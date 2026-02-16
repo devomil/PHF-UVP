@@ -3,10 +3,62 @@ import crypto from "crypto";
 import { db } from "./db";
 import { videoProductions, universalVideoProjects, videoGenerationJobs } from "../shared/schema";
 import { desc } from "drizzle-orm";
+import providerTestRouter from "./services/provider-test-routes";
+import { AI_VIDEO_PROVIDERS } from "./config/ai-video-providers";
+import { VIDEO_PROVIDERS } from "./config/video-providers";
 
 export function registerRoutes(app: Express) {
+  app.use("/api/provider-test", providerTestRouter);
+
+  import("./services/universal-video-routes")
+    .then((mod) => {
+      app.use("/api/universal-video", mod.default);
+      console.log("[Routes] Universal video routes loaded");
+    })
+    .catch((err: any) => {
+      console.warn("[Routes] Universal video routes not loaded:", err.message?.substring(0, 100));
+    });
   app.get("/api/health", (_req, res) => {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
+  });
+
+  app.get("/api/universal-video/provider-registry", (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ error: "Not authenticated" });
+    }
+
+    const providers = Object.entries(VIDEO_PROVIDERS).map(([id, config]) => ({
+      id,
+      name: config.name,
+      version: config.version,
+      costPer10Seconds: config.costPer10Seconds,
+      capabilities: config.capabilities,
+      apiProvider: config.apiProvider,
+      modelId: config.modelId,
+      isExecutable: config.isExecutable,
+      legacyId: config.legacyId,
+    }));
+
+    const families: Record<string, typeof providers> = { kling: [], wan: [], veo: [], other: [] };
+    for (const p of providers) {
+      if (p.id.startsWith('kling')) families.kling.push(p);
+      else if (p.id.startsWith('wan')) families.wan.push(p);
+      else if (p.id.includes('veo')) families.veo.push(p);
+      else families.other.push(p);
+    }
+
+    res.json({
+      success: true,
+      totalProviders: providers.length,
+      providers,
+      families,
+      videoProviders: providers.map(p => ({
+        id: p.id,
+        name: p.name,
+        costPer10Seconds: p.costPer10Seconds,
+        isExecutable: p.isExecutable,
+      })),
+    });
   });
 
   app.get("/api/projects", async (_req, res) => {

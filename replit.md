@@ -4,6 +4,7 @@
 A full-stack AI video production platform supporting multiple AI video providers (Kling, RunwayML, Luma, Pika, Veo), intelligent provider selection, brand asset management, quality evaluation, sound design, and Remotion-based video composition. Built with React frontend and Express backend using PostgreSQL database.
 
 ## Recent Changes
+- 2026-02-16: Integrated PiAPI I2V/T2V services. Created server/config/ai-video-providers.ts with all provider configs (30+ models), server/config/video-providers.ts for registry. Added provider-test API routes (/api/provider-test/providers, /generate, /task/:id). Updated Providers page with tabbed UI showing Provider Registry Panel and Testing Playground. Fixed generateAudio type error in piapi-video-service.ts.
 - 2026-02-16: Added light/dark mode toggle. ThemeContext manages theme state with localStorage persistence, CSS custom properties handle all theme-dependent colors. Toggle button in sidebar (authenticated) and top-right corner (landing/auth pages).
 - 2026-02-16: Major UI/UX redesign - Canva-inspired persistent sidebar navigation, glassmorphism card surfaces, animated gradient landing page, split-panel auth page, visual project cards with gradient thumbnails, modern dark theme throughout all pages.
 - 2026-02-16: Restructured from HR app to Video Production Platform. Removed all HR management files, created video-focused pages and dark theme UI. Organized backend services into server/services/ and frontend components into client/src/components/video/.
