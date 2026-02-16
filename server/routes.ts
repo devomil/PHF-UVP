@@ -22,6 +22,37 @@ export function registerRoutes(app: Express) {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
   });
 
+  app.get("/api/service-status", (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ error: "Not authenticated" });
+    }
+
+    res.json({
+      services: {
+        piapi: { configured: !!process.env.PIAPI_API_KEY, description: "PiAPI - Video/Image generation hub (Kling, Luma, Veo, Wan, etc.)" },
+        runway: { configured: !!process.env.RUNWAY_API_KEY, description: "Runway - Direct video generation API" },
+        stability: { configured: !!process.env.STABILITY_API_KEY, description: "Stability AI - Image generation" },
+        openai: { configured: !!process.env.OPENAI_API_KEY, description: "OpenAI - Script writing and analysis" },
+        anthropic: { configured: !!process.env.ANTHROPIC_API_KEY, description: "Anthropic - AI analysis and prompt enhancement" },
+        elevenlabs: { configured: !!process.env.ELEVENLABS_API_KEY, description: "ElevenLabs - Voice generation and TTS" },
+        pexels: { configured: !!process.env.PEXELS_API_KEY, description: "Pexels - Stock video/photo library" },
+        pixabay: { configured: !!process.env.PIXABAY_API_KEY, description: "Pixabay - Stock media library" },
+        unsplash: { configured: !!process.env.UNSPLASH_ACCESS_KEY, description: "Unsplash - Stock photography" },
+        remotion: {
+          configured: !!(process.env.REMOTION_SERVE_URL && process.env.REMOTION_S3_BUCKET),
+          description: "Remotion Lambda - Video composition and rendering",
+          details: {
+            serveUrl: !!process.env.REMOTION_SERVE_URL,
+            s3Bucket: !!process.env.REMOTION_S3_BUCKET,
+            awsRegion: !!process.env.REMOTION_AWS_REGION,
+            functionName: !!process.env.REMOTION_FUNCTION_NAME,
+          }
+        },
+      },
+      timestamp: new Date().toISOString(),
+    });
+  });
+
   app.get("/api/universal-video/provider-registry", (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ error: "Not authenticated" });
