@@ -54,7 +54,7 @@ export default function Dashboard() {
         </div>
 
         <div className="flex gap-3 mb-8">
-          <Link href="/projects">
+          <Link href="/projects/new">
             <Button className="bg-purple-600 hover:bg-purple-700">New Project</Button>
           </Link>
           <Link href="/assets">

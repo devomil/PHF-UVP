@@ -37,7 +37,9 @@ export default function Projects() {
             <h1 className="text-3xl font-bold">Projects</h1>
             <p className="text-gray-400 mt-1">Manage your video productions</p>
           </div>
-          <Button className="bg-purple-600 hover:bg-purple-700">New Project</Button>
+          <Link href="/projects/new">
+            <Button className="bg-purple-600 hover:bg-purple-700">New Project</Button>
+          </Link>
         </div>
 
         <div className="flex gap-2 mb-6">
