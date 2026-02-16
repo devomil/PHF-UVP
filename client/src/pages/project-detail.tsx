@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
-import { ArrowLeft, Settings, Play, RefreshCw, Clock, Target, Monitor, BarChart3, Loader2, AlertCircle, Zap, Video, Image, Download, RotateCcw, Save, Trash2, ExternalLink, CheckCircle2, XCircle, Server, HardDrive, Type, Film, ChevronDown, ChevronUp, CloudUpload, Mic, Music, Volume2, Palette, Shuffle, Sliders } from "lucide-react";
+import { ArrowLeft, Settings, Play, RefreshCw, Clock, Target, Monitor, BarChart3, Loader2, AlertCircle, Zap, Video, Image, Download, RotateCcw, Save, Trash2, ExternalLink, CheckCircle2, XCircle, Server, HardDrive, Type, Film, ChevronDown, ChevronUp, CloudUpload, Mic, Music, Volume2, Palette, Shuffle, Sliders, Wand2, Sparkles, ImagePlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 
@@ -441,7 +441,11 @@ export default function ProjectDetail({ params }: { params?: { id: string } }) {
           </div>
         )}
 
-        {project.outputUrl && (
+        {isQuickCreate && (
+          <QuickCreateAssetPanel projectId={projectId} project={project} />
+        )}
+
+        {!isQuickCreate && project.outputUrl && (
           <div className="border rounded-xl p-5 mt-8" style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)" }}>
             <h2 className="text-sm font-medium uppercase tracking-wider mb-3" style={{ color: "var(--text-secondary)" }}>Output</h2>
             {project.mediaMode === "image" ? (
@@ -453,7 +457,7 @@ export default function ProjectDetail({ params }: { params?: { id: string } }) {
         )}
 
         <RenderConfigPanel projectId={projectId} />
-        <PostProductionPanel projectId={projectId} project={project} />
+        {!isQuickCreate && <PostProductionPanel projectId={projectId} project={project} />}
       </div>
     </div>
   );
@@ -1427,6 +1431,403 @@ function TextOverlayControls({ projectId, project }: { projectId: string; projec
               </span>
             ))}
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function QuickCreateAssetPanel({ projectId, project }: { projectId: string; project: any }) {
+  const [expanded, setExpanded] = useState(true);
+  const [editPrompt, setEditPrompt] = useState(false);
+  const [promptText, setPromptText] = useState("");
+  const [selectedProvider, setSelectedProvider] = useState("kling");
+  const [musicMood, setMusicMood] = useState("upbeat");
+  const [musicStyle, setMusicStyle] = useState("cinematic");
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const assetsQuery = useQuery({
+    queryKey: ["quick-create-assets", projectId],
+    queryFn: async () => {
+      const res = await fetch(`/api/projects/${projectId}/quick-create/assets`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch assets");
+      return res.json();
+    },
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      if (!data) return 5000;
+      const anyGenerating = [data.visual?.status, data.voiceover?.status, data.music?.status].some(
+        (s) => s === "generating" || s === "queued" || s === "processing"
+      );
+      return anyGenerating ? 3000 : false;
+    },
+  });
+
+  useEffect(() => {
+    if (assetsQuery.data?.project?.prompt && !promptText) {
+      setPromptText(assetsQuery.data.project.prompt);
+    }
+    if (assetsQuery.data?.visual?.provider) {
+      setSelectedProvider(assetsQuery.data.visual.provider);
+    }
+  }, [assetsQuery.data]);
+
+  const generateVisualMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/projects/${projectId}/quick-create/generate-visual`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          prompt: promptText || undefined,
+          provider: selectedProvider,
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to start visual generation");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["quick-create-assets", projectId] });
+      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+      toast({ title: "Visual Generation Started", description: "Your visual asset is being generated." });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const generateVoiceoverMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/projects/${projectId}/quick-create/generate-voiceover`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ narrationText: promptText }),
+      });
+      if (!res.ok) throw new Error("Failed to start voiceover generation");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["quick-create-assets", projectId] });
+      toast({ title: "Voiceover Generation Started", description: "Your voiceover is being generated." });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const generateMusicMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/projects/${projectId}/quick-create/generate-music`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ mood: musicMood, style: musicStyle }),
+      });
+      if (!res.ok) throw new Error("Failed to start music generation");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["quick-create-assets", projectId] });
+      toast({ title: "Music Generation Started", description: "Your background music is being generated." });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const assets = assetsQuery.data || { visual: { status: "pending" }, voiceover: { status: "pending" }, music: { status: "pending" } };
+  const isVideoMode = project.mediaMode !== "image";
+
+  const assetStatusBadge = (status: string) => {
+    const configs: Record<string, { text: string; color: string; bg: string }> = {
+      pending: { text: "Not Generated", color: "text-gray-400", bg: "bg-gray-500/10 border-gray-500/20" },
+      queued: { text: "Queued", color: "text-blue-400", bg: "bg-blue-500/10 border-blue-500/20" },
+      generating: { text: "Generating...", color: "text-amber-400", bg: "bg-amber-500/10 border-amber-500/20" },
+      processing: { text: "Processing...", color: "text-amber-400", bg: "bg-amber-500/10 border-amber-500/20" },
+      completed: { text: "Ready", color: "text-emerald-400", bg: "bg-emerald-500/10 border-emerald-500/20" },
+      failed: { text: "Failed", color: "text-red-400", bg: "bg-red-500/10 border-red-500/20" },
+    };
+    const cfg = configs[status] || configs.pending;
+    return (
+      <span className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border font-medium ${cfg.color} ${cfg.bg}`}>
+        {(status === "generating" || status === "processing" || status === "queued") && <Loader2 className="w-3 h-3 animate-spin" />}
+        {status === "completed" && <CheckCircle2 className="w-3 h-3" />}
+        {status === "failed" && <XCircle className="w-3 h-3" />}
+        {cfg.text}
+      </span>
+    );
+  };
+
+  const providerOptions = [
+    { value: "kling", label: "Kling" },
+    { value: "runway", label: "RunwayML" },
+    { value: "luma", label: "Luma" },
+    { value: "hailuo", label: "Hailuo" },
+    { value: "veo", label: "Veo" },
+    { value: "pika", label: "Pika" },
+  ];
+
+  const moodOptions = [
+    { value: "upbeat", label: "Upbeat" },
+    { value: "calm", label: "Calm" },
+    { value: "dramatic", label: "Dramatic" },
+    { value: "energetic", label: "Energetic" },
+    { value: "mysterious", label: "Mysterious" },
+    { value: "inspirational", label: "Inspirational" },
+  ];
+
+  const styleOptions = [
+    { value: "cinematic", label: "Cinematic" },
+    { value: "electronic", label: "Electronic" },
+    { value: "acoustic", label: "Acoustic" },
+    { value: "orchestral", label: "Orchestral" },
+    { value: "ambient", label: "Ambient" },
+    { value: "pop", label: "Pop" },
+  ];
+
+  return (
+    <div className="border rounded-xl mt-8 overflow-hidden" style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)" }}>
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full px-5 py-4 flex items-center justify-between hover:bg-white/5 transition-colors"
+      >
+        <div className="flex items-center gap-3">
+          <Wand2 className="w-5 h-5 text-cyan-400" />
+          <h2 className="text-sm font-medium uppercase tracking-wider" style={{ color: "var(--text-primary)" }}>
+            Asset Creation
+          </h2>
+          <span className="text-xs px-2 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">Quick Create</span>
+        </div>
+        {expanded ? <ChevronUp className="w-4 h-4" style={{ color: "var(--text-muted)" }} /> : <ChevronDown className="w-4 h-4" style={{ color: "var(--text-muted)" }} />}
+      </button>
+
+      {expanded && (
+        <div className="px-5 pb-5 space-y-4">
+          <div className="border rounded-xl p-4" style={{ borderColor: "var(--border-subtle)", backgroundColor: "rgba(0,0,0,0.15)" }}>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                {project.mediaMode === "image" ? (
+                  <ImagePlus className="w-5 h-5 text-purple-400" />
+                ) : (
+                  <Video className="w-5 h-5 text-purple-400" />
+                )}
+                <h3 className="font-medium text-sm" style={{ color: "var(--text-primary)" }}>
+                  Visual Asset
+                </h3>
+              </div>
+              {assetStatusBadge(assets.visual?.status)}
+            </div>
+
+            {assets.visual?.url && (
+              <div className="mb-3 rounded-lg overflow-hidden border" style={{ borderColor: "var(--border-subtle)" }}>
+                {project.mediaMode === "image" ? (
+                  <img src={assets.visual.url} alt="Generated visual" className="w-full max-h-64 object-contain bg-black" />
+                ) : (
+                  <video src={assets.visual.url} controls className="w-full max-h-64" />
+                )}
+              </div>
+            )}
+
+            {assets.visual?.error && (
+              <div className="mb-3 text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg p-2.5">
+                {assets.visual.error}
+              </div>
+            )}
+
+            {assets.visual?.provider && assets.visual.status === "completed" && (
+              <div className="flex gap-3 mb-3 text-xs" style={{ color: "var(--text-muted)" }}>
+                <span>Provider: <strong style={{ color: "var(--text-secondary)" }}>{assets.visual.provider}</strong></span>
+                {assets.visual.generationTimeMs && (
+                  <span>Time: <strong style={{ color: "var(--text-secondary)" }}>{(assets.visual.generationTimeMs / 1000).toFixed(1)}s</strong></span>
+                )}
+                {assets.visual.cost && (
+                  <span>Cost: <strong style={{ color: "var(--text-secondary)" }}>${assets.visual.cost.toFixed(3)}</strong></span>
+                )}
+              </div>
+            )}
+
+            <div className="space-y-2.5">
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs" style={{ color: "var(--text-muted)" }}>Prompt</label>
+                  {!editPrompt && (
+                    <button className="text-xs text-purple-400 hover:text-purple-300" onClick={() => setEditPrompt(true)}>Edit</button>
+                  )}
+                </div>
+                {editPrompt ? (
+                  <div className="space-y-2">
+                    <textarea
+                      value={promptText}
+                      onChange={(e) => setPromptText(e.target.value)}
+                      rows={3}
+                      className="w-full rounded-lg border p-2.5 text-sm resize-none"
+                      style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }}
+                    />
+                    <button className="text-xs text-purple-400 hover:text-purple-300" onClick={() => setEditPrompt(false)}>Done editing</button>
+                  </div>
+                ) : (
+                  <p className="text-sm" style={{ color: "var(--text-secondary)" }}>{promptText || project.description || "No prompt"}</p>
+                )}
+              </div>
+
+              <div className="flex gap-3 items-end">
+                <div className="flex-1">
+                  <label className="text-xs block mb-1" style={{ color: "var(--text-muted)" }}>Provider</label>
+                  <select
+                    value={selectedProvider}
+                    onChange={(e) => setSelectedProvider(e.target.value)}
+                    className="w-full rounded-lg border p-2 text-sm"
+                    style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }}
+                  >
+                    {providerOptions.map((p) => (
+                      <option key={p.value} value={p.value}>{p.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <Button
+                  onClick={() => generateVisualMutation.mutate()}
+                  disabled={generateVisualMutation.isPending || assets.visual?.status === "generating" || assets.visual?.status === "processing" || assets.visual?.status === "queued"}
+                  className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white gap-1.5 text-sm"
+                  size="sm"
+                >
+                  {(generateVisualMutation.isPending || assets.visual?.status === "generating" || assets.visual?.status === "queued") ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Sparkles className="w-4 h-4" />
+                  )}
+                  {assets.visual?.status === "completed" ? "Regenerate" : "Generate"}
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {isVideoMode && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="border rounded-xl p-4" style={{ borderColor: "var(--border-subtle)", backgroundColor: "rgba(0,0,0,0.15)" }}>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <Mic className="w-5 h-5 text-amber-400" />
+                    <h3 className="font-medium text-sm" style={{ color: "var(--text-primary)" }}>Voiceover</h3>
+                  </div>
+                  {assetStatusBadge(assets.voiceover?.status)}
+                </div>
+
+                {assets.voiceover?.url && (
+                  <div className="mb-3">
+                    <audio src={assets.voiceover.url} controls className="w-full h-8" />
+                    {assets.voiceover.duration && (
+                      <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>Duration: {assets.voiceover.duration}s</p>
+                    )}
+                  </div>
+                )}
+
+                {assets.voiceover?.error && (
+                  <div className="mb-3 text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg p-2.5">
+                    {assets.voiceover.error}
+                  </div>
+                )}
+
+                <p className="text-xs mb-3" style={{ color: "var(--text-muted)" }}>
+                  Generates narration from your prompt using AI voice synthesis.
+                </p>
+
+                <Button
+                  onClick={() => generateVoiceoverMutation.mutate()}
+                  disabled={generateVoiceoverMutation.isPending || assets.voiceover?.status === "generating"}
+                  variant="outline"
+                  size="sm"
+                  className="w-full gap-1.5 text-sm"
+                  style={{ borderColor: "var(--border-medium)", color: "var(--text-secondary)" }}
+                >
+                  {(generateVoiceoverMutation.isPending || assets.voiceover?.status === "generating") ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Mic className="w-4 h-4" />
+                  )}
+                  {assets.voiceover?.status === "completed" ? "Regenerate Voiceover" : "Generate Voiceover"}
+                </Button>
+              </div>
+
+              <div className="border rounded-xl p-4" style={{ borderColor: "var(--border-subtle)", backgroundColor: "rgba(0,0,0,0.15)" }}>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <Music className="w-5 h-5 text-emerald-400" />
+                    <h3 className="font-medium text-sm" style={{ color: "var(--text-primary)" }}>Background Music</h3>
+                  </div>
+                  {assetStatusBadge(assets.music?.status)}
+                </div>
+
+                {assets.music?.url && (
+                  <div className="mb-3">
+                    <audio src={assets.music.url} controls className="w-full h-8" />
+                    <div className="flex gap-3 mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
+                      {assets.music.mood && <span>Mood: {assets.music.mood}</span>}
+                      {assets.music.duration && <span>Duration: {assets.music.duration}s</span>}
+                    </div>
+                  </div>
+                )}
+
+                {assets.music?.error && (
+                  <div className="mb-3 text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg p-2.5">
+                    {assets.music.error}
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-2 mb-3">
+                  <div>
+                    <label className="text-xs block mb-1" style={{ color: "var(--text-muted)" }}>Mood</label>
+                    <select
+                      value={musicMood}
+                      onChange={(e) => setMusicMood(e.target.value)}
+                      className="w-full rounded-lg border p-1.5 text-xs"
+                      style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }}
+                    >
+                      {moodOptions.map((m) => (
+                        <option key={m.value} value={m.value}>{m.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs block mb-1" style={{ color: "var(--text-muted)" }}>Style</label>
+                    <select
+                      value={musicStyle}
+                      onChange={(e) => setMusicStyle(e.target.value)}
+                      className="w-full rounded-lg border p-1.5 text-xs"
+                      style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }}
+                    >
+                      {styleOptions.map((s) => (
+                        <option key={s.value} value={s.value}>{s.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <Button
+                  onClick={() => generateMusicMutation.mutate()}
+                  disabled={generateMusicMutation.isPending || assets.music?.status === "generating"}
+                  variant="outline"
+                  size="sm"
+                  className="w-full gap-1.5 text-sm"
+                  style={{ borderColor: "var(--border-medium)", color: "var(--text-secondary)" }}
+                >
+                  {(generateMusicMutation.isPending || assets.music?.status === "generating") ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Music className="w-4 h-4" />
+                  )}
+                  {assets.music?.status === "completed" ? "Regenerate Music" : "Generate Music"}
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {!isVideoMode && (
+            <div className="text-xs rounded-lg p-3 border" style={{ borderColor: "var(--border-subtle)", color: "var(--text-muted)", backgroundColor: "rgba(0,0,0,0.1)" }}>
+              Voiceover and music are available for video projects only. Switch to video mode to enable audio asset generation.
+            </div>
+          )}
         </div>
       )}
     </div>

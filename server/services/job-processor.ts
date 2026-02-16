@@ -28,11 +28,32 @@ export async function processVideoJob(jobId: string) {
       .set({ status: "processing", startedAt: new Date(), updatedAt: new Date() })
       .where(eq(videoGenerationJobs.jobId, jobId));
 
+    const [currentProject] = await db
+      .select()
+      .from(universalVideoProjects)
+      .where(eq(universalVideoProjects.projectId, job.projectId))
+      .limit(1);
+
+    const existingAssets = (currentProject?.assets as any) || {};
+
     await db
       .update(universalVideoProjects)
       .set({
         status: "generating",
         progress: { phase: "generating", percentage: 10, currentStep: "Sending to AI provider..." },
+        assets: {
+          ...existingAssets,
+          quickCreate: {
+            ...(existingAssets.quickCreate || {}),
+            visual: {
+              status: "generating",
+              url: null,
+              provider: job.provider || "kling",
+              error: null,
+              updatedAt: new Date().toISOString(),
+            },
+          },
+        },
         updatedAt: new Date(),
       })
       .where(eq(universalVideoProjects.projectId, job.projectId));
@@ -46,6 +67,13 @@ export async function processVideoJob(jobId: string) {
       negativePrompt: job.negativePrompt || undefined,
       imageUrl: job.sourceImageUrl || undefined,
     });
+
+    const [projectAfterGen] = await db
+      .select()
+      .from(universalVideoProjects)
+      .where(eq(universalVideoProjects.projectId, job.projectId))
+      .limit(1);
+    const assetsAfterGen = (projectAfterGen?.assets as any) || {};
 
     if (result.success && result.videoUrl) {
       await db
@@ -65,6 +93,22 @@ export async function processVideoJob(jobId: string) {
           status: "completed",
           outputUrl: result.s3Url || result.videoUrl,
           progress: { phase: "completed", percentage: 100, currentStep: "Generation complete" },
+          assets: {
+            ...assetsAfterGen,
+            quickCreate: {
+              ...(assetsAfterGen.quickCreate || {}),
+              visual: {
+                status: "completed",
+                url: result.s3Url || result.videoUrl,
+                provider: result.provider || job.provider || "kling",
+                duration: result.duration,
+                cost: result.cost,
+                generationTimeMs: result.generationTimeMs,
+                error: null,
+                updatedAt: new Date().toISOString(),
+              },
+            },
+          },
           updatedAt: new Date(),
         })
         .where(eq(universalVideoProjects.projectId, job.projectId));
@@ -87,6 +131,19 @@ export async function processVideoJob(jobId: string) {
         .set({
           status: "failed",
           progress: { phase: "failed", percentage: 0, currentStep: errorMsg },
+          assets: {
+            ...assetsAfterGen,
+            quickCreate: {
+              ...(assetsAfterGen.quickCreate || {}),
+              visual: {
+                status: "failed",
+                url: null,
+                provider: job.provider || "kling",
+                error: errorMsg,
+                updatedAt: new Date().toISOString(),
+              },
+            },
+          },
           updatedAt: new Date(),
         })
         .where(eq(universalVideoProjects.projectId, job.projectId));
@@ -107,11 +164,31 @@ export async function processVideoJob(jobId: string) {
       })
       .where(eq(videoGenerationJobs.jobId, jobId));
 
+    const [projectOnError] = await db
+      .select()
+      .from(universalVideoProjects)
+      .where(eq(universalVideoProjects.projectId, job.projectId))
+      .limit(1);
+    const assetsOnError = (projectOnError?.assets as any) || {};
+
     await db
       .update(universalVideoProjects)
       .set({
         status: "failed",
         progress: { phase: "failed", percentage: 0, currentStep: errorMsg },
+        assets: {
+          ...assetsOnError,
+          quickCreate: {
+            ...(assetsOnError.quickCreate || {}),
+            visual: {
+              status: "failed",
+              url: null,
+              provider: job.provider || "kling",
+              error: errorMsg,
+              updatedAt: new Date().toISOString(),
+            },
+          },
+        },
         updatedAt: new Date(),
       })
       .where(eq(universalVideoProjects.projectId, job.projectId));
