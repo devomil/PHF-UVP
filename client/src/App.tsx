@@ -13,6 +13,7 @@ import BrandSettings from "@/pages/brand-settings";
 import RenderQueue from "@/pages/render-queue";
 import Providers from "@/pages/providers";
 import Profile from "@/pages/profile";
+import NewProject from "@/pages/new-project";
 import Landing from "@/pages/landing";
 import NotFound from "@/pages/not-found";
 
@@ -22,6 +23,7 @@ function AuthenticatedApp() {
       <Route path="/" component={Dashboard} />
       <Route path="/dashboard" component={Dashboard} />
       <Route path="/projects" component={Projects} />
+      <Route path="/projects/new" component={NewProject} />
       <Route path="/projects/:id" component={ProjectDetail} />
       <Route path="/assets" component={AssetLibrary} />
       <Route path="/brand" component={BrandSettings} />
