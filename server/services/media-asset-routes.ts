@@ -41,7 +41,7 @@ router.get('/', async (_req: Request, res: Response) => {
       .select()
       .from(mediaAssets)
       .orderBy(desc(mediaAssets.createdAt));
-    res.json(items);
+    res.json({ assets: items, total: items.length });
   } catch (error: any) {
     console.error('[MediaAssets] List error:', error.message);
     res.status(500).json({ error: 'Failed to fetch media assets' });
