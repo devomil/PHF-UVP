@@ -463,6 +463,8 @@ function PostProductionPanel({ projectId, project }: { projectId: string; projec
   const [renderPolling, setRenderPolling] = useState(false);
   const [renderId, setRenderId] = useState<string | null>(null);
   const [bucketName, setBucketName] = useState<string | null>(null);
+  const [renderError, setRenderError] = useState<string | null>(null);
+  const [renderSuccess, setRenderSuccess] = useState<string | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -527,6 +529,8 @@ function PostProductionPanel({ projectId, project }: { projectId: string; projec
 
   const renderMutation = useMutation({
     mutationFn: async () => {
+      setRenderError(null);
+      setRenderSuccess(null);
       const res = await fetch(`/api/universal-video/projects/${projectId}/render`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -535,7 +539,7 @@ function PostProductionPanel({ projectId, project }: { projectId: string; projec
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: "Render request failed" }));
-        throw new Error(err.error || "Render request failed");
+        throw new Error(err.error || err.message || "Render request failed");
       }
       return res.json();
     },
@@ -545,10 +549,12 @@ function PostProductionPanel({ projectId, project }: { projectId: string; projec
         setBucketName(data.bucketName || null);
       }
       setRenderPolling(true);
+      setRenderSuccess("Render started! Remotion Lambda is composing your video...");
       toast({ title: "Render Started", description: "Remotion Lambda is composing your video..." });
       queryClient.invalidateQueries({ queryKey: ["project", projectId] });
     },
     onError: (error: Error) => {
+      setRenderError(error.message);
       toast({ title: "Render Failed", description: error.message, variant: "destructive" });
     },
   });
@@ -729,6 +735,27 @@ function PostProductionPanel({ projectId, project }: { projectId: string; projec
                 </div>
               )}
 
+              {renderError && (
+                <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20">
+                  <div className="flex items-start gap-2">
+                    <XCircle className="w-4 h-4 text-red-400 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="text-xs font-medium text-red-400 mb-1">Render failed</p>
+                      <p className="text-xs text-red-300/70">{renderError}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {renderMutation.isPending && (
+                <div className="mb-4 p-3 rounded-lg bg-purple-500/10 border border-purple-500/20">
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin text-purple-400" />
+                    <p className="text-xs font-medium text-purple-400">Sending render request to Remotion Lambda...</p>
+                  </div>
+                </div>
+              )}
+
               {renderPolling && (
                 <div className="mb-4">
                   <div className="flex items-center justify-between mb-2">
@@ -746,11 +773,20 @@ function PostProductionPanel({ projectId, project }: { projectId: string; projec
                       style={{ width: `${renderProgress}%` }}
                     />
                   </div>
-                  {renderStatusQuery.data?.renderMethod === "chunked" && renderStatusQuery.data?.message && (
+                  {renderStatusQuery.data?.message && (
                     <p className="text-xs mt-2" style={{ color: "var(--text-muted)" }}>
                       {renderStatusQuery.data.message}
                     </p>
                   )}
+                </div>
+              )}
+
+              {renderSuccess && !renderPolling && !renderError && (
+                <div className="mb-4 p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                    <p className="text-xs font-medium text-emerald-400">{renderSuccess}</p>
+                  </div>
                 </div>
               )}
 

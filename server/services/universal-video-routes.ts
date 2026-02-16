@@ -1757,7 +1757,27 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
       console.log('[UniversalVideo] No QA report found - auto-generating from scene assets');
       
       // Create automatic quality report based on scene asset presence
-      const sceneStatuses = projectData.scenes.map((scene, idx) => {
+      const renderScenes = projectData.scenes || [];
+      
+      if (renderScenes.length === 0) {
+        qaReport = {
+          projectId: projectId,
+          overallScore: 85,
+          sceneStatuses: [],
+          approvedCount: 0,
+          needsReviewCount: 0,
+          rejectedCount: 0,
+          pendingCount: 0,
+          criticalIssueCount: 0,
+          majorIssueCount: 0,
+          minorIssueCount: 0,
+          passesThreshold: true,
+          canRender: true,
+          blockingReasons: [],
+        };
+      }
+      
+      const sceneStatuses = renderScenes.map((scene, idx) => {
         const hasImage = !!scene.assets?.imageUrl;
         const hasVideo = !!scene.assets?.videoUrl;
         const hasAsset = hasImage || hasVideo;
@@ -7938,7 +7958,20 @@ router.get('/projects/:projectId/can-render', isAuthenticated, async (req: Reque
 
     const projectData = dbRowToVideoProject(projectRows[0]);
     
-    const analyses: Phase8AnalysisResult[] = projectData.scenes.map((scene, idx) => {
+    const scenes = projectData.scenes || [];
+    
+    if (scenes.length === 0) {
+      return res.json({
+        success: true,
+        allowed: projectData.status === 'ready' || projectData.status === 'complete',
+        reason: 'Quick Create project - direct render',
+        blockingReasons: projectData.status === 'ready' || projectData.status === 'complete' 
+          ? [] 
+          : ['Project is not ready for rendering yet'],
+      });
+    }
+    
+    const analyses: Phase8AnalysisResult[] = scenes.map((scene, idx) => {
       if (scene.analysisResult) {
         return scene.analysisResult;
       }
@@ -7974,7 +8007,7 @@ router.get('/projects/:projectId/can-render', isAuthenticated, async (req: Reque
     });
     
     const approvals = new Map<number, boolean>(
-      projectData.scenes
+      scenes
         .filter(s => (s as any).userApproved)
         .map((s, idx) => [idx, true])
     );
@@ -7985,7 +8018,7 @@ router.get('/projects/:projectId/can-render', isAuthenticated, async (req: Reque
       approvals
     );
 
-    const unanalyzedCount = projectData.scenes.filter(s => !s.analysisResult).length;
+    const unanalyzedCount = scenes.filter(s => !s.analysisResult).length;
     if (unanalyzedCount > 0) {
       report.blockingReasons.push(`${unanalyzedCount} scenes not yet analyzed`);
       report.canRender = false;
