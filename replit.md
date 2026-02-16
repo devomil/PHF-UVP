@@ -4,6 +4,7 @@
 A full-stack AI video production platform supporting multiple AI video providers (Kling, RunwayML, Luma, Pika, Veo), intelligent provider selection, brand asset management, quality evaluation, sound design, and Remotion-based video composition. Built with React frontend and Express backend using PostgreSQL database.
 
 ## Recent Changes
+- 2026-02-16: Major UI/UX redesign - Canva-inspired persistent sidebar navigation, glassmorphism card surfaces, animated gradient landing page, split-panel auth page, visual project cards with gradient thumbnails, modern dark theme throughout all pages.
 - 2026-02-16: Restructured from HR app to Video Production Platform. Removed all HR management files, created video-focused pages and dark theme UI. Organized backend services into server/services/ and frontend components into client/src/components/video/.
 
 ## Project Architecture
@@ -26,6 +27,7 @@ client/                  # Frontend
     hooks/              # Custom React hooks (auth, toast, font-loader)
     contexts/           # React contexts (ThemeContext)
     components/         # Reusable components
+    components/layout/  # App layout with sidebar navigation
     components/ui/      # shadcn/ui primitives
     components/video/   # Video production UI components
     lib/                # Utilities (queryClient, utils)
@@ -65,7 +67,9 @@ remotion/               # Remotion video compositions
 - Frontend dev server: Vite middleware mode through Express on port 5000
 - Path aliases: `@/` maps to `client/src/`, `@shared/` maps to `shared/`
 - Vite configured with `allowedHosts: true` for Replit proxy
-- Dark theme with purple/indigo accents
+- Modern dark theme with glassmorphism surfaces (bg-white/[0.03], border-white/[0.06])
+- Canva-inspired collapsible sidebar navigation
+- Purple/indigo accent colors with gradient CTAs
 
 ### Scripts
 - `npm run dev` - Start development server (tsx server/index.ts)
@@ -87,3 +91,5 @@ remotion/               # Remotion video compositions
 ## User Preferences
 - Focus on Video Production Platform only (no HR features)
 - Dark theme with purple/indigo accent colors
+- Modern, professional, cutting-edge UI (Canva-inspired)
+- Glassmorphism card surfaces, gradient thumbnails, visual project cards

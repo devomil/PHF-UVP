@@ -16,22 +16,25 @@ import Profile from "@/pages/profile";
 import NewProject from "@/pages/new-project";
 import Landing from "@/pages/landing";
 import NotFound from "@/pages/not-found";
+import AppLayout from "@/components/layout/app-layout";
 
 function AuthenticatedApp() {
   return (
-    <Switch>
-      <Route path="/" component={Dashboard} />
-      <Route path="/dashboard" component={Dashboard} />
-      <Route path="/projects" component={Projects} />
-      <Route path="/projects/new" component={NewProject} />
-      <Route path="/projects/:id" component={ProjectDetail} />
-      <Route path="/assets" component={AssetLibrary} />
-      <Route path="/brand" component={BrandSettings} />
-      <Route path="/render-queue" component={RenderQueue} />
-      <Route path="/providers" component={Providers} />
-      <Route path="/profile" component={Profile} />
-      <Route component={NotFound} />
-    </Switch>
+    <AppLayout>
+      <Switch>
+        <Route path="/" component={Dashboard} />
+        <Route path="/dashboard" component={Dashboard} />
+        <Route path="/projects" component={Projects} />
+        <Route path="/projects/new" component={NewProject} />
+        <Route path="/projects/:id" component={ProjectDetail} />
+        <Route path="/assets" component={AssetLibrary} />
+        <Route path="/brand" component={BrandSettings} />
+        <Route path="/render-queue" component={RenderQueue} />
+        <Route path="/providers" component={Providers} />
+        <Route path="/profile" component={Profile} />
+        <Route component={NotFound} />
+      </Switch>
+    </AppLayout>
   );
 }
 
@@ -50,7 +53,7 @@ function AppRouter() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-950">
+      <div className="flex items-center justify-center min-h-screen bg-[#0a0a0f]">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500 mx-auto mb-4"></div>
           <p className="text-gray-400">Loading...</p>

@@ -1,37 +1,37 @@
 @import "tailwindcss";
 
 @theme inline {
-  --color-background: oklch(0.13 0.005 285);
+  --color-background: oklch(0.11 0.008 285);
   --color-foreground: oklch(0.95 0 0);
-  --color-card: oklch(0.18 0.005 285);
+  --color-card: oklch(0.16 0.008 285);
   --color-card-foreground: oklch(0.95 0 0);
-  --color-popover: oklch(0.18 0.005 285);
+  --color-popover: oklch(0.16 0.008 285);
   --color-popover-foreground: oklch(0.95 0 0);
   --color-primary: oklch(0.55 0.2 285);
   --color-primary-foreground: oklch(0.98 0 0);
-  --color-secondary: oklch(0.22 0.01 285);
+  --color-secondary: oklch(0.20 0.012 285);
   --color-secondary-foreground: oklch(0.85 0.02 285);
-  --color-muted: oklch(0.22 0.01 285);
+  --color-muted: oklch(0.20 0.012 285);
   --color-muted-foreground: oklch(0.6 0.02 285);
   --color-accent: oklch(0.65 0.15 220);
   --color-accent-foreground: oklch(0.98 0 0);
   --color-destructive: oklch(0.577 0.245 27.325);
   --color-destructive-foreground: oklch(0.577 0.245 27.325);
-  --color-border: oklch(0.28 0.01 285);
-  --color-input: oklch(0.28 0.01 285);
+  --color-border: oklch(0.24 0.012 285);
+  --color-input: oklch(0.24 0.012 285);
   --color-ring: oklch(0.55 0.2 285);
   --color-chart-1: oklch(0.55 0.2 285);
   --color-chart-2: oklch(0.6 0.15 200);
   --color-chart-3: oklch(0.65 0.15 220);
   --color-chart-4: oklch(0.55 0.15 300);
   --color-chart-5: oklch(0.55 0.2 20);
-  --color-sidebar: oklch(0.15 0.005 285);
+  --color-sidebar: oklch(0.13 0.008 285);
   --color-sidebar-foreground: oklch(0.95 0 0);
   --color-sidebar-primary: oklch(0.55 0.2 285);
   --color-sidebar-primary-foreground: oklch(0.98 0 0);
-  --color-sidebar-accent: oklch(0.22 0.01 285);
+  --color-sidebar-accent: oklch(0.20 0.012 285);
   --color-sidebar-accent-foreground: oklch(0.85 0.02 285);
-  --color-sidebar-border: oklch(0.28 0.01 285);
+  --color-sidebar-border: oklch(0.24 0.012 285);
   --color-sidebar-ring: oklch(0.55 0.2 285);
   --radius-sm: 0.25rem;
   --radius-md: 0.375rem;
@@ -43,7 +43,36 @@
   * {
     @apply border-border;
   }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
   body {
     @apply bg-background text-foreground;
+  }
+
+  ::selection {
+    background: oklch(0.45 0.18 285 / 0.35);
+    color: oklch(0.95 0 0);
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: oklch(0.3 0.01 285);
+    border-radius: 3px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: oklch(0.4 0.01 285);
   }
 }
