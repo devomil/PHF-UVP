@@ -51,11 +51,11 @@ export default function AssetLibrary() {
   };
 
   return (
-    <div className="p-6 lg:p-8 text-white">
+    <div className="p-6 lg:p-8" style={{ color: "var(--text-primary)" }}>
       <div className="flex items-start justify-between mb-8">
         <div>
           <h1 className="text-4xl font-bold tracking-tight">Asset Library</h1>
-          <p className="text-white/60 mt-2">Manage your brand assets and media files</p>
+          <p className="mt-2" style={{ color: "var(--text-secondary)" }}>Manage your brand assets and media files</p>
         </div>
         <Button className="bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 gap-2">
           <CloudUpload className="w-4 h-4" />
@@ -63,13 +63,16 @@ export default function AssetLibrary() {
         </Button>
       </div>
 
-      <div className="mb-8 p-8 bg-white/[0.02] border-2 border-dashed border-white/[0.08] rounded-2xl transition-all duration-300 hover:border-purple-500/30 hover:bg-purple-500/[0.03] group cursor-pointer">
+      <div
+        className="mb-8 p-8 border-2 border-dashed rounded-2xl transition-all duration-300 hover:border-purple-500/30 hover:bg-purple-500/[0.03] group cursor-pointer"
+        style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-medium)" }}
+      >
         <div className="text-center">
           <div className="flex justify-center mb-4">
-            <CloudUpload className="w-12 h-12 text-white/40 group-hover:text-purple-400 transition-colors" />
+            <CloudUpload className="w-12 h-12 group-hover:text-purple-400 transition-colors" style={{ color: "var(--text-muted)" }} />
           </div>
-          <p className="text-white/80 text-lg mb-1">Drag files here or click to browse</p>
-          <p className="text-sm text-white/40">Supports images, videos, logos, and audio files</p>
+          <p className="text-lg mb-1" style={{ color: "var(--text-primary)" }}>Drag files here or click to browse</p>
+          <p className="text-sm" style={{ color: "var(--text-muted)" }}>Supports images, videos, logos, and audio files</p>
         </div>
       </div>
 
@@ -78,11 +81,21 @@ export default function AssetLibrary() {
           <button
             key={t}
             onClick={() => setActiveType(t)}
-            className={`px-4 py-2 rounded-full transition-all duration-200 ${
-              activeType === t
-                ? "bg-white/10 text-white"
-                : "text-white/50 hover:text-white"
-            }`}
+            className="px-4 py-2 rounded-full transition-all duration-200"
+            style={{
+              backgroundColor: activeType === t ? "var(--surface-active)" : "transparent",
+              color: activeType === t ? "var(--text-primary)" : "var(--text-muted)",
+            }}
+            onMouseEnter={(e) => {
+              if (activeType !== t) {
+                e.currentTarget.style.color = "var(--text-primary)";
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (activeType !== t) {
+                e.currentTarget.style.color = "var(--text-muted)";
+              }
+            }}
           >
             {formatTypeLabel(t)}
           </button>
@@ -93,7 +106,8 @@ export default function AssetLibrary() {
         {filtered.map((asset) => (
           <div
             key={asset.id}
-            className="bg-white/[0.03] border border-white/[0.06] rounded-xl overflow-hidden group cursor-pointer hover:scale-[1.02] transition-transform duration-300"
+            className="border rounded-xl overflow-hidden group cursor-pointer hover:scale-[1.02] transition-transform duration-300"
+            style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)" }}
           >
             <div className={`h-40 bg-gradient-to-br ${typeGradients[asset.type]} flex items-center justify-center relative`}>
               {typeIcons[asset.type]}
@@ -102,8 +116,8 @@ export default function AssetLibrary() {
               </div>
             </div>
             <div className="p-4">
-              <p className="font-medium text-white text-sm truncate">{asset.name}</p>
-              <p className="text-xs text-white/50 mt-1">{asset.size} · {asset.date}</p>
+              <p className="font-medium text-sm truncate" style={{ color: "var(--text-primary)" }}>{asset.name}</p>
+              <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>{asset.size} · {asset.date}</p>
               <div className="mt-3 flex justify-start">
                 <Badge className={`text-xs ${typeBadgeColors[asset.type]}`}>
                   {asset.type}
@@ -115,8 +129,8 @@ export default function AssetLibrary() {
       </div>
 
       <div className="mt-8">
-        <p className="text-sm text-white/60 mb-3">Storage Used: {usedStorage} GB / {totalStorage} GB</p>
-        <div className="w-full h-2 bg-white/[0.06] rounded-full overflow-hidden">
+        <p className="text-sm mb-3" style={{ color: "var(--text-secondary)" }}>Storage Used: {usedStorage} GB / {totalStorage} GB</p>
+        <div className="w-full h-2 rounded-full overflow-hidden" style={{ backgroundColor: "var(--border-subtle)" }}>
           <div
             className="h-full bg-gradient-to-r from-purple-600 to-purple-400 rounded-full transition-all duration-500"
             style={{ width: `${(usedStorage / totalStorage) * 100}%` }}
@@ -125,7 +139,7 @@ export default function AssetLibrary() {
       </div>
 
       <div className="mt-8">
-        <Link href="/dashboard" className="text-sm text-white/50 hover:text-white/70 transition-colors duration-200">
+        <Link href="/dashboard" className="text-sm transition-colors duration-200" style={{ color: "var(--text-muted)" }}>
           ← Back to Dashboard
         </Link>
       </div>

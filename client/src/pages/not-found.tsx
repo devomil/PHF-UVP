@@ -8,8 +8,8 @@ export default function NotFound() {
         <h1 className="text-8xl font-extrabold bg-gradient-to-r from-purple-400 to-indigo-400 bg-clip-text text-transparent">
           404
         </h1>
-        <p className="text-xl text-gray-400 mt-4">Page not found</p>
-        <p className="text-sm text-gray-500 mt-2 max-w-sm mx-auto">
+        <p className="text-xl mt-4" style={{ color: "var(--text-secondary)" }}>Page not found</p>
+        <p className="text-sm mt-2 max-w-sm mx-auto" style={{ color: "var(--text-muted)" }}>
           The page you're looking for doesn't exist or has been moved.
         </p>
         <Link href="/">

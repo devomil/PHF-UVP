@@ -20,7 +20,7 @@ const projectGradients = [
 ];
 
 const statusConfig: Record<string, { bg: string; text: string }> = {
-  draft: { bg: "bg-gray-600", text: "text-gray-300" },
+  draft: { bg: "bg-gray-500", text: "text-white" },
   rendering: { bg: "bg-amber-500", text: "text-amber-100" },
   completed: { bg: "bg-emerald-500", text: "text-emerald-100" },
   failed: { bg: "bg-red-500", text: "text-red-100" },
@@ -31,19 +31,20 @@ export default function Dashboard() {
   const firstName = user?.firstName || user?.email?.split("@")[0] || "User";
 
   return (
-    <div className="w-full text-white p-6 lg:p-8">
+    <div className="w-full p-6 lg:p-8" style={{ color: "var(--text-primary)" }}>
       <div className="max-w-7xl mx-auto space-y-8">
         <div className="flex flex-col gap-6">
           <div>
             <h1 className="text-4xl font-bold">Welcome back, {firstName}</h1>
-            <p className="text-gray-400 mt-2">Manage your video projects and assets</p>
+            <p className="mt-2" style={{ color: "var(--text-secondary)" }}>Manage your video projects and assets</p>
           </div>
 
           <div className="relative max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: "var(--text-muted)" }} />
             <Input
               placeholder="Search projects, assets..."
-              className="pl-10 bg-white/[0.03] border border-white/[0.06] text-white placeholder-gray-500 focus:bg-white/[0.05] focus:border-white/[0.1]"
+              className="pl-10 border"
+              style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)", color: "var(--text-primary)" }}
             />
           </div>
         </div>
@@ -54,8 +55,8 @@ export default function Dashboard() {
               <div className="flex items-start justify-between mb-3">
                 <Sparkles className="w-6 h-6 text-purple-400 group-hover:text-purple-300 transition-colors" />
               </div>
-              <h3 className="font-semibold text-white group-hover:text-purple-100 transition-colors">AI Video</h3>
-              <p className="text-sm text-gray-400 mt-1">Create with AI</p>
+              <h3 className="font-semibold group-hover:text-purple-100 transition-colors" style={{ color: "var(--text-primary)" }}>AI Video</h3>
+              <p className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>Create with AI</p>
             </div>
           </Link>
 
@@ -64,8 +65,8 @@ export default function Dashboard() {
               <div className="flex items-start justify-between mb-3">
                 <Zap className="w-6 h-6 text-cyan-400 group-hover:text-cyan-300 transition-colors" />
               </div>
-              <h3 className="font-semibold text-white group-hover:text-cyan-100 transition-colors">Quick Clip</h3>
-              <p className="text-sm text-gray-400 mt-1">Fast creation</p>
+              <h3 className="font-semibold group-hover:text-cyan-100 transition-colors" style={{ color: "var(--text-primary)" }}>Quick Clip</h3>
+              <p className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>Fast creation</p>
             </div>
           </Link>
 
@@ -74,27 +75,47 @@ export default function Dashboard() {
               <div className="flex items-start justify-between mb-3">
                 <Upload className="w-6 h-6 text-emerald-400 group-hover:text-emerald-300 transition-colors" />
               </div>
-              <h3 className="font-semibold text-white group-hover:text-emerald-100 transition-colors">Upload Asset</h3>
-              <p className="text-sm text-gray-400 mt-1">Add media</p>
+              <h3 className="font-semibold group-hover:text-emerald-100 transition-colors" style={{ color: "var(--text-primary)" }}>Upload Asset</h3>
+              <p className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>Add media</p>
             </div>
           </Link>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="p-5 rounded-lg bg-white/[0.03] backdrop-blur border border-white/[0.06] hover:bg-white/[0.05] transition-all">
-            <p className="text-gray-400 text-sm mb-2">Total Projects</p>
-            <p className="text-3xl font-bold text-white">24</p>
+          <div
+            className="p-5 rounded-lg backdrop-blur border transition-all"
+            style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)" }}
+            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--surface-hover)")}
+            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "var(--surface)")}
+          >
+            <p className="text-sm mb-2" style={{ color: "var(--text-secondary)" }}>Total Projects</p>
+            <p className="text-3xl font-bold" style={{ color: "var(--text-primary)" }}>24</p>
           </div>
-          <div className="p-5 rounded-lg bg-white/[0.03] backdrop-blur border border-white/[0.06] hover:bg-white/[0.05] transition-all">
-            <p className="text-gray-400 text-sm mb-2">Active Renders</p>
+          <div
+            className="p-5 rounded-lg backdrop-blur border transition-all"
+            style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)" }}
+            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--surface-hover)")}
+            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "var(--surface)")}
+          >
+            <p className="text-sm mb-2" style={{ color: "var(--text-secondary)" }}>Active Renders</p>
             <p className="text-3xl font-bold text-amber-400">3</p>
           </div>
-          <div className="p-5 rounded-lg bg-white/[0.03] backdrop-blur border border-white/[0.06] hover:bg-white/[0.05] transition-all">
-            <p className="text-gray-400 text-sm mb-2">Completed</p>
+          <div
+            className="p-5 rounded-lg backdrop-blur border transition-all"
+            style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)" }}
+            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--surface-hover)")}
+            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "var(--surface)")}
+          >
+            <p className="text-sm mb-2" style={{ color: "var(--text-secondary)" }}>Completed</p>
             <p className="text-3xl font-bold text-emerald-400">18</p>
           </div>
-          <div className="p-5 rounded-lg bg-white/[0.03] backdrop-blur border border-white/[0.06] hover:bg-white/[0.05] transition-all">
-            <p className="text-gray-400 text-sm mb-2">Storage Used</p>
+          <div
+            className="p-5 rounded-lg backdrop-blur border transition-all"
+            style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)" }}
+            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--surface-hover)")}
+            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "var(--surface)")}
+          >
+            <p className="text-sm mb-2" style={{ color: "var(--text-secondary)" }}>Storage Used</p>
             <p className="text-3xl font-bold text-blue-400">142 GB</p>
           </div>
         </div>
@@ -104,14 +125,19 @@ export default function Dashboard() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
             {recentProjects.map((project, index) => (
               <Link key={project.id} href={`/projects/${project.id}`}>
-                <div className="rounded-lg overflow-hidden bg-gray-900/50 border border-white/[0.06] hover:border-white/[0.12] hover:shadow-xl transition-all hover:scale-105 cursor-pointer group">
+                <div
+                  className="rounded-lg overflow-hidden border hover:shadow-xl transition-all hover:scale-105 cursor-pointer group"
+                  style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)" }}
+                  onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--border-medium)")}
+                  onMouseLeave={(e) => (e.currentTarget.style.borderColor = "var(--border-subtle)")}
+                >
                   <div
                     className={`h-32 bg-gradient-to-br ${projectGradients[index % projectGradients.length]} group-hover:opacity-80 transition-opacity`}
                   />
                   <div className="p-4 space-y-3">
                     <div>
-                      <h3 className="font-medium text-white group-hover:text-purple-300 transition-colors">{project.name}</h3>
-                      <p className="text-xs text-gray-400 mt-1">
+                      <h3 className="font-medium group-hover:text-purple-300 transition-colors" style={{ color: "var(--text-primary)" }}>{project.name}</h3>
+                      <p className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>
                         {project.type} · {project.date}
                       </p>
                     </div>

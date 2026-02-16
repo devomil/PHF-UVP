@@ -4,6 +4,7 @@
 A full-stack AI video production platform supporting multiple AI video providers (Kling, RunwayML, Luma, Pika, Veo), intelligent provider selection, brand asset management, quality evaluation, sound design, and Remotion-based video composition. Built with React frontend and Express backend using PostgreSQL database.
 
 ## Recent Changes
+- 2026-02-16: Added light/dark mode toggle. ThemeContext manages theme state with localStorage persistence, CSS custom properties handle all theme-dependent colors. Toggle button in sidebar (authenticated) and top-right corner (landing/auth pages).
 - 2026-02-16: Major UI/UX redesign - Canva-inspired persistent sidebar navigation, glassmorphism card surfaces, animated gradient landing page, split-panel auth page, visual project cards with gradient thumbnails, modern dark theme throughout all pages.
 - 2026-02-16: Restructured from HR app to Video Production Platform. Removed all HR management files, created video-focused pages and dark theme UI. Organized backend services into server/services/ and frontend components into client/src/components/video/.
 
@@ -67,8 +68,9 @@ remotion/               # Remotion video compositions
 - Frontend dev server: Vite middleware mode through Express on port 5000
 - Path aliases: `@/` maps to `client/src/`, `@shared/` maps to `shared/`
 - Vite configured with `allowedHosts: true` for Replit proxy
-- Modern dark theme with glassmorphism surfaces (bg-white/[0.03], border-white/[0.06])
-- Canva-inspired collapsible sidebar navigation
+- Light/dark mode via CSS custom properties (--app-bg, --surface, --border-subtle, --text-primary, etc.)
+- ThemeContext with toggle, localStorage persistence, data-theme attribute on html
+- Canva-inspired collapsible sidebar navigation with theme toggle (Sun/Moon icons)
 - Purple/indigo accent colors with gradient CTAs
 
 ### Scripts

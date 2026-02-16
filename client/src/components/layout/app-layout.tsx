@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, ReactNode } from "react";
 import { useLocation, Link } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
+import { useTheme } from "@/contexts/ThemeContext";
 import {
   LayoutDashboard,
   FolderOpen,
@@ -14,6 +15,8 @@ import {
   LogOut,
   Settings,
   User,
+  Sun,
+  Moon,
 } from "lucide-react";
 
 const navItems = [
@@ -31,6 +34,7 @@ function AppLayout({ children }: { children: ReactNode }) {
   const menuRef = useRef<HTMLDivElement>(null);
   const [location] = useLocation();
   const { user, logoutMutation } = useAuth();
+  const { theme, toggleTheme } = useTheme();
 
   const isActive = (path: string) => {
     if (path === "/") return location === "/" || location === "/dashboard";
@@ -58,11 +62,12 @@ function AppLayout({ children }: { children: ReactNode }) {
   }, [menuOpen]);
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#0a0a0f]">
+    <div className="flex h-screen overflow-hidden theme-bg">
       <aside
-        className={`flex flex-col bg-[#0f0f14] border-r border-white/[0.06] transition-all duration-300 ease-in-out ${
+        className={`flex flex-col theme-sidebar-bg border-r transition-all duration-300 ease-in-out ${
           collapsed ? "w-[68px]" : "w-[240px]"
         }`}
+        style={{ borderColor: "var(--border-subtle)" }}
       >
         <div className="p-3 mt-2">
           <Link
@@ -85,35 +90,57 @@ function AppLayout({ children }: { children: ReactNode }) {
                 href={item.path}
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 group relative ${
                   active
-                    ? "bg-purple-500/10 text-purple-400"
-                    : "text-gray-400 hover:text-gray-200 hover:bg-white/[0.04]"
+                    ? "theme-nav-active text-purple-600"
+                    : "theme-text-secondary theme-nav-hover"
                 } ${collapsed ? "justify-center" : ""}`}
+                style={active ? { color: "rgb(124, 58, 237)" } : {}}
               >
                 {active && (
                   <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-purple-500 rounded-r-full" />
                 )}
-                <item.icon className={`w-5 h-5 shrink-0 ${active ? "text-purple-400" : "text-gray-500 group-hover:text-gray-300"}`} />
+                <item.icon
+                  className="w-5 h-5 shrink-0"
+                  style={{ color: active ? "rgb(124, 58, 237)" : "var(--icon-default)" }}
+                />
                 {!collapsed && <span>{item.label}</span>}
               </Link>
             );
           })}
         </nav>
 
-        <div className="border-t border-white/[0.06] p-2">
-          <button
-            onClick={() => setCollapsed(!collapsed)}
-            className="flex items-center justify-center w-full p-2 rounded-lg text-gray-500 hover:text-gray-300 hover:bg-white/[0.04] transition-all duration-200"
-          >
-            {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
-          </button>
+        <div className="p-2" style={{ borderTop: "1px solid var(--border-subtle)" }}>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={toggleTheme}
+              className="flex items-center justify-center flex-1 p-2 rounded-lg transition-all duration-200"
+              style={{ color: "var(--icon-default)" }}
+              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--nav-hover-bg)")}
+              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
+              title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            >
+              {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+            </button>
+            <button
+              onClick={() => setCollapsed(!collapsed)}
+              className="flex items-center justify-center flex-1 p-2 rounded-lg transition-all duration-200"
+              style={{ color: "var(--icon-default)" }}
+              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--nav-hover-bg)")}
+              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
+            >
+              {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+            </button>
+          </div>
         </div>
 
-        <div className="border-t border-white/[0.06] p-2 relative" ref={menuRef}>
+        <div className="p-2 relative" ref={menuRef} style={{ borderTop: "1px solid var(--border-subtle)" }}>
           <button
             onClick={() => setMenuOpen(!menuOpen)}
-            className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm text-gray-300 hover:bg-white/[0.04] transition-all duration-200 ${
+            className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm transition-all duration-200 ${
               collapsed ? "justify-center px-0" : ""
             }`}
+            style={{ color: "var(--text-secondary)" }}
+            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--nav-hover-bg)")}
+            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
           >
             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-600 to-violet-500 flex items-center justify-center text-xs font-semibold text-white shrink-0">
               {userInitials}
@@ -124,11 +151,17 @@ function AppLayout({ children }: { children: ReactNode }) {
           </button>
 
           {menuOpen && (
-            <div className="absolute bottom-full left-2 right-2 mb-1 bg-[#1a1a24] border border-white/[0.08] rounded-lg shadow-xl overflow-hidden z-50">
+            <div
+              className="absolute bottom-full left-2 right-2 mb-1 rounded-lg shadow-xl overflow-hidden z-50"
+              style={{ backgroundColor: "var(--menu-bg)", border: "1px solid var(--border-medium)" }}
+            >
               <Link
                 href="/profile"
                 onClick={() => setMenuOpen(false)}
-                className="flex items-center gap-2 px-3 py-2.5 text-sm text-gray-300 hover:bg-white/[0.06] transition-colors"
+                className="flex items-center gap-2 px-3 py-2.5 text-sm transition-colors"
+                style={{ color: "var(--text-secondary)" }}
+                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--surface-hover)")}
+                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
               >
                 <User className="w-4 h-4" />
                 <span>Profile</span>
@@ -136,18 +169,23 @@ function AppLayout({ children }: { children: ReactNode }) {
               <Link
                 href="/profile"
                 onClick={() => setMenuOpen(false)}
-                className="flex items-center gap-2 px-3 py-2.5 text-sm text-gray-300 hover:bg-white/[0.06] transition-colors"
+                className="flex items-center gap-2 px-3 py-2.5 text-sm transition-colors"
+                style={{ color: "var(--text-secondary)" }}
+                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--surface-hover)")}
+                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
               >
                 <Settings className="w-4 h-4" />
                 <span>Settings</span>
               </Link>
-              <div className="border-t border-white/[0.08]" />
+              <div style={{ borderTop: "1px solid var(--border-medium)" }} />
               <button
                 onClick={() => {
                   logoutMutation.mutate();
                   setMenuOpen(false);
                 }}
-                className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-red-400 hover:bg-white/[0.06] transition-colors"
+                className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-red-500 transition-colors"
+                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--surface-hover)")}
+                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
               >
                 <LogOut className="w-4 h-4" />
                 <span>Log out</span>

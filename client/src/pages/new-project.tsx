@@ -62,26 +62,27 @@ function ModeSelection({ onSelect }: { onSelect: (mode: Mode) => void }) {
 
   return (
     <div>
-      <h1 className="text-3xl font-bold mb-2">Create New Project</h1>
-      <p className="text-gray-400 mb-8">Choose how you want to create your video or image</p>
+      <h1 className="text-3xl font-bold mb-2" style={{ color: "var(--text-primary)" }}>Create New Project</h1>
+      <p className="mb-8" style={{ color: "var(--text-secondary)" }}>Choose how you want to create your video or image</p>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {modes.map((mode) => {
           const Icon = mode.icon;
           return (
             <Card
               key={mode.id}
-              className={`bg-white/[0.03] border border-white/[0.06] cursor-pointer transition-all duration-300 ${mode.border} ${mode.glow} hover:shadow-lg hover:-translate-y-1`}
+              className={`cursor-pointer transition-all duration-300 ${mode.border} ${mode.glow} hover:shadow-lg hover:-translate-y-1`}
+              style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)" }}
               onClick={() => onSelect(mode.id)}
             >
               <CardHeader>
                 <div className={`w-12 h-12 rounded-lg bg-gradient-to-br ${mode.gradient} flex items-center justify-center mb-3`}>
                   <Icon className={`w-6 h-6 ${mode.iconColor}`} />
                 </div>
-                <CardTitle className="text-white text-lg">{mode.title}</CardTitle>
-                <CardDescription className="text-gray-400 mt-2">{mode.description}</CardDescription>
+                <CardTitle className="text-lg" style={{ color: "var(--text-primary)" }}>{mode.title}</CardTitle>
+                <CardDescription className="mt-2" style={{ color: "var(--text-secondary)" }}>{mode.description}</CardDescription>
               </CardHeader>
               <CardContent>
-                <Badge variant="outline" className="border-white/[0.08] text-gray-400 text-xs">
+                <Badge variant="outline" className="text-xs" style={{ borderColor: "var(--border-medium)", color: "var(--text-secondary)" }}>
                   Best for: {mode.bestFor}
                 </Badge>
               </CardContent>
@@ -126,44 +127,44 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
     <form onSubmit={handleSubmit} className="max-w-2xl">
       <div className="flex items-center gap-3 mb-6">
         <Sparkles className="w-6 h-6 text-purple-400" />
-        <h2 className="text-2xl font-bold">AI-Generated Script</h2>
+        <h2 className="text-2xl font-bold" style={{ color: "var(--text-primary)" }}>AI-Generated Script</h2>
       </div>
 
       <div className="space-y-5">
         <div>
-          <Label className="text-gray-300">Project Title *</Label>
-          <Input value={title} onChange={(e) => setTitle(e.target.value)} required placeholder="Enter project title" className="mt-1.5 bg-white/[0.03] border-white/[0.08] text-white" />
+          <Label style={{ color: "var(--text-secondary)" }}>Project Title *</Label>
+          <Input value={title} onChange={(e) => setTitle(e.target.value)} required placeholder="Enter project title" className="mt-1.5" style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }} />
         </div>
 
         <div>
-          <Label className="text-gray-300">Description / Brief</Label>
-          <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Describe what you want your video to be about..." rows={4} className="mt-1.5 bg-white/[0.03] border-white/[0.08] text-white" />
+          <Label style={{ color: "var(--text-secondary)" }}>Description / Brief</Label>
+          <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Describe what you want your video to be about..." rows={4} className="mt-1.5" style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }} />
         </div>
 
         <div>
-          <Label className="text-gray-300">Target Audience</Label>
-          <Input value={targetAudience} onChange={(e) => setTargetAudience(e.target.value)} placeholder="e.g., Young professionals, Tech enthusiasts" className="mt-1.5 bg-white/[0.03] border-white/[0.08] text-white" />
+          <Label style={{ color: "var(--text-secondary)" }}>Target Audience</Label>
+          <Input value={targetAudience} onChange={(e) => setTargetAudience(e.target.value)} placeholder="e.g., Young professionals, Tech enthusiasts" className="mt-1.5" style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }} />
         </div>
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <Label className="text-gray-300">Target Duration</Label>
+            <Label style={{ color: "var(--text-secondary)" }}>Target Duration</Label>
             <Select value={duration} onValueChange={setDuration}>
-              <SelectTrigger className="mt-1.5 bg-white/[0.03] border-white/[0.08] text-white"><SelectValue /></SelectTrigger>
-              <SelectContent className="bg-[#1a1a2e] border-white/[0.08]">
+              <SelectTrigger className="mt-1.5" style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }}><SelectValue /></SelectTrigger>
+              <SelectContent style={{ backgroundColor: "var(--menu-bg)", borderColor: "var(--border-medium)" }}>
                 {["15", "30", "60", "90", "120", "180"].map((d) => (
-                  <SelectItem key={d} value={d} className="text-white">{d}s</SelectItem>
+                  <SelectItem key={d} value={d} style={{ color: "var(--text-primary)" }}>{d}s</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
           <div>
-            <Label className="text-gray-300">Platform</Label>
+            <Label style={{ color: "var(--text-secondary)" }}>Platform</Label>
             <Select value={platform} onValueChange={setPlatform}>
-              <SelectTrigger className="mt-1.5 bg-white/[0.03] border-white/[0.08] text-white"><SelectValue /></SelectTrigger>
-              <SelectContent className="bg-[#1a1a2e] border-white/[0.08]">
+              <SelectTrigger className="mt-1.5" style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }}><SelectValue /></SelectTrigger>
+              <SelectContent style={{ backgroundColor: "var(--menu-bg)", borderColor: "var(--border-medium)" }}>
                 {["YouTube", "TikTok", "Instagram Reels", "Instagram Post", "Facebook", "Website"].map((p) => (
-                  <SelectItem key={p} value={p} className="text-white">{p}</SelectItem>
+                  <SelectItem key={p} value={p} style={{ color: "var(--text-primary)" }}>{p}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -172,23 +173,23 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <Label className="text-gray-300">Aspect Ratio</Label>
+            <Label style={{ color: "var(--text-secondary)" }}>Aspect Ratio</Label>
             <Select value={aspectRatio} onValueChange={setAspectRatio}>
-              <SelectTrigger className="mt-1.5 bg-white/[0.03] border-white/[0.08] text-white"><SelectValue /></SelectTrigger>
-              <SelectContent className="bg-[#1a1a2e] border-white/[0.08]">
+              <SelectTrigger className="mt-1.5" style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }}><SelectValue /></SelectTrigger>
+              <SelectContent style={{ backgroundColor: "var(--menu-bg)", borderColor: "var(--border-medium)" }}>
                 {["16:9", "9:16", "1:1"].map((ar) => (
-                  <SelectItem key={ar} value={ar} className="text-white">{ar}</SelectItem>
+                  <SelectItem key={ar} value={ar} style={{ color: "var(--text-primary)" }}>{ar}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
           <div>
-            <Label className="text-gray-300">Quality Tier</Label>
+            <Label style={{ color: "var(--text-secondary)" }}>Quality Tier</Label>
             <Select value={qualityTier} onValueChange={setQualityTier}>
-              <SelectTrigger className="mt-1.5 bg-white/[0.03] border-white/[0.08] text-white"><SelectValue /></SelectTrigger>
-              <SelectContent className="bg-[#1a1a2e] border-white/[0.08]">
+              <SelectTrigger className="mt-1.5" style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }}><SelectValue /></SelectTrigger>
+              <SelectContent style={{ backgroundColor: "var(--menu-bg)", borderColor: "var(--border-medium)" }}>
                 {["ultra", "premium", "standard"].map((q) => (
-                  <SelectItem key={q} value={q} className="text-white">{q.charAt(0).toUpperCase() + q.slice(1)}</SelectItem>
+                  <SelectItem key={q} value={q} style={{ color: "var(--text-primary)" }}>{q.charAt(0).toUpperCase() + q.slice(1)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -196,19 +197,19 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
         </div>
 
         <div>
-          <Label className="text-gray-300">Media Mode</Label>
+          <Label style={{ color: "var(--text-secondary)" }}>Media Mode</Label>
           <div className="flex gap-3 mt-1.5">
-            <Button type="button" variant={mediaMode === "video" ? "default" : "outline"} className={mediaMode === "video" ? "bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500" : "border-white/[0.08] text-gray-400"} onClick={() => setMediaMode("video")}>
+            <Button type="button" variant={mediaMode === "video" ? "default" : "outline"} className={mediaMode === "video" ? "bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500" : ""} style={mediaMode !== "video" ? { borderColor: "var(--border-medium)", color: "var(--text-secondary)" } : {}} onClick={() => setMediaMode("video")}>
               <Video className="w-4 h-4 mr-2" /> Video
             </Button>
-            <Button type="button" variant={mediaMode === "image" ? "default" : "outline"} className={mediaMode === "image" ? "bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500" : "border-white/[0.08] text-gray-400"} onClick={() => setMediaMode("image")}>
+            <Button type="button" variant={mediaMode === "image" ? "default" : "outline"} className={mediaMode === "image" ? "bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500" : ""} style={mediaMode !== "image" ? { borderColor: "var(--border-medium)", color: "var(--text-secondary)" } : {}} onClick={() => setMediaMode("image")}>
               <Image className="w-4 h-4 mr-2" /> Image-only
             </Button>
           </div>
         </div>
 
         <div className="flex gap-3 pt-4">
-          <Button type="button" variant="outline" className="border-white/[0.08] text-gray-300 hover:bg-white/[0.05]" onClick={onBack}>
+          <Button type="button" variant="outline" onClick={onBack} style={{ borderColor: "var(--border-medium)", color: "var(--text-secondary)" }}>
             <ArrowLeft className="w-4 h-4 mr-2" /> Back
           </Button>
           <Button type="submit" className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500" disabled={isLoading || !title}>
@@ -255,32 +256,32 @@ function CustomScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void;
     <form onSubmit={handleSubmit} className="max-w-2xl">
       <div className="flex items-center gap-3 mb-6">
         <FileText className="w-6 h-6 text-blue-400" />
-        <h2 className="text-2xl font-bold">Custom Script</h2>
+        <h2 className="text-2xl font-bold" style={{ color: "var(--text-primary)" }}>Custom Script</h2>
       </div>
 
       <div className="space-y-5">
         <div>
-          <Label className="text-gray-300">Project Title *</Label>
-          <Input value={title} onChange={(e) => setTitle(e.target.value)} required placeholder="Enter project title" className="mt-1.5 bg-white/[0.03] border-white/[0.08] text-white" />
+          <Label style={{ color: "var(--text-secondary)" }}>Project Title *</Label>
+          <Input value={title} onChange={(e) => setTitle(e.target.value)} required placeholder="Enter project title" className="mt-1.5" style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }} />
         </div>
 
         <div>
-          <Label className="text-gray-300">Script</Label>
-          <Textarea value={script} onChange={(e) => setScript(e.target.value)} placeholder="Write or paste your script here..." rows={8} className="mt-1.5 bg-white/[0.03] border-white/[0.08] text-white" />
+          <Label style={{ color: "var(--text-secondary)" }}>Script</Label>
+          <Textarea value={script} onChange={(e) => setScript(e.target.value)} placeholder="Write or paste your script here..." rows={8} className="mt-1.5" style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }} />
         </div>
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <Label className="text-gray-300">Number of Scenes</Label>
-            <Input type="number" value={numScenes} onChange={(e) => setNumScenes(e.target.value)} min="1" max="50" className="mt-1.5 bg-white/[0.03] border-white/[0.08] text-white" />
+            <Label style={{ color: "var(--text-secondary)" }}>Number of Scenes</Label>
+            <Input type="number" value={numScenes} onChange={(e) => setNumScenes(e.target.value)} min="1" max="50" className="mt-1.5" style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }} />
           </div>
           <div>
-            <Label className="text-gray-300">Target Duration</Label>
+            <Label style={{ color: "var(--text-secondary)" }}>Target Duration</Label>
             <Select value={duration} onValueChange={setDuration}>
-              <SelectTrigger className="mt-1.5 bg-white/[0.03] border-white/[0.08] text-white"><SelectValue /></SelectTrigger>
-              <SelectContent className="bg-[#1a1a2e] border-white/[0.08]">
+              <SelectTrigger className="mt-1.5" style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }}><SelectValue /></SelectTrigger>
+              <SelectContent style={{ backgroundColor: "var(--menu-bg)", borderColor: "var(--border-medium)" }}>
                 {["15", "30", "60", "90", "120", "180"].map((d) => (
-                  <SelectItem key={d} value={d} className="text-white">{d}s</SelectItem>
+                  <SelectItem key={d} value={d} style={{ color: "var(--text-primary)" }}>{d}s</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -289,23 +290,23 @@ function CustomScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void;
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <Label className="text-gray-300">Platform</Label>
+            <Label style={{ color: "var(--text-secondary)" }}>Platform</Label>
             <Select value={platform} onValueChange={setPlatform}>
-              <SelectTrigger className="mt-1.5 bg-white/[0.03] border-white/[0.08] text-white"><SelectValue /></SelectTrigger>
-              <SelectContent className="bg-[#1a1a2e] border-white/[0.08]">
+              <SelectTrigger className="mt-1.5" style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }}><SelectValue /></SelectTrigger>
+              <SelectContent style={{ backgroundColor: "var(--menu-bg)", borderColor: "var(--border-medium)" }}>
                 {["YouTube", "TikTok", "Instagram Reels", "Instagram Post", "Facebook", "Website"].map((p) => (
-                  <SelectItem key={p} value={p} className="text-white">{p}</SelectItem>
+                  <SelectItem key={p} value={p} style={{ color: "var(--text-primary)" }}>{p}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
           <div>
-            <Label className="text-gray-300">Aspect Ratio</Label>
+            <Label style={{ color: "var(--text-secondary)" }}>Aspect Ratio</Label>
             <Select value={aspectRatio} onValueChange={setAspectRatio}>
-              <SelectTrigger className="mt-1.5 bg-white/[0.03] border-white/[0.08] text-white"><SelectValue /></SelectTrigger>
-              <SelectContent className="bg-[#1a1a2e] border-white/[0.08]">
+              <SelectTrigger className="mt-1.5" style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }}><SelectValue /></SelectTrigger>
+              <SelectContent style={{ backgroundColor: "var(--menu-bg)", borderColor: "var(--border-medium)" }}>
                 {["16:9", "9:16", "1:1"].map((ar) => (
-                  <SelectItem key={ar} value={ar} className="text-white">{ar}</SelectItem>
+                  <SelectItem key={ar} value={ar} style={{ color: "var(--text-primary)" }}>{ar}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -314,23 +315,23 @@ function CustomScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void;
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <Label className="text-gray-300">Visual Style</Label>
+            <Label style={{ color: "var(--text-secondary)" }}>Visual Style</Label>
             <Select value={visualStyle} onValueChange={setVisualStyle}>
-              <SelectTrigger className="mt-1.5 bg-white/[0.03] border-white/[0.08] text-white"><SelectValue /></SelectTrigger>
-              <SelectContent className="bg-[#1a1a2e] border-white/[0.08]">
+              <SelectTrigger className="mt-1.5" style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }}><SelectValue /></SelectTrigger>
+              <SelectContent style={{ backgroundColor: "var(--menu-bg)", borderColor: "var(--border-medium)" }}>
                 {["Professional", "Cinematic", "Minimal", "Bold", "Playful"].map((s) => (
-                  <SelectItem key={s} value={s} className="text-white">{s}</SelectItem>
+                  <SelectItem key={s} value={s} style={{ color: "var(--text-primary)" }}>{s}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
           <div>
-            <Label className="text-gray-300">Voice Style</Label>
+            <Label style={{ color: "var(--text-secondary)" }}>Voice Style</Label>
             <Select value={voiceStyle} onValueChange={setVoiceStyle}>
-              <SelectTrigger className="mt-1.5 bg-white/[0.03] border-white/[0.08] text-white"><SelectValue /></SelectTrigger>
-              <SelectContent className="bg-[#1a1a2e] border-white/[0.08]">
+              <SelectTrigger className="mt-1.5" style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }}><SelectValue /></SelectTrigger>
+              <SelectContent style={{ backgroundColor: "var(--menu-bg)", borderColor: "var(--border-medium)" }}>
                 {["Professional", "Conversational", "Energetic", "Calm", "Dramatic"].map((s) => (
-                  <SelectItem key={s} value={s} className="text-white">{s}</SelectItem>
+                  <SelectItem key={s} value={s} style={{ color: "var(--text-primary)" }}>{s}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -338,19 +339,19 @@ function CustomScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void;
         </div>
 
         <div>
-          <Label className="text-gray-300">Media Mode</Label>
+          <Label style={{ color: "var(--text-secondary)" }}>Media Mode</Label>
           <div className="flex gap-3 mt-1.5">
-            <Button type="button" variant={mediaMode === "video" ? "default" : "outline"} className={mediaMode === "video" ? "bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500" : "border-white/[0.08] text-gray-400"} onClick={() => setMediaMode("video")}>
+            <Button type="button" variant={mediaMode === "video" ? "default" : "outline"} className={mediaMode === "video" ? "bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500" : ""} style={mediaMode !== "video" ? { borderColor: "var(--border-medium)", color: "var(--text-secondary)" } : {}} onClick={() => setMediaMode("video")}>
               <Video className="w-4 h-4 mr-2" /> Video
             </Button>
-            <Button type="button" variant={mediaMode === "image" ? "default" : "outline"} className={mediaMode === "image" ? "bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500" : "border-white/[0.08] text-gray-400"} onClick={() => setMediaMode("image")}>
+            <Button type="button" variant={mediaMode === "image" ? "default" : "outline"} className={mediaMode === "image" ? "bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500" : ""} style={mediaMode !== "image" ? { borderColor: "var(--border-medium)", color: "var(--text-secondary)" } : {}} onClick={() => setMediaMode("image")}>
               <Image className="w-4 h-4 mr-2" /> Image-only
             </Button>
           </div>
         </div>
 
         <div className="flex gap-3 pt-4">
-          <Button type="button" variant="outline" className="border-white/[0.08] text-gray-300 hover:bg-white/[0.05]" onClick={onBack}>
+          <Button type="button" variant="outline" onClick={onBack} style={{ borderColor: "var(--border-medium)", color: "var(--text-secondary)" }}>
             <ArrowLeft className="w-4 h-4 mr-2" /> Back
           </Button>
           <Button type="submit" className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500" disabled={isLoading || !title}>
@@ -389,53 +390,53 @@ function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () => void; 
     <form onSubmit={handleSubmit} className="max-w-2xl">
       <div className="flex items-center gap-3 mb-6">
         <Zap className="w-6 h-6 text-cyan-400" />
-        <h2 className="text-2xl font-bold">Quick Create</h2>
+        <h2 className="text-2xl font-bold" style={{ color: "var(--text-primary)" }}>Quick Create</h2>
       </div>
 
       <div className="space-y-5">
         <div>
-          <Label className="text-gray-300">Output Type</Label>
+          <Label style={{ color: "var(--text-secondary)" }}>Output Type</Label>
           <div className="grid grid-cols-2 gap-3 mt-1.5">
-            <Card className={`cursor-pointer transition-all duration-200 ${outputType === "video" ? "bg-purple-600/20 border-purple-500" : "bg-white/[0.03] border-white/[0.06] hover:border-white/[0.1]"}`} onClick={() => setOutputType("video")}>
+            <Card className={`cursor-pointer transition-all duration-200 ${outputType === "video" ? "bg-purple-600/20 border-purple-500" : ""}`} style={outputType !== "video" ? { backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)" } : {}} onClick={() => setOutputType("video")}>
               <CardContent className="flex items-center justify-center gap-2 p-4">
-                <Video className={`w-5 h-5 ${outputType === "video" ? "text-purple-400" : "text-gray-400"}`} />
-                <span className={outputType === "video" ? "text-white font-medium" : "text-gray-400"}>Video</span>
+                <Video className={`w-5 h-5 ${outputType === "video" ? "text-purple-400" : ""}`} style={outputType !== "video" ? { color: "var(--text-secondary)" } : {}} />
+                <span className={outputType === "video" ? "font-medium" : ""} style={{ color: outputType === "video" ? "var(--text-primary)" : "var(--text-secondary)" }}>{outputType === "video" ? "Video" : "Video"}</span>
               </CardContent>
             </Card>
-            <Card className={`cursor-pointer transition-all duration-200 ${outputType === "image" ? "bg-purple-600/20 border-purple-500" : "bg-white/[0.03] border-white/[0.06] hover:border-white/[0.1]"}`} onClick={() => setOutputType("image")}>
+            <Card className={`cursor-pointer transition-all duration-200 ${outputType === "image" ? "bg-purple-600/20 border-purple-500" : ""}`} style={outputType !== "image" ? { backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)" } : {}} onClick={() => setOutputType("image")}>
               <CardContent className="flex items-center justify-center gap-2 p-4">
-                <Image className={`w-5 h-5 ${outputType === "image" ? "text-purple-400" : "text-gray-400"}`} />
-                <span className={outputType === "image" ? "text-white font-medium" : "text-gray-400"}>Image</span>
+                <Image className={`w-5 h-5 ${outputType === "image" ? "text-purple-400" : ""}`} style={outputType !== "image" ? { color: "var(--text-secondary)" } : {}} />
+                <span className={outputType === "image" ? "font-medium" : ""} style={{ color: outputType === "image" ? "var(--text-primary)" : "var(--text-secondary)" }}>{outputType === "image" ? "Image" : "Image"}</span>
               </CardContent>
             </Card>
           </div>
         </div>
 
         <div>
-          <Label className="text-gray-300">Prompt *</Label>
-          <Textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="Describe the video clip or image you want to create..." rows={4} required className="mt-1.5 bg-white/[0.03] border-white/[0.08] text-white" />
+          <Label style={{ color: "var(--text-secondary)" }}>Prompt *</Label>
+          <Textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="Describe the video clip or image you want to create..." rows={4} required className="mt-1.5" style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }} />
         </div>
 
         {outputType === "video" ? (
           <div>
-            <Label className="text-gray-300">Duration</Label>
+            <Label style={{ color: "var(--text-secondary)" }}>Duration</Label>
             <Select value={duration} onValueChange={setDuration}>
-              <SelectTrigger className="mt-1.5 bg-white/[0.03] border-white/[0.08] text-white"><SelectValue /></SelectTrigger>
-              <SelectContent className="bg-[#1a1a2e] border-white/[0.08]">
+              <SelectTrigger className="mt-1.5" style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }}><SelectValue /></SelectTrigger>
+              <SelectContent style={{ backgroundColor: "var(--menu-bg)", borderColor: "var(--border-medium)" }}>
                 {["4", "6", "8", "10"].map((d) => (
-                  <SelectItem key={d} value={d} className="text-white">{d}s</SelectItem>
+                  <SelectItem key={d} value={d} style={{ color: "var(--text-primary)" }}>{d}s</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
         ) : (
           <div>
-            <Label className="text-gray-300">Style</Label>
+            <Label style={{ color: "var(--text-secondary)" }}>Style</Label>
             <Select value={imageStyle} onValueChange={setImageStyle}>
-              <SelectTrigger className="mt-1.5 bg-white/[0.03] border-white/[0.08] text-white"><SelectValue /></SelectTrigger>
-              <SelectContent className="bg-[#1a1a2e] border-white/[0.08]">
+              <SelectTrigger className="mt-1.5" style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }}><SelectValue /></SelectTrigger>
+              <SelectContent style={{ backgroundColor: "var(--menu-bg)", borderColor: "var(--border-medium)" }}>
                 {["Photorealistic", "Illustration", "3D Render", "Anime", "Abstract"].map((s) => (
-                  <SelectItem key={s} value={s} className="text-white">{s}</SelectItem>
+                  <SelectItem key={s} value={s} style={{ color: "var(--text-primary)" }}>{s}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -444,23 +445,23 @@ function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () => void; 
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <Label className="text-gray-300">Aspect Ratio</Label>
+            <Label style={{ color: "var(--text-secondary)" }}>Aspect Ratio</Label>
             <Select value={aspectRatio} onValueChange={setAspectRatio}>
-              <SelectTrigger className="mt-1.5 bg-white/[0.03] border-white/[0.08] text-white"><SelectValue /></SelectTrigger>
-              <SelectContent className="bg-[#1a1a2e] border-white/[0.08]">
+              <SelectTrigger className="mt-1.5" style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }}><SelectValue /></SelectTrigger>
+              <SelectContent style={{ backgroundColor: "var(--menu-bg)", borderColor: "var(--border-medium)" }}>
                 {["16:9", "9:16", "1:1"].map((ar) => (
-                  <SelectItem key={ar} value={ar} className="text-white">{ar}</SelectItem>
+                  <SelectItem key={ar} value={ar} style={{ color: "var(--text-primary)" }}>{ar}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
           <div>
-            <Label className="text-gray-300">Provider</Label>
+            <Label style={{ color: "var(--text-secondary)" }}>Provider</Label>
             <Select value={provider} onValueChange={setProvider}>
-              <SelectTrigger className="mt-1.5 bg-white/[0.03] border-white/[0.08] text-white"><SelectValue /></SelectTrigger>
-              <SelectContent className="bg-[#1a1a2e] border-white/[0.08]">
+              <SelectTrigger className="mt-1.5" style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }}><SelectValue /></SelectTrigger>
+              <SelectContent style={{ backgroundColor: "var(--menu-bg)", borderColor: "var(--border-medium)" }}>
                 {[{ value: "auto", label: "Auto-select" }, { value: "kling", label: "Kling" }, { value: "runwayml", label: "RunwayML" }, { value: "luma", label: "Luma" }, { value: "pika", label: "Pika" }, { value: "veo", label: "Veo" }].map((p) => (
-                  <SelectItem key={p.value} value={p.value} className="text-white">{p.label}</SelectItem>
+                  <SelectItem key={p.value} value={p.value} style={{ color: "var(--text-primary)" }}>{p.label}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -468,12 +469,12 @@ function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () => void; 
         </div>
 
         <div className="flex items-center gap-2">
-          <input type="checkbox" id="saveToLibrary" checked={saveToLibrary} onChange={(e) => setSaveToLibrary(e.target.checked)} className="rounded border-white/[0.08] bg-white/[0.03]" />
-          <Label htmlFor="saveToLibrary" className="text-gray-300 cursor-pointer">Save to Asset Library</Label>
+          <input type="checkbox" id="saveToLibrary" checked={saveToLibrary} onChange={(e) => setSaveToLibrary(e.target.checked)} className="rounded" style={{ borderColor: "var(--border-medium)", backgroundColor: "var(--input-bg)" }} />
+          <Label htmlFor="saveToLibrary" className="cursor-pointer" style={{ color: "var(--text-secondary)" }}>Save to Asset Library</Label>
         </div>
 
         <div className="flex gap-3 pt-4">
-          <Button type="button" variant="outline" className="border-white/[0.08] text-gray-300 hover:bg-white/[0.05]" onClick={onBack}>
+          <Button type="button" variant="outline" onClick={onBack} style={{ borderColor: "var(--border-medium)", color: "var(--text-secondary)" }}>
             <ArrowLeft className="w-4 h-4 mr-2" /> Back
           </Button>
           <Button type="submit" className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500" disabled={isLoading || !prompt}>
@@ -510,7 +511,7 @@ export default function NewProject() {
 
   return (
     <div className="p-6 lg:p-8">
-      <Link href="/dashboard" className="text-sm text-gray-500 hover:text-gray-300 inline-flex items-center gap-1 mb-6">
+      <Link href="/dashboard" className="text-sm inline-flex items-center gap-1 mb-6" style={{ color: "var(--text-muted)" }}>
         <ArrowLeft className="w-4 h-4" /> Back to Dashboard
       </Link>
 
