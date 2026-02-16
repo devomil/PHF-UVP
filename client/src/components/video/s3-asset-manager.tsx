@@ -60,30 +60,82 @@ const CATEGORY_ICONS: Record<CategoryKey, typeof Music> = {
   'fonts': Type,
 };
 
-const EXPECTED_SFX_FILES: { name: string; description: string; required: boolean }[] = [
-  { name: 'whoosh-soft.mp3', description: 'Soft transition whoosh (fade, film-burn)', required: true },
-  { name: 'whoosh-medium.mp3', description: 'Medium transition (slide, wipe)', required: false },
-  { name: 'whoosh-dramatic.mp3', description: 'Heavy transition (zoom, whip-pan)', required: false },
-  { name: 'rise-swell.mp3', description: 'Rising build-up before key moments', required: true },
-  { name: 'rise-tension.mp3', description: 'Tension build-up effect', required: false },
-  { name: 'logo-impact.mp3', description: 'Sound when logo appears on screen', required: true },
-  { name: 'impact-deep.mp3', description: 'Deep impact hit for emphasis', required: false },
-  { name: 'impact-soft.mp3', description: 'Soft impact accent', required: false },
-  { name: 'room-tone-warm.mp3', description: 'Warm ambient background loop', required: true },
-  { name: 'room-tone-nature.mp3', description: 'Nature ambient background loop', required: true },
-  { name: 'ambient-nature.mp3', description: 'Nature ambience track', required: false },
-  { name: 'ambient-wellness.mp3', description: 'Calm/wellness ambience', required: false },
-  { name: 'ambient-energy.mp3', description: 'Energetic ambient layer', required: false },
-];
+const EXPECTED_FILES: Record<CategoryKey, { name: string; description: string; required: boolean }[]> = {
+  'sfx': [
+    { name: 'whoosh-soft.mp3', description: 'Soft transition whoosh (fade, film-burn)', required: true },
+    { name: 'whoosh-medium.mp3', description: 'Medium transition (slide, wipe)', required: false },
+    { name: 'whoosh-dramatic.mp3', description: 'Heavy transition (zoom, whip-pan)', required: false },
+    { name: 'rise-swell.mp3', description: 'Rising build-up before key moments', required: true },
+    { name: 'rise-tension.mp3', description: 'Tension build-up effect', required: false },
+    { name: 'logo-impact.mp3', description: 'Sound when logo appears on screen', required: true },
+    { name: 'impact-deep.mp3', description: 'Deep impact hit for emphasis', required: false },
+    { name: 'impact-soft.mp3', description: 'Soft impact accent', required: false },
+    { name: 'room-tone-warm.mp3', description: 'Warm ambient background loop', required: true },
+    { name: 'room-tone-nature.mp3', description: 'Nature ambient background loop', required: true },
+    { name: 'ambient-nature.mp3', description: 'Nature ambience track', required: false },
+    { name: 'ambient-wellness.mp3', description: 'Calm/wellness ambience', required: false },
+    { name: 'ambient-energy.mp3', description: 'Energetic ambient layer', required: false },
+  ],
+  'music': [
+    { name: 'background-upbeat.mp3', description: 'Upbeat background track for energetic scenes', required: true },
+    { name: 'background-calm.mp3', description: 'Calm background music for professional tone', required: true },
+    { name: 'intro-theme.mp3', description: 'Opening theme music for video intros', required: true },
+    { name: 'outro-theme.mp3', description: 'Closing theme music for video outros', required: true },
+    { name: 'background-corporate.mp3', description: 'Corporate/business style background', required: false },
+    { name: 'background-cinematic.mp3', description: 'Cinematic/dramatic background score', required: false },
+    { name: 'background-playful.mp3', description: 'Fun/playful background music', required: false },
+    { name: 'transition-sting.mp3', description: 'Short musical sting between sections', required: false },
+  ],
+  'logos': [
+    { name: 'primary.png', description: 'Main brand logo (transparent background)', required: true },
+    { name: 'primary-dark.png', description: 'Logo variant for dark backgrounds', required: true },
+    { name: 'primary-light.png', description: 'Logo variant for light backgrounds', required: true },
+    { name: 'icon.png', description: 'Square icon/mark only (no text)', required: true },
+    { name: 'wordmark.png', description: 'Text-only logo version', required: false },
+    { name: 'watermark.png', description: 'Semi-transparent watermark version', required: false },
+    { name: 'animated-logo.webp', description: 'Animated logo (WebP/APNG)', required: false },
+  ],
+  'badges': [
+    { name: 'award-badge.png', description: 'Primary award or recognition badge', required: false },
+    { name: 'certified-badge.png', description: 'Certification/compliance badge', required: false },
+    { name: 'best-seller.png', description: 'Best seller or top-rated badge', required: false },
+    { name: 'verified-badge.png', description: 'Verified/authenticated badge', required: false },
+    { name: 'quality-seal.png', description: 'Quality assurance seal', required: false },
+    { name: 'partner-badge.png', description: 'Partnership or affiliation badge', required: false },
+  ],
+  'overlays': [
+    { name: 'watermark.png', description: 'Brand watermark overlay (semi-transparent)', required: true },
+    { name: 'lower-third.png', description: 'Lower third title bar template', required: true },
+    { name: 'frame-border.png', description: 'Decorative frame border overlay', required: false },
+    { name: 'corner-logo.png', description: 'Corner-positioned logo overlay', required: false },
+    { name: 'subscribe-cta.png', description: 'Subscribe/follow call-to-action overlay', required: false },
+    { name: 'social-bar.png', description: 'Social media handles bar overlay', required: false },
+  ],
+  'end-cards': [
+    { name: 'background-default.png', description: 'Default end card background (1920x1080)', required: true },
+    { name: 'background-dark.png', description: 'Dark variant end card background', required: false },
+    { name: 'background-branded.png', description: 'Branded end card with logo placement', required: false },
+    { name: 'cta-subscribe.png', description: 'Subscribe button overlay for end card', required: false },
+    { name: 'cta-visit-website.png', description: 'Visit website button overlay', required: false },
+    { name: 'social-icons.png', description: 'Social media icons strip for end card', required: false },
+  ],
+  'fonts': [
+    { name: 'heading.ttf', description: 'Primary heading/title font', required: true },
+    { name: 'body.ttf', description: 'Body text font', required: true },
+    { name: 'accent.ttf', description: 'Accent/decorative font for callouts', required: false },
+    { name: 'mono.ttf', description: 'Monospace font for code/data displays', required: false },
+    { name: 'script.ttf', description: 'Script/handwriting style font', required: false },
+  ],
+};
 
 const CATEGORY_FILE_HINTS: Record<CategoryKey, { examples: string[]; hint: string; formatTip: string }> = {
   'sfx': { examples: [], hint: 'Select a required filename from the list above, or type a custom name', formatTip: 'MP3 is recommended for smaller file sizes. WAV for highest quality.' },
-  'music': { examples: ['background-upbeat.mp3', 'intro-theme.mp3', 'outro-calm.mp3'], hint: 'Name your music file descriptively (e.g., "background-upbeat")', formatTip: 'MP3 (128-320kbps) recommended. Keep files under 10MB for faster rendering.' },
-  'logos': { examples: ['primary.png', 'dark.png', 'light.png', 'icon.png', 'wordmark.svg'], hint: 'Use a descriptive variant name (e.g., "dark", "light", "primary")', formatTip: 'PNG with transparent background is best for video overlays. SVG is ideal for perfect scaling at any resolution. Minimum 800px wide recommended.' },
-  'badges': { examples: ['organic-certified.png', 'award-2024.png', 'best-seller.png'], hint: 'Name after the award or certification', formatTip: 'PNG with transparent background recommended so badges layer cleanly over video. Minimum 400px wide.' },
-  'overlays': { examples: ['watermark.png', 'lower-third.png', 'frame-border.png'], hint: 'Describe the overlay type (e.g., "watermark", "lower-third")', formatTip: 'PNG with transparency required for overlays. Match your video resolution (1920x1080 for HD) for best results.' },
-  'end-cards': { examples: ['background-default.png', 'background-seasonal.jpg', 'cta-subscribe.png'], hint: 'Describe the end card element (e.g., "background-default")', formatTip: 'PNG or JPG at 1920x1080 recommended. Use PNG for elements with transparency.' },
-  'fonts': { examples: ['heading.ttf', 'body.otf', 'accent.woff2'], hint: 'Name by usage (e.g., "heading", "body", "accent")', formatTip: 'TTF or OTF formats work best for video rendering. WOFF/WOFF2 are web-only and may not render in videos.' },
+  'music': { examples: ['background-upbeat.mp3', 'intro-theme.mp3', 'outro-calm.mp3'], hint: 'Select a target filename below, then pick your audio file', formatTip: 'MP3 (128-320kbps) recommended. Keep files under 10MB for faster rendering.' },
+  'logos': { examples: ['primary.png', 'dark.png', 'light.png', 'icon.png', 'wordmark.svg'], hint: 'Select a target filename below, then pick your image file', formatTip: 'PNG with transparent background is best for video overlays. SVG is ideal for perfect scaling at any resolution. Minimum 800px wide recommended.' },
+  'badges': { examples: ['organic-certified.png', 'award-2024.png', 'best-seller.png'], hint: 'Select a target filename below, then pick your image file', formatTip: 'PNG with transparent background recommended so badges layer cleanly over video. Minimum 400px wide.' },
+  'overlays': { examples: ['watermark.png', 'lower-third.png', 'frame-border.png'], hint: 'Select a target filename below, then pick your image file', formatTip: 'PNG with transparency required for overlays. Match your video resolution (1920x1080 for HD) for best results.' },
+  'end-cards': { examples: ['background-default.png', 'background-seasonal.jpg', 'cta-subscribe.png'], hint: 'Select a target filename below, then pick your image file', formatTip: 'PNG or JPG at 1920x1080 recommended. Use PNG for elements with transparency.' },
+  'fonts': { examples: ['heading.ttf', 'body.otf', 'accent.woff2'], hint: 'Select a target filename below, then pick your font file', formatTip: 'TTF or OTF formats work best for video rendering. WOFF/WOFF2 are web-only and may not render in videos.' },
 };
 
 function formatFileSize(bytes: number): string {
@@ -190,8 +242,8 @@ function ImagePreview({ fileKey, name }: { fileKey: string; name: string }) {
   }, [fileKey]);
 
   return (
-    <div className="w-10 h-10 rounded overflow-hidden flex-shrink-0 bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
-      {loading && <RefreshCw className="h-4 w-4 animate-spin text-gray-400" />}
+    <div className="w-10 h-10 rounded overflow-hidden flex-shrink-0 flex items-center justify-center" style={{ backgroundColor: "var(--surface)" }}>
+      {loading && <RefreshCw className="h-4 w-4 animate-spin" style={{ color: "var(--text-muted)" }} />}
       {error && <XCircle className="h-4 w-4 text-red-400" />}
       {src && !error && (
         <img src={src} alt={name} className="w-full h-full object-contain" onError={() => setError(true)} />
@@ -213,7 +265,10 @@ function FileRow({ file, category, onDelete, validation }: { file: S3File; categ
   const isInvalid = validation && !validation.valid;
 
   return (
-    <div className={`flex items-center justify-between p-3 rounded-lg border ${isInvalid ? 'border-red-300 bg-red-50 dark:bg-red-950/20' : 'border-gray-200 dark:border-gray-700'}`}>
+    <div
+      className={`flex items-center justify-between p-3 rounded-lg border ${isInvalid ? 'border-red-300 bg-red-50 dark:bg-red-950/20' : ''}`}
+      style={isInvalid ? undefined : { borderColor: "var(--border-subtle)" }}
+    >
       <div className="flex items-center gap-3 flex-1 min-w-0">
         {isImage && <ImagePreview fileKey={file.key} name={file.name} />}
         {isAudio ? (
@@ -237,8 +292,8 @@ function FileRow({ file, category, onDelete, validation }: { file: S3File; categ
             </Badge>
           )
         )}
-        <span className="text-xs text-gray-500 w-16 text-right">{formatFileSize(file.size)}</span>
-        <span className="text-xs text-gray-400 w-32 text-right hidden md:block">{formatDate(file.lastModified)}</span>
+        <span className="text-xs w-16 text-right" style={{ color: "var(--text-secondary)" }}>{formatFileSize(file.size)}</span>
+        <span className="text-xs w-32 text-right hidden md:block" style={{ color: "var(--text-muted)" }}>{formatDate(file.lastModified)}</span>
         <Button
           variant="ghost"
           size="sm"
@@ -274,12 +329,13 @@ function UploadDialog({
 }) {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [pendingUploads, setPendingUploads] = useState<PendingUpload[]>([]);
-  const [sfxTarget, setSfxTarget] = useState<string>('');
+  const [fileTarget, setFileTarget] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const existingNames = new Set(existingFiles.map(f => f.name));
   const prefix = categoryData?.prefix || '';
-  const isSfx = category === 'sfx';
+  const expectedFiles = EXPECTED_FILES[category] || [];
+  const hasExpectedFiles = expectedFiles.length > 0;
   const hints = CATEGORY_FILE_HINTS[category];
 
   const getFileExtension = (filename: string) => {
@@ -298,11 +354,11 @@ function UploadDialog({
     if (!files || files.length === 0) return;
     const fileArr = Array.from(files);
 
-    if (isSfx) {
+    if (hasExpectedFiles) {
       setSelectedFiles([fileArr[0]]);
-      if (!sfxTarget) {
-        const matchingExpected = EXPECTED_SFX_FILES.find(e => e.name === fileArr[0].name);
-        if (matchingExpected) setSfxTarget(matchingExpected.name);
+      if (!fileTarget) {
+        const matchingExpected = expectedFiles.find(e => e.name === fileArr[0].name);
+        if (matchingExpected) setFileTarget(matchingExpected.name);
       }
     } else {
       const newPending: PendingUpload[] = fileArr.map(f => {
@@ -314,17 +370,17 @@ function UploadDialog({
     }
   };
 
-  const addSfxUpload = () => {
-    if (!sfxTarget || selectedFiles.length === 0) return;
+  const addFileUpload = () => {
+    if (!fileTarget || selectedFiles.length === 0) return;
     const file = selectedFiles[0];
-    const ext = getFileExtension(sfxTarget) || getFileExtension(file.name);
-    const finalName = sfxTarget.includes('.') ? sfxTarget : `${sfxTarget}${ext}`;
+    const ext = getFileExtension(fileTarget) || getFileExtension(file.name);
+    const finalName = fileTarget.includes('.') ? fileTarget : `${fileTarget}${ext}`;
 
     if (pendingUploads.some(p => p.saveName === finalName)) return;
 
     setPendingUploads(prev => [...prev, { file, saveName: finalName }]);
     setSelectedFiles([]);
-    setSfxTarget('');
+    setFileTarget('');
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -356,38 +412,38 @@ function UploadDialog({
     onUpload(pendingUploads);
     setPendingUploads([]);
     setSelectedFiles([]);
-    setSfxTarget('');
+    setFileTarget('');
     onOpenChange(false);
   };
 
   const resetDialog = () => {
     setPendingUploads([]);
     setSelectedFiles([]);
-    setSfxTarget('');
+    setFileTarget('');
   };
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) resetDialog(); onOpenChange(v); }}>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto" style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)", color: "var(--text-primary)" }}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Upload className="h-5 w-5" />
             Upload to {categoryData?.label || category}
           </DialogTitle>
           <DialogDescription>
-            Files will be saved to <code className="bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded text-xs font-mono">{prefix}</code> on S3
+            Files will be saved to <code className="px-1.5 py-0.5 rounded text-xs font-mono" style={{ backgroundColor: "var(--surface)", color: "var(--text-primary)" }}>{prefix}</code> on S3
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
-          {isSfx && (
+          {hasExpectedFiles && (
             <div className="space-y-3">
               <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
                 <div className="flex items-start gap-2">
                   <Info className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
                   <div className="text-xs text-blue-700 dark:text-blue-300">
                     <p className="font-medium mb-1">Required filenames for the video renderer</p>
-                    <p>Select a target filename below, then pick your audio file. The renderer expects these exact names.</p>
+                    <p>Select a target filename below, then pick your file. The renderer expects these exact names.</p>
                   </div>
                 </div>
               </div>
@@ -403,29 +459,34 @@ function UploadDialog({
               </div>
 
               <div className="grid gap-1.5">
-                {EXPECTED_SFX_FILES.map(sfx => {
-                  const isUploaded = existingNames.has(sfx.name);
-                  const isPending = pendingUploads.some(p => p.saveName === sfx.name);
+                {expectedFiles.map(ef => {
+                  const isUploaded = existingNames.has(ef.name);
+                  const isPending = pendingUploads.some(p => p.saveName === ef.name);
                   return (
                     <div
-                      key={sfx.name}
+                      key={ef.name}
                       className={`flex items-center justify-between p-2 rounded border text-sm cursor-pointer transition-colors ${
-                        sfxTarget === sfx.name
+                        fileTarget === ef.name
                           ? 'border-blue-400 bg-blue-50 dark:bg-blue-950/30'
                           : isPending
                           ? 'border-green-300 bg-green-50 dark:bg-green-950/20'
                           : isUploaded
-                          ? 'border-gray-200 dark:border-gray-700 opacity-60'
-                          : 'border-gray-200 dark:border-gray-700 hover:border-blue-300 hover:bg-gray-50 dark:hover:bg-gray-800'
+                          ? 'opacity-60'
+                          : ''
                       }`}
-                      onClick={() => !isPending && setSfxTarget(sfx.name)}
+                      style={
+                        fileTarget === ef.name || isPending
+                          ? undefined
+                          : { borderColor: "var(--border-subtle)" }
+                      }
+                      onClick={() => !isPending && setFileTarget(ef.name)}
                     >
                       <div className="flex items-center gap-2 min-w-0">
-                        <code className="text-xs font-mono bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded flex-shrink-0">{sfx.name}</code>
-                        <span className="text-xs text-gray-500 truncate">{sfx.description}</span>
+                        <code className="text-xs font-mono px-1.5 py-0.5 rounded flex-shrink-0" style={{ backgroundColor: "var(--surface)", color: "var(--text-primary)" }}>{ef.name}</code>
+                        <span className="text-xs truncate" style={{ color: "var(--text-secondary)" }}>{ef.description}</span>
                       </div>
                       <div className="flex items-center gap-1.5 flex-shrink-0">
-                        {sfx.required && !isUploaded && !isPending && (
+                        {ef.required && !isUploaded && !isPending && (
                           <Badge variant="outline" className="text-amber-600 border-amber-300 text-[10px] px-1.5">Required</Badge>
                         )}
                         {isPending && (
@@ -434,7 +495,7 @@ function UploadDialog({
                           </Badge>
                         )}
                         {isUploaded && !isPending && (
-                          <Badge variant="outline" className="text-gray-500 border-gray-300 text-[10px] px-1.5">Uploaded</Badge>
+                          <Badge variant="outline" className="text-[10px] px-1.5" style={{ color: "var(--text-secondary)", borderColor: "var(--border-medium)" }}>Uploaded</Badge>
                         )}
                       </div>
                     </div>
@@ -442,25 +503,25 @@ function UploadDialog({
                 })}
               </div>
 
-              {sfxTarget && (
-                <div className="flex items-center gap-2 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+              {fileTarget && (
+                <div className="flex items-center gap-2 p-3 rounded-lg" style={{ backgroundColor: "var(--surface)" }}>
                   <div className="flex-1">
-                    <p className="text-xs text-gray-500 mb-1">
-                      Saving as: <code className="font-mono bg-white dark:bg-gray-700 px-1 py-0.5 rounded">{prefix}{sfxTarget}</code>
-                      {existingNames.has(sfxTarget) && <span className="text-amber-600 ml-2">(will replace existing)</span>}
+                    <p className="text-xs mb-1" style={{ color: "var(--text-secondary)" }}>
+                      Saving as: <code className="font-mono px-1 py-0.5 rounded" style={{ backgroundColor: "var(--surface)", color: "var(--text-primary)" }}>{prefix}{fileTarget}</code>
+                      {existingNames.has(fileTarget) && <span className="text-amber-600 ml-2">(will replace existing)</span>}
                     </p>
                     <input
                       ref={fileInputRef}
                       type="file"
-                      accept={categoryData?.accept || '.mp3,.wav,.ogg'}
+                      accept={categoryData?.accept || '*'}
                       className="text-sm file:mr-2 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"
                       onChange={(e) => handleFilesSelected(e.target.files)}
                     />
-                    <p className="text-[10px] text-gray-400 mt-1">Select one audio file for this sound effect</p>
+                    <p className="text-[10px] mt-1" style={{ color: "var(--text-muted)" }}>Select a file for this asset</p>
                   </div>
                   <Button
                     size="sm"
-                    onClick={addSfxUpload}
+                    onClick={addFileUpload}
                     disabled={selectedFiles.length === 0}
                   >
                     Add
@@ -470,7 +531,7 @@ function UploadDialog({
             </div>
           )}
 
-          {!isSfx && (
+          {!hasExpectedFiles && (
             <div className="space-y-3">
               <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
                 <div className="flex items-start gap-2">
@@ -493,7 +554,8 @@ function UploadDialog({
               </div>
 
               <div
-                className="border-2 border-dashed rounded-lg p-6 text-center cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors"
+                className="border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors"
+                style={{ borderColor: "var(--border-medium)" }}
                 onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
                 onDrop={(e) => { e.preventDefault(); e.stopPropagation(); handleFilesSelected(e.dataTransfer.files); }}
                 onClick={() => fileInputRef.current?.click()}
@@ -506,9 +568,9 @@ function UploadDialog({
                   className="hidden"
                   onChange={(e) => handleFilesSelected(e.target.files)}
                 />
-                <Upload className="h-8 w-8 mx-auto text-gray-400" />
+                <Upload className="h-8 w-8 mx-auto" style={{ color: "var(--text-muted)" }} />
                 <p className="text-sm font-medium mt-2">Drag & drop files here, or click to browse</p>
-                <p className="text-xs text-gray-400 mt-1">Accepted: {categoryData?.accept || 'any'}</p>
+                <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>Accepted: {categoryData?.accept || 'any'}</p>
               </div>
             </div>
           )}
@@ -520,16 +582,16 @@ function UploadDialog({
                 Files to Upload ({pendingUploads.length})
               </Label>
               {pendingUploads.map((pu, idx) => (
-                <div key={idx} className="flex items-center gap-2 p-2.5 bg-gray-50 dark:bg-gray-800 rounded-lg border">
+                <div key={idx} className="flex items-center gap-2 p-2.5 rounded-lg border" style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)" }}>
                   <div className="flex-1 min-w-0 space-y-1">
                     <div className="flex items-center gap-1.5">
-                      <span className="text-[10px] text-gray-400 uppercase tracking-wider">Original:</span>
-                      <span className="text-xs text-gray-500 truncate">{pu.file.name}</span>
-                      <span className="text-[10px] text-gray-400">({formatFileSize(pu.file.size)})</span>
+                      <span className="text-[10px] uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>Original:</span>
+                      <span className="text-xs truncate" style={{ color: "var(--text-secondary)" }}>{pu.file.name}</span>
+                      <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>({formatFileSize(pu.file.size)})</span>
                     </div>
                     <div className="flex items-center gap-1.5">
-                      <span className="text-[10px] text-gray-400 font-mono flex-shrink-0">{prefix}</span>
-                      {isSfx ? (
+                      <span className="text-[10px] font-mono flex-shrink-0" style={{ color: "var(--text-muted)" }}>{prefix}</span>
+                      {hasExpectedFiles ? (
                         <code className="text-xs font-mono text-blue-600 dark:text-blue-400">{pu.saveName}</code>
                       ) : (
                         <Input
@@ -605,6 +667,11 @@ export default function S3AssetManager() {
 
   const categoriesQuery = useQuery<Record<CategoryKey, AssetCategory>>({
     queryKey: ['/api/admin/s3-assets/categories'],
+    queryFn: async () => {
+      const res = await fetch('/api/admin/s3-assets/categories', { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed to load categories');
+      return res.json();
+    },
   });
 
   const filesQuery = useQuery<S3File[]>({
@@ -709,7 +776,7 @@ export default function S3AssetManager() {
   const validCount = Object.values(validationResults).filter(v => v.valid).length;
 
   return (
-    <Card>
+    <Card style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)", color: "var(--text-primary)" }}>
       <CardHeader>
         <div className="flex items-center justify-between">
           <div>
@@ -717,7 +784,7 @@ export default function S3AssetManager() {
               <HardDrive className="h-5 w-5" />
               S3 Render Assets
             </CardTitle>
-            <p className="text-sm text-gray-500 mt-1">
+            <p className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>
               Manage files on AWS S3 used by the video rendering pipeline (sound effects, logos, badges, etc.)
             </p>
           </div>
@@ -788,7 +855,7 @@ export default function S3AssetManager() {
                     <p className="text-sm font-medium">Uploading {uploadingFiles.length} file{uploadingFiles.length > 1 ? 's' : ''}...</p>
                   </div>
                   <Progress value={uploadProgress} className="max-w-md" />
-                  <div className="text-xs text-gray-500 space-y-0.5">
+                  <div className="text-xs space-y-0.5" style={{ color: "var(--text-secondary)" }}>
                     {uploadingFiles.map((name, i) => (
                       <div key={i} className="font-mono">{currentCategory?.prefix}{name}</div>
                     ))}
@@ -797,9 +864,9 @@ export default function S3AssetManager() {
               )}
 
               {filesQuery.isLoading ? (
-                <div className="text-center py-8 text-gray-500">Loading files...</div>
+                <div className="text-center py-8" style={{ color: "var(--text-secondary)" }}>Loading files...</div>
               ) : files.length === 0 ? (
-                <div className="text-center py-8 text-gray-400">
+                <div className="text-center py-8" style={{ color: "var(--text-muted)" }}>
                   <FileText className="h-10 w-10 mx-auto mb-2 opacity-50" />
                   <p>No files in this category yet</p>
                   <p className="text-xs mt-1">Click "Upload Files" to add assets</p>
@@ -831,7 +898,7 @@ export default function S3AssetManager() {
         />
 
         <Dialog open={!!deleteKey} onOpenChange={() => setDeleteKey(null)}>
-          <DialogContent>
+          <DialogContent style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)", color: "var(--text-primary)" }}>
             <DialogHeader>
               <DialogTitle>Confirm Delete</DialogTitle>
               <DialogDescription>
