@@ -1,16 +1,31 @@
-import {
-  deploySite,
-  getFunctions,
-  renderMediaOnLambda,
-  getRenderProgress,
-  AwsRegion,
-} from "@remotion/lambda";
-import {
-  LambdaClient,
-  GetFunctionConcurrencyCommand,
-  PutFunctionConcurrencyCommand,
-} from "@aws-sdk/client-lambda";
 import path from "path";
+
+type AwsRegion = string;
+
+let _remotionLambda: any = null;
+let _lambdaClientMod: any = null;
+
+async function getRemotionLambda() {
+  if (!_remotionLambda) {
+    try {
+      _remotionLambda = await import("@remotion/lambda");
+    } catch {
+      throw new Error("@remotion/lambda is not installed. Install it to use Remotion Lambda rendering.");
+    }
+  }
+  return _remotionLambda;
+}
+
+async function getLambdaClientModule() {
+  if (!_lambdaClientMod) {
+    try {
+      _lambdaClientMod = await import("@aws-sdk/client-lambda");
+    } catch {
+      throw new Error("@aws-sdk/client-lambda is not installed.");
+    }
+  }
+  return _lambdaClientMod;
+}
 
 const DEFAULT_REGION: AwsRegion = "us-east-2";
 const DEFAULT_FUNCTION_NAME = "remotion-render-4-0-410-mem3008mb-disk10240mb-900sec";
@@ -98,9 +113,10 @@ class RemotionLambdaService {
     return { accessKeyId, secretAccessKey };
   }
 
-  private getLambdaClient(): LambdaClient {
+  private async getLambdaClient(): Promise<any> {
+    const mod = await getLambdaClientModule();
     const creds = this.getAwsCredentials();
-    return new LambdaClient({
+    return new mod.LambdaClient({
       region: this.region,
       credentials: {
         accessKeyId: creds.accessKeyId,
@@ -119,8 +135,9 @@ class RemotionLambdaService {
   }
 
   async getConcurrency(): Promise<ConcurrencyInfo> {
-    const client = this.getLambdaClient();
-    const command = new GetFunctionConcurrencyCommand({
+    const lambdaMod = await getLambdaClientModule();
+    const client = await this.getLambdaClient();
+    const command = new lambdaMod.GetFunctionConcurrencyCommand({
       FunctionName: this.functionName,
     });
 
@@ -148,8 +165,9 @@ class RemotionLambdaService {
   }
 
   async setConcurrency(reservedConcurrentExecutions: number): Promise<ConcurrencyInfo> {
-    const client = this.getLambdaClient();
-    const command = new PutFunctionConcurrencyCommand({
+    const lambdaMod = await getLambdaClientModule();
+    const client = await this.getLambdaClient();
+    const command = new lambdaMod.PutFunctionConcurrencyCommand({
       FunctionName: this.functionName,
       ReservedConcurrentExecutions: reservedConcurrentExecutions,
     });
@@ -185,7 +203,8 @@ class RemotionLambdaService {
       this.getAwsCredentials();
 
       // First try with compatibleOnly to find version-matched functions
-      const compatibleFunctions = await getFunctions({
+      const rl = await getRemotionLambda();
+      const compatibleFunctions = await rl.getFunctions({
         region,
         compatibleOnly: true,
       });
@@ -195,7 +214,8 @@ class RemotionLambdaService {
       // If not found with compatibleOnly, try without - helps diagnose version mismatches
       if (!ourFunction) {
         console.warn(`[Health] Function ${functionName} not found with compatibleOnly=true, trying without filter...`);
-        const allFunctions = await getFunctions({
+        const rl2 = await getRemotionLambda();
+        const allFunctions = await rl2.getFunctions({
           region,
           compatibleOnly: false,
         });
@@ -268,7 +288,8 @@ class RemotionLambdaService {
     try {
       this.getAwsCredentials();
 
-      const functions = await getFunctions({
+      const rl = await getRemotionLambda();
+      const functions = await rl.getFunctions({
         region: this.region,
         compatibleOnly: true,
       });
@@ -287,7 +308,8 @@ class RemotionLambdaService {
       }
 
       // Check if function exists but with incompatible version
-      const allFunctions = await getFunctions({
+      const rl2 = await getRemotionLambda();
+        const allFunctions = await rl2.getFunctions({
         region: this.region,
         compatibleOnly: false,
       });
@@ -343,7 +365,8 @@ class RemotionLambdaService {
     try {
       this.getAwsCredentials();
 
-      const { serveUrl } = await deploySite({
+      const rl = await getRemotionLambda();
+      const { serveUrl } = await rl.deploySite({
         bucketName: this.bucketName,
         entryPoint: path.resolve(process.cwd(), "remotion/index.ts"),
         region: this.region,
@@ -392,7 +415,8 @@ class RemotionLambdaService {
           console.warn(`[Remotion Lambda] WARNING: Input props are ${inputPropsSizeKB} KB - near Lambda 6MB payload limit!`);
         }
 
-        const result = await renderMediaOnLambda({
+        const rl = await getRemotionLambda();
+        const result = await rl.renderMediaOnLambda({
           region: this.region,
           functionName: this.functionName,
           serveUrl: this.serveUrl,
@@ -452,7 +476,8 @@ class RemotionLambdaService {
 
   async getRenderProgress(renderId: string, bucketName: string): Promise<RenderProgress> {
     try {
-      const progress = await getRenderProgress({
+      const rl = await getRemotionLambda();
+      const progress = await rl.getRenderProgress({
         renderId,
         bucketName,
         functionName: this.functionName,
