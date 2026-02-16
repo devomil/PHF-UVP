@@ -12,6 +12,7 @@ import brandMediaRouter from "./services/brand-media-routes";
 import mediaAssetRouter from "./services/media-asset-routes";
 import assetLibraryRouter from "./services/asset-library-routes";
 import uploadRouter from "./services/upload-routes";
+import { processVideoJob } from "./services/job-processor";
 
 export function registerRoutes(app: Express) {
   app.use("/api/provider-test", providerTestRouter);
@@ -218,6 +219,10 @@ export function registerRoutes(app: Express) {
           sceneType: outputType === "image" ? "image" : "video",
           i2vSettings: { saveToLibrary: saveToLibrary !== false, outputType: outputType || "video" },
           triggeredBy: (req.user as any).id,
+        });
+
+        processVideoJob(jobId).catch((err) => {
+          console.error(`[Routes] Background job ${jobId} failed:`, err.message);
         });
 
         return res.json({ projectId: project.projectId, id: project.id, jobId, status: "pending" });
