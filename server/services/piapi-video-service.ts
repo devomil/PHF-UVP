@@ -788,6 +788,7 @@ class PiAPIVideoService {
     duration: number;
     aspectRatio: '16:9' | '9:16' | '1:1';
     model: string;
+    generateAudio?: boolean;
     i2vSettings?: {
       imageControlStrength?: number;
       animationStyle?: 'product-hero' | 'product-static' | 'subtle-motion' | 'dynamic';
