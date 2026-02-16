@@ -1,6 +1,7 @@
+import { useState, useEffect, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
-import { ArrowLeft, Settings, Play, RefreshCw, Clock, Target, Monitor, BarChart3, Loader2, AlertCircle, Zap, Video, Image, Download, RotateCcw, Save, Trash2, ExternalLink } from "lucide-react";
+import { ArrowLeft, Settings, Play, RefreshCw, Clock, Target, Monitor, BarChart3, Loader2, AlertCircle, Zap, Video, Image, Download, RotateCcw, Save, Trash2, ExternalLink, CheckCircle2, XCircle, Server, HardDrive, Type, Film, ChevronDown, ChevronUp, CloudUpload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 
@@ -450,7 +451,576 @@ export default function ProjectDetail({ params }: { params?: { id: string } }) {
             )}
           </div>
         )}
+
+        <PostProductionPanel projectId={projectId} project={project} />
       </div>
+    </div>
+  );
+}
+
+function PostProductionPanel({ projectId, project }: { projectId: string; project: any }) {
+  const [expanded, setExpanded] = useState(true);
+  const [renderPolling, setRenderPolling] = useState(false);
+  const [renderId, setRenderId] = useState<string | null>(null);
+  const [bucketName, setBucketName] = useState<string | null>(null);
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const serviceStatusQuery = useQuery({
+    queryKey: ["service-status"],
+    queryFn: async () => {
+      const res = await fetch("/api/service-status", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch service status");
+      return res.json();
+    },
+    staleTime: 60000,
+  });
+
+  const lambdaHealthQuery = useQuery({
+    queryKey: ["lambda-health"],
+    queryFn: async () => {
+      const res = await fetch("/api/services/lambda-health", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch Lambda health");
+      return res.json();
+    },
+    staleTime: 60000,
+    retry: false,
+  });
+
+  const canRenderQuery = useQuery({
+    queryKey: ["can-render", projectId],
+    queryFn: async () => {
+      const res = await fetch(`/api/universal-video/projects/${projectId}/can-render`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to check render eligibility");
+      return res.json();
+    },
+    enabled: !!projectId && !["generating", "processing", "queued", "pending"].includes(project.status),
+  });
+
+  const renderStatusQuery = useQuery({
+    queryKey: ["render-status", projectId, renderId],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (renderId) params.set("renderId", renderId);
+      if (bucketName) params.set("bucketName", bucketName);
+      const res = await fetch(`/api/universal-video/projects/${projectId}/render-status?${params}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch render status");
+      return res.json();
+    },
+    enabled: renderPolling && !!projectId,
+    refetchInterval: renderPolling ? 5000 : false,
+  });
+
+  useEffect(() => {
+    if (renderStatusQuery.data) {
+      if (renderStatusQuery.data.done) {
+        setRenderPolling(false);
+        if (renderStatusQuery.data.outputUrl) {
+          toast({ title: "Render Complete", description: "Your composed video is ready!" });
+          queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+        } else if (renderStatusQuery.data.errors?.length > 0) {
+          toast({ title: "Render Failed", description: renderStatusQuery.data.errors[0], variant: "destructive" });
+        }
+      }
+    }
+  }, [renderStatusQuery.data]);
+
+  const renderMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/universal-video/projects/${projectId}/render`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({}),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Render request failed" }));
+        throw new Error(err.error || "Render request failed");
+      }
+      return res.json();
+    },
+    onSuccess: (data) => {
+      if (data.renderId) {
+        setRenderId(data.renderId);
+        setBucketName(data.bucketName || null);
+      }
+      setRenderPolling(true);
+      toast({ title: "Render Started", description: "Remotion Lambda is composing your video..." });
+      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Render Failed", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const services = serviceStatusQuery.data?.services || {};
+  const lambdaConfigured = services["remotion"]?.configured || services["remotion-lambda"]?.configured;
+
+  const renderProgress = renderStatusQuery.data
+    ? Math.round((renderStatusQuery.data.progress || 0) * 100)
+    : 0;
+
+  return (
+    <div className="border rounded-xl mt-8 overflow-hidden" style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)" }}>
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center justify-between p-5 text-left hover:opacity-90 transition-opacity"
+      >
+        <div className="flex items-center gap-3">
+          <Film className="w-5 h-5 text-purple-400" />
+          <h2 className="text-sm font-medium uppercase tracking-wider" style={{ color: "var(--text-primary)" }}>
+            Post-Production & Rendering
+          </h2>
+        </div>
+        {expanded ? (
+          <ChevronUp className="w-5 h-5" style={{ color: "var(--text-muted)" }} />
+        ) : (
+          <ChevronDown className="w-5 h-5" style={{ color: "var(--text-muted)" }} />
+        )}
+      </button>
+
+      {expanded && (
+        <div className="px-5 pb-5 space-y-6">
+          <div>
+            <h3 className="text-xs font-medium uppercase tracking-wider mb-3" style={{ color: "var(--text-secondary)" }}>
+              Service Status
+            </h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {Object.entries(services).map(([name, svc]: [string, any]) => (
+                <div
+                  key={name}
+                  className="border rounded-lg p-3 flex items-start gap-2"
+                  style={{ backgroundColor: "var(--app-bg)", borderColor: "var(--border-subtle)" }}
+                >
+                  {svc.configured ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
+                  ) : (
+                    <XCircle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
+                  )}
+                  <div className="min-w-0">
+                    <p className="text-xs font-medium truncate" style={{ color: "var(--text-primary)" }}>{name}</p>
+                    <p className="text-xs truncate" style={{ color: "var(--text-muted)" }}>{svc.role}</p>
+                  </div>
+                </div>
+              ))}
+              {serviceStatusQuery.isLoading && (
+                <div className="col-span-full flex items-center gap-2 p-3">
+                  <Loader2 className="w-4 h-4 animate-spin" style={{ color: "var(--text-muted)" }} />
+                  <span className="text-xs" style={{ color: "var(--text-muted)" }}>Loading service status...</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div>
+            <h3 className="text-xs font-medium uppercase tracking-wider mb-3" style={{ color: "var(--text-secondary)" }}>
+              Lambda & S3
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div
+                className="border rounded-lg p-4"
+                style={{ backgroundColor: "var(--app-bg)", borderColor: "var(--border-subtle)" }}
+              >
+                <div className="flex items-center gap-2 mb-2">
+                  <Server className="w-4 h-4 text-indigo-400" />
+                  <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>Remotion Lambda</span>
+                </div>
+                {lambdaConfigured ? (
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                      <span className="text-xs" style={{ color: "var(--text-secondary)" }}>AWS credentials configured</span>
+                    </div>
+                    {lambdaHealthQuery.data?.health ? (
+                      <>
+                        <div className="flex items-center gap-1.5">
+                          {lambdaHealthQuery.data.health.status === "healthy" ? (
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                          ) : (
+                            <AlertCircle className="w-3.5 h-3.5 text-amber-400" />
+                          )}
+                          <span className="text-xs" style={{ color: "var(--text-secondary)" }}>
+                            Function: {lambdaHealthQuery.data.health.function?.name || "checking..."}
+                          </span>
+                        </div>
+                        {lambdaHealthQuery.data.health.function?.memory && (
+                          <div className="text-xs" style={{ color: "var(--text-muted)" }}>
+                            {lambdaHealthQuery.data.health.function.memory}MB RAM · {lambdaHealthQuery.data.health.function.disk}MB disk · {lambdaHealthQuery.data.health.region || "us-east-2"}
+                          </div>
+                        )}
+                      </>
+                    ) : lambdaHealthQuery.isLoading ? (
+                      <div className="flex items-center gap-1.5">
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" style={{ color: "var(--text-muted)" }} />
+                        <span className="text-xs" style={{ color: "var(--text-muted)" }}>Checking Lambda health...</span>
+                      </div>
+                    ) : lambdaHealthQuery.isError ? (
+                      <div className="flex items-center gap-1.5">
+                        <AlertCircle className="w-3.5 h-3.5 text-amber-400" />
+                        <span className="text-xs" style={{ color: "var(--text-muted)" }}>Health check endpoint not available</span>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1.5">
+                    <XCircle className="w-3.5 h-3.5 text-red-400" />
+                    <span className="text-xs" style={{ color: "var(--text-muted)" }}>Not configured - set AWS credentials</span>
+                  </div>
+                )}
+              </div>
+
+              <div
+                className="border rounded-lg p-4"
+                style={{ backgroundColor: "var(--app-bg)", borderColor: "var(--border-subtle)" }}
+              >
+                <div className="flex items-center gap-2 mb-2">
+                  <HardDrive className="w-4 h-4 text-cyan-400" />
+                  <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>S3 Bucket</span>
+                </div>
+                {lambdaConfigured ? (
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                      <span className="text-xs" style={{ color: "var(--text-secondary)" }}>Connected</span>
+                    </div>
+                    <div className="text-xs font-mono" style={{ color: "var(--text-muted)" }}>
+                      {lambdaHealthQuery.data?.health?.bucket || "loading..."}
+                    </div>
+                    <div className="text-xs" style={{ color: "var(--text-muted)" }}>
+                      Region: {lambdaHealthQuery.data?.health?.region || "us-east-2"} · Renders stored here
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1.5">
+                    <XCircle className="w-3.5 h-3.5 text-red-400" />
+                    <span className="text-xs" style={{ color: "var(--text-muted)" }}>Not connected - requires AWS credentials</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <h3 className="text-xs font-medium uppercase tracking-wider mb-3" style={{ color: "var(--text-secondary)" }}>
+              Text & Overlays
+            </h3>
+            <TextOverlayControls projectId={projectId} project={project} />
+          </div>
+
+          <div>
+            <h3 className="text-xs font-medium uppercase tracking-wider mb-3" style={{ color: "var(--text-secondary)" }}>
+              Render to Final Video
+            </h3>
+            <div
+              className="border rounded-lg p-4"
+              style={{ backgroundColor: "var(--app-bg)", borderColor: "var(--border-subtle)" }}
+            >
+              {canRenderQuery.data && !canRenderQuery.data.allowed && (
+                <div className="mb-4 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 text-amber-400 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="text-xs font-medium text-amber-400 mb-1">Cannot render yet</p>
+                      {canRenderQuery.data.blockingReasons?.map((reason: string, i: number) => (
+                        <p key={i} className="text-xs text-amber-300/70">{reason}</p>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {renderPolling && (
+                <div className="mb-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin text-purple-400" />
+                      <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                        Rendering in progress...
+                      </span>
+                    </div>
+                    <span className="text-sm font-mono text-purple-400">{renderProgress}%</span>
+                  </div>
+                  <div className="w-full rounded-full h-2" style={{ backgroundColor: "var(--border-subtle)" }}>
+                    <div
+                      className="bg-gradient-to-r from-purple-600 to-indigo-600 h-2 rounded-full transition-all duration-700"
+                      style={{ width: `${renderProgress}%` }}
+                    />
+                  </div>
+                  {renderStatusQuery.data?.renderMethod === "chunked" && renderStatusQuery.data?.message && (
+                    <p className="text-xs mt-2" style={{ color: "var(--text-muted)" }}>
+                      {renderStatusQuery.data.message}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {renderStatusQuery.data?.done && renderStatusQuery.data?.outputUrl && !renderPolling && (
+                <div className="mb-4 p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                    <span className="text-sm font-medium text-emerald-400">Render complete!</span>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center gap-3">
+                <Button
+                  onClick={() => renderMutation.mutate()}
+                  disabled={
+                    renderMutation.isPending ||
+                    renderPolling ||
+                    !lambdaConfigured ||
+                    ["generating", "processing", "queued", "pending"].includes(project.status)
+                  }
+                  className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white gap-2"
+                >
+                  {renderMutation.isPending ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Play className="w-4 h-4" />
+                  )}
+                  {renderMutation.isPending
+                    ? "Starting..."
+                    : renderPolling
+                      ? "Rendering..."
+                      : "Start Remotion Render"}
+                </Button>
+
+                {!lambdaConfigured && (
+                  <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+                    Requires Remotion Lambda credentials
+                  </span>
+                )}
+              </div>
+
+              <div className="mt-3 text-xs" style={{ color: "var(--text-muted)" }}>
+                Remotion Lambda will compose your scenes with text overlays, transitions, sound design, and branding into a final rendered video stored in S3.
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TextOverlayControls({ projectId, project }: { projectId: string; project: any }) {
+  const [overlayText, setOverlayText] = useState("");
+  const [position, setPosition] = useState<"top" | "center" | "bottom">("bottom");
+  const [fontSize, setFontSize] = useState(48);
+  const [overlays, setOverlays] = useState<Array<{ text: string; position: string; fontSize: number }>>([]);
+  const { toast } = useToast();
+
+  const scenes = Array.isArray(project.scenes) ? project.scenes : [];
+  const [selectedScene, setSelectedScene] = useState(0);
+
+  const textStylesQuery = useQuery({
+    queryKey: ["text-styles"],
+    queryFn: async () => {
+      const res = await fetch("/api/universal-video/text-placement/styles", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to load text styles");
+      return res.json();
+    },
+    staleTime: 300000,
+  });
+
+  const calculatePlacementsMutation = useMutation({
+    mutationFn: async () => {
+      const overlayPayload = overlays.map((o) => ({
+        text: o.text,
+        type: "caption" as const,
+        style: "modern" as const,
+        position: o.position,
+        fontSize: o.fontSize,
+      }));
+
+      const res = await fetch(
+        `/api/universal-video/projects/${projectId}/scenes/${selectedScene}/calculate-text-placements`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            overlays: overlayPayload,
+            sceneDuration: scenes[selectedScene]?.duration || 5,
+            fps: 30,
+          }),
+        }
+      );
+      if (!res.ok) throw new Error("Failed to calculate placements");
+      return res.json();
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Placements Calculated",
+        description: `${data.placements?.length || 0} text placements computed for Scene ${selectedScene + 1}`,
+      });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const addOverlay = () => {
+    if (!overlayText.trim()) return;
+    setOverlays((prev) => [...prev, { text: overlayText.trim(), position, fontSize }]);
+    setOverlayText("");
+  };
+
+  const removeOverlay = (index: number) => {
+    setOverlays((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  if (scenes.length === 0) {
+    return (
+      <div
+        className="border rounded-lg p-6 text-center"
+        style={{ backgroundColor: "var(--app-bg)", borderColor: "var(--border-subtle)" }}
+      >
+        <Type className="w-8 h-8 mx-auto mb-2" style={{ color: "var(--text-muted)" }} />
+        <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+          Text overlays are available for multi-scene projects (AI-Generated Script or Custom Script).
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="border rounded-lg p-4 space-y-4"
+      style={{ backgroundColor: "var(--app-bg)", borderColor: "var(--border-subtle)" }}
+    >
+      <div className="flex items-center gap-3">
+        <label className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>Scene:</label>
+        <select
+          value={selectedScene}
+          onChange={(e) => setSelectedScene(Number(e.target.value))}
+          className="text-sm rounded-lg border px-3 py-1.5"
+          style={{
+            backgroundColor: "var(--input-bg)",
+            borderColor: "var(--input-border)",
+            color: "var(--text-primary)",
+          }}
+        >
+          {scenes.map((_: any, i: number) => (
+            <option key={i} value={i}>Scene {i + 1}</option>
+          ))}
+        </select>
+      </div>
+
+      <div className="flex flex-col sm:flex-row gap-2">
+        <input
+          type="text"
+          value={overlayText}
+          onChange={(e) => setOverlayText(e.target.value)}
+          placeholder="Enter text overlay..."
+          className="flex-1 text-sm rounded-lg border px-3 py-2"
+          style={{
+            backgroundColor: "var(--input-bg)",
+            borderColor: "var(--input-border)",
+            color: "var(--text-primary)",
+          }}
+          onKeyDown={(e) => e.key === "Enter" && addOverlay()}
+        />
+        <select
+          value={position}
+          onChange={(e) => setPosition(e.target.value as "top" | "center" | "bottom")}
+          className="text-sm rounded-lg border px-3 py-2"
+          style={{
+            backgroundColor: "var(--input-bg)",
+            borderColor: "var(--input-border)",
+            color: "var(--text-primary)",
+          }}
+        >
+          <option value="top">Top</option>
+          <option value="center">Center</option>
+          <option value="bottom">Bottom</option>
+        </select>
+        <input
+          type="number"
+          value={fontSize}
+          onChange={(e) => setFontSize(Number(e.target.value))}
+          min={12}
+          max={120}
+          className="w-20 text-sm rounded-lg border px-3 py-2"
+          style={{
+            backgroundColor: "var(--input-bg)",
+            borderColor: "var(--input-border)",
+            color: "var(--text-primary)",
+          }}
+        />
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={addOverlay}
+          disabled={!overlayText.trim()}
+          style={{ borderColor: "var(--border-medium)", color: "var(--text-secondary)" }}
+        >
+          Add
+        </Button>
+      </div>
+
+      {overlays.length > 0 && (
+        <div className="space-y-2">
+          {overlays.map((o, i) => (
+            <div
+              key={i}
+              className="flex items-center justify-between rounded-lg border px-3 py-2"
+              style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)" }}
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <Type className="w-3.5 h-3.5 flex-shrink-0 text-purple-400" />
+                <span className="text-sm truncate" style={{ color: "var(--text-primary)" }}>{o.text}</span>
+                <span className="text-xs px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-400 flex-shrink-0">
+                  {o.position}
+                </span>
+                <span className="text-xs" style={{ color: "var(--text-muted)" }}>{o.fontSize}px</span>
+              </div>
+              <button
+                onClick={() => removeOverlay(i)}
+                className="text-red-400 hover:text-red-300 p-1"
+              >
+                <XCircle className="w-4 h-4" />
+              </button>
+            </div>
+          ))}
+
+          <Button
+            size="sm"
+            onClick={() => calculatePlacementsMutation.mutate()}
+            disabled={calculatePlacementsMutation.isPending}
+            className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white gap-2"
+          >
+            {calculatePlacementsMutation.isPending ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Type className="w-4 h-4" />
+            )}
+            Calculate Placements
+          </Button>
+        </div>
+      )}
+
+      {textStylesQuery.data?.styles && (
+        <div className="pt-2 border-t" style={{ borderColor: "var(--border-subtle)" }}>
+          <p className="text-xs mb-2" style={{ color: "var(--text-muted)" }}>Available styles:</p>
+          <div className="flex flex-wrap gap-1.5">
+            {Object.keys(textStylesQuery.data.styles).map((style: string) => (
+              <span
+                key={style}
+                className="text-xs px-2 py-0.5 rounded-full border"
+                style={{
+                  borderColor: "var(--border-subtle)",
+                  color: "var(--text-secondary)",
+                  backgroundColor: "var(--surface)",
+                }}
+              >
+                {style}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
