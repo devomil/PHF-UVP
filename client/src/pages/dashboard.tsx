@@ -1,34 +1,51 @@
 import { Link } from "wouter";
-import { Card, CardContent } from "@/components/ui/card";
+import { useQuery } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/use-auth";
-import { Search, Sparkles, Zap, Upload } from "lucide-react";
-
-const recentProjects = [
-  { id: 1, name: "Product Launch Video", type: "product", status: "completed", date: "2026-02-15" },
-  { id: 2, name: "Brand Story Series", type: "script-based", status: "rendering", date: "2026-02-14" },
-  { id: 3, name: "Social Media Ads Pack", type: "product", status: "draft", date: "2026-02-13" },
-  { id: 4, name: "Tutorial Walkthrough", type: "script-based", status: "completed", date: "2026-02-12" },
-];
+import { Search, Sparkles, Zap, Upload, Video, Loader2 } from "lucide-react";
 
 const projectGradients = [
   "from-blue-600/40 to-blue-900/20",
   "from-pink-600/40 to-pink-900/20",
   "from-orange-600/40 to-orange-900/20",
   "from-indigo-600/40 to-indigo-900/20",
+  "from-purple-600/40 to-purple-900/20",
+  "from-cyan-600/40 to-cyan-900/20",
 ];
 
 const statusConfig: Record<string, { bg: string; text: string }> = {
   draft: { bg: "bg-gray-500", text: "text-white" },
+  generating: { bg: "bg-purple-500", text: "text-purple-100" },
   rendering: { bg: "bg-amber-500", text: "text-amber-100" },
+  processing: { bg: "bg-amber-500", text: "text-amber-100" },
   completed: { bg: "bg-emerald-500", text: "text-emerald-100" },
   failed: { bg: "bg-red-500", text: "text-red-100" },
 };
 
+function formatDate(dateStr: string | null | undefined) {
+  if (!dateStr) return "";
+  return new Date(dateStr).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
 export default function Dashboard() {
   const { user } = useAuth();
   const firstName = user?.firstName || user?.email?.split("@")[0] || "User";
+
+  const { data: projects = [], isLoading } = useQuery({
+    queryKey: ["projects"],
+    queryFn: async () => {
+      const res = await fetch("/api/projects");
+      if (!res.ok) throw new Error("Failed to fetch projects");
+      return res.json();
+    },
+  });
+
+  const recentProjects = projects.slice(0, 4);
+  const totalProjects = projects.length;
+  const activeRenders = projects.filter((p: any) => ["generating", "rendering", "processing"].includes(p.status)).length;
+  const completedCount = projects.filter((p: any) => p.status === "completed").length;
+  const draftCount = projects.filter((p: any) => p.status === "draft").length;
 
   return (
     <div className="w-full p-6 lg:p-8" style={{ color: "var(--text-primary)" }}>
@@ -85,72 +102,89 @@ export default function Dashboard() {
           <div
             className="p-5 rounded-lg backdrop-blur border transition-all"
             style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)" }}
-            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--surface-hover)")}
-            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "var(--surface)")}
           >
             <p className="text-sm mb-2" style={{ color: "var(--text-secondary)" }}>Total Projects</p>
-            <p className="text-3xl font-bold" style={{ color: "var(--text-primary)" }}>24</p>
+            <p className="text-3xl font-bold" style={{ color: "var(--text-primary)" }}>{totalProjects}</p>
           </div>
           <div
             className="p-5 rounded-lg backdrop-blur border transition-all"
             style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)" }}
-            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--surface-hover)")}
-            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "var(--surface)")}
           >
             <p className="text-sm mb-2" style={{ color: "var(--text-secondary)" }}>Active Renders</p>
-            <p className="text-3xl font-bold text-amber-400">3</p>
+            <p className="text-3xl font-bold text-amber-400">{activeRenders}</p>
           </div>
           <div
             className="p-5 rounded-lg backdrop-blur border transition-all"
             style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)" }}
-            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--surface-hover)")}
-            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "var(--surface)")}
           >
             <p className="text-sm mb-2" style={{ color: "var(--text-secondary)" }}>Completed</p>
-            <p className="text-3xl font-bold text-emerald-400">18</p>
+            <p className="text-3xl font-bold text-emerald-400">{completedCount}</p>
           </div>
           <div
             className="p-5 rounded-lg backdrop-blur border transition-all"
             style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)" }}
-            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--surface-hover)")}
-            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "var(--surface)")}
           >
-            <p className="text-sm mb-2" style={{ color: "var(--text-secondary)" }}>Storage Used</p>
-            <p className="text-3xl font-bold text-blue-400">142 GB</p>
+            <p className="text-sm mb-2" style={{ color: "var(--text-secondary)" }}>Drafts</p>
+            <p className="text-3xl font-bold text-blue-400">{draftCount}</p>
           </div>
         </div>
 
         <div>
-          <h2 className="text-2xl font-bold mb-6">Recent Projects</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-            {recentProjects.map((project, index) => (
-              <Link key={project.id} href={`/projects/${project.id}`}>
-                <div
-                  className="rounded-lg overflow-hidden border hover:shadow-xl transition-all hover:scale-105 cursor-pointer group"
-                  style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)" }}
-                  onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--border-medium)")}
-                  onMouseLeave={(e) => (e.currentTarget.style.borderColor = "var(--border-subtle)")}
-                >
-                  <div
-                    className={`h-32 bg-gradient-to-br ${projectGradients[index % projectGradients.length]} group-hover:opacity-80 transition-opacity`}
-                  />
-                  <div className="p-4 space-y-3">
-                    <div>
-                      <h3 className="font-medium group-hover:text-purple-300 transition-colors" style={{ color: "var(--text-primary)" }}>{project.name}</h3>
-                      <p className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>
-                        {project.type} · {project.date}
-                      </p>
-                    </div>
-                    <Badge
-                      className={`w-fit ${statusConfig[project.status].bg} ${statusConfig[project.status].text} hover:opacity-90`}
-                    >
-                      {project.status}
-                    </Badge>
-                  </div>
-                </div>
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-2xl font-bold">Recent Projects</h2>
+            {projects.length > 4 && (
+              <Link href="/projects" className="text-sm text-purple-400 hover:text-purple-300 transition-colors">
+                View all
               </Link>
-            ))}
+            )}
           </div>
+          {isLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="w-8 h-8 animate-spin" style={{ color: "var(--text-muted)" }} />
+            </div>
+          ) : recentProjects.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-center border rounded-xl" style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)" }}>
+              <Video className="w-12 h-12 mb-4" style={{ color: "var(--text-muted)" }} />
+              <h3 className="text-lg font-medium mb-2" style={{ color: "var(--text-primary)" }}>No projects yet</h3>
+              <p className="text-sm mb-4" style={{ color: "var(--text-secondary)" }}>Create your first video project to get started</p>
+              <Link href="/projects/new">
+                <span className="text-purple-400 hover:text-purple-300 text-sm font-medium cursor-pointer">Create Project</span>
+              </Link>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+              {recentProjects.map((project: any, index: number) => {
+                const status = statusConfig[project.status] || statusConfig.draft;
+                return (
+                  <Link key={project.projectId} href={`/projects/${project.projectId}`}>
+                    <div
+                      className="rounded-lg overflow-hidden border hover:shadow-xl transition-all hover:scale-105 cursor-pointer group"
+                      style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)" }}
+                    >
+                      <div
+                        className={`h-32 bg-gradient-to-br ${projectGradients[index % projectGradients.length]} group-hover:opacity-80 transition-opacity`}
+                      />
+                      <div className="p-4 space-y-3">
+                        <div>
+                          <h3 className="font-medium group-hover:text-purple-300 transition-colors line-clamp-1" style={{ color: "var(--text-primary)" }}>
+                            {project.title}
+                          </h3>
+                          <p className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>
+                            {project.type} · {formatDate(project.createdAt)}
+                          </p>
+                        </div>
+                        <Badge
+                          className={`w-fit ${status.bg} ${status.text} hover:opacity-90`}
+                        >
+                          {project.status}
+                        </Badge>
+                      </div>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
     </div>
