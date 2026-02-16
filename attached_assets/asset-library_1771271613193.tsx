@@ -36,9 +36,9 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
-import { AssetUploadModal, type AssetMetadata } from '@/components/video/AssetUploadModal';
+import { AssetUploadModal, type AssetMetadata } from './AssetUploadModal';
 import { ASSET_CATEGORIES as TAXONOMY_CATEGORIES, getAssetType, getTypesByCategory } from '@shared/brand-asset-types';
-import S3AssetManager from '@/components/video/s3-asset-manager';
+import S3AssetManager from './s3-asset-manager';
 
 type AssetType = 'image' | 'video' | 'music' | 'all';
 type ViewMode = 'grid' | 'list';

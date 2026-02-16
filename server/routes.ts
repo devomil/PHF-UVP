@@ -1,14 +1,26 @@
 import type { Express } from "express";
 import crypto from "crypto";
+import express from "express";
 import { db } from "./db";
 import { videoProductions, universalVideoProjects, videoGenerationJobs } from "../shared/schema";
 import { desc } from "drizzle-orm";
 import providerTestRouter from "./services/provider-test-routes";
 import { AI_VIDEO_PROVIDERS } from "./config/ai-video-providers";
 import { VIDEO_PROVIDERS } from "./config/video-providers";
+import s3AssetRouter from "./services/s3-asset-routes";
+import brandMediaRouter from "./services/brand-media-routes";
+import mediaAssetRouter from "./services/media-asset-routes";
+import assetLibraryRouter from "./services/asset-library-routes";
+import uploadRouter from "./services/upload-routes";
 
 export function registerRoutes(app: Express) {
   app.use("/api/provider-test", providerTestRouter);
+  app.use("/api/admin/s3-assets", s3AssetRouter);
+  app.use("/api/brand-media-library", brandMediaRouter);
+  app.use("/api/media-assets", mediaAssetRouter);
+  app.use("/api/asset-library", assetLibraryRouter);
+  app.use("/api/videos", uploadRouter);
+  app.use('/uploads', express.static('uploads'));
 
   import("./services/universal-video-routes")
     .then((mod) => {
