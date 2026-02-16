@@ -52,7 +52,7 @@ const TIER_PROVIDER_VERSIONS: Record<string, Record<string, string>> = {
   kling: {
     ultra: 'kling-2.6',
     premium: 'kling-2.6',
-    standard: 'kling-2.5',
+    standard: 'kling-2.6',
   },
   runway: {
     ultra: 'runway',
@@ -82,7 +82,7 @@ const TIER_PROVIDER_VERSIONS: Record<string, Record<string, string>> = {
   wan: {
     ultra: 'wan-2.6',
     premium: 'wan-2.6',
-    standard: 'wan-2.1',
+    standard: 'wan-2.6',
   },
 };
 
