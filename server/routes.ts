@@ -13,6 +13,8 @@ import mediaAssetRouter from "./services/media-asset-routes";
 import assetLibraryRouter from "./services/asset-library-routes";
 import uploadRouter from "./services/upload-routes";
 import { processVideoJob } from "./services/job-processor";
+import { universalVideoService } from "./services/universal-video-service";
+import { aiMusicService } from "./services/ai-music-service";
 
 export function registerRoutes(app: Express) {
   app.use("/api/provider-test", providerTestRouter);
@@ -342,6 +344,401 @@ export function registerRoutes(app: Express) {
     } catch (error) {
       console.error("Failed to regenerate project:", error);
       res.status(500).json({ error: "Failed to regenerate" });
+    }
+  });
+
+  app.get("/api/projects/:projectId/quick-create/assets", async (req, res) => {
+    try {
+      if (!req.isAuthenticated() || !req.user) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+      const { projectId } = req.params;
+      const userId = (req.user as any).id;
+
+      const [project] = await db
+        .select()
+        .from(universalVideoProjects)
+        .where(eq(universalVideoProjects.projectId, projectId))
+        .limit(1);
+
+      if (!project || project.ownerId !== userId) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+
+      const outputFormat = (project.outputFormat as any) || {};
+      if (outputFormat.platform !== "quick-create") {
+        return res.status(400).json({ error: "Not a Quick Create project" });
+      }
+
+      const assets = (project.assets as any) || {};
+      const qc = assets.quickCreate || {};
+
+      const jobs = await db
+        .select()
+        .from(videoGenerationJobs)
+        .where(eq(videoGenerationJobs.projectId, projectId))
+        .orderBy(desc(videoGenerationJobs.createdAt))
+        .limit(5);
+
+      res.json({
+        visual: {
+          status: qc.visual?.status || (project.outputUrl ? "completed" : "pending"),
+          url: qc.visual?.url || project.outputUrl || null,
+          provider: qc.visual?.provider || jobs[0]?.provider || null,
+          error: qc.visual?.error || null,
+          duration: qc.visual?.duration || null,
+          cost: qc.visual?.cost || null,
+          generationTimeMs: qc.visual?.generationTimeMs || null,
+        },
+        voiceover: {
+          status: qc.voiceover?.status || "pending",
+          url: qc.voiceover?.url || null,
+          duration: qc.voiceover?.duration || null,
+          error: qc.voiceover?.error || null,
+        },
+        music: {
+          status: qc.music?.status || "pending",
+          url: qc.music?.url || null,
+          duration: qc.music?.duration || null,
+          mood: qc.music?.mood || null,
+          error: qc.music?.error || null,
+        },
+        jobs: jobs.map((j) => ({
+          jobId: j.jobId,
+          status: j.status,
+          provider: j.provider,
+          prompt: j.prompt,
+          videoUrl: j.videoUrl,
+          errorMessage: j.errorMessage,
+          createdAt: j.createdAt,
+        })),
+        project: {
+          status: project.status,
+          mediaMode: project.mediaMode,
+          prompt: project.description,
+          outputUrl: project.outputUrl,
+          totalDuration: project.totalDuration,
+          aspectRatio: outputFormat.aspectRatio,
+        },
+      });
+    } catch (error) {
+      console.error("Failed to fetch Quick Create assets:", error);
+      res.status(500).json({ error: "Failed to fetch assets" });
+    }
+  });
+
+  app.post("/api/projects/:projectId/quick-create/generate-visual", async (req, res) => {
+    try {
+      if (!req.isAuthenticated() || !req.user) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+      const { projectId } = req.params;
+      const userId = (req.user as any).id;
+      const { prompt: newPrompt, provider: newProvider, duration: newDuration, aspectRatio: newAspectRatio } = req.body || {};
+
+      const [project] = await db
+        .select()
+        .from(universalVideoProjects)
+        .where(eq(universalVideoProjects.projectId, projectId))
+        .limit(1);
+
+      if (!project || project.ownerId !== userId) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+
+      const outputFormat = (project.outputFormat as any) || {};
+      if (outputFormat.platform !== "quick-create") {
+        return res.status(400).json({ error: "Not a Quick Create project" });
+      }
+
+      const finalPrompt = newPrompt || project.description || "";
+      const finalProvider = newProvider || "kling";
+      const finalDuration = newDuration || project.totalDuration || 6;
+      const finalAspectRatio = newAspectRatio || outputFormat.aspectRatio || "16:9";
+
+      if (newPrompt && newPrompt !== project.description) {
+        await db.update(universalVideoProjects).set({
+          description: newPrompt,
+          updatedAt: new Date(),
+        }).where(eq(universalVideoProjects.projectId, projectId));
+      }
+
+      const existingAssets = (project.assets as any) || {};
+      await db.update(universalVideoProjects).set({
+        status: "generating",
+        progress: { phase: "generating", percentage: 0, currentStep: "Queued for visual generation" },
+        assets: {
+          ...existingAssets,
+          quickCreate: {
+            ...(existingAssets.quickCreate || {}),
+            visual: {
+              status: "queued",
+              url: null,
+              provider: finalProvider,
+              error: null,
+              updatedAt: new Date().toISOString(),
+            },
+          },
+        },
+        updatedAt: new Date(),
+      }).where(eq(universalVideoProjects.projectId, projectId));
+
+      const jobId = crypto.randomUUID();
+      await db.insert(videoGenerationJobs).values({
+        jobId,
+        projectId,
+        sceneId: "scene-1",
+        provider: finalProvider,
+        status: "pending",
+        prompt: finalPrompt,
+        duration: project.mediaMode === "video" ? finalDuration : undefined,
+        aspectRatio: finalAspectRatio,
+        sceneType: project.mediaMode === "image" ? "image" : "video",
+        i2vSettings: { saveToLibrary: true, outputType: project.mediaMode || "video" },
+        triggeredBy: userId,
+      });
+
+      processVideoJob(jobId).catch((err) => {
+        console.error(`[QuickCreate] Visual generation job ${jobId} failed:`, err.message);
+      });
+
+      res.json({ jobId, status: "pending", component: "visual" });
+    } catch (error) {
+      console.error("Failed to generate Quick Create visual:", error);
+      res.status(500).json({ error: "Failed to generate visual" });
+    }
+  });
+
+  app.post("/api/projects/:projectId/quick-create/generate-voiceover", async (req, res) => {
+    try {
+      if (!req.isAuthenticated() || !req.user) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+      const { projectId } = req.params;
+      const userId = (req.user as any).id;
+      const { narrationText, voiceId } = req.body || {};
+
+      const [project] = await db
+        .select()
+        .from(universalVideoProjects)
+        .where(eq(universalVideoProjects.projectId, projectId))
+        .limit(1);
+
+      if (!project || project.ownerId !== userId) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+
+      const outputFormat = (project.outputFormat as any) || {};
+      if (outputFormat.platform !== "quick-create") {
+        return res.status(400).json({ error: "Not a Quick Create project" });
+      }
+
+      const text = narrationText || project.description || "";
+      if (!text.trim()) {
+        return res.status(400).json({ error: "No narration text provided" });
+      }
+
+      const existingAssets = (project.assets as any) || {};
+      await db.update(universalVideoProjects).set({
+        assets: {
+          ...existingAssets,
+          quickCreate: {
+            ...(existingAssets.quickCreate || {}),
+            voiceover: {
+              status: "generating",
+              url: null,
+              error: null,
+              updatedAt: new Date().toISOString(),
+            },
+          },
+        },
+        updatedAt: new Date(),
+      }).where(eq(universalVideoProjects.projectId, projectId));
+
+      res.json({ status: "generating", component: "voiceover" });
+
+      try {
+        const result = await universalVideoService.generateVoiceover(text, voiceId);
+
+        const [freshProject] = await db
+          .select()
+          .from(universalVideoProjects)
+          .where(eq(universalVideoProjects.projectId, projectId))
+          .limit(1);
+        const freshAssets = (freshProject?.assets as any) || {};
+
+        if (result.success && result.url) {
+          await db.update(universalVideoProjects).set({
+            assets: {
+              ...freshAssets,
+              quickCreate: {
+                ...(freshAssets.quickCreate || {}),
+                voiceover: {
+                  status: "completed",
+                  url: result.url,
+                  duration: result.duration,
+                  error: null,
+                  updatedAt: new Date().toISOString(),
+                },
+              },
+            },
+            updatedAt: new Date(),
+          }).where(eq(universalVideoProjects.projectId, projectId));
+          console.log(`[QuickCreate] Voiceover generated: ${result.url}`);
+        } else {
+          await db.update(universalVideoProjects).set({
+            assets: {
+              ...freshAssets,
+              quickCreate: {
+                ...(freshAssets.quickCreate || {}),
+                voiceover: {
+                  status: "failed",
+                  url: null,
+                  error: result.error || "Voiceover generation failed",
+                  updatedAt: new Date().toISOString(),
+                },
+              },
+            },
+            updatedAt: new Date(),
+          }).where(eq(universalVideoProjects.projectId, projectId));
+        }
+      } catch (err: any) {
+        console.error("[QuickCreate] Voiceover generation error:", err.message);
+        const [ep] = await db.select().from(universalVideoProjects).where(eq(universalVideoProjects.projectId, projectId)).limit(1);
+        const ea = (ep?.assets as any) || {};
+        await db.update(universalVideoProjects).set({
+          assets: {
+            ...ea,
+            quickCreate: {
+              ...(ea.quickCreate || {}),
+              voiceover: { status: "failed", url: null, error: err.message, updatedAt: new Date().toISOString() },
+            },
+          },
+          updatedAt: new Date(),
+        }).where(eq(universalVideoProjects.projectId, projectId));
+      }
+    } catch (error) {
+      console.error("Failed to generate Quick Create voiceover:", error);
+      res.status(500).json({ error: "Failed to generate voiceover" });
+    }
+  });
+
+  app.post("/api/projects/:projectId/quick-create/generate-music", async (req, res) => {
+    try {
+      if (!req.isAuthenticated() || !req.user) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+      const { projectId } = req.params;
+      const userId = (req.user as any).id;
+      const { mood, style, customPrompt } = req.body || {};
+
+      const [project] = await db
+        .select()
+        .from(universalVideoProjects)
+        .where(eq(universalVideoProjects.projectId, projectId))
+        .limit(1);
+
+      if (!project || project.ownerId !== userId) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+
+      const outputFormat = (project.outputFormat as any) || {};
+      if (outputFormat.platform !== "quick-create") {
+        return res.status(400).json({ error: "Not a Quick Create project" });
+      }
+
+      const duration = project.totalDuration || 10;
+
+      const existingAssets = (project.assets as any) || {};
+      await db.update(universalVideoProjects).set({
+        assets: {
+          ...existingAssets,
+          quickCreate: {
+            ...(existingAssets.quickCreate || {}),
+            music: {
+              status: "generating",
+              url: null,
+              error: null,
+              updatedAt: new Date().toISOString(),
+            },
+          },
+        },
+        updatedAt: new Date(),
+      }).where(eq(universalVideoProjects.projectId, projectId));
+
+      res.json({ status: "generating", component: "music" });
+
+      try {
+        const result = await aiMusicService.generateMusic({
+          mood: mood || "upbeat",
+          style: style || "cinematic",
+          duration,
+          customPrompt: customPrompt || undefined,
+        });
+
+        const [freshProject] = await db
+          .select()
+          .from(universalVideoProjects)
+          .where(eq(universalVideoProjects.projectId, projectId))
+          .limit(1);
+        const freshAssets = (freshProject?.assets as any) || {};
+
+        if (result && result.url) {
+          await db.update(universalVideoProjects).set({
+            assets: {
+              ...freshAssets,
+              quickCreate: {
+                ...(freshAssets.quickCreate || {}),
+                music: {
+                  status: "completed",
+                  url: result.s3Url || result.url,
+                  duration: result.duration,
+                  mood: result.mood,
+                  style: result.style,
+                  cost: result.cost,
+                  error: null,
+                  updatedAt: new Date().toISOString(),
+                },
+              },
+            },
+            updatedAt: new Date(),
+          }).where(eq(universalVideoProjects.projectId, projectId));
+          console.log(`[QuickCreate] Music generated: ${result.s3Url || result.url}`);
+        } else {
+          await db.update(universalVideoProjects).set({
+            assets: {
+              ...freshAssets,
+              quickCreate: {
+                ...(freshAssets.quickCreate || {}),
+                music: {
+                  status: "failed",
+                  url: null,
+                  error: "Music generation failed",
+                  updatedAt: new Date().toISOString(),
+                },
+              },
+            },
+            updatedAt: new Date(),
+          }).where(eq(universalVideoProjects.projectId, projectId));
+        }
+      } catch (err: any) {
+        console.error("[QuickCreate] Music generation error:", err.message);
+        const [ep] = await db.select().from(universalVideoProjects).where(eq(universalVideoProjects.projectId, projectId)).limit(1);
+        const ea = (ep?.assets as any) || {};
+        await db.update(universalVideoProjects).set({
+          assets: {
+            ...ea,
+            quickCreate: {
+              ...(ea.quickCreate || {}),
+              music: { status: "failed", url: null, error: err.message, updatedAt: new Date().toISOString() },
+            },
+          },
+          updatedAt: new Date(),
+        }).where(eq(universalVideoProjects.projectId, projectId));
+      }
+    } catch (error) {
+      console.error("Failed to generate Quick Create music:", error);
+      res.status(500).json({ error: "Failed to generate music" });
     }
   });
 
