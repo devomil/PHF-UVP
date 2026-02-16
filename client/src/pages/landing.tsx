@@ -1,6 +1,7 @@
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Sparkles, Palette, Shield, Share2, Play, ArrowRight } from "lucide-react";
+import { useTheme } from "@/contexts/ThemeContext";
+import { Sparkles, Palette, Shield, Share2, Play, ArrowRight, Sun, Moon } from "lucide-react";
 
 const features = [
   {
@@ -32,8 +33,19 @@ const features = [
 const providers = ["Kling", "RunwayML", "Luma", "Pika", "Veo"];
 
 export default function Landing() {
+  const { theme, toggleTheme } = useTheme();
   return (
-    <div className="min-h-screen bg-[#0a0a0f] text-white">
+    <div className="min-h-screen relative" style={{ backgroundColor: "var(--app-bg)", color: "var(--text-primary)" }}>
+      <button
+        onClick={toggleTheme}
+        className="fixed top-4 right-4 z-50 p-2.5 rounded-full transition-all duration-200"
+        style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)", color: "var(--text-secondary)", border: "1px solid" }}
+        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--surface-hover)")}
+        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "var(--surface)")}
+        title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+      >
+        {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+      </button>
       <div className="relative min-h-screen flex items-center justify-center overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-purple-900/20 via-[#0a0a0f] to-indigo-900/20" />
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-purple-600/10 rounded-full blur-3xl animate-pulse" />
@@ -43,7 +55,7 @@ export default function Landing() {
           <h1 className="text-5xl md:text-7xl font-bold mb-6 bg-gradient-to-br from-white via-purple-200 to-purple-400 bg-clip-text text-transparent leading-tight">
             Create. Generate. Produce.
           </h1>
-          <p className="text-lg md:text-xl text-gray-400 max-w-2xl mx-auto mb-10">
+          <p className="text-lg md:text-xl max-w-2xl mx-auto mb-10" style={{ color: "var(--text-secondary)" }}>
             The all-in-one AI video production studio. Generate professional videos at scale
             with intelligent quality control and seamless brand integration.
           </p>
@@ -54,7 +66,7 @@ export default function Landing() {
                 <ArrowRight className="ml-2 h-5 w-5" />
               </Button>
             </Link>
-            <Button size="lg" variant="outline" className="border-white/10 text-white hover:bg-white/5 px-8 py-3 text-lg rounded-xl h-auto">
+            <Button size="lg" variant="outline" className="px-8 py-3 text-lg rounded-xl h-auto" style={{ borderColor: "var(--surface-active)", color: "var(--text-primary)" }}>
               <Play className="mr-2 h-5 w-5" />
               Watch Demo
             </Button>
@@ -63,10 +75,10 @@ export default function Landing() {
       </div>
 
       <div className="max-w-5xl mx-auto px-6 py-24">
-        <h2 className="text-3xl md:text-4xl font-bold text-center mb-4">
+        <h2 className="text-3xl md:text-4xl font-bold text-center mb-4" style={{ color: "var(--text-primary)" }}>
           Everything you need to produce AI videos
         </h2>
-        <p className="text-gray-400 text-center mb-12 max-w-xl mx-auto">
+        <p className="text-center mb-12 max-w-xl mx-auto" style={{ color: "var(--text-secondary)" }}>
           From script to screen, our platform handles every step of the production pipeline.
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -75,13 +87,14 @@ export default function Landing() {
             return (
               <div
                 key={feature.title}
-                className="p-6 rounded-2xl bg-white/[0.03] border border-white/[0.06] hover:border-white/[0.12] transition-colors"
+                className="p-6 rounded-2xl border transition-colors"
+                style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)" }}
               >
                 <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${feature.color} flex items-center justify-center mb-4`}>
                   <Icon className="h-5 w-5 text-white" />
                 </div>
-                <h3 className="text-lg font-semibold text-white mb-2">{feature.title}</h3>
-                <p className="text-gray-400 text-sm leading-relaxed">{feature.description}</p>
+                <h3 className="text-lg font-semibold mb-2" style={{ color: "var(--text-primary)" }}>{feature.title}</h3>
+                <p className="text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>{feature.description}</p>
               </div>
             );
           })}
@@ -89,12 +102,13 @@ export default function Landing() {
       </div>
 
       <div className="max-w-5xl mx-auto px-6 py-16 text-center">
-        <p className="text-gray-500 text-sm mb-6">Powered by leading AI providers</p>
+        <p className="text-sm mb-6" style={{ color: "var(--text-muted)" }}>Powered by leading AI providers</p>
         <div className="flex items-center justify-center gap-4 flex-wrap">
           {providers.map((name) => (
             <span
               key={name}
-              className="px-4 py-2 rounded-full bg-white/[0.03] border border-white/[0.06] text-gray-400 text-sm"
+              className="px-4 py-2 rounded-full text-sm"
+              style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)", border: "1px solid var(--border-subtle)", color: "var(--text-secondary)" }}
             >
               {name}
             </span>
@@ -102,8 +116,8 @@ export default function Landing() {
         </div>
       </div>
 
-      <div className="border-t border-white/[0.06] py-8 text-center">
-        <p className="text-gray-600 text-sm">&copy; 2026 AI Video Production Studio. All rights reserved.</p>
+      <div className="py-8 text-center" style={{ borderTop: "1px solid var(--border-subtle)" }}>
+        <p className="text-sm" style={{ color: "var(--text-muted)" }}>&copy; 2026 AI Video Production Studio. All rights reserved.</p>
       </div>
     </div>
   );

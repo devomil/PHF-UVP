@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
+import { useTheme } from "@/contexts/ThemeContext";
 import { Button } from "@/components/ui/button";
-import { Film } from "lucide-react";
+import { Film, Sun, Moon } from "lucide-react";
 
 export default function AuthPage() {
   const { loginMutation, registerMutation } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -24,7 +26,17 @@ export default function AuthPage() {
   const isPending = loginMutation.isPending || registerMutation.isPending;
 
   return (
-    <div className="min-h-screen bg-[#0a0a0f] flex">
+    <div className="min-h-screen flex relative" style={{ backgroundColor: "var(--app-bg)" }}>
+      <button
+        onClick={toggleTheme}
+        className="fixed top-4 right-4 z-50 p-2.5 rounded-full transition-all duration-200"
+        style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)", color: "var(--text-secondary)", border: "1px solid" }}
+        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--surface-hover)")}
+        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "var(--surface)")}
+        title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+      >
+        {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+      </button>
       <div className="hidden lg:flex lg:w-1/2 relative items-center justify-center overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-purple-900/40 via-indigo-900/30 to-[#0a0a0f]" />
         <div className="absolute top-1/3 left-1/3 w-80 h-80 bg-purple-600/15 rounded-full blur-3xl" />
@@ -33,8 +45,8 @@ export default function AuthPage() {
           <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-600 to-indigo-600 flex items-center justify-center mx-auto mb-6">
             <Film className="h-8 w-8 text-white" />
           </div>
-          <h2 className="text-3xl font-bold text-white mb-4">AI Video Production Studio</h2>
-          <p className="text-gray-400 max-w-sm mx-auto">
+          <h2 className="text-3xl font-bold mb-4" style={{ color: "var(--text-primary)" }}>AI Video Production Studio</h2>
+          <p style={{ color: "var(--text-secondary)" }} className="max-w-sm mx-auto">
             Create professional videos at scale with multi-provider AI generation and intelligent quality control.
           </p>
         </div>
@@ -46,30 +58,32 @@ export default function AuthPage() {
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-600 to-indigo-600 flex items-center justify-center">
               <Film className="h-5 w-5 text-white" />
             </div>
-            <span className="text-white font-semibold text-lg">AI Video Studio</span>
+            <span className="font-semibold text-lg" style={{ color: "var(--text-primary)" }}>AI Video Studio</span>
           </div>
 
-          <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-8">
+          <div className="rounded-2xl p-8" style={{ backgroundColor: "var(--surface)", border: "1px solid var(--border-subtle)" }}>
             <div className="flex gap-2 mb-8">
               <button
                 type="button"
                 onClick={() => setIsLogin(true)}
-                className={`flex-1 py-2.5 text-sm font-medium rounded-xl transition-colors ${
+                className="flex-1 py-2.5 text-sm font-medium rounded-xl transition-colors"
+                style={
                   isLogin
-                    ? "bg-white/[0.08] text-white"
-                    : "text-gray-500 hover:text-gray-300"
-                }`}
+                    ? { backgroundColor: "var(--surface-active)", color: "var(--text-primary)" }
+                    : { color: "var(--text-muted)" }
+                }
               >
                 Sign In
               </button>
               <button
                 type="button"
                 onClick={() => setIsLogin(false)}
-                className={`flex-1 py-2.5 text-sm font-medium rounded-xl transition-colors ${
+                className="flex-1 py-2.5 text-sm font-medium rounded-xl transition-colors"
+                style={
                   !isLogin
-                    ? "bg-white/[0.08] text-white"
-                    : "text-gray-500 hover:text-gray-300"
-                }`}
+                    ? { backgroundColor: "var(--surface-active)", color: "var(--text-primary)" }
+                    : { color: "var(--text-muted)" }
+                }
               >
                 Create Account
               </button>
@@ -85,7 +99,7 @@ export default function AuthPage() {
               {!isLogin && (
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <label htmlFor="firstName" className="text-sm text-gray-400">
+                    <label htmlFor="firstName" className="text-sm" style={{ color: "var(--text-secondary)" }}>
                       First Name
                     </label>
                     <input
@@ -93,12 +107,13 @@ export default function AuthPage() {
                       type="text"
                       value={firstName}
                       onChange={(e) => setFirstName(e.target.value)}
-                      className="w-full px-4 py-2.5 rounded-xl bg-white/[0.03] border border-white/[0.08] text-white placeholder-gray-600 focus:outline-none focus:border-purple-500/50 transition-colors"
+                      className="w-full px-4 py-2.5 rounded-xl focus:outline-none focus:border-purple-500/50 transition-colors"
+                      style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", border: "1px solid var(--input-border)", color: "var(--text-primary)" }}
                       placeholder="John"
                     />
                   </div>
                   <div className="space-y-2">
-                    <label htmlFor="lastName" className="text-sm text-gray-400">
+                    <label htmlFor="lastName" className="text-sm" style={{ color: "var(--text-secondary)" }}>
                       Last Name
                     </label>
                     <input
@@ -106,14 +121,15 @@ export default function AuthPage() {
                       type="text"
                       value={lastName}
                       onChange={(e) => setLastName(e.target.value)}
-                      className="w-full px-4 py-2.5 rounded-xl bg-white/[0.03] border border-white/[0.08] text-white placeholder-gray-600 focus:outline-none focus:border-purple-500/50 transition-colors"
+                      className="w-full px-4 py-2.5 rounded-xl focus:outline-none focus:border-purple-500/50 transition-colors"
+                      style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", border: "1px solid var(--input-border)", color: "var(--text-primary)" }}
                       placeholder="Doe"
                     />
                   </div>
                 </div>
               )}
               <div className="space-y-2">
-                <label htmlFor="email" className="text-sm text-gray-400">
+                <label htmlFor="email" className="text-sm" style={{ color: "var(--text-secondary)" }}>
                   Email
                 </label>
                 <input
@@ -122,12 +138,13 @@ export default function AuthPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  className="w-full px-4 py-2.5 rounded-xl bg-white/[0.03] border border-white/[0.08] text-white placeholder-gray-600 focus:outline-none focus:border-purple-500/50 transition-colors"
+                  className="w-full px-4 py-2.5 rounded-xl focus:outline-none focus:border-purple-500/50 transition-colors"
+                  style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", border: "1px solid var(--input-border)", color: "var(--text-primary)" }}
                   placeholder="you@example.com"
                 />
               </div>
               <div className="space-y-2">
-                <label htmlFor="password" className="text-sm text-gray-400">
+                <label htmlFor="password" className="text-sm" style={{ color: "var(--text-secondary)" }}>
                   Password
                 </label>
                 <input
@@ -136,7 +153,8 @@ export default function AuthPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  className="w-full px-4 py-2.5 rounded-xl bg-white/[0.03] border border-white/[0.08] text-white placeholder-gray-600 focus:outline-none focus:border-purple-500/50 transition-colors"
+                  className="w-full px-4 py-2.5 rounded-xl focus:outline-none focus:border-purple-500/50 transition-colors"
+                  style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", border: "1px solid var(--input-border)", color: "var(--text-primary)" }}
                   placeholder="Enter your password"
                 />
               </div>
@@ -149,7 +167,7 @@ export default function AuthPage() {
               </Button>
             </form>
 
-            <p className="mt-6 text-center text-sm text-gray-500">
+            <p className="mt-6 text-center text-sm" style={{ color: "var(--text-muted)" }}>
               {isLogin ? "Don't have an account? " : "Already have an account? "}
               <button
                 type="button"

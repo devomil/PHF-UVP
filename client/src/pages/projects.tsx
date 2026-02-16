@@ -35,12 +35,12 @@ export default function Projects() {
   });
 
   return (
-    <div className="text-white p-6 lg:p-8">
+    <div className="p-6 lg:p-8" style={{ color: "var(--text-primary)" }}>
       <div className="max-w-7xl mx-auto">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
           <div>
             <h1 className="text-4xl font-bold tracking-tight">Projects</h1>
-            <p className="text-gray-400 mt-2">Manage and create your video productions</p>
+            <p className="mt-2" style={{ color: "var(--text-secondary)" }}>Manage and create your video productions</p>
           </div>
           <Link href="/projects/new" asChild>
             <Button className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white gap-2 whitespace-nowrap">
@@ -51,11 +51,12 @@ export default function Projects() {
         </div>
 
         <div className="space-y-4 mb-8">
-          <div className="flex items-center gap-3 bg-white/[0.03] border border-white/[0.06] rounded-lg px-4 py-2">
-            <Search size={18} className="text-gray-400" />
+          <div className="flex items-center gap-3 border rounded-lg px-4 py-2" style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)" }}>
+            <Search size={18} style={{ color: "var(--text-secondary)" }} />
             <Input
               placeholder="Search projects..."
-              className="bg-transparent border-0 text-white placeholder:text-gray-500 focus-visible:ring-0 focus-visible:ring-offset-0"
+              className="bg-transparent border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+              style={{ color: "var(--text-primary)" }}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
@@ -67,11 +68,23 @@ export default function Projects() {
                 <button
                   key={f}
                   onClick={() => setActiveFilter(f)}
-                  className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
-                    activeFilter === f
-                      ? "bg-white/10 text-white"
-                      : "text-gray-400 hover:text-white hover:bg-white/[0.05]"
-                  }`}
+                  className="px-4 py-2 rounded-full text-sm font-medium transition-all"
+                  style={{
+                    backgroundColor: activeFilter === f ? "var(--surface-active)" : "transparent",
+                    color: activeFilter === f ? "var(--text-primary)" : "var(--text-secondary)",
+                  }}
+                  onMouseEnter={(e) => {
+                    if (activeFilter !== f) {
+                      e.currentTarget.style.backgroundColor = "var(--surface-hover)";
+                      e.currentTarget.style.color = "var(--text-primary)";
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (activeFilter !== f) {
+                      e.currentTarget.style.backgroundColor = "transparent";
+                      e.currentTarget.style.color = "var(--text-secondary)";
+                    }
+                  }}
                 >
                   {f.charAt(0).toUpperCase() + f.slice(1)}
                 </button>
@@ -81,22 +94,46 @@ export default function Projects() {
             <div className="flex gap-2">
               <button
                 onClick={() => setViewMode("grid")}
-                className={`p-2 rounded-lg transition-all ${
-                  viewMode === "grid"
-                    ? "bg-white/10 text-white"
-                    : "text-gray-400 hover:text-white hover:bg-white/[0.05]"
-                }`}
+                className="p-2 rounded-lg transition-all"
+                style={{
+                  backgroundColor: viewMode === "grid" ? "var(--surface-active)" : "transparent",
+                  color: viewMode === "grid" ? "var(--text-primary)" : "var(--text-secondary)",
+                }}
+                onMouseEnter={(e) => {
+                  if (viewMode !== "grid") {
+                    e.currentTarget.style.backgroundColor = "var(--surface-hover)";
+                    e.currentTarget.style.color = "var(--text-primary)";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (viewMode !== "grid") {
+                    e.currentTarget.style.backgroundColor = "transparent";
+                    e.currentTarget.style.color = "var(--text-secondary)";
+                  }
+                }}
                 title="Grid view"
               >
                 <Grid3x3 size={18} />
               </button>
               <button
                 onClick={() => setViewMode("list")}
-                className={`p-2 rounded-lg transition-all ${
-                  viewMode === "list"
-                    ? "bg-white/10 text-white"
-                    : "text-gray-400 hover:text-white hover:bg-white/[0.05]"
-                }`}
+                className="p-2 rounded-lg transition-all"
+                style={{
+                  backgroundColor: viewMode === "list" ? "var(--surface-active)" : "transparent",
+                  color: viewMode === "list" ? "var(--text-primary)" : "var(--text-secondary)",
+                }}
+                onMouseEnter={(e) => {
+                  if (viewMode !== "list") {
+                    e.currentTarget.style.backgroundColor = "var(--surface-hover)";
+                    e.currentTarget.style.color = "var(--text-primary)";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (viewMode !== "list") {
+                    e.currentTarget.style.backgroundColor = "transparent";
+                    e.currentTarget.style.color = "var(--text-secondary)";
+                  }
+                }}
                 title="List view"
               >
                 <List size={18} />
@@ -108,8 +145,8 @@ export default function Projects() {
         {filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <div className="text-5xl mb-4">📺</div>
-            <h3 className="text-xl font-semibold text-white mb-2">No projects found</h3>
-            <p className="text-gray-400 mb-6">
+            <h3 className="text-xl font-semibold mb-2" style={{ color: "var(--text-primary)" }}>No projects found</h3>
+            <p className="mb-6" style={{ color: "var(--text-secondary)" }}>
               {searchQuery
                 ? "Try adjusting your search criteria"
                 : "Create your first video project to get started"}
@@ -132,26 +169,26 @@ export default function Projects() {
                 asChild
               >
                 <a className="group cursor-pointer">
-                  <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl overflow-hidden transition-all duration-300 hover:translate-y-[-2px] hover:shadow-lg hover:shadow-purple-500/5">
+                  <div className="border rounded-xl overflow-hidden transition-all duration-300 hover:translate-y-[-2px] hover:shadow-lg hover:shadow-purple-500/5" style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)" }}>
                     <div className={`h-36 bg-gradient-to-br ${project.gradient} relative overflow-hidden`}>
                       <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors duration-300" />
                     </div>
 
                     <div className="p-4 space-y-3">
                       <div className="space-y-1">
-                        <h3 className="font-semibold text-white text-sm line-clamp-2 group-hover:text-purple-400 transition-colors">
+                        <h3 className="font-semibold text-sm line-clamp-2 group-hover:text-purple-400 transition-colors" style={{ color: "var(--text-primary)" }}>
                           {project.name}
                         </h3>
-                        <p className="text-xs text-gray-400">{project.date}</p>
+                        <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{project.date}</p>
                       </div>
 
                       <div className="flex items-center justify-between">
-                        <Badge className="bg-white/10 text-gray-300 text-xs">
+                        <Badge className="text-xs" style={{ backgroundColor: "var(--surface-active)", color: "var(--text-secondary)" }}>
                           {project.type}
                         </Badge>
                         <div className="flex items-center gap-2">
                           <div className={`w-2 h-2 rounded-full ${statusDotColor[project.status]}`} />
-                          <span className="text-xs text-gray-400">
+                          <span className="text-xs" style={{ color: "var(--text-secondary)" }}>
                             {project.status.charAt(0).toUpperCase() + project.status.slice(1)}
                           </span>
                         </div>
@@ -171,22 +208,27 @@ export default function Projects() {
                 asChild
               >
                 <a className="group cursor-pointer block">
-                  <div className="bg-white/[0.03] border border-white/[0.06] rounded-lg p-4 transition-all duration-300 hover:bg-white/[0.05] hover:shadow-lg hover:shadow-purple-500/5">
+                  <div
+                    className="border rounded-lg p-4 transition-all duration-300 hover:shadow-lg hover:shadow-purple-500/5"
+                    style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)" }}
+                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--surface-hover)")}
+                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "var(--surface)")}
+                  >
                     <div className="flex items-center justify-between gap-4">
                       <div className="flex-1 min-w-0">
-                        <h3 className="font-semibold text-white group-hover:text-purple-400 transition-colors line-clamp-1">
+                        <h3 className="font-semibold group-hover:text-purple-400 transition-colors line-clamp-1" style={{ color: "var(--text-primary)" }}>
                           {project.name}
                         </h3>
-                        <p className="text-sm text-gray-400 mt-1">{project.date}</p>
+                        <p className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>{project.date}</p>
                       </div>
 
                       <div className="flex items-center gap-6">
-                        <Badge className="bg-white/10 text-gray-300 text-xs flex-shrink-0">
+                        <Badge className="text-xs flex-shrink-0" style={{ backgroundColor: "var(--surface-active)", color: "var(--text-secondary)" }}>
                           {project.type}
                         </Badge>
                         <div className="flex items-center gap-2 flex-shrink-0">
                           <div className={`w-2 h-2 rounded-full ${statusDotColor[project.status]}`} />
-                          <span className="text-sm text-gray-400 w-20 text-right">
+                          <span className="text-sm w-20 text-right" style={{ color: "var(--text-secondary)" }}>
                             {project.status.charAt(0).toUpperCase() + project.status.slice(1)}
                           </span>
                         </div>
