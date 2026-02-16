@@ -1,8 +1,0 @@
-export default function EmployeeSupport() {
-  return (
-    <div className="p-6">
-      <h1 className="text-2xl font-bold">Employee Support</h1>
-      <p className="text-gray-500 mt-2">Get help and submit support requests.</p>
-    </div>
-  );
-}
