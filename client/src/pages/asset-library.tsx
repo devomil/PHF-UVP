@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { Link } from "wouter";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { CloudUpload, ImageIcon, Video, Mic, FileImage, Eye } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 
-const assetTypes = ["all", "image", "video", "logo", "audio"];
+const assetTypes = ["all", "images", "videos", "logos", "audio"];
 
 const mockAssets = [
   { id: 1, name: "Company Logo", type: "logo", size: "24 KB", date: "2026-02-10" },
@@ -15,11 +15,25 @@ const mockAssets = [
   { id: 6, name: "Voiceover Draft", type: "audio", size: "2.1 MB", date: "2026-02-15" },
 ];
 
-const typeColors: Record<string, string> = {
-  image: "bg-blue-900 text-blue-300",
-  video: "bg-purple-900 text-purple-300",
-  logo: "bg-indigo-900 text-indigo-300",
-  audio: "bg-cyan-900 text-cyan-300",
+const typeIcons: Record<string, React.ReactNode> = {
+  image: <ImageIcon className="w-8 h-8 text-blue-400/50" />,
+  video: <Video className="w-8 h-8 text-purple-400/50" />,
+  logo: <FileImage className="w-8 h-8 text-indigo-400/50" />,
+  audio: <Mic className="w-8 h-8 text-cyan-400/50" />,
+};
+
+const typeGradients: Record<string, string> = {
+  image: "from-blue-500/20 to-blue-600/10",
+  video: "from-purple-500/20 to-purple-600/10",
+  logo: "from-indigo-500/20 to-indigo-600/10",
+  audio: "from-cyan-500/20 to-cyan-600/10",
+};
+
+const typeBadgeColors: Record<string, string> = {
+  image: "bg-blue-500/20 text-blue-300",
+  video: "bg-purple-500/20 text-purple-300",
+  logo: "bg-indigo-500/20 text-indigo-300",
+  audio: "bg-cyan-500/20 text-cyan-300",
 };
 
 export default function AssetLibrary() {
@@ -27,69 +41,93 @@ export default function AssetLibrary() {
 
   const filtered = activeType === "all"
     ? mockAssets
-    : mockAssets.filter((a) => a.type === activeType);
+    : mockAssets.filter((a) => a.type === activeType.slice(0, -1));
+
+  const usedStorage = 52;
+  const totalStorage = 100;
+
+  const formatTypeLabel = (type: string) => {
+    return type === "all" ? "All" : type.charAt(0).toUpperCase() + type.slice(1);
+  };
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white p-6">
-      <div className="max-w-7xl mx-auto">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-3xl font-bold">Asset Library</h1>
-            <p className="text-gray-400 mt-1">Manage your brand assets and media files</p>
+    <div className="p-6 lg:p-8 text-white">
+      <div className="flex items-start justify-between mb-8">
+        <div>
+          <h1 className="text-4xl font-bold tracking-tight">Asset Library</h1>
+          <p className="text-white/60 mt-2">Manage your brand assets and media files</p>
+        </div>
+        <Button className="bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 gap-2">
+          <CloudUpload className="w-4 h-4" />
+          Upload
+        </Button>
+      </div>
+
+      <div className="mb-8 p-8 bg-white/[0.02] border-2 border-dashed border-white/[0.08] rounded-2xl transition-all duration-300 hover:border-purple-500/30 hover:bg-purple-500/[0.03] group cursor-pointer">
+        <div className="text-center">
+          <div className="flex justify-center mb-4">
+            <CloudUpload className="w-12 h-12 text-white/40 group-hover:text-purple-400 transition-colors" />
           </div>
-          <Button className="bg-purple-600 hover:bg-purple-700">Upload Asset</Button>
+          <p className="text-white/80 text-lg mb-1">Drag files here or click to browse</p>
+          <p className="text-sm text-white/40">Supports images, videos, logos, and audio files</p>
         </div>
+      </div>
 
-        <Card className="bg-gray-900 border-gray-800 border-dashed mb-6">
-          <CardContent className="py-8">
-            <div className="text-center">
-              <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-gray-800 flex items-center justify-center">
-                <span className="text-2xl text-gray-500">+</span>
+      <div className="flex gap-3 mb-8 flex-wrap">
+        {assetTypes.map((t) => (
+          <button
+            key={t}
+            onClick={() => setActiveType(t)}
+            className={`px-4 py-2 rounded-full transition-all duration-200 ${
+              activeType === t
+                ? "bg-white/10 text-white"
+                : "text-white/50 hover:text-white"
+            }`}
+          >
+            {formatTypeLabel(t)}
+          </button>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-8">
+        {filtered.map((asset) => (
+          <div
+            key={asset.id}
+            className="bg-white/[0.03] border border-white/[0.06] rounded-xl overflow-hidden group cursor-pointer hover:scale-[1.02] transition-transform duration-300"
+          >
+            <div className={`h-40 bg-gradient-to-br ${typeGradients[asset.type]} flex items-center justify-center relative`}>
+              {typeIcons[asset.type]}
+              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors duration-300 flex items-center justify-center">
+                <Eye className="w-5 h-5 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
               </div>
-              <p className="text-gray-400">Drag and drop files here, or click to browse</p>
-              <p className="text-sm text-gray-600 mt-1">Supports images, videos, logos, and audio files</p>
             </div>
-          </CardContent>
-        </Card>
+            <div className="p-4">
+              <p className="font-medium text-white text-sm truncate">{asset.name}</p>
+              <p className="text-xs text-white/50 mt-1">{asset.size} · {asset.date}</p>
+              <div className="mt-3 flex justify-start">
+                <Badge className={`text-xs ${typeBadgeColors[asset.type]}`}>
+                  {asset.type}
+                </Badge>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
 
-        <div className="flex gap-2 mb-6">
-          {assetTypes.map((t) => (
-            <Button
-              key={t}
-              variant={activeType === t ? "default" : "outline"}
-              size="sm"
-              className={activeType === t
-                ? "bg-purple-600 hover:bg-purple-700"
-                : "border-gray-700 text-gray-400 hover:bg-gray-800"}
-              onClick={() => setActiveType(t)}
-            >
-              {t.charAt(0).toUpperCase() + t.slice(1)}
-            </Button>
-          ))}
+      <div className="mt-8">
+        <p className="text-sm text-white/60 mb-3">Storage Used: {usedStorage} GB / {totalStorage} GB</p>
+        <div className="w-full h-2 bg-white/[0.06] rounded-full overflow-hidden">
+          <div
+            className="h-full bg-gradient-to-r from-purple-600 to-purple-400 rounded-full transition-all duration-500"
+            style={{ width: `${(usedStorage / totalStorage) * 100}%` }}
+          />
         </div>
+      </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filtered.map((asset) => (
-            <Card key={asset.id} className="bg-gray-900 border-gray-800 hover:border-gray-700 transition-colors cursor-pointer">
-              <CardContent className="pt-4">
-                <div className="w-full h-32 bg-gray-800 rounded-lg mb-3 flex items-center justify-center">
-                  <span className="text-gray-600 text-sm">{asset.type} preview</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium text-white">{asset.name}</p>
-                    <p className="text-sm text-gray-500">{asset.size} · {asset.date}</p>
-                  </div>
-                  <Badge className={typeColors[asset.type]}>{asset.type}</Badge>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-
-        <div className="mt-6">
-          <Link href="/dashboard" className="text-sm text-gray-500 hover:text-gray-300">← Back to Dashboard</Link>
-        </div>
+      <div className="mt-8">
+        <Link href="/dashboard" className="text-sm text-white/50 hover:text-white/70 transition-colors duration-200">
+          ← Back to Dashboard
+        </Link>
       </div>
     </div>
   );

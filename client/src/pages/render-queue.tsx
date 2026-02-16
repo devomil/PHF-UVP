@@ -1,7 +1,5 @@
-import { Link } from "wouter";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Activity, CheckCircle2, XCircle, Clock, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 
 const activeRenders = [
   { id: 1, project: "Brand Story Series", scene: "Scene 3", progress: 65, provider: "Kling", startedAt: "2 min ago" },
@@ -19,93 +17,128 @@ const failedRenders = [
 
 export default function RenderQueue() {
   return (
-    <div className="min-h-screen bg-gray-950 text-white p-6">
+    <div className="p-6 lg:p-8 text-white">
       <div className="max-w-5xl mx-auto">
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold">Render Queue</h1>
-          <p className="text-gray-400 mt-1">Monitor your video rendering jobs</p>
+        <div className="flex items-center gap-3 mb-8">
+          <div className="p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/20">
+            <Activity className="w-6 h-6 text-purple-400" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">Render Queue</h1>
+            <p className="text-sm text-gray-400">Monitor your video rendering jobs</p>
+          </div>
         </div>
 
-        <Card className="bg-gray-900 border-gray-800 mb-6">
-          <CardHeader>
-            <CardTitle className="text-white flex items-center gap-2">
-              Active Renders
-              <Badge className="bg-yellow-900 text-yellow-300">{activeRenders.length}</Badge>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {activeRenders.length === 0 ? (
-              <p className="text-gray-500">No active renders</p>
-            ) : (
-              <div className="space-y-4">
-                {activeRenders.map((render) => (
-                  <div key={render.id} className="p-4 bg-gray-800 rounded-lg">
-                    <div className="flex items-center justify-between mb-2">
-                      <div>
-                        <p className="font-medium text-white">{render.project}</p>
-                        <p className="text-sm text-gray-400">{render.scene} · {render.provider} · Started {render.startedAt}</p>
-                      </div>
-                      <span className="text-sm text-yellow-400 font-mono">{render.progress}%</span>
-                    </div>
-                    <div className="w-full bg-gray-700 rounded-full h-2">
-                      <div
-                        className="bg-purple-500 h-2 rounded-full transition-all"
-                        style={{ width: `${render.progress}%` }}
-                      />
-                    </div>
-                  </div>
-                ))}
+        <div className="grid grid-cols-3 gap-4 mb-8">
+          <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-amber-500/10 flex items-center justify-center">
+                <Clock className="w-5 h-5 text-amber-400" />
               </div>
-            )}
-          </CardContent>
-        </Card>
+              <div>
+                <p className="text-2xl font-bold text-amber-400">{activeRenders.length}</p>
+                <p className="text-xs text-gray-400">Active</p>
+              </div>
+            </div>
+          </div>
+          <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+                <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-emerald-400">{completedRenders.length}</p>
+                <p className="text-xs text-gray-400">Completed</p>
+              </div>
+            </div>
+          </div>
+          <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-red-500/10 flex items-center justify-center">
+                <XCircle className="w-5 h-5 text-red-400" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-red-400">{failedRenders.length}</p>
+                <p className="text-xs text-gray-400">Failed</p>
+              </div>
+            </div>
+          </div>
+        </div>
 
-        <Card className="bg-gray-900 border-gray-800 mb-6">
-          <CardHeader>
-            <CardTitle className="text-white flex items-center gap-2">
-              Completed
-              <Badge className="bg-green-900 text-green-300">{completedRenders.length}</Badge>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
+        <div className="mb-8">
+          <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wider mb-4">Active Renders</h2>
+          {activeRenders.length === 0 ? (
+            <p className="text-gray-500 text-sm">No active renders</p>
+          ) : (
             <div className="space-y-3">
-              {completedRenders.map((render) => (
-                <div key={render.id} className="flex items-center justify-between p-3 bg-gray-800 rounded-lg">
-                  <div>
-                    <p className="font-medium text-white">{render.project}</p>
-                    <p className="text-sm text-gray-400">{render.scene} · {render.duration} · {render.completedAt}</p>
+              {activeRenders.map((render) => (
+                <div key={render.id} className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-5">
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <p className="font-semibold text-white">{render.project}</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-sm text-gray-400">{render.scene}</span>
+                        <span className="text-gray-600">·</span>
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20">{render.provider}</span>
+                        <span className="text-gray-600">·</span>
+                        <span className="text-sm text-gray-500">{render.startedAt}</span>
+                      </div>
+                    </div>
+                    <span className="text-lg font-bold text-purple-400 font-mono">{render.progress}%</span>
                   </div>
-                  <Badge className="bg-green-900 text-green-300">Done</Badge>
+                  <div className="w-full bg-white/[0.06] rounded-full h-2">
+                    <div
+                      className="bg-gradient-to-r from-purple-500 to-indigo-500 h-2 rounded-full transition-all"
+                      style={{ width: `${render.progress}%` }}
+                    />
+                  </div>
                 </div>
               ))}
             </div>
-          </CardContent>
-        </Card>
+          )}
+        </div>
 
-        <Card className="bg-gray-900 border-gray-800">
-          <CardHeader>
-            <CardTitle className="text-white flex items-center gap-2">
-              Failed
-              <Badge className="bg-red-900 text-red-300">{failedRenders.length}</Badge>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {failedRenders.map((render) => (
-                <div key={render.id} className="flex items-center justify-between p-3 bg-gray-800 rounded-lg">
+        <div className="mb-8">
+          <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wider mb-4">Completed</h2>
+          <div className="space-y-3">
+            {completedRenders.map((render) => (
+              <div key={render.id} className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4 flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="w-9 h-9 rounded-full bg-emerald-500/10 flex items-center justify-center">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-white">{render.project}</p>
+                    <p className="text-sm text-gray-400">{render.scene} · {render.duration}</p>
+                  </div>
+                </div>
+                <span className="text-sm text-gray-500">{render.completedAt}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wider mb-4">Failed</h2>
+          <div className="space-y-3">
+            {failedRenders.map((render) => (
+              <div key={render.id} className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4 flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="w-9 h-9 rounded-full bg-red-500/10 flex items-center justify-center">
+                    <XCircle className="w-5 h-5 text-red-400" />
+                  </div>
                   <div>
                     <p className="font-medium text-white">{render.project}</p>
                     <p className="text-sm text-gray-400">{render.scene} · {render.error} · {render.failedAt}</p>
                   </div>
-                  <Button size="sm" className="bg-red-900 hover:bg-red-800 text-red-300">Retry</Button>
                 </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        <div className="mt-6">
-          <Link href="/dashboard" className="text-sm text-gray-500 hover:text-gray-300">← Back to Dashboard</Link>
+                <Button variant="outline" size="sm" className="border-red-500/20 text-red-400 hover:bg-red-500/10 hover:text-red-300 gap-1.5">
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  Retry
+                </Button>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>

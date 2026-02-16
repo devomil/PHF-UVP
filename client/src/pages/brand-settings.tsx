@@ -1,123 +1,129 @@
-import { Link } from "wouter";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Palette, Type, Droplets, Image, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export default function BrandSettings() {
   return (
-    <div className="min-h-screen bg-gray-950 text-white p-6">
+    <div className="p-6 lg:p-8 text-white">
       <div className="max-w-4xl mx-auto">
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold">Brand Settings</h1>
-          <p className="text-gray-400 mt-1">Configure your brand identity for video productions</p>
+        <div className="flex items-center gap-3 mb-8">
+          <div className="p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/20">
+            <Palette className="w-6 h-6 text-purple-400" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">Brand Settings</h1>
+            <p className="text-sm text-gray-400">Configure your brand identity for video productions</p>
+          </div>
         </div>
 
         <div className="space-y-6">
-          <Card className="bg-gray-900 border-gray-800">
-            <CardHeader>
-              <CardTitle className="text-white">Brand Identity</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <Type className="w-4 h-4 text-gray-400" />
+              <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wider">Brand Identity</h2>
+            </div>
+            <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-5 space-y-4">
               <div>
-                <label className="block text-sm text-gray-400 mb-1">Brand Name</label>
+                <label className="block text-sm font-medium text-gray-300 mb-1.5">Brand Name</label>
                 <input
                   type="text"
                   placeholder="Your Brand Name"
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
+                  className="w-full bg-white/[0.03] border border-white/[0.06] rounded-lg px-3.5 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/20 transition-colors"
                 />
               </div>
               <div>
-                <label className="block text-sm text-gray-400 mb-1">Tagline</label>
+                <label className="block text-sm font-medium text-gray-300 mb-1.5">Tagline</label>
                 <input
                   type="text"
                   placeholder="Your brand tagline"
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
+                  className="w-full bg-white/[0.03] border border-white/[0.06] rounded-lg px-3.5 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/20 transition-colors"
                 />
               </div>
               <div>
-                <label className="block text-sm text-gray-400 mb-1">Website</label>
+                <label className="block text-sm font-medium text-gray-300 mb-1.5">Website</label>
                 <input
                   type="url"
                   placeholder="https://yourbrand.com"
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
+                  className="w-full bg-white/[0.03] border border-white/[0.06] rounded-lg px-3.5 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/20 transition-colors"
                 />
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
-          <Card className="bg-gray-900 border-gray-800">
-            <CardHeader>
-              <CardTitle className="text-white">Color Palette</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-sm text-gray-400 mb-1">Primary</label>
-                  <div className="flex items-center gap-2">
-                    <div className="w-10 h-10 rounded-lg bg-purple-600 border border-gray-700"></div>
-                    <input
-                      type="text"
-                      defaultValue="#9333ea"
-                      className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-purple-500"
-                    />
-                  </div>
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <Droplets className="w-4 h-4 text-gray-400" />
+              <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wider">Color Palette</h2>
+            </div>
+            <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-5">
+              <div className="grid grid-cols-3 gap-6">
+                <div className="flex flex-col items-center gap-2">
+                  <div className="w-14 h-14 rounded-full bg-purple-600 border-2 border-white/10 shadow-lg shadow-purple-500/20" />
+                  <label className="text-xs text-gray-400 font-medium">Primary</label>
+                  <input
+                    type="text"
+                    defaultValue="#9333ea"
+                    className="w-full bg-white/[0.03] border border-white/[0.06] rounded-lg px-3 py-1.5 text-white text-sm text-center focus:outline-none focus:border-purple-500/50 transition-colors"
+                  />
                 </div>
-                <div>
-                  <label className="block text-sm text-gray-400 mb-1">Secondary</label>
-                  <div className="flex items-center gap-2">
-                    <div className="w-10 h-10 rounded-lg bg-indigo-600 border border-gray-700"></div>
-                    <input
-                      type="text"
-                      defaultValue="#4f46e5"
-                      className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-purple-500"
-                    />
-                  </div>
+                <div className="flex flex-col items-center gap-2">
+                  <div className="w-14 h-14 rounded-full bg-indigo-600 border-2 border-white/10 shadow-lg shadow-indigo-500/20" />
+                  <label className="text-xs text-gray-400 font-medium">Secondary</label>
+                  <input
+                    type="text"
+                    defaultValue="#4f46e5"
+                    className="w-full bg-white/[0.03] border border-white/[0.06] rounded-lg px-3 py-1.5 text-white text-sm text-center focus:outline-none focus:border-purple-500/50 transition-colors"
+                  />
                 </div>
-                <div>
-                  <label className="block text-sm text-gray-400 mb-1">Accent</label>
-                  <div className="flex items-center gap-2">
-                    <div className="w-10 h-10 rounded-lg bg-cyan-500 border border-gray-700"></div>
-                    <input
-                      type="text"
-                      defaultValue="#06b6d4"
-                      className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-purple-500"
-                    />
-                  </div>
+                <div className="flex flex-col items-center gap-2">
+                  <div className="w-14 h-14 rounded-full bg-cyan-500 border-2 border-white/10 shadow-lg shadow-cyan-500/20" />
+                  <label className="text-xs text-gray-400 font-medium">Accent</label>
+                  <input
+                    type="text"
+                    defaultValue="#06b6d4"
+                    className="w-full bg-white/[0.03] border border-white/[0.06] rounded-lg px-3 py-1.5 text-white text-sm text-center focus:outline-none focus:border-purple-500/50 transition-colors"
+                  />
                 </div>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
-          <Card className="bg-gray-900 border-gray-800">
-            <CardHeader>
-              <CardTitle className="text-white">Logo Management</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="border-2 border-dashed border-gray-700 rounded-lg p-8 text-center">
-                <p className="text-gray-400">Drop your logo here or click to upload</p>
-                <p className="text-sm text-gray-600 mt-1">PNG, SVG, or JPG up to 5MB</p>
-                <Button variant="outline" className="mt-4 border-gray-700 text-gray-300 hover:bg-gray-800">
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <Image className="w-4 h-4 text-gray-400" />
+              <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wider">Logo Management</h2>
+            </div>
+            <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-5">
+              <div className="border border-dashed border-white/[0.1] rounded-xl p-10 text-center hover:border-purple-500/30 transition-colors cursor-pointer">
+                <div className="w-12 h-12 rounded-xl bg-white/[0.05] flex items-center justify-center mx-auto mb-3">
+                  <Image className="w-6 h-6 text-gray-400" />
+                </div>
+                <p className="text-gray-300 font-medium">Drop your logo here or click to upload</p>
+                <p className="text-sm text-gray-500 mt-1">PNG, SVG, or JPG up to 5MB</p>
+                <Button variant="outline" className="mt-4 border-white/[0.1] text-gray-300 hover:bg-white/[0.05]">
                   Choose File
                 </Button>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
-          <Card className="bg-gray-900 border-gray-800">
-            <CardHeader>
-              <CardTitle className="text-white">Brand Guidelines</CardTitle>
-            </CardHeader>
-            <CardContent>
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <FileText className="w-4 h-4 text-gray-400" />
+              <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wider">Brand Guidelines</h2>
+            </div>
+            <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-5">
               <textarea
                 placeholder="Describe your brand voice, style guidelines, dos and don'ts for video content..."
                 rows={6}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 resize-none"
+                className="w-full bg-white/[0.03] border border-white/[0.06] rounded-lg px-3.5 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/20 transition-colors resize-none"
               />
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
-          <div className="flex justify-between items-center">
-            <Link href="/dashboard" className="text-sm text-gray-500 hover:text-gray-300">← Back to Dashboard</Link>
-            <Button className="bg-purple-600 hover:bg-purple-700">Save Settings</Button>
+          <div className="flex justify-end pt-2">
+            <Button className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white px-8 py-2.5 rounded-lg font-medium shadow-lg shadow-purple-500/20">
+              Save Settings
+            </Button>
           </div>
         </div>
       </div>

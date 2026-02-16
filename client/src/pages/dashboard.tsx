@@ -1,7 +1,9 @@
 import { Link } from "wouter";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { useAuth } from "@/hooks/use-auth";
+import { Search, Sparkles, Zap, Upload } from "lucide-react";
 
 const recentProjects = [
   { id: 1, name: "Product Launch Video", type: "product", status: "completed", date: "2026-02-15" },
@@ -10,88 +12,119 @@ const recentProjects = [
   { id: 4, name: "Tutorial Walkthrough", type: "script-based", status: "completed", date: "2026-02-12" },
 ];
 
-const statusColors: Record<string, string> = {
-  draft: "bg-gray-700 text-gray-300",
-  rendering: "bg-yellow-900 text-yellow-300",
-  completed: "bg-green-900 text-green-300",
-  failed: "bg-red-900 text-red-300",
+const projectGradients = [
+  "from-blue-600/40 to-blue-900/20",
+  "from-pink-600/40 to-pink-900/20",
+  "from-orange-600/40 to-orange-900/20",
+  "from-indigo-600/40 to-indigo-900/20",
+];
+
+const statusConfig: Record<string, { bg: string; text: string }> = {
+  draft: { bg: "bg-gray-600", text: "text-gray-300" },
+  rendering: { bg: "bg-amber-500", text: "text-amber-100" },
+  completed: { bg: "bg-emerald-500", text: "text-emerald-100" },
+  failed: { bg: "bg-red-500", text: "text-red-100" },
 };
 
 export default function Dashboard() {
+  const { user } = useAuth();
+  const firstName = user?.firstName || user?.email?.split("@")[0] || "User";
+
   return (
-    <div className="min-h-screen bg-gray-950 text-white p-6">
-      <div className="max-w-7xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold">Dashboard</h1>
-          <p className="text-gray-400 mt-1">Welcome to your AI Video Production Studio</p>
+    <div className="w-full text-white p-6 lg:p-8">
+      <div className="max-w-7xl mx-auto space-y-8">
+        <div className="flex flex-col gap-6">
+          <div>
+            <h1 className="text-4xl font-bold">Welcome back, {firstName}</h1>
+            <p className="text-gray-400 mt-2">Manage your video projects and assets</p>
+          </div>
+
+          <div className="relative max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+            <Input
+              placeholder="Search projects, assets..."
+              className="pl-10 bg-white/[0.03] border border-white/[0.06] text-white placeholder-gray-500 focus:bg-white/[0.05] focus:border-white/[0.1]"
+            />
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-          <Card className="bg-gray-900 border-gray-800">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-gray-400">Total Projects</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-3xl font-bold text-white">24</p>
-            </CardContent>
-          </Card>
-          <Card className="bg-gray-900 border-gray-800">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-gray-400">Rendering</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-3xl font-bold text-yellow-400">3</p>
-            </CardContent>
-          </Card>
-          <Card className="bg-gray-900 border-gray-800">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-gray-400">Completed</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-3xl font-bold text-green-400">18</p>
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="flex gap-3 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <Link href="/projects/new">
-            <Button className="bg-purple-600 hover:bg-purple-700">New Project</Button>
+            <div className="p-5 rounded-lg bg-gradient-to-br from-purple-600/20 to-purple-900/20 border border-purple-500/20 hover:border-purple-500/40 hover:shadow-lg hover:shadow-purple-500/10 transition-all cursor-pointer group">
+              <div className="flex items-start justify-between mb-3">
+                <Sparkles className="w-6 h-6 text-purple-400 group-hover:text-purple-300 transition-colors" />
+              </div>
+              <h3 className="font-semibold text-white group-hover:text-purple-100 transition-colors">AI Video</h3>
+              <p className="text-sm text-gray-400 mt-1">Create with AI</p>
+            </div>
           </Link>
+
+          <Link href="/projects/new">
+            <div className="p-5 rounded-lg bg-gradient-to-br from-cyan-600/20 to-cyan-900/20 border border-cyan-500/20 hover:border-cyan-500/40 hover:shadow-lg hover:shadow-cyan-500/10 transition-all cursor-pointer group">
+              <div className="flex items-start justify-between mb-3">
+                <Zap className="w-6 h-6 text-cyan-400 group-hover:text-cyan-300 transition-colors" />
+              </div>
+              <h3 className="font-semibold text-white group-hover:text-cyan-100 transition-colors">Quick Clip</h3>
+              <p className="text-sm text-gray-400 mt-1">Fast creation</p>
+            </div>
+          </Link>
+
           <Link href="/assets">
-            <Button variant="outline" className="border-gray-700 text-gray-300 hover:bg-gray-800">Asset Library</Button>
-          </Link>
-          <Link href="/brand">
-            <Button variant="outline" className="border-gray-700 text-gray-300 hover:bg-gray-800">Brand Settings</Button>
+            <div className="p-5 rounded-lg bg-gradient-to-br from-emerald-600/20 to-emerald-900/20 border border-emerald-500/20 hover:border-emerald-500/40 hover:shadow-lg hover:shadow-emerald-500/10 transition-all cursor-pointer group">
+              <div className="flex items-start justify-between mb-3">
+                <Upload className="w-6 h-6 text-emerald-400 group-hover:text-emerald-300 transition-colors" />
+              </div>
+              <h3 className="font-semibold text-white group-hover:text-emerald-100 transition-colors">Upload Asset</h3>
+              <p className="text-sm text-gray-400 mt-1">Add media</p>
+            </div>
           </Link>
         </div>
 
-        <Card className="bg-gray-900 border-gray-800">
-          <CardHeader>
-            <CardTitle className="text-white">Recent Projects</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {recentProjects.map((project) => (
-                <Link key={project.id} href={`/projects/${project.id}`}>
-                  <div className="flex items-center justify-between p-3 rounded-lg bg-gray-800 hover:bg-gray-750 cursor-pointer transition-colors">
-                    <div>
-                      <p className="font-medium text-white">{project.name}</p>
-                      <p className="text-sm text-gray-400">{project.type} · {project.date}</p>
-                    </div>
-                    <Badge className={statusColors[project.status]}>{project.status}</Badge>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="p-5 rounded-lg bg-white/[0.03] backdrop-blur border border-white/[0.06] hover:bg-white/[0.05] transition-all">
+            <p className="text-gray-400 text-sm mb-2">Total Projects</p>
+            <p className="text-3xl font-bold text-white">24</p>
+          </div>
+          <div className="p-5 rounded-lg bg-white/[0.03] backdrop-blur border border-white/[0.06] hover:bg-white/[0.05] transition-all">
+            <p className="text-gray-400 text-sm mb-2">Active Renders</p>
+            <p className="text-3xl font-bold text-amber-400">3</p>
+          </div>
+          <div className="p-5 rounded-lg bg-white/[0.03] backdrop-blur border border-white/[0.06] hover:bg-white/[0.05] transition-all">
+            <p className="text-gray-400 text-sm mb-2">Completed</p>
+            <p className="text-3xl font-bold text-emerald-400">18</p>
+          </div>
+          <div className="p-5 rounded-lg bg-white/[0.03] backdrop-blur border border-white/[0.06] hover:bg-white/[0.05] transition-all">
+            <p className="text-gray-400 text-sm mb-2">Storage Used</p>
+            <p className="text-3xl font-bold text-blue-400">142 GB</p>
+          </div>
+        </div>
 
-        <div className="mt-6 flex gap-3 text-sm text-gray-500">
-          <Link href="/render-queue" className="hover:text-gray-300">Render Queue</Link>
-          <span>·</span>
-          <Link href="/providers" className="hover:text-gray-300">AI Providers</Link>
-          <span>·</span>
-          <Link href="/profile" className="hover:text-gray-300">Profile</Link>
+        <div>
+          <h2 className="text-2xl font-bold mb-6">Recent Projects</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+            {recentProjects.map((project, index) => (
+              <Link key={project.id} href={`/projects/${project.id}`}>
+                <div className="rounded-lg overflow-hidden bg-gray-900/50 border border-white/[0.06] hover:border-white/[0.12] hover:shadow-xl transition-all hover:scale-105 cursor-pointer group">
+                  <div
+                    className={`h-32 bg-gradient-to-br ${projectGradients[index % projectGradients.length]} group-hover:opacity-80 transition-opacity`}
+                  />
+                  <div className="p-4 space-y-3">
+                    <div>
+                      <h3 className="font-medium text-white group-hover:text-purple-300 transition-colors">{project.name}</h3>
+                      <p className="text-xs text-gray-400 mt-1">
+                        {project.type} · {project.date}
+                      </p>
+                    </div>
+                    <Badge
+                      className={`w-fit ${statusConfig[project.status].bg} ${statusConfig[project.status].text} hover:opacity-90`}
+                    >
+                      {project.status}
+                    </Badge>
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
         </div>
       </div>
     </div>

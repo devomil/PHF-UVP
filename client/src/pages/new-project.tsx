@@ -70,7 +70,7 @@ function ModeSelection({ onSelect }: { onSelect: (mode: Mode) => void }) {
           return (
             <Card
               key={mode.id}
-              className={`bg-gray-900 border-gray-800 cursor-pointer transition-all duration-300 ${mode.border} ${mode.glow} hover:shadow-lg hover:-translate-y-1`}
+              className={`bg-white/[0.03] border border-white/[0.06] cursor-pointer transition-all duration-300 ${mode.border} ${mode.glow} hover:shadow-lg hover:-translate-y-1`}
               onClick={() => onSelect(mode.id)}
             >
               <CardHeader>
@@ -81,7 +81,7 @@ function ModeSelection({ onSelect }: { onSelect: (mode: Mode) => void }) {
                 <CardDescription className="text-gray-400 mt-2">{mode.description}</CardDescription>
               </CardHeader>
               <CardContent>
-                <Badge variant="outline" className="border-gray-700 text-gray-400 text-xs">
+                <Badge variant="outline" className="border-white/[0.08] text-gray-400 text-xs">
                   Best for: {mode.bestFor}
                 </Badge>
               </CardContent>
@@ -132,25 +132,25 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
       <div className="space-y-5">
         <div>
           <Label className="text-gray-300">Project Title *</Label>
-          <Input value={title} onChange={(e) => setTitle(e.target.value)} required placeholder="Enter project title" className="mt-1.5 bg-gray-900 border-gray-700 text-white" />
+          <Input value={title} onChange={(e) => setTitle(e.target.value)} required placeholder="Enter project title" className="mt-1.5 bg-white/[0.03] border-white/[0.08] text-white" />
         </div>
 
         <div>
           <Label className="text-gray-300">Description / Brief</Label>
-          <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Describe what you want your video to be about..." rows={4} className="mt-1.5 bg-gray-900 border-gray-700 text-white" />
+          <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Describe what you want your video to be about..." rows={4} className="mt-1.5 bg-white/[0.03] border-white/[0.08] text-white" />
         </div>
 
         <div>
           <Label className="text-gray-300">Target Audience</Label>
-          <Input value={targetAudience} onChange={(e) => setTargetAudience(e.target.value)} placeholder="e.g., Young professionals, Tech enthusiasts" className="mt-1.5 bg-gray-900 border-gray-700 text-white" />
+          <Input value={targetAudience} onChange={(e) => setTargetAudience(e.target.value)} placeholder="e.g., Young professionals, Tech enthusiasts" className="mt-1.5 bg-white/[0.03] border-white/[0.08] text-white" />
         </div>
 
         <div className="grid grid-cols-2 gap-4">
           <div>
             <Label className="text-gray-300">Target Duration</Label>
             <Select value={duration} onValueChange={setDuration}>
-              <SelectTrigger className="mt-1.5 bg-gray-900 border-gray-700 text-white"><SelectValue /></SelectTrigger>
-              <SelectContent className="bg-gray-900 border-gray-700">
+              <SelectTrigger className="mt-1.5 bg-white/[0.03] border-white/[0.08] text-white"><SelectValue /></SelectTrigger>
+              <SelectContent className="bg-[#1a1a2e] border-white/[0.08]">
                 {["15", "30", "60", "90", "120", "180"].map((d) => (
                   <SelectItem key={d} value={d} className="text-white">{d}s</SelectItem>
                 ))}
@@ -160,8 +160,8 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
           <div>
             <Label className="text-gray-300">Platform</Label>
             <Select value={platform} onValueChange={setPlatform}>
-              <SelectTrigger className="mt-1.5 bg-gray-900 border-gray-700 text-white"><SelectValue /></SelectTrigger>
-              <SelectContent className="bg-gray-900 border-gray-700">
+              <SelectTrigger className="mt-1.5 bg-white/[0.03] border-white/[0.08] text-white"><SelectValue /></SelectTrigger>
+              <SelectContent className="bg-[#1a1a2e] border-white/[0.08]">
                 {["YouTube", "TikTok", "Instagram Reels", "Instagram Post", "Facebook", "Website"].map((p) => (
                   <SelectItem key={p} value={p} className="text-white">{p}</SelectItem>
                 ))}
@@ -174,8 +174,8 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
           <div>
             <Label className="text-gray-300">Aspect Ratio</Label>
             <Select value={aspectRatio} onValueChange={setAspectRatio}>
-              <SelectTrigger className="mt-1.5 bg-gray-900 border-gray-700 text-white"><SelectValue /></SelectTrigger>
-              <SelectContent className="bg-gray-900 border-gray-700">
+              <SelectTrigger className="mt-1.5 bg-white/[0.03] border-white/[0.08] text-white"><SelectValue /></SelectTrigger>
+              <SelectContent className="bg-[#1a1a2e] border-white/[0.08]">
                 {["16:9", "9:16", "1:1"].map((ar) => (
                   <SelectItem key={ar} value={ar} className="text-white">{ar}</SelectItem>
                 ))}
@@ -185,8 +185,8 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
           <div>
             <Label className="text-gray-300">Quality Tier</Label>
             <Select value={qualityTier} onValueChange={setQualityTier}>
-              <SelectTrigger className="mt-1.5 bg-gray-900 border-gray-700 text-white"><SelectValue /></SelectTrigger>
-              <SelectContent className="bg-gray-900 border-gray-700">
+              <SelectTrigger className="mt-1.5 bg-white/[0.03] border-white/[0.08] text-white"><SelectValue /></SelectTrigger>
+              <SelectContent className="bg-[#1a1a2e] border-white/[0.08]">
                 {["ultra", "premium", "standard"].map((q) => (
                   <SelectItem key={q} value={q} className="text-white">{q.charAt(0).toUpperCase() + q.slice(1)}</SelectItem>
                 ))}
@@ -198,20 +198,20 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
         <div>
           <Label className="text-gray-300">Media Mode</Label>
           <div className="flex gap-3 mt-1.5">
-            <Button type="button" variant={mediaMode === "video" ? "default" : "outline"} className={mediaMode === "video" ? "bg-purple-600 hover:bg-purple-700" : "border-gray-700 text-gray-400"} onClick={() => setMediaMode("video")}>
+            <Button type="button" variant={mediaMode === "video" ? "default" : "outline"} className={mediaMode === "video" ? "bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500" : "border-white/[0.08] text-gray-400"} onClick={() => setMediaMode("video")}>
               <Video className="w-4 h-4 mr-2" /> Video
             </Button>
-            <Button type="button" variant={mediaMode === "image" ? "default" : "outline"} className={mediaMode === "image" ? "bg-purple-600 hover:bg-purple-700" : "border-gray-700 text-gray-400"} onClick={() => setMediaMode("image")}>
+            <Button type="button" variant={mediaMode === "image" ? "default" : "outline"} className={mediaMode === "image" ? "bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500" : "border-white/[0.08] text-gray-400"} onClick={() => setMediaMode("image")}>
               <Image className="w-4 h-4 mr-2" /> Image-only
             </Button>
           </div>
         </div>
 
         <div className="flex gap-3 pt-4">
-          <Button type="button" variant="outline" className="border-gray-700 text-gray-300 hover:bg-gray-800" onClick={onBack}>
+          <Button type="button" variant="outline" className="border-white/[0.08] text-gray-300 hover:bg-white/[0.05]" onClick={onBack}>
             <ArrowLeft className="w-4 h-4 mr-2" /> Back
           </Button>
-          <Button type="submit" className="bg-purple-600 hover:bg-purple-700" disabled={isLoading || !title}>
+          <Button type="submit" className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500" disabled={isLoading || !title}>
             {isLoading ? "Creating..." : "Create Project"}
           </Button>
         </div>
@@ -261,24 +261,24 @@ function CustomScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void;
       <div className="space-y-5">
         <div>
           <Label className="text-gray-300">Project Title *</Label>
-          <Input value={title} onChange={(e) => setTitle(e.target.value)} required placeholder="Enter project title" className="mt-1.5 bg-gray-900 border-gray-700 text-white" />
+          <Input value={title} onChange={(e) => setTitle(e.target.value)} required placeholder="Enter project title" className="mt-1.5 bg-white/[0.03] border-white/[0.08] text-white" />
         </div>
 
         <div>
           <Label className="text-gray-300">Script</Label>
-          <Textarea value={script} onChange={(e) => setScript(e.target.value)} placeholder="Write or paste your script here..." rows={8} className="mt-1.5 bg-gray-900 border-gray-700 text-white" />
+          <Textarea value={script} onChange={(e) => setScript(e.target.value)} placeholder="Write or paste your script here..." rows={8} className="mt-1.5 bg-white/[0.03] border-white/[0.08] text-white" />
         </div>
 
         <div className="grid grid-cols-2 gap-4">
           <div>
             <Label className="text-gray-300">Number of Scenes</Label>
-            <Input type="number" value={numScenes} onChange={(e) => setNumScenes(e.target.value)} min="1" max="50" className="mt-1.5 bg-gray-900 border-gray-700 text-white" />
+            <Input type="number" value={numScenes} onChange={(e) => setNumScenes(e.target.value)} min="1" max="50" className="mt-1.5 bg-white/[0.03] border-white/[0.08] text-white" />
           </div>
           <div>
             <Label className="text-gray-300">Target Duration</Label>
             <Select value={duration} onValueChange={setDuration}>
-              <SelectTrigger className="mt-1.5 bg-gray-900 border-gray-700 text-white"><SelectValue /></SelectTrigger>
-              <SelectContent className="bg-gray-900 border-gray-700">
+              <SelectTrigger className="mt-1.5 bg-white/[0.03] border-white/[0.08] text-white"><SelectValue /></SelectTrigger>
+              <SelectContent className="bg-[#1a1a2e] border-white/[0.08]">
                 {["15", "30", "60", "90", "120", "180"].map((d) => (
                   <SelectItem key={d} value={d} className="text-white">{d}s</SelectItem>
                 ))}
@@ -291,8 +291,8 @@ function CustomScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void;
           <div>
             <Label className="text-gray-300">Platform</Label>
             <Select value={platform} onValueChange={setPlatform}>
-              <SelectTrigger className="mt-1.5 bg-gray-900 border-gray-700 text-white"><SelectValue /></SelectTrigger>
-              <SelectContent className="bg-gray-900 border-gray-700">
+              <SelectTrigger className="mt-1.5 bg-white/[0.03] border-white/[0.08] text-white"><SelectValue /></SelectTrigger>
+              <SelectContent className="bg-[#1a1a2e] border-white/[0.08]">
                 {["YouTube", "TikTok", "Instagram Reels", "Instagram Post", "Facebook", "Website"].map((p) => (
                   <SelectItem key={p} value={p} className="text-white">{p}</SelectItem>
                 ))}
@@ -302,8 +302,8 @@ function CustomScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void;
           <div>
             <Label className="text-gray-300">Aspect Ratio</Label>
             <Select value={aspectRatio} onValueChange={setAspectRatio}>
-              <SelectTrigger className="mt-1.5 bg-gray-900 border-gray-700 text-white"><SelectValue /></SelectTrigger>
-              <SelectContent className="bg-gray-900 border-gray-700">
+              <SelectTrigger className="mt-1.5 bg-white/[0.03] border-white/[0.08] text-white"><SelectValue /></SelectTrigger>
+              <SelectContent className="bg-[#1a1a2e] border-white/[0.08]">
                 {["16:9", "9:16", "1:1"].map((ar) => (
                   <SelectItem key={ar} value={ar} className="text-white">{ar}</SelectItem>
                 ))}
@@ -316,8 +316,8 @@ function CustomScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void;
           <div>
             <Label className="text-gray-300">Visual Style</Label>
             <Select value={visualStyle} onValueChange={setVisualStyle}>
-              <SelectTrigger className="mt-1.5 bg-gray-900 border-gray-700 text-white"><SelectValue /></SelectTrigger>
-              <SelectContent className="bg-gray-900 border-gray-700">
+              <SelectTrigger className="mt-1.5 bg-white/[0.03] border-white/[0.08] text-white"><SelectValue /></SelectTrigger>
+              <SelectContent className="bg-[#1a1a2e] border-white/[0.08]">
                 {["Professional", "Cinematic", "Minimal", "Bold", "Playful"].map((s) => (
                   <SelectItem key={s} value={s} className="text-white">{s}</SelectItem>
                 ))}
@@ -327,8 +327,8 @@ function CustomScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void;
           <div>
             <Label className="text-gray-300">Voice Style</Label>
             <Select value={voiceStyle} onValueChange={setVoiceStyle}>
-              <SelectTrigger className="mt-1.5 bg-gray-900 border-gray-700 text-white"><SelectValue /></SelectTrigger>
-              <SelectContent className="bg-gray-900 border-gray-700">
+              <SelectTrigger className="mt-1.5 bg-white/[0.03] border-white/[0.08] text-white"><SelectValue /></SelectTrigger>
+              <SelectContent className="bg-[#1a1a2e] border-white/[0.08]">
                 {["Professional", "Conversational", "Energetic", "Calm", "Dramatic"].map((s) => (
                   <SelectItem key={s} value={s} className="text-white">{s}</SelectItem>
                 ))}
@@ -340,20 +340,20 @@ function CustomScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void;
         <div>
           <Label className="text-gray-300">Media Mode</Label>
           <div className="flex gap-3 mt-1.5">
-            <Button type="button" variant={mediaMode === "video" ? "default" : "outline"} className={mediaMode === "video" ? "bg-purple-600 hover:bg-purple-700" : "border-gray-700 text-gray-400"} onClick={() => setMediaMode("video")}>
+            <Button type="button" variant={mediaMode === "video" ? "default" : "outline"} className={mediaMode === "video" ? "bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500" : "border-white/[0.08] text-gray-400"} onClick={() => setMediaMode("video")}>
               <Video className="w-4 h-4 mr-2" /> Video
             </Button>
-            <Button type="button" variant={mediaMode === "image" ? "default" : "outline"} className={mediaMode === "image" ? "bg-purple-600 hover:bg-purple-700" : "border-gray-700 text-gray-400"} onClick={() => setMediaMode("image")}>
+            <Button type="button" variant={mediaMode === "image" ? "default" : "outline"} className={mediaMode === "image" ? "bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500" : "border-white/[0.08] text-gray-400"} onClick={() => setMediaMode("image")}>
               <Image className="w-4 h-4 mr-2" /> Image-only
             </Button>
           </div>
         </div>
 
         <div className="flex gap-3 pt-4">
-          <Button type="button" variant="outline" className="border-gray-700 text-gray-300 hover:bg-gray-800" onClick={onBack}>
+          <Button type="button" variant="outline" className="border-white/[0.08] text-gray-300 hover:bg-white/[0.05]" onClick={onBack}>
             <ArrowLeft className="w-4 h-4 mr-2" /> Back
           </Button>
-          <Button type="submit" className="bg-purple-600 hover:bg-purple-700" disabled={isLoading || !title}>
+          <Button type="submit" className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500" disabled={isLoading || !title}>
             {isLoading ? "Creating..." : "Create Project"}
           </Button>
         </div>
@@ -396,13 +396,13 @@ function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () => void; 
         <div>
           <Label className="text-gray-300">Output Type</Label>
           <div className="grid grid-cols-2 gap-3 mt-1.5">
-            <Card className={`cursor-pointer transition-all duration-200 ${outputType === "video" ? "bg-purple-600/20 border-purple-500" : "bg-gray-900 border-gray-700 hover:border-gray-600"}`} onClick={() => setOutputType("video")}>
+            <Card className={`cursor-pointer transition-all duration-200 ${outputType === "video" ? "bg-purple-600/20 border-purple-500" : "bg-white/[0.03] border-white/[0.06] hover:border-white/[0.1]"}`} onClick={() => setOutputType("video")}>
               <CardContent className="flex items-center justify-center gap-2 p-4">
                 <Video className={`w-5 h-5 ${outputType === "video" ? "text-purple-400" : "text-gray-400"}`} />
                 <span className={outputType === "video" ? "text-white font-medium" : "text-gray-400"}>Video</span>
               </CardContent>
             </Card>
-            <Card className={`cursor-pointer transition-all duration-200 ${outputType === "image" ? "bg-purple-600/20 border-purple-500" : "bg-gray-900 border-gray-700 hover:border-gray-600"}`} onClick={() => setOutputType("image")}>
+            <Card className={`cursor-pointer transition-all duration-200 ${outputType === "image" ? "bg-purple-600/20 border-purple-500" : "bg-white/[0.03] border-white/[0.06] hover:border-white/[0.1]"}`} onClick={() => setOutputType("image")}>
               <CardContent className="flex items-center justify-center gap-2 p-4">
                 <Image className={`w-5 h-5 ${outputType === "image" ? "text-purple-400" : "text-gray-400"}`} />
                 <span className={outputType === "image" ? "text-white font-medium" : "text-gray-400"}>Image</span>
@@ -413,15 +413,15 @@ function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () => void; 
 
         <div>
           <Label className="text-gray-300">Prompt *</Label>
-          <Textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="Describe the video clip or image you want to create..." rows={4} required className="mt-1.5 bg-gray-900 border-gray-700 text-white" />
+          <Textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="Describe the video clip or image you want to create..." rows={4} required className="mt-1.5 bg-white/[0.03] border-white/[0.08] text-white" />
         </div>
 
         {outputType === "video" ? (
           <div>
             <Label className="text-gray-300">Duration</Label>
             <Select value={duration} onValueChange={setDuration}>
-              <SelectTrigger className="mt-1.5 bg-gray-900 border-gray-700 text-white"><SelectValue /></SelectTrigger>
-              <SelectContent className="bg-gray-900 border-gray-700">
+              <SelectTrigger className="mt-1.5 bg-white/[0.03] border-white/[0.08] text-white"><SelectValue /></SelectTrigger>
+              <SelectContent className="bg-[#1a1a2e] border-white/[0.08]">
                 {["4", "6", "8", "10"].map((d) => (
                   <SelectItem key={d} value={d} className="text-white">{d}s</SelectItem>
                 ))}
@@ -432,8 +432,8 @@ function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () => void; 
           <div>
             <Label className="text-gray-300">Style</Label>
             <Select value={imageStyle} onValueChange={setImageStyle}>
-              <SelectTrigger className="mt-1.5 bg-gray-900 border-gray-700 text-white"><SelectValue /></SelectTrigger>
-              <SelectContent className="bg-gray-900 border-gray-700">
+              <SelectTrigger className="mt-1.5 bg-white/[0.03] border-white/[0.08] text-white"><SelectValue /></SelectTrigger>
+              <SelectContent className="bg-[#1a1a2e] border-white/[0.08]">
                 {["Photorealistic", "Illustration", "3D Render", "Anime", "Abstract"].map((s) => (
                   <SelectItem key={s} value={s} className="text-white">{s}</SelectItem>
                 ))}
@@ -446,8 +446,8 @@ function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () => void; 
           <div>
             <Label className="text-gray-300">Aspect Ratio</Label>
             <Select value={aspectRatio} onValueChange={setAspectRatio}>
-              <SelectTrigger className="mt-1.5 bg-gray-900 border-gray-700 text-white"><SelectValue /></SelectTrigger>
-              <SelectContent className="bg-gray-900 border-gray-700">
+              <SelectTrigger className="mt-1.5 bg-white/[0.03] border-white/[0.08] text-white"><SelectValue /></SelectTrigger>
+              <SelectContent className="bg-[#1a1a2e] border-white/[0.08]">
                 {["16:9", "9:16", "1:1"].map((ar) => (
                   <SelectItem key={ar} value={ar} className="text-white">{ar}</SelectItem>
                 ))}
@@ -457,8 +457,8 @@ function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () => void; 
           <div>
             <Label className="text-gray-300">Provider</Label>
             <Select value={provider} onValueChange={setProvider}>
-              <SelectTrigger className="mt-1.5 bg-gray-900 border-gray-700 text-white"><SelectValue /></SelectTrigger>
-              <SelectContent className="bg-gray-900 border-gray-700">
+              <SelectTrigger className="mt-1.5 bg-white/[0.03] border-white/[0.08] text-white"><SelectValue /></SelectTrigger>
+              <SelectContent className="bg-[#1a1a2e] border-white/[0.08]">
                 {[{ value: "auto", label: "Auto-select" }, { value: "kling", label: "Kling" }, { value: "runwayml", label: "RunwayML" }, { value: "luma", label: "Luma" }, { value: "pika", label: "Pika" }, { value: "veo", label: "Veo" }].map((p) => (
                   <SelectItem key={p.value} value={p.value} className="text-white">{p.label}</SelectItem>
                 ))}
@@ -468,15 +468,15 @@ function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () => void; 
         </div>
 
         <div className="flex items-center gap-2">
-          <input type="checkbox" id="saveToLibrary" checked={saveToLibrary} onChange={(e) => setSaveToLibrary(e.target.checked)} className="rounded border-gray-700 bg-gray-900" />
+          <input type="checkbox" id="saveToLibrary" checked={saveToLibrary} onChange={(e) => setSaveToLibrary(e.target.checked)} className="rounded border-white/[0.08] bg-white/[0.03]" />
           <Label htmlFor="saveToLibrary" className="text-gray-300 cursor-pointer">Save to Asset Library</Label>
         </div>
 
         <div className="flex gap-3 pt-4">
-          <Button type="button" variant="outline" className="border-gray-700 text-gray-300 hover:bg-gray-800" onClick={onBack}>
+          <Button type="button" variant="outline" className="border-white/[0.08] text-gray-300 hover:bg-white/[0.05]" onClick={onBack}>
             <ArrowLeft className="w-4 h-4 mr-2" /> Back
           </Button>
-          <Button type="submit" className="bg-purple-600 hover:bg-purple-700" disabled={isLoading || !prompt}>
+          <Button type="submit" className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500" disabled={isLoading || !prompt}>
             {isLoading ? "Generating..." : "Generate"}
           </Button>
         </div>
@@ -509,17 +509,15 @@ export default function NewProject() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white p-6">
-      <div className="max-w-7xl mx-auto">
-        <Link href="/dashboard" className="text-sm text-gray-500 hover:text-gray-300 inline-flex items-center gap-1 mb-6">
-          <ArrowLeft className="w-4 h-4" /> Back to Dashboard
-        </Link>
+    <div className="p-6 lg:p-8">
+      <Link href="/dashboard" className="text-sm text-gray-500 hover:text-gray-300 inline-flex items-center gap-1 mb-6">
+        <ArrowLeft className="w-4 h-4" /> Back to Dashboard
+      </Link>
 
-        {mode === null && <ModeSelection onSelect={setMode} />}
-        {mode === "ai-script" && <AIScriptForm onBack={() => setMode(null)} onSubmit={handleSubmit} isLoading={createMutation.isPending} />}
-        {mode === "custom-script" && <CustomScriptForm onBack={() => setMode(null)} onSubmit={handleSubmit} isLoading={createMutation.isPending} />}
-        {mode === "quick-create" && <QuickCreateForm onBack={() => setMode(null)} onSubmit={handleSubmit} isLoading={createMutation.isPending} />}
-      </div>
+      {mode === null && <ModeSelection onSelect={setMode} />}
+      {mode === "ai-script" && <AIScriptForm onBack={() => setMode(null)} onSubmit={handleSubmit} isLoading={createMutation.isPending} />}
+      {mode === "custom-script" && <CustomScriptForm onBack={() => setMode(null)} onSubmit={handleSubmit} isLoading={createMutation.isPending} />}
+      {mode === "quick-create" && <QuickCreateForm onBack={() => setMode(null)} onSubmit={handleSubmit} isLoading={createMutation.isPending} />}
     </div>
   );
 }
