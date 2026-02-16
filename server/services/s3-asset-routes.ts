@@ -34,7 +34,7 @@ const memUpload = multer({
   limits: { fileSize: 50 * 1024 * 1024 },
 });
 
-router.use(isAuthenticated, requireRole(['admin']));
+router.use(isAuthenticated);
 
 router.get('/categories', (_req: Request, res: Response) => {
   res.json(ASSET_CATEGORIES);
