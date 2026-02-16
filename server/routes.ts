@@ -35,6 +35,23 @@ export function registerRoutes(app: Express) {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
   });
 
+  app.get("/api/services/lambda-health", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ error: "Not authenticated" });
+    }
+    try {
+      const { remotionLambdaService } = await import("./services/remotion-lambda-service");
+      const isConfigured = await remotionLambdaService.isConfigured();
+      if (!isConfigured) {
+        return res.json({ health: { status: "unconfigured", region: "us-east-2", timestamp: new Date().toISOString() } });
+      }
+      const health = await remotionLambdaService.healthCheck();
+      res.json({ health });
+    } catch (error: any) {
+      res.json({ health: { status: "error", error: error.message, timestamp: new Date().toISOString() } });
+    }
+  });
+
   app.get("/api/service-status", (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ error: "Not authenticated" });
