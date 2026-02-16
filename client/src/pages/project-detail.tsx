@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
-import { ArrowLeft, Settings, Play, RefreshCw, Clock, Target, Monitor, BarChart3, Loader2, AlertCircle, Zap, Video, Image, Download, RotateCcw, Save, Trash2, ExternalLink, CheckCircle2, XCircle, Server, HardDrive, Type, Film, ChevronDown, ChevronUp, CloudUpload } from "lucide-react";
+import { ArrowLeft, Settings, Play, RefreshCw, Clock, Target, Monitor, BarChart3, Loader2, AlertCircle, Zap, Video, Image, Download, RotateCcw, Save, Trash2, ExternalLink, CheckCircle2, XCircle, Server, HardDrive, Type, Film, ChevronDown, ChevronUp, CloudUpload, Mic, Music, Volume2, Palette, Shuffle, Sliders } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 
@@ -452,8 +452,380 @@ export default function ProjectDetail({ params }: { params?: { id: string } }) {
           </div>
         )}
 
+        <RenderConfigPanel projectId={projectId} />
         <PostProductionPanel projectId={projectId} project={project} />
       </div>
+    </div>
+  );
+}
+
+function ToggleSwitch({ enabled, onChange, label }: { enabled: boolean; onChange: (v: boolean) => void; label: string }) {
+  return (
+    <button
+      onClick={() => onChange(!enabled)}
+      className="flex items-center gap-2"
+    >
+      <div className={`relative w-9 h-5 rounded-full transition-colors ${enabled ? "bg-purple-600" : "bg-gray-600"}`}>
+        <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${enabled ? "left-[18px]" : "left-0.5"}`} />
+      </div>
+      <span className="text-xs" style={{ color: "var(--text-secondary)" }}>{label}</span>
+    </button>
+  );
+}
+
+function RenderConfigPanel({ projectId }: { projectId: string }) {
+  const [expanded, setExpanded] = useState(true);
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const settingsQuery = useQuery({
+    queryKey: ["render-settings", projectId],
+    queryFn: async () => {
+      const res = await fetch(`/api/universal-video/projects/${projectId}/render-settings`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch render settings");
+      return res.json();
+    },
+  });
+
+  const settings = settingsQuery.data?.settings || {
+    voiceover: { enabled: true, voiceId: null, hasGenerated: false },
+    music: { enabled: true, volume: 0.18, hasGenerated: false },
+    soundDesign: { enabled: true, transitionSounds: true, impactSounds: true, ambientLayer: true, ambientType: "nature", masterVolume: 1.0 },
+    filmTreatment: { enabled: true, colorGrade: "warm-cinematic", grainIntensity: 0.03, vignetteIntensity: 0.2, letterbox: "none" },
+    transitions: { style: "crossfade", duration: 0.5 },
+  };
+
+  const saveMutation = useMutation({
+    mutationFn: async (patch: any) => {
+      const res = await fetch(`/api/universal-video/projects/${projectId}/render-settings`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(patch),
+      });
+      if (!res.ok) throw new Error("Failed to save settings");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["render-settings", projectId] });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const updateSetting = (category: string, key: string, value: any) => {
+    saveMutation.mutate({ [category]: { ...settings[category], [key]: value } });
+  };
+
+  const colorGradeOptions = [
+    { value: "warm-cinematic", label: "Warm Cinematic" },
+    { value: "cool-corporate", label: "Cool Corporate" },
+    { value: "natural-organic", label: "Natural Organic" },
+    { value: "vibrant-lifestyle", label: "Vibrant Lifestyle" },
+    { value: "luxury-elegant", label: "Luxury Elegant" },
+    { value: "moody-dramatic", label: "Moody Dramatic" },
+  ];
+
+  const transitionOptions = [
+    { value: "crossfade", label: "Crossfade" },
+    { value: "fade", label: "Fade" },
+    { value: "dissolve", label: "Dissolve" },
+    { value: "slide-left", label: "Slide Left" },
+    { value: "slide-right", label: "Slide Right" },
+    { value: "wipe-left", label: "Wipe Left" },
+    { value: "wipe-right", label: "Wipe Right" },
+    { value: "zoom", label: "Zoom" },
+    { value: "none", label: "None (Cut)" },
+  ];
+
+  const ambientOptions = [
+    { value: "nature", label: "Nature" },
+    { value: "warm", label: "Warm Room" },
+  ];
+
+  if (settingsQuery.isLoading) {
+    return (
+      <div className="border rounded-xl mt-6 p-5" style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)" }}>
+        <div className="flex items-center gap-2">
+          <Loader2 className="w-4 h-4 animate-spin" style={{ color: "var(--text-muted)" }} />
+          <span className="text-xs" style={{ color: "var(--text-muted)" }}>Loading render settings...</span>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="border rounded-xl mt-6 overflow-hidden" style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)" }}>
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center justify-between p-5 text-left hover:opacity-90 transition-opacity"
+      >
+        <div className="flex items-center gap-3">
+          <Sliders className="w-5 h-5 text-indigo-400" />
+          <h2 className="text-sm font-medium uppercase tracking-wider" style={{ color: "var(--text-primary)" }}>
+            Render Configuration
+          </h2>
+          {saveMutation.isPending && (
+            <span className="flex items-center gap-1 text-xs text-purple-400">
+              <Loader2 className="w-3 h-3 animate-spin" /> Saving...
+            </span>
+          )}
+        </div>
+        {expanded ? (
+          <ChevronUp className="w-5 h-5" style={{ color: "var(--text-muted)" }} />
+        ) : (
+          <ChevronDown className="w-5 h-5" style={{ color: "var(--text-muted)" }} />
+        )}
+      </button>
+
+      {expanded && (
+        <div className="px-5 pb-5 space-y-5">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="border rounded-lg p-4 space-y-3" style={{ backgroundColor: "var(--app-bg)", borderColor: "var(--border-subtle)" }}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Mic className="w-4 h-4 text-blue-400" />
+                  <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>Voiceover</span>
+                </div>
+                <ToggleSwitch
+                  enabled={settings.voiceover.enabled}
+                  onChange={(v) => updateSetting("voiceover", "enabled", v)}
+                  label=""
+                />
+              </div>
+              {settings.voiceover.enabled && (
+                <>
+                  <div className="flex items-center gap-2">
+                    {settings.voiceover.hasGenerated ? (
+                      <span className="flex items-center gap-1 text-xs text-emerald-400">
+                        <CheckCircle2 className="w-3 h-3" /> Generated ({Math.round(settings.voiceover.duration || 0)}s)
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1 text-xs text-amber-400">
+                        <AlertCircle className="w-3 h-3" /> Not generated yet
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                    Voiceover is generated from the project's script narration during asset generation.
+                  </p>
+                </>
+              )}
+            </div>
+
+            <div className="border rounded-lg p-4 space-y-3" style={{ backgroundColor: "var(--app-bg)", borderColor: "var(--border-subtle)" }}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Music className="w-4 h-4 text-pink-400" />
+                  <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>Background Music</span>
+                </div>
+                <ToggleSwitch
+                  enabled={settings.music.enabled}
+                  onChange={(v) => updateSetting("music", "enabled", v)}
+                  label=""
+                />
+              </div>
+              {settings.music.enabled && (
+                <>
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs" style={{ color: "var(--text-secondary)" }}>Volume</span>
+                      <span className="text-xs font-mono" style={{ color: "var(--text-muted)" }}>
+                        {Math.round((settings.music.volume || 0.18) * 100)}%
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      value={Math.round((settings.music.volume || 0.18) * 100)}
+                      onChange={(e) => updateSetting("music", "volume", parseInt(e.target.value) / 100)}
+                      className="w-full h-1.5 rounded-full appearance-none cursor-pointer"
+                      style={{ background: `linear-gradient(to right, rgb(168 85 247) ${Math.round((settings.music.volume || 0.18) * 100)}%, var(--border-subtle) ${Math.round((settings.music.volume || 0.18) * 100)}%)` }}
+                    />
+                  </div>
+                  {settings.music.hasGenerated ? (
+                    <span className="flex items-center gap-1 text-xs text-emerald-400">
+                      <CheckCircle2 className="w-3 h-3" /> Music ready
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1 text-xs text-amber-400">
+                      <AlertCircle className="w-3 h-3" /> Generated during asset creation
+                    </span>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+
+          <div className="border rounded-lg p-4 space-y-3" style={{ backgroundColor: "var(--app-bg)", borderColor: "var(--border-subtle)" }}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Volume2 className="w-4 h-4 text-cyan-400" />
+                <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>Sound Design</span>
+              </div>
+              <ToggleSwitch
+                enabled={settings.soundDesign.enabled}
+                onChange={(v) => updateSetting("soundDesign", "enabled", v)}
+                label=""
+              />
+            </div>
+            {settings.soundDesign.enabled && (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <ToggleSwitch
+                  enabled={settings.soundDesign.transitionSounds}
+                  onChange={(v) => saveMutation.mutate({ soundDesign: { ...settings.soundDesign, transitionSounds: v } })}
+                  label="Transitions"
+                />
+                <ToggleSwitch
+                  enabled={settings.soundDesign.impactSounds}
+                  onChange={(v) => saveMutation.mutate({ soundDesign: { ...settings.soundDesign, impactSounds: v } })}
+                  label="Impacts"
+                />
+                <ToggleSwitch
+                  enabled={settings.soundDesign.ambientLayer}
+                  onChange={(v) => saveMutation.mutate({ soundDesign: { ...settings.soundDesign, ambientLayer: v } })}
+                  label="Ambient"
+                />
+                <div>
+                  <span className="text-xs block mb-1" style={{ color: "var(--text-secondary)" }}>Ambient Type</span>
+                  <select
+                    value={settings.soundDesign.ambientType}
+                    onChange={(e) => saveMutation.mutate({ soundDesign: { ...settings.soundDesign, ambientType: e.target.value } })}
+                    className="w-full text-xs rounded-md border p-1.5 appearance-none"
+                    style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)", color: "var(--text-primary)" }}
+                  >
+                    {ambientOptions.map((o) => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="border rounded-lg p-4 space-y-3" style={{ backgroundColor: "var(--app-bg)", borderColor: "var(--border-subtle)" }}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Palette className="w-4 h-4 text-amber-400" />
+                  <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>Film Treatment</span>
+                </div>
+                <ToggleSwitch
+                  enabled={settings.filmTreatment.enabled}
+                  onChange={(v) => updateSetting("filmTreatment", "enabled", v)}
+                  label=""
+                />
+              </div>
+              {settings.filmTreatment.enabled && (
+                <>
+                  <div>
+                    <span className="text-xs block mb-1" style={{ color: "var(--text-secondary)" }}>Color Grade</span>
+                    <select
+                      value={settings.filmTreatment.colorGrade}
+                      onChange={(e) => saveMutation.mutate({ filmTreatment: { ...settings.filmTreatment, colorGrade: e.target.value } })}
+                      className="w-full text-xs rounded-md border p-1.5 appearance-none"
+                      style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)", color: "var(--text-primary)" }}
+                    >
+                      {colorGradeOptions.map((o) => (
+                        <option key={o.value} value={o.value}>{o.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs" style={{ color: "var(--text-secondary)" }}>Film Grain</span>
+                      <span className="text-xs font-mono" style={{ color: "var(--text-muted)" }}>
+                        {Math.round((settings.filmTreatment.grainIntensity || 0) * 100)}%
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="10"
+                      value={Math.round((settings.filmTreatment.grainIntensity || 0) * 100)}
+                      onChange={(e) => saveMutation.mutate({ filmTreatment: { ...settings.filmTreatment, grainIntensity: parseInt(e.target.value) / 100 } })}
+                      className="w-full h-1.5 rounded-full appearance-none cursor-pointer"
+                      style={{ background: `linear-gradient(to right, rgb(245 158 11) ${Math.round((settings.filmTreatment.grainIntensity || 0) * 1000)}%, var(--border-subtle) ${Math.round((settings.filmTreatment.grainIntensity || 0) * 1000)}%)` }}
+                    />
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs" style={{ color: "var(--text-secondary)" }}>Vignette</span>
+                      <span className="text-xs font-mono" style={{ color: "var(--text-muted)" }}>
+                        {Math.round((settings.filmTreatment.vignetteIntensity || 0) * 100)}%
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="50"
+                      value={Math.round((settings.filmTreatment.vignetteIntensity || 0) * 100)}
+                      onChange={(e) => saveMutation.mutate({ filmTreatment: { ...settings.filmTreatment, vignetteIntensity: parseInt(e.target.value) / 100 } })}
+                      className="w-full h-1.5 rounded-full appearance-none cursor-pointer"
+                      style={{ background: `linear-gradient(to right, rgb(245 158 11) ${Math.round((settings.filmTreatment.vignetteIntensity || 0) * 200)}%, var(--border-subtle) ${Math.round((settings.filmTreatment.vignetteIntensity || 0) * 200)}%)` }}
+                    />
+                  </div>
+                  <div>
+                    <span className="text-xs block mb-1" style={{ color: "var(--text-secondary)" }}>Letterbox</span>
+                    <select
+                      value={settings.filmTreatment.letterbox}
+                      onChange={(e) => saveMutation.mutate({ filmTreatment: { ...settings.filmTreatment, letterbox: e.target.value } })}
+                      className="w-full text-xs rounded-md border p-1.5 appearance-none"
+                      style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)", color: "var(--text-primary)" }}
+                    >
+                      <option value="none">None</option>
+                      <option value="2.39:1">Cinematic (2.39:1)</option>
+                      <option value="1.85:1">Widescreen (1.85:1)</option>
+                    </select>
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="border rounded-lg p-4 space-y-3" style={{ backgroundColor: "var(--app-bg)", borderColor: "var(--border-subtle)" }}>
+              <div className="flex items-center gap-2">
+                <Shuffle className="w-4 h-4 text-green-400" />
+                <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>Transitions</span>
+              </div>
+              <div>
+                <span className="text-xs block mb-1" style={{ color: "var(--text-secondary)" }}>Style</span>
+                <select
+                  value={settings.transitions.style}
+                  onChange={(e) => saveMutation.mutate({ transitions: { ...settings.transitions, style: e.target.value } })}
+                  className="w-full text-xs rounded-md border p-1.5 appearance-none"
+                  style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)", color: "var(--text-primary)" }}
+                >
+                  {transitionOptions.map((o) => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs" style={{ color: "var(--text-secondary)" }}>Duration</span>
+                  <span className="text-xs font-mono" style={{ color: "var(--text-muted)" }}>
+                    {(settings.transitions.duration || 0.5).toFixed(1)}s
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="1"
+                  max="20"
+                  value={Math.round((settings.transitions.duration || 0.5) * 10)}
+                  onChange={(e) => saveMutation.mutate({ transitions: { ...settings.transitions, duration: parseInt(e.target.value) / 10 } })}
+                  className="w-full h-1.5 rounded-full appearance-none cursor-pointer"
+                  style={{ background: `linear-gradient(to right, rgb(34 197 94) ${Math.round((settings.transitions.duration || 0.5) * 50)}%, var(--border-subtle) ${Math.round((settings.transitions.duration || 0.5) * 50)}%)` }}
+                />
+              </div>
+              <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                Applied between scenes during final render composition.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
