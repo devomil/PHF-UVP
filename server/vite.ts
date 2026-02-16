@@ -11,11 +11,7 @@ export async function setupVite(app: Express) {
     configFile: path.resolve(__dirname, "..", "vite.config.ts"),
     server: {
       middlewareMode: true,
-      hmr: {
-        port: 443,
-        clientPort: 443,
-        protocol: 'wss',
-      },
+      hmr: false,
       allowedHosts: true,
     },
     appType: "spa",
