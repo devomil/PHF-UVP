@@ -1612,11 +1612,12 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
       return res.status(403).json({ success: false, error: 'Access denied' });
     }
     
-    // Allow re-render for complete projects, first-time render for ready projects, and retry for error projects
-    if (projectData.status !== 'ready' && projectData.status !== 'error' && projectData.status !== 'complete') {
+    // Allow re-render for complete/completed projects, first-time render for ready projects, and retry for error projects
+    const renderableStatuses = ['ready', 'error', 'complete', 'completed'];
+    if (!renderableStatuses.includes(projectData.status)) {
       return res.status(400).json({ 
         success: false, 
-        error: 'Project must be ready before rendering. Generate assets first.' 
+        error: `Project must be ready before rendering. Current status: ${projectData.status}` 
       });
     }
     
@@ -7961,13 +7962,16 @@ router.get('/projects/:projectId/can-render', isAuthenticated, async (req: Reque
     const scenes = projectData.scenes || [];
     
     if (scenes.length === 0) {
+      const quickCreateReady = ['ready', 'complete', 'completed'].includes(projectData.status);
       return res.json({
         success: true,
-        allowed: projectData.status === 'ready' || projectData.status === 'complete',
-        reason: 'Quick Create project - direct render',
-        blockingReasons: projectData.status === 'ready' || projectData.status === 'complete' 
+        allowed: quickCreateReady,
+        reason: quickCreateReady 
+          ? 'Quick Create project ready for rendering' 
+          : 'Quick Create project - waiting for asset generation',
+        blockingReasons: quickCreateReady 
           ? [] 
-          : ['Project is not ready for rendering yet'],
+          : ['Project is still generating assets - please wait for completion'],
       });
     }
     
