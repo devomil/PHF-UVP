@@ -3,6 +3,8 @@ export interface AIVideoProviderConfig {
   apiProvider: string;
   costPerSecond: number;
   maxDuration: number;
+  name?: string;
+  type?: 'piapi' | 'direct';
   capabilities: {
     t2v: boolean;
     i2v: boolean;
@@ -270,8 +272,26 @@ export const AI_VIDEO_PROVIDERS: Record<string, AIVideoProviderConfig> = {
   },
 };
 
+export function selectProvidersForScene(scene: any, options?: any): string[] {
+  return getConfiguredProviders();
+}
+
 export function selectProvidersForSceneSmart(scene: any, options?: any): string[] {
   return ['kling-2.6', 'veo-3.1', 'luma'];
+}
+
+export function getConfiguredProviders(): string[] {
+  const configured: string[] = [];
+  if (process.env.PIAPI_API_KEY) {
+    configured.push('kling-2.6', 'kling-2.6-pro', 'veo-3.1', 'luma', 'runway', 'hailuo', 'wan-2.6', 'pika', 'seedance-1.0');
+  }
+  if (process.env.RUNWAY_API_KEY) {
+    configured.push('runway-direct');
+  }
+  if (process.env.STABILITY_API_KEY) {
+    configured.push('stability-direct');
+  }
+  return [...new Set(configured)];
 }
 
 export function analyzePromptComplexity(prompt: string): { complexity: string; score: number } {
