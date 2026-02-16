@@ -1262,6 +1262,164 @@ router.patch('/projects/:projectId/media-mode', isAuthenticated, async (req: Req
   }
 });
 
+router.patch('/projects/:projectId/render-settings', isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const userId = (req.user as any)?.id;
+    const { projectId } = req.params;
+    const { voiceover, music, soundDesign, filmTreatment, transitions } = req.body;
+    
+    const projectData = await getProjectFromDb(projectId);
+    if (!projectData) {
+      return res.status(404).json({ success: false, error: 'Project not found' });
+    }
+    
+    if (projectData.ownerId !== userId) {
+      return res.status(403).json({ success: false, error: 'Access denied' });
+    }
+    
+    if (voiceover !== undefined) {
+      if (!projectData.assets) {
+        projectData.assets = { voiceover: { fullTrackUrl: '', duration: 0, perScene: [] }, music: { url: '', volume: 0.18, duration: 0 }, images: [], videos: [] } as any;
+      }
+      if (voiceover.enabled === false) {
+        projectData.assets.voiceover.fullTrackUrl = '';
+      }
+      (projectData as any).voiceoverSettings = {
+        enabled: voiceover.enabled ?? true,
+        voiceId: voiceover.voiceId || null,
+      };
+    }
+    
+    if (music !== undefined) {
+      if (projectData.assets?.music) {
+        projectData.assets.music.volume = music.volume ?? projectData.assets.music.volume ?? 0.18;
+      }
+      (projectData as any).musicSettings = {
+        enabled: music.enabled ?? true,
+        volume: music.volume ?? 0.18,
+      };
+    }
+    
+    if (soundDesign !== undefined) {
+      (projectData as any).soundDesignSettings = {
+        enabled: soundDesign.enabled ?? true,
+        transitionSounds: soundDesign.transitionSounds ?? true,
+        impactSounds: soundDesign.impactSounds ?? true,
+        ambientLayer: soundDesign.ambientLayer ?? true,
+        ambientType: soundDesign.ambientType || 'nature',
+        masterVolume: soundDesign.masterVolume ?? 1.0,
+        audioDucking: {
+          enabled: soundDesign.audioDucking?.enabled ?? true,
+          baseVolume: soundDesign.audioDucking?.baseVolume ?? 0.35,
+          duckLevel: soundDesign.audioDucking?.duckLevel ?? 0.1,
+          fadeFrames: soundDesign.audioDucking?.fadeFrames ?? 15,
+        },
+      };
+    }
+    
+    if (filmTreatment !== undefined) {
+      const validColorGrades = ['warm-cinematic', 'cool-corporate', 'natural-organic', 'vibrant-lifestyle', 'luxury-elegant', 'moody-dramatic'];
+      const validLetterbox = ['none', '2.39:1', '1.85:1'];
+      (projectData as any).filmTreatmentSettings = {
+        enabled: filmTreatment.enabled ?? true,
+        colorGrade: validColorGrades.includes(filmTreatment.colorGrade) ? filmTreatment.colorGrade : 'warm-cinematic',
+        colorIntensity: Math.min(1.0, Math.max(0, filmTreatment.colorIntensity ?? 1.0)),
+        grainIntensity: Math.min(0.10, Math.max(0, filmTreatment.grainIntensity ?? 0.03)),
+        vignetteIntensity: Math.min(0.50, Math.max(0, filmTreatment.vignetteIntensity ?? 0.2)),
+        letterbox: validLetterbox.includes(filmTreatment.letterbox) ? filmTreatment.letterbox : 'none',
+      };
+    }
+    
+    if (transitions !== undefined) {
+      const validStyles = ['fade', 'crossfade', 'dissolve', 'wipe-left', 'wipe-right', 'zoom', 'slide-left', 'slide-right', 'none'];
+      (projectData as any).transitionSettings = {
+        style: validStyles.includes(transitions.style) ? transitions.style : 'crossfade',
+        duration: Math.min(2.0, Math.max(0.1, transitions.duration ?? 0.5)),
+      };
+    }
+    
+    projectData.updatedAt = new Date().toISOString();
+    await saveProjectToDb(projectData, projectData.ownerId);
+    
+    console.log(`[RenderSettings] Updated render settings for project ${projectId}`);
+    
+    res.json({ 
+      success: true, 
+      message: 'Render settings updated',
+      settings: {
+        voiceover: (projectData as any).voiceoverSettings,
+        music: (projectData as any).musicSettings,
+        soundDesign: (projectData as any).soundDesignSettings,
+        filmTreatment: (projectData as any).filmTreatmentSettings,
+        transitions: (projectData as any).transitionSettings,
+      }
+    });
+  } catch (error: any) {
+    console.error('[RenderSettings] Error updating render settings:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.get('/projects/:projectId/render-settings', isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const userId = (req.user as any)?.id;
+    const { projectId } = req.params;
+    
+    const projectData = await getProjectFromDb(projectId);
+    if (!projectData) {
+      return res.status(404).json({ success: false, error: 'Project not found' });
+    }
+    
+    if (projectData.ownerId !== userId) {
+      return res.status(403).json({ success: false, error: 'Access denied' });
+    }
+    
+    const hasVoiceover = !!(projectData.assets?.voiceover?.fullTrackUrl);
+    const hasMusic = !!(projectData.assets?.music?.url);
+    
+    res.json({ 
+      success: true,
+      settings: {
+        voiceover: {
+          enabled: (projectData as any).voiceoverSettings?.enabled ?? true,
+          voiceId: (projectData as any).voiceoverSettings?.voiceId || null,
+          hasGenerated: hasVoiceover,
+          url: projectData.assets?.voiceover?.fullTrackUrl || null,
+          duration: projectData.assets?.voiceover?.duration || 0,
+        },
+        music: {
+          enabled: (projectData as any).musicSettings?.enabled ?? true,
+          volume: (projectData as any).musicSettings?.volume ?? projectData.assets?.music?.volume ?? 0.18,
+          hasGenerated: hasMusic,
+          url: projectData.assets?.music?.url || null,
+        },
+        soundDesign: {
+          enabled: (projectData as any).soundDesignSettings?.enabled ?? true,
+          transitionSounds: (projectData as any).soundDesignSettings?.transitionSounds ?? true,
+          impactSounds: (projectData as any).soundDesignSettings?.impactSounds ?? true,
+          ambientLayer: (projectData as any).soundDesignSettings?.ambientLayer ?? true,
+          ambientType: (projectData as any).soundDesignSettings?.ambientType || 'nature',
+          masterVolume: (projectData as any).soundDesignSettings?.masterVolume ?? 1.0,
+        },
+        filmTreatment: {
+          enabled: (projectData as any).filmTreatmentSettings?.enabled ?? true,
+          colorGrade: (projectData as any).filmTreatmentSettings?.colorGrade || 'warm-cinematic',
+          grainIntensity: (projectData as any).filmTreatmentSettings?.grainIntensity ?? 0.03,
+          vignetteIntensity: (projectData as any).filmTreatmentSettings?.vignetteIntensity ?? 0.2,
+          letterbox: (projectData as any).filmTreatmentSettings?.letterbox || 'none',
+        },
+        transitions: {
+          style: (projectData as any).transitionSettings?.style || 'crossfade',
+          duration: (projectData as any).transitionSettings?.duration ?? 0.5,
+        },
+      }
+    });
+  } catch (error: any) {
+    console.error('[RenderSettings] Error fetching render settings:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Phase 8A: Background scene analysis helper (runs async without blocking response)
 // Updated to handle video scenes by extracting a thumbnail frame for analysis
 async function runBackgroundSceneAnalysis(projectId: string, userId: number | string) {
