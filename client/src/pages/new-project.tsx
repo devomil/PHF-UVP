@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useLocation, Link } from "wouter";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Sparkles, FileText, Zap, ArrowLeft, Video, Image } from "lucide-react";
@@ -490,6 +490,7 @@ export default function NewProject() {
   const [mode, setMode] = useState<Mode>(null);
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const createMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -497,6 +498,7 @@ export default function NewProject() {
       return res.json();
     },
     onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
       toast({ title: "Project created", description: "Your project has been created successfully." });
       setLocation(`/projects/${data.projectId}`);
     },

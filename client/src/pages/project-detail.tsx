@@ -1,7 +1,8 @@
-import { useQuery } from "@tanstack/react-query";
-import { Link } from "wouter";
-import { ArrowLeft, Settings, Play, RefreshCw, Clock, Target, Monitor, BarChart3, Loader2, AlertCircle, Zap, Video, Image } from "lucide-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Link, useLocation } from "wouter";
+import { ArrowLeft, Settings, Play, RefreshCw, Clock, Target, Monitor, BarChart3, Loader2, AlertCircle, Zap, Video, Image, Download, RotateCcw, Save, Trash2, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
 
 const statusDot: Record<string, string> = {
   pending: "bg-gray-500",
@@ -51,6 +52,9 @@ function formatDate(dateStr: string | null | undefined) {
 
 export default function ProjectDetail({ params }: { params?: { id: string } }) {
   const projectId = params?.id || "";
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [, setLocation] = useLocation();
 
   const { data: project, isLoading, error } = useQuery({
     queryKey: ["project", projectId],
@@ -60,8 +64,61 @@ export default function ProjectDetail({ params }: { params?: { id: string } }) {
       return res.json();
     },
     enabled: !!projectId,
-    refetchInterval: 5000,
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      if (data && ["completed", "failed"].includes(data.status)) return false;
+      return 5000;
+    },
   });
+
+  const regenerateMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/projects/${projectId}/regenerate`, { method: "POST" });
+      if (!res.ok) throw new Error("Failed to regenerate");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+      toast({ title: "Regenerating", description: "A new generation job has been queued." });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/projects/${projectId}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
+      toast({ title: "Deleted", description: "Project has been deleted." });
+      setLocation("/projects");
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const handleDownload = async (url: string, filename: string) => {
+    try {
+      const res = await fetch(url);
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
+      toast({ title: "Download started", description: `Saving ${filename}` });
+    } catch {
+      window.open(url, "_blank");
+    }
+  };
 
   if (isLoading) {
     return (
@@ -114,17 +171,62 @@ export default function ProjectDetail({ params }: { params?: { id: string } }) {
               </p>
             </div>
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" className="gap-1.5" style={{ borderColor: "var(--border-medium)", color: "var(--text-secondary)" }}>
-              <Settings className="w-4 h-4" />
-              Edit Settings
-            </Button>
-            {!isQuickCreate && (
-              <Button size="sm" className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 gap-1.5">
-                <Play className="w-4 h-4" />
-                Generate All
+          <div className="flex gap-2 flex-wrap">
+            {project.outputUrl && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                style={{ borderColor: "var(--border-medium)", color: "var(--text-secondary)" }}
+                onClick={() => handleDownload(
+                  project.outputUrl,
+                  `${(project.title || "output").replace(/[^a-zA-Z0-9]/g, "_")}.${project.mediaMode === "image" ? "png" : "mp4"}`
+                )}
+              >
+                <Download className="w-4 h-4" />
+                Download
               </Button>
             )}
+            {project.outputUrl && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                style={{ borderColor: "var(--border-medium)", color: "var(--text-secondary)" }}
+                onClick={() => window.open(project.outputUrl, "_blank")}
+              >
+                <ExternalLink className="w-4 h-4" />
+                Open
+              </Button>
+            )}
+            {isQuickCreate && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                style={{ borderColor: "var(--border-medium)", color: "var(--text-secondary)" }}
+                onClick={() => regenerateMutation.mutate()}
+                disabled={regenerateMutation.isPending || project.status === "generating" || project.status === "processing"}
+              >
+                <RotateCcw className="w-4 h-4" />
+                {regenerateMutation.isPending ? "Queuing..." : "Regenerate"}
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5 text-red-400 hover:text-red-300"
+              style={{ borderColor: "var(--border-medium)" }}
+              onClick={() => {
+                if (confirm("Are you sure you want to delete this project?")) {
+                  deleteMutation.mutate();
+                }
+              }}
+              disabled={deleteMutation.isPending}
+            >
+              <Trash2 className="w-4 h-4" />
+              Delete
+            </Button>
           </div>
         </div>
 

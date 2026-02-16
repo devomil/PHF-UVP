@@ -235,6 +235,99 @@ export function registerRoutes(app: Express) {
     }
   });
 
+  app.delete("/api/projects/:projectId", async (req, res) => {
+    try {
+      if (!req.isAuthenticated() || !req.user) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+      const { projectId } = req.params;
+      const userId = (req.user as any).id;
+
+      const [project] = await db
+        .select()
+        .from(universalVideoProjects)
+        .where(eq(universalVideoProjects.projectId, projectId))
+        .limit(1);
+
+      if (!project || project.ownerId !== userId) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+
+      await db.delete(videoGenerationJobs).where(eq(videoGenerationJobs.projectId, projectId));
+      await db.delete(universalVideoProjects).where(eq(universalVideoProjects.projectId, projectId));
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Failed to delete project:", error);
+      res.status(500).json({ error: "Failed to delete project" });
+    }
+  });
+
+  app.post("/api/projects/:projectId/regenerate", async (req, res) => {
+    try {
+      if (!req.isAuthenticated() || !req.user) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+      const { projectId } = req.params;
+      const userId = (req.user as any).id;
+
+      const [project] = await db
+        .select()
+        .from(universalVideoProjects)
+        .where(eq(universalVideoProjects.projectId, projectId))
+        .limit(1);
+
+      if (!project || project.ownerId !== userId) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+
+      const outputFormat = (project.outputFormat as any) || {};
+      const isQuickCreate = outputFormat.platform === "quick-create";
+
+      if (!isQuickCreate) {
+        return res.status(400).json({ error: "Regeneration only supported for Quick Create projects" });
+      }
+
+      const previousJobs = await db
+        .select()
+        .from(videoGenerationJobs)
+        .where(eq(videoGenerationJobs.projectId, projectId))
+        .orderBy(desc(videoGenerationJobs.createdAt))
+        .limit(1);
+
+      const originalProvider = previousJobs[0]?.provider || "kling";
+
+      await db.update(universalVideoProjects).set({
+        status: "draft",
+        outputUrl: null,
+        progress: { phase: "generating", percentage: 0, currentStep: "Queued for regeneration" },
+      }).where(eq(universalVideoProjects.projectId, projectId));
+
+      const jobId = crypto.randomUUID();
+      await db.insert(videoGenerationJobs).values({
+        jobId,
+        projectId,
+        sceneId: "scene-1",
+        provider: originalProvider,
+        status: "pending",
+        prompt: project.description || "",
+        duration: project.totalDuration || 6,
+        aspectRatio: outputFormat.aspectRatio || "16:9",
+        sceneType: project.mediaMode === "image" ? "image" : "video",
+        i2vSettings: { saveToLibrary: true, outputType: project.mediaMode || "video" },
+        triggeredBy: userId,
+      });
+
+      processVideoJob(jobId).catch((err) => {
+        console.error(`[Routes] Background regeneration job ${jobId} failed:`, err.message);
+      });
+
+      res.json({ jobId, status: "pending" });
+    } catch (error) {
+      console.error("Failed to regenerate project:", error);
+      res.status(500).json({ error: "Failed to regenerate" });
+    }
+  });
+
   app.get("/api/productions", async (_req, res) => {
     try {
       const productions = await db
