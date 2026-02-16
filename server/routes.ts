@@ -3,7 +3,7 @@ import crypto from "crypto";
 import express from "express";
 import { db } from "./db";
 import { videoProductions, universalVideoProjects, videoGenerationJobs } from "../shared/schema";
-import { desc } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import providerTestRouter from "./services/provider-test-routes";
 import { AI_VIDEO_PROVIDERS } from "./config/ai-video-providers";
 import { VIDEO_PROVIDERS } from "./config/video-providers";
@@ -114,6 +114,32 @@ export function registerRoutes(app: Express) {
       res.json(projects);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch projects" });
+    }
+  });
+
+  app.get("/api/projects/:projectId", async (req, res) => {
+    try {
+      const { projectId } = req.params;
+      const [project] = await db
+        .select()
+        .from(universalVideoProjects)
+        .where(eq(universalVideoProjects.projectId, projectId))
+        .limit(1);
+
+      if (!project) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+
+      const jobs = await db
+        .select()
+        .from(videoGenerationJobs)
+        .where(eq(videoGenerationJobs.projectId, projectId))
+        .orderBy(desc(videoGenerationJobs.createdAt));
+
+      res.json({ ...project, jobs });
+    } catch (error) {
+      console.error("Failed to fetch project:", error);
+      res.status(500).json({ error: "Failed to fetch project" });
     }
   });
 
