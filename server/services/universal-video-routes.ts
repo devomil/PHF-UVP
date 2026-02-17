@@ -2961,6 +2961,10 @@ router.get('/projects/:projectId/render-status', isAuthenticated, async (req: Re
         estimatedTotalSeconds,
         renderPhase,
         renderStartTime,
+        message: statusResult.done ? 'Render complete!' : 
+          renderPhase === 'initializing' ? 'Initializing Lambda render...' :
+          renderPhase === 'encoding' ? `Encoding video... ${progressPercent}%` :
+          `Rendering video... ${progressPercent}%`,
       });
     } catch (progressError: any) {
       console.error(`[UniversalVideo] Error getting render progress for ${projectId}:`, progressError.message);
