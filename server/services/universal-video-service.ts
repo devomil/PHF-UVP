@@ -4061,7 +4061,7 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
       }
     }
 
-    if (preparedProject.assets.voiceover.fullTrackUrl) {
+    if (preparedProject.assets?.voiceover?.fullTrackUrl) {
       const voiceoverUrl = preparedProject.assets.voiceover.fullTrackUrl;
       if (!this.isValidHttpsUrl(voiceoverUrl)) {
         if (voiceoverUrl.startsWith('data:')) {
@@ -4087,14 +4087,14 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
       }
     }
 
-    if (preparedProject.assets.music?.url) {
+    if (preparedProject.assets?.music?.url) {
       if (!this.isValidHttpsUrl(preparedProject.assets.music.url)) {
         issues.push(`Invalid music URL: ${preparedProject.assets.music.url.substring(0, 50)}...`);
         preparedProject.assets.music = { url: '', duration: 0, volume: 0 };
       }
     }
 
-    for (let i = 0; i < preparedProject.scenes.length; i++) {
+    for (let i = 0; i < (preparedProject.scenes || []).length; i++) {
       const scene = preparedProject.scenes[i];
       
       if (scene.assets?.imageUrl && !this.isValidHttpsUrl(scene.assets.imageUrl)) {
@@ -4278,8 +4278,8 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
         console.log(`    - ${s.id}: videoUrl=${s.assets?.videoUrl?.substring(0, 60)}... background.type=${s.background?.type}`);
       });
     }
-    console.log(`  - Voiceover: ${this.isValidHttpsUrl(preparedProject.assets.voiceover.fullTrackUrl) ? 'OK' : 'Missing/Invalid'}`);
-    console.log(`  - Music: ${this.isValidHttpsUrl(preparedProject.assets.music?.url) ? 'OK' : 'None'}`);
+    console.log(`  - Voiceover: ${this.isValidHttpsUrl(preparedProject.assets?.voiceover?.fullTrackUrl || '') ? 'OK' : 'Missing/Invalid'}`);
+    console.log(`  - Music: ${this.isValidHttpsUrl(preparedProject.assets?.music?.url || '') ? 'OK' : 'None'}`);
     console.log(`  - Issues: ${issues.length}`);
     
     if (issues.length > 0) {
