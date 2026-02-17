@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
-import { ArrowLeft, Settings, Play, RefreshCw, Clock, Target, Monitor, BarChart3, Loader2, AlertCircle, Zap, Video, Image, Download, RotateCcw, Save, Trash2, ExternalLink, CheckCircle2, XCircle, Server, HardDrive, Type, Film, ChevronDown, ChevronUp, CloudUpload, Mic, Music, Volume2, Palette, Shuffle, Sliders, Wand2, Sparkles, ImagePlus, Upload } from "lucide-react";
+import { ArrowLeft, Settings, Play, RefreshCw, Clock, Target, Monitor, BarChart3, Loader2, AlertCircle, Zap, Video, Image, Download, RotateCcw, Save, Trash2, ExternalLink, CheckCircle2, XCircle, Server, HardDrive, Type, Film, ChevronDown, ChevronUp, CloudUpload, Mic, Music, Volume2, Palette, Shuffle, Sliders, Wand2, Sparkles, ImagePlus, Upload, Edit2, FileText, Plus, GripVertical, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ProviderCatalogSelector } from "@/components/video/provider-catalog-selector";
 import { useToast } from "@/hooks/use-toast";
@@ -53,6 +53,7 @@ function formatDate(dateStr: string | null | undefined) {
 }
 
 const PIPELINE_STEPS = [
+  { key: "script", label: "Script", icon: FileText },
   { key: "voiceover", label: "Voiceover", icon: Mic },
   { key: "images", label: "Images", icon: ImagePlus },
   { key: "videos", label: "Videos", icon: Video },
@@ -71,6 +72,9 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
   const [referenceImages, setReferenceImages] = useState<string[]>((project as any).referenceImages || []);
   const [showRefLibrary, setShowRefLibrary] = useState(false);
   const [uploadingRef, setUploadingRef] = useState(false);
+  const [editingSceneId, setEditingSceneId] = useState<string | null>(null);
+  const [editValues, setEditValues] = useState<Record<string, any>>({});
+  const [expandedSceneId, setExpandedSceneId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const refFileInputRef = useRef<HTMLInputElement>(null);
   const activeSceneRef = useRef<string | null>(null);
@@ -78,6 +82,8 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
   const progress = project.progress || {};
   const isGenerating = ["generating", "queued", "processing"].includes(project.status);
   const currentStep = progress.currentStep || null;
+  const hasScenes = scenes.length > 0;
+  const scriptReady = hasScenes && (project.status === "draft" || progress.phase === "script_ready");
 
   const voicesQuery = useQuery({
     queryKey: ["voices"],
@@ -134,6 +140,69 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
     setUploadingRef(false);
     if (refFileInputRef.current) refFileInputRef.current.value = "";
   };
+
+  const generateScriptMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/universal-video/projects/${projectId}/generate-script`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({}),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Failed to generate script");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+      toast({ title: "Script Generated", description: "Review and edit your scenes below, then generate assets." });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const updateSceneMutation = useMutation({
+    mutationFn: async ({ sceneId, updates }: { sceneId: string; updates: any }) => {
+      const res = await fetch(`/api/universal-video/projects/${projectId}/scenes/${sceneId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(updates),
+      });
+      if (!res.ok) throw new Error("Failed to update scene");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+      setEditingSceneId(null);
+      setEditValues({});
+      toast({ title: "Scene Updated" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const deleteSceneMutation = useMutation({
+    mutationFn: async (sceneId: string) => {
+      const res = await fetch(`/api/universal-video/projects/${projectId}/scenes/${sceneId}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to delete scene");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+      toast({ title: "Scene Deleted" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
 
   const generateAllMutation = useMutation({
     mutationFn: async () => {
@@ -286,6 +355,7 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
   };
 
   const getStepStatus = (stepKey: string) => {
+    if (stepKey === "script" && hasScenes) return "completed";
     if (!isGenerating && !progress.completedSteps) return "pending";
     const completed = Array.isArray(progress.completedSteps) ? progress.completedSteps : [];
     if (completed.includes(stepKey)) return "completed";
@@ -302,57 +372,398 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
     "failed": { dot: "bg-red-400", text: "text-red-400" },
   };
 
+  const sceneTypes = ["hook", "problem", "agitation", "solution", "benefit", "proof", "product", "testimonial", "cta", "explanation", "process", "intro", "brand"];
+
+  const startEditing = (scene: any) => {
+    setEditingSceneId(scene.id);
+    setEditValues({
+      narration: scene.narration || "",
+      visualDirection: scene.visualDirection || "",
+      duration: scene.duration || 5,
+      type: scene.type || "benefit",
+    });
+  };
+
+  const saveEdit = (sceneId: string) => {
+    updateSceneMutation.mutate({ sceneId, updates: editValues });
+  };
+
+  const totalDuration = scenes.reduce((sum: number, s: any) => sum + (s.duration || 0), 0);
+
   return (
     <div className="border rounded-xl mb-8 overflow-hidden" style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)" }}>
       <div className="px-5 py-4 flex items-center gap-3 border-b" style={{ borderColor: "var(--border-subtle)" }}>
         <Sparkles className="w-5 h-5 text-purple-400" />
         <h2 className="text-sm font-medium uppercase tracking-wider" style={{ color: "var(--text-primary)" }}>
-          Script Content Generation
+          Script & Asset Generation
         </h2>
+        {hasScenes && (
+          <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-400">
+            {scenes.length} scenes &middot; {totalDuration}s
+          </span>
+        )}
       </div>
 
       <div className="px-5 py-5 space-y-5">
-        {(isGenerating || progress.overallPercent > 0) && (
-          <div className="space-y-3">
+        {/* Pipeline Progress Tracker */}
+        <div className="space-y-3">
+          {(isGenerating || progress.overallPercent > 0) && (
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>Pipeline Progress</span>
               <span className="text-xs font-bold" style={{ color: "var(--text-primary)" }}>{progress.overallPercent || 0}%</span>
             </div>
+          )}
+          {(isGenerating || progress.overallPercent > 0) && (
             <div className="w-full bg-gray-700 rounded-full h-2">
               <div
                 className="bg-gradient-to-r from-purple-600 to-indigo-600 h-2 rounded-full transition-all duration-500"
                 style={{ width: `${progress.overallPercent || 0}%` }}
               />
             </div>
-            <div className="grid grid-cols-5 gap-2">
-              {PIPELINE_STEPS.map((step) => {
-                const status = getStepStatus(step.key);
-                const styles = stepStatusStyles[status];
-                const Icon = step.icon;
+          )}
+          <div className="grid grid-cols-6 gap-2">
+            {PIPELINE_STEPS.map((step) => {
+              const status = getStepStatus(step.key);
+              const styles = stepStatusStyles[status];
+              const Icon = step.icon;
+              return (
+                <div key={step.key} className="flex flex-col items-center gap-1.5 p-2 rounded-lg" style={{ backgroundColor: "rgba(0,0,0,0.15)" }}>
+                  <div className={`w-2.5 h-2.5 rounded-full ${styles.dot}`} />
+                  <Icon className={`w-4 h-4 ${styles.text}`} />
+                  <span className={`text-[10px] font-medium ${styles.text}`}>{step.label}</span>
+                </div>
+              );
+            })}
+          </div>
+          {Array.isArray(progress.errors) && progress.errors.length > 0 && (
+            <div className="space-y-1">
+              {progress.errors.map((err: any, i: number) => (
+                <div key={i} className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg p-2.5 flex items-start gap-2">
+                  <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+                  <span>{err.message || err.error || String(err)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* PHASE 1: Generate Script (no scenes yet) */}
+        {!hasScenes && !isGenerating && (
+          <div className="space-y-4">
+            <div className="text-center py-6 space-y-3">
+              <div className="w-16 h-16 rounded-2xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center mx-auto">
+                <FileText className="w-8 h-8 text-purple-400" />
+              </div>
+              <h3 className="text-lg font-semibold" style={{ color: "var(--text-primary)" }}>
+                Step 1: Generate Your Script
+              </h3>
+              <p className="text-sm max-w-md mx-auto" style={{ color: "var(--text-muted)" }}>
+                AI will create scenes from your script with narration, visual directions, and timing. You can review and edit everything before generating visual assets.
+              </p>
+            </div>
+            <button
+              onClick={() => generateScriptMutation.mutate()}
+              disabled={generateScriptMutation.isPending}
+              className="w-full py-4 rounded-xl font-semibold text-white text-base flex items-center justify-center gap-2.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{ background: "linear-gradient(135deg, #7c3aed, #4f46e5)" }}
+            >
+              {generateScriptMutation.isPending ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <FileText className="w-5 h-5" />
+              )}
+              {generateScriptMutation.isPending ? "Generating Script..." : "Generate Script"}
+            </button>
+          </div>
+        )}
+
+        {/* PHASE 2: Scene Editor (scenes exist, not yet generating assets) */}
+        {hasScenes && (
+          <div className="space-y-4">
+            {scriptReady && (
+              <div className="flex items-center gap-2 p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                <span className="text-sm text-emerald-400">Script generated! Review and edit your scenes below, then generate visual assets.</span>
+              </div>
+            )}
+
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-medium" style={{ color: "var(--text-secondary)" }}>
+                Scenes ({scenes.length})
+              </h3>
+              <div className="flex items-center gap-2">
+                {scriptReady && (
+                  <button
+                    onClick={() => generateScriptMutation.mutate()}
+                    disabled={generateScriptMutation.isPending}
+                    className="text-xs px-3 py-1.5 rounded-lg border flex items-center gap-1.5 transition-colors hover:border-purple-500/30"
+                    style={{ borderColor: "var(--border-subtle)", color: "var(--text-secondary)" }}
+                  >
+                    <RefreshCw className={`w-3 h-3 ${generateScriptMutation.isPending ? "animate-spin" : ""}`} />
+                    Regenerate Script
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Scene Cards */}
+            <div className="space-y-3">
+              {scenes.map((scene: any, index: number) => {
+                const sceneId = scene.id || `scene-${index}`;
+                const isEditing = editingSceneId === sceneId;
+                const isExpanded = expandedSceneId === sceneId;
+                const thumb = scene.assets?.imageUrl || scene.assets?.videoUrl || scene.background?.url || null;
+                const narration = scene.narration || scene.voiceover?.text || "";
+                const isUploading = uploadingSceneId === sceneId;
+                const showLibrary = librarySceneId === sceneId;
+
                 return (
-                  <div key={step.key} className="flex flex-col items-center gap-1.5 p-2 rounded-lg" style={{ backgroundColor: "rgba(0,0,0,0.15)" }}>
-                    <div className={`w-2.5 h-2.5 rounded-full ${styles.dot}`} />
-                    <Icon className={`w-4 h-4 ${styles.text}`} />
-                    <span className={`text-[10px] font-medium ${styles.text}`}>{step.label}</span>
+                  <div
+                    key={sceneId}
+                    className="border rounded-xl overflow-hidden transition-all"
+                    style={{ backgroundColor: "rgba(0,0,0,0.15)", borderColor: isEditing ? "rgba(124,58,237,0.4)" : "var(--border-subtle)" }}
+                  >
+                    {/* Scene Header */}
+                    <div
+                      className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-white/5 transition-colors"
+                      onClick={() => setExpandedSceneId(isExpanded ? null : sceneId)}
+                    >
+                      <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${sceneGradients[index % sceneGradients.length]} flex items-center justify-center flex-shrink-0`}>
+                        {thumb ? (
+                          <img src={thumb} alt="" className="w-full h-full object-cover rounded-lg" />
+                        ) : (
+                          <span className="text-xs font-bold text-white/70">{index + 1}</span>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                            {scene.name || scene.title || `Scene ${index + 1}`}
+                          </span>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-400 uppercase tracking-wider font-medium">
+                            {scene.type || "scene"}
+                          </span>
+                          {scene.duration && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full border" style={{ borderColor: "var(--border-subtle)", color: "var(--text-muted)" }}>
+                              {scene.duration}s
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs truncate mt-0.5" style={{ color: "var(--text-muted)" }}>
+                          {narration.substring(0, 80)}{narration.length > 80 ? "..." : ""}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        {scriptReady && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); isEditing ? saveEdit(sceneId) : startEditing(scene); }}
+                            className="p-1.5 rounded-lg border transition-colors hover:border-purple-500/30"
+                            style={{ borderColor: "var(--border-subtle)", color: isEditing ? "#a78bfa" : "var(--text-muted)" }}
+                            title={isEditing ? "Save" : "Edit"}
+                          >
+                            {isEditing ? <Save className="w-3.5 h-3.5" /> : <Edit2 className="w-3.5 h-3.5" />}
+                          </button>
+                        )}
+                        {scriptReady && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); deleteSceneMutation.mutate(sceneId); }}
+                            className="p-1.5 rounded-lg border transition-colors hover:border-red-500/30"
+                            style={{ borderColor: "var(--border-subtle)", color: "var(--text-muted)" }}
+                            title="Delete scene"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        {isExpanded ? <ChevronUp className="w-4 h-4" style={{ color: "var(--text-muted)" }} /> : <ChevronDown className="w-4 h-4" style={{ color: "var(--text-muted)" }} />}
+                      </div>
+                    </div>
+
+                    {/* Expanded Scene Content */}
+                    {isExpanded && (
+                      <div className="px-4 pb-4 space-y-3 border-t" style={{ borderColor: "var(--border-subtle)" }}>
+                        {isEditing ? (
+                          <>
+                            <div className="grid grid-cols-2 gap-3 pt-3">
+                              <div>
+                                <label className="text-[11px] font-medium uppercase tracking-wider mb-1 block" style={{ color: "var(--text-secondary)" }}>Scene Type</label>
+                                <select
+                                  value={editValues.type || scene.type}
+                                  onChange={(e) => setEditValues({ ...editValues, type: e.target.value })}
+                                  className="w-full text-sm rounded-lg border px-3 py-2 bg-transparent outline-none"
+                                  style={{ borderColor: "var(--border-subtle)", color: "var(--text-primary)" }}
+                                >
+                                  {sceneTypes.map((t) => (
+                                    <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>
+                                  ))}
+                                </select>
+                              </div>
+                              <div>
+                                <label className="text-[11px] font-medium uppercase tracking-wider mb-1 block" style={{ color: "var(--text-secondary)" }}>Duration (seconds)</label>
+                                <input
+                                  type="number"
+                                  min={2}
+                                  max={60}
+                                  value={editValues.duration ?? scene.duration}
+                                  onChange={(e) => setEditValues({ ...editValues, duration: parseInt(e.target.value) || 5 })}
+                                  className="w-full text-sm rounded-lg border px-3 py-2 bg-transparent outline-none"
+                                  style={{ borderColor: "var(--border-subtle)", color: "var(--text-primary)" }}
+                                />
+                              </div>
+                            </div>
+                            <div>
+                              <label className="text-[11px] font-medium uppercase tracking-wider mb-1 block" style={{ color: "var(--text-secondary)" }}>Narration</label>
+                              <textarea
+                                value={editValues.narration ?? scene.narration}
+                                onChange={(e) => setEditValues({ ...editValues, narration: e.target.value })}
+                                rows={3}
+                                className="w-full text-sm rounded-lg border px-3 py-2 bg-transparent outline-none resize-none"
+                                style={{ borderColor: "var(--border-subtle)", color: "var(--text-primary)" }}
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[11px] font-medium uppercase tracking-wider mb-1 block" style={{ color: "var(--text-secondary)" }}>Visual Direction (AI prompt for video generation)</label>
+                              <textarea
+                                value={editValues.visualDirection ?? scene.visualDirection}
+                                onChange={(e) => setEditValues({ ...editValues, visualDirection: e.target.value })}
+                                rows={3}
+                                className="w-full text-sm rounded-lg border px-3 py-2 bg-transparent outline-none resize-none"
+                                style={{ borderColor: "var(--border-subtle)", color: "var(--text-primary)" }}
+                              />
+                            </div>
+                            <div className="flex gap-2 justify-end">
+                              <button
+                                onClick={() => { setEditingSceneId(null); setEditValues({}); }}
+                                className="text-xs px-3 py-1.5 rounded-lg border transition-colors"
+                                style={{ borderColor: "var(--border-subtle)", color: "var(--text-muted)" }}
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                onClick={() => saveEdit(sceneId)}
+                                disabled={updateSceneMutation.isPending}
+                                className="text-xs px-3 py-1.5 rounded-lg bg-purple-600 text-white font-medium flex items-center gap-1.5 disabled:opacity-50"
+                              >
+                                {updateSceneMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                                Save Changes
+                              </button>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="pt-3 space-y-2">
+                              <div>
+                                <span className="text-[11px] font-medium uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>Narration</span>
+                                <p className="text-sm mt-1 leading-relaxed" style={{ color: "var(--text-primary)" }}>{narration || "No narration"}</p>
+                              </div>
+                              {scene.visualDirection && (
+                                <div>
+                                  <span className="text-[11px] font-medium uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>Visual Direction</span>
+                                  <p className="text-sm mt-1 leading-relaxed" style={{ color: "var(--text-muted)" }}>{scene.visualDirection}</p>
+                                </div>
+                              )}
+                              {scene.keyPoints && scene.keyPoints.length > 0 && (
+                                <div>
+                                  <span className="text-[11px] font-medium uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>Key Points</span>
+                                  <ul className="mt-1 space-y-1">
+                                    {scene.keyPoints.map((kp: string, i: number) => (
+                                      <li key={i} className="text-xs flex items-center gap-1.5" style={{ color: "var(--text-muted)" }}>
+                                        <span className="w-1.5 h-1.5 rounded-full bg-purple-400 flex-shrink-0" />
+                                        {kp}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+                            </div>
+                            {/* Asset actions (regen, upload, library) - only show when assets are being/have been generated */}
+                            {!scriptReady && (
+                              <div className="flex flex-wrap gap-1.5 pt-2">
+                                <button
+                                  onClick={() => regenImageMutation.mutate(sceneId)}
+                                  disabled={regenImageMutation.isPending}
+                                  className="text-[11px] px-2 py-1 rounded-md border flex items-center gap-1 transition-colors hover:border-purple-500/30"
+                                  style={{ borderColor: "var(--border-subtle)", color: "var(--text-secondary)" }}
+                                >
+                                  <ImagePlus className="w-3 h-3" /> Regen Image
+                                </button>
+                                <button
+                                  onClick={() => regenVideoMutation.mutate(sceneId)}
+                                  disabled={regenVideoMutation.isPending}
+                                  className="text-[11px] px-2 py-1 rounded-md border flex items-center gap-1 transition-colors hover:border-purple-500/30"
+                                  style={{ borderColor: "var(--border-subtle)", color: "var(--text-secondary)" }}
+                                >
+                                  <Video className="w-3 h-3" /> Regen Video
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    activeSceneRef.current = sceneId;
+                                    fileInputRef.current?.click();
+                                  }}
+                                  disabled={isUploading}
+                                  className="text-[11px] px-2 py-1 rounded-md border flex items-center gap-1 transition-colors hover:border-purple-500/30"
+                                  style={{ borderColor: "var(--border-subtle)", color: "var(--text-secondary)" }}
+                                >
+                                  {isUploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
+                                  Upload
+                                </button>
+                                <button
+                                  onClick={() => setLibrarySceneId(showLibrary ? null : sceneId)}
+                                  className="text-[11px] px-2 py-1 rounded-md border flex items-center gap-1 transition-colors hover:border-purple-500/30"
+                                  style={{ borderColor: "var(--border-subtle)", color: "var(--text-secondary)" }}
+                                >
+                                  <Image className="w-3 h-3" /> Library
+                                </button>
+                              </div>
+                            )}
+                            {showLibrary && (
+                              <div className="border rounded-lg p-2 mt-1 max-h-40 overflow-y-auto" style={{ borderColor: "var(--border-subtle)", backgroundColor: "var(--surface)" }}>
+                                {libraryQuery.isLoading ? (
+                                  <div className="flex items-center justify-center py-3">
+                                    <Loader2 className="w-4 h-4 animate-spin" style={{ color: "var(--text-muted)" }} />
+                                  </div>
+                                ) : !libraryQuery.data || libraryQuery.data.length === 0 ? (
+                                  <p className="text-xs text-center py-3" style={{ color: "var(--text-muted)" }}>No images in library</p>
+                                ) : (
+                                  <div className="grid grid-cols-4 gap-1.5">
+                                    {libraryQuery.data.slice(0, 12).map((asset: any) => (
+                                      <button
+                                        key={asset.id}
+                                        onClick={() => assignImageMutation.mutate({ sceneId, imageId: asset.id })}
+                                        className="aspect-square rounded overflow-hidden border hover:border-purple-500/50 transition-colors"
+                                        style={{ borderColor: "var(--border-subtle)" }}
+                                      >
+                                        <img src={asset.url || asset.thumbnailUrl} alt={asset.name || ""} className="w-full h-full object-cover" />
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
               })}
             </div>
-            {Array.isArray(progress.errors) && progress.errors.length > 0 && (
-              <div className="space-y-1">
-                {progress.errors.map((err: any, i: number) => (
-                  <div key={i} className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg p-2.5 flex items-start gap-2">
-                    <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
-                    <span>{err.message || err.error || String(err)}</span>
-                  </div>
-                ))}
-              </div>
-            )}
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleFileUpload}
+            />
           </div>
         )}
 
-        {(scenes.length === 0 || project.status === "draft") && !isGenerating && (
-          <div className="space-y-4">
+        {/* PHASE 3: Asset Generation Config (scenes exist, ready to generate) */}
+        {scriptReady && !isGenerating && (
+          <div className="space-y-4 border-t pt-5" style={{ borderColor: "var(--border-subtle)" }}>
+            <h3 className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+              Step 2: Configure & Generate Assets
+            </h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div className="border rounded-xl p-4 space-y-2" style={{ backgroundColor: "rgba(0,0,0,0.15)", borderColor: "var(--border-subtle)" }}>
                 <div className="flex items-center gap-2 mb-1">
@@ -394,7 +805,7 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
                   <ImagePlus className="w-4 h-4 text-purple-400" />
                   <span className="text-xs font-medium uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>Reference Images</span>
                 </div>
-                <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>Add product or brand images to guide AI generation</p>
+                <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>Add images for I2V (image-to-video) generation</p>
                 <input
                   ref={refFileInputRef}
                   type="file"
@@ -410,7 +821,7 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
                         onClick={() => setReferenceImages((prev) => prev.filter((_, idx) => idx !== i))}
                         className="absolute top-0 right-0 bg-red-500 text-white w-4 h-4 text-[10px] rounded-bl opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
                       >
-                        ×
+                        x
                       </button>
                     </div>
                   ))}
@@ -478,7 +889,9 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
                   compact
                 />
                 <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
-                  {selectedProvider === "auto" ? "AI will select the best provider for each scene" : "All scenes will use this provider"}
+                  {referenceImages.length > 0
+                    ? "I2V mode: Reference images will be used for video generation"
+                    : "T2V mode: Videos generated from visual direction prompts"}
                 </p>
               </div>
             </div>
@@ -494,7 +907,7 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
               ) : (
                 <Sparkles className="w-5 h-5" />
               )}
-              {isGenerating ? "Generating..." : generateAllMutation.isPending ? "Starting..." : "Generate All Assets"}
+              {isGenerating ? "Generating..." : generateAllMutation.isPending ? "Starting..." : `Generate All Assets (${scenes.length} scenes)`}
             </button>
 
             <div className="flex items-center gap-2">
@@ -510,8 +923,8 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
             </div>
 
             {showStepButtons && (
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                {PIPELINE_STEPS.filter(s => s.key !== "assembly").map((step) => {
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                {PIPELINE_STEPS.filter(s => s.key !== "assembly" && s.key !== "script").map((step) => {
                   const status = getStepStatus(step.key);
                   const Icon = step.icon;
                   const isCompleted = status === "completed";
@@ -538,132 +951,6 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
                 })}
               </div>
             )}
-          </div>
-        )}
-
-        {scenes.length > 0 && (
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-medium" style={{ color: "var(--text-secondary)" }}>Scenes ({scenes.length})</h3>
-              <div className="w-48">
-                <ProviderCatalogSelector
-                  outputType="video"
-                  provider={selectedProvider}
-                  onProviderChange={setSelectedProvider}
-                  label=""
-                  compact
-                />
-              </div>
-            </div>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={handleFileUpload}
-            />
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {scenes.map((scene: any, index: number) => {
-                const thumb = scene.assets?.imageUrl || scene.assets?.videoUrl || scene.background?.url || null;
-                const narration = scene.narration || scene.voiceover?.text || "";
-                const sceneId = scene.id || `scene-${index}`;
-                const isUploading = uploadingSceneId === sceneId;
-                const showLibrary = librarySceneId === sceneId;
-
-                return (
-                  <div
-                    key={sceneId}
-                    className="border rounded-xl overflow-hidden"
-                    style={{ backgroundColor: "rgba(0,0,0,0.15)", borderColor: "var(--border-subtle)" }}
-                  >
-                    <div className={`h-28 bg-gradient-to-br ${sceneGradients[index % sceneGradients.length]} relative flex items-center justify-center`}>
-                      {thumb ? (
-                        <img src={thumb} alt="" className="absolute inset-0 w-full h-full object-cover" />
-                      ) : (
-                        <span className="text-3xl font-bold text-white/20">{index + 1}</span>
-                      )}
-                    </div>
-                    <div className="p-3 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <p className="font-medium text-sm" style={{ color: "var(--text-primary)" }}>
-                          {scene.name || scene.title || `Scene ${index + 1}`}
-                        </p>
-                        <div className="flex items-center gap-2">
-                          {scene.duration && (
-                            <span className="text-xs" style={{ color: "var(--text-muted)" }}>{scene.duration}s</span>
-                          )}
-                          <div className={`w-2.5 h-2.5 rounded-full ${statusDot[scene.status] || "bg-gray-500"}`} />
-                        </div>
-                      </div>
-                      {narration && (
-                        <p className="text-xs line-clamp-2" style={{ color: "var(--text-muted)" }}>{narration}</p>
-                      )}
-                      <div className="flex flex-wrap gap-1.5 pt-1">
-                        <button
-                          onClick={() => regenImageMutation.mutate(sceneId)}
-                          disabled={regenImageMutation.isPending}
-                          className="text-[11px] px-2 py-1 rounded-md border flex items-center gap-1 transition-colors hover:border-purple-500/30"
-                          style={{ borderColor: "var(--border-subtle)", color: "var(--text-secondary)" }}
-                        >
-                          <ImagePlus className="w-3 h-3" /> Regen Image
-                        </button>
-                        <button
-                          onClick={() => regenVideoMutation.mutate(sceneId)}
-                          disabled={regenVideoMutation.isPending}
-                          className="text-[11px] px-2 py-1 rounded-md border flex items-center gap-1 transition-colors hover:border-purple-500/30"
-                          style={{ borderColor: "var(--border-subtle)", color: "var(--text-secondary)" }}
-                        >
-                          <Video className="w-3 h-3" /> Regen Video
-                        </button>
-                        <button
-                          onClick={() => {
-                            activeSceneRef.current = sceneId;
-                            fileInputRef.current?.click();
-                          }}
-                          disabled={isUploading}
-                          className="text-[11px] px-2 py-1 rounded-md border flex items-center gap-1 transition-colors hover:border-purple-500/30"
-                          style={{ borderColor: "var(--border-subtle)", color: "var(--text-secondary)" }}
-                        >
-                          {isUploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
-                          Upload
-                        </button>
-                        <button
-                          onClick={() => setLibrarySceneId(showLibrary ? null : sceneId)}
-                          className="text-[11px] px-2 py-1 rounded-md border flex items-center gap-1 transition-colors hover:border-purple-500/30"
-                          style={{ borderColor: "var(--border-subtle)", color: "var(--text-secondary)" }}
-                        >
-                          <Image className="w-3 h-3" /> Library
-                        </button>
-                      </div>
-                      {showLibrary && (
-                        <div className="border rounded-lg p-2 mt-1 max-h-40 overflow-y-auto" style={{ borderColor: "var(--border-subtle)", backgroundColor: "var(--surface)" }}>
-                          {libraryQuery.isLoading ? (
-                            <div className="flex items-center justify-center py-3">
-                              <Loader2 className="w-4 h-4 animate-spin" style={{ color: "var(--text-muted)" }} />
-                            </div>
-                          ) : !libraryQuery.data || libraryQuery.data.length === 0 ? (
-                            <p className="text-xs text-center py-3" style={{ color: "var(--text-muted)" }}>No images in library</p>
-                          ) : (
-                            <div className="grid grid-cols-4 gap-1.5">
-                              {libraryQuery.data.slice(0, 12).map((asset: any) => (
-                                <button
-                                  key={asset.id}
-                                  onClick={() => assignImageMutation.mutate({ sceneId, imageId: asset.id })}
-                                  className="aspect-square rounded overflow-hidden border hover:border-purple-500/50 transition-colors"
-                                  style={{ borderColor: "var(--border-subtle)" }}
-                                >
-                                  <img src={asset.url || asset.thumbnailUrl} alt={asset.name || ""} className="w-full h-full object-cover" />
-                                </button>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
           </div>
         )}
       </div>
