@@ -3,6 +3,9 @@ import { PIAPI_TEST_DEFINITIONS, getTestById, getTestsByCategory } from './piapi
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import { db } from '../db';
+import { piapiTestResults } from '../../shared/schema';
+import { eq, desc, and, sql } from 'drizzle-orm';
 
 const router = Router();
 
@@ -118,6 +121,61 @@ router.delete('/api/piapi-tests/test-image', (req: Request, res: Response) => {
     fs.unlinkSync(path.join(TEST_IMAGE_DIR, f));
   }
   res.json({ success: true });
+});
+
+router.get('/api/piapi-tests/results', async (req: Request, res: Response) => {
+  if (!requireAuth(req, res)) return;
+  const userId = (req.user as any)?.id;
+  if (!userId) return res.status(401).json({ error: 'User not found' });
+  try {
+    const latestResults = await db.execute(sql`
+      SELECT DISTINCT ON (test_id) *
+      FROM piapi_test_results
+      WHERE tested_by = ${userId}
+      ORDER BY test_id, tested_at DESC
+    `);
+    res.json({ results: latestResults.rows });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.post('/api/piapi-tests/results', async (req: Request, res: Response) => {
+  if (!requireAuth(req, res)) return;
+  const { testId, testName, category, status, responseTime, taskId, outputUrl, outputText, error } = req.body;
+  if (!testId || !status) {
+    return res.status(400).json({ error: 'testId and status are required' });
+  }
+  try {
+    const userId = (req.user as any)?.id || null;
+    const [saved] = await db.insert(piapiTestResults).values({
+      testId,
+      testName: testName || testId,
+      category: category || 'unknown',
+      status,
+      responseTime: responseTime || null,
+      taskId: taskId || null,
+      outputUrl: outputUrl || null,
+      outputText: outputText || null,
+      error: error || null,
+      testedBy: userId,
+    }).returning();
+    res.json({ success: true, result: saved, testedAt: saved.testedAt });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.delete('/api/piapi-tests/results', async (req: Request, res: Response) => {
+  if (!requireAuth(req, res)) return;
+  const userId = (req.user as any)?.id;
+  if (!userId) return res.status(401).json({ error: 'User not found' });
+  try {
+    await db.delete(piapiTestResults).where(eq(piapiTestResults.testedBy, userId));
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 router.post('/api/piapi-tests/run/:testId', async (req: Request, res: Response) => {

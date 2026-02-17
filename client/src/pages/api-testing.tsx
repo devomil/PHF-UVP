@@ -19,6 +19,7 @@ import {
   ImageIcon,
   Clapperboard,
   Paintbrush,
+  RotateCcw,
 } from "lucide-react";
 
 interface TestDefinition {
@@ -40,6 +41,7 @@ interface TestState {
   outputUrl?: string;
   outputText?: string;
   error?: string;
+  testedAt?: string;
 }
 
 const categoryConfig: Record<string, { label: string; icon: any; color: string; description: string }> = {
@@ -62,11 +64,28 @@ export default function ApiTesting() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    fetch("/api/piapi-tests/definitions")
-      .then((r) => r.json())
-      .then((data) => {
-        setDefinitions(data.definitions || {});
-        setTestImageUrl(data.testImageUrl || null);
+    Promise.all([
+      fetch("/api/piapi-tests/definitions").then((r) => r.json()),
+      fetch("/api/piapi-tests/results").then((r) => r.json()),
+    ])
+      .then(([defData, resultsData]) => {
+        setDefinitions(defData.definitions || {});
+        setTestImageUrl(defData.testImageUrl || null);
+        if (resultsData.results) {
+          const savedStates: Record<string, TestState> = {};
+          for (const r of resultsData.results) {
+            savedStates[r.test_id] = {
+              status: r.status as TestState["status"],
+              responseTime: r.response_time || undefined,
+              taskId: r.task_id || undefined,
+              outputUrl: r.output_url || undefined,
+              outputText: r.output_text || undefined,
+              error: r.error || undefined,
+              testedAt: r.tested_at,
+            };
+          }
+          setTestStates(savedStates);
+        }
         setLoading(false);
       })
       .catch(() => setLoading(false));
@@ -78,6 +97,39 @@ export default function ApiTesting() {
       [id]: { ...(prev[id] || { status: "idle" }), ...update },
     }));
   }, []);
+
+  const saveTestResult = useCallback(
+    async (testId: string, state: Partial<TestState>, testDef?: TestDefinition) => {
+      const finalStatus = state.status;
+      if (!finalStatus || finalStatus === "submitting" || finalStatus === "polling" || finalStatus === "idle") return;
+      try {
+        const allDefs = Object.values(definitions).flat();
+        const def = testDef || allDefs.find((d) => d.id === testId);
+        const saveRes = await fetch("/api/piapi-tests/results", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            testId,
+            testName: def?.name || testId,
+            category: def?.category || "unknown",
+            status: finalStatus,
+            responseTime: state.responseTime || null,
+            taskId: state.taskId || null,
+            outputUrl: state.outputUrl || null,
+            outputText: state.outputText || null,
+            error: state.error || null,
+          }),
+        });
+        const saveData = await saveRes.json();
+        setTestStates((prev) => ({
+          ...prev,
+          [testId]: { ...prev[testId], testedAt: saveData.testedAt || new Date().toISOString() },
+        }));
+      } catch {
+      }
+    },
+    [definitions]
+  );
 
   const handleImageUpload = async (file: File) => {
     setUploading(true);
@@ -115,11 +167,14 @@ export default function ApiTesting() {
 
       const poll = async () => {
         if (Date.now() - startTime > maxPollTime) {
-          updateTestState(testId, {
-            status: "timeout",
+          const result = {
+            status: "timeout" as const,
             responseTime: Date.now() - startTime,
             error: "Exceeded 3 minute timeout",
-          });
+            taskId,
+          };
+          updateTestState(testId, result);
+          saveTestResult(testId, result);
           return;
         }
 
@@ -128,20 +183,26 @@ export default function ApiTesting() {
           const data = await res.json();
 
           if (data.status === "completed" || data.status === "success" || data.status === "succeeded") {
-            updateTestState(testId, {
-              status: "pass",
+            const result = {
+              status: "pass" as const,
               responseTime: Date.now() - startTime,
               outputUrl: data.outputUrl || undefined,
-            });
+              taskId,
+            };
+            updateTestState(testId, result);
+            saveTestResult(testId, result);
             return;
           }
 
           if (data.status === "failed" || data.status === "error" || data.status === "cancelled") {
-            updateTestState(testId, {
-              status: "fail",
+            const result = {
+              status: "fail" as const,
               responseTime: Date.now() - startTime,
               error: data.error || "Task failed",
-            });
+              taskId,
+            };
+            updateTestState(testId, result);
+            saveTestResult(testId, result);
             return;
           }
 
@@ -153,34 +214,38 @@ export default function ApiTesting() {
 
       setTimeout(poll, pollInterval);
     },
-    [updateTestState]
+    [updateTestState, saveTestResult]
   );
 
   const runTest = useCallback(
     async (testId: string) => {
       const startTime = Date.now();
-      updateTestState(testId, { status: "submitting", error: undefined, outputUrl: undefined, outputText: undefined });
+      updateTestState(testId, { status: "submitting", error: undefined, outputUrl: undefined, outputText: undefined, testedAt: undefined });
 
       try {
         const res = await fetch(`/api/piapi-tests/submit/${testId}`, { method: "POST" });
         const data = await res.json();
 
         if (data.status === "fail") {
-          updateTestState(testId, {
-            status: "fail",
+          const result = {
+            status: "fail" as const,
             responseTime: Date.now() - startTime,
             error: data.error,
-          });
+          };
+          updateTestState(testId, result);
+          saveTestResult(testId, result);
           return;
         }
 
         if (data.status === "pass") {
-          updateTestState(testId, {
-            status: "pass",
+          const result = {
+            status: "pass" as const,
             responseTime: data.responseTime || Date.now() - startTime,
             outputUrl: data.outputUrl,
             outputText: data.outputText,
-          });
+          };
+          updateTestState(testId, result);
+          saveTestResult(testId, result);
           return;
         }
 
@@ -191,21 +256,25 @@ export default function ApiTesting() {
           });
           pollTask(testId, data.taskId, startTime);
         } else {
-          updateTestState(testId, {
-            status: "fail",
+          const result = {
+            status: "fail" as const,
             responseTime: Date.now() - startTime,
             error: data.error || "No task ID returned",
-          });
+          };
+          updateTestState(testId, result);
+          saveTestResult(testId, result);
         }
       } catch (err: any) {
-        updateTestState(testId, {
-          status: "fail",
+        const result = {
+          status: "fail" as const,
           responseTime: Date.now() - startTime,
           error: err.message,
-        });
+        };
+        updateTestState(testId, result);
+        saveTestResult(testId, result);
       }
     },
-    [updateTestState, pollTask]
+    [updateTestState, pollTask, saveTestResult]
   );
 
   const runCategory = useCallback(
@@ -244,6 +313,22 @@ export default function ApiTesting() {
       case "fail": return "Failed";
       case "timeout": return "Timeout";
     }
+  };
+
+  const formatTimeAgo = (dateStr?: string) => {
+    if (!dateStr) return null;
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return "just now";
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   };
 
   const getSummary = () => {
@@ -302,10 +387,28 @@ export default function ApiTesting() {
           style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)" }}
         >
           <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
-          <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
+          <p className="text-xs flex-1" style={{ color: "var(--text-secondary)" }}>
             Each test makes a real API call. Video tests may take 1-3 minutes to complete.
-            Estimated total cost to test everything: ~$8-12.
+            Estimated total cost to test everything: ~$8-12. Results are saved automatically.
           </p>
+          {summary.total - summary.idle > 0 && (
+            <button
+              onClick={async () => {
+                if (!confirm("Clear all saved test results?")) return;
+                await fetch("/api/piapi-tests/results", { method: "DELETE" });
+                setTestStates({});
+              }}
+              className="shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] border transition-colors hover:brightness-110"
+              style={{
+                borderColor: "var(--border-subtle)",
+                backgroundColor: "var(--surface-hover)",
+                color: "var(--text-secondary)",
+              }}
+            >
+              <RotateCcw className="w-3 h-3" />
+              Clear Results
+            </button>
+          )}
         </div>
 
         <div
@@ -507,6 +610,15 @@ export default function ApiTesting() {
                           <span className="text-[11px]" style={{ color: "var(--text-tertiary)" }}>
                             {getStatusLabel(state.status)}
                           </span>
+                          {state.testedAt && state.status !== "submitting" && state.status !== "polling" && (
+                            <span
+                              className="text-[10px] px-1.5 py-0.5 rounded"
+                              style={{ backgroundColor: "var(--surface-hover)", color: "var(--text-tertiary)" }}
+                              title={new Date(state.testedAt).toLocaleString()}
+                            >
+                              {formatTimeAgo(state.testedAt)}
+                            </span>
+                          )}
                           {state.responseTime && (
                             <span className="text-[11px]" style={{ color: "var(--text-tertiary)" }}>
                               {(state.responseTime / 1000).toFixed(1)}s
