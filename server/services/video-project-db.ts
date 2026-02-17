@@ -44,7 +44,8 @@ export async function saveProjectToDb(
   project: any,
   ownerId: string | number,
   renderId?: string,
-  bucketName?: string
+  bucketName?: string,
+  outputUrl?: string
 ): Promise<void> {
   const projectId = project.projectId as string;
   const existing = await db.select({ id: universalVideoProjects.id })
@@ -58,6 +59,7 @@ export async function saveProjectToDb(
   };
   if (renderId !== undefined) updateData.renderId = renderId;
   if (bucketName !== undefined) updateData.bucketName = bucketName;
+  if (outputUrl !== undefined) updateData.outputUrl = outputUrl;
 
   if (existing.length > 0) {
     await db.update(universalVideoProjects)

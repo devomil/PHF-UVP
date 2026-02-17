@@ -515,18 +515,22 @@ function RenderButton({ projectId, hasVisual, hasVoiceover, hasMusic }: { projec
   useQuery({
     queryKey: ["render-status", projectId, renderId],
     queryFn: async () => {
-      const res = await fetch(`/api/universal-video/projects/${projectId}/render-status`, { credentials: "include" });
+      const params = new URLSearchParams();
+      if (renderId) params.set("renderId", renderId);
+      const res = await fetch(`/api/universal-video/projects/${projectId}/render-status?${params}`, { credentials: "include" });
       if (!res.ok) return null;
       const data = await res.json();
-      if (data.progress !== undefined) setRenderProgress(data.progress);
+      if (data.progress !== undefined) setRenderProgress(Math.round(data.progress * 100));
       if (data.message) setRenderMessage(data.message);
-      if (data.status === "completed" || data.outputUrl) {
+      if (data.done && data.outputUrl) {
         setRenderStatus("completed");
-        setOutputUrl(data.outputUrl || data.url || null);
+        setOutputUrl(data.outputUrl);
         setRenderMessage("Render complete!");
-      } else if (data.status === "failed") {
+      } else if (data.done && !data.success) {
         setRenderStatus("failed");
-        setRenderMessage(data.error || "Render failed");
+        setRenderMessage(data.errors?.[0] || data.error || "Render failed");
+      } else if (!data.done) {
+        setRenderMessage(data.message || `Rendering... ${Math.round((data.progress || 0) * 100)}%`);
       }
       return data;
     },
