@@ -2447,11 +2447,28 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
     console.log(`[UniversalVideo] Phase 18D: Calculated ${voiceoverRanges.length} voiceover ranges for audio ducking`);
     
     // Create a brand copy with S3-cached logo URL for Lambda accessibility
-    const brandWithCachedLogo = preparedProject.brand ? {
-      ...preparedProject.brand,
-      // Use end card's cachedLogoUrl (S3) instead of original Replit URL
-      logoUrl: endCardConfig?.logo?.url || preparedProject.brand.logoUrl,
-    } : undefined;
+    // Ensure brand always has complete colors to prevent render crashes
+    const defaultBrandColors = {
+      primary: '#2d5a27',
+      secondary: '#607e66',
+      accent: '#c9a227',
+      text: '#5e637a',
+      textLight: '#ffffff',
+    };
+    const defaultBrandFonts = {
+      heading: 'Playfair Display, Georgia, serif',
+      body: 'Open Sans, Helvetica, sans-serif',
+      weight: { heading: 700, body: 400 },
+    };
+    const baseBrand = preparedProject.brand && Object.keys(preparedProject.brand).length > 0 
+      ? preparedProject.brand 
+      : PINE_HILL_FARM_BRAND;
+    const brandWithCachedLogo = {
+      ...baseBrand,
+      colors: { ...defaultBrandColors, ...(baseBrand.colors || {}) },
+      fonts: { ...defaultBrandFonts, ...(baseBrand.fonts || {}) },
+      logoUrl: endCardConfig?.logo?.url || baseBrand.logoUrl,
+    };
     
     console.log('[UniversalVideo] Brand logo URL for Lambda:', {
       original: preparedProject.brand?.logoUrl?.substring(0, 60),
