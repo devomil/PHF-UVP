@@ -823,10 +823,20 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
         fallbackUsed: 'Hugging Face SDXL',
       });
     } else {
+      const piapiResult = await this.generateImageWithPiAPI(enhancedPrompt);
+      if (piapiResult.success) {
+        this.addNotification({
+          type: 'info',
+          service: 'PiAPI Flux',
+          message: `Image generated for scene ${sceneId} via PiAPI Flux`,
+        });
+        return piapiResult;
+      }
+
       this.addNotification({
         type: 'warning',
-        service: 'fal.ai',
-        message: 'FAL_KEY not configured - using fallback services',
+        service: 'PiAPI Flux',
+        message: `PiAPI image generation failed: ${piapiResult.error}. Trying fallbacks.`,
       });
     }
 
@@ -1141,6 +1151,101 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
     // Fallback to text-to-image if I2I fails
     console.warn('[I2I] All I2I models failed, falling back to text-to-image');
     return this.generateImage(prompt, sceneId, false);
+  }
+
+  private async generateImageWithPiAPI(prompt: string): Promise<ImageGenerationResult> {
+    const piapiKey = process.env.PIAPI_API_KEY;
+    if (!piapiKey) {
+      return { url: '', source: 'piapi-flux', success: false, error: 'PIAPI_API_KEY not configured' };
+    }
+
+    try {
+      console.log('[PiAPI Flux] Generating image with Flux Schnell...');
+      const createRes = await fetch('https://api.piapi.ai/api/v1/task', {
+        method: 'POST',
+        headers: {
+          'X-API-Key': piapiKey,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'Qubico/flux1-schnell',
+          task_type: 'txt2img',
+          input: {
+            prompt: prompt,
+            width: 1280,
+            height: 720,
+          },
+        }),
+      });
+
+      if (!createRes.ok) {
+        return { url: '', source: 'piapi-flux', success: false, error: `HTTP ${createRes.status}: ${createRes.statusText}` };
+      }
+
+      let createData: any;
+      try {
+        createData = await createRes.json();
+      } catch {
+        return { url: '', source: 'piapi-flux', success: false, error: 'Invalid JSON response from PiAPI' };
+      }
+
+      if (createData.code !== 200 || !createData.data?.task_id) {
+        return { url: '', source: 'piapi-flux', success: false, error: createData.message || 'Task creation failed' };
+      }
+
+      const taskId = createData.data.task_id;
+      console.log(`[PiAPI Flux] Task created: ${taskId}`);
+
+      for (let attempt = 0; attempt < 45; attempt++) {
+        const delay = attempt < 5 ? 1000 : 2000;
+        await new Promise(r => setTimeout(r, delay));
+
+        let pollData: any;
+        try {
+          const pollRes = await fetch(`https://api.piapi.ai/api/v1/task/${taskId}`, {
+            headers: { 'X-API-Key': piapiKey },
+          });
+          if (!pollRes.ok) {
+            console.warn(`[PiAPI Flux] Poll HTTP ${pollRes.status}, retrying...`);
+            continue;
+          }
+          pollData = await pollRes.json();
+        } catch (pollErr: any) {
+          console.warn(`[PiAPI Flux] Poll error: ${pollErr.message}, retrying...`);
+          continue;
+        }
+
+        const status = pollData.data?.status;
+
+        if (status === 'completed') {
+          const output = pollData.data?.output;
+          const imageUrl = output?.image_url ||
+            (Array.isArray(output?.images) && output.images[0]?.url) ||
+            output?.url;
+          if (imageUrl) {
+            console.log(`[PiAPI Flux] Image generated: ${imageUrl.substring(0, 80)}...`);
+            return { url: imageUrl, source: 'piapi-flux', success: true };
+          }
+          console.warn('[PiAPI Flux] Completed but no image URL. Output:', JSON.stringify(output).substring(0, 200));
+          return { url: '', source: 'piapi-flux', success: false, error: 'No image URL in completed response' };
+        }
+
+        if (status === 'failed') {
+          const errMsg = pollData.data?.error?.message || pollData.data?.error || 'Generation failed';
+          console.error(`[PiAPI Flux] Failed: ${errMsg}`);
+          return { url: '', source: 'piapi-flux', success: false, error: String(errMsg) };
+        }
+
+        if (attempt % 10 === 9) {
+          console.log(`[PiAPI Flux] Still polling... status=${status}, attempt ${attempt + 1}/45`);
+        }
+      }
+
+      return { url: '', source: 'piapi-flux', success: false, error: 'Timeout after 90s' };
+    } catch (error: any) {
+      console.error('[PiAPI Flux] Error:', error.message);
+      return { url: '', source: 'piapi-flux', success: false, error: error.message };
+    }
   }
 
   private async generateImageWithHuggingFace(prompt: string): Promise<ImageGenerationResult> {
@@ -2582,6 +2687,15 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
         music: { status: 'pending', progress: 0, message: '' },
         assembly: { status: 'pending', progress: 0, message: '' },
       } as any;
+    }
+    if (!updatedProject.progress.serviceFailures) {
+      updatedProject.progress.serviceFailures = [];
+    }
+    if (!updatedProject.assets.images) {
+      updatedProject.assets.images = [];
+    }
+    if (!updatedProject.assets.videos) {
+      updatedProject.assets.videos = [];
     }
     
     const saveProgress = async () => {
