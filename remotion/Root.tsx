@@ -39,12 +39,23 @@ const calculateBroadcastMetadata: CalculateMetadataFunction<BroadcastInputProps>
 };
 
 const calculateUniversalMetadata: CalculateMetadataFunction<UniversalVideoProps> = async ({ props }) => {
-  const totalDuration = props.scenes.reduce(
+  const sceneDuration = props.scenes.reduce(
     (acc: number, scene) => acc + (scene.duration || 4),
     0
   );
+
+  const logoIntroDuration = (props as any).brandInjectionPlan?.logoIntro?.enabled && (props as any).brandInjectionPlan?.logoIntro?.asset?.url
+    ? ((props as any).brandInjectionPlan.logoIntro.duration || 2.5)
+    : 0;
+
+  const endCardDuration = ((props as any).endCardConfig?.enabled !== false)
+    ? ((props as any).endCardConfig?.duration || 5)
+    : 0;
+
+  const totalDuration = logoIntroDuration + sceneDuration + endCardDuration;
+
   return {
-    durationInFrames: Math.max(totalDuration * 30, 150),
+    durationInFrames: Math.max(Math.ceil(totalDuration * 30), 150),
     props,
   };
 };
