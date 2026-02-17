@@ -2214,7 +2214,7 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
     console.log('[UniversalVideo] Phase 16 End Card - brand.logoUrl:', preparedProject.brand?.logoUrl || 'EMPTY');
     if (endCardSettings?.enabled !== false) {
       // Phase 17A: Use assetUrlResolver for end card logo
-      const defaultLogoUrl = '/uploads/pinehillfarm-logo.png';
+      const defaultLogoUrl = '/uploads/16045ec5-d8e6-4b90-a65f-eb7e39e280ab.png';
       const sourceLogoUrl = preparedProject.brand?.logoUrl || defaultLogoUrl;
       
       // Try to resolve to public GCS URL first
