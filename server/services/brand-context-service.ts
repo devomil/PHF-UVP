@@ -120,7 +120,20 @@ class BrandContextService {
       return this.brandData;
     } catch (error: any) {
       console.error('[BrandContext] Failed to load brand context:', error.message);
-      throw error;
+      this.brandData = {
+        brand: { name: "Brand", tagline: "" },
+        identity: { story: "", mission: "" },
+        targetAudience: { primary: { description: "", demographics: "" }, conditions: [] },
+        services: [],
+        products: { categories: [] },
+        terminology: { useTheseTerms: [], avoidTheseTerms: [], brandSpecificPhrases: [] },
+        aesthetics: { visualStyle: "clean", colorPalette: [], typography: {} },
+        contentGuidelines: { tone: [], messaging: { emphasize: [] } },
+        visualDirectionRules: { aestheticDescriptors: {}, forbiddenPhrases: [] },
+      } as any;
+      this.loadedAt = Date.now();
+      console.log('[BrandContext] Using empty fallback brand context');
+      return this.brandData;
     }
   }
 
