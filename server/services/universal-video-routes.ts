@@ -2016,20 +2016,24 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
     const preparedProject = assetPrep.preparedProject;
     
     preparedProject.status = 'rendering';
+    if (!preparedProject.progress) preparedProject.progress = {} as any;
+    if (!preparedProject.progress.steps) preparedProject.progress.steps = {} as any;
+    if (!preparedProject.progress.steps.rendering) preparedProject.progress.steps.rendering = {} as any;
     preparedProject.progress.currentStep = 'rendering';
     preparedProject.progress.steps.rendering.status = 'in-progress';
     preparedProject.progress.steps.rendering.progress = 0;
     preparedProject.progress.steps.rendering.message = 'Starting render...';
-    // Reset stall detection state and worker renderStatus for retry renders
     (preparedProject.progress as any).lastProgressValue = 0;
     (preparedProject.progress as any).lastProgressUpdateAt = Date.now();
     delete (preparedProject.progress as any).renderStatus;
-    preparedProject.progress.errors = []; // Clear any previous errors
+    if (!preparedProject.progress.errors) preparedProject.progress.errors = [];
+    preparedProject.progress.errors = [];
     preparedProject.updatedAt = new Date().toISOString();
     
     console.log('[UniversalVideo] Render state reset - cleared stall detection, renderStatus, and errors');
     
-    const compositionId = getCompositionId(preparedProject.outputFormat.aspectRatio);
+    if (!preparedProject.outputFormat) preparedProject.outputFormat = { aspectRatio: '16:9', resolution: '1080p' } as any;
+    const compositionId = getCompositionId(preparedProject.outputFormat.aspectRatio || '16:9');
     
     // Map scene-level overlayConfig to brandInstructions format for Remotion
     const sceneBrandOverlays: Record<string, any> = {};
