@@ -669,12 +669,27 @@ export function registerRoutes(app: Express) {
       res.json({ status: "generating", component: "music" });
 
       try {
-        const result = await aiMusicService.generateMusic({
+        let result = await aiMusicService.generateMusic({
           mood: mood || "upbeat",
           style: style || "cinematic",
           duration,
           customPrompt: customPrompt || undefined,
         });
+
+        if (!result || !result.url) {
+          console.log("[QuickCreate] PiAPI music failed, trying ElevenLabs fallback...");
+          const fallbackResult = await universalVideoService.generateBackgroundMusic(duration, `${mood || "upbeat"} ${style || "cinematic"}`, project.title);
+          if (fallbackResult && fallbackResult.url) {
+            result = {
+              url: fallbackResult.url,
+              s3Url: fallbackResult.url,
+              duration: fallbackResult.duration || duration,
+              mood: mood || "upbeat",
+              style: style || "cinematic",
+              cost: 0,
+            } as any;
+          }
+        }
 
         const [freshProject] = await db
           .select()
@@ -713,7 +728,7 @@ export function registerRoutes(app: Express) {
                 music: {
                   status: "failed",
                   url: null,
-                  error: "Music generation failed",
+                  error: "Music generation failed (both PiAPI and ElevenLabs)",
                   updatedAt: new Date().toISOString(),
                 },
               },
