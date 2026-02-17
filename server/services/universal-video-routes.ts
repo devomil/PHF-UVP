@@ -26,6 +26,7 @@ import { textPlacementService, TextOverlay as TextOverlayType, TextPlacement } f
 import { brandInjectionService, BrandInjectionPlan } from '../services/brand-injection-service';
 import { qualityGateService, ProjectQualityReport, SceneQualityStatus } from '../services/quality-gate-service';
 import { assetUrlResolver } from '../services/asset-url-resolver';
+import { s3RenderAssetService } from '../services/s3-render-asset-service';
 import { VIDEO_PROVIDERS } from '../../shared/provider-config';
 import { ObjectStorageService } from '../objectStorage';
 import { videoFrameExtractor } from '../services/video-frame-extractor';
@@ -2044,22 +2045,48 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
     const getPublicAssetUrl = async (relativeUrl: string): Promise<string> => {
       if (!relativeUrl) return '';
       
-      // Use the new asset URL resolver for reliable public URL resolution
+      // Priority 1: Check if it is already a public URL
+      if (relativeUrl.startsWith('https://') && !relativeUrl.includes('.replit.dev')) {
+        return relativeUrl;
+      }
+      
+      // Priority 2: Try the asset URL resolver for relative/replit URLs
       const resolved = await assetUrlResolver.resolve(relativeUrl);
       if (resolved) {
-        console.log(`[UniversalVideo] Resolved asset URL: ${relativeUrl} → ${resolved.substring(0, 60)}...`);
+        console.log(`[UniversalVideo] Resolved asset URL: ${relativeUrl} -> ${resolved.substring(0, 60)}...`);
         return resolved;
       }
       
-      // Fallback: If resolution failed and it's already a full URL, return as-is
+      // Priority 3: Try S3 Render Assets by category based on URL hints
+      if (relativeUrl.includes('logo') || relativeUrl.includes('brand')) {
+        const s3Logo = await s3RenderAssetService.getLogoAsset();
+        if (s3Logo) {
+          console.log(`[UniversalVideo] Fallback to S3 Render Assets logo: ${s3Logo.name}`);
+          return s3Logo.url;
+        }
+      }
+      if (relativeUrl.includes('overlay') || relativeUrl.includes('watermark')) {
+        const s3Overlay = await s3RenderAssetService.getOverlayAsset();
+        if (s3Overlay) {
+          console.log(`[UniversalVideo] Fallback to S3 Render Assets overlay: ${s3Overlay.name}`);
+          return s3Overlay.url;
+        }
+      }
+      if (relativeUrl.includes('badge')) {
+        const s3Badges = await s3RenderAssetService.getBadgeAssets();
+        if (s3Badges.length > 0) {
+          console.log(`[UniversalVideo] Fallback to S3 Render Assets badge: ${s3Badges[0].name}`);
+          return s3Badges[0].url;
+        }
+      }
+      
+      // Fallback: If it is already a full URL, return as-is
       if (relativeUrl.startsWith('http://') || relativeUrl.startsWith('https://')) {
         console.warn(`[UniversalVideo] Asset URL resolver failed, using original URL: ${relativeUrl.substring(0, 60)}...`);
         return relativeUrl;
       }
       
-      // Last resort fallback - this won't work for Lambda but logs a warning
-      console.error(`[UniversalVideo] Failed to resolve asset URL to public GCS URL: ${relativeUrl}`);
-      console.error(`[UniversalVideo] This URL will NOT be accessible from Remotion Lambda!`);
+      console.error(`[UniversalVideo] Failed to resolve asset URL to public URL: ${relativeUrl}`);
       const baseUrl = process.env.REPLIT_DEV_DOMAIN 
         ? `https://${process.env.REPLIT_DEV_DOMAIN}`
         : 'http://localhost:5000';
@@ -2213,57 +2240,44 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
     console.log('[UniversalVideo] Phase 16 End Card - endCardSettings:', JSON.stringify(endCardSettings || 'undefined'));
     console.log('[UniversalVideo] Phase 16 End Card - brand.logoUrl:', preparedProject.brand?.logoUrl || 'EMPTY');
     if (endCardSettings?.enabled !== false) {
-      // Phase 17A: Use assetUrlResolver for end card logo
-      const defaultLogoUrl = '/uploads/16045ec5-d8e6-4b90-a65f-eb7e39e280ab.png';
-      const sourceLogoUrl = preparedProject.brand?.logoUrl || defaultLogoUrl;
+      // Phase 17A: Try S3 Render Assets (brand/logos/) first, then fallback to asset resolver
+      let cachedLogoUrl = '';
       
-      // Try to resolve to public GCS URL first
-      let cachedLogoUrl = await assetUrlResolver.resolve(sourceLogoUrl);
-      console.log('[UniversalVideo] End card logo URL resolution:', sourceLogoUrl, '→', cachedLogoUrl || 'FAILED');
+      // Priority 1: Check S3 Render Assets (brand/logos/) - managed via Asset Library UI
+      const s3Logo = await s3RenderAssetService.getLogoAsset();
+      if (s3Logo) {
+        cachedLogoUrl = s3Logo.url;
+        console.log('[UniversalVideo] End card logo from S3 Render Assets (brand/logos/):', s3Logo.name, '->'     , cachedLogoUrl);
+      }
       
-      // If resolution failed and it's a relative URL, we need to fetch and cache to S3
-      if (!cachedLogoUrl && s3Client) {
-        try {
-          // Convert relative to absolute for fetching
-          let fetchUrl = sourceLogoUrl;
-          if (fetchUrl.startsWith('/')) {
-            const baseUrl = process.env.REPLIT_DEV_DOMAIN 
-              ? `https://${process.env.REPLIT_DEV_DOMAIN}`
-              : 'http://localhost:5000';
-            fetchUrl = `${baseUrl}${fetchUrl}`;
-          }
-          
-          console.log('[UniversalVideo] Fetching and caching logo to S3:', fetchUrl.substring(0, 60));
-          const logoResponse = await fetch(fetchUrl);
-          if (logoResponse.ok) {
-            const logoBuffer = Buffer.from(await logoResponse.arrayBuffer());
-            const logoKey = `video-assets/brand/end-card-logo-${Date.now()}.png`;
-            await s3Client.send(new PutObjectCommand({
-              Bucket: REMOTION_BUCKET_NAME,
-              Key: logoKey,
-              Body: logoBuffer,
-              ContentType: 'image/png',
-            }));
-            cachedLogoUrl = `https://${REMOTION_BUCKET_NAME}.s3.${REMOTION_REGION}.amazonaws.com/${logoKey}`;
-            console.log('[UniversalVideo] End card logo cached to S3:', cachedLogoUrl);
-          } else {
-            console.error('[UniversalVideo] Failed to fetch logo, status:', logoResponse.status);
-          }
-        } catch (err) {
-          console.error('[UniversalVideo] Failed to cache end card logo:', err);
+      // Priority 2: Try brand logoUrl through asset resolver
+      if (!cachedLogoUrl) {
+        const defaultLogoUrl = '/uploads/16045ec5-d8e6-4b90-a65f-eb7e39e280ab.png';
+        const sourceLogoUrl = preparedProject.brand?.logoUrl || defaultLogoUrl;
+        cachedLogoUrl = await assetUrlResolver.resolve(sourceLogoUrl) || '';
+        if (cachedLogoUrl) {
+          console.log('[UniversalVideo] End card logo from asset resolver:', sourceLogoUrl, '->'     , cachedLogoUrl);
         }
       }
       
-      // Use resolved/cached URL or empty string if all else fails
       if (!cachedLogoUrl) {
         console.error('[UniversalVideo] End card logo URL could not be resolved - logo will not appear');
-        cachedLogoUrl = '';
       }
       // Default to enabled if not explicitly disabled
+      // Check S3 Render Assets (brand/end-cards/) for end card background image
+      const s3EndCard = await s3RenderAssetService.getEndCardAsset();
+      const endCardBgUrl = s3EndCard ? s3EndCard.url : null;
+      if (s3EndCard) {
+        console.log('[UniversalVideo] End card background from S3 Render Assets (brand/end-cards/):', s3EndCard.name);
+      }
+      
       endCardConfig = {
         enabled: true,  // Phase 18E: Explicit enabled flag
         duration: endCardSettings?.duration || 5,
-        background: {
+        background: endCardBgUrl ? {
+          type: 'image' as const,
+          imageUrl: endCardBgUrl,
+        } : {
           type: 'animated-gradient' as const,
           gradient: {
             colors: ['#1a3a2a', '#0d2818', '#0a1f12'],
@@ -2325,39 +2339,21 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
     const soundDesignSettings = (preparedProject as any).soundDesignSettings;
     let soundDesignConfig: any = undefined;
     if (soundDesignSettings?.enabled !== false) {
-      const sfxBaseUrl = process.env.SOUND_EFFECTS_URL || `https://${process.env.REMOTION_S3_BUCKET || 'remotionlambda-useast2-1vc2l6a56o'}.s3.${process.env.REMOTION_AWS_REGION || 'us-east-2'}.amazonaws.com/audio/sfx`;
-
-      const validateSfxFile = async (filename: string): Promise<boolean> => {
-        try {
-          const resp = await fetch(`${sfxBaseUrl}/${filename}`, {
-            headers: { 'Range': 'bytes=0-511' }
-          });
-          if (!resp.ok && resp.status !== 206) return false;
-          const buffer = await resp.arrayBuffer();
-          const bytes = new Uint8Array(buffer);
-          if (bytes.length < 100) return false;
-          let zeroCount = 0;
-          for (let i = 4; i < Math.min(bytes.length, 200); i++) {
-            if (bytes[i] === 0) zeroCount++;
-          }
-          const zeroRatio = zeroCount / Math.min(bytes.length - 4, 196);
-          return zeroRatio < 0.9;
-        } catch { return false; }
-      };
-
-      const [whooshValid, riseSwellValid, logoImpactValid, ambientValid] = await Promise.all([
-        validateSfxFile('whoosh-soft.mp3'),
-        validateSfxFile('rise-swell.mp3'),
-        validateSfxFile('logo-impact.mp3'),
-        validateSfxFile(soundDesignSettings?.ambientType === 'warm' ? 'room-tone-warm.mp3' : 'room-tone-nature.mp3'),
-      ]);
+      // Validate SFX files exist in S3 Render Assets (audio/sfx/) managed via Asset Library UI
+      const sfxAssets = await s3RenderAssetService.listAssets('sfx');
+      const sfxNames = sfxAssets.map(a => a.name.toLowerCase());
+      const whooshValid = sfxNames.some(n => n.includes('whoosh'));
+      const riseSwellValid = sfxNames.some(n => n.includes('rise-swell') || n.includes('swell'));
+      const logoImpactValid = sfxNames.some(n => n.includes('logo-impact') || n.includes('impact'));
+      const roomToneType = soundDesignSettings?.ambientType === 'warm' ? 'room-tone-warm' : 'room-tone';
+      const ambientValid = sfxNames.some(n => n.includes(roomToneType) || n.includes('ambient'));
 
       const transitionsEnabled = whooshValid && (soundDesignSettings?.transitionSounds !== false);
       const impactsEnabled = (logoImpactValid || riseSwellValid) && (soundDesignSettings?.impactSounds !== false);
       const ambientEnabled = ambientValid && (soundDesignSettings?.ambientLayer !== false);
       const anyEnabled = transitionsEnabled || impactsEnabled || ambientEnabled;
 
-      console.log(`[UniversalVideo] SFX validation: whoosh=${whooshValid}, riseSwell=${riseSwellValid}, logoImpact=${logoImpactValid}, ambient=${ambientValid}`);
+      console.log(`[UniversalVideo] SFX from S3 Render Assets (audio/sfx/): ${sfxAssets.length} files found - whoosh=${whooshValid}, riseSwell=${riseSwellValid}, logoImpact=${logoImpactValid}, ambient=${ambientValid}`);
 
       soundDesignConfig = {
         enabled: anyEnabled,
@@ -2610,10 +2606,20 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
       // Continue without brand injection
     }
     
+    // S3 Render Assets: Fallback for background music from audio/music/ if project has no music
+    let resolvedMusicUrl = preparedProject.assets.music?.url || null;
+    if (!resolvedMusicUrl) {
+      const s3Music = await soundDesignService.getBackgroundMusicFromS3();
+      if (s3Music) {
+        resolvedMusicUrl = s3Music.url;
+        console.log(`[UniversalVideo] Background music from S3 Render Assets (audio/music/): ${s3Music.name}`);
+      }
+    }
+    
     const inputProps = {
       scenes: preparedProject.scenes,
       voiceoverUrl: preparedProject.assets.voiceover.fullTrackUrl || null,
-      musicUrl: preparedProject.assets.music?.url || null,
+      musicUrl: resolvedMusicUrl,
       musicVolume: preparedProject.assets.music?.volume || 0.18,
       brand: brandWithCachedLogo,
       outputFormat: preparedProject.outputFormat,
@@ -2627,7 +2633,7 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
       brandInjectionPlan,
       // Phase 18D: Voiceover ranges for audio ducking
       voiceoverRanges,
-      soundEffectsBaseUrl: process.env.SOUND_EFFECTS_URL || 'https://remotionlambda-useast2-1vc2l6a56o.s3.us-east-2.amazonaws.com/audio/sfx',
+      soundEffectsBaseUrl: process.env.SOUND_EFFECTS_URL || `https://${process.env.REMOTION_S3_BUCKET || 'remotionlambda-useast2-1vc2l6a56o'}.s3.${process.env.REMOTION_AWS_REGION || 'us-east-2'}.amazonaws.com/audio/sfx`,
       // Phase 18F: Film treatment config
       filmTreatmentConfig,
     };
