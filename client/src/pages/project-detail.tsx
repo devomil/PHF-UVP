@@ -67,12 +67,39 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
   const [showStepButtons, setShowStepButtons] = useState(false);
   const [uploadingSceneId, setUploadingSceneId] = useState<string | null>(null);
   const [librarySceneId, setLibrarySceneId] = useState<string | null>(null);
+  const [selectedVoice, setSelectedVoice] = useState(project.voiceoverSettings?.voiceId || project.voiceId || "");
+  const [referenceImages, setReferenceImages] = useState<string[]>((project as any).referenceImages || []);
+  const [showRefLibrary, setShowRefLibrary] = useState(false);
+  const [uploadingRef, setUploadingRef] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const refFileInputRef = useRef<HTMLInputElement>(null);
   const activeSceneRef = useRef<string | null>(null);
 
   const progress = project.progress || {};
   const isGenerating = ["generating", "queued", "processing"].includes(project.status);
   const currentStep = progress.currentStep || null;
+
+  const voicesQuery = useQuery({
+    queryKey: ["voices"],
+    queryFn: async () => {
+      const res = await fetch("/api/universal-video/voices", { credentials: "include" });
+      if (!res.ok) return [];
+      const data = await res.json();
+      return data.voices || data || [];
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const refLibraryQuery = useQuery({
+    queryKey: ["asset-library-ref-images"],
+    queryFn: async () => {
+      const res = await fetch("/api/asset-library?type=image", { credentials: "include" });
+      if (!res.ok) return [];
+      const data = await res.json();
+      return Array.isArray(data) ? data : data.assets || [];
+    },
+    enabled: showRefLibrary,
+  });
 
   const libraryQuery = useQuery({
     queryKey: ["asset-library-images"],
@@ -85,12 +112,40 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
     enabled: !!librarySceneId,
   });
 
+  const handleRefUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingRef(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const uploadRes = await fetch("/api/videos/uploads", {
+        method: "POST",
+        credentials: "include",
+        body: formData,
+      });
+      if (!uploadRes.ok) throw new Error("Upload failed");
+      const data = await uploadRes.json();
+      const url = data.url || data.fileUrl;
+      if (url) setReferenceImages((prev) => [...prev, url]);
+    } catch (err: any) {
+      toast({ title: "Upload Error", description: err.message, variant: "destructive" });
+    }
+    setUploadingRef(false);
+    if (refFileInputRef.current) refFileInputRef.current.value = "";
+  };
+
   const generateAllMutation = useMutation({
     mutationFn: async () => {
+      const body: any = {};
+      if (selectedVoice) body.voiceId = selectedVoice;
+      if (referenceImages.length > 0) body.referenceImages = referenceImages;
+      if (selectedProvider && selectedProvider !== "auto") body.videoProvider = selectedProvider;
       const res = await fetch(`/api/universal-video/projects/${projectId}/generate-assets`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
+        body: JSON.stringify(body),
       });
       if (!res.ok) throw new Error("Failed to start asset generation");
       return res.json();
@@ -296,8 +351,138 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
           </div>
         )}
 
-        {(scenes.length === 0 || project.status === "draft") && (
+        {(scenes.length === 0 || project.status === "draft") && !isGenerating && (
           <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="border rounded-xl p-4 space-y-2" style={{ backgroundColor: "rgba(0,0,0,0.15)", borderColor: "var(--border-subtle)" }}>
+                <div className="flex items-center gap-2 mb-1">
+                  <Mic className="w-4 h-4 text-purple-400" />
+                  <span className="text-xs font-medium uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>Voice Actor</span>
+                </div>
+                {voicesQuery.isLoading ? (
+                  <div className="flex items-center gap-2 py-1">
+                    <Loader2 className="w-3 h-3 animate-spin" style={{ color: "var(--text-muted)" }} />
+                    <span className="text-xs" style={{ color: "var(--text-muted)" }}>Loading voices...</span>
+                  </div>
+                ) : (
+                  <select
+                    value={selectedVoice}
+                    onChange={(e) => setSelectedVoice(e.target.value)}
+                    className="w-full text-sm rounded-lg border px-3 py-2 bg-transparent outline-none"
+                    style={{ borderColor: "var(--border-subtle)", color: "var(--text-primary)" }}
+                  >
+                    <option value="">Auto (default)</option>
+                    {(voicesQuery.data || []).map((v: any) => (
+                      <option key={v.voice_id} value={v.voice_id}>
+                        {v.name}{v.labels?.gender ? ` (${v.labels.gender})` : ""}{v.labels?.accent ? ` - ${v.labels.accent}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                {selectedVoice && (voicesQuery.data || []).find((v: any) => v.voice_id === selectedVoice)?.preview_url && (
+                  <audio
+                    src={(voicesQuery.data || []).find((v: any) => v.voice_id === selectedVoice)?.preview_url}
+                    controls
+                    className="w-full h-8 mt-1"
+                    style={{ filter: "invert(1) hue-rotate(180deg)", opacity: 0.8 }}
+                  />
+                )}
+              </div>
+
+              <div className="border rounded-xl p-4 space-y-2" style={{ backgroundColor: "rgba(0,0,0,0.15)", borderColor: "var(--border-subtle)" }}>
+                <div className="flex items-center gap-2 mb-1">
+                  <ImagePlus className="w-4 h-4 text-purple-400" />
+                  <span className="text-xs font-medium uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>Reference Images</span>
+                </div>
+                <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>Add product or brand images to guide AI generation</p>
+                <input
+                  ref={refFileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleRefUpload}
+                />
+                <div className="flex gap-2 flex-wrap">
+                  {referenceImages.map((url, i) => (
+                    <div key={i} className="relative w-14 h-14 rounded-lg overflow-hidden border group" style={{ borderColor: "var(--border-subtle)" }}>
+                      <img src={url} alt="" className="w-full h-full object-cover" />
+                      <button
+                        onClick={() => setReferenceImages((prev) => prev.filter((_, idx) => idx !== i))}
+                        className="absolute top-0 right-0 bg-red-500 text-white w-4 h-4 text-[10px] rounded-bl opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                  <div className="flex gap-1.5">
+                    <button
+                      onClick={() => refFileInputRef.current?.click()}
+                      disabled={uploadingRef}
+                      className="w-14 h-14 rounded-lg border-2 border-dashed flex items-center justify-center transition-colors hover:border-purple-500/30"
+                      style={{ borderColor: "var(--border-subtle)", color: "var(--text-muted)" }}
+                    >
+                      {uploadingRef ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                    </button>
+                    <button
+                      onClick={() => setShowRefLibrary(!showRefLibrary)}
+                      className="w-14 h-14 rounded-lg border-2 border-dashed flex items-center justify-center transition-colors hover:border-purple-500/30"
+                      style={{ borderColor: "var(--border-subtle)", color: "var(--text-muted)" }}
+                      title="Pick from library"
+                    >
+                      <Image className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+                {showRefLibrary && (
+                  <div className="border rounded-lg p-2 max-h-32 overflow-y-auto" style={{ borderColor: "var(--border-subtle)", backgroundColor: "var(--surface)" }}>
+                    {refLibraryQuery.isLoading ? (
+                      <div className="flex items-center justify-center py-3">
+                        <Loader2 className="w-4 h-4 animate-spin" style={{ color: "var(--text-muted)" }} />
+                      </div>
+                    ) : !refLibraryQuery.data || refLibraryQuery.data.length === 0 ? (
+                      <p className="text-xs text-center py-3" style={{ color: "var(--text-muted)" }}>No images in library</p>
+                    ) : (
+                      <div className="grid grid-cols-5 gap-1.5">
+                        {refLibraryQuery.data.slice(0, 15).map((asset: any) => (
+                          <button
+                            key={asset.id}
+                            onClick={() => {
+                              const url = asset.url || asset.thumbnailUrl;
+                              if (url && !referenceImages.includes(url)) {
+                                setReferenceImages((prev) => [...prev, url]);
+                              }
+                              setShowRefLibrary(false);
+                            }}
+                            className="aspect-square rounded overflow-hidden border hover:border-purple-500/50 transition-colors"
+                            style={{ borderColor: "var(--border-subtle)" }}
+                          >
+                            <img src={asset.url || asset.thumbnailUrl} alt={asset.name || ""} className="w-full h-full object-cover" />
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div className="border rounded-xl p-4 space-y-2" style={{ backgroundColor: "rgba(0,0,0,0.15)", borderColor: "var(--border-subtle)" }}>
+                <div className="flex items-center gap-2 mb-1">
+                  <Video className="w-4 h-4 text-purple-400" />
+                  <span className="text-xs font-medium uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>Video Provider</span>
+                </div>
+                <ProviderCatalogSelector
+                  outputType="video"
+                  provider={selectedProvider}
+                  onProviderChange={setSelectedProvider}
+                  label=""
+                  compact
+                />
+                <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+                  {selectedProvider === "auto" ? "AI will select the best provider for each scene" : "All scenes will use this provider"}
+                </p>
+              </div>
+            </div>
+
             <button
               onClick={() => generateAllMutation.mutate()}
               disabled={isGenerating || generateAllMutation.isPending}

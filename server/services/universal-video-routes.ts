@@ -1521,7 +1521,7 @@ router.post('/projects/:projectId/generate-assets', isAuthenticated, async (req:
   try {
     const userId = (req.user as any)?.id;
     const { projectId } = req.params;
-    const { skipMusic, skipAnalysis } = req.body || {};
+    const { skipMusic, skipAnalysis, voiceId, referenceImages, videoProvider } = req.body || {};
     
     const projectData = await getProjectFromDb(projectId);
     if (!projectData) {
@@ -1532,7 +1532,22 @@ router.post('/projects/:projectId/generate-assets', isAuthenticated, async (req:
       return res.status(403).json({ success: false, error: 'Access denied' });
     }
     
-    console.log('[UniversalVideo] Queuing asset generation for project:', projectId, skipMusic ? '(music disabled)' : '');
+    if (voiceId) {
+      (projectData as any).voiceId = voiceId;
+      (projectData as any).voiceoverSettings = {
+        ...((projectData as any).voiceoverSettings || {}),
+        enabled: true,
+        voiceId,
+      };
+    }
+    if (referenceImages && Array.isArray(referenceImages) && referenceImages.length > 0) {
+      (projectData as any).referenceImages = referenceImages;
+    }
+    if (videoProvider) {
+      (projectData as any).preferredVideoProvider = videoProvider;
+    }
+    
+    console.log('[UniversalVideo] Queuing asset generation for project:', projectId, skipMusic ? '(music disabled)' : '', voiceId ? `voice: ${voiceId}` : '');
     
     projectData.status = 'queued';
     if (!projectData.progress) {
