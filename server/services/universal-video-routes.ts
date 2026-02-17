@@ -1770,8 +1770,9 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
       return res.status(403).json({ success: false, error: 'Access denied' });
     }
     
-    // Allow re-render for complete/completed projects, first-time render for ready projects, and retry for error projects
-    const renderableStatuses = ['ready', 'error', 'complete', 'completed'];
+    // Allow rendering for ready/draft/error/complete projects
+    // Quick Create projects may stay in 'draft' status with assets ready
+    const renderableStatuses = ['ready', 'draft', 'error', 'complete', 'completed'];
     if (!renderableStatuses.includes(projectData.status)) {
       return res.status(400).json({ 
         success: false, 
