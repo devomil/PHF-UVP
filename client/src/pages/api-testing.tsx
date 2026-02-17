@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   FlaskConical,
   Video,
@@ -14,6 +14,11 @@ import {
   ExternalLink,
   RefreshCw,
   Zap,
+  Upload,
+  Trash2,
+  ImageIcon,
+  Clapperboard,
+  Paintbrush,
 } from "lucide-react";
 
 interface TestDefinition {
@@ -25,6 +30,7 @@ interface TestDefinition {
   estimatedCost: string;
   estimatedTime: string;
   notes?: string;
+  requiresImage?: boolean;
 }
 
 interface TestState {
@@ -36,23 +42,31 @@ interface TestState {
   error?: string;
 }
 
-const categoryConfig = {
-  video: { label: "Video Generation", icon: Video, color: "purple" },
-  image: { label: "Image Generation", icon: Image, color: "blue" },
-  audio: { label: "Audio Generation", icon: Music, color: "green" },
-  llm: { label: "LLM", icon: MessageSquare, color: "amber" },
+const categoryConfig: Record<string, { label: string; icon: any; color: string; description: string }> = {
+  video: { label: "Video Generation (T2V)", icon: Video, color: "purple", description: "Text-to-Video" },
+  i2v: { label: "Image-to-Video (I2V)", icon: Clapperboard, color: "indigo", description: "Image-to-Video — requires test image" },
+  image: { label: "Image Generation (T2I)", icon: Image, color: "blue", description: "Text-to-Image" },
+  i2i: { label: "Image-to-Image (I2I)", icon: Paintbrush, color: "cyan", description: "Image-to-Image — requires test image" },
+  audio: { label: "Audio Generation", icon: Music, color: "green", description: "Text-to-Audio / Music" },
+  llm: { label: "LLM", icon: MessageSquare, color: "amber", description: "Large Language Models" },
 };
+
+const categoryOrder = ["video", "i2v", "image", "i2i", "audio", "llm"];
 
 export default function ApiTesting() {
   const [definitions, setDefinitions] = useState<Record<string, TestDefinition[]>>({});
   const [testStates, setTestStates] = useState<Record<string, TestState>>({});
   const [loading, setLoading] = useState(true);
+  const [testImageUrl, setTestImageUrl] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetch("/api/piapi-tests/definitions")
       .then((r) => r.json())
       .then((data) => {
         setDefinitions(data.definitions || {});
+        setTestImageUrl(data.testImageUrl || null);
         setLoading(false);
       })
       .catch(() => setLoading(false));
@@ -64,6 +78,35 @@ export default function ApiTesting() {
       [id]: { ...(prev[id] || { status: "idle" }), ...update },
     }));
   }, []);
+
+  const handleImageUpload = async (file: File) => {
+    setUploading(true);
+    const formData = new FormData();
+    formData.append("image", file);
+
+    try {
+      const res = await fetch("/api/piapi-tests/upload-test-image", {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+      if (data.success) {
+        setTestImageUrl(data.imageUrl);
+      }
+    } catch (err) {
+      console.error("Upload failed:", err);
+    }
+    setUploading(false);
+  };
+
+  const handleDeleteImage = async () => {
+    try {
+      await fetch("/api/piapi-tests/test-image", { method: "DELETE" });
+      setTestImageUrl(null);
+    } catch (err) {
+      console.error("Delete failed:", err);
+    }
+  };
 
   const pollTask = useCallback(
     async (testId: string, taskId: string, startTime: number) => {
@@ -217,6 +260,7 @@ export default function ApiTesting() {
   };
 
   const summary = getSummary();
+  const requiresImageCategories = ["i2v", "i2i"];
 
   if (loading) {
     return (
@@ -254,20 +298,125 @@ export default function ApiTesting() {
         </div>
 
         <div
-          className="border rounded-xl p-3 mb-6 flex items-center gap-2"
+          className="border rounded-xl p-3 mb-4 flex items-center gap-2"
           style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)" }}
         >
           <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
           <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
             Each test makes a real API call. Video tests may take 1-3 minutes to complete.
-            Estimated total cost to test everything: ~$5-8.
+            Estimated total cost to test everything: ~$8-12.
           </p>
         </div>
 
-        {(["video", "image", "audio", "llm"] as const).map((category) => {
+        <div
+          className="border rounded-xl p-4 mb-6"
+          style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)" }}
+        >
+          <div className="flex items-center gap-2 mb-3">
+            <ImageIcon className="w-4 h-4 text-indigo-400" />
+            <span className="text-sm font-semibold">Test Image for I2V & I2I</span>
+            <span className="text-[11px] px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+              Required for image-based tests
+            </span>
+          </div>
+
+          {testImageUrl ? (
+            <div className="flex items-center gap-4">
+              <div className="relative group">
+                <img
+                  src={testImageUrl}
+                  alt="Test image"
+                  className="w-20 h-20 object-cover rounded-lg border"
+                  style={{ borderColor: "var(--border-subtle)" }}
+                />
+                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
+                  <button
+                    onClick={handleDeleteImage}
+                    className="p-1.5 rounded-full bg-red-500/80 hover:bg-red-500 text-white"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-medium text-emerald-400 flex items-center gap-1.5">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  Image uploaded
+                </p>
+                <p className="text-[11px] mt-0.5 break-all" style={{ color: "var(--text-tertiary)" }}>
+                  {testImageUrl}
+                </p>
+                <div className="flex gap-2 mt-2">
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="text-[11px] px-2 py-1 rounded border transition-colors hover:brightness-110"
+                    style={{
+                      borderColor: "var(--border-subtle)",
+                      backgroundColor: "var(--surface-hover)",
+                      color: "var(--text-secondary)",
+                    }}
+                  >
+                    Replace Image
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div
+              className="border-2 border-dashed rounded-xl p-6 text-center cursor-pointer hover:brightness-110 transition-all"
+              style={{ borderColor: "var(--border-subtle)", backgroundColor: "var(--app-bg)" }}
+              onClick={() => fileInputRef.current?.click()}
+              onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+              onDrop={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const file = e.dataTransfer.files[0];
+                if (file && file.type.startsWith("image/")) {
+                  handleImageUpload(file);
+                }
+              }}
+            >
+              {uploading ? (
+                <div className="flex flex-col items-center gap-2">
+                  <Loader2 className="w-6 h-6 text-indigo-400 animate-spin" />
+                  <span className="text-sm" style={{ color: "var(--text-secondary)" }}>Uploading...</span>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center gap-2">
+                  <Upload className="w-6 h-6 text-indigo-400" />
+                  <span className="text-sm font-medium" style={{ color: "var(--text-secondary)" }}>
+                    Upload a test image (logo, photo, etc.)
+                  </span>
+                  <span className="text-[11px]" style={{ color: "var(--text-tertiary)" }}>
+                    Click or drag & drop. JPEG, PNG, WebP, or GIF (max 10MB).
+                    This image will be used for all I2V and I2I tests.
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/gif"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) handleImageUpload(file);
+              e.target.value = "";
+            }}
+          />
+        </div>
+
+        {categoryOrder.map((category) => {
           const config = categoryConfig[category];
+          if (!config) return null;
           const tests = definitions[category] || [];
+          if (tests.length === 0) return null;
           const Icon = config.icon;
+          const needsImage = requiresImageCategories.includes(category);
+          const hasImage = !!testImageUrl;
 
           const catStates = tests.map((t) => testStates[t.id]?.status || "idle");
           const catPassed = catStates.filter((s) => s === "pass").length;
@@ -299,10 +448,16 @@ export default function ApiTesting() {
                   {catFailed > 0 && (
                     <span className="text-xs text-red-400">{catFailed} failed</span>
                   )}
+                  {needsImage && !hasImage && (
+                    <span className="text-xs text-amber-400 flex items-center gap-1">
+                      <AlertCircle className="w-3 h-3" />
+                      Needs image
+                    </span>
+                  )}
                 </div>
                 <button
                   onClick={() => runCategory(category)}
-                  disabled={catRunning > 0}
+                  disabled={catRunning > 0 || (needsImage && !hasImage)}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-purple-600 hover:bg-purple-500 text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   {catRunning > 0 ? (
@@ -313,7 +468,7 @@ export default function ApiTesting() {
                   ) : (
                     <>
                       <Zap className="w-3 h-3" />
-                      Test All {config.label}
+                      Test All {config.label.split("(")[0].trim()}
                     </>
                   )}
                 </button>
@@ -323,6 +478,7 @@ export default function ApiTesting() {
                 {tests.map((test) => {
                   const state = testStates[test.id] || { status: "idle" as const };
                   const isRunning = state.status === "submitting" || state.status === "polling";
+                  const isDisabled = isRunning || (needsImage && !hasImage);
 
                   return (
                     <div
@@ -341,6 +497,11 @@ export default function ApiTesting() {
                           >
                             {test.model}
                           </code>
+                          {test.requiresImage && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                              IMG
+                            </span>
+                          )}
                         </div>
                         <div className="flex items-center gap-3 mt-0.5">
                           <span className="text-[11px]" style={{ color: "var(--text-tertiary)" }}>
@@ -385,7 +546,7 @@ export default function ApiTesting() {
 
                       <button
                         onClick={() => runTest(test.id)}
-                        disabled={isRunning}
+                        disabled={isDisabled}
                         className="shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         style={{
                           borderColor: "var(--border-subtle)",

@@ -1,11 +1,55 @@
 import { Router, Request, Response } from 'express';
 import { PIAPI_TEST_DEFINITIONS, getTestById, getTestsByCategory } from './piapi-test-config';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
 
 const router = Router();
 
 const PIAPI_BASE = 'https://api.piapi.ai';
 const TASK_ENDPOINT = `${PIAPI_BASE}/api/v1/task`;
 const CHAT_ENDPOINT = `${PIAPI_BASE}/v1/chat/completions`;
+
+const TEST_IMAGE_DIR = path.join(process.cwd(), 'public', 'test-images');
+if (!fs.existsSync(TEST_IMAGE_DIR)) {
+  fs.mkdirSync(TEST_IMAGE_DIR, { recursive: true });
+}
+
+const upload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, TEST_IMAGE_DIR),
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname) || '.png';
+      cb(null, `test-image${ext}`);
+    },
+  }),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    if (allowed.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only JPEG, PNG, WebP, and GIF images are allowed'));
+    }
+  },
+});
+
+function getTestImageUrl(_req: Request): string | null {
+  const files = fs.readdirSync(TEST_IMAGE_DIR).filter(f => f.startsWith('test-image'));
+  if (files.length === 0) return null;
+
+  const replitDomain = process.env.REPLIT_DEV_DOMAIN || process.env.REPLIT_DOMAINS;
+  if (replitDomain) {
+    return `https://${replitDomain}/test-images/${files[0]}`;
+  }
+
+  const publicBaseUrl = process.env.PUBLIC_BASE_URL;
+  if (publicBaseUrl) {
+    return `${publicBaseUrl.replace(/\/$/, '')}/test-images/${files[0]}`;
+  }
+
+  return `https://localhost:5000/test-images/${files[0]}`;
+}
 
 interface TestResult {
   id: string;
@@ -38,10 +82,42 @@ router.get('/api/piapi-tests/definitions', (req: Request, res: Response) => {
   const grouped = {
     video: getTestsByCategory('video'),
     image: getTestsByCategory('image'),
+    i2v: getTestsByCategory('i2v'),
+    i2i: getTestsByCategory('i2i'),
     audio: getTestsByCategory('audio'),
     llm: getTestsByCategory('llm'),
   };
-  res.json({ definitions: grouped, totalCount: PIAPI_TEST_DEFINITIONS.length });
+  const imageUrl = getTestImageUrl(req);
+  res.json({ definitions: grouped, totalCount: PIAPI_TEST_DEFINITIONS.length, testImageUrl: imageUrl });
+});
+
+router.post('/api/piapi-tests/upload-test-image', (req: Request, res: Response) => {
+  if (!requireAuth(req, res)) return;
+  upload.single('image')(req, res, (err) => {
+    if (err) {
+      return res.status(400).json({ error: err.message });
+    }
+    if (!req.file) {
+      return res.status(400).json({ error: 'No image file provided' });
+    }
+    const imageUrl = getTestImageUrl(req);
+    res.json({ success: true, imageUrl, filename: req.file.filename });
+  });
+});
+
+router.get('/api/piapi-tests/test-image', (req: Request, res: Response) => {
+  if (!requireAuth(req, res)) return;
+  const imageUrl = getTestImageUrl(req);
+  res.json({ imageUrl });
+});
+
+router.delete('/api/piapi-tests/test-image', (req: Request, res: Response) => {
+  if (!requireAuth(req, res)) return;
+  const files = fs.readdirSync(TEST_IMAGE_DIR).filter(f => f.startsWith('test-image'));
+  for (const f of files) {
+    fs.unlinkSync(path.join(TEST_IMAGE_DIR, f));
+  }
+  res.json({ success: true });
 });
 
 router.post('/api/piapi-tests/run/:testId', async (req: Request, res: Response) => {
@@ -58,7 +134,7 @@ router.post('/api/piapi-tests/run/:testId', async (req: Request, res: Response) 
   }
 
   try {
-    const result = await runSingleTest(test, apiKey);
+    const result = await runSingleTest(test, apiKey, req);
     res.json(result);
   } catch (error: any) {
     res.json({
@@ -88,7 +164,7 @@ router.post('/api/piapi-tests/run-category/:category', async (req: Request, res:
   const results: TestResult[] = [];
   for (const test of tests) {
     try {
-      const result = await runSingleTest(test, apiKey);
+      const result = await runSingleTest(test, apiKey, req);
       results.push(result);
     } catch (error: any) {
       results.push({
@@ -126,6 +202,23 @@ router.post('/api/piapi-tests/submit/:testId', async (req: Request, res: Respons
       return res.json(result);
     }
 
+    const inputData = { ...test.input };
+    if (test.requiresImage) {
+      const imageUrl = getTestImageUrl(req);
+      if (!imageUrl) {
+        return res.json({
+          id: test.id,
+          name: test.name,
+          category: test.category,
+          status: 'fail',
+          responseTime: 0,
+          error: 'No test image uploaded. Please upload a test image first.',
+        } as TestResult);
+      }
+      const field = test.imageInputField || 'image_url';
+      inputData[field] = imageUrl;
+    }
+
     const createRes = await fetch(TASK_ENDPOINT, {
       method: 'POST',
       headers: {
@@ -135,7 +228,7 @@ router.post('/api/piapi-tests/submit/:testId', async (req: Request, res: Respons
       body: JSON.stringify({
         model: test.model,
         task_type: test.taskType,
-        input: test.input,
+        input: inputData,
       }),
     });
 
@@ -324,7 +417,7 @@ async function runChatCompletionTest(test: any, apiKey: string): Promise<TestRes
   }
 }
 
-async function runSingleTest(test: any, apiKey: string): Promise<TestResult> {
+async function runSingleTest(test: any, apiKey: string, req: Request): Promise<TestResult> {
   const startTime = Date.now();
 
   if (test.endpoint === 'chat-completions') {
@@ -332,6 +425,23 @@ async function runSingleTest(test: any, apiKey: string): Promise<TestResult> {
   }
 
   try {
+    const inputData = { ...test.input };
+    if (test.requiresImage) {
+      const imageUrl = getTestImageUrl(req);
+      if (!imageUrl) {
+        return {
+          id: test.id,
+          name: test.name,
+          category: test.category,
+          status: 'fail',
+          responseTime: 0,
+          error: 'No test image uploaded',
+        };
+      }
+      const field = test.imageInputField || 'image_url';
+      inputData[field] = imageUrl;
+    }
+
     const createRes = await fetch(TASK_ENDPOINT, {
       method: 'POST',
       headers: {
@@ -341,7 +451,7 @@ async function runSingleTest(test: any, apiKey: string): Promise<TestResult> {
       body: JSON.stringify({
         model: test.model,
         task_type: test.taskType,
-        input: test.input,
+        input: inputData,
       }),
     });
 
@@ -411,7 +521,7 @@ async function runSingleTest(test: any, apiKey: string): Promise<TestResult> {
         const pollData = await pollRes.json() as any;
         const status = pollData.data?.status;
 
-        if (status === 'completed') {
+        if (status === 'completed' || status === 'success' || status === 'succeeded') {
           const output = pollData.data?.output;
           const outputUrl = output?.video_url || output?.image_url || output?.audio_url ||
             (Array.isArray(output?.images) && output.images[0]?.url) ||
@@ -430,7 +540,7 @@ async function runSingleTest(test: any, apiKey: string): Promise<TestResult> {
           };
         }
 
-        if (status === 'failed') {
+        if (status === 'failed' || status === 'error' || status === 'cancelled') {
           return {
             id: test.id,
             name: test.name,
@@ -438,7 +548,7 @@ async function runSingleTest(test: any, apiKey: string): Promise<TestResult> {
             status: 'fail',
             responseTime: Date.now() - startTime,
             taskId,
-            taskStatus: 'failed',
+            taskStatus: status,
             error: JSON.stringify(pollData.data?.error || 'Task failed').substring(0, 300),
           };
         }
