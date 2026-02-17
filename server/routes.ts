@@ -538,12 +538,13 @@ export function registerRoutes(app: Express) {
         return res.status(400).json({ error: "No narration text provided" });
       }
 
-      const existingAssets = (project.assets as any) || {};
+      const [latestForVO] = await db.select().from(universalVideoProjects).where(eq(universalVideoProjects.projectId, projectId)).limit(1);
+      const existingAssetsVO = (latestForVO?.assets as any) || {};
       await db.update(universalVideoProjects).set({
         assets: {
-          ...existingAssets,
+          ...existingAssetsVO,
           quickCreate: {
-            ...(existingAssets.quickCreate || {}),
+            ...(existingAssetsVO.quickCreate || {}),
             voiceover: {
               status: "generating",
               url: null,
@@ -649,12 +650,13 @@ export function registerRoutes(app: Express) {
 
       const duration = project.totalDuration || 10;
 
-      const existingAssets = (project.assets as any) || {};
+      const [latestForMusic] = await db.select().from(universalVideoProjects).where(eq(universalVideoProjects.projectId, projectId)).limit(1);
+      const existingAssetsMusic = (latestForMusic?.assets as any) || {};
       await db.update(universalVideoProjects).set({
         assets: {
-          ...existingAssets,
+          ...existingAssetsMusic,
           quickCreate: {
-            ...(existingAssets.quickCreate || {}),
+            ...(existingAssetsMusic.quickCreate || {}),
             music: {
               status: "generating",
               url: null,

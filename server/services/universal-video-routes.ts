@@ -31,7 +31,7 @@ import { VIDEO_PROVIDERS } from '../../shared/provider-config';
 import { ObjectStorageService } from '../objectStorage';
 import { videoFrameExtractor } from '../services/video-frame-extractor';
 import { db } from '../db';
-import { universalVideoProjects, sceneRegenerationHistory, brandAssets, brandMediaLibrary } from '../../shared/schema';
+import { universalVideoProjects, sceneRegenerationHistory, brandAssets, brandMediaLibrary, videoGenerationJobs } from '../../shared/schema';
 import { objectStorageClient } from '../objectStorage';
 import type { 
   VideoProject, 
@@ -1998,6 +1998,42 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
     }
     
     console.log('[UniversalVideo] QA gate PASSED - starting render for project:', projectId);
+    
+    // Ensure Quick Create visual asset is populated (fix race condition where voiceover/music overwrites visual)
+    const qcAssets = (projectData as any).assets?.quickCreate;
+    if (qcAssets && !qcAssets.visual?.url) {
+      console.log('[PrepareAssets] Quick Create visual missing from assets, checking video_generation_jobs fallback...');
+      try {
+        const [latestJob] = await db
+          .select()
+          .from(videoGenerationJobs)
+          .where(eq(videoGenerationJobs.projectId, projectId))
+          .orderBy(desc(videoGenerationJobs.createdAt))
+          .limit(1);
+        
+        if (latestJob?.status === 'completed' && latestJob.videoUrl) {
+          const jobUrl = latestJob.videoUrl;
+          const jobIsVideo = /\.(mp4|webm|mov|avi|mkv)$/i.test(jobUrl) || latestJob.sceneType === 'video';
+          console.log(`[PrepareAssets] Found visual from job fallback: ${jobUrl.substring(0, 60)}... (isVideo: ${jobIsVideo})`);
+          
+          if (!projectData.assets) projectData.assets = {} as any;
+          (projectData as any).assets.quickCreate = {
+            ...qcAssets,
+            visual: {
+              status: 'completed',
+              url: jobUrl,
+              videoUrl: jobIsVideo ? jobUrl : undefined,
+              imageUrl: !jobIsVideo ? jobUrl : undefined,
+              type: jobIsVideo ? 'video' : 'image',
+              provider: latestJob.provider || 'kling',
+              error: null,
+            },
+          };
+        }
+      } catch (err: any) {
+        console.warn('[PrepareAssets] Job fallback lookup failed:', err.message);
+      }
+    }
     
     console.log('[UniversalVideo] Preparing assets for Lambda...');
     const assetPrep = await universalVideoService.prepareAssetsForLambda(projectData);
