@@ -3,6 +3,8 @@ import { brandAssets } from '@shared/schema';
 import { eq } from 'drizzle-orm';
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { objectStorageClient } from '../objectStorage';
+import * as fs from 'fs';
+import * as path from 'path';
 
 const urlCache = new Map<string, string>();
 
@@ -139,17 +141,17 @@ class AssetUrlResolver {
   private async resolveReplitDevUrl(url: string): Promise<string | null> {
     try {
       const urlObj = new URL(url);
-      const path = urlObj.pathname;
+      const pathStr = urlObj.pathname;
       
-      if (path.startsWith('/api/brand-assets/file/')) {
-        return this.resolveRelativeAssetUrl(path);
+      if (pathStr.startsWith('/api/brand-assets/file/')) {
+        return this.resolveRelativeAssetUrl(pathStr);
       }
       
-      if (path.startsWith('/uploads/')) {
-        return this.resolveStaticPath(path);
+      if (pathStr.startsWith('/uploads/')) {
+        return this.resolveStaticPath(pathStr);
       }
       
-      console.log('[AssetURL] Unknown Replit URL pattern:', path);
+      console.log('[AssetURL] Unknown Replit URL pattern:', pathStr);
       return null;
       
     } catch (error) {
@@ -158,8 +160,8 @@ class AssetUrlResolver {
     }
   }
   
-  private async resolveStaticPath(path: string): Promise<string | null> {
-    return await this.cacheLocalFileToS3(path);
+  private async resolveStaticPath(pathStr: string): Promise<string | null> {
+    return await this.cacheLocalFileToS3(pathStr);
   }
   
   private async cacheReplitAssetToS3(objectPath: string, assetId: number): Promise<string | null> {
@@ -171,7 +173,6 @@ class AssetUrlResolver {
     try {
       console.log('[AssetURL] Fetching asset from Replit object storage:', objectPath);
       
-      // Get bucket name from environment
       const bucketId = process.env.REPLIT_DEFAULT_BUCKET_ID || 
                        (process.env.PUBLIC_OBJECT_SEARCH_PATHS?.split('/')[1]);
       
@@ -180,11 +181,9 @@ class AssetUrlResolver {
         return null;
       }
       
-      // Use the GCS client from objectStorage.ts with proper sidecar authentication
       const bucket = objectStorageClient.bucket(bucketId);
       const file = bucket.file(objectPath);
       
-      // Download file contents
       const [contents] = await file.download();
       const buffer = contents;
       
@@ -211,30 +210,69 @@ class AssetUrlResolver {
     }
   }
   
-  private async cacheLocalFileToS3(path: string): Promise<string | null> {
+  private async cacheLocalFileToS3(filePath: string): Promise<string | null> {
     if (!s3Client) {
       console.error('[AssetURL] S3 client not configured - cannot cache local file');
       return null;
     }
     
     try {
-      const baseUrl = process.env.REPLIT_DEV_DOMAIN 
-        ? `https://${process.env.REPLIT_DEV_DOMAIN}`
-        : 'http://localhost:5000';
-      const fetchUrl = `${baseUrl}${path}`;
-      
-      console.log('[AssetURL] Fetching local file:', fetchUrl.substring(0, 60));
-      
-      const response = await fetch(fetchUrl);
-      if (!response.ok) {
-        console.error('[AssetURL] Failed to fetch local file, status:', response.status);
+      const extension = filePath.split('.').pop() || 'png';
+      const contentType = this.getContentType(extension);
+      const filename = filePath.split('/').pop() || 'file';
+      let buffer: Buffer | null = null;
+
+      // Try reading directly from disk first (avoids Vite returning HTML for missing files)
+      const exactPath = path.join(process.cwd(), filePath.replace(/^\//, ''));
+      if (fs.existsSync(exactPath)) {
+        buffer = fs.readFileSync(exactPath);
+        console.log('[AssetURL] Read file from disk:', exactPath, `(${buffer.length} bytes)`);
+      }
+
+      // If exact file not found, scan the uploads directory for any matching image
+      if (!buffer && filePath.startsWith('/uploads/')) {
+        const uploadsDir = path.join(process.cwd(), 'uploads');
+        if (fs.existsSync(uploadsDir)) {
+          const files = fs.readdirSync(uploadsDir);
+          const imageFiles = files.filter(f => /\.(png|jpg|jpeg|gif|webp|svg)$/i.test(f));
+          if (imageFiles.length > 0) {
+            const bestMatch = imageFiles[0];
+            const matchPath = path.join(uploadsDir, bestMatch);
+            buffer = fs.readFileSync(matchPath);
+            console.log('[AssetURL] Found upload file on disk:', matchPath, `(${buffer.length} bytes)`);
+          }
+        }
+      }
+
+      // Last resort: HTTP fetch
+      if (!buffer) {
+        const baseUrl = process.env.REPLIT_DEV_DOMAIN 
+          ? `https://${process.env.REPLIT_DEV_DOMAIN}`
+          : 'http://localhost:5000';
+        const fetchUrl = `${baseUrl}${filePath}`;
+        
+        console.log('[AssetURL] Fetching local file via HTTP:', fetchUrl.substring(0, 60));
+        
+        const response = await fetch(fetchUrl);
+        if (!response.ok) {
+          console.error('[AssetURL] Failed to fetch local file, status:', response.status);
+          return null;
+        }
+        
+        buffer = Buffer.from(await response.arrayBuffer());
+      }
+
+      // Validate the content is actually a media file, not HTML from Vite
+      if (buffer.length < 100) {
+        console.error('[AssetURL] File too small to be a valid image:', buffer.length, 'bytes');
         return null;
       }
-      
-      const buffer = Buffer.from(await response.arrayBuffer());
-      const extension = path.split('.').pop() || 'png';
-      const contentType = this.getContentType(extension);
-      const filename = path.split('/').pop() || 'file';
+      const headerStr = buffer.slice(0, 30).toString('utf-8');
+      if (headerStr.startsWith('<!DOCTYPE') || headerStr.startsWith('<html') || headerStr.startsWith('<head')) {
+        console.error('[AssetURL] Content is HTML, not a media file - skipping upload for:', filePath);
+        return null;
+      }
+
       const s3Key = `video-assets/brand/${filename.replace(/\.[^.]+$/, '')}-${Date.now()}.${extension}`;
       
       await s3Client.send(new PutObjectCommand({
@@ -246,7 +284,7 @@ class AssetUrlResolver {
       }));
       
       const s3Url = `https://${REMOTION_BUCKET_NAME}.s3.${REMOTION_REGION}.amazonaws.com/${s3Key}`;
-      console.log('[AssetURL] Cached local file to S3 with public-read ACL:', s3Url);
+      console.log('[AssetURL] Cached local file to S3:', s3Url, `(${buffer.length} bytes)`);
       
       return s3Url;
       
@@ -277,15 +315,11 @@ class AssetUrlResolver {
     console.log('[AssetURL] Cache cleared');
   }
 
-  /**
-   * Validate a URL can be accessed by Remotion Lambda
-   */
   async validate(url: string): Promise<{ valid: boolean; error?: string }> {
     if (!url) {
       return { valid: false, error: 'URL is empty' };
     }
 
-    // Check for Replit dev URLs (inaccessible from Lambda)
     const invalidPatterns = [
       '.picard.replit.dev',
       '.repl.co',
@@ -302,7 +336,6 @@ class AssetUrlResolver {
       }
     }
 
-    // Check for relative URLs
     if (url.startsWith('/')) {
       return { 
         valid: false, 
@@ -310,12 +343,10 @@ class AssetUrlResolver {
       };
     }
 
-    // Check if it's a public URL
     if (this.isPublicUrl(url)) {
       return { valid: true };
     }
 
-    // HTTPS URLs without invalid patterns are generally accessible
     if (url.startsWith('https://')) {
       return { valid: true };
     }
@@ -326,9 +357,6 @@ class AssetUrlResolver {
     };
   }
 
-  /**
-   * Check if a URL is accessible from Lambda (alias for validate)
-   */
   isLambdaAccessible(url: string): boolean {
     if (!url) return false;
     
