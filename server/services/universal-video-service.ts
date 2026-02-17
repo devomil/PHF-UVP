@@ -2565,6 +2565,25 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
     const onProgress = options?.onProgress;
     const targetStep = options?.targetStep;
     
+    if (!updatedProject.assets) {
+      updatedProject.assets = { voiceover: { fullTrackUrl: '', duration: 0, perScene: [] }, music: { url: '', volume: 0.18, duration: 0 }, images: [], videos: [] } as any;
+    }
+    if (!updatedProject.assets.voiceover) {
+      updatedProject.assets.voiceover = { fullTrackUrl: '', duration: 0, perScene: [] } as any;
+    }
+    if (!updatedProject.progress) {
+      updatedProject.progress = {} as any;
+    }
+    if (!updatedProject.progress.steps) {
+      updatedProject.progress.steps = {
+        voiceover: { status: 'pending', progress: 0, message: '' },
+        images: { status: 'pending', progress: 0, message: '' },
+        videos: { status: 'pending', progress: 0, message: '' },
+        music: { status: 'pending', progress: 0, message: '' },
+        assembly: { status: 'pending', progress: 0, message: '' },
+      } as any;
+    }
+    
     const saveProgress = async () => {
       if (onProgress) {
         try {

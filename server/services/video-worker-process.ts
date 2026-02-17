@@ -1,17 +1,17 @@
-import { db } from './db';
-import { universalVideoProjects } from '../shared/schema';
+import { db } from '../db';
+import { universalVideoProjects } from '../../shared/schema';
 import { eq, and, lt, inArray } from 'drizzle-orm';
-import { universalVideoService } from './services/universal-video-service';
-import { sceneAnalysisService } from './services/scene-analysis-service';
-import { chunkedRenderService } from './services/chunked-render-service';
-import type { ChunkedRenderProgress, LambdaChunkState, ChunkResult } from './services/chunked-render-service';
-import { remotionLambdaService } from './services/remotion-lambda-service';
+import { universalVideoService } from './universal-video-service';
+import { sceneAnalysisService } from './scene-analysis-service';
+import { chunkedRenderService } from './chunked-render-service';
+import type { ChunkedRenderProgress, LambdaChunkState, ChunkResult } from './chunked-render-service';
+import { remotionLambdaService } from './remotion-lambda-service';
 import {
   saveProjectToDb,
   dbRowToVideoProject,
   getProjectFromDb,
   type VideoProjectWithMeta,
-} from './services/video-project-db';
+} from './video-project-db';
 
 const POLL_INTERVAL_MS = 5000;
 const STALL_THRESHOLD_MS = 2 * 60 * 1000;
