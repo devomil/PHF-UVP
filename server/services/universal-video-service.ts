@@ -2609,7 +2609,7 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
     updatedProject.progress.steps.voiceover.status = 'in-progress';
     await saveProgress();
 
-    const fullNarration = project.scenes.map(s => s.narration).join(' ... ');
+    const fullNarration = (project.scenes || []).map(s => s.narration).join(' ... ');
     const voiceoverResult = await this.generateVoiceover(fullNarration, project.voiceId);
 
     if (voiceoverResult.success) {
@@ -2764,7 +2764,7 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
             }
           }
           
-          updatedProject.progress.steps.images.progress = Math.round(((i + 1) / project.scenes.length) * 100);
+          updatedProject.progress.steps.images.progress = Math.round(((i + 1) / (project.scenes || []).length) * 100);
           console.log(`[UniversalVideoService] I2I image generated for scene ${scene.id}: ${i2iResult.source}`);
           continue; // Skip to next scene - we have I2I generated image with overlay setup
         } else {
@@ -2864,7 +2864,7 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
           // If we found brand assets for product-hero or branded-environment, skip AI generation
           if ((products.length > 0 && analysisWithAssets.requirements.sceneType === 'product-hero') ||
               (locations.length > 0 && analysisWithAssets.requirements.sceneType === 'branded-environment')) {
-            updatedProject.progress.steps.images.progress = Math.round(((i + 1) / project.scenes.length) * 100);
+            updatedProject.progress.steps.images.progress = Math.round(((i + 1) / (project.scenes || []).length) * 100);
             continue;
           }
         } catch (error: any) {
@@ -2909,7 +2909,7 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
             }
             
             if (brandAssets.photos.length > 0 || brandAssets.videos.length > 0) {
-              updatedProject.progress.steps.images.progress = Math.round(((i + 1) / project.scenes.length) * 100);
+              updatedProject.progress.steps.images.progress = Math.round(((i + 1) / (project.scenes || []).length) * 100);
               continue;
             }
           }
@@ -2929,7 +2929,7 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
             source: 'uploaded',
           });
           updatedProject.scenes[i].assets!.imageUrl = assignedImage.url;
-          updatedProject.progress.steps.images.progress = Math.round(((i + 1) / project.scenes.length) * 100);
+          updatedProject.progress.steps.images.progress = Math.round(((i + 1) / (project.scenes || []).length) * 100);
           continue;
         }
       }
@@ -2943,7 +2943,7 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
           source: 'uploaded',
         });
         updatedProject.scenes[i].assets!.imageUrl = imageToUse.url;
-        updatedProject.progress.steps.images.progress = Math.round(((i + 1) / project.scenes.length) * 100);
+        updatedProject.progress.steps.images.progress = Math.round(((i + 1) / (project.scenes || []).length) * 100);
         continue;
       }
 
@@ -3093,8 +3093,8 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
         }
       }
 
-      updatedProject.progress.steps.images.progress = Math.round(((i + 1) / project.scenes.length) * 100);
-      updatedProject.progress.overallPercent = 15 + Math.round(((i + 1) / project.scenes.length) * 25);
+      updatedProject.progress.steps.images.progress = Math.round(((i + 1) / (project.scenes || []).length) * 100);
+      updatedProject.progress.overallPercent = 15 + Math.round(((i + 1) / (project.scenes || []).length) * 25);
       await saveProgress();
     }
 
@@ -4262,16 +4262,16 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
     }
 
     // Count scenes with valid video B-roll
-    const videoScenes = preparedProject.scenes.filter(
+    const videoScenes = (preparedProject.scenes || []).filter(
       s => s.assets?.videoUrl && s.background?.type === 'video'
     );
     
-    const validScenes = preparedProject.scenes.filter(
+    const validScenes = (preparedProject.scenes || []).filter(
       s => s.assets?.imageUrl || s.assets?.backgroundUrl || s.assets?.videoUrl
     ).length;
     
     console.log(`[UniversalVideoService] Asset preparation complete:`);
-    console.log(`  - Valid scenes: ${validScenes}/${preparedProject.scenes.length}`);
+    console.log(`  - Valid scenes: ${validScenes}/${(preparedProject.scenes || []).length}`);
     console.log(`  - Scenes with video B-roll: ${videoScenes.length}`);
     if (videoScenes.length > 0) {
       videoScenes.forEach((s, idx) => {
@@ -4620,7 +4620,7 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
     // Collect narration from selected scenes or all scenes
     let scenesToProcess = project.scenes;
     if (sceneIds && sceneIds.length > 0) {
-      scenesToProcess = project.scenes.filter(s => sceneIds.includes(s.id));
+      scenesToProcess = (project.scenes || []).filter(s => sceneIds.includes(s.id));
     }
 
     if (scenesToProcess.length === 0) {
@@ -4965,7 +4965,7 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
     sceneOrder: string[]
   ): { success: boolean; error?: string } {
     // Validate that all scene IDs are present
-    const existingIds = new Set(project.scenes.map(s => s.id));
+    const existingIds = new Set((project.scenes || []).map(s => s.id));
     const newOrderIds = new Set(sceneOrder);
 
     if (existingIds.size !== newOrderIds.size) {
@@ -4979,7 +4979,7 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
     }
 
     // Reorder scenes based on provided order
-    const sceneMap = new Map(project.scenes.map(s => [s.id, s]));
+    const sceneMap = new Map((project.scenes || []).map(s => [s.id, s]));
     project.scenes = sceneOrder.map((id, index) => {
       const scene = sceneMap.get(id)!;
       scene.order = index;
@@ -5012,7 +5012,7 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
     };
 
     const inputProps = {
-      scenes: project.scenes.map(scene => ({
+      scenes: (project.scenes || []).map(scene => ({
         ...scene,
         previewMode: true,
       })),
