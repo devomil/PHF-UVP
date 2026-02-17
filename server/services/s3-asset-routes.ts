@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { S3Client, ListObjectsV2Command, DeleteObjectCommand, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, ListObjectsV2Command, DeleteObjectCommand, PutObjectCommand, GetObjectCommand, PutObjectAclCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { isAuthenticated, requireRole } from '../auth';
 import multer from 'multer';
@@ -106,6 +106,7 @@ router.post('/upload', memUpload.single('file'), async (req: Request, res: Respo
       Key: key,
       Body: req.file.buffer,
       ContentType: req.file.mimetype || 'application/octet-stream',
+      ACL: 'public-read',
     });
 
     await s3.send(command);
@@ -236,5 +237,83 @@ router.post('/validate', async (req: Request, res: Response) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+router.post('/fix-acl', isAuthenticated, async (_req: Request, res: Response) => {
+  try {
+    const allPrefixes = Object.values(ASSET_CATEGORIES).map(c => c.prefix);
+    let fixed = 0;
+    let errors = 0;
+
+    for (const prefix of allPrefixes) {
+      let continuationToken: string | undefined;
+      do {
+        const listResult = await s3.send(new ListObjectsV2Command({
+          Bucket: BUCKET,
+          Prefix: prefix,
+          ContinuationToken: continuationToken,
+        }));
+
+        for (const obj of listResult.Contents || []) {
+          if (!obj.Key || obj.Key === prefix) continue;
+          try {
+            await s3.send(new PutObjectAclCommand({
+              Bucket: BUCKET,
+              Key: obj.Key,
+              ACL: 'public-read',
+            }));
+            fixed++;
+          } catch (err: any) {
+            console.error(`[S3Assets] ACL fix failed for ${obj.Key}:`, err.message);
+            errors++;
+          }
+        }
+
+        continuationToken = listResult.IsTruncated ? listResult.NextContinuationToken : undefined;
+      } while (continuationToken);
+    }
+
+    console.log(`[S3Assets] ACL fix complete: ${fixed} fixed, ${errors} errors`);
+    res.json({ success: true, fixed, errors });
+  } catch (error: any) {
+    console.error('[S3Assets] ACL fix error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+async function fixExistingAcls() {
+  try {
+    const allPrefixes = Object.values(ASSET_CATEGORIES).map(c => c.prefix);
+    let fixed = 0;
+
+    for (const prefix of allPrefixes) {
+      const listResult = await s3.send(new ListObjectsV2Command({
+        Bucket: BUCKET,
+        Prefix: prefix,
+      }));
+
+      for (const obj of listResult.Contents || []) {
+        if (!obj.Key || obj.Key === prefix) continue;
+        try {
+          await s3.send(new PutObjectAclCommand({
+            Bucket: BUCKET,
+            Key: obj.Key,
+            ACL: 'public-read',
+          }));
+          fixed++;
+        } catch {
+          // Silently continue
+        }
+      }
+    }
+
+    if (fixed > 0) {
+      console.log(`[S3Assets] Auto-fixed ACL for ${fixed} existing render assets to public-read`);
+    }
+  } catch (err: any) {
+    console.warn('[S3Assets] Auto ACL fix skipped:', err.message);
+  }
+}
+
+fixExistingAcls();
 
 export default router;
