@@ -4024,17 +4024,70 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
     if (!preparedProject.assets) preparedProject.assets = {} as any;
     const qcAssets = (preparedProject as any).assets?.quickCreate;
     if (qcAssets) {
+      console.log('[PrepareAssets] Quick Create project detected, mapping assets...');
+      
+      // Map voiceover
       if (qcAssets.voiceover?.url && qcAssets.voiceover?.status === 'completed') {
         if (!preparedProject.assets.voiceover) preparedProject.assets.voiceover = {} as any;
         preparedProject.assets.voiceover.fullTrackUrl = qcAssets.voiceover.url;
         if (qcAssets.voiceover.duration) preparedProject.assets.voiceover.duration = qcAssets.voiceover.duration;
+        console.log('[PrepareAssets] Voiceover mapped:', qcAssets.voiceover.url.substring(0, 60));
       }
+      
+      // Map music
       if (qcAssets.music?.url && qcAssets.music?.status === 'completed') {
         if (!preparedProject.assets.music) preparedProject.assets.music = {} as any;
         preparedProject.assets.music.url = qcAssets.music.url;
         if (qcAssets.music.duration) preparedProject.assets.music.duration = qcAssets.music.duration;
+        preparedProject.assets.music.volume = qcAssets.music.volume || 0.18;
+        console.log('[PrepareAssets] Music mapped:', qcAssets.music.url.substring(0, 60));
       }
-      console.log('[PrepareAssets] Quick Create assets mapped:', { voiceover: !!qcAssets.voiceover?.url, music: !!qcAssets.music?.url });
+      
+      // Create a scene from Quick Create visual asset if scenes are empty
+      if (!preparedProject.scenes || preparedProject.scenes.length === 0) {
+        const visualUrl = qcAssets.visual?.url || qcAssets.visual?.imageUrl;
+        const visualVideoUrl = qcAssets.visual?.videoUrl;
+        const isVideo = !!(visualVideoUrl && qcAssets.visual?.type === 'video');
+        const duration = qcAssets.voiceover?.duration || qcAssets.music?.duration || 6;
+        
+        const sceneId = 'qc-scene-1';
+        const scene: any = {
+          id: sceneId,
+          title: preparedProject.title || 'Quick Create Video',
+          duration: duration,
+          script: preparedProject.description || '',
+          voiceover: { text: '' },
+          background: {
+            type: isVideo ? 'video' : 'image',
+            imageUrl: visualUrl || '',
+            videoUrl: isVideo ? visualVideoUrl : undefined,
+          },
+          assets: {
+            imageUrl: visualUrl || '',
+            backgroundUrl: visualUrl || '',
+            videoUrl: isVideo ? visualVideoUrl : undefined,
+          },
+          textOverlays: [],
+          transitions: { type: 'fade', duration: 0.5 },
+        };
+        
+        preparedProject.scenes = [scene];
+        console.log('[PrepareAssets] Created scene from Quick Create visual:', { 
+          hasImage: !!visualUrl, 
+          hasVideo: isVideo, 
+          duration 
+        });
+        
+        // If no visual asset exists, create a simple color background scene
+        if (!visualUrl && !visualVideoUrl) {
+          scene.background = { type: 'color', color: '#1a1a2e' };
+          scene.assets.imageUrl = undefined;
+          scene.assets.backgroundUrl = undefined;
+          console.log('[PrepareAssets] No visual asset - using color background');
+        }
+      }
+      
+      console.log('[PrepareAssets] Quick Create mapping complete');
     }
 
     // ========== S3 ASSET CACHING (CRITICAL FOR FAST RENDERS) ==========
@@ -4287,7 +4340,7 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
     }
 
     return {
-      valid: validScenes > 0,
+      valid: (preparedProject.scenes || []).length > 0,
       issues,
       preparedProject,
     };
