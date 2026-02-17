@@ -56,13 +56,21 @@ class ScriptParserService {
     }
   }
 
+  private getClient(): Anthropic {
+    if (process.env.ANTHROPIC_API_KEY) {
+      this.anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    }
+    if (!this.anthropic) {
+      throw new Error("Anthropic API not configured - set ANTHROPIC_API_KEY");
+    }
+    return this.anthropic;
+  }
+
   async parseScript(
     script: string,
     options: ScriptParseOptions
   ): Promise<ParsedScript> {
-    if (!this.anthropic) {
-      throw new Error("Anthropic API not configured");
-    }
+    const client = this.getClient();
 
     console.log("[ScriptParser] Starting brand-aware script parsing...");
 
@@ -79,7 +87,7 @@ class ScriptParserService {
     const userPrompt = this.buildParsingPrompt(script, options, serviceMatches);
 
     try {
-      const response = await this.anthropic.messages.create({
+      const response = await client.messages.create({
         model: "claude-sonnet-4-20250514",
         max_tokens: 8000,
         system: systemPrompt,
