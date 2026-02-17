@@ -426,8 +426,7 @@ class RemotionLambdaService {
           imageFormat: params.imageFormat || "jpeg",
           maxRetries: 3,
           privacy: "public",
-          framesPerLambda: 120,
-          concurrencyPerLambda: 1,
+          framesPerLambda: 20,
           timeoutInMilliseconds: 840000, // 14 min - leave buffer before 15min Lambda timeout
           chromiumOptions: {
             gl: 'angle',
