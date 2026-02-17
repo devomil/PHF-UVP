@@ -87,11 +87,14 @@ export async function processVideoJob(jobId: string) {
         })
         .where(eq(videoGenerationJobs.jobId, jobId));
 
+      const finalUrl = result.s3Url || result.videoUrl;
+      const isVideo = /\.(mp4|webm|mov|avi|mkv)$/i.test(finalUrl || '') || job.sceneType === 'video';
+
       await db
         .update(universalVideoProjects)
         .set({
           status: "completed",
-          outputUrl: result.s3Url || result.videoUrl,
+          outputUrl: finalUrl,
           progress: { phase: "completed", percentage: 100, currentStep: "Generation complete" },
           assets: {
             ...assetsAfterGen,
@@ -99,7 +102,10 @@ export async function processVideoJob(jobId: string) {
               ...(assetsAfterGen.quickCreate || {}),
               visual: {
                 status: "completed",
-                url: result.s3Url || result.videoUrl,
+                url: finalUrl,
+                videoUrl: isVideo ? finalUrl : undefined,
+                imageUrl: !isVideo ? finalUrl : undefined,
+                type: isVideo ? 'video' : 'image',
                 provider: result.provider || job.provider || "kling",
                 duration: result.duration,
                 cost: result.cost,

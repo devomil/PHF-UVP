@@ -4045,10 +4045,20 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
       
       // Create a scene from Quick Create visual asset if scenes are empty
       if (!preparedProject.scenes || preparedProject.scenes.length === 0) {
-        const visualUrl = qcAssets.visual?.url || qcAssets.visual?.imageUrl;
-        const visualVideoUrl = qcAssets.visual?.videoUrl;
-        const isVideo = !!(visualVideoUrl && qcAssets.visual?.type === 'video');
+        const visualUrl = qcAssets.visual?.url || qcAssets.visual?.imageUrl || qcAssets.visual?.videoUrl;
+        const visualVideoUrl = qcAssets.visual?.videoUrl || (qcAssets.visual?.type === 'video' ? qcAssets.visual?.url : undefined);
+        const isVideoByExtension = /\.(mp4|webm|mov|avi|mkv)$/i.test(visualUrl || '');
+        const isVideo = !!(visualVideoUrl || qcAssets.visual?.type === 'video' || isVideoByExtension);
+        const finalVideoUrl = isVideo ? (visualVideoUrl || visualUrl) : undefined;
         const duration = qcAssets.voiceover?.duration || qcAssets.music?.duration || 6;
+        
+        console.log('[PrepareAssets] Visual asset detection:', { 
+          visualUrl: visualUrl?.substring(0, 60), 
+          visualVideoUrl: visualVideoUrl?.substring(0, 60),
+          type: qcAssets.visual?.type,
+          isVideoByExtension,
+          isVideo 
+        });
         
         const sceneId = 'qc-scene-1';
         const scene: any = {
@@ -4058,14 +4068,15 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
           script: preparedProject.description || '',
           voiceover: { text: '' },
           background: {
-            type: isVideo ? 'video' : 'image',
-            imageUrl: visualUrl || '',
-            videoUrl: isVideo ? visualVideoUrl : undefined,
+            type: isVideo ? 'video' : (visualUrl ? 'image' : 'color'),
+            imageUrl: !isVideo ? visualUrl || '' : '',
+            videoUrl: finalVideoUrl,
+            color: (!visualUrl && !finalVideoUrl) ? '#1a1a2e' : undefined,
           },
           assets: {
-            imageUrl: visualUrl || '',
+            imageUrl: !isVideo ? visualUrl || '' : '',
             backgroundUrl: visualUrl || '',
-            videoUrl: isVideo ? visualVideoUrl : undefined,
+            videoUrl: finalVideoUrl,
           },
           textOverlays: [],
           transitions: { type: 'fade', duration: 0.5 },
@@ -4073,13 +4084,13 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
         
         preparedProject.scenes = [scene];
         console.log('[PrepareAssets] Created scene from Quick Create visual:', { 
-          hasImage: !!visualUrl, 
+          hasImage: !!visualUrl && !isVideo, 
           hasVideo: isVideo, 
+          videoUrl: finalVideoUrl?.substring(0, 60),
           duration 
         });
         
-        // If no visual asset exists, create a simple color background scene
-        if (!visualUrl && !visualVideoUrl) {
+        if (!visualUrl && !finalVideoUrl) {
           scene.background = { type: 'color', color: '#1a1a2e' };
           scene.assets.imageUrl = undefined;
           scene.assets.backgroundUrl = undefined;
