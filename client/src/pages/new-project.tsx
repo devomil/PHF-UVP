@@ -3,7 +3,9 @@ import { useLocation, Link } from "wouter";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Sparkles, FileText, Zap, ArrowLeft, Video, Image } from "lucide-react";
+import { Sparkles, FileText, Zap, ArrowLeft, Video, Image, Info } from "lucide-react";
+import { getVideoProviders, getImageProviders, COST_TIER_LABELS } from "@shared/provider-catalog";
+import type { ProviderCatalogEntry } from "@shared/provider-catalog";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -363,6 +365,150 @@ function CustomScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void;
   );
 }
 
+function ProviderSelector({ outputType, provider, onProviderChange }: { outputType: "video" | "image"; provider: string; onProviderChange: (v: string) => void }) {
+  const [expandedProvider, setExpandedProvider] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const providers = outputType === "video" ? getVideoProviders() : getImageProviders();
+
+  const families = Array.from(new Set(providers.map(p => p.family)));
+
+  const filteredProviders = searchQuery
+    ? providers.filter(p =>
+        p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        p.family.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        p.description.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    : providers;
+
+  const selectedProvider = providers.find(p => p.id === provider);
+
+  return (
+    <div>
+      <Label style={{ color: "var(--text-secondary)" }}>Provider</Label>
+      <div className="mt-1.5 space-y-2">
+        <div
+          className="flex items-center justify-between px-3 py-2.5 rounded-lg border cursor-pointer transition-colors"
+          style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)" }}
+          onClick={() => setExpandedProvider(expandedProvider ? null : "open")}
+        >
+          <div className="flex items-center gap-2 min-w-0">
+            {provider === "auto" ? (
+              <span style={{ color: "var(--text-primary)" }}>Auto-select (recommended)</span>
+            ) : selectedProvider ? (
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="font-medium" style={{ color: "var(--text-primary)" }}>{selectedProvider.name}</span>
+                {selectedProvider.highlight && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-500/20 text-purple-400 whitespace-nowrap">{selectedProvider.highlight}</span>
+                )}
+                <span className="text-xs truncate" style={{ color: "var(--text-muted)" }}>{selectedProvider.capabilities.join(" · ")}</span>
+              </div>
+            ) : (
+              <span style={{ color: "var(--text-primary)" }}>{provider}</span>
+            )}
+          </div>
+          <svg className={`w-4 h-4 transition-transform ${expandedProvider ? "rotate-180" : ""}`} style={{ color: "var(--text-muted)" }} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+        </div>
+
+        {expandedProvider && (
+          <div className="border rounded-lg overflow-hidden" style={{ backgroundColor: "var(--menu-bg)", borderColor: "var(--border-medium)" }}>
+            <div className="p-2 border-b" style={{ borderColor: "var(--border-subtle)" }}>
+              <input
+                type="text"
+                placeholder="Search providers..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full px-3 py-1.5 rounded text-sm bg-transparent outline-none"
+                style={{ color: "var(--text-primary)" }}
+                autoFocus
+              />
+            </div>
+            <div className="max-h-80 overflow-y-auto">
+              <button
+                type="button"
+                className="w-full text-left px-3 py-2.5 transition-colors flex items-center gap-3"
+                style={{
+                  backgroundColor: provider === "auto" ? "var(--surface-active)" : "transparent",
+                  color: "var(--text-primary)",
+                }}
+                onClick={() => { onProviderChange("auto"); setExpandedProvider(null); setSearchQuery(""); }}
+                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--surface-active)")}
+                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = provider === "auto" ? "var(--surface-active)" : "transparent")}
+              >
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500/30 to-indigo-500/30 flex items-center justify-center flex-shrink-0">
+                  <Sparkles className="w-4 h-4 text-purple-400" />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-sm">Auto-select</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-500/20 text-purple-400">Recommended</span>
+                  </div>
+                  <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
+                    Intelligently picks the best provider based on your prompt, duration, and aspect ratio
+                  </p>
+                </div>
+              </button>
+
+              {families.map(family => {
+                const familyProviders = filteredProviders.filter(p => p.family === family);
+                if (familyProviders.length === 0) return null;
+                return (
+                  <div key={family}>
+                    <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)", backgroundColor: "var(--surface)" }}>
+                      {family}
+                    </div>
+                    {familyProviders.map(p => {
+                      const costInfo = COST_TIER_LABELS[p.costTier];
+                      return (
+                        <button
+                          type="button"
+                          key={p.id}
+                          className="w-full text-left px-3 py-2.5 transition-colors flex items-start gap-3"
+                          style={{
+                            backgroundColor: provider === p.id ? "var(--surface-active)" : "transparent",
+                            color: "var(--text-primary)",
+                          }}
+                          onClick={() => { onProviderChange(p.id); setExpandedProvider(null); setSearchQuery(""); }}
+                          onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--surface-active)")}
+                          onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = provider === p.id ? "var(--surface-active)" : "transparent")}
+                        >
+                          <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5" style={{ backgroundColor: "var(--surface)" }}>
+                            {p.type === "video" ? <Video className="w-4 h-4" style={{ color: "var(--text-muted)" }} /> : <Image className="w-4 h-4" style={{ color: "var(--text-muted)" }} />}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-medium text-sm">{p.name}</span>
+                              {p.highlight && (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-500/20 text-purple-400 whitespace-nowrap">{p.highlight}</span>
+                              )}
+                              <span className="text-[10px] font-medium ml-auto" style={{ color: costInfo.color }}>{costInfo.label}</span>
+                            </div>
+                            <p className="text-xs mt-0.5 leading-relaxed" style={{ color: "var(--text-muted)" }}>
+                              {p.description}
+                            </p>
+                            <div className="flex items-center gap-2 mt-1 flex-wrap">
+                              {p.capabilities.map(cap => (
+                                <span key={cap} className="text-[10px] px-1.5 py-0.5 rounded border" style={{ borderColor: "var(--border-subtle)", color: "var(--text-secondary)" }}>{cap}</span>
+                              ))}
+                              {p.maxDuration > 0 && (
+                                <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>Up to {p.maxDuration}s</span>
+                              )}
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onSubmit: (data: any) => void; isLoading: boolean }) {
   const [outputType, setOutputType] = useState<"video" | "image">("video");
   const [prompt, setPrompt] = useState("");
@@ -371,6 +517,10 @@ function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () => void; 
   const [aspectRatio, setAspectRatio] = useState("16:9");
   const [provider, setProvider] = useState("auto");
   const [saveToLibrary, setSaveToLibrary] = useState(true);
+
+  useEffect(() => {
+    setProvider("auto");
+  }, [outputType]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -443,30 +593,19 @@ function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () => void; 
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <Label style={{ color: "var(--text-secondary)" }}>Aspect Ratio</Label>
-            <Select value={aspectRatio} onValueChange={setAspectRatio}>
-              <SelectTrigger className="mt-1.5" style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }}><SelectValue /></SelectTrigger>
-              <SelectContent style={{ backgroundColor: "var(--menu-bg)", borderColor: "var(--border-medium)" }}>
-                {["16:9", "9:16", "1:1"].map((ar) => (
-                  <SelectItem key={ar} value={ar} style={{ color: "var(--text-primary)" }}>{ar}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label style={{ color: "var(--text-secondary)" }}>Provider</Label>
-            <Select value={provider} onValueChange={setProvider}>
-              <SelectTrigger className="mt-1.5" style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }}><SelectValue /></SelectTrigger>
-              <SelectContent style={{ backgroundColor: "var(--menu-bg)", borderColor: "var(--border-medium)" }}>
-                {[{ value: "auto", label: "Auto-select" }, { value: "kling", label: "Kling" }, { value: "runwayml", label: "RunwayML" }, { value: "luma", label: "Luma" }, { value: "pika", label: "Pika" }, { value: "veo", label: "Veo" }].map((p) => (
-                  <SelectItem key={p.value} value={p.value} style={{ color: "var(--text-primary)" }}>{p.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+        <div>
+          <Label style={{ color: "var(--text-secondary)" }}>Aspect Ratio</Label>
+          <Select value={aspectRatio} onValueChange={setAspectRatio}>
+            <SelectTrigger className="mt-1.5" style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }}><SelectValue /></SelectTrigger>
+            <SelectContent style={{ backgroundColor: "var(--menu-bg)", borderColor: "var(--border-medium)" }}>
+              {["16:9", "9:16", "1:1"].map((ar) => (
+                <SelectItem key={ar} value={ar} style={{ color: "var(--text-primary)" }}>{ar}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
+
+        <ProviderSelector outputType={outputType} provider={provider} onProviderChange={setProvider} />
 
         <div className="flex items-center gap-2">
           <input type="checkbox" id="saveToLibrary" checked={saveToLibrary} onChange={(e) => setSaveToLibrary(e.target.checked)} className="rounded" style={{ borderColor: "var(--border-medium)", backgroundColor: "var(--input-bg)" }} />
