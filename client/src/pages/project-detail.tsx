@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
-import { ArrowLeft, Settings, Play, RefreshCw, Clock, Target, Monitor, BarChart3, Loader2, AlertCircle, Zap, Video, Image, Download, RotateCcw, Save, Trash2, ExternalLink, CheckCircle2, XCircle, Server, HardDrive, Type, Film, ChevronDown, ChevronUp, CloudUpload, Mic, Music, Volume2, Palette, Shuffle, Sliders, Wand2, Sparkles, ImagePlus } from "lucide-react";
+import { ArrowLeft, Settings, Play, RefreshCw, Clock, Target, Monitor, BarChart3, Loader2, AlertCircle, Zap, Video, Image, Download, RotateCcw, Save, Trash2, ExternalLink, CheckCircle2, XCircle, Server, HardDrive, Type, Film, ChevronDown, ChevronUp, CloudUpload, Mic, Music, Volume2, Palette, Shuffle, Sliders, Wand2, Sparkles, ImagePlus, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ProviderCatalogSelector } from "@/components/video/provider-catalog-selector";
 import { useToast } from "@/hooks/use-toast";
@@ -50,6 +50,440 @@ function formatDuration(seconds: number) {
 function formatDate(dateStr: string | null | undefined) {
   if (!dateStr) return "Unknown";
   return new Date(dateStr).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+const PIPELINE_STEPS = [
+  { key: "voiceover", label: "Voiceover", icon: Mic },
+  { key: "images", label: "Images", icon: ImagePlus },
+  { key: "videos", label: "Videos", icon: Video },
+  { key: "music", label: "Music", icon: Music },
+  { key: "assembly", label: "Assembly", icon: Film },
+] as const;
+
+function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: string; project: any; scenes: any[] }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [selectedProvider, setSelectedProvider] = useState("auto");
+  const [showStepButtons, setShowStepButtons] = useState(false);
+  const [uploadingSceneId, setUploadingSceneId] = useState<string | null>(null);
+  const [librarySceneId, setLibrarySceneId] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const activeSceneRef = useRef<string | null>(null);
+
+  const progress = project.progress || {};
+  const isGenerating = ["generating", "queued", "processing"].includes(project.status);
+  const currentStep = progress.currentStep || null;
+
+  const libraryQuery = useQuery({
+    queryKey: ["asset-library-images"],
+    queryFn: async () => {
+      const res = await fetch("/api/asset-library?type=image", { credentials: "include" });
+      if (!res.ok) return [];
+      const data = await res.json();
+      return Array.isArray(data) ? data : data.assets || [];
+    },
+    enabled: !!librarySceneId,
+  });
+
+  const generateAllMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/universal-video/projects/${projectId}/generate-assets`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to start asset generation");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+      toast({ title: "Generation Started", description: "All assets are being generated." });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const generateStepMutation = useMutation({
+    mutationFn: async (step: string) => {
+      const res = await fetch(`/api/universal-video/projects/${projectId}/generate-step`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ step }),
+      });
+      if (!res.ok) throw new Error(`Failed to generate ${step}`);
+      return res.json();
+    },
+    onSuccess: (_data, step) => {
+      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+      toast({ title: "Step Started", description: `${step} generation started.` });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const regenImageMutation = useMutation({
+    mutationFn: async (sceneId: string) => {
+      const res = await fetch(`/api/universal-video/${projectId}/scenes/${sceneId}/regenerate-image`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to regenerate image");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+      toast({ title: "Regenerating Image", description: "Scene image is being regenerated." });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const regenVideoMutation = useMutation({
+    mutationFn: async (sceneId: string) => {
+      const res = await fetch(`/api/universal-video/${projectId}/scenes/${sceneId}/regenerate-video`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ provider: selectedProvider }),
+      });
+      if (!res.ok) throw new Error("Failed to regenerate video");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+      toast({ title: "Regenerating Video", description: "Scene video is being regenerated." });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const setMediaMutation = useMutation({
+    mutationFn: async ({ sceneId, mediaUrl }: { sceneId: string; mediaUrl: string }) => {
+      const res = await fetch(`/api/universal-video/${projectId}/scenes/${sceneId}/set-media`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ mediaUrl, mediaType: "image", source: "upload" }),
+      });
+      if (!res.ok) throw new Error("Failed to set media");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+      setUploadingSceneId(null);
+      toast({ title: "Image Set", description: "Scene image has been updated." });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+      setUploadingSceneId(null);
+    },
+  });
+
+  const assignImageMutation = useMutation({
+    mutationFn: async ({ sceneId, imageId }: { sceneId: string; imageId: string }) => {
+      const res = await fetch(`/api/universal-video/projects/${projectId}/scenes/${sceneId}/assign-image`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ imageId }),
+      });
+      if (!res.ok) throw new Error("Failed to assign image");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+      setLibrarySceneId(null);
+      toast({ title: "Image Assigned", description: "Library image assigned to scene." });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    const sceneId = activeSceneRef.current;
+    if (!file || !sceneId) return;
+    setUploadingSceneId(sceneId);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const uploadRes = await fetch("/api/videos/uploads", {
+        method: "POST",
+        credentials: "include",
+        body: formData,
+      });
+      if (!uploadRes.ok) throw new Error("Upload failed");
+      const uploadData = await uploadRes.json();
+      const mediaUrl = uploadData.url || uploadData.fileUrl;
+      if (!mediaUrl) throw new Error("No URL returned from upload");
+      setMediaMutation.mutate({ sceneId, mediaUrl });
+    } catch (err: any) {
+      toast({ title: "Upload Error", description: err.message, variant: "destructive" });
+      setUploadingSceneId(null);
+    }
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const getStepStatus = (stepKey: string) => {
+    if (!isGenerating && !progress.completedSteps) return "pending";
+    const completed = Array.isArray(progress.completedSteps) ? progress.completedSteps : [];
+    if (completed.includes(stepKey)) return "completed";
+    if (currentStep === stepKey) return "in-progress";
+    const failed = Array.isArray(progress.errors) && progress.errors.some((e: any) => e.step === stepKey);
+    if (failed) return "failed";
+    return "pending";
+  };
+
+  const stepStatusStyles: Record<string, { dot: string; text: string }> = {
+    "pending": { dot: "bg-gray-500", text: "text-gray-400" },
+    "in-progress": { dot: "bg-amber-400 animate-pulse", text: "text-amber-400" },
+    "completed": { dot: "bg-emerald-400", text: "text-emerald-400" },
+    "failed": { dot: "bg-red-400", text: "text-red-400" },
+  };
+
+  return (
+    <div className="border rounded-xl mb-8 overflow-hidden" style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)" }}>
+      <div className="px-5 py-4 flex items-center gap-3 border-b" style={{ borderColor: "var(--border-subtle)" }}>
+        <Sparkles className="w-5 h-5 text-purple-400" />
+        <h2 className="text-sm font-medium uppercase tracking-wider" style={{ color: "var(--text-primary)" }}>
+          Script Content Generation
+        </h2>
+      </div>
+
+      <div className="px-5 py-5 space-y-5">
+        {(isGenerating || progress.overallPercent > 0) && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>Pipeline Progress</span>
+              <span className="text-xs font-bold" style={{ color: "var(--text-primary)" }}>{progress.overallPercent || 0}%</span>
+            </div>
+            <div className="w-full bg-gray-700 rounded-full h-2">
+              <div
+                className="bg-gradient-to-r from-purple-600 to-indigo-600 h-2 rounded-full transition-all duration-500"
+                style={{ width: `${progress.overallPercent || 0}%` }}
+              />
+            </div>
+            <div className="grid grid-cols-5 gap-2">
+              {PIPELINE_STEPS.map((step) => {
+                const status = getStepStatus(step.key);
+                const styles = stepStatusStyles[status];
+                const Icon = step.icon;
+                return (
+                  <div key={step.key} className="flex flex-col items-center gap-1.5 p-2 rounded-lg" style={{ backgroundColor: "rgba(0,0,0,0.15)" }}>
+                    <div className={`w-2.5 h-2.5 rounded-full ${styles.dot}`} />
+                    <Icon className={`w-4 h-4 ${styles.text}`} />
+                    <span className={`text-[10px] font-medium ${styles.text}`}>{step.label}</span>
+                  </div>
+                );
+              })}
+            </div>
+            {Array.isArray(progress.errors) && progress.errors.length > 0 && (
+              <div className="space-y-1">
+                {progress.errors.map((err: any, i: number) => (
+                  <div key={i} className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg p-2.5 flex items-start gap-2">
+                    <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+                    <span>{err.message || err.error || String(err)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {(scenes.length === 0 || project.status === "draft") && (
+          <div className="space-y-4">
+            <button
+              onClick={() => generateAllMutation.mutate()}
+              disabled={isGenerating || generateAllMutation.isPending}
+              className="w-full py-4 rounded-xl font-semibold text-white text-base flex items-center justify-center gap-2.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{ background: "linear-gradient(135deg, #7c3aed, #4f46e5)" }}
+            >
+              {(isGenerating || generateAllMutation.isPending) ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <Sparkles className="w-5 h-5" />
+              )}
+              {isGenerating ? "Generating..." : generateAllMutation.isPending ? "Starting..." : "Generate All Assets"}
+            </button>
+
+            <div className="flex items-center gap-2">
+              <div className="flex-1 h-px" style={{ backgroundColor: "var(--border-subtle)" }} />
+              <button
+                onClick={() => setShowStepButtons(!showStepButtons)}
+                className="text-xs px-3 py-1 rounded-full border transition-colors"
+                style={{ borderColor: "var(--border-subtle)", color: "var(--text-muted)" }}
+              >
+                {showStepButtons ? "Hide Steps" : "Step-by-step"}
+              </button>
+              <div className="flex-1 h-px" style={{ backgroundColor: "var(--border-subtle)" }} />
+            </div>
+
+            {showStepButtons && (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {PIPELINE_STEPS.filter(s => s.key !== "assembly").map((step) => {
+                  const status = getStepStatus(step.key);
+                  const Icon = step.icon;
+                  const isCompleted = status === "completed";
+                  return (
+                    <button
+                      key={step.key}
+                      onClick={() => generateStepMutation.mutate(step.key)}
+                      disabled={isGenerating || generateStepMutation.isPending}
+                      className="flex items-center gap-2 px-3 py-2.5 rounded-lg border text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      style={{
+                        borderColor: isCompleted ? "var(--border-subtle)" : "var(--border-medium)",
+                        color: isCompleted ? "var(--text-muted)" : "var(--text-primary)",
+                        backgroundColor: isCompleted ? "rgba(16,185,129,0.05)" : "transparent",
+                      }}
+                    >
+                      {isCompleted ? (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                      ) : (
+                        <Icon className="w-4 h-4" style={{ color: "var(--text-muted)" }} />
+                      )}
+                      {step.label}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {scenes.length > 0 && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-medium" style={{ color: "var(--text-secondary)" }}>Scenes ({scenes.length})</h3>
+              <div className="w-48">
+                <ProviderCatalogSelector
+                  outputType="video"
+                  provider={selectedProvider}
+                  onProviderChange={setSelectedProvider}
+                  label=""
+                  compact
+                />
+              </div>
+            </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleFileUpload}
+            />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {scenes.map((scene: any, index: number) => {
+                const thumb = scene.assets?.imageUrl || scene.assets?.videoUrl || scene.background?.url || null;
+                const narration = scene.narration || scene.voiceover?.text || "";
+                const sceneId = scene.id || `scene-${index}`;
+                const isUploading = uploadingSceneId === sceneId;
+                const showLibrary = librarySceneId === sceneId;
+
+                return (
+                  <div
+                    key={sceneId}
+                    className="border rounded-xl overflow-hidden"
+                    style={{ backgroundColor: "rgba(0,0,0,0.15)", borderColor: "var(--border-subtle)" }}
+                  >
+                    <div className={`h-28 bg-gradient-to-br ${sceneGradients[index % sceneGradients.length]} relative flex items-center justify-center`}>
+                      {thumb ? (
+                        <img src={thumb} alt="" className="absolute inset-0 w-full h-full object-cover" />
+                      ) : (
+                        <span className="text-3xl font-bold text-white/20">{index + 1}</span>
+                      )}
+                    </div>
+                    <div className="p-3 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <p className="font-medium text-sm" style={{ color: "var(--text-primary)" }}>
+                          {scene.name || scene.title || `Scene ${index + 1}`}
+                        </p>
+                        <div className="flex items-center gap-2">
+                          {scene.duration && (
+                            <span className="text-xs" style={{ color: "var(--text-muted)" }}>{scene.duration}s</span>
+                          )}
+                          <div className={`w-2.5 h-2.5 rounded-full ${statusDot[scene.status] || "bg-gray-500"}`} />
+                        </div>
+                      </div>
+                      {narration && (
+                        <p className="text-xs line-clamp-2" style={{ color: "var(--text-muted)" }}>{narration}</p>
+                      )}
+                      <div className="flex flex-wrap gap-1.5 pt-1">
+                        <button
+                          onClick={() => regenImageMutation.mutate(sceneId)}
+                          disabled={regenImageMutation.isPending}
+                          className="text-[11px] px-2 py-1 rounded-md border flex items-center gap-1 transition-colors hover:border-purple-500/30"
+                          style={{ borderColor: "var(--border-subtle)", color: "var(--text-secondary)" }}
+                        >
+                          <ImagePlus className="w-3 h-3" /> Regen Image
+                        </button>
+                        <button
+                          onClick={() => regenVideoMutation.mutate(sceneId)}
+                          disabled={regenVideoMutation.isPending}
+                          className="text-[11px] px-2 py-1 rounded-md border flex items-center gap-1 transition-colors hover:border-purple-500/30"
+                          style={{ borderColor: "var(--border-subtle)", color: "var(--text-secondary)" }}
+                        >
+                          <Video className="w-3 h-3" /> Regen Video
+                        </button>
+                        <button
+                          onClick={() => {
+                            activeSceneRef.current = sceneId;
+                            fileInputRef.current?.click();
+                          }}
+                          disabled={isUploading}
+                          className="text-[11px] px-2 py-1 rounded-md border flex items-center gap-1 transition-colors hover:border-purple-500/30"
+                          style={{ borderColor: "var(--border-subtle)", color: "var(--text-secondary)" }}
+                        >
+                          {isUploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
+                          Upload
+                        </button>
+                        <button
+                          onClick={() => setLibrarySceneId(showLibrary ? null : sceneId)}
+                          className="text-[11px] px-2 py-1 rounded-md border flex items-center gap-1 transition-colors hover:border-purple-500/30"
+                          style={{ borderColor: "var(--border-subtle)", color: "var(--text-secondary)" }}
+                        >
+                          <Image className="w-3 h-3" /> Library
+                        </button>
+                      </div>
+                      {showLibrary && (
+                        <div className="border rounded-lg p-2 mt-1 max-h-40 overflow-y-auto" style={{ borderColor: "var(--border-subtle)", backgroundColor: "var(--surface)" }}>
+                          {libraryQuery.isLoading ? (
+                            <div className="flex items-center justify-center py-3">
+                              <Loader2 className="w-4 h-4 animate-spin" style={{ color: "var(--text-muted)" }} />
+                            </div>
+                          ) : !libraryQuery.data || libraryQuery.data.length === 0 ? (
+                            <p className="text-xs text-center py-3" style={{ color: "var(--text-muted)" }}>No images in library</p>
+                          ) : (
+                            <div className="grid grid-cols-4 gap-1.5">
+                              {libraryQuery.data.slice(0, 12).map((asset: any) => (
+                                <button
+                                  key={asset.id}
+                                  onClick={() => assignImageMutation.mutate({ sceneId, imageId: asset.id })}
+                                  className="aspect-square rounded overflow-hidden border hover:border-purple-500/50 transition-colors"
+                                  style={{ borderColor: "var(--border-subtle)" }}
+                                >
+                                  <img src={asset.url || asset.thumbnailUrl} alt={asset.name || ""} className="w-full h-full object-cover" />
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 export default function ProjectDetail({ params }: { params?: { id: string } }) {
@@ -370,7 +804,11 @@ export default function ProjectDetail({ params }: { params?: { id: string } }) {
           </div>
         )}
 
-        {scenes.length > 0 && (
+        {!isQuickCreate && (
+          <ScriptGenerationPanel projectId={projectId} project={project} scenes={scenes} />
+        )}
+
+        {isQuickCreate && scenes.length > 0 && (
           <div className="mb-8">
             <h2 className="text-sm font-medium uppercase tracking-wider mb-4" style={{ color: "var(--text-secondary)" }}>Scenes</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -409,14 +847,12 @@ export default function ProjectDetail({ params }: { params?: { id: string } }) {
           </div>
         )}
 
-        {scenes.length === 0 && jobs.length === 0 && (
+        {isQuickCreate && scenes.length === 0 && jobs.length === 0 && (
           <div className="border rounded-xl p-12 text-center mb-8" style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)" }}>
             <Zap className="w-12 h-12 mx-auto mb-4" style={{ color: "var(--text-muted)" }} />
             <h3 className="text-lg font-medium mb-2" style={{ color: "var(--text-primary)" }}>No content yet</h3>
             <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
-              {isQuickCreate
-                ? "Your generation job has been queued. Results will appear here once processing begins."
-                : "Add scenes to your project or generate content to get started."}
+              Your generation job has been queued. Results will appear here once processing begins.
             </p>
           </div>
         )}
