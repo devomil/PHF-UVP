@@ -2717,10 +2717,15 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
         });
       } catch (renderError: any) {
         preparedProject.status = 'error';
+        if (!preparedProject.progress) preparedProject.progress = {} as any;
+        if (!preparedProject.progress.steps) preparedProject.progress.steps = {} as any;
+        if (!preparedProject.progress.steps.rendering) preparedProject.progress.steps.rendering = {} as any;
         preparedProject.progress.steps.rendering.status = 'error';
         preparedProject.progress.steps.rendering.message = renderError.message || 'Render failed';
+        if (!preparedProject.progress.errors) preparedProject.progress.errors = [];
         preparedProject.progress.errors.push(`Render failed: ${renderError.message}`);
         
+        if (!preparedProject.progress.serviceFailures) preparedProject.progress.serviceFailures = [];
         preparedProject.progress.serviceFailures.push({
           service: 'remotion-lambda',
           timestamp: new Date().toISOString(),
