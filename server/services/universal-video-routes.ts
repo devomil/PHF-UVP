@@ -1517,6 +1517,153 @@ async function runBackgroundSceneAnalysis(projectId: string, userId: number | st
   }
 }
 
+router.post('/projects/:projectId/generate-script', isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const userId = (req.user as any)?.id;
+    const { projectId } = req.params;
+
+    const projectData = await getProjectFromDb(projectId);
+    if (!projectData) {
+      return res.status(404).json({ success: false, error: 'Project not found' });
+    }
+    if (projectData.ownerId !== userId) {
+      return res.status(403).json({ success: false, error: 'Access denied' });
+    }
+
+    const script = projectData.description || '';
+    if (!script.trim()) {
+      return res.status(400).json({ success: false, error: 'No script/description to parse' });
+    }
+
+    const platform = projectData.outputFormat?.platform || 'YouTube';
+    const targetDuration = projectData.totalDuration || 60;
+    const visualStyle = (projectData as any).visualStyle || req.body?.visualStyle || 'lifestyle';
+    const numScenes = req.body?.numScenes || undefined;
+
+    console.log(`[GenerateScript] Generating script for project ${projectId} - ${targetDuration}s, ${platform}, style: ${visualStyle}`);
+
+    const parsed = await universalVideoService.parseScriptWithBrandMatches({
+      script,
+      platform,
+      targetDuration,
+    } as any);
+
+    let scenes = parsed.scenes;
+
+    if (numScenes && scenes.length > numScenes) {
+      scenes = scenes.slice(0, numScenes);
+    }
+
+    projectData.scenes = scenes;
+    projectData.progress = {
+      ...projectData.progress,
+      phase: 'script_ready',
+      currentStep: '',
+      overallPercent: 0,
+      completedSteps: ['script'],
+      steps: {
+        script: { status: 'complete', progress: 100, message: 'Script generated' },
+        voiceover: { status: 'pending', progress: 0, message: '' },
+        images: { status: 'pending', progress: 0, message: '' },
+        videos: { status: 'pending', progress: 0, message: '' },
+        music: { status: 'pending', progress: 0, message: '' },
+        assembly: { status: 'pending', progress: 0, message: '' },
+      },
+    };
+
+    await db.update(universalVideoProjects)
+      .set({
+        scenes: projectData.scenes,
+        progress: projectData.progress,
+        totalDuration: parsed.summary?.totalDuration || targetDuration,
+        updatedAt: new Date(),
+      })
+      .where(eq(universalVideoProjects.projectId, projectId));
+
+    console.log(`[GenerateScript] Generated ${scenes.length} scenes for project ${projectId}`);
+
+    res.json({
+      success: true,
+      scenes,
+      summary: parsed.summary,
+      brandMatches: parsed.brandMatches,
+    });
+  } catch (error: any) {
+    console.error('[GenerateScript] Error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.patch('/projects/:projectId/scenes/:sceneId', isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const userId = (req.user as any)?.id;
+    const { projectId, sceneId } = req.params;
+    const updates = req.body;
+
+    const projectData = await getProjectFromDb(projectId);
+    if (!projectData) {
+      return res.status(404).json({ success: false, error: 'Project not found' });
+    }
+    if (projectData.ownerId !== userId) {
+      return res.status(403).json({ success: false, error: 'Access denied' });
+    }
+
+    const scenes = projectData.scenes || [];
+    const sceneIndex = scenes.findIndex((s: any) => s.id === sceneId);
+    if (sceneIndex === -1) {
+      return res.status(404).json({ success: false, error: 'Scene not found' });
+    }
+
+    const allowedFields = ['narration', 'visualDirection', 'duration', 'type', 'name', 'title', 'searchQuery', 'keyPoints'];
+    for (const field of allowedFields) {
+      if (updates[field] !== undefined) {
+        (scenes[sceneIndex] as any)[field] = updates[field];
+      }
+    }
+
+    await db.update(universalVideoProjects)
+      .set({
+        scenes,
+        updatedAt: new Date(),
+      })
+      .where(eq(universalVideoProjects.projectId, projectId));
+
+    res.json({ success: true, scene: scenes[sceneIndex] });
+  } catch (error: any) {
+    console.error('[UpdateScene] Error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.delete('/projects/:projectId/scenes/:sceneId', isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const userId = (req.user as any)?.id;
+    const { projectId, sceneId } = req.params;
+
+    const projectData = await getProjectFromDb(projectId);
+    if (!projectData) {
+      return res.status(404).json({ success: false, error: 'Project not found' });
+    }
+    if (projectData.ownerId !== userId) {
+      return res.status(403).json({ success: false, error: 'Access denied' });
+    }
+
+    const scenes = (projectData.scenes || []).filter((s: any) => s.id !== sceneId);
+
+    await db.update(universalVideoProjects)
+      .set({
+        scenes,
+        updatedAt: new Date(),
+      })
+      .where(eq(universalVideoProjects.projectId, projectId));
+
+    res.json({ success: true, scenes });
+  } catch (error: any) {
+    console.error('[DeleteScene] Error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 router.post('/projects/:projectId/generate-assets', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;

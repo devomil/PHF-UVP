@@ -57,6 +57,9 @@ export async function saveProjectToDb(
     progress: project.progress,
     updatedAt: new Date(),
   };
+  if (project.scenes !== undefined) updateData.scenes = project.scenes;
+  if (project.assets !== undefined) updateData.assets = project.assets;
+  if (project.totalDuration !== undefined) updateData.totalDuration = project.totalDuration;
   if (renderId !== undefined) updateData.renderId = renderId;
   if (bucketName !== undefined) updateData.bucketName = bucketName;
   if (outputUrl !== undefined) updateData.outputUrl = outputUrl;
