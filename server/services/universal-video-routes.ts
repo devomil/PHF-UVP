@@ -2677,6 +2677,8 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
         return;
       } catch (renderError: any) {
         preparedProject.status = 'error';
+        preparedProject.progress.currentStep = null;
+        preparedProject.progress.percentage = 0;
         preparedProject.progress.steps.rendering.status = 'error';
         preparedProject.progress.steps.rendering.message = renderError.message || 'Render failed';
         preparedProject.progress.errors.push(`Render failed: ${renderError.message}`);
@@ -2881,6 +2883,9 @@ router.get('/projects/:projectId/render-status', isAuthenticated, async (req: Re
         projectData.progress.steps.rendering.status = 'complete';
         projectData.progress.steps.rendering.progress = 100;
         projectData.progress.overallPercent = 100;
+        projectData.progress.currentStep = null;
+        projectData.progress.percentage = 0;
+        projectData.outputUrl = statusResult.outputFile;
         projectData.updatedAt = new Date().toISOString();
         
         await saveProjectToDb(
