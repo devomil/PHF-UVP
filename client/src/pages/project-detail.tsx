@@ -456,7 +456,7 @@ export default function ProjectDetail({ params }: { params?: { id: string } }) {
           </div>
         )}
 
-        <RenderConfigPanel projectId={projectId} />
+        <RenderConfigPanel projectId={projectId} projectOutputUrl={project.outputUrl} projectStatus={project.status} />
         {!isQuickCreate && <PostProductionPanel projectId={projectId} project={project} />}
       </div>
     </div>
@@ -477,13 +477,14 @@ function ToggleSwitch({ enabled, onChange, label }: { enabled: boolean; onChange
   );
 }
 
-function RenderButton({ projectId, hasVisual, hasVoiceover, hasMusic }: { projectId: string; hasVisual: boolean; hasVoiceover: boolean; hasMusic: boolean }) {
+function RenderButton({ projectId, hasVisual, hasVoiceover, hasMusic, initialOutputUrl, initialStatus }: { projectId: string; hasVisual: boolean; hasVoiceover: boolean; hasMusic: boolean; initialOutputUrl?: string | null; initialStatus?: string }) {
   const { toast } = useToast();
-  const [renderStatus, setRenderStatus] = useState<"idle" | "rendering" | "completed" | "failed">("idle");
-  const [renderProgress, setRenderProgress] = useState(0);
-  const [renderMessage, setRenderMessage] = useState("");
+  const isAlreadyCompleted = (initialStatus === 'completed' || initialStatus === 'complete') && !!initialOutputUrl;
+  const [renderStatus, setRenderStatus] = useState<"idle" | "rendering" | "completed" | "failed">(isAlreadyCompleted ? "completed" : "idle");
+  const [renderProgress, setRenderProgress] = useState(isAlreadyCompleted ? 100 : 0);
+  const [renderMessage, setRenderMessage] = useState(isAlreadyCompleted ? "Render complete!" : "");
   const [renderId, setRenderId] = useState<string | null>(null);
-  const [outputUrl, setOutputUrl] = useState<string | null>(null);
+  const [outputUrl, setOutputUrl] = useState<string | null>(initialOutputUrl || null);
 
   const startRenderMutation = useMutation({
     mutationFn: async () => {
@@ -644,7 +645,7 @@ function RenderButton({ projectId, hasVisual, hasVoiceover, hasMusic }: { projec
   );
 }
 
-function RenderConfigPanel({ projectId }: { projectId: string }) {
+function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus }: { projectId: string; projectOutputUrl?: string | null; projectStatus?: string }) {
   const [expanded, setExpanded] = useState(true);
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -1035,7 +1036,7 @@ function RenderConfigPanel({ projectId }: { projectId: string }) {
             </div>
           </div>
 
-          <RenderButton projectId={projectId} hasVisual={!!quickAssets.visual?.url} hasVoiceover={voiceoverReady} hasMusic={musicReady} />
+          <RenderButton projectId={projectId} hasVisual={!!quickAssets.visual?.url} hasVoiceover={voiceoverReady} hasMusic={musicReady} initialOutputUrl={projectOutputUrl} initialStatus={projectStatus} />
         </div>
       )}
     </div>

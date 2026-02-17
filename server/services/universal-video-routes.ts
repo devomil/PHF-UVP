@@ -2832,14 +2832,14 @@ router.get('/projects/:projectId/render-status', isAuthenticated, async (req: Re
     if (renderMethod === 'chunked') {
       console.log(`[UniversalVideo] Chunked render status for ${projectId}: ${projectData.status}, progress: ${projectData.progress.steps.rendering?.progress || 0}%`);
       
-      const isDone = projectData.status === 'complete' || projectData.status === 'error';
+      const isDone = projectData.status === 'complete' || projectData.status === 'completed' || projectData.status === 'error';
       const renderProgress = projectData.progress.steps.rendering;
       
       return res.json({
         success: projectData.status !== 'error',
         done: isDone,
         progress: (renderProgress?.progress || 0) / 100,
-        outputUrl: isDone && projectData.status === 'complete' ? projectData.outputUrl : null,
+        outputUrl: isDone && (projectData.status === 'complete' || projectData.status === 'completed') ? projectData.outputUrl : null,
         errors: projectData.status === 'error' ? projectData.progress.errors : [],
         project: projectData,
         renderMethod: 'chunked',
@@ -2853,7 +2853,7 @@ router.get('/projects/:projectId/render-status', isAuthenticated, async (req: Re
       console.log(`[UniversalVideo] No renderId for ${projectId}, returning current state`);
       return res.json({
         success: true,
-        done: projectData.status === 'complete' || projectData.status === 'error',
+        done: projectData.status === 'complete' || projectData.status === 'completed' || projectData.status === 'error',
         progress: (projectData.progress.steps.rendering?.progress || 0) / 100,
         outputUrl: projectData.outputUrl || null,
         errors: projectData.progress.errors || [],
@@ -2939,7 +2939,7 @@ router.get('/projects/:projectId/render-status', isAuthenticated, async (req: Re
       }
       
       if (statusResult.done) {
-        projectData.status = 'complete';
+        projectData.status = 'completed';
         projectData.progress.steps.rendering.status = 'complete';
         projectData.progress.steps.rendering.progress = 100;
         projectData.progress.overallPercent = 100;
