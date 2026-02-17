@@ -1535,16 +1535,22 @@ router.post('/projects/:projectId/generate-assets', isAuthenticated, async (req:
     console.log('[UniversalVideo] Queuing asset generation for project:', projectId, skipMusic ? '(music disabled)' : '');
     
     projectData.status = 'queued';
+    if (!projectData.progress) {
+      projectData.progress = {};
+    }
     projectData.progress.overallPercent = 0;
     projectData.progress.currentStep = 'voiceover';
+    projectData.progress.completedSteps = [];
     projectData.progress.errors = [];
     projectData.progress.serviceFailures = [];
-    for (const step of Object.keys(projectData.progress.steps)) {
-      const s = (projectData.progress.steps as any)[step];
-      if (s && typeof s === 'object') {
-        s.status = 'pending';
-        s.progress = 0;
-        s.message = '';
+    if (projectData.progress.steps && typeof projectData.progress.steps === 'object') {
+      for (const step of Object.keys(projectData.progress.steps)) {
+        const s = (projectData.progress.steps as any)[step];
+        if (s && typeof s === 'object') {
+          s.status = 'pending';
+          s.progress = 0;
+          s.message = '';
+        }
       }
     }
     
