@@ -1437,11 +1437,61 @@ function TextOverlayControls({ projectId, project }: { projectId: string; projec
   );
 }
 
+const ELEVENLABS_VOICES = [
+  { id: "21m00Tcm4TlvDq8ikWAM", name: "Rachel", gender: "female", description: "Calm, warm", accent: "American", useCase: "Narration" },
+  { id: "pNInz6obpgDQGcFmaJgB", name: "Adam", gender: "male", description: "Deep, trustworthy", accent: "American", useCase: "Narration" },
+  { id: "nPczCjzI2devNBz1zQrb", name: "Brian", gender: "male", description: "Deep, professional", accent: "American", useCase: "Narration" },
+  { id: "EXAVITQu4vr4xnSDxMaL", name: "Sarah", gender: "female", description: "Soft, friendly", accent: "American", useCase: "News" },
+  { id: "XB0fDUnXU5powFXDhCwa", name: "Charlotte", gender: "female", description: "Warm, seductive", accent: "English-Swedish", useCase: "Video Games" },
+  { id: "XrExE9yKIg1WjnnlVkGX", name: "Matilda", gender: "female", description: "Warm, friendly", accent: "American", useCase: "Audiobook" },
+  { id: "GBv7mTt0atIp3Br8iCZE", name: "Thomas", gender: "male", description: "Calm, professional", accent: "American", useCase: "Meditation" },
+  { id: "IKne3meq5aSn9XLyUdCD", name: "Charlie", gender: "male", description: "Casual, natural", accent: "Australian", useCase: "Conversational" },
+  { id: "onwK4e9ZLuTAKqWW03F9", name: "Daniel", gender: "male", description: "Deep, authoritative", accent: "British", useCase: "News" },
+  { id: "Xb7hH8MSUJpSbSDYk0k2", name: "Alice", gender: "female", description: "Confident, clear", accent: "British", useCase: "News" },
+  { id: "ErXwobaYiN019PkySvjV", name: "Antoni", gender: "male", description: "Well-rounded", accent: "American", useCase: "Narration" },
+  { id: "VR6AewLTigWG4xSOukaG", name: "Arnold", gender: "male", description: "Crisp, clear", accent: "American", useCase: "Narration" },
+  { id: "pqHfZKP75CvOlQylNhV4", name: "Bill", gender: "male", description: "Strong, documentary", accent: "American", useCase: "Documentary" },
+  { id: "N2lVS1w4EtoT3dr4eOWO", name: "Callum", gender: "male", description: "Hoarse, rugged", accent: "American", useCase: "Video Games" },
+  { id: "iP95p4xoKVk53GoZ742B", name: "Chris", gender: "male", description: "Casual, friendly", accent: "American", useCase: "Conversational" },
+  { id: "2EiwWnXFnvU5JabPnv8n", name: "Clyde", gender: "male", description: "War veteran, gruff", accent: "American", useCase: "Video Games" },
+  { id: "CYw3kZ02Hs0563khs1Fj", name: "Dave", gender: "male", description: "Conversational", accent: "British-Essex", useCase: "Video Games" },
+  { id: "AZnzlk1XvdvUeBnXmlld", name: "Domi", gender: "female", description: "Strong, confident", accent: "American", useCase: "Narration" },
+  { id: "ThT5KcBeYPX3keUQqHPh", name: "Dorothy", gender: "female", description: "Pleasant, warm", accent: "British", useCase: "Children's Stories" },
+  { id: "29vD33N1CtxCmqQRPOHJ", name: "Drew", gender: "male", description: "Well-rounded", accent: "American", useCase: "News" },
+  { id: "LcfcDJNUP1GQjkzn1xUU", name: "Emily", gender: "female", description: "Calm, soothing", accent: "American", useCase: "Meditation" },
+  { id: "g5CIjZEefAph4nQFvHAz", name: "Ethan", gender: "male", description: "Soft, ASMR", accent: "American", useCase: "ASMR" },
+  { id: "D38z5RcWu1voky8WS1ja", name: "Fin", gender: "male", description: "Sailor, rugged", accent: "Irish", useCase: "Video Games" },
+  { id: "jsCqWAovK2LkecY7zXl4", name: "Freya", gender: "female", description: "Expressive", accent: "American", useCase: "General" },
+  { id: "JBFqnCBsd6RMkjVDRZzb", name: "George", gender: "male", description: "Raspy, warm", accent: "British", useCase: "Narration" },
+  { id: "jBpfuIE2acCO8z3wKNLl", name: "Gigi", gender: "female", description: "Childish, playful", accent: "American", useCase: "Animation" },
+  { id: "zcAOhNBS3c14rBihAFp1", name: "Giovanni", gender: "male", description: "Foreign charm", accent: "English-Italian", useCase: "Audiobook" },
+  { id: "z9fAnlkpzviPz146aGWa", name: "Glinda", gender: "female", description: "Mystical, witch", accent: "American", useCase: "Video Games" },
+  { id: "oWAxZDx7w5VEj9dCyTzz", name: "Grace", gender: "female", description: "Southern charm", accent: "American-Southern", useCase: "Audiobook" },
+  { id: "SOYHLrjzK2X1ezoPC6cr", name: "Harry", gender: "male", description: "Anxious, young", accent: "American", useCase: "Video Games" },
+  { id: "ZQe5CZNOzWyzPSCn5a3c", name: "James", gender: "male", description: "Calm, mature", accent: "Australian", useCase: "News" },
+  { id: "bVMeCyTHy58xNoL34h3p", name: "Jeremy", gender: "male", description: "Excited, energetic", accent: "American-Irish", useCase: "Narration" },
+  { id: "t0jbNlBVZ17f02VDIeMI", name: "Jessie", gender: "male", description: "Raspy, old", accent: "American", useCase: "Video Games" },
+  { id: "Zlb1dXrM653N07WRdFW3", name: "Joseph", gender: "male", description: "Professional", accent: "British", useCase: "News" },
+  { id: "TxGEqnHWrfWFTfGW9XjX", name: "Josh", gender: "male", description: "Deep, young", accent: "American", useCase: "Narration" },
+  { id: "TX3LPaxmHKxFdv7VOQHJ", name: "Liam", gender: "male", description: "Natural, clear", accent: "American", useCase: "Narration" },
+  { id: "pFZP5JQG7iQjIQuC4Bku", name: "Lily", gender: "female", description: "Raspy, mature", accent: "British", useCase: "Narration" },
+  { id: "flq6f7yk4E4fJM5XTYuZ", name: "Michael", gender: "male", description: "Mature, warm", accent: "American", useCase: "Audiobook" },
+  { id: "zrHiDhphv9ZnVXBqCLjz", name: "Mimi", gender: "female", description: "Childish, cute", accent: "English-Swedish", useCase: "Animation" },
+  { id: "piTKgcLEGmPE4e6mEKli", name: "Nicole", gender: "female", description: "Whisper, soft", accent: "American", useCase: "Audiobook" },
+  { id: "ODq5zmih8GrVes37Dizd", name: "Patrick", gender: "male", description: "Shouty, bold", accent: "American", useCase: "Video Games" },
+  { id: "5Q0t7uMcjvnagumLfvZi", name: "Paul", gender: "male", description: "Ground reporter", accent: "American", useCase: "News" },
+  { id: "yoZ06aMxZJJ28mfd3POQ", name: "Sam", gender: "male", description: "Raspy, young", accent: "American", useCase: "Narration" },
+  { id: "pMsXgVXv3BLzUgSXRplE", name: "Serena", gender: "female", description: "Pleasant, calm", accent: "American", useCase: "Interactive" },
+  { id: "knrPHWnBmmDHMoiMeP3l", name: "Santa Claus", gender: "male", description: "Jolly, festive", accent: "American", useCase: "Christmas" },
+];
+
 function QuickCreateAssetPanel({ projectId, project }: { projectId: string; project: any }) {
   const [expanded, setExpanded] = useState(true);
   const [editPrompt, setEditPrompt] = useState(false);
   const [promptText, setPromptText] = useState("");
   const [selectedProvider, setSelectedProvider] = useState("kling");
+  const [selectedVoiceId, setSelectedVoiceId] = useState("21m00Tcm4TlvDq8ikWAM");
+  const [voiceFilter, setVoiceFilter] = useState<"all" | "male" | "female">("all");
   const [musicMood, setMusicMood] = useState("upbeat");
   const [musicStyle, setMusicStyle] = useState("cinematic");
   const { toast } = useToast();
@@ -1503,7 +1553,7 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ narrationText: promptText }),
+        body: JSON.stringify({ narrationText: promptText, voiceId: selectedVoiceId }),
       });
       if (!res.ok) throw new Error("Failed to start voiceover generation");
       return res.json();
@@ -1729,9 +1779,44 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
                   </div>
                 )}
 
-                <p className="text-xs mb-3" style={{ color: "var(--text-muted)" }}>
-                  Generates narration from your prompt using AI voice synthesis.
-                </p>
+                <div className="mb-3">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <label className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>Narrator Voice</label>
+                    <div className="flex gap-1 ml-auto">
+                      {(["all", "female", "male"] as const).map((g) => (
+                        <button
+                          key={g}
+                          onClick={() => setVoiceFilter(g)}
+                          className={`text-[10px] px-2 py-0.5 rounded-full border transition-colors ${voiceFilter === g ? "border-purple-500/50 text-purple-300 bg-purple-500/10" : "border-transparent text-gray-500 hover:text-gray-300"}`}
+                        >
+                          {g === "all" ? "All" : g === "female" ? "Female" : "Male"}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <select
+                    value={selectedVoiceId}
+                    onChange={(e) => setSelectedVoiceId(e.target.value)}
+                    className="w-full rounded-lg border px-3 py-2 text-sm"
+                    style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-medium)", color: "var(--text-primary)" }}
+                  >
+                    {ELEVENLABS_VOICES
+                      .filter((v) => voiceFilter === "all" || v.gender === voiceFilter)
+                      .map((voice) => (
+                        <option key={voice.id} value={voice.id}>
+                          {voice.name} — {voice.description} ({voice.accent})
+                        </option>
+                      ))}
+                  </select>
+                  {(() => {
+                    const selected = ELEVENLABS_VOICES.find((v) => v.id === selectedVoiceId);
+                    return selected ? (
+                      <p className="text-[10px] mt-1" style={{ color: "var(--text-muted)" }}>
+                        {selected.gender === "female" ? "♀" : "♂"} {selected.name} · {selected.description} · Best for: {selected.useCase}
+                      </p>
+                    ) : null;
+                  })()}
+                </div>
 
                 <Button
                   onClick={() => generateVoiceoverMutation.mutate()}

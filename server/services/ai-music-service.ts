@@ -343,6 +343,8 @@ class AIMusicService {
   }
 
   private extractAudioUrl(data: any): string | null {
+    console.log('[AIMusic] Extracting audio URL from response:', JSON.stringify(data.data?.output || data.output || {}, null, 2).substring(0, 2000));
+
     const possiblePaths = [
       data.data?.output?.audio_url,
       data.data?.output?.audio,
@@ -360,10 +362,36 @@ class AIMusicService {
     }
 
     if (Array.isArray(data.data?.output)) {
-      const audio = data.data.output.find((o: any) => o.audio_url || o.url);
-      return audio?.audio_url || audio?.url || null;
+      for (const item of data.data.output) {
+        const url = item?.audio_url || item?.url || item?.song_url || item?.music_url;
+        if (url && typeof url === 'string' && url.startsWith('http')) {
+          return url;
+        }
+      }
     }
 
+    const output = data.data?.output;
+    if (output && typeof output === 'object' && !Array.isArray(output)) {
+      for (const key of Object.keys(output)) {
+        const val = output[key];
+        if (typeof val === 'string' && val.startsWith('http') && (val.includes('.mp3') || val.includes('.wav') || val.includes('.m4a') || val.includes('audio') || val.includes('music') || val.includes('cdn'))) {
+          console.log('[AIMusic] Found audio URL in output.' + key + ': ' + val);
+          return val;
+        }
+        if (Array.isArray(val)) {
+          for (const item of val) {
+            const itemUrl = typeof item === 'string' && item.startsWith('http') ? item :
+              (item?.audio_url || item?.url || item?.song_url);
+            if (itemUrl && typeof itemUrl === 'string' && itemUrl.startsWith('http')) {
+              console.log('[AIMusic] Found audio URL in output.' + key + '[]: ' + itemUrl);
+              return itemUrl;
+            }
+          }
+        }
+      }
+    }
+
+    console.log('[AIMusic] Full response data keys:', JSON.stringify(Object.keys(data.data || {})));
     return null;
   }
 
