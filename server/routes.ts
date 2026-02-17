@@ -5,6 +5,7 @@ import { db } from "./db";
 import { videoProductions, universalVideoProjects, videoGenerationJobs } from "../shared/schema";
 import { desc, eq } from "drizzle-orm";
 import providerTestRouter from "./services/provider-test-routes";
+import piapiTestRouter from "./services/piapi-test-routes";
 import { AI_VIDEO_PROVIDERS } from "./config/ai-video-providers";
 import { VIDEO_PROVIDERS } from "./config/video-providers";
 import s3AssetRouter from "./services/s3-asset-routes";
@@ -18,6 +19,7 @@ import { aiMusicService } from "./services/ai-music-service";
 
 export function registerRoutes(app: Express) {
   app.use("/api/provider-test", providerTestRouter);
+  app.use(piapiTestRouter);
   app.use("/api/admin/s3-assets", s3AssetRouter);
   app.use("/api/brand-media-library", brandMediaRouter);
   app.use("/api/media-assets", mediaAssetRouter);

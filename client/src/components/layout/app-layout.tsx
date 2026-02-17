@@ -9,6 +9,7 @@ import {
   Palette,
   Layers,
   Cpu,
+  FlaskConical,
   Plus,
   ChevronLeft,
   ChevronRight,
@@ -26,6 +27,7 @@ const navItems = [
   { label: "Brand", icon: Palette, path: "/brand" },
   { label: "Render Queue", icon: Layers, path: "/render-queue" },
   { label: "AI Providers", icon: Cpu, path: "/providers" },
+  { label: "API Testing", icon: FlaskConical, path: "/api-testing" },
 ];
 
 function AppLayout({ children }: { children: ReactNode }) {
