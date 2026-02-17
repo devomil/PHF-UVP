@@ -491,12 +491,41 @@ function RenderConfigPanel({ projectId }: { projectId: string }) {
     },
   });
 
-  const settings = settingsQuery.data?.settings || {
+  const assetsQuery = useQuery({
+    queryKey: ["quick-create-assets", projectId],
+    queryFn: async () => {
+      const res = await fetch(`/api/projects/${projectId}/quick-create/assets`, { credentials: "include" });
+      if (!res.ok) return null;
+      return res.json();
+    },
+    refetchInterval: 5000,
+  });
+
+  const quickAssets = assetsQuery.data?.assets || {};
+  const voiceoverReady = quickAssets.voiceover?.status === "completed" && !!quickAssets.voiceover?.url;
+  const musicReady = quickAssets.music?.status === "completed" && !!quickAssets.music?.url;
+
+  const rawSettings = settingsQuery.data?.settings || {
     voiceover: { enabled: true, voiceId: null, hasGenerated: false },
     music: { enabled: true, volume: 0.18, hasGenerated: false },
     soundDesign: { enabled: true, transitionSounds: true, impactSounds: true, ambientLayer: true, ambientType: "nature", masterVolume: 1.0 },
     filmTreatment: { enabled: true, colorGrade: "warm-cinematic", grainIntensity: 0.03, vignetteIntensity: 0.2, letterbox: "none" },
     transitions: { style: "crossfade", duration: 0.5 },
+  };
+
+  const settings = {
+    ...rawSettings,
+    voiceover: {
+      ...rawSettings.voiceover,
+      hasGenerated: rawSettings.voiceover.hasGenerated || voiceoverReady,
+      duration: rawSettings.voiceover.duration || (voiceoverReady ? quickAssets.voiceover?.duration : undefined),
+      url: rawSettings.voiceover.url || (voiceoverReady ? quickAssets.voiceover?.url : undefined),
+    },
+    music: {
+      ...rawSettings.music,
+      hasGenerated: rawSettings.music.hasGenerated || musicReady,
+      url: rawSettings.music.url || (musicReady ? quickAssets.music?.url : undefined),
+    },
   };
 
   const saveMutation = useMutation({
@@ -603,7 +632,11 @@ function RenderConfigPanel({ projectId }: { projectId: string }) {
                   <div className="flex items-center gap-2">
                     {settings.voiceover.hasGenerated ? (
                       <span className="flex items-center gap-1 text-xs text-emerald-400">
-                        <CheckCircle2 className="w-3 h-3" /> Generated ({Math.round(settings.voiceover.duration || 0)}s)
+                        <CheckCircle2 className="w-3 h-3" /> Ready{settings.voiceover.duration ? ` (${Math.round(settings.voiceover.duration)}s)` : ""}
+                      </span>
+                    ) : quickAssets.voiceover?.status === "generating" ? (
+                      <span className="flex items-center gap-1 text-xs text-blue-400">
+                        <Loader2 className="w-3 h-3 animate-spin" /> Generating...
                       </span>
                     ) : (
                       <span className="flex items-center gap-1 text-xs text-amber-400">
@@ -612,7 +645,9 @@ function RenderConfigPanel({ projectId }: { projectId: string }) {
                     )}
                   </div>
                   <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                    Voiceover is generated from the project's script narration during asset generation.
+                    {settings.voiceover.hasGenerated
+                      ? "Voiceover audio is ready for rendering."
+                      : "Generate a voiceover in the Asset Creation panel above."}
                   </p>
                 </>
               )}
@@ -653,9 +688,13 @@ function RenderConfigPanel({ projectId }: { projectId: string }) {
                     <span className="flex items-center gap-1 text-xs text-emerald-400">
                       <CheckCircle2 className="w-3 h-3" /> Music ready
                     </span>
+                  ) : quickAssets.music?.status === "generating" ? (
+                    <span className="flex items-center gap-1 text-xs text-blue-400">
+                      <Loader2 className="w-3 h-3 animate-spin" /> Generating...
+                    </span>
                   ) : (
                     <span className="flex items-center gap-1 text-xs text-amber-400">
-                      <AlertCircle className="w-3 h-3" /> Generated during asset creation
+                      <AlertCircle className="w-3 h-3" /> Not generated yet
                     </span>
                   )}
                 </>
