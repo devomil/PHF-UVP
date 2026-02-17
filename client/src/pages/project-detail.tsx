@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
 import { ArrowLeft, Settings, Play, RefreshCw, Clock, Target, Monitor, BarChart3, Loader2, AlertCircle, Zap, Video, Image, Download, RotateCcw, Save, Trash2, ExternalLink, CheckCircle2, XCircle, Server, HardDrive, Type, Film, ChevronDown, ChevronUp, CloudUpload, Mic, Music, Volume2, Palette, Shuffle, Sliders, Wand2, Sparkles, ImagePlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ProviderCatalogSelector } from "@/components/video/provider-catalog-selector";
 import { useToast } from "@/hooks/use-toast";
 
 const statusDot: Record<string, string> = {
@@ -1819,14 +1820,7 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
     );
   };
 
-  const providerOptions = [
-    { value: "kling", label: "Kling" },
-    { value: "runway", label: "RunwayML" },
-    { value: "luma", label: "Luma" },
-    { value: "hailuo", label: "Hailuo" },
-    { value: "veo", label: "Veo" },
-    { value: "pika", label: "Pika" },
-  ];
+  const outputType: "video" | "image" = project?.mediaMode === "image" ? "image" : "video";
 
   const moodOptions = [
     { value: "auto", label: "Auto" },
@@ -1931,17 +1925,13 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
 
               <div className="flex gap-3 items-end">
                 <div className="flex-1">
-                  <label className="text-xs block mb-1" style={{ color: "var(--text-muted)" }}>Provider</label>
-                  <select
-                    value={selectedProvider}
-                    onChange={(e) => setSelectedProvider(e.target.value)}
-                    className="w-full rounded-lg border p-2 text-sm"
-                    style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }}
-                  >
-                    {providerOptions.map((p) => (
-                      <option key={p.value} value={p.value}>{p.label}</option>
-                    ))}
-                  </select>
+                  <ProviderCatalogSelector
+                    outputType={outputType}
+                    provider={selectedProvider}
+                    onProviderChange={setSelectedProvider}
+                    label="Provider"
+                    compact
+                  />
                 </div>
                 <Button
                   onClick={() => generateVisualMutation.mutate()}
