@@ -321,7 +321,7 @@ class UniversalVideoService {
     const startTime = Date.now();
 
     // Cache voiceover (usually already S3, but verify)
-    if (project.assets.voiceover.fullTrackUrl) {
+    if (project.assets?.voiceover?.fullTrackUrl) {
       const url = project.assets.voiceover.fullTrackUrl;
       if (!url.includes('s3.amazonaws.com') && !url.startsWith('data:') && url.startsWith('http')) {
         const downloadResult = await this.downloadExternalFile(url, 30000);
