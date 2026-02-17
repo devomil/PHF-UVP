@@ -26,6 +26,7 @@ export function registerRoutes(app: Express) {
   app.use("/api/asset-library", assetLibraryRouter);
   app.use("/api/videos", uploadRouter);
   app.use('/uploads', express.static('uploads'));
+  app.use('/test-images', express.static('public/test-images'));
 
   import("./services/universal-video-routes")
     .then((mod) => {

@@ -1,7 +1,7 @@
 export interface PiAPITestDefinition {
   id: string;
   name: string;
-  category: 'video' | 'image' | 'audio' | 'llm';
+  category: 'video' | 'image' | 'audio' | 'llm' | 'i2v' | 'i2i';
   model: string;
   taskType: string;
   input: Record<string, any>;
@@ -10,10 +10,12 @@ export interface PiAPITestDefinition {
   estimatedCost: string;
   estimatedTime: string;
   notes?: string;
+  requiresImage?: boolean;
+  imageInputField?: string;
 }
 
 export const PIAPI_TEST_DEFINITIONS: PiAPITestDefinition[] = [
-  // ==================== VIDEO GENERATION ====================
+  // ==================== VIDEO GENERATION (T2V) ====================
   {
     id: 'kling-2.6',
     name: 'Kling 2.6',
@@ -308,7 +310,286 @@ export const PIAPI_TEST_DEFINITIONS: PiAPITestDefinition[] = [
     notes: 'Avatar generation - may require reference image',
   },
 
-  // ==================== IMAGE GENERATION ====================
+  // ==================== IMAGE-TO-VIDEO (I2V) ====================
+  {
+    id: 'i2v-kling-2.6',
+    name: 'Kling 2.6 I2V',
+    category: 'i2v',
+    model: 'kling',
+    taskType: 'video_generation',
+    input: {
+      prompt: 'The logo gently rotates with soft lighting, cinematic movement',
+      mode: 'std',
+      duration: 5,
+      aspect_ratio: '16:9',
+      version: '2.6',
+    },
+    requiresImage: true,
+    imageInputField: 'image_url',
+    pollForResult: true,
+    estimatedCost: '$0.14',
+    estimatedTime: '~60s',
+  },
+  {
+    id: 'i2v-kling-2.5',
+    name: 'Kling 2.5 I2V',
+    category: 'i2v',
+    model: 'kling',
+    taskType: 'video_generation',
+    input: {
+      prompt: 'Smooth zoom out revealing the full image with ambient particles',
+      mode: 'std',
+      duration: 5,
+      aspect_ratio: '16:9',
+      version: '2.5',
+    },
+    requiresImage: true,
+    imageInputField: 'image_url',
+    pollForResult: true,
+    estimatedCost: '$0.14',
+    estimatedTime: '~60s',
+  },
+  {
+    id: 'i2v-hailuo',
+    name: 'Hailuo I2V',
+    category: 'i2v',
+    model: 'hailuo',
+    taskType: 'video_generation',
+    input: {
+      prompt: 'The image comes to life with gentle motion and natural movement',
+      model: 'i2v-01',
+      duration: 6,
+    },
+    requiresImage: true,
+    imageInputField: 'image_url',
+    pollForResult: true,
+    estimatedCost: '$0.20',
+    estimatedTime: '~120s',
+  },
+  {
+    id: 'i2v-hailuo-director',
+    name: 'Hailuo Director I2V',
+    category: 'i2v',
+    model: 'hailuo',
+    taskType: 'video_generation',
+    input: {
+      prompt: '[Push in,Pan left]smooth cinematic reveal',
+      model: 'i2v-01-director',
+      duration: 6,
+    },
+    requiresImage: true,
+    imageInputField: 'image_url',
+    pollForResult: true,
+    estimatedCost: '$0.20',
+    estimatedTime: '~120s',
+    notes: 'Camera control mode with directorial movements',
+  },
+  {
+    id: 'i2v-wan-2.6',
+    name: 'Wan 2.6 I2V',
+    category: 'i2v',
+    model: 'Wan',
+    taskType: 'wan26-img2video',
+    input: {
+      prompt: 'The image animates with gentle movement and flowing energy',
+      resolution: '720P',
+      duration: 5,
+      watermark: false,
+    },
+    requiresImage: true,
+    imageInputField: 'image',
+    pollForResult: true,
+    estimatedCost: '$0.40',
+    estimatedTime: '~90s',
+  },
+  {
+    id: 'i2v-luma',
+    name: 'Luma I2V',
+    category: 'i2v',
+    model: 'luma',
+    taskType: 'video_generation',
+    input: {
+      prompt: 'Cinematic slow push in with subtle parallax depth effect',
+      aspect_ratio: '16:9',
+    },
+    requiresImage: true,
+    imageInputField: 'image_url',
+    pollForResult: true,
+    estimatedCost: '$0.30',
+    estimatedTime: '~90s',
+  },
+  {
+    id: 'i2v-veo-3',
+    name: 'Veo 3 I2V',
+    category: 'i2v',
+    model: 'veo3',
+    taskType: 'veo3-video-fast',
+    input: {
+      prompt: 'The image transforms into a cinematic scene with natural motion',
+      aspect_ratio: '16:9',
+      duration: '4s',
+      resolution: '720p',
+    },
+    requiresImage: true,
+    imageInputField: 'image_url',
+    pollForResult: true,
+    estimatedCost: '$0.50',
+    estimatedTime: '~120s',
+  },
+  {
+    id: 'i2v-veo-3.1',
+    name: 'Veo 3.1 I2V',
+    category: 'i2v',
+    model: 'veo3.1',
+    taskType: 'veo3.1-video-fast',
+    input: {
+      prompt: 'Smooth animation of the image with professional camera movement',
+      aspect_ratio: '16:9',
+      duration: '4s',
+      resolution: '720p',
+    },
+    requiresImage: true,
+    imageInputField: 'image_url',
+    pollForResult: true,
+    estimatedCost: '$0.50',
+    estimatedTime: '~120s',
+  },
+  {
+    id: 'i2v-seedance-pro',
+    name: 'Seedance Pro I2V',
+    category: 'i2v',
+    model: 'seedance',
+    taskType: 'video_generation',
+    input: {
+      prompt: 'The image gently moves with organic flowing motion',
+      version: '1.0-pro',
+    },
+    requiresImage: true,
+    imageInputField: 'image_url',
+    pollForResult: true,
+    estimatedCost: '$0.25',
+    estimatedTime: '~120s',
+  },
+  {
+    id: 'i2v-seedance-lite',
+    name: 'Seedance Lite I2V',
+    category: 'i2v',
+    model: 'seedance',
+    taskType: 'video_generation',
+    input: {
+      prompt: 'Subtle zoom and motion bringing the still image to life',
+      version: '1.0-lite',
+    },
+    requiresImage: true,
+    imageInputField: 'image_url',
+    pollForResult: true,
+    estimatedCost: '$0.10',
+    estimatedTime: '~60s',
+  },
+
+  // ==================== IMAGE-TO-IMAGE (I2I) ====================
+  {
+    id: 'i2i-flux-kontext-dev',
+    name: 'Flux Kontext Dev I2I',
+    category: 'i2i',
+    model: 'Qubico/flux1-kontext-dev',
+    taskType: 'img2img',
+    input: {
+      prompt: 'Transform into a vibrant watercolor painting style, keep the composition',
+      guidance_scale: 2.5,
+      strength: 0.85,
+    },
+    requiresImage: true,
+    imageInputField: 'image',
+    pollForResult: true,
+    estimatedCost: '$0.02',
+    estimatedTime: '~10s',
+  },
+  {
+    id: 'i2i-flux-kontext-pro',
+    name: 'Flux Kontext Pro I2I',
+    category: 'i2i',
+    model: 'Qubico/flux-kontext-pro',
+    taskType: 'img2img',
+    input: {
+      prompt: 'Enhance and add dramatic cinematic lighting, professional photography style',
+      guidance_scale: 3.0,
+      strength: 0.75,
+    },
+    requiresImage: true,
+    imageInputField: 'image',
+    pollForResult: true,
+    estimatedCost: '$0.05',
+    estimatedTime: '~15s',
+  },
+  {
+    id: 'i2i-flux-kontext-max',
+    name: 'Flux Kontext Max I2I',
+    category: 'i2i',
+    model: 'Qubico/flux-kontext-max',
+    taskType: 'img2img',
+    input: {
+      prompt: 'Convert to elegant minimalist vector art with clean lines and flat colors',
+      guidance_scale: 3.5,
+      strength: 0.9,
+    },
+    requiresImage: true,
+    imageInputField: 'image',
+    pollForResult: true,
+    estimatedCost: '$0.08',
+    estimatedTime: '~15s',
+  },
+  {
+    id: 'i2i-flux-dev',
+    name: 'Flux Dev I2I',
+    category: 'i2i',
+    model: 'Qubico/flux1-dev',
+    taskType: 'img2img',
+    input: {
+      prompt: 'Reimagine as a 3D rendered scene with soft studio lighting',
+      width: 1024,
+      height: 1024,
+    },
+    requiresImage: true,
+    imageInputField: 'image',
+    pollForResult: true,
+    estimatedCost: '$0.015',
+    estimatedTime: '~10s',
+  },
+  {
+    id: 'i2i-seedream',
+    name: 'Seedream 4.0 I2I',
+    category: 'i2i',
+    model: 'bytedance/seedream-v4.0',
+    taskType: 'img2img',
+    input: {
+      prompt: 'Transform into a luxury brand advertisement style with golden accents',
+    },
+    requiresImage: true,
+    imageInputField: 'image',
+    pollForResult: true,
+    estimatedCost: '$0.02',
+    estimatedTime: '~8s',
+  },
+  {
+    id: 'i2i-qwen',
+    name: 'Qwen Image I2I',
+    category: 'i2i',
+    model: 'Qubico/qwen-image',
+    taskType: 'img2img',
+    input: {
+      prompt: 'Redraw in traditional Japanese ink wash painting style',
+      width: 1024,
+      height: 1024,
+    },
+    requiresImage: true,
+    imageInputField: 'image',
+    pollForResult: true,
+    estimatedCost: '$0.075',
+    estimatedTime: '~10s',
+  },
+
+  // ==================== IMAGE GENERATION (T2I) ====================
   {
     id: 'flux-schnell',
     name: 'Flux Schnell',
