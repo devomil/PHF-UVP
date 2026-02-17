@@ -477,6 +477,169 @@ function ToggleSwitch({ enabled, onChange, label }: { enabled: boolean; onChange
   );
 }
 
+function RenderButton({ projectId, hasVisual, hasVoiceover, hasMusic }: { projectId: string; hasVisual: boolean; hasVoiceover: boolean; hasMusic: boolean }) {
+  const { toast } = useToast();
+  const [renderStatus, setRenderStatus] = useState<"idle" | "rendering" | "completed" | "failed">("idle");
+  const [renderProgress, setRenderProgress] = useState(0);
+  const [renderMessage, setRenderMessage] = useState("");
+  const [renderId, setRenderId] = useState<string | null>(null);
+  const [outputUrl, setOutputUrl] = useState<string | null>(null);
+
+  const startRenderMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/universal-video/projects/${projectId}/render`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Render failed" }));
+        throw new Error(err.error || "Render failed");
+      }
+      return res.json();
+    },
+    onSuccess: (data) => {
+      setRenderStatus("rendering");
+      setRenderProgress(0);
+      setRenderMessage("Render started...");
+      if (data.renderId) setRenderId(data.renderId);
+      toast({ title: "Render Started", description: "Your video is being rendered." });
+    },
+    onError: (err: Error) => {
+      setRenderStatus("failed");
+      setRenderMessage(err.message);
+      toast({ title: "Render Failed", description: err.message, variant: "destructive" });
+    },
+  });
+
+  useQuery({
+    queryKey: ["render-status", projectId, renderId],
+    queryFn: async () => {
+      const res = await fetch(`/api/universal-video/projects/${projectId}/render-status`, { credentials: "include" });
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (data.progress !== undefined) setRenderProgress(data.progress);
+      if (data.message) setRenderMessage(data.message);
+      if (data.status === "completed" || data.outputUrl) {
+        setRenderStatus("completed");
+        setOutputUrl(data.outputUrl || data.url || null);
+        setRenderMessage("Render complete!");
+      } else if (data.status === "failed") {
+        setRenderStatus("failed");
+        setRenderMessage(data.error || "Render failed");
+      }
+      return data;
+    },
+    enabled: renderStatus === "rendering",
+    refetchInterval: 3000,
+  });
+
+  const canRender = hasVisual;
+
+  return (
+    <div className="border rounded-lg p-4 mt-2" style={{ backgroundColor: "var(--app-bg)", borderColor: "var(--border-subtle)" }}>
+      {renderStatus === "completed" && outputUrl ? (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2 text-emerald-400">
+            <CheckCircle2 className="w-5 h-5" />
+            <span className="text-sm font-medium">Render Complete</span>
+          </div>
+          <div className="flex gap-2">
+            <a
+              href={outputUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex-1 flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 transition-all"
+            >
+              <ExternalLink className="w-4 h-4" /> View Rendered Video
+            </a>
+            <a
+              href={outputUrl}
+              download
+              className="flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium border transition-colors"
+              style={{ borderColor: "var(--border-medium)", color: "var(--text-secondary)" }}
+            >
+              <Download className="w-4 h-4" /> Download
+            </a>
+          </div>
+          <button
+            onClick={() => { setRenderStatus("idle"); setOutputUrl(null); setRenderProgress(0); setRenderMessage(""); }}
+            className="w-full text-xs text-center py-1"
+            style={{ color: "var(--text-muted)" }}
+          >
+            Render again
+          </button>
+        </div>
+      ) : renderStatus === "rendering" ? (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Loader2 className="w-4 h-4 animate-spin text-purple-400" />
+              <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>Rendering...</span>
+            </div>
+            <span className="text-xs font-mono" style={{ color: "var(--text-muted)" }}>{Math.round(renderProgress)}%</span>
+          </div>
+          <div className="w-full h-2 rounded-full overflow-hidden" style={{ backgroundColor: "var(--progress-track)" }}>
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-purple-600 to-indigo-500 transition-all duration-500"
+              style={{ width: `${renderProgress}%` }}
+            />
+          </div>
+          {renderMessage && <p className="text-xs" style={{ color: "var(--text-muted)" }}>{renderMessage}</p>}
+        </div>
+      ) : renderStatus === "failed" ? (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2 text-red-400">
+            <XCircle className="w-4 h-4" />
+            <span className="text-sm font-medium">Render Failed</span>
+          </div>
+          {renderMessage && <p className="text-xs text-red-400/80">{renderMessage}</p>}
+          <button
+            onClick={() => startRenderMutation.mutate()}
+            disabled={startRenderMutation.isPending}
+            className="w-full flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 transition-all disabled:opacity-50"
+          >
+            <RotateCcw className="w-4 h-4" /> Retry Render
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {!canRender && (
+            <p className="text-xs text-amber-400 flex items-center gap-1">
+              <AlertCircle className="w-3 h-3" /> Generate a visual asset before rendering.
+            </p>
+          )}
+          <div className="flex gap-2">
+            <button
+              onClick={() => startRenderMutation.mutate()}
+              disabled={!canRender || startRenderMutation.isPending}
+              className="flex-1 flex items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-semibold text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-lg shadow-purple-500/20"
+            >
+              {startRenderMutation.isPending ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Film className="w-4 h-4" />
+              )}
+              Start Render
+            </button>
+          </div>
+          <div className="flex items-center gap-3 text-[10px]" style={{ color: "var(--text-muted)" }}>
+            <span className={`flex items-center gap-1 ${hasVisual ? "text-emerald-400" : ""}`}>
+              {hasVisual ? <CheckCircle2 className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />} Visual
+            </span>
+            <span className={`flex items-center gap-1 ${hasVoiceover ? "text-emerald-400" : ""}`}>
+              {hasVoiceover ? <CheckCircle2 className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />} Voiceover
+            </span>
+            <span className={`flex items-center gap-1 ${hasMusic ? "text-emerald-400" : ""}`}>
+              {hasMusic ? <CheckCircle2 className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />} Music
+            </span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function RenderConfigPanel({ projectId }: { projectId: string }) {
   const [expanded, setExpanded] = useState(true);
   const { toast } = useToast();
@@ -867,6 +1030,8 @@ function RenderConfigPanel({ projectId }: { projectId: string }) {
               </p>
             </div>
           </div>
+
+          <RenderButton projectId={projectId} hasVisual={!!quickAssets.visual?.url} hasVoiceover={voiceoverReady} hasMusic={musicReady} />
         </div>
       )}
     </div>
