@@ -492,16 +492,16 @@ function RenderConfigPanel({ projectId }: { projectId: string }) {
   });
 
   const assetsQuery = useQuery({
-    queryKey: ["quick-create-assets", projectId],
+    queryKey: ["quick-create-assets-render", projectId],
     queryFn: async () => {
       const res = await fetch(`/api/projects/${projectId}/quick-create/assets`, { credentials: "include" });
-      if (!res.ok) return null;
+      if (!res.ok) return {};
       return res.json();
     },
     refetchInterval: 5000,
   });
 
-  const quickAssets = assetsQuery.data?.assets || {};
+  const quickAssets = assetsQuery.data || {};
   const voiceoverReady = quickAssets.voiceover?.status === "completed" && !!quickAssets.voiceover?.url;
   const musicReady = quickAssets.music?.status === "completed" && !!quickAssets.music?.url;
 
