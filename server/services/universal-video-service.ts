@@ -341,7 +341,7 @@ class UniversalVideoService {
     }
 
     // Cache music
-    if (project.assets.music?.url) {
+    if (project.assets?.music?.url) {
       const url = project.assets.music.url;
       if (!url.includes('s3.amazonaws.com') && !url.startsWith('data:') && url.startsWith('http')) {
         const downloadResult = await this.downloadExternalFile(url, 60000);
@@ -361,7 +361,7 @@ class UniversalVideoService {
     }
 
     // Cache scene assets (images and videos)
-    for (let i = 0; i < project.scenes.length; i++) {
+    for (let i = 0; i < (project.scenes || []).length; i++) {
       const scene = project.scenes[i];
       
       // Cache B-roll video
@@ -2707,7 +2707,7 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
     const productSceneTypes = ['hook', 'feature', 'benefit', 'cta', 'intro'];
     const lifestyleSceneTypes = ['explanation', 'process', 'testimonial', 'brand', 'outro'];
 
-    for (let i = 0; i < project.scenes.length; i++) {
+    for (let i = 0; i < (project.scenes || []).length; i++) {
       const scene = project.scenes[i];
       console.log(`[UniversalVideoService] Processing scene ${i}: type=${scene.type}, isProductScene=${productSceneTypes.includes(scene.type)}, useAIImage=${scene.assets?.useAIImage}`);
       
@@ -4019,6 +4019,23 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
     const preparedProject = JSON.parse(JSON.stringify(project)) as VideoProject;
 
     console.log('[UniversalVideoService] Preparing assets for Lambda render...');
+
+    // Map Quick Create assets into standard structure for render pipeline
+    if (!preparedProject.assets) preparedProject.assets = {} as any;
+    const qcAssets = (preparedProject as any).assets?.quickCreate;
+    if (qcAssets) {
+      if (qcAssets.voiceover?.url && qcAssets.voiceover?.status === 'completed') {
+        if (!preparedProject.assets.voiceover) preparedProject.assets.voiceover = {} as any;
+        preparedProject.assets.voiceover.fullTrackUrl = qcAssets.voiceover.url;
+        if (qcAssets.voiceover.duration) preparedProject.assets.voiceover.duration = qcAssets.voiceover.duration;
+      }
+      if (qcAssets.music?.url && qcAssets.music?.status === 'completed') {
+        if (!preparedProject.assets.music) preparedProject.assets.music = {} as any;
+        preparedProject.assets.music.url = qcAssets.music.url;
+        if (qcAssets.music.duration) preparedProject.assets.music.duration = qcAssets.music.duration;
+      }
+      console.log('[PrepareAssets] Quick Create assets mapped:', { voiceover: !!qcAssets.voiceover?.url, music: !!qcAssets.music?.url });
+    }
 
     // ========== S3 ASSET CACHING (CRITICAL FOR FAST RENDERS) ==========
     // Cache all external assets to S3 BEFORE sending to Lambda
