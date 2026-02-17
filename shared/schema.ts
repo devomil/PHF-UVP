@@ -622,3 +622,24 @@ export const insertAssetLibrarySchema = createInsertSchema(assetLibrary).omit({
 
 export type AssetLibraryItem = typeof assetLibrary.$inferSelect;
 export type InsertAssetLibraryItem = z.infer<typeof insertAssetLibrarySchema>;
+
+export const piapiTestResults = pgTable("piapi_test_results", {
+  id: serial("id").primaryKey(),
+  testId: varchar("test_id", { length: 100 }).notNull(),
+  testName: varchar("test_name", { length: 255 }).notNull(),
+  category: varchar("category", { length: 50 }).notNull(),
+  status: varchar("status", { length: 20 }).notNull(),
+  responseTime: integer("response_time"),
+  taskId: varchar("task_id", { length: 255 }),
+  outputUrl: text("output_url"),
+  outputText: text("output_text"),
+  error: text("error"),
+  testedAt: timestamp("tested_at").defaultNow().notNull(),
+  testedBy: varchar("tested_by").references(() => users.id),
+}, (table) => ({
+  testIdIdx: index("idx_piapi_test_results_test_id").on(table.testId),
+  categoryIdx: index("idx_piapi_test_results_category").on(table.category),
+  testedAtIdx: index("idx_piapi_test_results_tested_at").on(table.testedAt),
+}));
+
+export type PiapiTestResult = typeof piapiTestResults.$inferSelect;
