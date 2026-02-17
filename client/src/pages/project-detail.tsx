@@ -1492,8 +1492,8 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
   const [selectedProvider, setSelectedProvider] = useState("kling");
   const [selectedVoiceId, setSelectedVoiceId] = useState("21m00Tcm4TlvDq8ikWAM");
   const [voiceFilter, setVoiceFilter] = useState<"all" | "male" | "female">("all");
-  const [musicMood, setMusicMood] = useState("upbeat");
-  const [musicStyle, setMusicStyle] = useState("cinematic");
+  const [musicMood, setMusicMood] = useState("auto");
+  const [musicGenerator, setMusicGenerator] = useState("auto");
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -1573,7 +1573,7 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ mood: musicMood, style: musicStyle }),
+        body: JSON.stringify({ mood: musicMood, style: musicGenerator, generator: musicGenerator }),
       });
       if (!res.ok) throw new Error("Failed to start music generation");
       return res.json();
@@ -1620,21 +1620,19 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
   ];
 
   const moodOptions = [
-    { value: "upbeat", label: "Upbeat" },
+    { value: "auto", label: "Auto" },
+    { value: "uplifting", label: "Uplifting" },
     { value: "calm", label: "Calm" },
-    { value: "dramatic", label: "Dramatic" },
-    { value: "energetic", label: "Energetic" },
-    { value: "mysterious", label: "Mysterious" },
-    { value: "inspirational", label: "Inspirational" },
+    { value: "intense", label: "Intense" },
+    { value: "playful", label: "Playful" },
   ];
 
-  const styleOptions = [
-    { value: "cinematic", label: "Cinematic" },
-    { value: "electronic", label: "Electronic" },
-    { value: "acoustic", label: "Acoustic" },
-    { value: "orchestral", label: "Orchestral" },
-    { value: "ambient", label: "Ambient" },
-    { value: "pop", label: "Pop" },
+  const generatorOptions = [
+    { value: "auto", label: "Auto", desc: "Best for style" },
+    { value: "udio", label: "Udio", desc: "Professional-grade, versatile", price: "$0.05" },
+    { value: "suno-v5", label: "Suno V5", desc: "Adaptive, structured songs", price: "Variable" },
+    { value: "diffrhythm", label: "DiffRhythm", desc: "Full songs with vocals, fast", price: "$0.02" },
+    { value: "kling-sound", label: "Kling Sound", desc: "Sound effects & ambient", price: "$0.07" },
   ];
 
   return (
@@ -1867,7 +1865,7 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
                       value={musicMood}
                       onChange={(e) => setMusicMood(e.target.value)}
                       className="w-full rounded-lg border p-1.5 text-xs"
-                      style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }}
+                      style={{ backgroundColor: "var(--surface)", borderColor: "var(--input-border)", color: "var(--text-primary)" }}
                     >
                       {moodOptions.map((m) => (
                         <option key={m.value} value={m.value}>{m.label}</option>
@@ -1875,15 +1873,17 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
                     </select>
                   </div>
                   <div>
-                    <label className="text-xs block mb-1" style={{ color: "var(--text-muted)" }}>Style</label>
+                    <label className="text-xs block mb-1" style={{ color: "var(--text-muted)" }}>Music Generator</label>
                     <select
-                      value={musicStyle}
-                      onChange={(e) => setMusicStyle(e.target.value)}
+                      value={musicGenerator}
+                      onChange={(e) => setMusicGenerator(e.target.value)}
                       className="w-full rounded-lg border p-1.5 text-xs"
-                      style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }}
+                      style={{ backgroundColor: "var(--surface)", borderColor: "var(--input-border)", color: "var(--text-primary)" }}
                     >
-                      {styleOptions.map((s) => (
-                        <option key={s.value} value={s.value}>{s.label}</option>
+                      {generatorOptions.map((g) => (
+                        <option key={g.value} value={g.value}>
+                          {g.label}{g.price ? ` — ${g.price}` : ""}
+                        </option>
                       ))}
                     </select>
                   </div>

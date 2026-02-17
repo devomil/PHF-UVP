@@ -74,6 +74,16 @@
   --status-failed-text: #fca5a5;
 }
 
+[data-theme="dark"] select,
+[data-theme="dark"] select option {
+  background-color: #1a1a2e !important;
+  color: #e2e8f0 !important;
+}
+
+select option {
+  padding: 4px 8px;
+}
+
 @theme inline {
   --color-background: oklch(0.11 0.008 285);
   --color-foreground: oklch(0.95 0 0);
