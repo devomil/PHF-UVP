@@ -5,6 +5,7 @@ import { brandMediaLibrary } from '@shared/schema';
 import { eq } from 'drizzle-orm';
 import { brandBibleService, BrandBible, BrandAsset } from './brand-bible-service';
 import { assetUrlResolver } from './asset-url-resolver';
+import { s3RenderAssetService } from './s3-render-asset-service';
 
 // ============================================
 // PHASE 8E TYPES
@@ -203,9 +204,19 @@ class BrandInjectionService {
       return undefined;
     };
     
-    const resolvedIntroLogo = resolveLogoUrl(bible.logos.intro) || resolveLogoUrl(bible.logos.main);
-    const resolvedWatermarkLogo = resolveLogoUrl(bible.logos.watermark) || resolveLogoUrl(bible.logos.main);
-    const resolvedOutroLogo = resolveLogoUrl(bible.logos.outro) || resolveLogoUrl(bible.logos.main);
+    // S3 Render Assets fallback for logos (brand/logos/) managed via Asset Library UI
+    const getS3LogoFallback = async (): Promise<BrandAsset | undefined> => {
+      const s3Logo = await s3RenderAssetService.getLogoAsset();
+      if (s3Logo) {
+        console.log(`[BrandInject] Using S3 Render Assets logo fallback: ${s3Logo.name}`);
+        return { id: 0, name: s3Logo.name, url: s3Logo.url, mediaType: 'logo' as const, matchKeywords: [], excludeKeywords: [], usageContexts: ['intro', 'watermark', 'outro'], priority: 0, isDefault: true, isActive: true };
+      }
+      return undefined;
+    };
+    
+    const resolvedIntroLogo = resolveLogoUrl(bible.logos.intro) || resolveLogoUrl(bible.logos.main) || await getS3LogoFallback();
+    const resolvedWatermarkLogo = resolveLogoUrl(bible.logos.watermark) || resolveLogoUrl(bible.logos.main) || await getS3LogoFallback();
+    const resolvedOutroLogo = resolveLogoUrl(bible.logos.outro) || resolveLogoUrl(bible.logos.main) || await getS3LogoFallback();
     
     // 1. Generate intro animation for first scene
     if (resolvedIntroLogo) {

@@ -1,7 +1,6 @@
-// server/services/sound-design-service.ts
-
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { SOUND_PROVIDERS } from '@shared/provider-config';
+import { s3RenderAssetService } from './s3-render-asset-service';
 
 export interface SoundEffect {
   type: 'whoosh' | 'transition' | 'impact' | 'sparkle' | 'ambient' | 'notification' | 'success';
@@ -18,7 +17,6 @@ export interface SceneSoundDesign {
   emphasis?: SoundEffect[];
 }
 
-// Phase 7C: Enhanced sound design interfaces for UI display
 export interface SceneSoundInfo {
   sceneIndex: number;
   ambient: {
@@ -212,7 +210,7 @@ class SoundDesignService {
       };
     }
 
-    console.warn(`[SoundDesign] Transition sound failed, using stock fallback`);
+    console.warn(`[SoundDesign] Transition sound failed, using S3 Render Assets fallback`);
     return this.getStockTransitionSound(intensity);
   }
 
@@ -251,7 +249,8 @@ class SoundDesignService {
       };
     }
 
-    return undefined;
+    console.warn(`[SoundDesign] Ambient sound failed, trying S3 Render Assets fallback`);
+    return this.getStockAmbientSound(ambientType === 'morning' ? 'nature' : ambientType === 'wellness' ? 'wellness' : ambientType === 'energy' ? 'energy' : 'nature');
   }
 
   private async generateEmphasisSound(
@@ -374,7 +373,6 @@ class SoundDesignService {
         }
 
       } catch (error) {
-        // Continue polling
       }
     }
 
@@ -415,83 +413,86 @@ class SoundDesignService {
     return ambientScenes.includes(sceneType);
   }
 
-  /**
-   * Get stock transition sound from S3
-   *
-   * To enable stock sounds, upload the following files to your S3 bucket:
-   * - stock-sounds/whoosh-soft.mp3
-   * - stock-sounds/whoosh-medium.mp3
-   * - stock-sounds/whoosh-dramatic.mp3
-   *
-   * You can use royalty-free sounds from sources like:
-   * - freesound.org (CC0/CC-BY licensed)
-   * - pixabay.com/sound-effects (Pixabay License)
-   * - mixkit.co/free-sound-effects (free for commercial use)
-   */
-  getStockTransitionSound(intensity: 'soft' | 'medium' | 'dramatic'): SoundEffect | undefined {
-    const stockSoundBaseUrl = `https://${this.bucket}.s3.${this.region}.amazonaws.com/stock-sounds`;
-
-    const stockSounds: Record<string, { url: string; volume: number; duration: number }> = {
-      'soft': { url: `${stockSoundBaseUrl}/whoosh-soft.mp3`, volume: 0.4, duration: 0.5 },
-      'medium': { url: `${stockSoundBaseUrl}/whoosh-medium.mp3`, volume: 0.5, duration: 0.6 },
-      'dramatic': { url: `${stockSoundBaseUrl}/whoosh-dramatic.mp3`, volume: 0.6, duration: 0.8 },
+  async getStockTransitionSound(intensity: 'soft' | 'medium' | 'dramatic'): Promise<SoundEffect | undefined> {
+    const searchTerms: Record<string, string[]> = {
+      'soft': ['whoosh-soft', 'whoosh', 'soft'],
+      'medium': ['whoosh-medium', 'whoosh', 'medium'],
+      'dramatic': ['whoosh-dramatic', 'whoosh', 'dramatic'],
     };
 
-    const sound = stockSounds[intensity];
-    if (!sound) {
-      console.log(`[SoundDesign] Unknown intensity: ${intensity}`);
-      return undefined;
+    const terms = searchTerms[intensity] || ['whoosh'];
+    
+    for (const term of terms) {
+      const asset = await s3RenderAssetService.findAssetByName('sfx', term);
+      if (asset) {
+        console.log(`[SoundDesign] Found SFX from S3 Render Assets (sfx): ${asset.name} -> ${asset.url}`);
+        const volumeMap: Record<string, number> = { soft: 0.4, medium: 0.5, dramatic: 0.6 };
+        const durationMap: Record<string, number> = { soft: 0.5, medium: 0.6, dramatic: 0.8 };
+        return {
+          type: 'whoosh',
+          url: asset.url,
+          duration: durationMap[intensity] || 0.6,
+          volume: volumeMap[intensity] || 0.5,
+        };
+      }
     }
 
-    console.log(`[SoundDesign] Using stock transition sound: ${intensity} -> ${sound.url}`);
-    return {
-      type: 'whoosh',
-      url: sound.url,
-      duration: sound.duration,
-      volume: sound.volume,
-    };
+    const anyAsset = await s3RenderAssetService.getRandomAsset('sfx');
+    if (anyAsset) {
+      console.log(`[SoundDesign] Using random SFX from S3 Render Assets: ${anyAsset.name}`);
+      return {
+        type: 'whoosh',
+        url: anyAsset.url,
+        duration: 0.6,
+        volume: 0.5,
+      };
+    }
+
+    console.warn(`[SoundDesign] No SFX found in S3 Render Assets (audio/sfx/)`);
+    return undefined;
   }
 
-  /**
-   * Get stock ambient sound from S3
-   *
-   * To enable stock ambient sounds, upload the following files to your S3 bucket:
-   * - stock-sounds/ambient-nature.mp3
-   * - stock-sounds/ambient-wellness.mp3
-   * - stock-sounds/ambient-energy.mp3
-   */
-  getStockAmbientSound(type: 'nature' | 'wellness' | 'energy'): SoundEffect | undefined {
-    const stockSoundBaseUrl = `https://${this.bucket}.s3.${this.region}.amazonaws.com/stock-sounds`;
-
-    const stockSounds: Record<string, { url: string; volume: number }> = {
-      'nature': { url: `${stockSoundBaseUrl}/ambient-nature.mp3`, volume: 0.1 },
-      'wellness': { url: `${stockSoundBaseUrl}/ambient-wellness.mp3`, volume: 0.08 },
-      'energy': { url: `${stockSoundBaseUrl}/ambient-energy.mp3`, volume: 0.12 },
+  async getStockAmbientSound(type: 'nature' | 'wellness' | 'energy'): Promise<SoundEffect | undefined> {
+    const searchTerms: Record<string, string[]> = {
+      'nature': ['room-tone', 'ambient', 'nature'],
+      'wellness': ['room-tone', 'ambient', 'wellness'],
+      'energy': ['rise-swell', 'ambient', 'energy'],
     };
 
-    const sound = stockSounds[type];
-    if (!sound) {
-      console.log(`[SoundDesign] Unknown ambient type: ${type}`);
-      return undefined;
+    const terms = searchTerms[type] || ['room-tone', 'ambient'];
+
+    for (const term of terms) {
+      const asset = await s3RenderAssetService.findAssetByName('sfx', term);
+      if (asset) {
+        console.log(`[SoundDesign] Found ambient SFX from S3 Render Assets: ${asset.name} -> ${asset.url}`);
+        const volumeMap: Record<string, number> = { nature: 0.1, wellness: 0.08, energy: 0.12 };
+        return {
+          type: 'ambient',
+          url: asset.url,
+          duration: 30,
+          volume: volumeMap[type] || 0.1,
+        };
+      }
     }
 
-    console.log(`[SoundDesign] Using stock ambient sound: ${type} -> ${sound.url}`);
-    return {
-      type: 'ambient',
-      url: sound.url,
-      duration: 30, // Ambient sounds typically loop
-      volume: sound.volume,
-    };
+    console.warn(`[SoundDesign] No ambient sounds found in S3 Render Assets`);
+    return undefined;
+  }
+
+  async getBackgroundMusicFromS3(): Promise<{ url: string; name: string } | null> {
+    const musicAssets = await s3RenderAssetService.listAssets('music');
+    if (musicAssets.length > 0) {
+      const asset = musicAssets[0];
+      console.log(`[SoundDesign] Found background music from S3 Render Assets: ${asset.name}`);
+      return { url: asset.url, name: asset.name };
+    }
+    return null;
   }
 
   private sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
-  // ============================================
-  // Phase 7C: Project Sound Info for UI Display
-  // ============================================
-  
   private readonly SFX_PROVIDER = SOUND_PROVIDERS.kling_sound;
   
   designProjectSoundInfo(
