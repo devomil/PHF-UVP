@@ -5,6 +5,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Sparkles, FileText, Zap, ArrowLeft, Video, Image, Info } from "lucide-react";
 import { ProviderCatalogSelector } from "@/components/video/provider-catalog-selector";
+import { getAvailableStyles } from "@shared/visual-style-config";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -229,7 +230,7 @@ function CustomScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void;
   const [duration, setDuration] = useState("60");
   const [platform, setPlatform] = useState("YouTube");
   const [aspectRatio, setAspectRatio] = useState("16:9");
-  const [visualStyle, setVisualStyle] = useState("Professional");
+  const [visualStyle, setVisualStyle] = useState("lifestyle");
   const [voiceStyle, setVoiceStyle] = useState("Professional");
   const [mediaMode, setMediaMode] = useState("video");
 
@@ -314,29 +315,38 @@ function CustomScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void;
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <Label style={{ color: "var(--text-secondary)" }}>Visual Style</Label>
-            <Select value={visualStyle} onValueChange={setVisualStyle}>
-              <SelectTrigger className="mt-1.5" style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }}><SelectValue /></SelectTrigger>
-              <SelectContent style={{ backgroundColor: "var(--menu-bg)", borderColor: "var(--border-medium)" }}>
-                {["Professional", "Cinematic", "Minimal", "Bold", "Playful"].map((s) => (
-                  <SelectItem key={s} value={s} style={{ color: "var(--text-primary)" }}>{s}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+        <div>
+          <Label style={{ color: "var(--text-secondary)" }}>Visual Style</Label>
+          <p className="text-xs mt-0.5 mb-2" style={{ color: "var(--text-muted)" }}>Style affects AI provider selection, prompt enhancement, and transitions</p>
+          <div className="grid grid-cols-3 gap-2">
+            {getAvailableStyles().map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                className="text-left p-3 rounded-lg border-2 transition-all"
+                style={{
+                  backgroundColor: visualStyle === s.id ? "var(--surface-active)" : "var(--input-bg)",
+                  borderColor: visualStyle === s.id ? "rgb(139, 92, 246)" : "var(--input-border)",
+                }}
+                onClick={() => setVisualStyle(s.id)}
+              >
+                <span className="font-medium text-sm block" style={{ color: "var(--text-primary)" }}>{s.name}</span>
+                <span className="text-[11px] mt-0.5 block leading-snug" style={{ color: "var(--text-muted)" }}>{s.description}</span>
+              </button>
+            ))}
           </div>
-          <div>
-            <Label style={{ color: "var(--text-secondary)" }}>Voice Style</Label>
-            <Select value={voiceStyle} onValueChange={setVoiceStyle}>
-              <SelectTrigger className="mt-1.5" style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }}><SelectValue /></SelectTrigger>
-              <SelectContent style={{ backgroundColor: "var(--menu-bg)", borderColor: "var(--border-medium)" }}>
-                {["Professional", "Conversational", "Energetic", "Calm", "Dramatic"].map((s) => (
-                  <SelectItem key={s} value={s} style={{ color: "var(--text-primary)" }}>{s}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+        </div>
+
+        <div>
+          <Label style={{ color: "var(--text-secondary)" }}>Voice Style</Label>
+          <Select value={voiceStyle} onValueChange={setVoiceStyle}>
+            <SelectTrigger className="mt-1.5" style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }}><SelectValue /></SelectTrigger>
+            <SelectContent style={{ backgroundColor: "var(--menu-bg)", borderColor: "var(--border-medium)" }}>
+              {["Professional", "Conversational", "Energetic", "Calm", "Dramatic"].map((s) => (
+                <SelectItem key={s} value={s} style={{ color: "var(--text-primary)" }}>{s}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         <div>
