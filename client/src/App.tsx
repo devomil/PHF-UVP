@@ -14,6 +14,7 @@ import RenderQueue from "@/pages/render-queue";
 import Providers from "@/pages/providers";
 import Profile from "@/pages/profile";
 import NewProject from "@/pages/new-project";
+import ApiTesting from "@/pages/api-testing";
 import Landing from "@/pages/landing";
 import NotFound from "@/pages/not-found";
 import AppLayout from "@/components/layout/app-layout";
@@ -31,6 +32,7 @@ function AuthenticatedApp() {
         <Route path="/brand" component={BrandSettings} />
         <Route path="/render-queue" component={RenderQueue} />
         <Route path="/providers" component={Providers} />
+        <Route path="/api-testing" component={ApiTesting} />
         <Route path="/profile" component={Profile} />
         <Route component={NotFound} />
       </Switch>
