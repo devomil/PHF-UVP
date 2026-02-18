@@ -274,7 +274,16 @@ router.post('/api/piapi-tests/submit/:testId', async (req: Request, res: Respons
         } as TestResult);
       }
       const field = test.imageInputField || 'image_url';
-      inputData[field] = imageUrl;
+      if (field === 'key_frames') {
+        inputData.key_frames = {
+          frame0: {
+            type: 'image',
+            url: imageUrl,
+          },
+        };
+      } else {
+        inputData[field] = imageUrl;
+      }
     }
 
     let submitUrl = TASK_ENDPOINT;
@@ -394,8 +403,9 @@ router.get('/api/piapi-tests/poll/:taskId', async (req: Request, res: Response) 
     });
 
     if (!pollRes.ok) {
-      console.log(`[PiAPI-Test] Poll ${pollTaskId} failed: HTTP ${pollRes.status} (url: ${pollUrl})`);
-      return res.json({ status: 'error', error: `HTTP ${pollRes.status}` });
+      const errBody = await pollRes.text().catch(() => '');
+      console.log(`[PiAPI-Test] Poll ${pollTaskId} failed: HTTP ${pollRes.status} (url: ${pollUrl}) body: ${errBody.substring(0, 300)}`);
+      return res.json({ status: 'error', error: `HTTP ${pollRes.status}: ${errBody.substring(0, 200)}` });
     }
 
     const pollData = await pollRes.json() as any;
