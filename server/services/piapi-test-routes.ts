@@ -385,6 +385,51 @@ router.get('/api/piapi-tests/poll/:taskId', async (req: Request, res: Response) 
   }
 });
 
+router.get('/api/piapi-tests/task-output/:taskId', async (req: Request, res: Response) => {
+  if (!requireAuth(req, res)) return;
+  const apiKey = getPiAPIKey();
+  if (!apiKey) {
+    return res.status(400).json({ error: 'PIAPI_API_KEY not configured' });
+  }
+
+  const taskId = req.params.taskId as string;
+
+  try {
+    const taskRes = await fetch(`${PIAPI_BASE}/api/v1/task/${taskId}`, {
+      headers: { 'X-API-Key': apiKey },
+    });
+
+    if (!taskRes.ok) {
+      return res.status(taskRes.status).json({ error: `PiAPI returned ${taskRes.status}` });
+    }
+
+    const taskData = await taskRes.json() as any;
+    const output = taskData.data?.output;
+    const outputUrl = extractOutputUrl(output);
+
+    if (outputUrl) {
+      const userId = (req.user as any)?.id;
+      if (userId) {
+        await db.execute(sql`
+          UPDATE piapi_test_results
+          SET output_url = ${outputUrl}
+          WHERE task_id = ${taskId} AND tested_by = ${userId} AND (output_url IS NULL OR output_url = '')
+        `);
+      }
+      return res.redirect(outputUrl);
+    }
+
+    res.json({
+      taskId,
+      status: taskData.data?.status,
+      output: output || null,
+      message: 'No direct media URL found in task output',
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 function extractOutputUrl(output: any): string {
   if (!output) return '';
 

@@ -676,12 +676,12 @@ export default function ApiTesting() {
                             )}
                             {!state.outputUrl && state.taskId && state.status === "pass" && (
                               <a
-                                href={`https://api.piapi.ai/api/v1/task/${state.taskId}`}
+                                href={`/api/piapi-tests/task-output/${state.taskId}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="text-[11px] px-2 py-0.5 rounded-full bg-purple-500/15 border border-purple-500/30 text-purple-400 hover:text-purple-300 hover:bg-purple-500/25 flex items-center gap-1 transition-colors"
                               >
-                                View Task <ExternalLink className="w-3 h-3" />
+                                View Output <ExternalLink className="w-3 h-3" />
                               </a>
                             )}
                           </div>
