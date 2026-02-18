@@ -183,7 +183,7 @@ export default function ApiTesting() {
         }
 
         try {
-          const res = await fetch(`/api/piapi-tests/poll/${taskId}`);
+          const res = await fetch(`/api/piapi-tests/poll/${taskId}?testId=${testId}`);
           const data = await res.json();
 
           if (data.status === "completed" || data.status === "success" || data.status === "succeeded") {

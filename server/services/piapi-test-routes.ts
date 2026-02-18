@@ -367,13 +367,23 @@ router.get('/api/piapi-tests/poll/:taskId', async (req: Request, res: Response) 
   }
 
   const pollTaskId = req.params.taskId as string;
+  const testId = req.query.testId as string | undefined;
+
+  let pollUrl = `${PIAPI_BASE}/api/v1/task/${pollTaskId}`;
+  if (testId) {
+    const test = PIAPI_TEST_DEFINITIONS.find(t => t.id === testId);
+    if (test?.pollEndpoint) {
+      pollUrl = `${PIAPI_BASE}${test.pollEndpoint}/${pollTaskId}`;
+    }
+  }
 
   try {
-    const pollRes = await fetch(`${PIAPI_BASE}/api/v1/task/${pollTaskId}`, {
+    const pollRes = await fetch(pollUrl, {
       headers: { 'X-API-Key': apiKey },
     });
 
     if (!pollRes.ok) {
+      console.log(`[PiAPI-Test] Poll ${pollTaskId} failed: HTTP ${pollRes.status} (url: ${pollUrl})`);
       return res.json({ status: 'error', error: `HTTP ${pollRes.status}` });
     }
 
@@ -449,6 +459,8 @@ function extractOutputUrl(output: any): string {
   if (output.image_url) return output.image_url;
   if (output.audio_url) return output.audio_url;
   if (output.url) return output.url;
+  if (output.video?.url) return output.video.url;
+  if (output.video_raw?.url) return output.video_raw.url;
 
   if (Array.isArray(output.works) && output.works.length > 0) {
     const work = output.works[0];
