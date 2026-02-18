@@ -363,8 +363,12 @@ export const PIAPI_TEST_DEFINITIONS: PiAPITestDefinition[] = [
     taskType: 'video_generation',
     input: {
       prompt: 'The image comes to life with gentle motion and natural movement',
-      model: 'i2v-01',
+      model: 'v2.3',
       duration: 6,
+      resolution: 768,
+    },
+    config: {
+      service_mode: 'public',
     },
     requiresImage: true,
     imageInputField: 'image_url',
@@ -380,8 +384,12 @@ export const PIAPI_TEST_DEFINITIONS: PiAPITestDefinition[] = [
     taskType: 'video_generation',
     input: {
       prompt: '[Push in,Pan left]smooth cinematic reveal',
-      model: 'i2v-01-director',
+      model: 'v2.3',
       duration: 6,
+      resolution: 768,
+    },
+    config: {
+      service_mode: 'public',
     },
     requiresImage: true,
     imageInputField: 'image_url',
