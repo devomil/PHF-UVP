@@ -252,6 +252,22 @@ export const PIAPI_TEST_DEFINITIONS: PiAPITestDefinition[] = [
     estimatedTime: '~120s',
   },
   {
+    id: 'sora-2-pro',
+    name: 'Sora 2 Pro',
+    category: 'video',
+    model: 'sora2',
+    taskType: 'sora2-pro-video',
+    input: {
+      prompt: 'A cinematic tracking shot through a misty ancient forest at dawn',
+      aspect_ratio: '16:9',
+      resolution: '720p',
+      duration: 4,
+    },
+    pollForResult: true,
+    estimatedCost: '$0.60',
+    estimatedTime: '~180s',
+  },
+  {
     id: 'omnihuman',
     name: 'OmniHuman',
     category: 'video',
