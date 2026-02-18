@@ -169,19 +169,6 @@ export const PIAPI_TEST_DEFINITIONS: PiAPITestDefinition[] = [
     timeoutMs: 660000,
   },
   {
-    id: 'skyreels',
-    name: 'Skyreels',
-    category: 'video',
-    model: 'skyreels',
-    taskType: 'video_generation',
-    input: {
-      prompt: 'Stars twinkling in a clear night sky with milky way visible',
-    },
-    pollForResult: true,
-    estimatedCost: '$0.10',
-    estimatedTime: '~60s',
-  },
-  {
     id: 'seedance-pro',
     name: 'Seedance 1.0 Pro',
     category: 'video',
@@ -493,6 +480,24 @@ export const PIAPI_TEST_DEFINITIONS: PiAPITestDefinition[] = [
     pollForResult: true,
     estimatedCost: '$0.10',
     estimatedTime: '~60s',
+  },
+  {
+    id: 'i2v-skyreels',
+    name: 'Skyreels I2V',
+    category: 'i2v',
+    model: 'Qubico/skyreels',
+    taskType: 'img2video',
+    input: {
+      prompt: 'FPS-24, gentle movement and natural motion of the subject',
+      negative_prompt: 'chaotic, distortion, morphing',
+      aspect_ratio: '16:9',
+      guidance_scale: 3.5,
+    },
+    requiresImage: true,
+    imageInputField: 'image',
+    pollForResult: true,
+    estimatedCost: '$0.10',
+    estimatedTime: '~90s',
   },
 
   // ==================== IMAGE-TO-IMAGE (I2I) ====================
