@@ -7,6 +7,7 @@ export interface PiAPITestDefinition {
   input: Record<string, any>;
   config?: Record<string, any>;
   endpoint?: string;
+  pollEndpoint?: string;
   pollForResult: boolean;
   estimatedCost: string;
   estimatedTime: string;
@@ -116,6 +117,7 @@ export const PIAPI_TEST_DEFINITIONS: PiAPITestDefinition[] = [
       aspect_ratio: '16:9',
       loop: false,
     },
+    pollEndpoint: '/api/luma/v1/video',
     pollForResult: true,
     estimatedCost: '$0.30',
     estimatedTime: '~90s',
