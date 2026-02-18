@@ -389,6 +389,10 @@ router.get('/api/piapi-tests/poll/:taskId', async (req: Request, res: Response) 
   const pollTaskId = req.params.taskId as string;
   const testId = req.query.testId as string | undefined;
 
+  const FALLBACK_POLL_ENDPOINTS: Record<string, string> = {
+    'luma': '/api/luma/v1/video',
+  };
+
   let pollUrl = `${PIAPI_BASE}/api/v1/task/${pollTaskId}`;
   if (testId) {
     const test = PIAPI_TEST_DEFINITIONS.find(t => t.id === testId);
@@ -398,9 +402,21 @@ router.get('/api/piapi-tests/poll/:taskId', async (req: Request, res: Response) 
   }
 
   try {
-    const pollRes = await fetch(pollUrl, {
-      headers: { 'X-API-Key': apiKey },
+    let pollRes = await fetch(pollUrl, {
+      headers: { 'X-API-Key': apiKey, 'Accept': 'application/json' },
     });
+
+    if (!pollRes.ok && testId) {
+      const test = PIAPI_TEST_DEFINITIONS.find(t => t.id === testId);
+      const fallbackPath = test?.model ? FALLBACK_POLL_ENDPOINTS[test.model] : null;
+      if (fallbackPath && !pollUrl.includes(fallbackPath)) {
+        const fallbackUrl = `${PIAPI_BASE}${fallbackPath}/${pollTaskId}`;
+        console.log(`[PiAPI-Test] Poll ${pollTaskId} primary failed (${pollRes.status}), trying fallback: ${fallbackUrl}`);
+        pollRes = await fetch(fallbackUrl, {
+          headers: { 'X-API-Key': apiKey, 'Accept': 'application/json' },
+        });
+      }
+    }
 
     if (!pollRes.ok) {
       const errBody = await pollRes.text().catch(() => '');
