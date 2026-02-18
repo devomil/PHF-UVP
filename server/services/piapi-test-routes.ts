@@ -277,11 +277,14 @@ router.post('/api/piapi-tests/submit/:testId', async (req: Request, res: Respons
       inputData[field] = imageUrl;
     }
 
-    const requestBody = {
+    const requestBody: Record<string, any> = {
       model: test.model,
       task_type: test.taskType,
       input: inputData,
     };
+    if (test.config) {
+      requestBody.config = test.config;
+    }
 
     console.log(`[PiAPI-Test] Submitting ${test.id}: ${JSON.stringify(requestBody)}`);
 
