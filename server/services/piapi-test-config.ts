@@ -5,6 +5,7 @@ export interface PiAPITestDefinition {
   model: string;
   taskType: string;
   input: Record<string, any>;
+  config?: Record<string, any>;
   endpoint?: string;
   pollForResult: boolean;
   estimatedCost: string;
@@ -75,8 +76,11 @@ export const PIAPI_TEST_DEFINITIONS: PiAPITestDefinition[] = [
     taskType: 'video_generation',
     input: {
       prompt: 'Ocean waves gently rolling onto a sandy beach at sunset',
-      model: 'v2.3',
+      model: 't2v-01',
       expand_prompt: true,
+    },
+    config: {
+      service_mode: 'public',
     },
     pollForResult: true,
     estimatedCost: '$0.20',
