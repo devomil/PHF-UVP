@@ -371,25 +371,61 @@ router.get('/api/piapi-tests/poll/:taskId', async (req: Request, res: Response) 
     const status = pollData.data?.status;
     const output = pollData.data?.output;
 
-    let outputUrl = '';
-    if (output) {
-      outputUrl = output.video_url || output.image_url || output.audio_url ||
-        (Array.isArray(output.images) && output.images[0]?.url) ||
-        (Array.isArray(output.videos) && output.videos[0]?.url) ||
-        output.url || '';
-    }
+    const outputUrl = extractOutputUrl(output);
 
     res.json({
       taskId: pollTaskId,
       status: status,
       outputUrl,
-      output: output ? JSON.stringify(output).substring(0, 500) : null,
+      output: output ? JSON.stringify(output).substring(0, 1000) : null,
       error: pollData.data?.error ? JSON.stringify(pollData.data.error).substring(0, 300) : null,
     });
   } catch (error: any) {
     res.json({ status: 'error', error: error.message });
   }
 });
+
+function extractOutputUrl(output: any): string {
+  if (!output) return '';
+
+  if (output.video_url) return output.video_url;
+  if (output.image_url) return output.image_url;
+  if (output.audio_url) return output.audio_url;
+  if (output.url) return output.url;
+
+  if (Array.isArray(output.works) && output.works.length > 0) {
+    const work = output.works[0];
+    if (work?.resource?.resource) return work.resource.resource;
+    if (work?.url) return work.url;
+    if (work?.video_url) return work.video_url;
+    if (work?.image_url) return work.image_url;
+  }
+
+  if (Array.isArray(output.videos) && output.videos.length > 0) {
+    const v = output.videos[0];
+    if (typeof v === 'string') return v;
+    if (v?.url) return v.url;
+    if (v?.video_url) return v.video_url;
+  }
+
+  if (Array.isArray(output.images) && output.images.length > 0) {
+    const img = output.images[0];
+    if (typeof img === 'string') return img;
+    if (img?.url) return img.url;
+    if (img?.image_url) return img.image_url;
+  }
+
+  if (output.result_url) return output.result_url;
+  if (output.download_url) return output.download_url;
+  if (output.media_url) return output.media_url;
+  if (output.file_url) return output.file_url;
+
+  const outputStr = JSON.stringify(output);
+  const urlMatch = outputStr.match(/https?:\/\/[^\s"',}\]]+\.(mp4|webm|mov|jpg|jpeg|png|webp|gif|mp3|wav|ogg)/i);
+  if (urlMatch) return urlMatch[0];
+
+  return '';
+}
 
 async function runChatCompletionTest(test: any, apiKey: string): Promise<TestResult> {
   const startTime = Date.now();
@@ -581,10 +617,7 @@ async function runSingleTest(test: any, apiKey: string, req: Request): Promise<T
 
         if (status === 'completed' || status === 'success' || status === 'succeeded') {
           const output = pollData.data?.output;
-          const outputUrl = output?.video_url || output?.image_url || output?.audio_url ||
-            (Array.isArray(output?.images) && output.images[0]?.url) ||
-            (Array.isArray(output?.videos) && output.videos[0]?.url) ||
-            output?.url || '';
+          const outputUrl = extractOutputUrl(output);
 
           return {
             id: test.id,
