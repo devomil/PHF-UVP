@@ -436,9 +436,18 @@ router.get('/api/piapi-tests/task-output/:taskId', async (req: Request, res: Res
   }
 
   const taskId = req.params.taskId as string;
+  const testId = req.query.testId as string | undefined;
+
+  let fetchUrl = `${PIAPI_BASE}/api/v1/task/${taskId}`;
+  if (testId) {
+    const test = PIAPI_TEST_DEFINITIONS.find(t => t.id === testId);
+    if (test?.pollEndpoint) {
+      fetchUrl = `${PIAPI_BASE}${test.pollEndpoint}/${taskId}`;
+    }
+  }
 
   try {
-    const taskRes = await fetch(`${PIAPI_BASE}/api/v1/task/${taskId}`, {
+    const taskRes = await fetch(fetchUrl, {
       headers: { 'X-API-Key': apiKey },
     });
 

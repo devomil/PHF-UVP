@@ -117,6 +117,8 @@ export const PIAPI_TEST_DEFINITIONS: PiAPITestDefinition[] = [
       aspect_ratio: '16:9',
       key_frames: null,
     },
+    endpoint: '/api/luma/v1/video',
+    pollEndpoint: '/api/luma/v1/video',
     config: {
       service_mode: 'public',
     },
@@ -430,6 +432,8 @@ export const PIAPI_TEST_DEFINITIONS: PiAPITestDefinition[] = [
       aspect_ratio: '16:9',
       duration: 5,
     },
+    endpoint: '/api/luma/v1/video',
+    pollEndpoint: '/api/luma/v1/video',
     config: {
       service_mode: 'public',
     },
