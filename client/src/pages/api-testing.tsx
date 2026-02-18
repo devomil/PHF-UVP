@@ -32,6 +32,8 @@ interface TestDefinition {
   estimatedTime: string;
   notes?: string;
   requiresImage?: boolean;
+  input?: Record<string, any>;
+  endpoint?: string;
 }
 
 interface TestState {
@@ -595,6 +597,11 @@ export default function ApiTesting() {
                   const isDisabled = isRunning || (needsImage && !hasImage);
                   const badge = getStatusBadge(state.status);
                   const hasFinalResult = state.status === "pass" || state.status === "fail" || state.status === "timeout";
+                  const prompt = test.input?.prompt
+                    || test.input?.messages?.[0]?.content
+                    || test.input?.text
+                    || test.input?.lyrics
+                    || null;
 
                   return (
                     <div
@@ -628,7 +635,17 @@ export default function ApiTesting() {
                           )}
                         </div>
 
-                        {state.status === "idle" && (
+                        {prompt && (
+                          <p
+                            className="text-[11px] mt-1 leading-relaxed italic truncate max-w-[500px]"
+                            style={{ color: "var(--text-secondary)" }}
+                            title={typeof prompt === "string" ? prompt : JSON.stringify(prompt)}
+                          >
+                            &ldquo;{typeof prompt === "string" ? prompt : JSON.stringify(prompt)}&rdquo;
+                          </p>
+                        )}
+
+                        {state.status === "idle" && !prompt && (
                           <div className="mt-0.5">
                             <span className="text-[11px]" style={{ color: "var(--text-tertiary)" }}>Not tested</span>
                           </div>
