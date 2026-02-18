@@ -151,7 +151,8 @@ export const PIAPI_TEST_DEFINITIONS: PiAPITestDefinition[] = [
     },
     pollForResult: true,
     estimatedCost: '$0.15',
-    estimatedTime: '~90s',
+    estimatedTime: '~300s',
+    timeoutMs: 360000,
   },
   {
     id: 'wan-2.1',
@@ -164,7 +165,8 @@ export const PIAPI_TEST_DEFINITIONS: PiAPITestDefinition[] = [
     },
     pollForResult: true,
     estimatedCost: '$0.15',
-    estimatedTime: '~90s',
+    estimatedTime: '~300s',
+    timeoutMs: 360000,
   },
   {
     id: 'skyreels',
