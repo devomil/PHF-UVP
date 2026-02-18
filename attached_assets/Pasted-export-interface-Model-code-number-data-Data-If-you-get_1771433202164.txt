@@ -1,0 +1,76 @@
+export interface Model {
+    code: number;
+    data: Data;
+    /**
+     * If you get non-null error message, here are some steps you chould follow:
+     * - Check our [common error
+     * message](https://climbing-adapter-afb.notion.site/Common-Error-Messages-6d108f5a8f644238b05ca50d47bbb0f4)
+     * - Retry for several times
+     * - If you have retried for more than 3 times and still not work, file a ticket on Discord
+     * and our support will be with you soon.
+     */
+    message: string;
+    [property: string]: any;
+}
+
+export interface Data {
+    detail: null;
+    error: Error;
+    input: { [key: string]: any };
+    logs: { [key: string]: any }[];
+    meta: Meta;
+    model: string;
+    output: { [key: string]: any };
+    /**
+     * Hover on the "Completed" option and you coult see the explaintion of all status:
+     * completed/processing/pending/failed/staged
+     */
+    status: Status;
+    task_id: string;
+    task_type: string;
+    [property: string]: any;
+}
+
+export interface Error {
+    code?: number;
+    message?: string;
+    [property: string]: any;
+}
+
+export interface Meta {
+    /**
+     * The time when the task was submitted to us (staged and/or pending)
+     */
+    created_at?: string;
+    /**
+     * The time when the task finished processing.
+     */
+    ended_at?: string;
+    is_using_private_pool: boolean;
+    /**
+     * The time when the task started processing. the time from created_at to time of started_at
+     * is time the job spent in the "staged“ stage and/or the"pending" stage if there were any.
+     */
+    started_at?: string;
+    usage: Usage;
+    [property: string]: any;
+}
+
+export interface Usage {
+    consume: number;
+    frozen: number;
+    type: string;
+    [property: string]: any;
+}
+
+/**
+ * Hover on the "Completed" option and you coult see the explaintion of all status:
+ * completed/processing/pending/failed/staged
+ */
+export enum Status {
+    Completed = "Completed",
+    Failed = "Failed",
+    Pending = "Pending",
+    Processing = "Processing",
+    Staged = "Staged",
+}
