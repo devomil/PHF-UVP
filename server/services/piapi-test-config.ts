@@ -15,6 +15,8 @@ export interface PiAPITestDefinition {
   notes?: string;
   requiresImage?: boolean;
   imageInputField?: string;
+  disabled?: boolean;
+  disabledReason?: string;
 }
 
 export const PIAPI_TEST_DEFINITIONS: PiAPITestDefinition[] = [
@@ -170,7 +172,7 @@ export const PIAPI_TEST_DEFINITIONS: PiAPITestDefinition[] = [
   },
   {
     id: 'seedance-pro',
-    name: 'Seedance 1.0 Pro',
+    name: 'Seedance 1.0 Pro (Not Yet on PiAPI)',
     category: 'video',
     model: 'seedance-1.0-pro',
     taskType: 'text-to-video',
@@ -182,10 +184,12 @@ export const PIAPI_TEST_DEFINITIONS: PiAPITestDefinition[] = [
     pollForResult: true,
     estimatedCost: '$0.25',
     estimatedTime: '~120s',
+    disabled: true,
+    disabledReason: 'Seedance not yet available on PiAPI - check back after Feb 24 2026',
   },
   {
     id: 'seedance-lite',
-    name: 'Seedance 1.0 Lite',
+    name: 'Seedance 1.0 Lite (Not Yet on PiAPI)',
     category: 'video',
     model: 'seedance-1.0-lite',
     taskType: 'text-to-video',
@@ -197,6 +201,8 @@ export const PIAPI_TEST_DEFINITIONS: PiAPITestDefinition[] = [
     pollForResult: true,
     estimatedCost: '$0.10',
     estimatedTime: '~60s',
+    disabled: true,
+    disabledReason: 'Seedance not yet available on PiAPI - check back after Feb 24 2026',
   },
   {
     id: 'veo-3',
@@ -453,7 +459,7 @@ export const PIAPI_TEST_DEFINITIONS: PiAPITestDefinition[] = [
   },
   {
     id: 'i2v-seedance-pro',
-    name: 'Seedance Pro I2V',
+    name: 'Seedance Pro I2V (Not Yet on PiAPI)',
     category: 'i2v',
     model: 'seedance-1.0-pro',
     taskType: 'image-to-video',
@@ -467,10 +473,12 @@ export const PIAPI_TEST_DEFINITIONS: PiAPITestDefinition[] = [
     pollForResult: true,
     estimatedCost: '$0.25',
     estimatedTime: '~120s',
+    disabled: true,
+    disabledReason: 'Seedance not yet available on PiAPI - check back after Feb 24 2026',
   },
   {
     id: 'i2v-seedance-lite',
-    name: 'Seedance Lite I2V',
+    name: 'Seedance Lite I2V (Not Yet on PiAPI)',
     category: 'i2v',
     model: 'seedance-1.0-lite',
     taskType: 'image-to-video',
@@ -484,6 +492,8 @@ export const PIAPI_TEST_DEFINITIONS: PiAPITestDefinition[] = [
     pollForResult: true,
     estimatedCost: '$0.10',
     estimatedTime: '~60s',
+    disabled: true,
+    disabledReason: 'Seedance not yet available on PiAPI - check back after Feb 24 2026',
   },
   {
     id: 'i2v-skyreels',

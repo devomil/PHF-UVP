@@ -35,6 +35,8 @@ interface TestDefinition {
   requiresImage?: boolean;
   input?: Record<string, any>;
   endpoint?: string;
+  disabled?: boolean;
+  disabledReason?: string;
 }
 
 interface TestState {
@@ -287,7 +289,7 @@ export default function ApiTesting() {
 
   const runCategory = useCallback(
     async (category: string) => {
-      const tests = definitions[category] || [];
+      const tests = (definitions[category] || []).filter((t) => !t.disabled);
       for (const test of tests) {
         await runTest(test.id);
         await new Promise((r) => setTimeout(r, 500));
@@ -600,7 +602,7 @@ export default function ApiTesting() {
                 {tests.map((test) => {
                   const state = testStates[test.id] || { status: "idle" as const };
                   const isRunning = state.status === "submitting" || state.status === "polling";
-                  const isDisabled = isRunning || (needsImage && !hasImage);
+                  const isDisabled = isRunning || (needsImage && !hasImage) || !!test.disabled;
                   const badge = getStatusBadge(state.status);
                   const hasFinalResult = state.status === "pass" || state.status === "fail" || state.status === "timeout";
                   const prompt = test.input?.prompt
@@ -629,6 +631,11 @@ export default function ApiTesting() {
                           {test.requiresImage && (
                             <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
                               IMG
+                            </span>
+                          )}
+                          {test.disabled && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-500/10 text-yellow-400 border border-yellow-500/20">
+                              UNAVAILABLE
                             </span>
                           )}
                           {badge && (
@@ -731,6 +738,7 @@ export default function ApiTesting() {
                       <button
                         onClick={() => runTest(test.id)}
                         disabled={isDisabled}
+                        title={test.disabled ? (test.disabledReason || 'This test is currently unavailable') : undefined}
                         className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         style={{
                           borderColor: hasFinalResult ? "var(--border-subtle)" : "var(--border-subtle)",
@@ -745,7 +753,7 @@ export default function ApiTesting() {
                         ) : (
                           <Play className="w-3.5 h-3.5" />
                         )}
-                        {isRunning ? "Testing..." : hasFinalResult ? "Retest" : "Test"}
+                        {test.disabled ? "N/A" : isRunning ? "Testing..." : hasFinalResult ? "Retest" : "Test"}
                       </button>
                     </div>
                   );

@@ -251,6 +251,9 @@ router.post('/api/piapi-tests/submit/:testId', async (req: Request, res: Respons
   if (!test) {
     return res.status(404).json({ error: `Test "${submitTestId}" not found` });
   }
+  if (test.disabled) {
+    return res.status(400).json({ error: test.disabledReason || 'This test is currently disabled' });
+  }
 
   try {
     const startTime = Date.now();
