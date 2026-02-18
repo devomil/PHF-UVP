@@ -277,21 +277,26 @@ router.post('/api/piapi-tests/submit/:testId', async (req: Request, res: Respons
       inputData[field] = imageUrl;
     }
 
+    const requestBody = {
+      model: test.model,
+      task_type: test.taskType,
+      input: inputData,
+    };
+
+    console.log(`[PiAPI-Test] Submitting ${test.id}: ${JSON.stringify(requestBody)}`);
+
     const createRes = await fetch(TASK_ENDPOINT, {
       method: 'POST',
       headers: {
         'X-API-Key': apiKey,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        model: test.model,
-        task_type: test.taskType,
-        input: inputData,
-      }),
+      body: JSON.stringify(requestBody),
     });
 
     if (!createRes.ok) {
       const errorText = await createRes.text();
+      console.log(`[PiAPI-Test] ${test.id} submit failed: HTTP ${createRes.status} - ${errorText.substring(0, 500)}`);
       return res.json({
         id: test.id,
         name: test.name,
@@ -315,6 +320,8 @@ router.post('/api/piapi-tests/submit/:testId', async (req: Request, res: Respons
         error: 'Invalid JSON response',
       } as TestResult);
     }
+
+    console.log(`[PiAPI-Test] ${test.id} response: status=${createData.data?.status}, task_id=${createData.data?.task_id}, message=${createData.message || 'none'}`);
 
     if (!createData.data?.task_id) {
       return res.json({
@@ -370,6 +377,8 @@ router.get('/api/piapi-tests/poll/:taskId', async (req: Request, res: Response) 
     const pollData = await pollRes.json() as any;
     const status = pollData.data?.status;
     const output = pollData.data?.output;
+
+    console.log(`[PiAPI-Test] Poll ${pollTaskId}: status=${status}, model=${pollData.data?.model || 'unknown'}`);
 
     const outputUrl = extractOutputUrl(output);
 
