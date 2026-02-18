@@ -291,27 +291,38 @@ export default function ApiTesting() {
   const getStatusIcon = (status: TestState["status"]) => {
     switch (status) {
       case "idle":
-        return <div className="w-3 h-3 rounded-full border-2" style={{ borderColor: "var(--text-tertiary)" }} />;
+        return <div className="w-3.5 h-3.5 rounded-full border-2" style={{ borderColor: "var(--text-tertiary)" }} />;
       case "submitting":
       case "polling":
-        return <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />;
+        return <Loader2 className="w-5 h-5 text-blue-400 animate-spin" />;
       case "pass":
-        return <CheckCircle2 className="w-4 h-4 text-emerald-400" />;
+        return <CheckCircle2 className="w-5 h-5 text-emerald-400" />;
       case "fail":
-        return <XCircle className="w-4 h-4 text-red-400" />;
+        return <XCircle className="w-5 h-5 text-red-400" />;
       case "timeout":
-        return <Clock className="w-4 h-4 text-amber-400" />;
+        return <Clock className="w-5 h-5 text-amber-400" />;
     }
   };
 
-  const getStatusLabel = (status: TestState["status"]) => {
+  const getStatusBadge = (status: TestState["status"]) => {
     switch (status) {
-      case "idle": return "Not tested";
-      case "submitting": return "Submitting...";
-      case "polling": return "Processing...";
-      case "pass": return "Passed";
-      case "fail": return "Failed";
-      case "timeout": return "Timeout";
+      case "idle": return null;
+      case "submitting": return { label: "Submitting...", bg: "rgba(96,165,250,0.15)", border: "rgba(96,165,250,0.3)", color: "rgb(96,165,250)" };
+      case "polling": return { label: "Processing...", bg: "rgba(96,165,250,0.15)", border: "rgba(96,165,250,0.3)", color: "rgb(96,165,250)" };
+      case "pass": return { label: "Passed", bg: "rgba(52,211,153,0.15)", border: "rgba(52,211,153,0.3)", color: "rgb(52,211,153)" };
+      case "fail": return { label: "Failed", bg: "rgba(248,113,113,0.15)", border: "rgba(248,113,113,0.3)", color: "rgb(248,113,113)" };
+      case "timeout": return { label: "Timeout", bg: "rgba(251,191,36,0.15)", border: "rgba(251,191,36,0.3)", color: "rgb(251,191,36)" };
+    }
+  };
+
+  const getRowStyle = (status: TestState["status"]): React.CSSProperties => {
+    switch (status) {
+      case "pass": return { backgroundColor: "rgba(52,211,153,0.05)", borderLeft: "3px solid rgb(52,211,153)" };
+      case "fail": return { backgroundColor: "rgba(248,113,113,0.05)", borderLeft: "3px solid rgb(248,113,113)" };
+      case "timeout": return { backgroundColor: "rgba(251,191,36,0.05)", borderLeft: "3px solid rgb(251,191,36)" };
+      case "submitting":
+      case "polling": return { backgroundColor: "rgba(96,165,250,0.05)", borderLeft: "3px solid rgb(96,165,250)" };
+      default: return { backgroundColor: "var(--app-bg)", borderLeft: "3px solid transparent" };
     }
   };
 
@@ -582,17 +593,19 @@ export default function ApiTesting() {
                   const state = testStates[test.id] || { status: "idle" as const };
                   const isRunning = state.status === "submitting" || state.status === "polling";
                   const isDisabled = isRunning || (needsImage && !hasImage);
+                  const badge = getStatusBadge(state.status);
+                  const hasFinalResult = state.status === "pass" || state.status === "fail" || state.status === "timeout";
 
                   return (
                     <div
                       key={test.id}
-                      className="flex items-center gap-3 px-4 py-2.5 hover:brightness-105 transition-colors"
-                      style={{ backgroundColor: "var(--app-bg)" }}
+                      className="flex items-center gap-3 px-4 py-3 transition-colors"
+                      style={getRowStyle(state.status)}
                     >
                       <div className="shrink-0">{getStatusIcon(state.status)}</div>
 
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-sm font-medium truncate">{test.name}</span>
                           <code
                             className="text-[10px] px-1.5 py-0.5 rounded font-mono hidden sm:inline-block"
@@ -605,46 +618,72 @@ export default function ApiTesting() {
                               IMG
                             </span>
                           )}
-                        </div>
-                        <div className="flex items-center gap-3 mt-0.5">
-                          <span className="text-[11px]" style={{ color: "var(--text-tertiary)" }}>
-                            {getStatusLabel(state.status)}
-                          </span>
-                          {state.testedAt && state.status !== "submitting" && state.status !== "polling" && (
+                          {badge && (
                             <span
-                              className="text-[10px] px-1.5 py-0.5 rounded"
-                              style={{ backgroundColor: "var(--surface-hover)", color: "var(--text-tertiary)" }}
-                              title={new Date(state.testedAt).toLocaleString()}
+                              className="text-[11px] font-semibold px-2 py-0.5 rounded-full border"
+                              style={{ backgroundColor: badge.bg, borderColor: badge.border, color: badge.color }}
                             >
-                              {formatTimeAgo(state.testedAt)}
+                              {badge.label}
                             </span>
-                          )}
-                          {state.responseTime && (
-                            <span className="text-[11px]" style={{ color: "var(--text-tertiary)" }}>
-                              {(state.responseTime / 1000).toFixed(1)}s
-                            </span>
-                          )}
-                          {state.error && (
-                            <span className="text-[11px] text-red-400 truncate max-w-[300px]" title={state.error}>
-                              {state.error}
-                            </span>
-                          )}
-                          {state.outputText && (
-                            <span className="text-[11px] text-emerald-400 truncate max-w-[200px]">
-                              {state.outputText}
-                            </span>
-                          )}
-                          {state.outputUrl && (
-                            <a
-                              href={state.outputUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-[11px] text-blue-400 hover:text-blue-300 flex items-center gap-0.5"
-                            >
-                              View output <ExternalLink className="w-2.5 h-2.5" />
-                            </a>
                           )}
                         </div>
+
+                        {state.status === "idle" && (
+                          <div className="mt-0.5">
+                            <span className="text-[11px]" style={{ color: "var(--text-tertiary)" }}>Not tested</span>
+                          </div>
+                        )}
+
+                        {hasFinalResult && (
+                          <div className="flex items-center gap-2 mt-1 flex-wrap">
+                            {state.testedAt && (
+                              <span
+                                className="text-[11px] px-1.5 py-0.5 rounded inline-flex items-center gap-1"
+                                style={{ backgroundColor: "var(--surface-hover)", color: "var(--text-secondary)" }}
+                                title={new Date(state.testedAt).toLocaleString()}
+                              >
+                                <Clock className="w-3 h-3" />
+                                {formatTimeAgo(state.testedAt)}
+                              </span>
+                            )}
+                            {state.responseTime != null && state.responseTime > 0 && (
+                              <span
+                                className="text-[11px] px-1.5 py-0.5 rounded"
+                                style={{ backgroundColor: "var(--surface-hover)", color: "var(--text-secondary)" }}
+                              >
+                                {(state.responseTime / 1000).toFixed(1)}s
+                              </span>
+                            )}
+                            {state.error && (
+                              <span className="text-[11px] text-red-400 truncate max-w-[400px]" title={state.error}>
+                                {state.error}
+                              </span>
+                            )}
+                            {state.outputText && (
+                              <span className="text-[11px] text-emerald-300 truncate max-w-[250px]">
+                                {state.outputText}
+                              </span>
+                            )}
+                            {state.outputUrl && (
+                              <a
+                                href={state.outputUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-[11px] px-2 py-0.5 rounded-full bg-blue-500/15 border border-blue-500/30 text-blue-400 hover:text-blue-300 hover:bg-blue-500/25 flex items-center gap-1 transition-colors"
+                              >
+                                View Output <ExternalLink className="w-3 h-3" />
+                              </a>
+                            )}
+                          </div>
+                        )}
+
+                        {isRunning && (
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="text-[11px] text-blue-400 animate-pulse">
+                              {state.status === "submitting" ? "Submitting to PiAPI..." : "Waiting for result..."}
+                            </span>
+                          </div>
+                        )}
                       </div>
 
                       <div className="hidden md:flex items-center gap-3 shrink-0">
@@ -659,21 +698,21 @@ export default function ApiTesting() {
                       <button
                         onClick={() => runTest(test.id)}
                         disabled={isDisabled}
-                        className="shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         style={{
-                          borderColor: "var(--border-subtle)",
-                          backgroundColor: "var(--surface)",
+                          borderColor: hasFinalResult ? "var(--border-subtle)" : "var(--border-subtle)",
+                          backgroundColor: hasFinalResult ? "var(--surface-hover)" : "var(--surface)",
                           color: "var(--text-primary)",
                         }}
                       >
                         {isRunning ? (
-                          <Loader2 className="w-3 h-3 animate-spin" />
-                        ) : state.status === "pass" || state.status === "fail" || state.status === "timeout" ? (
-                          <RefreshCw className="w-3 h-3" />
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : hasFinalResult ? (
+                          <RefreshCw className="w-3.5 h-3.5" />
                         ) : (
-                          <Play className="w-3 h-3" />
+                          <Play className="w-3.5 h-3.5" />
                         )}
-                        {isRunning ? "..." : state.status !== "idle" ? "Retest" : "Test"}
+                        {isRunning ? "Testing..." : hasFinalResult ? "Retest" : "Test"}
                       </button>
                     </div>
                   );
