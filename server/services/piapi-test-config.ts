@@ -75,7 +75,8 @@ export const PIAPI_TEST_DEFINITIONS: PiAPITestDefinition[] = [
     taskType: 'video_generation',
     input: {
       prompt: 'Ocean waves gently rolling onto a sandy beach at sunset',
-      model: 't2v-01',
+      model: 'v2.3',
+      expand_prompt: true,
     },
     pollForResult: true,
     estimatedCost: '$0.20',
