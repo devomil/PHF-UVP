@@ -30,6 +30,7 @@ interface TestDefinition {
   taskType: string;
   estimatedCost: string;
   estimatedTime: string;
+  timeoutMs?: number;
   notes?: string;
   requiresImage?: boolean;
   input?: Record<string, any>;
@@ -163,16 +164,17 @@ export default function ApiTesting() {
   };
 
   const pollTask = useCallback(
-    async (testId: string, taskId: string, startTime: number) => {
-      const maxPollTime = 180000;
+    async (testId: string, taskId: string, startTime: number, timeoutMs?: number) => {
+      const maxPollTime = timeoutMs || 180000;
       const pollInterval = 3000;
+      const timeoutLabel = maxPollTime >= 60000 ? `${Math.round(maxPollTime / 60000)} minute` : `${Math.round(maxPollTime / 1000)}s`;
 
       const poll = async () => {
         if (Date.now() - startTime > maxPollTime) {
           const result = {
             status: "timeout" as const,
             responseTime: Date.now() - startTime,
-            error: "Exceeded 3 minute timeout",
+            error: `Exceeded ${timeoutLabel} timeout`,
             taskId,
           };
           updateTestState(testId, result);
@@ -224,6 +226,10 @@ export default function ApiTesting() {
       const startTime = Date.now();
       updateTestState(testId, { status: "submitting", error: undefined, outputUrl: undefined, outputText: undefined, testedAt: undefined });
 
+      const allTests = Object.values(definitions).flat();
+      const testDef = allTests.find((t) => t.id === testId);
+      const testTimeout = testDef?.timeoutMs;
+
       try {
         const res = await fetch(`/api/piapi-tests/submit/${testId}`, { method: "POST" });
         const data = await res.json();
@@ -256,7 +262,7 @@ export default function ApiTesting() {
             status: "polling",
             taskId: data.taskId,
           });
-          pollTask(testId, data.taskId, startTime);
+          pollTask(testId, data.taskId, startTime, testTimeout);
         } else {
           const result = {
             status: "fail" as const,

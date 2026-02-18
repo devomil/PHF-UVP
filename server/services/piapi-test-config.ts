@@ -10,6 +10,7 @@ export interface PiAPITestDefinition {
   pollForResult: boolean;
   estimatedCost: string;
   estimatedTime: string;
+  timeoutMs?: number;
   notes?: string;
   requiresImage?: boolean;
   imageInputField?: string;
@@ -99,7 +100,8 @@ export const PIAPI_TEST_DEFINITIONS: PiAPITestDefinition[] = [
     },
     pollForResult: true,
     estimatedCost: '$0.10',
-    estimatedTime: '~120s',
+    estimatedTime: '~300s',
+    timeoutMs: 360000,
   },
   {
     id: 'luma',
