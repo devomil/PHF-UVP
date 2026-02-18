@@ -112,10 +112,10 @@ export const PIAPI_TEST_DEFINITIONS: PiAPITestDefinition[] = [
     taskType: 'video_generation',
     input: {
       prompt: 'Morning mist rising over a quiet lake surrounded by mountains',
-      model: 'ray-v2',
+      model_name: 'ray-v2',
       duration: 5,
       aspect_ratio: '16:9',
-      loop: false,
+      key_frames: null,
     },
     config: {
       service_mode: 'public',
@@ -426,10 +426,15 @@ export const PIAPI_TEST_DEFINITIONS: PiAPITestDefinition[] = [
     taskType: 'video_generation',
     input: {
       prompt: 'Cinematic slow push in with subtle parallax depth effect',
+      model_name: 'ray-v2',
       aspect_ratio: '16:9',
+      duration: 5,
+    },
+    config: {
+      service_mode: 'public',
     },
     requiresImage: true,
-    imageInputField: 'image_url',
+    imageInputField: 'key_frames',
     pollForResult: true,
     estimatedCost: '$0.30',
     estimatedTime: '~90s',
