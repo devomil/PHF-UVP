@@ -277,18 +277,29 @@ router.post('/api/piapi-tests/submit/:testId', async (req: Request, res: Respons
       inputData[field] = imageUrl;
     }
 
-    const requestBody: Record<string, any> = {
-      model: test.model,
-      task_type: test.taskType,
-      input: inputData,
-    };
-    if (test.config) {
-      requestBody.config = test.config;
+    let submitUrl = TASK_ENDPOINT;
+    let requestBody: Record<string, any>;
+
+    if (test.endpoint) {
+      submitUrl = `${PIAPI_BASE}${test.endpoint}`;
+      requestBody = { ...inputData };
+      if (test.config) {
+        requestBody.config = test.config;
+      }
+    } else {
+      requestBody = {
+        model: test.model,
+        task_type: test.taskType,
+        input: inputData,
+      };
+      if (test.config) {
+        requestBody.config = test.config;
+      }
     }
 
-    console.log(`[PiAPI-Test] Submitting ${test.id}: ${JSON.stringify(requestBody)}`);
+    console.log(`[PiAPI-Test] Submitting ${test.id} to ${submitUrl}: ${JSON.stringify(requestBody)}`);
 
-    const createRes = await fetch(TASK_ENDPOINT, {
+    const createRes = await fetch(submitUrl, {
       method: 'POST',
       headers: {
         'X-API-Key': apiKey,
