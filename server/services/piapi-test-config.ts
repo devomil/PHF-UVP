@@ -111,7 +111,10 @@ export const PIAPI_TEST_DEFINITIONS: PiAPITestDefinition[] = [
     taskType: 'video_generation',
     input: {
       prompt: 'Morning mist rising over a quiet lake surrounded by mountains',
+      model: 'ray-v2',
+      duration: 5,
       aspect_ratio: '16:9',
+      loop: false,
     },
     pollForResult: true,
     estimatedCost: '$0.30',
