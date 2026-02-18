@@ -241,9 +241,11 @@ export const PIAPI_TEST_DEFINITIONS: PiAPITestDefinition[] = [
     name: 'Sora 2',
     category: 'video',
     model: 'sora2',
-    taskType: 'sora2-text-to-video',
+    taskType: 'sora2-video',
     input: {
       prompt: 'A paper airplane gliding through a sunlit room',
+      aspect_ratio: '16:9',
+      duration: 4,
     },
     pollForResult: true,
     estimatedCost: '$0.40',
