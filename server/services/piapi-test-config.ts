@@ -92,8 +92,8 @@ export const PIAPI_TEST_DEFINITIONS: PiAPITestDefinition[] = [
     id: 'hunyuan',
     name: 'Hunyuan',
     category: 'video',
-    model: 'hunyuan',
-    taskType: 'video_generation',
+    model: 'Qubico/hunyuan',
+    taskType: 'txt2video',
     input: {
       prompt: 'A butterfly landing on a flower in slow motion',
     },
