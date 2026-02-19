@@ -3,7 +3,7 @@ import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import {
   Play, Pause, Volume2, VolumeX, Maximize2, MoreVertical,
   RefreshCw, Upload, Image, Video, Save, X, Loader2,
-  CheckCircle2, ImagePlus, ChevronDown, Edit2
+  CheckCircle2, ImagePlus, ChevronDown, Edit2, FolderOpen
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -391,20 +391,22 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose }: E
                 </div>
               ))}
               <button
+                type="button"
                 onClick={() => refFileInputRef.current?.click()}
                 className="w-10 h-10 rounded-md border border-dashed flex items-center justify-center transition-colors hover:border-purple-500/40"
                 style={{ borderColor: "var(--border-subtle)", color: "var(--text-muted)" }}
-                title="Upload reference image"
+                title="Upload from computer"
               >
                 <Upload className="w-3.5 h-3.5" />
               </button>
               <button
-                onClick={() => setShowLibrary(!showLibrary)}
+                type="button"
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowLibrary(!showLibrary); }}
                 className="w-10 h-10 rounded-md border border-dashed flex items-center justify-center transition-colors hover:border-purple-500/40"
-                style={{ borderColor: showLibrary ? "rgba(124,58,237,0.4)" : "var(--border-subtle)", color: "var(--text-muted)" }}
-                title="Browse library"
+                style={{ borderColor: showLibrary ? "rgba(124,58,237,0.4)" : "var(--border-subtle)", color: showLibrary ? "rgb(124,58,237)" : "var(--text-muted)" }}
+                title="Browse asset library"
               >
-                <Image className="w-3.5 h-3.5" />
+                <FolderOpen className="w-3.5 h-3.5" />
               </button>
             </div>
             {showLibrary && (
