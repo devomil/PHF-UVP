@@ -20,13 +20,19 @@ const VIDEO_PROVIDERS = [
   { id: "hailuo", label: "Hailuo" },
   { id: "wan-2.6", label: "Wan 2.6" },
   { id: "wan-2.1", label: "Wan 2.1" },
-  { id: "luma", label: "Luma" },
-  { id: "runway", label: "RunwayML" },
-  { id: "pika", label: "Pika" },
   { id: "veo-3.1", label: "Veo 3.1" },
   { id: "veo-3", label: "Veo 3" },
   { id: "sora-2", label: "Sora 2" },
   { id: "sora-2-pro", label: "Sora 2 Pro" },
+  { id: "hunyuan", label: "Hunyuan" },
+];
+
+const GENERATION_MODES = [
+  { id: "auto", label: "Auto", description: "Automatically choose based on available assets" },
+  { id: "t2v", label: "T2V", description: "Text-to-Video: Generate video from text prompt" },
+  { id: "i2v", label: "I2V", description: "Image-to-Video: Animate a reference image" },
+  { id: "t2i", label: "T2I", description: "Text-to-Image: Generate a still image from text" },
+  { id: "i2i", label: "I2I", description: "Image-to-Image: Transform an existing image" },
 ];
 
 interface EnhancedSceneEditorProps {
@@ -56,6 +62,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose }: E
   const [videoDuration, setVideoDuration] = useState(0);
   const [isEditing, setIsEditing] = useState(false);
   const [provider, setProvider] = useState("auto");
+  const [generationMode, setGenerationMode] = useState("auto");
   const [referenceImageUrls, setReferenceImageUrls] = useState<string[]>([]);
   const [showLibrary, setShowLibrary] = useState(false);
   const [editValues, setEditValues] = useState({
@@ -146,11 +153,19 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose }: E
 
   const regenImageMutation = useMutation({
     mutationFn: async () => {
+      const activeMode = generationMode === "auto"
+        ? (referenceImageUrls.length > 0 ? "i2i" : "t2i")
+        : generationMode;
+      const sourceImage = referenceImageUrls.length > 0 ? referenceImageUrls[0] : imageUrl;
       const res = await fetch(`/api/universal-video/${projectId}/scenes/${sceneId}/regenerate-image`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ prompt: editValues.visualDirection }),
+        body: JSON.stringify({
+          prompt: editValues.visualDirection,
+          generationMode: activeMode,
+          sourceImageUrl: activeMode === "i2i" ? sourceImage : undefined,
+        }),
       });
       if (!res.ok) throw new Error("Failed to regenerate image");
       return res.json();
@@ -166,7 +181,11 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose }: E
 
   const regenVideoMutation = useMutation({
     mutationFn: async () => {
+      const activeMode = generationMode === "auto"
+        ? (referenceImageUrls.length > 0 ? "i2v" : "t2v")
+        : generationMode;
       const sourceImage = referenceImageUrls.length > 0 ? referenceImageUrls[0] : imageUrl;
+      const useSourceImage = activeMode === "i2v" || activeMode === "i2i";
       const res = await fetch(`/api/universal-video/${projectId}/scenes/${sceneId}/regenerate-video`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -174,7 +193,8 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose }: E
         body: JSON.stringify({
           query: editValues.visualDirection,
           provider: provider === "auto" ? undefined : provider,
-          sourceImageUrl: sourceImage,
+          sourceImageUrl: useSourceImage ? sourceImage : undefined,
+          generationMode: activeMode,
         }),
       });
       if (!res.ok) throw new Error("Failed to regenerate video");
@@ -442,30 +462,50 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose }: E
             )}
           </div>
 
-          {/* Provider Selector + Regenerate */}
+          {/* Provider + Mode Selectors + Regenerate */}
           <div className="flex flex-col items-end gap-2">
-            <div>
-              <p className="text-[11px] font-medium mb-1 text-right" style={{ color: "var(--text-secondary)" }}>Video Provider</p>
-              <select
-                value={provider}
-                onChange={(e) => setProvider(e.target.value)}
-                className="text-xs rounded-lg border px-2 py-1.5 bg-transparent outline-none w-48"
-                style={{ borderColor: "var(--border-subtle)", color: "var(--text-primary)" }}
-              >
-                {VIDEO_PROVIDERS.map((p) => (
-                  <option key={p.id} value={p.id}>{p.label}</option>
-                ))}
-              </select>
-              {referenceImageUrls.length > 0 ? (
-                <p className="text-[10px] mt-0.5 text-right" style={{ color: "rgb(124,58,237)" }}>
-                  I2V mode: Reference image will be used
-                </p>
-              ) : (
-                <p className="text-[10px] mt-0.5 text-right" style={{ color: "var(--text-muted)" }}>
-                  T2V mode: Direct text-to-video
-                </p>
-              )}
+            <div className="flex gap-2">
+              <div>
+                <p className="text-[11px] font-medium mb-1 text-right" style={{ color: "var(--text-secondary)" }}>Mode</p>
+                <select
+                  value={generationMode}
+                  onChange={(e) => setGenerationMode(e.target.value)}
+                  className="text-xs rounded-lg border px-2 py-1.5 bg-transparent outline-none w-24"
+                  style={{ borderColor: "var(--border-subtle)", color: "var(--text-primary)" }}
+                >
+                  {GENERATION_MODES.map((m) => (
+                    <option key={m.id} value={m.id}>{m.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <p className="text-[11px] font-medium mb-1 text-right" style={{ color: "var(--text-secondary)" }}>Provider</p>
+                <select
+                  value={provider}
+                  onChange={(e) => setProvider(e.target.value)}
+                  className="text-xs rounded-lg border px-2 py-1.5 bg-transparent outline-none w-44"
+                  style={{ borderColor: "var(--border-subtle)", color: "var(--text-primary)" }}
+                >
+                  {VIDEO_PROVIDERS.map((p) => (
+                    <option key={p.id} value={p.id}>{p.label}</option>
+                  ))}
+                </select>
+              </div>
             </div>
+            <p className="text-[10px] text-right max-w-[280px]" style={{ color: (() => {
+              const activeMode = generationMode === "auto"
+                ? (referenceImageUrls.length > 0 ? "i2v" : "t2v")
+                : generationMode;
+              return activeMode === "i2v" || activeMode === "i2i" ? "rgb(124,58,237)" : "var(--text-muted)";
+            })() }}>
+              {(() => {
+                const activeMode = generationMode === "auto"
+                  ? (referenceImageUrls.length > 0 ? "i2v" : "t2v")
+                  : generationMode;
+                const modeInfo = GENERATION_MODES.find(m => m.id === activeMode);
+                return modeInfo?.description || "Select a generation mode";
+              })()}
+            </p>
             <div className="flex gap-1.5">
               <button
                 onClick={() => regenImageMutation.mutate()}
