@@ -17,7 +17,7 @@ class PromptEnhancementService {
   async enhanceVideoPrompt(prompt: string, options: EnhanceOptions): Promise<EnhancedPrompt> {
     return {
       prompt,
-      negativePrompt: 'blurry, low quality, distorted, watermark',
+      negativePrompt: 'text, words, letters, numbers, writing, signage, logos, watermarks, labels, captions, titles, subtitles, UI elements, buttons, banners, badges, stamps, certificates, menus, blurry, low quality, distorted',
     };
   }
 }

@@ -185,7 +185,7 @@ class PiAPIVideoService {
       task_type: 'text_to_video',
       input: {
         prompt: options.prompt,
-        negative_prompt: options.negativePrompt || 'blurry, low quality, distorted, ugly, watermark, text',
+        negative_prompt: options.negativePrompt || 'text, words, letters, numbers, writing, signage, logos, watermarks, labels, captions, titles, subtitles, UI elements, buttons, banners, blurry, low quality, distorted, ugly',
         duration: Math.min(options.duration, modelConfig.maxDuration),
         aspect_ratio: options.aspectRatio,
       },
@@ -428,7 +428,7 @@ class PiAPIVideoService {
           task_type: 'wan26-txt2video',
           input: {
             prompt: options.prompt,
-            negative_prompt: options.negativePrompt || 'blurry, low quality, distorted',
+            negative_prompt: options.negativePrompt || 'text, words, letters, numbers, writing, signage, logos, watermarks, labels, captions, blurry, low quality, distorted',
             prompt_extend: true,
             resolution: '720p',
             aspect_ratio: options.aspectRatio || '16:9',
@@ -1160,7 +1160,7 @@ class PiAPIVideoService {
     // ===========================================
     
     // I2V-specific negative prompt for Kling (simplified - no black/fade references)
-    const i2vNegativePrompt = 'blurry, low quality, distorted, warping, watermark';
+    const i2vNegativePrompt = 'text, words, letters, numbers, writing, signage, logos, watermarks, labels, captions, blurry, low quality, distorted, warping';
     
     if (options.model.startsWith('kling')) {
       let version = '2.6';
@@ -1395,7 +1395,7 @@ class PiAPIVideoService {
           version: '1.6',  // Elements feature only available in v1.6
           duration: Math.min(options.duration || 5, 10),  // v1.6 max 10s
           aspect_ratio: options.aspectRatio || '16:9',
-          negative_prompt: 'blurry, low quality, distorted, morphing, warping, watermark',
+          negative_prompt: 'text, words, letters, numbers, writing, signage, logos, watermarks, labels, captions, blurry, low quality, distorted, morphing, warping',
         },
       };
 
@@ -1489,7 +1489,7 @@ class PiAPIVideoService {
           version: '1.6',  // v1.6 for better I2V support
           duration: Math.min(options.duration || 5, 10),
           aspect_ratio: options.aspectRatio || '16:9',
-          negative_prompt: 'blurry, low quality, distorted, morphing, warping, watermark, different product, wrong product',
+          negative_prompt: 'text, words, letters, numbers, writing, signage, logos, watermarks, labels, captions, blurry, low quality, distorted, morphing, warping, different product, wrong product',
         },
       };
 

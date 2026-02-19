@@ -239,6 +239,7 @@ CRITICAL VISUAL DIRECTION RULES:
 - Only mention "Pine Hill Farm" explicitly in CTA, outro, product, or testimonial scenes
 - Apply the PHF AESTHETIC (warm lighting, earth tones, natural textures) to ALL scenes
 - Do NOT invent fictional Pine Hill Farm locations
+- NEVER include text, words, signs, labels, logos, or written content in visual directions. AI video models cannot render readable text. Describe ONLY visual imagery, actions, lighting, and composition. Instead of "storefront with sign" write "exterior entrance". Instead of "label showing ingredients" write "close-up of product packaging".
 
 Return ONLY valid JSON matching this structure:
 {
