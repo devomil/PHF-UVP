@@ -4619,7 +4619,9 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
     project: VideoProject,
     sceneId: string,
     customPrompt?: string,
-    provider?: string
+    provider?: string,
+    generationMode?: string,
+    sourceImageUrl?: string
   ): Promise<{ success: boolean; newImageUrl?: string; source?: string; error?: string }> {
     const sceneIndex = project.scenes.findIndex(s => s.id === sceneId);
     if (sceneIndex < 0) {
@@ -4629,16 +4631,49 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
     const scene = project.scenes[sceneIndex];
     const prompt = customPrompt || scene.visualDirection || scene.background?.source || 'wellness lifestyle';
     
-    // Detect if this is a product video context by checking for product images in assets
     const isProductVideo = (project.assets?.productImages?.length ?? 0) > 0;
+    const mode = generationMode || 'auto';
     
-    console.log(`[Regenerate] Image for scene ${sceneId} with prompt: ${prompt.substring(0, 60)}... (isProductVideo: ${isProductVideo}, provider: ${provider || 'default'})`);
+    console.log(`[Regenerate] Image for scene ${sceneId} with prompt: ${prompt.substring(0, 60)}... (mode: ${mode}, isProductVideo: ${isProductVideo}, provider: ${provider || 'default'})`);
     console.log(`[Regenerate] Scene type: ${scene.type}, Visual direction: ${(scene.visualDirection || 'none').substring(0, 50)}`);
     
-    // Phase 9B: Store the requested provider in scene assets for tracking
     if (provider) {
       if (!scene.assets) scene.assets = {};
       (scene.assets as any).requestedProvider = provider;
+    }
+    
+    // Handle explicit I2I mode from UI
+    if (mode === 'i2i' && sourceImageUrl) {
+      console.log(`[Regenerate] Explicit I2I mode with source: ${sourceImageUrl.substring(0, 80)}`);
+      try {
+        const i2iResult = await this.generateImageWithReference(
+          prompt,
+          sourceImageUrl,
+          { strength: 0.7, preserveComposition: true },
+          sceneId
+        );
+        if (i2iResult.success && i2iResult.url) {
+          console.log(`[Regenerate] I2I image generated successfully: ${i2iResult.source}`);
+          return { success: true, newImageUrl: i2iResult.url, source: i2iResult.source };
+        }
+        console.log(`[Regenerate] Explicit I2I failed: ${i2iResult.error || 'no URL'} - falling through`);
+      } catch (err: any) {
+        console.error(`[Regenerate] Explicit I2I error:`, err.message);
+      }
+    }
+    
+    // Handle explicit T2I mode - skip reference image logic
+    if (mode === 't2i') {
+      console.log(`[Regenerate] Explicit T2I mode - generating from text only`);
+      try {
+        const imageResult = await this.generateImage(prompt, sceneId, isProductVideo);
+        if (imageResult.success && imageResult.url) {
+          return { success: true, newImageUrl: imageResult.url, source: imageResult.source };
+        }
+      } catch (err: any) {
+        console.error(`[Regenerate] T2I error:`, err.message);
+      }
+      return { success: false, error: 'T2I image generation failed' };
     }
     
     // ===== PHASE 13D: IMAGE-TO-IMAGE REFERENCE SUPPORT FOR REGENERATION =====

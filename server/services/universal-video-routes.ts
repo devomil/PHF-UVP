@@ -3983,9 +3983,9 @@ router.post('/:projectId/scenes/:sceneId/regenerate-image', isAuthenticated, asy
   try {
     const userId = (req.user as any)?.id;
     const { projectId, sceneId } = req.params;
-    const { prompt, provider } = req.body;
+    const { prompt, provider, generationMode, sourceImageUrl } = req.body;
     
-    console.log(`[Phase9B] Regenerating image for scene ${sceneId} with provider: ${provider || 'default'}`);
+    console.log(`[Phase9B] Regenerating image for scene ${sceneId} with provider: ${provider || 'default'}, mode: ${generationMode || 'auto'}`);
     
     const projectData = await getProjectFromDb(projectId);
     if (!projectData) {
@@ -3996,7 +3996,7 @@ router.post('/:projectId/scenes/:sceneId/regenerate-image', isAuthenticated, asy
       return res.status(403).json({ success: false, error: 'Access denied' });
     }
     
-    const result = await universalVideoService.regenerateSceneImage(projectData, sceneId, prompt, provider);
+    const result = await universalVideoService.regenerateSceneImage(projectData, sceneId, prompt, provider, generationMode, sourceImageUrl);
     
     if (result.success && result.newImageUrl) {
       const sceneIndex = projectData.scenes.findIndex((s: Scene) => s.id === sceneId);
@@ -4099,9 +4099,10 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, asy
   try {
     const userId = (req.user as any)?.id;
     const { projectId, sceneId } = req.params;
-    const { query, provider, sourceImageUrl, i2vSettings, motionControl, forceRegenerate } = req.body;
+    const { query, provider, sourceImageUrl, i2vSettings, motionControl, forceRegenerate, generationMode } = req.body;
     
     console.log(`[Phase9B-Async] Creating async video generation job for scene ${sceneId} with provider: ${provider || 'default'}${sourceImageUrl ? ', using I2V with source image' : ''}${i2vSettings ? ', with I2V settings' : ''}${forceRegenerate ? ', FORCE REGENERATE' : ''}`);
+    console.log(`[Phase9B-Async] Generation mode: ${generationMode || 'auto'}`);
     console.log(`[Phase9B-Async] Source image URL from request: ${sourceImageUrl?.substring(0, 80) || 'none'}`);
     console.log(`[Phase9B-Async] I2V settings: ${JSON.stringify(i2vSettings || 'none')}`);
     console.log(`[Phase9B-Async] Motion control: ${JSON.stringify(motionControl || 'auto (intelligent)')}`);
@@ -4177,8 +4178,13 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, asy
     
     // Determine source image for I2V - use provided sourceImageUrl or scene's brandAssetUrl
     // BUT skip brandAssetUrl if the visual direction requires AI-generated people content
-    const shouldUseBrandAsset = scene.brandAssetUrl && !requiresPeopleContent;
-    const relativeSourceUrl = sourceImageUrl || (shouldUseBrandAsset ? scene.brandAssetUrl : undefined);
+    // If explicit generationMode is "t2v", skip all source images (user chose text-to-video)
+    const explicitMode = generationMode || 'auto';
+    const forceT2V = explicitMode === 't2v';
+    const forceI2V = explicitMode === 'i2v';
+    const shouldUseBrandAsset = !forceT2V && scene.brandAssetUrl && !requiresPeopleContent;
+    const relativeSourceUrl = forceT2V ? undefined : (sourceImageUrl || (shouldUseBrandAsset ? scene.brandAssetUrl : undefined));
+    console.log(`[Phase9B-Async] Explicit generation mode: ${explicitMode}`);
     console.log(`[Phase9B-Async] Scene brandAssetUrl: ${scene.brandAssetUrl?.substring(0, 80) || 'none'}`);
     console.log(`[Phase9B-Async] Requires people content: ${requiresPeopleContent}, will use brandAsset: ${shouldUseBrandAsset}`);
     console.log(`[Phase9B-Async] Relative source image URL: ${relativeSourceUrl?.substring(0, 80) || 'none (T2V mode)'}`);
