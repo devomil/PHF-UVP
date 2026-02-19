@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { brandContextService } from "./brand-context-service";
 import { projectInstructionsService } from "./project-instructions-service";
+import { getAnyBrandContext, getBrandNameOrDefault, type BrandContext } from "./brand-settings-service";
 
 export interface ParsedScene {
   id: string;
@@ -83,8 +84,8 @@ class ScriptParserService {
       `[ScriptParser] Brand matches - Services: ${serviceMatches.services.length}, Products: ${serviceMatches.products.length}, Conditions: ${serviceMatches.conditions.length}`
     );
 
-    const systemPrompt = this.buildBrandAwareSystemPrompt(brandContext, roleContext, aestheticContext);
-    const userPrompt = this.buildParsingPrompt(script, options, serviceMatches);
+    const systemPrompt = await this.buildBrandAwareSystemPrompt(brandContext, roleContext, aestheticContext);
+    const userPrompt = await this.buildParsingPrompt(script, options, serviceMatches);
 
     try {
       const response = await client.messages.create({
@@ -111,34 +112,44 @@ class ScriptParserService {
     }
   }
 
-  private buildBrandAwareSystemPrompt(brandContext: string, roleContext: string, aestheticContext: string): string {
+  private async buildBrandAwareSystemPrompt(brandContext: string, roleContext: string, aestheticContext: string): Promise<string> {
+    const brand = await getAnyBrandContext();
+    const brandName = getBrandNameOrDefault(brand);
+    const hasBrand = brand.brandName?.trim();
+    const brandDesc = hasBrand
+      ? `${brandName}${brand.tagline ? ` - ${brand.tagline}` : ''}`
+      : 'the brand';
+    const guidelinesBlock = brand.guidelines?.trim()
+      ? `\nBRAND GUIDELINES (from user):\n${brand.guidelines}\n`
+      : '';
+
     return `${roleContext}
 
-You are an expert video script parser for Pine Hill Farm, a farm-to-wellness brand.
+You are an expert video script parser for ${brandDesc}.
 
 ${brandContext}
 
 ${aestheticContext}
-
+${guidelinesBlock}
 YOUR ROLE:
 You parse video scripts into scenes, identifying:
 1. Scene breaks and types (hook, problem, solution, benefit, testimonial, cta)
-2. Pine Hill Farm service/product connections for each scene
-3. Visual directions that match the brand's warm, natural aesthetic
+2. ${hasBrand ? `${brandName} service/product connections for each scene` : 'Brand service/product connections for each scene'}
+3. Visual directions that match the brand's aesthetic
 4. Target audience resonance points
 5. Brand messaging opportunities
 
-SCENE TYPES FOR PINE HILL FARM:
-- "hook": Opening that captures attention, often showing a relatable health struggle
-- "problem": Depicts the health challenge (fatigue, gut issues, hormone problems)
-- "agitation": Deepens the pain point (conventional medicine frustrations)
-- "solution": Introduces Pine Hill Farm's approach (root cause, holistic)
+SCENE TYPES:
+- "hook": Opening that captures attention
+- "problem": Depicts the challenge or pain point
+- "agitation": Deepens the pain point
+- "solution": Introduces ${hasBrand ? `${brandName}'s` : "the brand's"} approach
 - "benefit": Shows transformation and positive outcomes
 - "proof": Social proof, credentials, certifications
 - "product": Showcases specific products or services
 - "testimonial": Customer success stories
 - "cta": Call to action (visit website, book consultation)
-- "explanation": Educational content about health topics
+- "explanation": Educational content
 - "process": Step-by-step demonstrations
 - "intro": Introduction and context setting
 - "brand": Brand values and mission
@@ -147,19 +158,16 @@ VISUAL DIRECTION RULES - CRITICAL:
 
 1. APPLY THE AESTHETIC, DON'T FORCE THE LOCATION
    
-   WRONG: "Pine Hill Farm kitchen with woman preparing food"
+   WRONG: "${brandName} kitchen with woman preparing food"
    RIGHT: "Warm, sunlit home kitchen with natural wood counters, woman preparing fresh vegetables, golden morning light, earth tones"
    
-   WRONG: "Pine Hill Farm consultation room"
+   WRONG: "${brandName} consultation room"
    RIGHT: "Cozy wellness space with plants, natural light, warm wood furniture"
-   
-   WRONG: "Pine Hill Farm entrance"
-   RIGHT: "Welcoming wellness center with natural landscaping" (only for CTA scenes)
 
-2. WHEN TO EXPLICITLY MENTION "PINE HILL FARM":
+2. WHEN TO EXPLICITLY MENTION "${brandName.toUpperCase()}":
    - CTA scenes (call to action, visit us, contact us)
    - Outro scenes (final branding moment)
-   - Product showcase scenes (PHF supplements, PHF CBD products)
+   - Product showcase scenes
    - NEVER in educational/informational scenes
    
 3. BRAND AESTHETIC (apply to ALL scenes):
@@ -175,18 +183,18 @@ VISUAL DIRECTION RULES - CRITICAL:
    - EDUCATIONAL: Clean background, warm lighting, focus on subject matter
    - SOLUTION: Bright, hopeful, natural ingredients or wellness imagery
    - BENEFIT: Lifestyle imagery, transformation, vitality
-   - CTA: Pine Hill Farm branding, logo, contact info, welcoming entrance
+   - CTA: ${hasBrand ? `${brandName} branding, logo, contact info` : 'Brand logo, contact info'}, welcoming entrance
 
 5. WHAT THE VISUAL DIRECTION SHOULD DESCRIBE:
    - Lighting quality and color temperature
    - Setting type (home kitchen, living room, garden, wellness space)
    - Subject (person demographics, expression, activity)
    - Textures and materials visible
-   - Color palette
+   - Color palette${brand.primaryColor !== '#9333ea' ? ` (brand colors: ${brand.primaryColor}, ${brand.secondaryColor}, ${brand.accentColor})` : ''}
    - Camera framing/angle
    - Mood and atmosphere
    
-   DO NOT describe fictional "Pine Hill Farm" locations that don't exist.
+   DO NOT describe fictional "${brandName}" locations that don't exist.
 
 OUTPUT FORMAT:
 Return a JSON object with scenes array. Each scene should include:
@@ -194,23 +202,26 @@ Return a JSON object with scenes array. Each scene should include:
 - type: scene type from list above
 - narration: the script text for this scene
 - duration: estimated seconds (based on reading speed ~150 words/min or ~2.5 words/sec)
-- visualDirection: detailed visual description matching PHF aesthetic
+- visualDirection: detailed visual description matching brand aesthetic
 - searchQuery: 3-5 word stock video search query
 - fallbackQuery: alternative search query
 - keyPoints: main points for text overlays
-- serviceMatch: Pine Hill Farm service if relevant
-- productMatch: Pine Hill Farm product if relevant
+- serviceMatch: ${hasBrand ? `${brandName} service` : 'brand service'} if relevant
+- productMatch: ${hasBrand ? `${brandName} product` : 'brand product'} if relevant
 - conditionMatch: Health condition being addressed
 - audienceResonance: Why this connects with target audience
-- brandOpportunity: Messaging opportunity for PHF values`;
+- brandOpportunity: Messaging opportunity for brand values`;
   }
 
-  private buildParsingPrompt(
+  private async buildParsingPrompt(
     script: string,
     options: ScriptParseOptions,
     serviceMatches: { services: string[]; products: string[]; conditions: string[] }
-  ): string {
-    return `Parse this video script for Pine Hill Farm.
+  ): Promise<string> {
+    const brand = await getAnyBrandContext();
+    const brandName = getBrandNameOrDefault(brand);
+
+    return `Parse this video script${brand.brandName?.trim() ? ` for ${brandName}` : ''}.
 
 PLATFORM: ${options.platform}
 VISUAL STYLE: ${options.visualStyle}
@@ -226,19 +237,19 @@ SCRIPT TO PARSE:
 ${script}
 """
 
-Parse this into scenes with Pine Hill Farm brand awareness. For each scene:
+Parse this into scenes with brand awareness. For each scene:
 1. Identify the scene type and purpose
-2. Connect to relevant PHF services/products
-3. Write visual directions that match PHF's warm, natural aesthetic
+2. Connect to relevant brand services/products
+3. Write visual directions that match the brand's warm, natural aesthetic
 4. Note audience resonance and brand opportunities
 5. Create searchQuery for stock video (3-5 concise words)
 6. Create fallbackQuery as alternative search approach
 
 CRITICAL VISUAL DIRECTION RULES:
-- For hook/problem/solution/benefit/educational scenes: Use GENERIC aesthetic settings like "warm sunlit home kitchen" or "cozy living room" - do NOT say "Pine Hill Farm kitchen" or "Pine Hill Farm consultation room"
-- Only mention "Pine Hill Farm" explicitly in CTA, outro, product, or testimonial scenes
-- Apply the PHF AESTHETIC (warm lighting, earth tones, natural textures) to ALL scenes
-- Do NOT invent fictional Pine Hill Farm locations
+- For hook/problem/solution/benefit/educational scenes: Use GENERIC aesthetic settings like "warm sunlit home kitchen" or "cozy living room" - do NOT say "${brandName} kitchen" or "${brandName} consultation room"
+- Only mention "${brandName}" explicitly in CTA, outro, product, or testimonial scenes
+- Apply the brand aesthetic (warm lighting, earth tones, natural textures) to ALL scenes
+- Do NOT invent fictional ${brandName} locations
 - NEVER include text, words, signs, labels, logos, or written content in visual directions. AI video models cannot render readable text. Describe ONLY visual imagery, actions, lighting, and composition. Instead of "storefront with sign" write "exterior entrance". Instead of "label showing ingredients" write "close-up of product packaging".
 
 Return ONLY valid JSON matching this structure:
@@ -249,12 +260,12 @@ Return ONLY valid JSON matching this structure:
       "type": "hook|problem|solution|benefit|cta|etc",
       "narration": "exact script text for this scene",
       "duration": 5,
-      "visualDirection": "detailed visual matching PHF aesthetic",
+      "visualDirection": "detailed visual matching brand aesthetic",
       "searchQuery": "3-5 word stock video search",
       "fallbackQuery": "alternative search query",
       "keyPoints": ["main point for text overlay"],
-      "serviceMatch": "PHF service name or null",
-      "productMatch": "PHF product name or null",
+      "serviceMatch": "brand service name or null",
+      "productMatch": "brand product name or null",
       "conditionMatch": "health condition or null",
       "audienceResonance": "why this connects with target audience",
       "brandOpportunity": "PHF value or messaging opportunity"

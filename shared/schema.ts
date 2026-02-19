@@ -644,3 +644,33 @@ export const piapiTestResults = pgTable("piapi_test_results", {
 }));
 
 export type PiapiTestResult = typeof piapiTestResults.$inferSelect;
+
+export const brandSettings = pgTable("brand_settings", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  brandName: varchar("brand_name", { length: 255 }).default(""),
+  tagline: varchar("tagline", { length: 500 }).default(""),
+  website: varchar("website", { length: 500 }).default(""),
+  primaryColor: varchar("primary_color", { length: 20 }).default("#9333ea"),
+  secondaryColor: varchar("secondary_color", { length: 20 }).default("#4f46e5"),
+  accentColor: varchar("accent_color", { length: 20 }).default("#06b6d4"),
+  logoUrl: text("logo_url"),
+  guidelines: text("guidelines").default(""),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  userIdx: unique("uq_brand_settings_user_id").on(table.userId),
+}));
+
+export const brandSettingsRelations = relations(brandSettings, ({ one }) => ({
+  user: one(users, { fields: [brandSettings.userId], references: [users.id] }),
+}));
+
+export const insertBrandSettingsSchema = createInsertSchema(brandSettings).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type BrandSettings = typeof brandSettings.$inferSelect;
+export type InsertBrandSettings = z.infer<typeof insertBrandSettingsSchema>;

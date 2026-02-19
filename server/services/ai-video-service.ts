@@ -12,6 +12,7 @@ import {
 import { getVisualStyleConfig, VisualStyleConfig } from '@shared/visual-style-config';
 import { getMotionControl, MotionControlConfig } from '@shared/config/motion-control';
 import { optimizePrompt, logPromptOptimization, analyzePrompt } from './video-prompt-optimizer';
+import { getAnyBrandContext, getBrandNameOrDefault } from './brand-settings-service';
 
 interface AIVideoResult {
   success: boolean;
@@ -151,7 +152,7 @@ class AIVideoService {
       visualDescription: enhanced.prompt,
       sceneType: options.sceneType || 'general',
       includeProduct,
-      productName: 'Pine Hill supplement',
+      productName: 'product',
       visualStyle: options.visualStyle || 'lifestyle',
       generationMode,
       provider: normalizedProvider,

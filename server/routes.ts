@@ -13,9 +13,11 @@ import brandMediaRouter from "./services/brand-media-routes";
 import mediaAssetRouter from "./services/media-asset-routes";
 import assetLibraryRouter from "./services/asset-library-routes";
 import uploadRouter from "./services/upload-routes";
+import brandSettingsRouter from "./services/brand-settings-routes";
 import { processVideoJob } from "./services/job-processor";
 import { universalVideoService } from "./services/universal-video-service";
 import { aiMusicService } from "./services/ai-music-service";
+import { getBrandContext } from "./services/brand-settings-service";
 
 export function registerRoutes(app: Express) {
   app.use("/api/provider-test", providerTestRouter);
@@ -25,6 +27,7 @@ export function registerRoutes(app: Express) {
   app.use("/api/media-assets", mediaAssetRouter);
   app.use("/api/asset-library", assetLibraryRouter);
   app.use("/api/videos", uploadRouter);
+  app.use("/api/brand-settings", brandSettingsRouter);
   app.use('/uploads', express.static('uploads'));
   app.use('/test-images', express.static('public/test-images'));
 
@@ -195,9 +198,11 @@ export function registerRoutes(app: Express) {
 
       if (mode === "ai-script" || mode === "custom-script") {
         const type = mode === "ai-script" ? "product" : "script-based";
+        const userId = (req.user as any).id;
+        const brandData = await getBrandContext(userId);
         const [project] = await db.insert(universalVideoProjects).values({
           projectId,
-          ownerId: (req.user as any).id,
+          ownerId: userId,
           type,
           title: title || "Untitled Project",
           description: description || script || "",
@@ -205,7 +210,7 @@ export function registerRoutes(app: Express) {
           totalDuration: duration || 60,
           fps: 30,
           outputFormat: { aspectRatio: aspectRatio || "16:9", resolution, platform: platform || "YouTube" },
-          brand: {},
+          brand: brandData.brandName ? { name: brandData.brandName, tagline: brandData.tagline, website: brandData.website, colors: { primary: brandData.primaryColor, secondary: brandData.secondaryColor, accent: brandData.accentColor }, logoUrl: brandData.logoUrl, guidelines: brandData.guidelines } : {},
           scenes: [],
           assets: {},
           progress: { phase: "draft", percentage: 0, currentStep: "" },
@@ -219,16 +224,18 @@ export function registerRoutes(app: Express) {
       }
 
       if (mode === "quick-create") {
+        const qcUserId = (req.user as any).id;
+        const qcBrandData = await getBrandContext(qcUserId);
         const [project] = await db.insert(universalVideoProjects).values({
           projectId,
-          ownerId: (req.user as any).id,
+          ownerId: qcUserId,
           type: "product",
           title: `Quick ${outputType === "image" ? "Image" : "Video"} - ${new Date().toLocaleDateString()}`,
           description: prompt || "",
           totalDuration: outputType === "video" ? (duration || 6) : 0,
           fps: 30,
           outputFormat: { aspectRatio: aspectRatio || "16:9", resolution, platform: "quick-create" },
-          brand: {},
+          brand: qcBrandData.brandName ? { name: qcBrandData.brandName, tagline: qcBrandData.tagline, website: qcBrandData.website, colors: { primary: qcBrandData.primaryColor, secondary: qcBrandData.secondaryColor, accent: qcBrandData.accentColor }, logoUrl: qcBrandData.logoUrl, guidelines: qcBrandData.guidelines } : {},
           scenes: [],
           assets: {},
           progress: { phase: "generating", percentage: 0, currentStep: "Queued for generation" },
