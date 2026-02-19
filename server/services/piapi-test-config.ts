@@ -608,6 +608,8 @@ export const PIAPI_TEST_DEFINITIONS: PiAPITestDefinition[] = [
     pollForResult: true,
     estimatedCost: '$0.02',
     estimatedTime: '~8s',
+    disabled: true,
+    disabledReason: 'Seedream requires direct API access - not available via PiAPI',
   },
   {
     id: 'i2i-qwen',
@@ -766,6 +768,8 @@ export const PIAPI_TEST_DEFINITIONS: PiAPITestDefinition[] = [
     pollForResult: true,
     estimatedCost: '$0.02',
     estimatedTime: '~8s',
+    disabled: true,
+    disabledReason: 'Seedream requires direct API access - not available via PiAPI',
   },
   {
     id: 'z-image-turbo',
