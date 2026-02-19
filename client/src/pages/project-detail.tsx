@@ -5,6 +5,7 @@ import { ArrowLeft, Settings, Play, RefreshCw, Clock, Target, Monitor, BarChart3
 import { Button } from "@/components/ui/button";
 import { ProviderCatalogSelector } from "@/components/video/provider-catalog-selector";
 import { useToast } from "@/hooks/use-toast";
+import { EnhancedSceneEditor } from "@/components/video/enhanced-scene-editor";
 
 const statusDot: Record<string, string> = {
   pending: "bg-gray-500",
@@ -578,170 +579,14 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
                       </div>
                     </div>
 
-                    {/* Expanded Scene Content */}
+                    {/* Expanded Scene Content - Enhanced Editor */}
                     {isExpanded && (
-                      <div className="px-4 pb-4 space-y-3 border-t" style={{ borderColor: "var(--border-subtle)" }}>
-                        {isEditing ? (
-                          <>
-                            <div className="grid grid-cols-2 gap-3 pt-3">
-                              <div>
-                                <label className="text-[11px] font-medium uppercase tracking-wider mb-1 block" style={{ color: "var(--text-secondary)" }}>Scene Type</label>
-                                <select
-                                  value={editValues.type || scene.type}
-                                  onChange={(e) => setEditValues({ ...editValues, type: e.target.value })}
-                                  className="w-full text-sm rounded-lg border px-3 py-2 bg-transparent outline-none"
-                                  style={{ borderColor: "var(--border-subtle)", color: "var(--text-primary)" }}
-                                >
-                                  {sceneTypes.map((t) => (
-                                    <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>
-                                  ))}
-                                </select>
-                              </div>
-                              <div>
-                                <label className="text-[11px] font-medium uppercase tracking-wider mb-1 block" style={{ color: "var(--text-secondary)" }}>Duration (seconds)</label>
-                                <input
-                                  type="number"
-                                  min={2}
-                                  max={60}
-                                  value={editValues.duration ?? scene.duration}
-                                  onChange={(e) => setEditValues({ ...editValues, duration: parseInt(e.target.value) || 5 })}
-                                  className="w-full text-sm rounded-lg border px-3 py-2 bg-transparent outline-none"
-                                  style={{ borderColor: "var(--border-subtle)", color: "var(--text-primary)" }}
-                                />
-                              </div>
-                            </div>
-                            <div>
-                              <label className="text-[11px] font-medium uppercase tracking-wider mb-1 block" style={{ color: "var(--text-secondary)" }}>Narration</label>
-                              <textarea
-                                value={editValues.narration ?? scene.narration}
-                                onChange={(e) => setEditValues({ ...editValues, narration: e.target.value })}
-                                rows={3}
-                                className="w-full text-sm rounded-lg border px-3 py-2 bg-transparent outline-none resize-none"
-                                style={{ borderColor: "var(--border-subtle)", color: "var(--text-primary)" }}
-                              />
-                            </div>
-                            <div>
-                              <label className="text-[11px] font-medium uppercase tracking-wider mb-1 block" style={{ color: "var(--text-secondary)" }}>Visual Direction (AI prompt for video generation)</label>
-                              <textarea
-                                value={editValues.visualDirection ?? scene.visualDirection}
-                                onChange={(e) => setEditValues({ ...editValues, visualDirection: e.target.value })}
-                                rows={3}
-                                className="w-full text-sm rounded-lg border px-3 py-2 bg-transparent outline-none resize-none"
-                                style={{ borderColor: "var(--border-subtle)", color: "var(--text-primary)" }}
-                              />
-                            </div>
-                            <div className="flex gap-2 justify-end">
-                              <button
-                                onClick={() => { setEditingSceneId(null); setEditValues({}); }}
-                                className="text-xs px-3 py-1.5 rounded-lg border transition-colors"
-                                style={{ borderColor: "var(--border-subtle)", color: "var(--text-muted)" }}
-                              >
-                                Cancel
-                              </button>
-                              <button
-                                onClick={() => saveEdit(sceneId)}
-                                disabled={updateSceneMutation.isPending}
-                                className="text-xs px-3 py-1.5 rounded-lg bg-purple-600 text-white font-medium flex items-center gap-1.5 disabled:opacity-50"
-                              >
-                                {updateSceneMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
-                                Save Changes
-                              </button>
-                            </div>
-                          </>
-                        ) : (
-                          <>
-                            <div className="pt-3 space-y-2">
-                              <div>
-                                <span className="text-[11px] font-medium uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>Narration</span>
-                                <p className="text-sm mt-1 leading-relaxed" style={{ color: "var(--text-primary)" }}>{narration || "No narration"}</p>
-                              </div>
-                              {scene.visualDirection && (
-                                <div>
-                                  <span className="text-[11px] font-medium uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>Visual Direction</span>
-                                  <p className="text-sm mt-1 leading-relaxed" style={{ color: "var(--text-muted)" }}>{scene.visualDirection}</p>
-                                </div>
-                              )}
-                              {scene.keyPoints && scene.keyPoints.length > 0 && (
-                                <div>
-                                  <span className="text-[11px] font-medium uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>Key Points</span>
-                                  <ul className="mt-1 space-y-1">
-                                    {scene.keyPoints.map((kp: string, i: number) => (
-                                      <li key={i} className="text-xs flex items-center gap-1.5" style={{ color: "var(--text-muted)" }}>
-                                        <span className="w-1.5 h-1.5 rounded-full bg-purple-400 flex-shrink-0" />
-                                        {kp}
-                                      </li>
-                                    ))}
-                                  </ul>
-                                </div>
-                              )}
-                            </div>
-                            {/* Asset actions (regen, upload, library) - only show when assets are being/have been generated */}
-                            {!scriptReady && (
-                              <div className="flex flex-wrap gap-1.5 pt-2">
-                                <button
-                                  onClick={() => regenImageMutation.mutate(sceneId)}
-                                  disabled={regenImageMutation.isPending}
-                                  className="text-[11px] px-2 py-1 rounded-md border flex items-center gap-1 transition-colors hover:border-purple-500/30"
-                                  style={{ borderColor: "var(--border-subtle)", color: "var(--text-secondary)" }}
-                                >
-                                  <ImagePlus className="w-3 h-3" /> Regen Image
-                                </button>
-                                <button
-                                  onClick={() => regenVideoMutation.mutate(sceneId)}
-                                  disabled={regenVideoMutation.isPending}
-                                  className="text-[11px] px-2 py-1 rounded-md border flex items-center gap-1 transition-colors hover:border-purple-500/30"
-                                  style={{ borderColor: "var(--border-subtle)", color: "var(--text-secondary)" }}
-                                >
-                                  <Video className="w-3 h-3" /> Regen Video
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    activeSceneRef.current = sceneId;
-                                    fileInputRef.current?.click();
-                                  }}
-                                  disabled={isUploading}
-                                  className="text-[11px] px-2 py-1 rounded-md border flex items-center gap-1 transition-colors hover:border-purple-500/30"
-                                  style={{ borderColor: "var(--border-subtle)", color: "var(--text-secondary)" }}
-                                >
-                                  {isUploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
-                                  Upload
-                                </button>
-                                <button
-                                  onClick={() => setLibrarySceneId(showLibrary ? null : sceneId)}
-                                  className="text-[11px] px-2 py-1 rounded-md border flex items-center gap-1 transition-colors hover:border-purple-500/30"
-                                  style={{ borderColor: "var(--border-subtle)", color: "var(--text-secondary)" }}
-                                >
-                                  <Image className="w-3 h-3" /> Library
-                                </button>
-                              </div>
-                            )}
-                            {showLibrary && (
-                              <div className="border rounded-lg p-2 mt-1 max-h-40 overflow-y-auto" style={{ borderColor: "var(--border-subtle)", backgroundColor: "var(--surface)" }}>
-                                {libraryQuery.isLoading ? (
-                                  <div className="flex items-center justify-center py-3">
-                                    <Loader2 className="w-4 h-4 animate-spin" style={{ color: "var(--text-muted)" }} />
-                                  </div>
-                                ) : !libraryQuery.data || libraryQuery.data.length === 0 ? (
-                                  <p className="text-xs text-center py-3" style={{ color: "var(--text-muted)" }}>No images in library</p>
-                                ) : (
-                                  <div className="grid grid-cols-4 gap-1.5">
-                                    {libraryQuery.data.slice(0, 12).map((asset: any) => (
-                                      <button
-                                        key={asset.id}
-                                        onClick={() => assignImageMutation.mutate({ sceneId, imageId: asset.id })}
-                                        className="aspect-square rounded overflow-hidden border hover:border-purple-500/50 transition-colors"
-                                        style={{ borderColor: "var(--border-subtle)" }}
-                                      >
-                                        <img src={asset.url || asset.thumbnailUrl} alt={asset.name || ""} className="w-full h-full object-cover" />
-                                      </button>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                          </>
-                        )}
-                      </div>
+                      <EnhancedSceneEditor
+                        scene={scene}
+                        sceneIndex={index}
+                        projectId={projectId}
+                        onClose={() => setExpandedSceneId(null)}
+                      />
                     )}
                   </div>
                 );
