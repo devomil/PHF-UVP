@@ -1689,6 +1689,8 @@ router.post('/projects/:projectId/generate-assets', isAuthenticated, async (req:
     }
     if (referenceImages && Array.isArray(referenceImages) && referenceImages.length > 0) {
       (projectData as any).referenceImages = referenceImages;
+      if (!projectData.assets) projectData.assets = {} as any;
+      (projectData.assets as any).referenceImages = referenceImages;
     }
     if (videoProvider) {
       (projectData as any).preferredVideoProvider = videoProvider;

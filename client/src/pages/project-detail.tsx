@@ -70,7 +70,7 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
   const [uploadingSceneId, setUploadingSceneId] = useState<string | null>(null);
   const [librarySceneId, setLibrarySceneId] = useState<string | null>(null);
   const [selectedVoice, setSelectedVoice] = useState(project.voiceoverSettings?.voiceId || project.voiceId || "");
-  const [referenceImages, setReferenceImages] = useState<string[]>((project as any).referenceImages || []);
+  const [referenceImages, setReferenceImages] = useState<string[]>((project as any).referenceImages || (project as any).assets?.referenceImages || []);
   const [showRefLibrary, setShowRefLibrary] = useState(false);
   const [uploadingRef, setUploadingRef] = useState(false);
   const [editingSceneId, setEditingSceneId] = useState<string | null>(null);
