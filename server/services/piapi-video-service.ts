@@ -542,6 +542,7 @@ class PiAPIVideoService {
   ): Promise<{ success: boolean; videoUrl?: string; error?: string }> {
     const maxAttempts = 120;
     const pollInterval = 5000;
+    let consecutiveErrors = 0;
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       await this.sleep(pollInterval);
@@ -554,9 +555,14 @@ class PiAPIVideoService {
         });
 
         if (!response.ok) {
-          console.warn(`[PiAPI:${model}] Status check failed: ${response.status}`);
+          consecutiveErrors++;
+          console.warn(`[PiAPI:${model}] Status check failed: ${response.status} (${consecutiveErrors} consecutive)`);
+          if (consecutiveErrors >= 5) {
+            return { success: false, error: `Provider ${model} returning ${response.status} errors consistently` };
+          }
           continue;
         }
+        consecutiveErrors = 0;
 
         const data = await response.json();
         const status = data.data?.status || data.status;

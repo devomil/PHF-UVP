@@ -32,7 +32,7 @@ The AI Video Production Studio is a full-stack platform designed to streamline v
 -   **Database Schema**: Drizzle ORM defines schema for users, sessions, video projects, production phases, brand assets, media assets, and various job queues.
 
 ## External Dependencies
--   **AI Video Providers**: Kling, RunwayML, Luma, Pika, Veo.
+-   **AI Video Providers**: Kling, RunwayML, Luma, Pika, Veo, Hailuo, Wan, Sora, Seedance, Hunyuan (via PiAPI). Provider selection is filtered by API test results from `piapi_test_results` table - only providers that passed testing are used in production pipelines.
 -   **Database**: PostgreSQL (specifically Neon).
 -   **Object Storage**: S3 (for render assets, logos, overlays, badges, end-cards, sfx, music, fonts).
 -   **Rendering**: Remotion (for video composition and rendering via Remotion Lambda).

@@ -3362,7 +3362,8 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
     if (scenesNeedingVideo.length > 0) {
       console.log(`[UniversalVideoService] Processing ${scenesNeedingVideo.length} scenes for video (types: ${videoSceneTypes.join(', ')})...`);
       console.log(`[UniversalVideoService] Target audience for video search: ${project.targetAudience || 'not specified'}`);
-      console.log(`[UniversalVideoService] AI Video providers available: ${aiVideoService.getAvailableProviders().join(', ') || 'none'}`);
+      const testedProviders = await aiVideoService.getTestedAvailableProviders();
+      console.log(`[UniversalVideoService] AI Video providers (tested & passed): ${testedProviders.join(', ') || 'none'}`);
       let videosGenerated = 0;
       let aiVideosGenerated = 0;
       
