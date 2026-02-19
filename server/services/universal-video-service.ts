@@ -3432,7 +3432,16 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
         const shouldGenerateVideo = true; // All scenes in scenesNeedingVideo list need video
         
         if (shouldGenerateVideo && aiVideoService.isAvailable()) {
-          console.log(`[Assets] Using AI video for ${scene.type} scene ${scene.id} (isHero=${isHeroScene}, sceneQualityTier=${sceneQualityTier})...`);
+          const sceneRefImageUrl = (scene as any).brandAssetUrl || 
+                                   scene.referenceConfig?.imageUrl ||
+                                   updatedProject.assets.images.find(img => img.sceneId === scene.id && img.source === 'uploaded')?.url;
+          const sceneImageUrl = sceneRefImageUrl || 
+                                updatedProject.scenes.find(s => s.id === scene.id)?.assets?.imageUrl;
+          
+          if (sceneRefImageUrl) {
+            console.log(`[Assets] Scene ${scene.id} has reference image → using I2V with: ${sceneRefImageUrl}`);
+          }
+          console.log(`[Assets] Using AI video for ${scene.type} scene ${scene.id} (isHero=${isHeroScene}, sceneQualityTier=${sceneQualityTier}, mode=${sceneRefImageUrl ? 'I2V' : 'T2V'})...`);
           console.log(`[Assets] Using quality tier: ${sceneQualityTier} (scene override: ${scene.qualityTier || 'none'})`);
           
           const aiResult = await aiVideoService.generateVideo({
@@ -3444,6 +3453,7 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
             mood: (scene as any).analysis?.mood,
             contentType: (scene as any).analysis?.contentType as 'person' | 'product' | 'nature' | 'abstract' | 'lifestyle' | undefined,
             qualityTier: sceneQualityTier,
+            ...(sceneRefImageUrl ? { imageUrl: sceneRefImageUrl } : {}),
           });
           
           if (aiResult.success && aiResult.s3Url) {
