@@ -181,7 +181,7 @@ export function registerRoutes(app: Express) {
         return res.status(401).json({ error: "Not authenticated" });
       }
 
-      const { mode, title, description, targetAudience, duration, platform, aspectRatio, mediaMode, qualityTier, script, numScenes, visualStyle, voiceStyle, outputType, prompt, imageStyle, provider, saveToLibrary } = req.body;
+      const { mode, title, description, targetAudience, duration, platform, aspectRatio, mediaMode, videoGenerationMode, qualityTier, script, numScenes, visualStyle, voiceStyle, outputType, prompt, imageStyle, provider, saveToLibrary } = req.body;
 
       const projectId = crypto.randomUUID();
 
@@ -212,6 +212,7 @@ export function registerRoutes(app: Express) {
           status: "draft",
           qualityTier: qualityTier || "premium",
           mediaMode: mediaMode || "video",
+          videoGenerationMode: videoGenerationMode || null,
         }).returning();
 
         return res.json({ projectId: project.projectId, id: project.id, status: "draft" });

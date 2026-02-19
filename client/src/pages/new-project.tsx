@@ -104,6 +104,7 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
   const [platform, setPlatform] = useState("YouTube");
   const [aspectRatio, setAspectRatio] = useState("16:9");
   const [mediaMode, setMediaMode] = useState("video");
+  const [videoGenerationMode, setVideoGenerationMode] = useState("auto");
   const [qualityTier, setQualityTier] = useState("premium");
 
   useEffect(() => {
@@ -121,6 +122,7 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
       platform,
       aspectRatio,
       mediaMode,
+      videoGenerationMode: mediaMode === "video" ? videoGenerationMode : undefined,
       qualityTier,
     });
   };
@@ -210,6 +212,26 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
           </div>
         </div>
 
+        {mediaMode === "video" && (
+        <div>
+          <Label style={{ color: "var(--text-secondary)" }}>Video Generation Method</Label>
+          <p className="text-xs mt-0.5 mb-2" style={{ color: "var(--text-muted)" }}>How AI creates video for each scene</p>
+          <div className="flex gap-3">
+            <Button type="button" variant={videoGenerationMode === "auto" ? "default" : "outline"} className={`text-xs ${videoGenerationMode === "auto" ? "bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500" : ""}`} style={videoGenerationMode !== "auto" ? { borderColor: "var(--border-medium)", color: "var(--text-secondary)" } : {}} onClick={() => setVideoGenerationMode("auto")}>
+              Direct T2V (faster)
+            </Button>
+            <Button type="button" variant={videoGenerationMode === "image-first-i2v" ? "default" : "outline"} className={`text-xs ${videoGenerationMode === "image-first-i2v" ? "bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500" : ""}`} style={videoGenerationMode !== "image-first-i2v" ? { borderColor: "var(--border-medium)", color: "var(--text-secondary)" } : {}} onClick={() => setVideoGenerationMode("image-first-i2v")}>
+              Image then Video (more control)
+            </Button>
+          </div>
+          <p className="text-[10px] mt-1.5" style={{ color: "var(--text-muted)" }}>
+            {videoGenerationMode === "image-first-i2v" 
+              ? "Generates an image first, then animates it into video. Slower but gives you a preview image to approve." 
+              : "Creates video directly from your script using 13+ AI video providers. Faster and more cost-effective."}
+          </p>
+        </div>
+        )}
+
         <div className="flex gap-3 pt-4">
           <Button type="button" variant="outline" onClick={onBack} style={{ borderColor: "var(--border-medium)", color: "var(--text-secondary)" }}>
             <ArrowLeft className="w-4 h-4 mr-2" /> Back
@@ -233,6 +255,7 @@ function CustomScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void;
   const [visualStyle, setVisualStyle] = useState("lifestyle");
   const [voiceStyle, setVoiceStyle] = useState("Professional");
   const [mediaMode, setMediaMode] = useState("video");
+  const [videoGenerationMode, setVideoGenerationMode] = useState("auto");
 
   useEffect(() => {
     setAspectRatio(platformAspectMap[platform] || "16:9");
@@ -251,6 +274,7 @@ function CustomScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void;
       visualStyle,
       voiceStyle,
       mediaMode,
+      videoGenerationMode: mediaMode === "video" ? videoGenerationMode : undefined,
     });
   };
 
@@ -360,6 +384,26 @@ function CustomScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void;
             </Button>
           </div>
         </div>
+
+        {mediaMode === "video" && (
+        <div>
+          <Label style={{ color: "var(--text-secondary)" }}>Video Generation Method</Label>
+          <p className="text-xs mt-0.5 mb-2" style={{ color: "var(--text-muted)" }}>How AI creates video for each scene</p>
+          <div className="flex gap-3">
+            <Button type="button" variant={videoGenerationMode === "auto" ? "default" : "outline"} className={`text-xs ${videoGenerationMode === "auto" ? "bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500" : ""}`} style={videoGenerationMode !== "auto" ? { borderColor: "var(--border-medium)", color: "var(--text-secondary)" } : {}} onClick={() => setVideoGenerationMode("auto")}>
+              Direct T2V (faster)
+            </Button>
+            <Button type="button" variant={videoGenerationMode === "image-first-i2v" ? "default" : "outline"} className={`text-xs ${videoGenerationMode === "image-first-i2v" ? "bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500" : ""}`} style={videoGenerationMode !== "image-first-i2v" ? { borderColor: "var(--border-medium)", color: "var(--text-secondary)" } : {}} onClick={() => setVideoGenerationMode("image-first-i2v")}>
+              Image then Video (more control)
+            </Button>
+          </div>
+          <p className="text-[10px] mt-1.5" style={{ color: "var(--text-muted)" }}>
+            {videoGenerationMode === "image-first-i2v" 
+              ? "Generates an image first, then animates it into video. Slower but gives you a preview image to approve." 
+              : "Creates video directly from your script using 13+ AI video providers. Faster and more cost-effective."}
+          </p>
+        </div>
+        )}
 
         <div className="flex gap-3 pt-4">
           <Button type="button" variant="outline" onClick={onBack} style={{ borderColor: "var(--border-medium)", color: "var(--text-secondary)" }}>

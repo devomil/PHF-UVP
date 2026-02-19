@@ -473,6 +473,7 @@ export const universalVideoProjects = pgTable("universal_video_projects", {
   qualityReport: jsonb("quality_report"),
   qualityTier: varchar("quality_tier", { length: 20 }).notNull().default("premium"),
   mediaMode: varchar("media_mode", { length: 10 }),
+  videoGenerationMode: varchar("video_generation_mode", { length: 20 }),
   renderId: varchar("render_id", { length: 100 }),
   bucketName: varchar("bucket_name", { length: 255 }),
   outputUrl: text("output_url"),

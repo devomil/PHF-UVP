@@ -32,6 +32,7 @@ export function dbRowToVideoProject(row: any): VideoProject {
     qualityReport: row.qualityReport,
     qualityTier: row.qualityTier,
     mediaMode: row.mediaMode,
+    videoGenerationMode: row.videoGenerationMode,
     renderId: row.renderId,
     bucketName: row.bucketName,
     outputUrl: row.outputUrl,
