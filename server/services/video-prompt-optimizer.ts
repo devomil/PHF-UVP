@@ -23,7 +23,7 @@ interface PromptAnalysis {
 export function optimizePrompt(input: OptimizePromptInput): OptimizedPrompt {
   return {
     prompt: input.visualDescription,
-    negativePrompt: 'blurry, low quality, distorted, watermark, text overlay',
+    negativePrompt: 'text, words, letters, numbers, writing, signage, logos, watermarks, labels, captions, titles, subtitles, UI elements, buttons, banners, blurry, low quality, distorted',
   };
 }
 

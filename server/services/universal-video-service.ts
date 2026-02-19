@@ -940,11 +940,13 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
       'clean composition',
       '4K ultra detailed',
       'soft color palette',
+      'no text anywhere',
+      'no writing',
+      'no letters',
+      'no signs with words',
     ];
     
-    // Product terms are already sanitized before this function is called
-    // Just add a reminder to the AI to focus on lifestyle/people imagery
-    const focusClause = 'Focus on lifestyle, people, or environmental scenes.';
+    const focusClause = 'Focus on lifestyle, people, or environmental scenes. All signs, screens, papers, and surfaces must be blank with no visible text or writing.';
     
     return `${subjectEnforcement}${prompt}, ${styleModifiers.join(', ')}. ${focusClause}`;
   }
@@ -1172,6 +1174,7 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
           task_type: 'txt2img',
           input: {
             prompt: prompt,
+            negative_prompt: 'text, words, letters, numbers, writing, signage, logos, watermarks, labels, captions, titles, subtitles, UI elements, buttons, banners, badges, stamps, certificates, menus, price tags, phone numbers, URLs, addresses, blurry, low quality, distorted',
             width: 1280,
             height: 720,
           },

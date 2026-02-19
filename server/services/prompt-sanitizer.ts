@@ -168,6 +168,33 @@ export function sanitizePromptForAI(
     cleanPrompt = cleanPrompt.replace(pattern, '');
   }
 
+  // === STEP 4B: Remove text-generating trigger words ===
+  const textTriggerReplacements: [RegExp, string][] = [
+    [/(?:welcoming|branded|informational|decorative|promotional)\s+signage/gi, 'welcoming entrance'],
+    [/(?:with\s+)?signage\b/gi, ''],
+    [/(?:with\s+)?(?:a\s+)?sign\s+(?:reading|saying|displaying|showing)\s+[^,.]+/gi, ''],
+    [/(?:wooden|stone|metal|elegant|rustic)\s+sign\b/gi, 'entrance detail'],
+    [/storefront\s+(?:with|showing|displaying)/gi, 'storefront exterior,'],
+    [/(?:with\s+)?(?:company|business|brand|shop)\s+(?:name|sign)/gi, ''],
+    [/(?:with\s+)?(?:infographic|diagram|chart|graph|flowchart|mind\s*map)/gi, 'abstract visual composition'],
+    [/(?:with\s+)?(?:bullet\s+points?|numbered\s+(?:list|steps?))/gi, ''],
+    [/(?:with\s+)?(?:product\s+)?(?:packaging|label)\s+(?:showing|reading|with)\s+[^,.]+/gi, 'product packaging,'],
+    [/(?:menu|price\s*list|directory)\s+(?:board|sign)/gi, 'decorative display'],
+    [/(?:neon|illuminated|lit)\s+sign/gi, 'ambient lighting'],
+    [/(?:chalkboard|whiteboard|blackboard)\s+(?:with|showing|displaying)/gi, 'rustic wall decor'],
+    [/(?:plaque|nameplate|door\s*sign|wayfinding)/gi, 'entrance detail'],
+    [/(?:certificate|diploma|award)\s+(?:on|hanging|displayed)/gi, 'framed art on'],
+    [/(?:with\s+)?(?:visible\s+)?(?:writing|lettering|inscription|engraving)/gi, ''],
+    [/(?:website|url|web\s*address|email|phone\s*number)\s*(?:display|shown|visible)?/gi, ''],
+  ];
+
+  for (const [pattern, replacement] of textTriggerReplacements) {
+    if (pattern.test(cleanPrompt)) {
+      removedElements.push(`text-trigger: ${cleanPrompt.match(pattern)?.[0]}`);
+      cleanPrompt = cleanPrompt.replace(pattern, replacement);
+    }
+  }
+
   // === STEP 5: Remove UI element and branding requests ===
 
   const uiPatterns = [
@@ -177,8 +204,8 @@ export function sanitizePromptForAI(
     /(?:with\s+)?(?:banner|banners)/gi,
     /(?:with\s+)?(?:overlay|overlays)/gi,
     /(?:with\s+)?(?:graphics|graphic)/gi,
-    /(?:with\s+)?(?:branding\s+)?(?:elements?|assets?)/gi,  // "branding elements"
-    /(?:and\s+)?branding\b/gi,  // standalone "branding"
+    /(?:with\s+)?(?:branding\s+)?(?:elements?|assets?)/gi,
+    /(?:and\s+)?branding\b/gi,
   ];
   
   for (const pattern of uiPatterns) {
@@ -204,7 +231,7 @@ export function sanitizePromptForAI(
 
   // === STEP 7: Add explicit "no text" instruction ===
 
-  const noTextSuffix = '. IMPORTANT: Do not include any text, words, letters, numbers, logos, watermarks, labels, buttons, badges, banners, or UI elements in the image. Generate only the pure visual scene without any overlaid text or graphics.';
+  const noTextSuffix = '. CRITICAL REQUIREMENT: Generate ONLY the visual scene with absolutely NO text, NO words, NO letters, NO numbers, NO logos, NO signs with writing, NO watermarks, NO labels, NO captions, NO UI elements anywhere in the image. Any surfaces that might contain text (signs, screens, papers, packaging) must be blank or blurred. Pure visual imagery only.';
 
   // Only add if we have a prompt
   if (cleanPrompt.length > 0) {
