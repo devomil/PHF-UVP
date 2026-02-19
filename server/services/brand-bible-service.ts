@@ -1,6 +1,7 @@
 import { db } from '../db';
-import { brandMediaLibrary } from '@shared/schema';
+import { brandMediaLibrary, brandSettings } from '@shared/schema';
 import { eq } from 'drizzle-orm';
+import { getAnyBrandContext, type BrandContext } from './brand-settings-service';
 
 export interface BrandAsset {
   id: number;
@@ -85,17 +86,17 @@ const BRAND_COLOR_PALETTE = [
   { hex: '#f5f0e8', name: 'Warm Beige' },
 ];
 
-const DEFAULT_BRAND_SETTINGS = {
-  brandName: 'Pine Hill Farm',
-  tagline: 'Natural Wellness, Naturally You',
-  website: 'PineHillFarm.com',
-  industry: 'wellness and natural health supplements',
+const FALLBACK_BRAND_SETTINGS = {
+  brandName: 'My Brand',
+  tagline: '',
+  website: '',
+  industry: 'general',
   colors: {
-    primary: '#2d5a27',
-    secondary: '#607e66',
-    accent: '#c9a227',
+    primary: '#9333ea',
+    secondary: '#4f46e5',
+    accent: '#06b6d4',
     text: '#ffffff',
-    background: '#f5f0e8',
+    background: '#f5f5f5',
   },
   colorPalette: BRAND_COLOR_PALETTE,
   typography: {
@@ -103,12 +104,39 @@ const DEFAULT_BRAND_SETTINGS = {
     bodyFont: 'Open Sans',
   },
   callToAction: {
-    text: 'Start Your Wellness Journey Today',
-    subtext: 'Natural solutions for lasting health',
-    buttonText: 'Learn More',
-    url: 'PineHillFarm.com',
+    text: 'Learn More',
+    subtext: '',
+    buttonText: 'Get Started',
+    url: '',
   },
 };
+
+function buildBrandDefaults(ctx: BrandContext) {
+  const hasSettings = !!(ctx.brandName?.trim());
+  if (!hasSettings) return FALLBACK_BRAND_SETTINGS;
+
+  return {
+    brandName: ctx.brandName,
+    tagline: ctx.tagline || '',
+    website: ctx.website || '',
+    industry: 'general',
+    colors: {
+      primary: ctx.primaryColor || FALLBACK_BRAND_SETTINGS.colors.primary,
+      secondary: ctx.secondaryColor || FALLBACK_BRAND_SETTINGS.colors.secondary,
+      accent: ctx.accentColor || FALLBACK_BRAND_SETTINGS.colors.accent,
+      text: '#ffffff',
+      background: '#f5f5f5',
+    },
+    colorPalette: BRAND_COLOR_PALETTE,
+    typography: FALLBACK_BRAND_SETTINGS.typography,
+    callToAction: {
+      text: ctx.tagline || `Visit ${ctx.brandName}`,
+      subtext: ctx.guidelines ? ctx.guidelines.substring(0, 100) : '',
+      buttonText: 'Learn More',
+      url: ctx.website || '',
+    },
+  };
+}
 
 class BrandBibleService {
   private cachedBible: BrandBible | null = null;
@@ -123,9 +151,13 @@ class BrandBibleService {
       return this.cachedBible;
     }
 
-    console.log('[BrandBible] Loading brand assets from database...');
+    console.log('[BrandBible] Loading brand bible (settings + media assets)...');
 
     try {
+      const brandCtx = await getAnyBrandContext();
+      const brandDefaults = buildBrandDefaults(brandCtx);
+      console.log(`[BrandBible] Brand Settings loaded: "${brandDefaults.brandName}" (colors: ${brandDefaults.colors.primary}/${brandDefaults.colors.secondary}/${brandDefaults.colors.accent})`);
+
       const dbAssets = await db
         .select()
         .from(brandMediaLibrary)
@@ -149,14 +181,31 @@ class BrandBibleService {
         isActive: asset.isActive ?? true,
       }));
 
+      if (brandCtx.logoUrl) {
+        const hasLogoInMedia = assets.some(a => a.url === brandCtx.logoUrl);
+        if (!hasLogoInMedia) {
+          console.log(`[BrandBible] Injecting Brand Settings logo as fallback asset: ${brandCtx.logoUrl}`);
+          assets.push({
+            id: -1,
+            name: `${brandDefaults.brandName} Logo`,
+            mediaType: 'logo',
+            url: brandCtx.logoUrl,
+            matchKeywords: ['logo', 'brand'],
+            excludeKeywords: [],
+            usageContexts: ['main', 'intro', 'outro', 'watermark'],
+            priority: -1,
+            isDefault: true,
+            isActive: true,
+          });
+        }
+      }
+
       console.log(`[BrandBible] Loaded ${assets.length} active brand assets`);
       
-      // Debug: Show all assets with their contexts
       assets.forEach(a => {
         console.log(`[BrandBible] Asset: "${a.name}" | type: ${a.mediaType} | contexts: [${a.usageContexts.join(', ')}] | keywords: [${a.matchKeywords.join(', ')}] | url: ${a.url}`);
       });
 
-      // Find logos with flexible mediaType matching (logo, photo, graphic all work)
       const logoTypes = ['logo', 'photo', 'graphic'];
       const logos = {
         main: this.findAssetByContextFlexible(assets, logoTypes, ['main', 'primary'], ['logo']),
@@ -167,16 +216,15 @@ class BrandBibleService {
         favicon: this.findAssetByContextFlexible(assets, logoTypes, ['favicon', 'icon'], []),
       };
       
-      // Debug: Show found logos with their URLs
       console.log(`[BrandBible] Intro logo found: ${logos.intro ? `${logos.intro.name} -> ${logos.intro.url}` : 'NONE'}`);
       console.log(`[BrandBible] Outro logo found: ${logos.outro ? `${logos.outro.name} -> ${logos.outro.url}` : 'NONE'}`);
       console.log(`[BrandBible] Watermark found: ${logos.watermark ? `${logos.watermark.name} -> ${logos.watermark.url}` : 'NONE'}`);
 
       const bible: BrandBible = {
-        ...DEFAULT_BRAND_SETTINGS,
+        ...brandDefaults,
         logos,
         assets,
-        promptContext: this.buildPromptContext(),
+        promptContext: this.buildPromptContext(brandDefaults),
         negativePrompts: this.buildNegativePrompts(),
       };
 
@@ -184,6 +232,7 @@ class BrandBibleService {
       this.cacheTimestamp = now;
 
       console.log('[BrandBible] Brand bible loaded successfully');
+      console.log(`[BrandBible] Brand: "${bible.brandName}" | CTA: "${bible.callToAction.text}" | Website: "${bible.website}"`);
       console.log(`[BrandBible] Logos found: main=${!!logos.main}, watermark=${!!logos.watermark}, intro=${!!logos.intro}, outro=${!!logos.outro}`);
 
       return bible;
@@ -192,10 +241,10 @@ class BrandBibleService {
       console.error('[BrandBible] Failed to load from database:', error.message);
       
       return {
-        ...DEFAULT_BRAND_SETTINGS,
+        ...FALLBACK_BRAND_SETTINGS,
         logos: {},
         assets: [],
-        promptContext: this.buildPromptContext(),
+        promptContext: this.buildPromptContext(FALLBACK_BRAND_SETTINGS),
         negativePrompts: this.buildNegativePrompts(),
       };
     }
@@ -290,8 +339,10 @@ class BrandBibleService {
     return undefined;
   }
 
-  private buildPromptContext(): string {
-    return `For ${DEFAULT_BRAND_SETTINGS.brandName}, a ${DEFAULT_BRAND_SETTINGS.industry} brand. ` +
+  private buildPromptContext(brand: typeof FALLBACK_BRAND_SETTINGS): string {
+    const name = brand.brandName || 'the brand';
+    const industry = brand.industry || 'general';
+    return `For ${name}, a ${industry} brand. ` +
            `Style: professional, warm, natural, wellness-focused, trustworthy. ` +
            `Aesthetic: soft natural lighting, earth tones, clean compositions, human connection.`;
   }
