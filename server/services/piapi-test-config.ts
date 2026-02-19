@@ -815,12 +815,14 @@ export const PIAPI_TEST_DEFINITIONS: PiAPITestDefinition[] = [
     input: {
       prompt: 'gentle nature sounds, birds chirping, wind rustling leaves',
       negative_prompt: 'loud noise music speech',
+      video: '',
       steps: 20,
+      seed: 48511119825268,
     },
     pollForResult: true,
     estimatedCost: '$0.03',
     estimatedTime: '~15s',
-    notes: 'Video-to-audio - may require video input for full test',
+    notes: 'Video-to-audio generation - requires video URL input',
   },
   {
     id: 'ace-step',
