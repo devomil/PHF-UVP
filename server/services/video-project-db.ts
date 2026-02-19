@@ -33,6 +33,7 @@ export function dbRowToVideoProject(row: any): VideoProject {
     qualityTier: row.qualityTier,
     mediaMode: row.mediaMode,
     videoGenerationMode: row.videoGenerationMode,
+    referenceImages: row.referenceImages || (row.assets as any)?.referenceImages || [],
     renderId: row.renderId,
     bucketName: row.bucketName,
     outputUrl: row.outputUrl,
@@ -59,7 +60,13 @@ export async function saveProjectToDb(
     updatedAt: new Date(),
   };
   if (project.scenes !== undefined) updateData.scenes = project.scenes;
-  if (project.assets !== undefined) updateData.assets = project.assets;
+  if (project.assets !== undefined) {
+    const assetsToSave = { ...project.assets };
+    if (project.referenceImages && Array.isArray(project.referenceImages) && project.referenceImages.length > 0) {
+      assetsToSave.referenceImages = project.referenceImages;
+    }
+    updateData.assets = assetsToSave;
+  }
   if (project.totalDuration !== undefined) updateData.totalDuration = project.totalDuration;
   if (renderId !== undefined) updateData.renderId = renderId;
   if (bucketName !== undefined) updateData.bucketName = bucketName;

@@ -2838,6 +2838,54 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
       console.log(`[Assets] Direct T2V mode enabled (videoGenerationMode=${videoGenMode || 'auto'}) - skipping intermediate image generation for video scenes`);
     }
 
+    // ===== DISTRIBUTE PROJECT-LEVEL REFERENCE IMAGES TO SCENES =====
+    // When user uploads reference images at the project level (e.g., product photos),
+    // assign them to relevant scenes so they're used as I2V references during video generation.
+    const projectRefImages: string[] = (project as any).referenceImages || 
+                                        (project.assets as any)?.referenceImages || [];
+    if (projectRefImages.length > 0) {
+      const baseUrl = process.env.REPLIT_DEV_DOMAIN
+        ? `https://${process.env.REPLIT_DEV_DOMAIN}`
+        : (process.env.REPLIT_DOMAINS ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}` : 'http://localhost:5000');
+      
+      const resolvedRefImages = projectRefImages.map(url => {
+        if (url.startsWith('http://') || url.startsWith('https://')) return url;
+        return `${baseUrl}${url.startsWith('/') ? '' : '/'}${url}`;
+      });
+      
+      console.log(`[Assets] Project reference images (${resolvedRefImages.length}): ${resolvedRefImages.join(', ')}`);
+      
+      const refTargetSceneTypes = ['solution', 'cta', 'product', 'feature', 'benefit', 'hook'];
+      const primaryRefImage = resolvedRefImages[0];
+      let assignedCount = 0;
+      
+      for (let i = 0; i < updatedProject.scenes.length; i++) {
+        const scene = updatedProject.scenes[i];
+        const sceneType = (scene.type || '').toLowerCase();
+        const alreadyHasRef = (scene as any).brandAssetUrl || 
+                               ((scene as any).referenceConfig?.imageUrl) ||
+                               scene.assets?.assignedProductImageId;
+        
+        if (refTargetSceneTypes.includes(sceneType) && !alreadyHasRef) {
+          const refImageToUse = resolvedRefImages[assignedCount % resolvedRefImages.length] || primaryRefImage;
+          (updatedProject.scenes[i] as any).brandAssetUrl = refImageToUse;
+          if (!updatedProject.scenes[i].assets) {
+            updatedProject.scenes[i].assets = {};
+          }
+          updatedProject.scenes[i].assets!.useAIImage = false;
+          assignedCount++;
+          console.log(`[Assets] Assigned reference image to scene ${scene.id} (type=${sceneType}): ${refImageToUse}`);
+        }
+      }
+      
+      if (assignedCount > 0) {
+        console.log(`[Assets] Distributed ${assignedCount} reference image assignments across ${refTargetSceneTypes.join('/')} scenes`);
+        await saveProgress();
+      } else {
+        console.log(`[Assets] No matching scenes found for reference image distribution (scene types: ${updatedProject.scenes.map(s => s.type).join(', ')})`);
+      }
+    }
+
     if (shouldSkipStep('images')) {
       console.log('[Assets] Images already complete, skipping');
     } else {
