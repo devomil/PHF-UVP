@@ -2679,7 +2679,7 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
     if (!updatedProject.progress) {
       updatedProject.progress = {} as any;
     }
-    if (!updatedProject.progress.steps) {
+    if (!updatedProject.progress.steps || Object.keys(updatedProject.progress.steps).length === 0) {
       updatedProject.progress.steps = {
         voiceover: { status: 'pending', progress: 0, message: '' },
         images: { status: 'pending', progress: 0, message: '' },
@@ -2687,6 +2687,14 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
         music: { status: 'pending', progress: 0, message: '' },
         assembly: { status: 'pending', progress: 0, message: '' },
       } as any;
+    } else {
+      const defaultStep = { status: 'pending', progress: 0, message: '' };
+      const steps = updatedProject.progress.steps as any;
+      if (!steps.voiceover) steps.voiceover = { ...defaultStep };
+      if (!steps.images) steps.images = { ...defaultStep };
+      if (!steps.videos) steps.videos = { ...defaultStep };
+      if (!steps.music) steps.music = { ...defaultStep };
+      if (!steps.assembly) steps.assembly = { ...defaultStep };
     }
     if (!updatedProject.progress.serviceFailures) {
       updatedProject.progress.serviceFailures = [];
