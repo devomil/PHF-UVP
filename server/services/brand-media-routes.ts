@@ -3,6 +3,7 @@ import { isAuthenticated } from '../auth';
 import { db } from '../db';
 import { brandMediaLibrary } from '../../shared/schema';
 import { eq, desc } from 'drizzle-orm';
+import { brandBibleService } from './brand-bible-service';
 
 const router = Router();
 
@@ -66,6 +67,7 @@ router.post('/', async (req: Request, res: Response) => {
       placementSettings: placementSettings || null,
     }).returning();
 
+    brandBibleService.clearCache();
     res.status(201).json(item);
   } catch (error: any) {
     console.error('[BrandMedia] Create error:', error.message);
@@ -112,6 +114,7 @@ router.put('/:id', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Brand media asset not found' });
     }
 
+    brandBibleService.clearCache();
     res.json(updated);
   } catch (error: any) {
     console.error('[BrandMedia] Update error:', error.message);
@@ -135,6 +138,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Brand media asset not found' });
     }
 
+    brandBibleService.clearCache();
     res.json({ success: true, id });
   } catch (error: any) {
     console.error('[BrandMedia] Delete error:', error.message);

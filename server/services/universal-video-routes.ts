@@ -51,6 +51,7 @@ import {
   getCompositionId,
 } from '../../shared/video-types';
 import { imageCompositionService } from '../services/image-composition-service';
+import { getAnyBrandContext } from '../services/brand-settings-service';
 import { compositionRequestBuilder } from '../services/composition-request-builder';
 import type { CompositionRequest, ProductPlacement } from '../../shared/types/image-composition-types';
 import { imageToVideoService } from '../services/image-to-video-service';
@@ -718,6 +719,11 @@ router.post('/projects/script', isAuthenticated, async (req: Request, res: Respo
     
     const scenes = await universalVideoService.parseScript(validatedInput);
     
+    const scriptBrandCtx = await getAnyBrandContext();
+    const scriptBrand = scriptBrandCtx.brandName
+      ? { name: scriptBrandCtx.brandName, tagline: scriptBrandCtx.tagline, website: scriptBrandCtx.website, colors: { primary: scriptBrandCtx.primaryColor, secondary: scriptBrandCtx.secondaryColor, accent: scriptBrandCtx.accentColor }, logoUrl: scriptBrandCtx.logoUrl, guidelines: scriptBrandCtx.guidelines }
+      : PINE_HILL_FARM_BRAND;
+    
     const project: VideoProject = {
       id: `proj_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       type: 'script-based',
@@ -726,7 +732,7 @@ router.post('/projects/script', isAuthenticated, async (req: Request, res: Respo
       fps: 30,
       totalDuration: scenes.reduce((acc, s) => acc + s.duration, 0),
       outputFormat: OUTPUT_FORMATS[validatedInput.platform] || OUTPUT_FORMATS.youtube,
-      brand: PINE_HILL_FARM_BRAND,
+      brand: scriptBrand,
       scenes,
       voiceId: validatedInput.voiceId || '21m00Tcm4TlvDq8ikWAM',
       voiceName: validatedInput.voiceName || 'Rachel',
@@ -2662,9 +2668,13 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
       body: 'Open Sans, Helvetica, sans-serif',
       weight: { heading: 700, body: 400 },
     };
+    const renderBrandCtx = await getAnyBrandContext();
+    const renderBrandFallback = renderBrandCtx.brandName
+      ? { name: renderBrandCtx.brandName, tagline: renderBrandCtx.tagline, website: renderBrandCtx.website, colors: { primary: renderBrandCtx.primaryColor, secondary: renderBrandCtx.secondaryColor, accent: renderBrandCtx.accentColor }, logoUrl: renderBrandCtx.logoUrl, guidelines: renderBrandCtx.guidelines }
+      : PINE_HILL_FARM_BRAND;
     const baseBrand = preparedProject.brand && Object.keys(preparedProject.brand).length > 0 
       ? preparedProject.brand 
-      : PINE_HILL_FARM_BRAND;
+      : renderBrandFallback;
     const brandWithCachedLogo = {
       ...baseBrand,
       colors: { ...defaultBrandColors, ...(baseBrand.colors || {}) },
