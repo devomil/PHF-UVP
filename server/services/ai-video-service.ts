@@ -1,6 +1,5 @@
 // server/services/ai-video-service.ts
 
-import { runwayVideoService } from './runway-video-service';
 import { piapiVideoService } from './piapi-video-service';
 import { promptEnhancementService } from './prompt-enhancement-service';
 import { intelligentProviderSelector, SceneContent } from './intelligent-provider-selector';
@@ -56,11 +55,6 @@ const TIER_PROVIDER_VERSIONS: Record<string, Record<string, string>> = {
     ultra: 'kling-2.6',
     premium: 'kling-2.6',
     standard: 'kling-2.6',
-  },
-  runway: {
-    ultra: 'runway',
-    premium: 'runway',
-    standard: 'runway',
   },
   luma: {
     ultra: 'luma',
@@ -253,48 +247,7 @@ class AIVideoService {
     provider: typeof AI_VIDEO_PROVIDERS[string],
     options: AIVideoOptions
   ): Promise<AIVideoResult> {
-    
-    if (provider.type === 'direct') {
-      return this.generateDirect(providerKey, options);
-    } else {
-      return this.generateViaPiAPI(providerKey, options);
-    }
-  }
-
-  private async generateDirect(
-    providerKey: string,
-    options: AIVideoOptions
-  ): Promise<AIVideoResult> {
-    if (providerKey === 'runway') {
-      if (!runwayVideoService.isAvailable()) {
-        return { success: false, error: 'Runway not configured' };
-      }
-      
-      if (options.imageUrl && options.i2vSettings) {
-        console.log(`[AIVideo] Using Runway I2V with settings: style=${options.i2vSettings.animationStyle}, fidelity=${options.i2vSettings.imageControlStrength}`);
-      }
-      
-      const result = await runwayVideoService.generateVideo({
-        prompt: options.prompt,
-        duration: options.duration,
-        aspectRatio: options.aspectRatio,
-        negativePrompt: options.negativePrompt,
-        imageUrl: options.imageUrl,
-        i2vSettings: options.i2vSettings,
-      });
-      
-      return {
-        success: result.success,
-        videoUrl: result.videoUrl,
-        s3Url: result.s3Url,
-        duration: result.duration,
-        cost: result.cost,
-        error: result.error,
-        generationTimeMs: result.generationTimeMs,
-      };
-    }
-    
-    return { success: false, error: `Unknown direct provider: ${providerKey}` };
+    return this.generateViaPiAPI(providerKey, options);
   }
 
   private async generateViaPiAPI(
@@ -401,9 +354,7 @@ class AIVideoService {
     
     // Adjust for specific scene/content needs
     if (contentType === 'person') {
-      // Runway and Kling handle people well - process in REVERSE order
-      // so Runway ends up first (last unshift wins)
-      const personProviders = ['kling', 'runway'];
+      const personProviders = ['kling', 'sora-2'];
       personProviders.forEach(p => {
         const idx = providers.indexOf(p);
         if (idx > 0) {
@@ -413,12 +364,11 @@ class AIVideoService {
       });
     }
     
-    // For CTA scenes, prioritize most reliable provider
     if (sceneType === 'cta') {
-      const runwayIdx = providers.indexOf('runway');
-      if (runwayIdx > 0) {
-        providers.splice(runwayIdx, 1);
-        providers.unshift('runway');
+      const klingIdx = providers.indexOf('kling');
+      if (klingIdx > 0) {
+        providers.splice(klingIdx, 1);
+        providers.unshift('kling');
       }
     }
     
@@ -474,8 +424,8 @@ class AIVideoService {
     } catch (error: any) {
       console.warn('[AIVideo] Intelligent selection failed, using default order:', error.message);
       return {
-        providerOrder: ['runway', ...configuredProviders.filter(p => p !== 'runway')],
-        reasoning: 'Fallback to Runway (intelligent selection unavailable)',
+        providerOrder: ['kling-2.6', ...configuredProviders.filter(p => p !== 'kling-2.6')],
+        reasoning: 'Fallback to Kling (intelligent selection unavailable)',
       };
     }
   }

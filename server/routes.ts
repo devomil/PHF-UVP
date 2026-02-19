@@ -77,8 +77,6 @@ export function registerRoutes(app: Express) {
     res.json({
       services: {
         piapi: { configured: !!process.env.PIAPI_API_KEY, description: "PiAPI - Video/Image generation hub (Kling, Luma, Veo, Wan, etc.)" },
-        runway: { configured: !!process.env.RUNWAY_API_KEY, description: "Runway - Direct video generation API" },
-        stability: { configured: !!process.env.STABILITY_API_KEY, description: "Stability AI - Image generation" },
         openai: { configured: !!process.env.OPENAI_API_KEY, description: "OpenAI - Script writing and analysis" },
         anthropic: { configured: !!process.env.ANTHROPIC_API_KEY, description: "Anthropic - AI analysis and prompt enhancement" },
         elevenlabs: { configured: !!process.env.ELEVENLABS_API_KEY, description: "ElevenLabs - Voice generation and TTS" },
