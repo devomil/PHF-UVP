@@ -689,6 +689,8 @@ export const PIAPI_TEST_DEFINITIONS: PiAPITestDefinition[] = [
     estimatedCost: '$0.04',
     estimatedTime: '~15s',
     notes: 'Uses chat completions endpoint',
+    disabled: true,
+    disabledReason: 'GPT-Image-1 not available on PiAPI - not listed in PiAPI documentation',
   },
   {
     id: 'gpt-image-1.5',
@@ -704,6 +706,8 @@ export const PIAPI_TEST_DEFINITIONS: PiAPITestDefinition[] = [
     estimatedCost: '$0.05',
     estimatedTime: '~15s',
     notes: 'Uses chat completions endpoint',
+    disabled: true,
+    disabledReason: 'GPT-Image-1.5 not available on PiAPI - not listed in PiAPI documentation',
   },
   {
     id: 'qwen-image',
