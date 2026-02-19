@@ -20,6 +20,7 @@ export interface VideoProject {
   history?: ProjectHistory;
   qualityTier?: 'ultra' | 'premium' | 'standard';
   mediaMode?: 'image' | 'video';
+  videoGenerationMode?: 'direct-t2v' | 'image-first-i2v' | 'auto';
 }
 
 export type VideoProjectStatus = 'draft' | 'queued' | 'generating' | 'ready' | 'render_queued' | 'rendering' | 'lambda_pending' | 'complete' | 'error';

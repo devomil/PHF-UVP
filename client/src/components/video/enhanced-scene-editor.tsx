@@ -456,9 +456,13 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose }: E
                   <option key={p.id} value={p.id}>{p.label}</option>
                 ))}
               </select>
-              {(referenceImageUrls.length > 0 || imageUrl) && (
-                <p className="text-[10px] mt-0.5 text-right" style={{ color: "var(--text-muted)" }}>
+              {referenceImageUrls.length > 0 ? (
+                <p className="text-[10px] mt-0.5 text-right" style={{ color: "rgb(124,58,237)" }}>
                   I2V mode: Reference image will be used
+                </p>
+              ) : (
+                <p className="text-[10px] mt-0.5 text-right" style={{ color: "var(--text-muted)" }}>
+                  T2V mode: Direct text-to-video
                 </p>
               )}
             </div>

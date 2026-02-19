@@ -2830,6 +2830,14 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
     updatedProject.progress.currentStep = 'images';
     updatedProject.progress.overallPercent = 15;
 
+    const videoGenMode = (project as any).videoGenerationMode as 'direct-t2v' | 'image-first-i2v' | 'auto' | undefined;
+    const projectMediaMode2 = (project as any).mediaMode as 'image' | 'video' | undefined;
+    const useDirectT2V = projectMediaMode2 === 'video' && (videoGenMode === 'direct-t2v' || videoGenMode === 'auto' || !videoGenMode);
+    
+    if (useDirectT2V) {
+      console.log(`[Assets] Direct T2V mode enabled (videoGenerationMode=${videoGenMode || 'auto'}) - skipping intermediate image generation for video scenes`);
+    }
+
     if (shouldSkipStep('images')) {
       console.log('[Assets] Images already complete, skipping');
     } else {
@@ -2854,6 +2862,25 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
       
       if (!updatedProject.scenes[i].assets) {
         updatedProject.scenes[i].assets = {};
+      }
+
+      // ===== DIRECT T2V: Skip AI image generation for video scenes =====
+      // When using direct T2V mode, don't waste time/money generating intermediate images
+      // that will just be used as I2V references. Go straight to T2V in the video step.
+      // Only skip if scene has NO explicit user-uploaded reference image or brand asset.
+      const sceneRefConfig = (scene as any).referenceConfig;
+      const hasUserReferenceImage = (sceneRefConfig?.mode === 'image-to-image' && sceneRefConfig?.sourceUrl) ||
+                                     (sceneRefConfig?.mode !== 'none' && sceneRefConfig?.imageUrl);
+      const hasExplicitBrandAsset = scene.assets?.assignedProductImageId || 
+                                     (scene.assets?.useAIImage === false) ||
+                                     (scene as any).brandAssetUrl;
+      
+      if (useDirectT2V && !hasUserReferenceImage && !hasExplicitBrandAsset) {
+        console.log(`[Assets] Direct T2V: Skipping image generation for scene ${scene.id} (will use T2V in video step)`);
+        updatedProject.progress.steps.images.progress = Math.round(((i + 1) / (project.scenes || []).length) * 100);
+        updatedProject.progress.overallPercent = 15 + Math.round(((i + 1) / (project.scenes || []).length) * 25);
+        await saveProgress();
+        continue;
       }
 
       // ===== PHASE 13D: IMAGE-TO-IMAGE REFERENCE PROCESSING =====
@@ -3404,25 +3431,24 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
           const useVideo = this.shouldUseVideoBackground(scene, videoResult, project.targetAudience, sceneQualityTier, projectMediaMode);
           
           // If video mode and we need video but don't have one, check for I2V or T2V
+          const currentVideoGenMode = (project as any).videoGenerationMode as 'direct-t2v' | 'image-first-i2v' | 'auto' | undefined;
+          const preferDirectT2V = currentVideoGenMode === 'direct-t2v' || currentVideoGenMode === 'auto' || !currentVideoGenMode;
+          
           if (useVideo && !videoResult && projectMediaMode !== 'image') {
-            // Check for REAL brand asset or user-uploaded reference image for I2V routing
-            // Important: Do NOT use backgroundUrl (AI-generated image) - only genuine brand assets
-            
-            // Check 1: Explicit brand asset URL on scene
-            // Check 2: User-uploaded reference image from scene configuration
-            // Check 3: Look for brand assets matched in Phase 14A/14B (source: 'uploaded')
+            // Check for user-provided reference images (brand assets, user uploads)
+            // These are ALWAYS respected regardless of T2V/I2V mode
             const matchedBrandImage = updatedProject.assets.images.find(
               img => img.sceneId === scene.id && img.source === 'uploaded'
             );
             
-            const hasBrandAsset = scene.brandAssetUrl || 
+            const userProvidedRef = scene.brandAssetUrl || 
                                   (scene.referenceConfig?.mode !== 'none' && scene.referenceConfig?.imageUrl) ||
                                   matchedBrandImage?.url;
             
-            if (hasBrandAsset) {
-              // Route through I2V with verified brand asset (not AI-generated background)
+            if (userProvidedRef) {
+              // User explicitly provided a reference image → use I2V regardless of mode
               const sourceImageUrl = scene.brandAssetUrl || scene.referenceConfig?.imageUrl || matchedBrandImage?.url;
-              console.log(`[Assets] ${sceneQualityTier} tier: Scene ${scene.id} has brand asset - using I2V with ${sourceImageUrl}`);
+              console.log(`[Assets] Scene ${scene.id} has USER-PROVIDED reference image → I2V with ${sourceImageUrl}`);
               
               const i2vResult = await aiVideoService.generateVideo({
                 prompt: scene.visualDirection || scene.narration || 'Dynamic professional video content',
@@ -3444,11 +3470,37 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
               } else {
                 console.warn(`[Assets] I2V failed for ${scene.id}: ${i2vResult.error} - falling back to T2V`);
               }
+            } else if (!preferDirectT2V) {
+              // image-first-i2v mode: use the AI-generated image as I2V source
+              const aiGeneratedImage = updatedProject.scenes.find(s => s.id === scene.id)?.assets?.imageUrl;
+              if (aiGeneratedImage) {
+                console.log(`[Assets] Image-first I2V mode: Using AI-generated image for I2V on scene ${scene.id}`);
+                const i2vResult = await aiVideoService.generateVideo({
+                  prompt: scene.visualDirection || scene.narration || 'Dynamic professional video content',
+                  sceneType: scene.type,
+                  duration: scene.duration || 5,
+                  aspectRatio: updatedProject.outputFormat?.aspectRatio || '16:9',
+                  qualityTier: sceneQualityTier,
+                  imageUrl: aiGeneratedImage,
+                });
+                
+                if (i2vResult.success && i2vResult.s3Url) {
+                  videoResult = { 
+                    url: i2vResult.s3Url, 
+                    source: i2vResult.provider || 'ai-i2v',
+                    duration: i2vResult.duration,
+                  };
+                  aiVideosGenerated++;
+                  console.log(`[Assets] I2V (image-first) generated for ${scene.id}: ${i2vResult.s3Url}`);
+                } else {
+                  console.warn(`[Assets] I2V (image-first) failed for ${scene.id}: ${i2vResult.error} - falling back to T2V`);
+                }
+              }
             }
             
-            // T2V fallback if no brand asset or I2V failed
+            // T2V: Direct text-to-video (default path, or fallback if I2V failed)
             if (!videoResult) {
-              console.log(`[Assets] ${sceneQualityTier} tier: Scene ${scene.id} needs video - generating T2V...`);
+              console.log(`[Assets] Direct T2V: Scene ${scene.id} → generating video from text prompt`);
               const t2vResult = await aiVideoService.generateVideo({
                 prompt: scene.visualDirection || scene.narration || 'Dynamic professional video content',
                 sceneType: scene.type,
