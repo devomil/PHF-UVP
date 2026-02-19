@@ -574,6 +574,8 @@ export const PIAPI_TEST_DEFINITIONS: PiAPITestDefinition[] = [
     pollForResult: true,
     estimatedCost: '$0.05',
     estimatedTime: '~15s',
+    disabled: true,
+    disabledReason: 'Qubico/flux1-dev-advanced returns invalid model error - may not be available on PiAPI yet',
   },
   {
     id: 'i2i-flux-dev',
@@ -657,8 +659,8 @@ export const PIAPI_TEST_DEFINITIONS: PiAPITestDefinition[] = [
     estimatedTime: '~10s',
   },
   {
-    id: 'flux-kontext',
-    name: 'Flux Kontext',
+    id: 'flux-dev-advanced',
+    name: 'Flux Dev Advanced',
     category: 'image',
     model: 'Qubico/flux1-dev-advanced',
     taskType: 'txt2img',
@@ -670,6 +672,8 @@ export const PIAPI_TEST_DEFINITIONS: PiAPITestDefinition[] = [
     pollForResult: true,
     estimatedCost: '$0.02',
     estimatedTime: '~10s',
+    disabled: true,
+    disabledReason: 'Qubico/flux1-dev-advanced returns invalid model error - may not be available on PiAPI yet',
   },
   {
     id: 'gpt-image-1',
