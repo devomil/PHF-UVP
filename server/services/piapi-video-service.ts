@@ -384,14 +384,17 @@ class PiAPIVideoService {
       // Hailuo/Minimax Family
       case 'hailuo':
       case 'hailuo-minimax':
-        console.log(`[PiAPI T2V] Using Hailuo (t2v-01)`);
+        console.log(`[PiAPI T2V] Using Hailuo (v2.3)`);
         return {
           ...baseRequest,
           model: 'hailuo',
           task_type: 'video_generation',
           input: {
             ...baseRequest.input,
-            model: 't2v-01',
+            model: 'v2.3',
+          },
+          config: {
+            service_mode: 'public',
           },
         };
         
@@ -411,24 +414,26 @@ class PiAPIVideoService {
       case 'wan-2.1':
         console.log(`[PiAPI T2V] Using Wan 2.1`);
         return {
-          ...baseRequest,
-          model: 'hailuo',
-          task_type: 'video_generation',
+          model: 'Qubico/wanx',
+          task_type: 'txt2video-14b',
           input: {
-            ...baseRequest.input,
-            model: 'wan-2.1',
+            prompt: options.prompt,
           },
         };
         
       case 'wan-2.6':
         console.log(`[PiAPI T2V] Using Wan 2.6`);
         return {
-          ...baseRequest,
-          model: 'hailuo',
-          task_type: 'video_generation',
+          model: 'Wan',
+          task_type: 'wan26-txt2video',
           input: {
-            ...baseRequest.input,
-            model: 'wan-2.6',
+            prompt: options.prompt,
+            negative_prompt: options.negativePrompt || 'blurry, low quality, distorted',
+            prompt_extend: true,
+            resolution: '720p',
+            aspect_ratio: options.aspectRatio || '16:9',
+            duration: Math.min(options.duration, 5),
+            watermark: false,
           },
         };
         
@@ -497,6 +502,34 @@ class PiAPIVideoService {
           },
         };
         
+      // Sora 2 (OpenAI)
+      case 'sora-2':
+      case 'sora2':
+        console.log(`[PiAPI T2V] Using Sora 2`);
+        return {
+          model: 'sora2',
+          task_type: 'sora2-video',
+          input: {
+            prompt: options.prompt,
+            aspect_ratio: options.aspectRatio || '16:9',
+            duration: Math.min(options.duration, 10),
+          },
+        };
+        
+      case 'sora-2-pro':
+      case 'sora2-pro':
+        console.log(`[PiAPI T2V] Using Sora 2 Pro`);
+        return {
+          model: 'sora2',
+          task_type: 'sora2-pro-video',
+          input: {
+            prompt: options.prompt,
+            aspect_ratio: options.aspectRatio || '16:9',
+            resolution: '720p',
+            duration: Math.min(options.duration, 10),
+          },
+        };
+
       default:
         console.log(`[PiAPI T2V] Using default model: ${options.model}`);
         return baseRequest;
@@ -633,10 +666,15 @@ class PiAPIVideoService {
       'hailuo-minimax': { modelId: 'hailuo', maxDuration: 6 },
       'seedance-1.0': { modelId: 'hailuo', maxDuration: 6 },
       // Wan Family (Alibaba via PiAPI)
-      'wan-2.1': { modelId: 'hailuo', maxDuration: 5 },
-      'wan-2.6': { modelId: 'hailuo', maxDuration: 5 },
+      'wan-2.1': { modelId: 'Qubico/wanx', maxDuration: 10 },
+      'wan-2.6': { modelId: 'Wan', maxDuration: 5 },
       // Hunyuan
       'hunyuan': { modelId: 'hunyuan', maxDuration: 5 },
+      // Sora 2
+      'sora-2': { modelId: 'sora2', maxDuration: 10 },
+      'sora2': { modelId: 'sora2', maxDuration: 10 },
+      'sora-2-pro': { modelId: 'sora2', maxDuration: 10 },
+      'sora2-pro': { modelId: 'sora2', maxDuration: 10 },
       // Veo Family (Google)
       'veo': { modelId: 'veo-3', maxDuration: 8 },
       'veo-2': { modelId: 'veo-2', maxDuration: 8 },
@@ -1065,9 +1103,12 @@ class PiAPIVideoService {
           task_type: 'video_generation',
           input: {
             prompt: prompt,
-            model: 'i2v-01',
-            reference_images: [options.imageUrl],  // Style reference for new content
+            model: 'v2.3',
+            reference_images: [options.imageUrl],
             expand_prompt: true,
+          },
+          config: {
+            service_mode: 'public',
           },
         };
       }
@@ -1077,9 +1118,12 @@ class PiAPIVideoService {
         task_type: 'video_generation',
         input: {
           prompt: prompt,
-          model: 'i2v-01',
-          image_url: options.imageUrl,  // First frame animation
+          model: 'v2.3',
+          image_url: options.imageUrl,
           expand_prompt: true,
+        },
+        config: {
+          service_mode: 'public',
         },
       };
     }

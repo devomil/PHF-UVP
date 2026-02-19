@@ -270,6 +270,22 @@ export const AI_VIDEO_PROVIDERS: Record<string, AIVideoProviderConfig> = {
     capabilities: { t2v: true, i2v: true, v2v: false },
     supportedAspectRatios: ['16:9', '9:16', '1:1'],
   },
+  'sora-2': {
+    modelId: 'sora2',
+    apiProvider: 'piapi',
+    costPerSecond: 0.08,
+    maxDuration: 10,
+    capabilities: { t2v: true, i2v: false, v2v: false },
+    supportedAspectRatios: ['16:9', '9:16', '1:1'],
+  },
+  'sora-2-pro': {
+    modelId: 'sora2',
+    apiProvider: 'piapi',
+    costPerSecond: 0.12,
+    maxDuration: 10,
+    capabilities: { t2v: true, i2v: false, v2v: false },
+    supportedAspectRatios: ['16:9', '9:16', '1:1'],
+  },
 };
 
 export function selectProvidersForScene(scene: any, options?: any): string[] {
@@ -283,7 +299,7 @@ export function selectProvidersForSceneSmart(scene: any, options?: any): string[
 export function getConfiguredProviders(): string[] {
   const configured: string[] = [];
   if (process.env.PIAPI_API_KEY) {
-    configured.push('kling-2.6', 'kling-2.6-pro', 'veo-3.1', 'luma', 'runway', 'hailuo', 'wan-2.6', 'pika', 'seedance-1.0');
+    configured.push('kling-2.6', 'kling-2.6-pro', 'veo-3.1', 'luma', 'runway', 'hailuo', 'wan-2.6', 'pika', 'seedance-1.0', 'sora-2', 'sora-2-pro');
   }
   if (process.env.RUNWAY_API_KEY) {
     configured.push('runway-direct');
