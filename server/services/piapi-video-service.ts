@@ -541,8 +541,11 @@ class PiAPIVideoService {
     model: string
   ): Promise<{ success: boolean; videoUrl?: string; error?: string }> {
     const maxAttempts = 120;
+    const maxPendingAttempts = 36;
     const pollInterval = 5000;
     let consecutiveErrors = 0;
+    let consecutivePending = 0;
+    let hasStartedProcessing = false;
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       await this.sleep(pollInterval);
@@ -581,6 +584,17 @@ class PiAPIVideoService {
         if (status === 'failed' || status === 'error' || status === 'FAILED') {
           const errorMsg = data.data?.error || data.error || 'Generation failed';
           return { success: false, error: errorMsg };
+        }
+
+        if (status === 'processing' || status === 'running') {
+          consecutivePending = 0;
+          hasStartedProcessing = true;
+        } else if (!hasStartedProcessing) {
+          consecutivePending++;
+          if (consecutivePending >= maxPendingAttempts) {
+            console.warn(`[PiAPI:${model}] Provider stuck in '${status}' for ${consecutivePending} polls (~${Math.round(consecutivePending * pollInterval / 1000)}s) - bailing out`);
+            return { success: false, error: `Provider ${model} stuck in ${status} queue for ${Math.round(consecutivePending * pollInterval / 1000)}s` };
+          }
         }
 
       } catch (error: any) {

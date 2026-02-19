@@ -119,7 +119,12 @@ class BrandContextService {
 
       return this.brandData;
     } catch (error: any) {
-      console.error('[BrandContext] Failed to load brand context:', error.message);
+      const isFileNotFound = error.code === 'ENOENT';
+      if (isFileNotFound) {
+        console.log('[BrandContext] No custom brand context file found - using database brand settings instead');
+      } else {
+        console.warn(`[BrandContext] Could not load brand context file: ${error.message} - using fallback`);
+      }
       this.brandData = {
         brand: { name: "Brand", tagline: "" },
         identity: { story: "", mission: "" },

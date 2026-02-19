@@ -54,7 +54,7 @@ export const IMAGE_PROVIDERS: Record<string, ImageProvider> = {
     name: 'Stable Diffusion 3',
     modelId: 'sd3',
     costPerImage: 0.04,
-    apiProvider: process.env.STABILITY_API_KEY ? 'stability' : 'piapi',
+    apiProvider: 'piapi',
   },
   'ideogram': {
     id: 'ideogram',

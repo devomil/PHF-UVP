@@ -375,13 +375,7 @@ export function selectProvidersForSceneSmart(scene: any, options?: any): string[
 export function getAllConfiguredProviders(): string[] {
   const configured: string[] = [];
   if (process.env.PIAPI_API_KEY) {
-    configured.push('kling-2.6', 'kling-2.6-pro', 'veo-3.1', 'luma', 'runway', 'hailuo', 'wan-2.6', 'pika', 'seedance-1.0', 'sora-2', 'sora-2-pro');
-  }
-  if (process.env.RUNWAY_API_KEY) {
-    configured.push('runway-direct');
-  }
-  if (process.env.STABILITY_API_KEY) {
-    configured.push('stability-direct');
+    configured.push('kling-2.6', 'kling-2.6-pro', 'veo-3.1', 'luma', 'hailuo', 'wan-2.6', 'pika', 'seedance-1.0', 'sora-2', 'sora-2-pro');
   }
   return [...new Set(configured)];
 }
@@ -402,9 +396,6 @@ export async function getTestedProviders(): Promise<string[]> {
   }
   
   const filtered = allConfigured.filter(provider => {
-    if (provider === 'runway-direct' || provider === 'stability-direct') {
-      return true;
-    }
     return passed.has(provider);
   });
   
