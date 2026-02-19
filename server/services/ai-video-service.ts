@@ -7,7 +7,9 @@ import { intelligentProviderSelector, SceneContent } from './intelligent-provide
 import { 
   AI_VIDEO_PROVIDERS, 
   selectProvidersForScene, 
-  getConfiguredProviders 
+  getConfiguredProviders,
+  getTestedProviders,
+  clearProviderCache
 } from '../config/ai-video-providers';
 import { getVisualStyleConfig, VisualStyleConfig } from '@shared/visual-style-config';
 import { getMotionControl, MotionControlConfig } from '@shared/config/motion-control';
@@ -103,12 +105,18 @@ class AIVideoService {
     return getConfiguredProviders();
   }
 
+  async getTestedAvailableProviders(): Promise<string[]> {
+    return getTestedProviders();
+  }
+
   async generateVideo(options: AIVideoOptions): Promise<AIVideoResult> {
-    const configuredProviders = getConfiguredProviders();
+    const configuredProviders = await getTestedProviders();
     
     if (configuredProviders.length === 0) {
       return { success: false, error: 'No AI video providers configured' };
     }
+    
+    console.log(`[AIVideo] Using ${configuredProviders.length} tested providers: ${configuredProviders.join(', ')}`);
 
     // Get visual style configuration (Phase 5B)
     const styleConfig = getVisualStyleConfig(options.visualStyle || 'professional');
@@ -436,12 +444,21 @@ class AIVideoService {
 
       const result = await intelligentProviderSelector.recommendProviderForScene(sceneContent);
       
-      const recommendedProvider = result.recommendedProvider;
-      const fallbackProvider = result.fallbackProvider;
+      let recommendedProvider = result.recommendedProvider;
+      let fallbackProvider = result.fallbackProvider;
       
-      // Build provider order: recommended first, then fallback, then other configured providers
+      const isProviderAvailable = (p: string) => configuredProviders.some(cp => cp === p || cp.startsWith(p + '-') || cp.startsWith(p));
+      
+      if (!isProviderAvailable(recommendedProvider)) {
+        console.log(`[AIVideo] Recommended provider "${recommendedProvider}" not in tested providers, using first available`);
+        recommendedProvider = configuredProviders[0]?.split('-')[0] as any || 'kling';
+      }
+      if (fallbackProvider && !isProviderAvailable(fallbackProvider)) {
+        fallbackProvider = configuredProviders[1]?.split('-')[0] || configuredProviders[0]?.split('-')[0] || 'hailuo';
+      }
+      
       const providerOrder: string[] = [recommendedProvider];
-      if (fallbackProvider && fallbackProvider !== recommendedProvider && configuredProviders.includes(fallbackProvider)) {
+      if (fallbackProvider && fallbackProvider !== recommendedProvider && isProviderAvailable(fallbackProvider)) {
         providerOrder.push(fallbackProvider);
       }
       for (const p of configuredProviders) {

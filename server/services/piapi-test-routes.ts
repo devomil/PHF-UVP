@@ -6,6 +6,7 @@ import fs from 'fs';
 import { db } from '../db';
 import { piapiTestResults } from '../../shared/schema';
 import { eq, desc, and, sql } from 'drizzle-orm';
+import { clearProviderCache } from '../config/ai-video-providers';
 
 const router = Router();
 
@@ -160,6 +161,7 @@ router.post('/api/piapi-tests/results', async (req: Request, res: Response) => {
       error: error || null,
       testedBy: userId,
     }).returning();
+    clearProviderCache();
     res.json({ success: true, result: saved, testedAt: saved.testedAt });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -172,6 +174,7 @@ router.delete('/api/piapi-tests/results', async (req: Request, res: Response) =>
   if (!userId) return res.status(401).json({ error: 'User not found' });
   try {
     await db.delete(piapiTestResults).where(eq(piapiTestResults.testedBy, userId));
+    clearProviderCache();
     res.json({ success: true });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
