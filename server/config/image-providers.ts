@@ -31,14 +31,14 @@ export const IMAGE_PROVIDERS: Record<string, ImageProvider> = {
   'flux-kontext': {
     id: 'flux-kontext',
     name: 'Flux Kontext',
-    modelId: 'Qubico/flux1-dev-advanced',
+    modelId: 'Qubico/flux1-dev',
     costPerImage: 0.01,
     apiProvider: 'piapi',
   },
   'flux-1.1-pro': {
     id: 'flux-1.1-pro',
     name: 'Flux 1.1 Pro',
-    modelId: 'flux-pro',
+    modelId: 'Qubico/flux1-dev',
     costPerImage: 0.04,
     apiProvider: 'piapi',
   },

@@ -110,15 +110,14 @@ class ImageGenerationService {
     }
     
     const piapiModelMap: Record<string, string> = {
-      'flux-kontext': 'Qubico/flux1-dev-advanced',
-      'flux-1.1-pro': 'flux-pro',
-      'flux': 'flux-schnell',
-      'gpt-image-1.5': 'gpt-image-1.5',
+      'flux-kontext': 'Qubico/flux1-dev',
+      'flux-1.1-pro': 'Qubico/flux1-dev',
+      'flux': 'Qubico/flux1-schnell',
       'stable-diffusion-3': 'sd3',
       'ideogram': 'ideogram-v2',
     };
     
-    const model = piapiModelMap[providerId] || 'flux-pro';
+    const model = piapiModelMap[providerId] || 'Qubico/flux1-dev';
     
     const guidanceScale = i2iConfig?.guidanceScale ?? 7.5;
     console.log(`[I2I] Using guidance scale: ${guidanceScale}`);
@@ -134,10 +133,8 @@ class ImageGenerationService {
           model,
           task_type: 'img2img',
           input: {
-            image_url: request.referenceImageUrl,
+            image: request.referenceImageUrl,
             prompt: request.prompt,
-            strength,
-            guidance_scale: guidanceScale,
           },
         }),
       });
@@ -334,7 +331,7 @@ class ImageGenerationService {
       const response = await fetch('https://api.piapi.ai/api/v1/task', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${apiKey}`,
+          'X-API-Key': apiKey,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
