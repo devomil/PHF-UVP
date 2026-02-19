@@ -823,6 +823,8 @@ export const PIAPI_TEST_DEFINITIONS: PiAPITestDefinition[] = [
     estimatedCost: '$0.03',
     estimatedTime: '~15s',
     notes: 'Video-to-audio generation - requires video URL input',
+    disabled: true,
+    disabledReason: 'Requires video URL input - video upload for audio tests not yet implemented',
   },
   {
     id: 'ace-step',
