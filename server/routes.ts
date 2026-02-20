@@ -48,6 +48,15 @@ export function registerRoutes(app: Express) {
     .catch((err: any) => {
       console.warn("[Routes] Video worker loop not started:", err.message?.substring(0, 100));
     });
+
+  import("./services/video-generation-worker")
+    .then((mod) => {
+      mod.videoGenerationWorker.startWorker(5000);
+      console.log("[Routes] Scene video generation worker started");
+    })
+    .catch((err: any) => {
+      console.warn("[Routes] Scene video generation worker not started:", err.message?.substring(0, 100));
+    });
   app.get("/api/health", (_req, res) => {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
   });
