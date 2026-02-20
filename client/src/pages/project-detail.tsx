@@ -1211,7 +1211,7 @@ export default function ProjectDetail({ params }: { params?: { id: string } }) {
           </div>
         )}
 
-        <RenderConfigPanel projectId={projectId} projectOutputUrl={project.outputUrl} projectStatus={project.status} />
+        <RenderConfigPanel projectId={projectId} projectOutputUrl={project.outputUrl} projectStatus={project.status} projectScenes={project.scenes} />
         {!isQuickCreate && <PostProductionPanel projectId={projectId} project={project} />}
       </div>
     </div>
@@ -1400,7 +1400,7 @@ function RenderButton({ projectId, hasVisual, hasVoiceover, hasMusic, initialOut
   );
 }
 
-function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus }: { projectId: string; projectOutputUrl?: string | null; projectStatus?: string }) {
+function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, projectScenes }: { projectId: string; projectOutputUrl?: string | null; projectStatus?: string; projectScenes?: any[] }) {
   const [expanded, setExpanded] = useState(true);
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -1427,6 +1427,9 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus }: { pro
   const quickAssets = assetsQuery.data || {};
   const voiceoverReady = quickAssets.voiceover?.status === "completed" && !!quickAssets.voiceover?.url;
   const musicReady = quickAssets.music?.status === "completed" && !!quickAssets.music?.url;
+
+  const scenes = Array.isArray(projectScenes) ? projectScenes : [];
+  const scenesHaveVideo = scenes.some((s: any) => s.assets?.videoUrl || (s.background as any)?.videoUrl);
 
   const rawSettings = settingsQuery.data?.settings || {
     voiceover: { enabled: true, voiceId: null, hasGenerated: false },
@@ -1791,7 +1794,7 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus }: { pro
             </div>
           </div>
 
-          <RenderButton projectId={projectId} hasVisual={!!quickAssets.visual?.url} hasVoiceover={voiceoverReady} hasMusic={musicReady} initialOutputUrl={projectOutputUrl} initialStatus={projectStatus} />
+          <RenderButton projectId={projectId} hasVisual={!!quickAssets.visual?.url || scenesHaveVideo} hasVoiceover={voiceoverReady || settings.voiceover.hasGenerated} hasMusic={musicReady || settings.music.hasGenerated} initialOutputUrl={projectOutputUrl} initialStatus={projectStatus} />
         </div>
       )}
     </div>
