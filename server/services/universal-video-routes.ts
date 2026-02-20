@@ -4127,7 +4127,7 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, asy
     const job = await videoGenerationWorker.createJob({
       projectId,
       sceneId,
-      provider: provider || 'runway',
+      provider: provider || undefined,
       prompt,
       fallbackPrompt,
       duration: scene.duration || 6,
