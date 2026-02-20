@@ -63,7 +63,9 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose }: E
   const [isEditing, setIsEditing] = useState(false);
   const [provider, setProvider] = useState("auto");
   const [generationMode, setGenerationMode] = useState("auto");
-  const [referenceImageUrls, setReferenceImageUrls] = useState<string[]>([]);
+  const [referenceImageUrls, setReferenceImageUrls] = useState<string[]>(
+    () => scene.assets?.referenceImages || []
+  );
   const [showLibrary, setShowLibrary] = useState(false);
   const [isEditingPrompt, setIsEditingPrompt] = useState(false);
   const [inlinePrompt, setInlinePrompt] = useState(scene.assets?.prompt || scene.visualDirection || "");
@@ -189,6 +191,20 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose }: E
     const m = Math.floor(t / 60);
     const s = Math.floor(t % 60);
     return `${m}:${s.toString().padStart(2, "0")}`;
+  };
+
+  const persistReferenceImages = async (images: string[]) => {
+    try {
+      await fetch(`/api/universal-video/projects/${projectId}/scenes/${sceneId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ referenceImages: images }),
+      });
+      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+    } catch (err) {
+      console.error("[RefImages] Failed to persist reference images:", err);
+    }
   };
 
   const updateSceneMutation = useMutation({
@@ -332,7 +348,9 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose }: E
       const data = await uploadRes.json();
       const url = data.url || data.fileUrl;
       if (url) {
-        setReferenceImageUrls((prev) => [...prev, url]);
+        const newImages = [...referenceImageUrls, url];
+        setReferenceImageUrls(newImages);
+        persistReferenceImages(newImages);
         toast({ title: "Reference Image Added", description: "Image will be used for I2V video generation." });
       }
     } catch (err: any) {
@@ -564,7 +582,11 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose }: E
                 <div key={i} className="relative w-10 h-10 rounded-md overflow-hidden border group" style={{ borderColor: "rgba(124,58,237,0.3)" }}>
                   <img src={url} alt="" className="w-full h-full object-cover" />
                   <button
-                    onClick={() => setReferenceImageUrls((prev) => prev.filter((_, idx) => idx !== i))}
+                    onClick={() => {
+                      const newImages = referenceImageUrls.filter((_, idx) => idx !== i);
+                      setReferenceImageUrls(newImages);
+                      persistReferenceImages(newImages);
+                    }}
                     className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white flex items-center justify-center text-[8px] opacity-0 group-hover:opacity-100 transition-opacity"
                   >
                     <X className="w-2.5 h-2.5" />
@@ -606,7 +628,9 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose }: E
                         onClick={() => {
                           const url = asset.url || asset.thumbnailUrl;
                           if (url) {
-                            setReferenceImageUrls((prev) => [...prev, url]);
+                            const newImages = [...referenceImageUrls, url];
+                            setReferenceImageUrls(newImages);
+                            persistReferenceImages(newImages);
                             setShowLibrary(false);
                             toast({ title: "Reference Added" });
                           }

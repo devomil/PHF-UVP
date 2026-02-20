@@ -215,6 +215,31 @@ async function getPublicUrlForBrandAsset(relativeUrl: string): Promise<string | 
     }
   }
   
+  // Handle /uploads/ paths (local disk uploads)
+  if (relativeUrl.startsWith('/uploads/')) {
+    try {
+      const fs = await import('fs');
+      const path = await import('path');
+      const filePath = path.default.resolve(process.cwd(), '.' + relativeUrl);
+      if (fs.default.existsSync(filePath)) {
+        const fileBuffer = fs.default.readFileSync(filePath);
+        console.log('[PublicURL] Read from local uploads, size:', fileBuffer.length, 'bytes');
+        const ext = relativeUrl.split('.').pop() || 'png';
+        const filename = `scene_ref_${Date.now()}.${ext}`;
+        const piapiUrl = await uploadImageToPiAPIStorage(fileBuffer, filename);
+        if (piapiUrl) {
+          console.log('[PublicURL] ✓ Uploaded local file to PiAPI storage:', piapiUrl);
+          return piapiUrl;
+        }
+      }
+      console.log('[PublicURL] Local file not found:', filePath);
+      return null;
+    } catch (error) {
+      console.error('[PublicURL] Error processing local upload path:', error);
+      return null;
+    }
+  }
+  
   // Handle brand-assets API paths: /api/brand-assets/file/{id}
   if (!relativeUrl.startsWith('/api/brand-assets/file/')) {
     console.log('[PublicURL] Unsupported URL format:', relativeUrl.substring(0, 80));
@@ -1627,6 +1652,13 @@ router.patch('/projects/:projectId/scenes/:sceneId', isAuthenticated, async (req
       if (updates[field] !== undefined) {
         (scenes[sceneIndex] as any)[field] = updates[field];
       }
+    }
+
+    if (updates.referenceImages !== undefined) {
+      if (!scenes[sceneIndex].assets) {
+        (scenes[sceneIndex] as any).assets = {};
+      }
+      (scenes[sceneIndex] as any).assets.referenceImages = updates.referenceImages;
     }
 
     if (updates.clearImage) {
