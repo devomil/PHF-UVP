@@ -1340,23 +1340,26 @@ class PiAPIVideoService {
       }
       
       // Animation mode: use image_url for first-frame animation
+      const isLegacyVersion = version === '1.6' || version === '1.0';
+      const klingInput: any = {
+        prompt: klingI2vPrompt,
+        image_url: options.imageUrl,
+        duration: options.duration,
+        aspect_ratio: options.aspectRatio,
+        negative_prompt: i2vNegativePrompt,
+        mode,
+        version,
+        cfg_scale: cfgScale,
+        ...motionParams,
+      };
+      if (isLegacyVersion) {
+        klingInput.elements = [{ image_url: options.imageUrl }];
+        klingInput.first_frame_image = options.imageUrl;
+      }
       return {
         model: 'kling',
         task_type: 'video_generation',
-        input: {
-          prompt: klingI2vPrompt,
-          image_url: options.imageUrl,
-          first_frame_image: options.imageUrl, // Some Kling versions use this
-          duration: options.duration,
-          aspect_ratio: options.aspectRatio,
-          negative_prompt: i2vNegativePrompt,
-          mode,
-          version,
-          cfg_scale: cfgScale,
-          // Elements array is preferred for Kling 1.6+
-          elements: [{ image_url: options.imageUrl }],
-          ...motionParams, // Apply camera_control from Phase 16 motion system
-        },
+        input: klingInput,
       };
     }
     
