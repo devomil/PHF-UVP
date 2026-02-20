@@ -109,27 +109,41 @@ async function cropImageToAspectRatio(
     return inputPath;
   }
   
-  let cropW: number, cropH: number;
-  if (imgRatio > targetRatio) {
-    cropH = imgH;
-    cropW = Math.round(imgH * targetRatio);
-  } else {
-    cropW = imgW;
-    cropH = Math.round(imgW / targetRatio);
-  }
-  
   const ext = path.default.extname(inputPath);
   const outputPath = inputPath.replace(ext, `_cropped${ext}`);
   
-  console.log(`[ImageCrop] Cropping ${imgW}x${imgH} (ratio ${imgRatio.toFixed(2)}) to ${cropW}x${cropH} (target ${targetAspectRatio})`);
-  execSync(`convert "${inputPath}" -gravity center -crop ${cropW}x${cropH}+0+0 +repage -resize 1920x1080 "${outputPath}"`, { timeout: 15000 });
+  if (imgRatio < targetRatio) {
+    // Portrait image going into landscape frame - PAD with blurred background instead of cropping
+    // This preserves the full product/bottle without cutting off top/bottom
+    const canvasW = 1920;
+    const canvasH = 1080;
+    // Scale image to fit height, then pad sides with blurred version of itself
+    const fitH = canvasH;
+    const fitW = Math.round(fitH * imgRatio);
+    
+    console.log(`[ImageCrop] Portrait→Landscape: Padding ${imgW}x${imgH} into ${canvasW}x${canvasH} (product preserved in full)`);
+    
+    // Create blurred background from the source, then overlay the sharp original centered
+    execSync(
+      `magick "${inputPath}" -resize ${canvasW}x${canvasH}^ -gravity center -crop ${canvasW}x${canvasH}+0+0 +repage -blur 0x30 -brightness-contrast -30x0 ` +
+      `\\( "${inputPath}" -resize x${fitH} \\) -gravity center -composite "${outputPath}"`,
+      { timeout: 30000 }
+    );
+  } else {
+    // Landscape image wider than target - center crop width (minimal loss)
+    const cropH = imgH;
+    const cropW = Math.round(imgH * targetRatio);
+    
+    console.log(`[ImageCrop] Landscape crop: ${imgW}x${imgH} to ${cropW}x${cropH} (target ${targetAspectRatio})`);
+    execSync(`magick "${inputPath}" -gravity center -crop ${cropW}x${cropH}+0+0 +repage -resize 1920x1080 "${outputPath}"`, { timeout: 15000 });
+  }
   
   if (fs.default.existsSync(outputPath)) {
-    console.log(`[ImageCrop] ✓ Cropped image saved: ${outputPath}`);
+    console.log(`[ImageCrop] ✓ Processed image saved: ${outputPath}`);
     return outputPath;
   }
   
-  console.log(`[ImageCrop] ⚠ Crop failed, using original`);
+  console.log(`[ImageCrop] ⚠ Processing failed, using original`);
   return inputPath;
 }
 
