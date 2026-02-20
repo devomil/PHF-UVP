@@ -181,8 +181,8 @@ class AIVideoService {
     const qualityTier = options.qualityTier || 'standard';
     
     if (enhancedOptions.preferredProvider) {
-      providerOrder = [enhancedOptions.preferredProvider, ...configuredProviders.filter(p => p !== enhancedOptions.preferredProvider)];
-      console.log(`[AIVideo] Using explicit preferred provider: ${enhancedOptions.preferredProvider}`);
+      providerOrder = [enhancedOptions.preferredProvider];
+      console.log(`[AIVideo] Using STRICT user-selected provider: ${enhancedOptions.preferredProvider} (no fallbacks)`);
     } else if (options.narration && options.prompt) {
       // Use Claude-based intelligent provider selection
       const recommendation = await this.getIntelligentProviderRecommendation(options, configuredProviders);
@@ -194,8 +194,9 @@ class AIVideoService {
     }
 
     // Map base providers to tier-appropriate versions
-    const tierAdjustedOrder = providerOrder.map(baseProvider => {
-      // Extract base provider name (e.g., 'kling' from 'kling-2.6')
+    // Skip tier mapping when user explicitly selected a provider
+    const isExplicitSelection = !!enhancedOptions.preferredProvider;
+    const tierAdjustedOrder = isExplicitSelection ? providerOrder : providerOrder.map(baseProvider => {
       const baseName = baseProvider.split('-')[0];
       const tierVersions = TIER_PROVIDER_VERSIONS[baseName];
       if (tierVersions && tierVersions[qualityTier]) {
