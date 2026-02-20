@@ -84,6 +84,55 @@ const s3Client = process.env.REMOTION_AWS_ACCESS_KEY_ID && process.env.REMOTION_
 
 const router = Router();
 
+async function cropImageToAspectRatio(
+  inputPath: string,
+  targetAspectRatio: string
+): Promise<string> {
+  const { execSync } = await import('child_process');
+  const fs = await import('fs');
+  const path = await import('path');
+  
+  const [targetW, targetH] = targetAspectRatio.split(':').map(Number);
+  if (!targetW || !targetH) return inputPath;
+  
+  const targetRatio = targetW / targetH;
+  
+  const identifyOutput = execSync(`identify -format "%wx%h" "${inputPath}"`, { encoding: 'utf-8' }).trim();
+  const dims = identifyOutput.replace(/"/g, '');
+  const [imgW, imgH] = dims.split('x').map(Number);
+  if (!imgW || !imgH) return inputPath;
+  
+  const imgRatio = imgW / imgH;
+  const ratioTolerance = 0.05;
+  if (Math.abs(imgRatio - targetRatio) < ratioTolerance) {
+    console.log(`[ImageCrop] Image already matches target ratio ${targetAspectRatio} (${imgW}x${imgH})`);
+    return inputPath;
+  }
+  
+  let cropW: number, cropH: number;
+  if (imgRatio > targetRatio) {
+    cropH = imgH;
+    cropW = Math.round(imgH * targetRatio);
+  } else {
+    cropW = imgW;
+    cropH = Math.round(imgW / targetRatio);
+  }
+  
+  const ext = path.default.extname(inputPath);
+  const outputPath = inputPath.replace(ext, `_cropped${ext}`);
+  
+  console.log(`[ImageCrop] Cropping ${imgW}x${imgH} (ratio ${imgRatio.toFixed(2)}) to ${cropW}x${cropH} (target ${targetAspectRatio})`);
+  execSync(`convert "${inputPath}" -gravity center -crop ${cropW}x${cropH}+0+0 +repage -resize 1920x1080 "${outputPath}"`, { timeout: 15000 });
+  
+  if (fs.default.existsSync(outputPath)) {
+    console.log(`[ImageCrop] ✓ Cropped image saved: ${outputPath}`);
+    return outputPath;
+  }
+  
+  console.log(`[ImageCrop] ⚠ Crop failed, using original`);
+  return inputPath;
+}
+
 /**
  * Upload image to PiAPI's ephemeral storage.
  * Returns a storage.theapi.app URL (same as PiAPI Workspace uses).
@@ -158,7 +207,7 @@ async function uploadImageToPiAPIStorage(
  * Uses PiAPI's ephemeral storage to get storage.theapi.app URLs.
  * PiAPI storage is REQUIRED - no GCS fallback (GCS URLs are not publicly accessible).
  */
-async function getPublicUrlForBrandAsset(relativeUrl: string): Promise<string | null> {
+async function getPublicUrlForBrandAsset(relativeUrl: string, targetAspectRatio?: string): Promise<string | null> {
   if (!relativeUrl) {
     return null;
   }
@@ -220,11 +269,18 @@ async function getPublicUrlForBrandAsset(relativeUrl: string): Promise<string | 
     try {
       const fs = await import('fs');
       const path = await import('path');
-      const filePath = path.default.resolve(process.cwd(), '.' + relativeUrl);
+      let filePath = path.default.resolve(process.cwd(), '.' + relativeUrl);
       if (fs.default.existsSync(filePath)) {
+        if (targetAspectRatio) {
+          try {
+            filePath = await cropImageToAspectRatio(filePath, targetAspectRatio);
+          } catch (cropErr) {
+            console.warn('[PublicURL] Image crop failed, using original:', cropErr);
+          }
+        }
         const fileBuffer = fs.default.readFileSync(filePath);
         console.log('[PublicURL] Read from local uploads, size:', fileBuffer.length, 'bytes');
-        const ext = relativeUrl.split('.').pop() || 'png';
+        const ext = filePath.split('.').pop() || 'png';
         const filename = `scene_ref_${Date.now()}.${ext}`;
         const piapiUrl = await uploadImageToPiAPIStorage(fileBuffer, filename);
         if (piapiUrl) {
@@ -4038,10 +4094,11 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, asy
     // Convert relative URL to signed public URL for external video providers
     let finalSourceImageUrl: string | undefined = undefined;
     if (relativeSourceUrl) {
-      const publicUrl = await getPublicUrlForBrandAsset(relativeSourceUrl);
+      const projectAspectRatio = (projectData as any).outputFormat?.aspectRatio || (projectData as any).settings?.aspectRatio || '16:9';
+      const publicUrl = await getPublicUrlForBrandAsset(relativeSourceUrl, projectAspectRatio);
       if (publicUrl) {
         finalSourceImageUrl = publicUrl;
-        console.log(`[Phase9B-Async] ✓ Converted to public signed URL for I2V`);
+        console.log(`[Phase9B-Async] ✓ Converted to public signed URL for I2V (aspect ratio: ${projectAspectRatio})`);
       } else {
         console.log(`[Phase9B-Async] ⚠ Could not convert to public URL, falling back to T2V mode`);
       }
