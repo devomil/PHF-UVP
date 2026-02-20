@@ -1271,9 +1271,10 @@ class PiAPIVideoService {
       const animationStyle = options.i2vSettings?.animationStyle ?? 'product-hero';
       
       // Map user's Image Fidelity slider (0-1 where 1 = max fidelity) to cfg_scale
-      // Higher fidelity = lower cfg (more source preservation)
       // cfg_scale range: 0.0 (full source) to 1.0 (full prompt)
-      const cfgScale = Math.max(0.1, 1.0 - imageControlStrength * 0.8); // Invert: high fidelity = low cfg
+      // Use a balanced range so the model follows the prompt's scene composition
+      // while still referencing the source image for visual style
+      const cfgScale = Math.max(0.3, 1.0 - imageControlStrength * 0.5); // Range: 0.5 (default) to 0.3 (max fidelity)
       
       // Map motion strength to animation intensity
       // Kling uses a subtle approach - lower values mean less dramatic motion
@@ -1294,23 +1295,22 @@ class PiAPIVideoService {
       const requiresNewContent = promptRequiresNewContent(sanitizedPrompt);
       console.log(`[PiAPI I2V] Kling: ${requiresNewContent ? 'REFERENCE MODE (new content)' : 'ANIMATE MODE (motion only)'}`);
       
-      // Build Kling-specific prompt
+      // Build Kling-specific prompt - prioritize user's actual visual direction
       let klingPromptBase: string;
       if (requiresNewContent) {
-        // Reference mode: use the image as context/style guide but generate new content
         klingPromptBase = sanitizedPrompt;
       } else if (animationStyle === 'product-static') {
-        klingPromptBase = `Gently animate this exact product image. Preserve all details, labels, and text exactly as shown. Subtle ambient motion only.`;
+        klingPromptBase = `${sanitizedPrompt}. Subtle ambient motion, gentle lighting shifts.`;
       } else if (animationStyle === 'product-hero') {
-        klingPromptBase = `Cinematic product shot. Animate this exact product image with gentle, smooth camera motion. Preserve all product details, labels, and text exactly as shown. ${sanitizedPrompt.substring(0, 100)}`;
+        klingPromptBase = `${sanitizedPrompt}. Cinematic, smooth camera motion.`;
       } else if (animationStyle === 'subtle-motion') {
-        klingPromptBase = `Animate this image with subtle environmental motion. Preserve the product exactly as shown. Gentle lighting shifts and ambient movement. ${sanitizedPrompt.substring(0, 80)}`;
+        klingPromptBase = `${sanitizedPrompt}. Subtle environmental motion, gentle lighting shifts.`;
       } else {
-        klingPromptBase = `Dynamic product animation. Animate from this exact image with energetic camera motion. Preserve product appearance and labels. ${sanitizedPrompt.substring(0, 100)}`;
+        klingPromptBase = `${sanitizedPrompt}. Dynamic camera motion, energetic.`;
       }
       
       // Append motion directive to prompt for better control
-      const klingI2vPrompt = `${klingPromptBase}. Camera: ${motionDirective}.`;
+      const klingI2vPrompt = `${klingPromptBase} Camera: ${motionDirective}.`;
       
       console.log(`[PiAPI I2V] Kling prompt: ${klingI2vPrompt}`);
       
