@@ -426,7 +426,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose }: E
                 src={videoUrl}
                 className="w-full aspect-video object-contain bg-black"
                 playsInline
-                poster={imageUrl}
+                preload="auto"
               />
               {/* Video Controls Overlay */}
               <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3">
