@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
-import { ArrowLeft, Settings, Play, RefreshCw, Clock, Target, Monitor, BarChart3, Loader2, AlertCircle, Zap, Video, Image, Download, RotateCcw, Save, Trash2, ExternalLink, CheckCircle2, XCircle, Server, HardDrive, Type, Film, ChevronDown, ChevronUp, CloudUpload, Mic, Music, Volume2, Palette, Shuffle, Sliders, Wand2, Sparkles, ImagePlus, Upload, Edit2, FileText, Plus, GripVertical, Eye, EyeOff } from "lucide-react";
+import { ArrowLeft, Settings, Play, RefreshCw, Clock, Target, Monitor, BarChart3, Loader2, AlertCircle, Zap, Video, Image, Download, RotateCcw, Save, Trash2, ExternalLink, CheckCircle2, XCircle, X, Server, HardDrive, Type, Film, ChevronDown, ChevronUp, CloudUpload, Mic, Music, Volume2, Palette, Shuffle, Sliders, Wand2, Sparkles, ImagePlus, Upload, Edit2, FileText, Plus, GripVertical, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ProviderCatalogSelector } from "@/components/video/provider-catalog-selector";
 import { useToast } from "@/hooks/use-toast";
@@ -804,6 +804,151 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
   );
 }
 
+function GenerationJobsPanel({ jobs, projectId }: { jobs: any[]; projectId: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const COLLAPSED_COUNT = 2;
+  const hasMore = jobs.length > COLLAPSED_COUNT;
+  const displayJobs = expanded ? jobs : jobs.slice(0, COLLAPSED_COUNT);
+  const failedCount = jobs.filter((j: any) => j.status === "failed").length;
+  const completedCount = jobs.filter((j: any) => j.status === "succeeded" || j.status === "completed").length;
+
+  const deleteJob = async (jobId: string) => {
+    setDeletingIds(prev => new Set(prev).add(jobId));
+    try {
+      const res = await fetch(`/api/video-generation-jobs/${jobId}`, { method: "DELETE", credentials: "include" });
+      if (res.ok) {
+        queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId] });
+        queryClient.invalidateQueries({ queryKey: [`/api/projects/${projectId}/quick-create`] });
+      }
+    } catch {
+      toast({ title: "Error", description: "Failed to delete job", variant: "destructive" });
+    } finally {
+      setDeletingIds(prev => { const s = new Set(prev); s.delete(jobId); return s; });
+    }
+  };
+
+  const clearJobs = async (statuses: string[]) => {
+    try {
+      const res = await fetch(`/api/projects/${projectId}/video-generation-jobs?statuses=${statuses.join(",")}`, { method: "DELETE", credentials: "include" });
+      if (res.ok) {
+        queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId] });
+        queryClient.invalidateQueries({ queryKey: [`/api/projects/${projectId}/quick-create`] });
+        toast({ title: "Cleared", description: "Jobs removed" });
+      }
+    } catch {
+      toast({ title: "Error", description: "Failed to clear jobs", variant: "destructive" });
+    }
+  };
+
+  return (
+    <div className="mb-8">
+      <div className="flex items-center justify-between mb-3">
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+        >
+          <h2 className="text-sm font-medium uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
+            Generation Jobs
+          </h2>
+          <span className="text-xs px-1.5 py-0.5 rounded-full bg-purple-500/10 text-purple-400">{jobs.length}</span>
+          {hasMore && (
+            expanded
+              ? <ChevronUp className="w-4 h-4" style={{ color: "var(--text-muted)" }} />
+              : <ChevronDown className="w-4 h-4" style={{ color: "var(--text-muted)" }} />
+          )}
+        </button>
+        <div className="flex items-center gap-2">
+          {failedCount > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-xs h-7 text-red-400 hover:text-red-300 hover:bg-red-500/10"
+              onClick={() => clearJobs(["failed"])}
+            >
+              <Trash2 className="w-3 h-3 mr-1" />
+              Clear Failed ({failedCount})
+            </Button>
+          )}
+          {completedCount > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-xs h-7 hover:bg-gray-500/10"
+              style={{ color: "var(--text-muted)" }}
+              onClick={() => clearJobs(["succeeded", "completed"])}
+            >
+              <Trash2 className="w-3 h-3 mr-1" />
+              Clear Completed ({completedCount})
+            </Button>
+          )}
+        </div>
+      </div>
+      <div className="space-y-2">
+        {displayJobs.map((job: any) => {
+          const jobStatus = getStatusInfo(job.status);
+          const isDeleting = deletingIds.has(job.jobId);
+          return (
+            <div
+              key={job.jobId}
+              className={`border rounded-lg p-3 flex items-center gap-3 group transition-opacity ${isDeleting ? "opacity-40" : ""}`}
+              style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)" }}
+            >
+              <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${statusDot[job.status] || "bg-gray-500"}`} />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-medium" style={{ color: "var(--text-primary)" }}>
+                    {job.sceneType === "image" ? "Image" : "Video"} Generation
+                  </span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full border ${jobStatus.color} ${jobStatus.bg}`}>
+                    {jobStatus.text}
+                  </span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-400">
+                    {job.provider}
+                  </span>
+                </div>
+                {job.prompt && (
+                  <p className="text-xs truncate mt-0.5" style={{ color: "var(--text-muted)" }}>{job.prompt}</p>
+                )}
+                {job.errorMessage && (
+                  <p className="text-xs text-red-400 mt-0.5 truncate">{job.errorMessage}</p>
+                )}
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {job.duration && (
+                  <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>{job.duration}s</span>
+                )}
+                {job.aspectRatio && (
+                  <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>{job.aspectRatio}</span>
+                )}
+                <button
+                  onClick={() => deleteJob(job.jobId)}
+                  disabled={isDeleting}
+                  className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-red-500/10 text-gray-500 hover:text-red-400"
+                  title="Remove job"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {hasMore && !expanded && (
+        <button
+          onClick={() => setExpanded(true)}
+          className="mt-2 text-xs hover:underline"
+          style={{ color: "var(--text-muted)" }}
+        >
+          Show {jobs.length - COLLAPSED_COUNT} more jobs...
+        </button>
+      )}
+    </div>
+  );
+}
+
 export default function ProjectDetail({ params }: { params?: { id: string } }) {
   const projectId = params?.id || "";
   const queryClient = useQueryClient();
@@ -1066,52 +1211,7 @@ export default function ProjectDetail({ params }: { params?: { id: string } }) {
         )}
 
         {jobs.length > 0 && (
-          <div className="mb-8">
-            <h2 className="text-sm font-medium uppercase tracking-wider mb-4" style={{ color: "var(--text-secondary)" }}>
-              Generation Jobs
-            </h2>
-            <div className="space-y-3">
-              {jobs.map((job: any) => {
-                const jobStatus = getStatusInfo(job.status);
-                return (
-                  <div
-                    key={job.jobId}
-                    className="border rounded-xl p-4 flex items-center gap-4"
-                    style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)" }}
-                  >
-                    <div className={`w-3 h-3 rounded-full flex-shrink-0 ${statusDot[job.status] || "bg-gray-500"}`} />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-                          {job.sceneType === "image" ? "Image" : "Video"} Generation
-                        </span>
-                        <span className={`text-xs px-2 py-0.5 rounded-full border ${jobStatus.color} ${jobStatus.bg}`}>
-                          {jobStatus.text}
-                        </span>
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-400">
-                          {job.provider}
-                        </span>
-                      </div>
-                      {job.prompt && (
-                        <p className="text-sm truncate" style={{ color: "var(--text-muted)" }}>{job.prompt}</p>
-                      )}
-                      {job.errorMessage && (
-                        <p className="text-sm text-red-400 mt-1">{job.errorMessage}</p>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      {job.duration && (
-                        <span className="text-xs" style={{ color: "var(--text-muted)" }}>{job.duration}s</span>
-                      )}
-                      {job.aspectRatio && (
-                        <span className="text-xs" style={{ color: "var(--text-muted)" }}>{job.aspectRatio}</span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+          <GenerationJobsPanel jobs={jobs} projectId={projectId} />
         )}
 
         {!isQuickCreate && (

@@ -3,7 +3,7 @@ import crypto from "crypto";
 import express from "express";
 import { db } from "./db";
 import { videoProductions, universalVideoProjects, videoGenerationJobs } from "../shared/schema";
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, and, or, inArray } from "drizzle-orm";
 import providerTestRouter from "./services/provider-test-routes";
 import piapiTestRouter from "./services/piapi-test-routes";
 import { AI_VIDEO_PROVIDERS } from "./config/ai-video-providers";
@@ -796,6 +796,48 @@ export function registerRoutes(app: Express) {
       res.json(productions);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch productions" });
+    }
+  });
+
+  app.delete("/api/video-generation-jobs/:jobId", async (req, res) => {
+    try {
+      if (!req.isAuthenticated() || !req.user) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+      const { jobId } = req.params;
+      const result = await db.delete(videoGenerationJobs).where(eq(videoGenerationJobs.jobId, jobId)).returning();
+      if (result.length === 0) {
+        return res.status(404).json({ error: "Job not found" });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete job" });
+    }
+  });
+
+  app.delete("/api/projects/:projectId/video-generation-jobs", async (req, res) => {
+    try {
+      if (!req.isAuthenticated() || !req.user) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+      const { projectId } = req.params;
+      const statusList = req.query.statuses ? (req.query.statuses as string).split(",") : null;
+      let result;
+      if (statusList && statusList.length > 0) {
+        result = await db.delete(videoGenerationJobs)
+          .where(and(
+            eq(videoGenerationJobs.projectId, projectId),
+            inArray(videoGenerationJobs.status, statusList)
+          ))
+          .returning();
+      } else {
+        result = await db.delete(videoGenerationJobs)
+          .where(eq(videoGenerationJobs.projectId, projectId))
+          .returning();
+      }
+      res.json({ success: true, deleted: result.length });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete jobs" });
     }
   });
 }

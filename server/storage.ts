@@ -13,6 +13,8 @@ export interface IStorage {
   getVideoGenerationJobsByScene(projectId: string, sceneId: string): Promise<VideoGenerationJob[]>;
   getPendingVideoGenerationJobs(): Promise<VideoGenerationJob[]>;
   updateVideoGenerationJob(jobId: string, data: Partial<InsertVideoGenerationJob>): Promise<VideoGenerationJob | undefined>;
+  deleteVideoGenerationJob(jobId: string): Promise<boolean>;
+  deleteVideoGenerationJobsByProject(projectId: string, statuses?: string[]): Promise<number>;
   recoverStuckVideoGenerationJobs(staleMinutes: number): Promise<number>;
 }
 
@@ -68,6 +70,27 @@ export class DatabaseStorage implements IStorage {
       .where(eq(videoGenerationJobs.jobId, jobId))
       .returning();
     return job || undefined;
+  }
+
+  async deleteVideoGenerationJob(jobId: string): Promise<boolean> {
+    const result = await db.delete(videoGenerationJobs).where(eq(videoGenerationJobs.jobId, jobId)).returning();
+    return result.length > 0;
+  }
+
+  async deleteVideoGenerationJobsByProject(projectId: string, statuses?: string[]): Promise<number> {
+    if (statuses && statuses.length > 0) {
+      const result = await db.delete(videoGenerationJobs)
+        .where(and(
+          eq(videoGenerationJobs.projectId, projectId),
+          or(...statuses.map(s => eq(videoGenerationJobs.status, s)))
+        ))
+        .returning();
+      return result.length;
+    }
+    const result = await db.delete(videoGenerationJobs)
+      .where(eq(videoGenerationJobs.projectId, projectId))
+      .returning();
+    return result.length;
   }
 
   async recoverStuckVideoGenerationJobs(staleMinutes: number): Promise<number> {
