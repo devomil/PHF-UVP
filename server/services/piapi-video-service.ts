@@ -1179,8 +1179,10 @@ class PiAPIVideoService {
     // These providers benefit from detailed motion directives
     // ===========================================
     
-    // I2V-specific negative prompt for Kling (simplified - no black/fade references)
-    const i2vNegativePrompt = 'text, words, letters, numbers, writing, signage, logos, watermarks, labels, captions, blurry, low quality, distorted, warping';
+    // I2V-specific negative prompt - preserve source image details, only avoid quality issues
+    // CRITICAL: Do NOT include "text, words, letters, logos, labels" in I2V negative prompts
+    // because the source image may contain important text/labels that must be preserved
+    const i2vNegativePrompt = 'blurry, low quality, distorted, warping, morphing, deformed, glitchy artifacts';
     
     if (options.model.startsWith('kling')) {
       let version = '2.6';
@@ -1271,10 +1273,10 @@ class PiAPIVideoService {
       const animationStyle = options.i2vSettings?.animationStyle ?? 'product-hero';
       
       // Map user's Image Fidelity slider (0-1 where 1 = max fidelity) to cfg_scale
-      // cfg_scale range: 0.0 (full source) to 1.0 (full prompt)
-      // Use a balanced range so the model follows the prompt's scene composition
-      // while still referencing the source image for visual style
-      const cfgScale = Math.max(0.3, 1.0 - imageControlStrength * 0.5); // Range: 0.5 (default) to 0.3 (max fidelity)
+      // cfg_scale: 0.0 = preserve source exactly, 1.0 = follow prompt completely
+      // For product shots with text/labels, we need very low values to prevent distortion
+      // Default fidelity=1.0 → cfg=0.1 (preserve source), fidelity=0.0 → cfg=0.5 (more creative)
+      const cfgScale = Math.max(0.05, 0.5 - imageControlStrength * 0.45); // Range: 0.5 (creative) to 0.05 (max fidelity)
       
       // Map motion strength to animation intensity
       // Kling uses a subtle approach - lower values mean less dramatic motion
@@ -1295,16 +1297,16 @@ class PiAPIVideoService {
       const requiresNewContent = promptRequiresNewContent(sanitizedPrompt);
       console.log(`[PiAPI I2V] Kling: ${requiresNewContent ? 'REFERENCE MODE (new content)' : 'ANIMATE MODE (motion only)'}`);
       
-      // Build Kling-specific prompt - prioritize user's actual visual direction
+      // Build Kling-specific prompt - prioritize source image preservation for I2V
       let klingPromptBase: string;
       if (requiresNewContent) {
         klingPromptBase = sanitizedPrompt;
       } else if (animationStyle === 'product-static') {
-        klingPromptBase = `${sanitizedPrompt}. Subtle ambient motion, gentle lighting shifts.`;
+        klingPromptBase = `${sanitizedPrompt}. Keep product label and text perfectly sharp and unchanged. Subtle ambient motion, gentle lighting shifts only.`;
       } else if (animationStyle === 'product-hero') {
-        klingPromptBase = `${sanitizedPrompt}. Cinematic, smooth camera motion.`;
+        klingPromptBase = `${sanitizedPrompt}. Preserve all text, labels, and product details exactly as shown. Cinematic, smooth camera motion around the product.`;
       } else if (animationStyle === 'subtle-motion') {
-        klingPromptBase = `${sanitizedPrompt}. Subtle environmental motion, gentle lighting shifts.`;
+        klingPromptBase = `${sanitizedPrompt}. Preserve all details from source image. Subtle environmental motion, gentle lighting shifts.`;
       } else {
         klingPromptBase = `${sanitizedPrompt}. Dynamic camera motion, energetic.`;
       }
