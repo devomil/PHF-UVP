@@ -306,7 +306,7 @@ class VideoGenerationWorker {
         const sanitizedResult: SanitizedPrompt = preparePromptForProvider(
           job.prompt || "",
           job.sceneType || "hook",
-          provider
+          provider || 'kling'
         );
         
         // Log sanitization results for debugging
@@ -381,7 +381,8 @@ class VideoGenerationWorker {
         });
         this.notifyJobUpdate(progressJob2);
       } catch (genError: any) {
-        log.error(`Video generation error for job ${job.jobId}:`, genError);
+        const errMsg = genError?.message || genError?.toString?.() || JSON.stringify(genError);
+        log.error(`Video generation error for job ${job.jobId}: ${errMsg}`);
 
         if (
           job.retryCount !== null &&

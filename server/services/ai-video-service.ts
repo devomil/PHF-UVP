@@ -143,8 +143,7 @@ class AIVideoService {
     // PHASE 6R: Optimize prompt - strip jargon, simplify for AI video generation
     const generationMode = options.imageUrl ? 'i2v' : 't2v';
     
-    // Normalize provider name (strip version numbers like "kling-2.6" -> "kling")
-    const rawProvider = options.preferredProvider || 'piapi';
+    const rawProvider = options.preferredProvider || 'kling';
     const normalizedProvider = rawProvider.split('-')[0];
     
     // Detect if product should be included based on scene type
