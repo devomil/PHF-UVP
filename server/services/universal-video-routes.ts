@@ -113,22 +113,38 @@ async function cropImageToAspectRatio(
   const outputPath = inputPath.replace(ext, `_cropped${ext}`);
   
   if (imgRatio < targetRatio) {
-    // Portrait image going into landscape frame - PAD with blurred background instead of cropping
-    // This preserves the full product/bottle without cutting off top/bottom
     const canvasW = 1920;
     const canvasH = 1080;
-    // Scale image to fit height, then pad sides with blurred version of itself
     const fitH = canvasH;
     const fitW = Math.round(fitH * imgRatio);
     
-    console.log(`[ImageCrop] Portrait→Landscape: Padding ${imgW}x${imgH} into ${canvasW}x${canvasH} (product preserved in full)`);
+    console.log(`[ImageCrop] Portrait→Landscape: Padding ${imgW}x${imgH} into ${canvasW}x${canvasH} (seamless blend)`);
     
-    // Create blurred background from the source, then overlay the sharp original centered
-    execSync(
-      `magick "${inputPath}" -resize ${canvasW}x${canvasH}^ -gravity center -crop ${canvasW}x${canvasH}+0+0 +repage -blur 0x30 -brightness-contrast -30x0 ` +
-      `\\( "${inputPath}" -resize x${fitH} \\) -gravity center -composite "${outputPath}"`,
-      { timeout: 30000 }
-    );
+    try {
+      // Attempt feathered edges: heavy blur background + alpha-feathered sharp overlay
+      execSync(
+        `magick "${inputPath}" -resize ${canvasW}x${canvasH}^ -gravity center -crop ${canvasW}x${canvasH}+0+0 +repage -blur 0x60 -brightness-contrast -40x-10 -modulate 100,80,100 ` +
+        `\\( "${inputPath}" -resize x${fitH} ` +
+        `\\( +clone -alpha extract -virtual-pixel black -morphology Distance Euclidean:1,40! -auto-level -negate \\) -compose CopyOpacity -composite \\) ` +
+        `-gravity center -composite "${outputPath}"`,
+        { timeout: 30000 }
+      );
+    } catch (featherErr) {
+      console.warn('[ImageCrop] Feathered edge command failed, using simple blend fallback:', featherErr);
+    }
+    
+    const fs2 = await import('fs');
+    if (!fs2.default.existsSync(outputPath)) {
+      try {
+        execSync(
+          `magick "${inputPath}" -resize ${canvasW}x${canvasH}^ -gravity center -crop ${canvasW}x${canvasH}+0+0 +repage -blur 0x60 -brightness-contrast -40x-10 ` +
+          `\\( "${inputPath}" -resize x${fitH} \\) -gravity center -composite "${outputPath}"`,
+          { timeout: 30000 }
+        );
+      } catch (fallbackErr) {
+        console.warn('[ImageCrop] Simple blend also failed:', fallbackErr);
+      }
+    }
   } else {
     // Landscape image wider than target - center crop width (minimal loss)
     const cropH = imgH;

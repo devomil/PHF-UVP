@@ -1274,9 +1274,11 @@ class PiAPIVideoService {
       
       // Map user's Image Fidelity slider (0-1 where 1 = max fidelity) to cfg_scale
       // cfg_scale: 0.0 = preserve source exactly, 1.0 = follow prompt completely
-      // For product shots with text/labels, we need very low values to prevent distortion
-      // Default fidelity=1.0 → cfg=0.1 (preserve source), fidelity=0.0 → cfg=0.5 (more creative)
-      const cfgScale = Math.max(0.05, 0.5 - imageControlStrength * 0.45); // Range: 0.5 (creative) to 0.05 (max fidelity)
+      // Too low (0.05) produces a nearly static image that looks like an overlay
+      // We need enough freedom for actual camera/environmental animation
+      // Default fidelity=1.0 → cfg=0.3 (good product fidelity with real motion)
+      // fidelity=0.5 → cfg=0.45, fidelity=0.0 → cfg=0.6 (creative)
+      const cfgScale = Math.max(0.25, 0.6 - imageControlStrength * 0.35); // Range: 0.6 (creative) to 0.25 (high fidelity)
       
       // Map motion strength to animation intensity
       // Kling uses a subtle approach - lower values mean less dramatic motion
