@@ -79,7 +79,7 @@ interface MotionControlOverride {
 interface VideoGenerationRequest {
   projectId: string;
   sceneId: string;
-  provider: string;
+  provider?: string;
   prompt: string;
   fallbackPrompt?: string;
   duration?: number;
@@ -134,7 +134,7 @@ class VideoGenerationWorker {
       jobId,
       projectId: request.projectId,
       sceneId: request.sceneId,
-      provider: request.provider,
+      provider: request.provider || 'auto',
       status: "pending",
       progress: 0,
       prompt: request.prompt,
@@ -256,7 +256,7 @@ class VideoGenerationWorker {
         ` Provider: ${job.provider}, Duration: ${job.duration}s, Aspect: ${job.aspectRatio}`,
       );
 
-      const provider = job.provider as
+      const provider = (job.provider === "auto" ? undefined : job.provider) as
         | "runway"
         | "kling"
         | "luma"
@@ -365,7 +365,7 @@ class VideoGenerationWorker {
         });
 
         // Log which provider actually fulfilled the request
-        const actualProvider = result.provider || provider;
+        const actualProvider = result.provider || provider || 'auto';
         log.debug(` Job ${job.jobId} fulfilled by provider: ${actualProvider}`);
 
         if (result.success && result.videoUrl) {
