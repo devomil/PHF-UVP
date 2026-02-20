@@ -43,27 +43,41 @@ export const AnimatedEndCard: React.FC<AnimatedEndCardProps> = ({ config }) => {
         />
       )}
       
-      {isValidImageUrl(config.logo.url) && (
-        <LogoReveal
-          logoUrl={config.logo.url}
-          size={config.logo.size}
-          position={config.logo.position}
-          animation={config.logo.animation}
-          startFrame={Math.round(0.3 * fps)}
-          fps={fps}
-          width={width}
-        />
-      )}
-      
-      {config.tagline && (
-        <TaglineReveal
-          text={config.tagline.text}
-          style={config.tagline.style}
-          animation={config.tagline.animation}
-          startFrame={Math.round(config.tagline.delay * fps)}
-          fps={fps}
-        />
-      )}
+      <div
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 0,
+        }}
+      >
+        {isValidImageUrl(config.logo.url) && (
+          <LogoReveal
+            logoUrl={config.logo.url}
+            size={config.logo.size}
+            animation={config.logo.animation}
+            startFrame={Math.round(0.3 * fps)}
+            fps={fps}
+            width={width}
+          />
+        )}
+        
+        {config.tagline && (
+          <TaglineReveal
+            text={config.tagline.text}
+            style={config.tagline.style}
+            animation={config.tagline.animation}
+            startFrame={Math.round(config.tagline.delay * fps)}
+            fps={fps}
+          />
+        )}
+      </div>
       
       <ContactReveal
         website={config.contact.website}
@@ -247,18 +261,17 @@ const BokehCircle: React.FC<{
 const LogoReveal: React.FC<{
   logoUrl: string;
   size: number;
-  position: { x: number; y: number };
   animation: string;
   startFrame: number;
   fps: number;
   width: number;
-}> = ({ logoUrl, size, position, animation, startFrame, fps, width }) => {
+}> = ({ logoUrl, size, animation, startFrame, fps, width }) => {
   const frame = useCurrentFrame();
   const localFrame = frame - startFrame;
   
   if (localFrame < 0) return null;
   
-  const logoWidth = (size / 100) * width;
+  const logoWidth = Math.max((size / 100) * width, width * 0.2);
   
   const scale = animation === 'scale-bounce' 
     ? spring({
@@ -286,11 +299,12 @@ const LogoReveal: React.FC<{
   return (
     <div
       style={{
-        position: 'absolute',
-        left: `${position.x}%`,
-        top: `${position.y}%`,
-        transform: `translate(-50%, -50%) scale(${scale}) translateY(${translateY}px)`,
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        transform: `scale(${scale}) translateY(${translateY}px)`,
         opacity,
+        marginBottom: 20,
       }}
     >
       <div style={{ position: 'relative', overflow: 'hidden' }}>
@@ -299,6 +313,7 @@ const LogoReveal: React.FC<{
           style={{
             width: logoWidth,
             height: 'auto',
+            filter: 'drop-shadow(0 0 15px rgba(255,255,255,0.2)) drop-shadow(0 4px 12px rgba(0,0,0,0.4))',
           }}
         />
         <div
@@ -348,15 +363,15 @@ const TaglineReveal: React.FC<{
   return (
     <div
       style={{
-        position: 'absolute',
-        left: '50%',
-        top: '52%',
-        transform: 'translateX(-50%)',
+        display: 'flex',
+        justifyContent: 'center',
         fontSize: style.fontSize,
         fontFamily: style.fontFamily,
         color: style.color,
         opacity,
         whiteSpace: 'nowrap',
+        textShadow: '0 2px 8px rgba(0,0,0,0.4)',
+        marginTop: 8,
       }}
     >
       {displayText}
@@ -424,6 +439,7 @@ const ContactReveal: React.FC<{
               fontWeight: 500,
               opacity,
               transform: `translateY(${translateY}px)`,
+              textShadow: '0 1px 4px rgba(0,0,0,0.3)',
             }}
           >
             {item}

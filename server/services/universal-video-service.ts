@@ -2786,31 +2786,68 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
         outro: 1.3,
       };
       
-      let totalCalculatedDuration = 0;
+      const actualVoiceoverDuration = voiceoverResult.duration || 0;
+      
+      const rawDurations: number[] = [];
+      let totalRawDuration = 0;
       
       for (let i = 0; i < updatedProject.scenes.length; i++) {
         const scene = updatedProject.scenes[i];
         const narration = scene.narration || '';
         const wordCount = narration.trim().split(/\s+/).filter(Boolean).length;
         
-        // Speaking rate: ~2.5 words/second (150 WPM)
-        // Add 1.5 second buffer for transitions and breathing room
         const baseDuration = (wordCount / 2.5) + 1.5;
         const pacingMultiplier = SCENE_PACING[scene.type] || 1.0;
-        const sceneDuration = Math.max(5, Math.ceil(baseDuration * pacingMultiplier));
-        
-        updatedProject.scenes[i].duration = sceneDuration;
-        totalCalculatedDuration += sceneDuration;
-        
-        console.log(`  Scene ${i} (${scene.type}): ${wordCount} words → ${sceneDuration}s (x${pacingMultiplier})`);
+        const rawDuration = Math.max(3, baseDuration * pacingMultiplier);
+        rawDurations.push(rawDuration);
+        totalRawDuration += rawDuration;
       }
       
-      // Add 2 seconds to final scene for clean ending
-      const lastIndex = updatedProject.scenes.length - 1;
-      if (lastIndex >= 0) {
-        updatedProject.scenes[lastIndex].duration += 2;
-        totalCalculatedDuration += 2;
-        console.log(`  Added 2s buffer to final scene`);
+      let totalCalculatedDuration = 0;
+      
+      const TAIL_BUFFER = 2;
+      
+      if (actualVoiceoverDuration > 0 && totalRawDuration > 0) {
+        const targetDuration = actualVoiceoverDuration + TAIL_BUFFER;
+        const scaleFactor = targetDuration / totalRawDuration;
+        console.log(`[VoiceoverSync] Voiceover: ${actualVoiceoverDuration.toFixed(1)}s + ${TAIL_BUFFER}s buffer = ${targetDuration.toFixed(1)}s target`);
+        console.log(`[VoiceoverSync] Estimated: ${totalRawDuration.toFixed(1)}s, scale: ${scaleFactor.toFixed(3)}`);
+        
+        for (let i = 0; i < updatedProject.scenes.length; i++) {
+          const scaledDuration = Math.max(3, Math.round(rawDurations[i] * scaleFactor));
+          updatedProject.scenes[i].duration = scaledDuration;
+          totalCalculatedDuration += scaledDuration;
+          console.log(`  Scene ${i} (${updatedProject.scenes[i].type}): ${rawDurations[i].toFixed(1)}s → ${scaledDuration}s (scaled)`);
+        }
+        
+        const durationDiff = targetDuration - totalCalculatedDuration;
+        if (Math.abs(durationDiff) >= 1) {
+          const lastIndex = updatedProject.scenes.length - 1;
+          if (lastIndex >= 0) {
+            const adjustment = Math.round(durationDiff);
+            updatedProject.scenes[lastIndex].duration = Math.max(3, updatedProject.scenes[lastIndex].duration + adjustment);
+            totalCalculatedDuration += adjustment;
+            console.log(`  Rounding correction: adjusted last scene by ${adjustment}s`);
+          }
+        }
+        
+        const drift = Math.abs(totalCalculatedDuration - targetDuration);
+        if (drift > 1) {
+          console.warn(`[VoiceoverSync] WARNING: ${drift.toFixed(1)}s drift between scene total (${totalCalculatedDuration}s) and target (${targetDuration.toFixed(1)}s)`);
+        }
+        console.log(`[VoiceoverSync] Final total: ${totalCalculatedDuration}s (voiceover ends at ${actualVoiceoverDuration.toFixed(1)}s, ${(totalCalculatedDuration - actualVoiceoverDuration).toFixed(1)}s visual tail)`);
+      } else {
+        for (let i = 0; i < updatedProject.scenes.length; i++) {
+          const sceneDuration = Math.max(5, Math.ceil(rawDurations[i]));
+          updatedProject.scenes[i].duration = sceneDuration;
+          totalCalculatedDuration += sceneDuration;
+          console.log(`  Scene ${i} (${updatedProject.scenes[i].type}): ${sceneDuration}s (word-count based)`);
+        }
+        const lastIdx = updatedProject.scenes.length - 1;
+        if (lastIdx >= 0) {
+          updatedProject.scenes[lastIdx].duration += TAIL_BUFFER;
+          totalCalculatedDuration += TAIL_BUFFER;
+        }
       }
       
       updatedProject.totalDuration = totalCalculatedDuration;

@@ -2766,17 +2766,17 @@ export const UniversalVideoComposition: React.FC<UniversalVideoProps> = ({
             transitions: {
               enabled: effectiveSoundConfig.transitionSounds,
               defaultSound: 'whoosh-soft',
-              volume: 0.4,
+              volume: 0.1,
             },
             logoReveal: {
               enabled: effectiveSoundConfig.impactSounds,
               sound: 'logo-impact',
-              volume: 0.5,
+              volume: 0.15,
             },
             riseSwell: {
               enabled: effectiveSoundConfig.impactSounds,
               durationBeforeCTA: 3,
-              volume: 0.3,
+              volume: 0.1,
             },
             audioDucking: soundDesignConfig?.audioDucking || {
               enabled: true,
@@ -2787,7 +2787,7 @@ export const UniversalVideoComposition: React.FC<UniversalVideoProps> = ({
             ambient: {
               enabled: effectiveSoundConfig.ambientLayer,
               sound: effectiveSoundConfig.ambientType === 'nature' ? 'room-tone-nature' : 'room-tone-warm',
-              volume: 0.05,
+              volume: 0.02,
             },
           }}
           transitions={(() => {
@@ -2800,7 +2800,7 @@ export const UniversalVideoComposition: React.FC<UniversalVideoProps> = ({
                   sceneIndex: index,
                   startFrame: frameOffset - Math.round(fps * 0.3),
                   sound: 'whoosh-soft',
-                  volume: 0.4,
+                  volume: 0.1,
                 });
               }
               frameOffset += Math.round((scene.duration || 5) * fps);

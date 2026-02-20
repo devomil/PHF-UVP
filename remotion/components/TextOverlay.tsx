@@ -87,6 +87,10 @@ export const TextOverlay: React.FC<TextOverlayProps> = ({ placement, fps }) => {
     }
   };
 
+  const isLowerThirdType = overlay.type === 'lower_third' || overlay.type === 'caption' || overlay.type === 'subtitle';
+
+  const bgStyle = getBroadcastBackground(style, isLowerThirdType);
+
   return (
     <AbsoluteFill style={{ pointerEvents: 'none' }}>
       <div
@@ -98,18 +102,15 @@ export const TextOverlay: React.FC<TextOverlayProps> = ({ placement, fps }) => {
           fontWeight: getFontWeight(style.fontWeight),
           fontFamily: style.fontFamily,
           color: style.color,
-          backgroundColor: style.backgroundColor 
-            ? style.backgroundOpacity !== undefined 
-              ? `rgba(${hexToRgb(style.backgroundColor)}, ${style.backgroundOpacity})`
-              : style.backgroundColor
-            : undefined,
-          padding: style.padding,
-          borderRadius: style.borderRadius,
-          textShadow: (style.shadow || style.textShadow) ? '2px 2px 4px rgba(0,0,0,0.5)' : undefined,
+          ...bgStyle,
+          padding: style.padding || (isLowerThirdType ? 14 : 16),
+          borderRadius: isLowerThirdType ? 4 : (style.borderRadius || 6),
+          textShadow: '0 1px 3px rgba(0,0,0,0.6), 0 0 12px rgba(0,0,0,0.3)',
           whiteSpace: 'nowrap',
           maxWidth: '80%',
           textAlign: 'center',
           lineHeight: 1.4,
+          letterSpacing: isLowerThirdType ? 0.5 : 0,
         }}
       >
         {overlay.text}
@@ -117,6 +118,31 @@ export const TextOverlay: React.FC<TextOverlayProps> = ({ placement, fps }) => {
     </AbsoluteFill>
   );
 };
+
+function getBroadcastBackground(style: TextOverlayStyle, isLowerThird: boolean): React.CSSProperties {
+  if (!style.backgroundColor && !isLowerThird) {
+    return {};
+  }
+
+  if (isLowerThird) {
+    return {
+      background: 'linear-gradient(90deg, transparent 0%, rgba(0,0,0,0.55) 8%, rgba(0,0,0,0.55) 92%, transparent 100%)',
+      backdropFilter: 'blur(4px)',
+      WebkitBackdropFilter: 'blur(4px)',
+    };
+  }
+
+  if (style.backgroundColor) {
+    const bgOpacity = Math.min(style.backgroundOpacity ?? 0.5, 0.55);
+    return {
+      background: `linear-gradient(90deg, transparent 0%, rgba(${hexToRgb(style.backgroundColor)},${bgOpacity}) 8%, rgba(${hexToRgb(style.backgroundColor)},${bgOpacity}) 92%, transparent 100%)`,
+      backdropFilter: 'blur(4px)',
+      WebkitBackdropFilter: 'blur(4px)',
+    };
+  }
+
+  return {};
+}
 
 interface MultipleTextOverlaysProps {
   placements: TextPlacementData[];
@@ -255,6 +281,19 @@ export const EnhancedTextOverlay: React.FC<EnhancedTextOverlayProps> = ({
         { extrapolateRight: 'clamp' }
       )))
     : text;
+
+  const isBottomPosition = position === 'bottom' || (!position);
+  const bgOpacity = Math.min(style.backgroundOpacity ?? 0.5, 0.55);
+  
+  const backgroundStyle: React.CSSProperties = style.backgroundColor
+    ? {
+        background: isBottomPosition
+          ? `linear-gradient(90deg, transparent 0%, rgba(${hexToRgb(style.backgroundColor)},${bgOpacity}) 8%, rgba(${hexToRgb(style.backgroundColor)},${bgOpacity}) 92%, transparent 100%)`
+          : `rgba(${hexToRgb(style.backgroundColor)}, ${bgOpacity})`,
+        backdropFilter: 'blur(4px)',
+        WebkitBackdropFilter: 'blur(4px)',
+      }
+    : {};
   
   return (
     <div
@@ -266,12 +305,10 @@ export const EnhancedTextOverlay: React.FC<EnhancedTextOverlayProps> = ({
         fontFamily: style.fontFamily,
         fontWeight: style.fontWeight,
         color: style.color,
-        backgroundColor: style.backgroundColor 
-          ? `rgba(${hexToRgb(style.backgroundColor)}, ${style.backgroundOpacity || 0.8})`
-          : 'transparent',
-        padding: style.padding || 16,
-        borderRadius: style.borderRadius || 8,
-        textShadow: style.textShadow ? '2px 2px 4px rgba(0,0,0,0.5)' : 'none',
+        ...backgroundStyle,
+        padding: style.padding || 14,
+        borderRadius: isBottomPosition ? 4 : (style.borderRadius || 6),
+        textShadow: '0 1px 3px rgba(0,0,0,0.6), 0 0 12px rgba(0,0,0,0.3)',
         maxWidth: '80%',
         lineHeight: 1.4,
       }}
