@@ -2750,6 +2750,12 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
     if (shouldSkipStep('voiceover')) {
       console.log('[Assets] Voiceover already complete, skipping');
     } else {
+    const existingVoiceoverUrl = updatedProject.assets?.voiceover?.fullTrackUrl;
+    if (existingVoiceoverUrl && this.isValidHttpsUrl(existingVoiceoverUrl) && updatedProject.assets.voiceover.duration > 0) {
+      console.log(`[Assets] Voiceover already exists: ${existingVoiceoverUrl.substring(0, 80)}... (${updatedProject.assets.voiceover.duration}s) — skipping generation`);
+      updatedProject.progress.steps.voiceover.status = 'complete';
+      updatedProject.progress.steps.voiceover.progress = 100;
+    } else {
     updatedProject.progress.steps.voiceover.status = 'in-progress';
     await saveProgress();
 
@@ -2821,6 +2827,7 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
         error: voiceoverResult.error || 'Unknown error',
       });
     }
+    } // end else (voiceover needs generation)
     } // end else (voiceover not skipped)
 
     if (targetStep === 'voiceover') {
@@ -3376,6 +3383,13 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
         await saveProgress();
         videoSceneIndex++;
         
+        const existingVideoUrl = scene.assets?.videoUrl || scene.background?.videoUrl;
+        if (existingVideoUrl && this.isValidHttpsUrl(existingVideoUrl)) {
+          console.log(`[Assets] Scene ${scene.id} already has video: ${existingVideoUrl.substring(0, 80)}... — skipping generation`);
+          videosGenerated++;
+          continue;
+        }
+        
         const isHeroScene = heroSceneTypes.includes(scene.type);
         let videoResult: { url: string; source: string; duration?: number } | null = null;
         
@@ -3645,7 +3659,12 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
     } else {
     await saveProgress();
     
-    if (skipMusic) {
+    const existingMusicUrl = updatedProject.assets?.music?.url;
+    if (existingMusicUrl && this.isValidHttpsUrl(existingMusicUrl)) {
+      console.log(`[Assets] Music already exists: ${existingMusicUrl.substring(0, 80)}... — skipping generation`);
+      updatedProject.progress.steps.music.status = 'complete';
+      updatedProject.progress.steps.music.progress = 100;
+    } else if (skipMusic) {
       updatedProject.progress.steps.music.status = 'skipped';
       updatedProject.progress.steps.music.message = 'Music generation disabled by user';
       console.log('[UniversalVideoService] Music step skipped - disabled by user');

@@ -68,8 +68,8 @@ const TIER_PROVIDER_VERSIONS: Record<string, Record<string, string>> = {
   },
   veo: {
     ultra: 'veo-3.1',
-    premium: 'veo-2',
-    standard: 'veo',
+    premium: 'veo-3',
+    standard: 'veo-3',
   },
   hunyuan: {
     ultra: 'hunyuan',
@@ -208,31 +208,37 @@ class AIVideoService {
       return baseProvider;
     });
 
-    console.log(`[AIVideo] Scene: ${enhancedOptions.sceneType}, Quality: ${qualityTier}`);
-    console.log(`[AIVideo] Provider order: ${tierAdjustedOrder.join(' → ')}`);
+    const validOrder = [...new Set(tierAdjustedOrder)].filter(p => {
+      if (!AI_VIDEO_PROVIDERS[p]) {
+        console.warn(`[AIVideo] Skipping unknown provider "${p}" from order`);
+        return false;
+      }
+      return true;
+    });
 
-    for (const providerKey of tierAdjustedOrder) {
+    console.log(`[AIVideo] Scene: ${enhancedOptions.sceneType}, Quality: ${qualityTier}`);
+    console.log(`[AIVideo] Provider order: ${validOrder.join(' → ')}`);
+
+    for (const providerKey of validOrder) {
       const provider = AI_VIDEO_PROVIDERS[providerKey];
       
-      if (!provider) continue;
-      
-      console.log(`[AIVideo] Trying ${provider.name}...`);
+      console.log(`[AIVideo] Trying ${providerKey}...`);
       
       try {
         const result = await this.generateWithProvider(providerKey, provider, enhancedOptions);
         
         if (result.success && result.s3Url) {
-          console.log(`[AIVideo] ✓ Success with ${provider.name}`);
+          console.log(`[AIVideo] ✓ Success with ${providerKey}`);
           return {
             ...result,
             provider: providerKey,
           };
         }
         
-        console.warn(`[AIVideo] ✗ ${provider.name} failed: ${result.error}`);
+        console.warn(`[AIVideo] ✗ ${providerKey} failed: ${result.error}`);
         
       } catch (error: any) {
-        console.warn(`[AIVideo] ✗ ${provider.name} error: ${error.message}`);
+        console.warn(`[AIVideo] ✗ ${providerKey} error: ${error.message}`);
       }
     }
 
