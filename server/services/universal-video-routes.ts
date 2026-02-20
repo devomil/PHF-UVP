@@ -1629,12 +1629,34 @@ router.patch('/projects/:projectId/scenes/:sceneId', isAuthenticated, async (req
       }
     }
 
+    if (updates.clearImage) {
+      if (scenes[sceneIndex].assets) {
+        scenes[sceneIndex].assets.imageUrl = '';
+        scenes[sceneIndex].assets.imageProvider = '';
+      }
+      if (scenes[sceneIndex].background) {
+        scenes[sceneIndex].background.url = '';
+        scenes[sceneIndex].background.mediaUrl = '';
+      }
+      const assets = projectData.assets as any;
+      if (assets?.images) {
+        assets.images = assets.images.filter((img: any) => img.sceneId !== sceneId);
+      }
+      await db.update(universalVideoProjects)
+        .set({
+          scenes,
+          assets,
+          updatedAt: new Date(),
+        })
+        .where(eq(universalVideoProjects.projectId, projectId));
+    } else {
     await db.update(universalVideoProjects)
       .set({
         scenes,
         updatedAt: new Date(),
       })
       .where(eq(universalVideoProjects.projectId, projectId));
+    }
 
     res.json({ success: true, scene: scenes[sceneIndex] });
   } catch (error: any) {

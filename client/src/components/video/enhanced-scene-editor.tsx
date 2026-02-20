@@ -65,6 +65,15 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose }: E
   const [generationMode, setGenerationMode] = useState("auto");
   const [referenceImageUrls, setReferenceImageUrls] = useState<string[]>([]);
   const [showLibrary, setShowLibrary] = useState(false);
+  const [isEditingPrompt, setIsEditingPrompt] = useState(false);
+  const [inlinePrompt, setInlinePrompt] = useState(scene.assets?.prompt || scene.visualDirection || "");
+
+  useEffect(() => {
+    const newPrompt = scene.assets?.prompt || scene.visualDirection || "";
+    if (!isEditingPrompt) {
+      setInlinePrompt(newPrompt);
+    }
+  }, [scene.assets?.prompt, scene.visualDirection, sceneId]);
   const [editValues, setEditValues] = useState({
     type: scene.type || "scene",
     duration: scene.duration || 5,
@@ -162,7 +171,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose }: E
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({
-          prompt: editValues.visualDirection,
+          prompt: inlinePrompt || editValues.visualDirection,
           generationMode: activeMode,
           sourceImageUrl: activeMode === "i2i" ? sourceImage : undefined,
         }),
@@ -191,7 +200,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose }: E
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({
-          query: editValues.visualDirection,
+          query: inlinePrompt || editValues.visualDirection,
           provider: provider === "auto" ? undefined : provider,
           sourceImageUrl: useSourceImage ? sourceImage : undefined,
           generationMode: activeMode,
@@ -276,6 +285,9 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose }: E
 
   const saveChanges = () => {
     updateSceneMutation.mutate(editValues);
+    if (editValues.visualDirection) {
+      setInlinePrompt(editValues.visualDirection);
+    }
   };
 
   const isRegenerating = regenImageMutation.isPending || regenVideoMutation.isPending;
@@ -379,12 +391,69 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose }: E
                 Provider: <span className="font-medium" style={{ color: "var(--text-secondary)" }}>{providerUsed}</span>
               </p>
             )}
-            {promptUsed && (
-              <>
+            <div>
+              <div className="flex items-center gap-1.5">
                 <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>Prompt</p>
-                <p className="text-xs mt-0.5 line-clamp-2" style={{ color: "var(--text-secondary)" }}>{promptUsed}</p>
-              </>
-            )}
+                {!isEditingPrompt && (
+                  <button
+                    onClick={() => setIsEditingPrompt(true)}
+                    className="p-0.5 rounded hover:bg-purple-500/10 transition-colors"
+                    title="Edit prompt"
+                  >
+                    <Edit2 className="w-2.5 h-2.5" style={{ color: "var(--text-muted)" }} />
+                  </button>
+                )}
+              </div>
+              {isEditingPrompt ? (
+                <div className="mt-1 space-y-1.5">
+                  <textarea
+                    value={inlinePrompt}
+                    onChange={(e) => setInlinePrompt(e.target.value)}
+                    rows={3}
+                    autoFocus
+                    className="w-full text-xs rounded-lg border px-2 py-1.5 bg-transparent outline-none resize-none"
+                    style={{
+                      borderColor: "rgba(124,58,237,0.3)",
+                      color: "var(--text-primary)",
+                      backgroundColor: "rgba(124,58,237,0.05)",
+                    }}
+                  />
+                  <div className="flex gap-1.5">
+                    <button
+                      onClick={() => {
+                        setEditValues((prev) => ({ ...prev, visualDirection: inlinePrompt }));
+                        updateSceneMutation.mutate({ visualDirection: inlinePrompt });
+                        setIsEditingPrompt(false);
+                      }}
+                      disabled={updateSceneMutation.isPending}
+                      className="text-[10px] px-2 py-1 rounded bg-purple-600 text-white font-medium flex items-center gap-1 hover:bg-purple-500 disabled:opacity-50 transition-colors"
+                    >
+                      {updateSceneMutation.isPending ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : <Save className="w-2.5 h-2.5" />}
+                      Save
+                    </button>
+                    <button
+                      onClick={() => {
+                        setInlinePrompt(promptUsed);
+                        setIsEditingPrompt(false);
+                      }}
+                      className="text-[10px] px-2 py-1 rounded border transition-colors"
+                      style={{ borderColor: "var(--border-subtle)", color: "var(--text-muted)" }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <p
+                  className="text-xs mt-0.5 line-clamp-2 cursor-pointer hover:text-purple-400 transition-colors"
+                  style={{ color: "var(--text-secondary)" }}
+                  onClick={() => setIsEditingPrompt(true)}
+                  title="Click to edit prompt"
+                >
+                  {inlinePrompt || promptUsed || "No prompt set — click to add"}
+                </p>
+              )}
+            </div>
           </div>
 
           {/* Reference Images */}
@@ -395,8 +464,17 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose }: E
             <p className="text-[10px] mb-1.5" style={{ color: "var(--text-muted)" }}>For I2V (image-to-video)</p>
             <div className="flex items-center gap-1.5 flex-wrap">
               {imageUrl && (
-                <div className="w-10 h-10 rounded-md overflow-hidden border" style={{ borderColor: "var(--border-subtle)" }}>
+                <div className="relative w-10 h-10 rounded-md overflow-hidden border group" style={{ borderColor: "var(--border-subtle)" }}>
                   <img src={imageUrl} alt="" className="w-full h-full object-cover" />
+                  <button
+                    onClick={() => {
+                      updateSceneMutation.mutate({ clearImage: true });
+                    }}
+                    className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white flex items-center justify-center text-[8px] opacity-0 group-hover:opacity-100 transition-opacity"
+                    title="Remove reference image"
+                  >
+                    <X className="w-2.5 h-2.5" />
+                  </button>
                 </div>
               )}
               {referenceImageUrls.map((url, i) => (
