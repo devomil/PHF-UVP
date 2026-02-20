@@ -3980,8 +3980,13 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, asy
       const promptsMatch = existingPrompt.trim().toLowerCase() === prompt.trim().toLowerCase();
       const providersMatch = existingProvider.toLowerCase() === requestedProvider.toLowerCase();
       
-      if (promptsMatch && providersMatch) {
-        console.log(`[Phase9B-Async] Scene ${sceneId} already has active job with matching prompt AND provider: ${existingJob.jobId}`);
+      const existingSourceImage = (existingJob as any).sourceImageUrl || '';
+      const sourceImagesMatch = !sourceImageUrl || existingSourceImage === sourceImageUrl;
+      const jobAgeMs = Date.now() - new Date(existingJob.createdAt).getTime();
+      const isStale = existingJob.status === 'pending' && jobAgeMs > 5 * 60 * 1000;
+      
+      if (promptsMatch && providersMatch && sourceImagesMatch && !isStale) {
+        console.log(`[Phase9B-Async] Scene ${sceneId} already has active job with matching settings: ${existingJob.jobId}`);
         return res.json({ 
           success: true, 
           jobId: existingJob.jobId,
@@ -3993,11 +3998,12 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, asy
         const changes = [];
         if (!promptsMatch) changes.push('prompt');
         if (!providersMatch) changes.push(`provider (${existingProvider} → ${requestedProvider})`);
+        if (!sourceImagesMatch) changes.push('source image');
+        if (isStale) changes.push(`stale (${Math.round(jobAgeMs / 60000)}min old, still ${existingJob.status})`);
         console.log(`[Phase9B-Async] Scene ${sceneId} has active job but ${changes.join(' and ')} changed - creating new job`);
-        if (!promptsMatch) {
-          console.log(`[Phase9B-Async] Old prompt: ${existingPrompt.substring(0, 80)}...`);
-          console.log(`[Phase9B-Async] New prompt: ${prompt.substring(0, 80)}...`);
-        }
+        // Cancel the old stale job
+        const { storage } = await import('../storage');
+        await storage.updateVideoGenerationJob(existingJob.jobId, { status: 'failed' as any });
         // Continue to create new job with updated settings
       }
     } else if (existingJob && forceRegenerate) {
