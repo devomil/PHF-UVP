@@ -67,6 +67,58 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose }: E
   const [showLibrary, setShowLibrary] = useState(false);
   const [isEditingPrompt, setIsEditingPrompt] = useState(false);
   const [inlinePrompt, setInlinePrompt] = useState(scene.assets?.prompt || scene.visualDirection || "");
+  const [regeneratingType, setRegeneratingType] = useState<'video' | 'image' | null>(null);
+  const [regenStartedAt, setRegenStartedAt] = useState<number | null>(null);
+  const [regenElapsed, setRegenElapsed] = useState(0);
+  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const prevVideoUrl = useRef(videoUrl);
+  const prevImageUrl = useRef(imageUrl);
+
+  useEffect(() => {
+    if (regeneratingType && (
+      (regeneratingType === 'video' && videoUrl && videoUrl !== prevVideoUrl.current) ||
+      (regeneratingType === 'image' && imageUrl && imageUrl !== prevImageUrl.current)
+    )) {
+      setRegeneratingType(null);
+      setRegenStartedAt(null);
+      setRegenElapsed(0);
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+      if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+      toast({ title: regeneratingType === 'video' ? "Video Ready" : "Image Ready", description: "Your new asset has been generated." });
+    }
+    prevVideoUrl.current = videoUrl;
+    prevImageUrl.current = imageUrl;
+  }, [videoUrl, imageUrl, regeneratingType]);
+
+  useEffect(() => {
+    if (regenStartedAt) {
+      timerIntervalRef.current = setInterval(() => {
+        setRegenElapsed(Math.floor((Date.now() - regenStartedAt) / 1000));
+      }, 1000);
+    }
+    return () => {
+      if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+    };
+  }, [regenStartedAt]);
+
+  useEffect(() => {
+    if (regeneratingType) {
+      pollIntervalRef.current = setInterval(() => {
+        queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+      }, 5000);
+    }
+    return () => {
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+    };
+  }, [regeneratingType, projectId, queryClient]);
+
+  useEffect(() => {
+    return () => {
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+      if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     const newPrompt = scene.assets?.prompt || scene.visualDirection || "";
@@ -181,6 +233,9 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose }: E
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+      setRegeneratingType('image');
+      setRegenStartedAt(Date.now());
+      setRegenElapsed(0);
       toast({ title: "Image Regenerating", description: "New image is being generated for this scene." });
     },
     onError: (err: Error) => {
@@ -211,7 +266,10 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose }: E
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["project", projectId] });
-      toast({ title: "Video Regenerating", description: "New video is being generated for this scene." });
+      setRegeneratingType('video');
+      setRegenStartedAt(Date.now());
+      setRegenElapsed(0);
+      toast({ title: "Video Regenerating", description: "New video is being generated. This may take 1-3 minutes." });
     },
     onError: (err: Error) => {
       toast({ title: "Error", description: err.message, variant: "destructive" });
@@ -290,7 +348,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose }: E
     }
   };
 
-  const isRegenerating = regenImageMutation.isPending || regenVideoMutation.isPending;
+  const isRegenerating = regenImageMutation.isPending || regenVideoMutation.isPending || !!regeneratingType;
 
   return (
     <div className="px-4 pb-4 space-y-4 border-t" style={{ borderColor: "var(--border-subtle)" }}>
@@ -304,20 +362,45 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose }: E
             <Video className="w-4 h-4" style={{ color: "var(--text-secondary)" }} />
             <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>Visual Asset</span>
           </div>
-          {assetReady && (
+          {isRegenerating ? (
+            <span className="text-[11px] px-2 py-0.5 rounded-full bg-purple-500/15 border border-purple-500/25 text-purple-400 flex items-center gap-1">
+              <Loader2 className="w-3 h-3 animate-spin" /> {regeneratingType === 'video' ? 'Generating Video...' : regeneratingType === 'image' ? 'Generating Image...' : 'Submitting...'}
+            </span>
+          ) : assetReady ? (
             <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center gap-1">
               <CheckCircle2 className="w-3 h-3" /> Ready
             </span>
-          )}
-          {isRegenerating && (
-            <span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center gap-1">
-              <Loader2 className="w-3 h-3 animate-spin" /> Generating...
-            </span>
-          )}
+          ) : null}
         </div>
 
         {/* Video/Image Preview */}
-        <div className="rounded-xl overflow-hidden border" style={{ borderColor: "var(--border-subtle)", backgroundColor: "rgba(0,0,0,0.3)" }}>
+        <div className="rounded-xl overflow-hidden border relative" style={{ borderColor: "var(--border-subtle)", backgroundColor: "rgba(0,0,0,0.3)" }}>
+          {regeneratingType && (
+            <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/70 backdrop-blur-sm">
+              <div className="relative mb-4">
+                <div className="w-16 h-16 rounded-full border-3 border-purple-500/30 border-t-purple-500 animate-spin" />
+                <div className="absolute inset-0 flex items-center justify-center">
+                  {regeneratingType === 'video' ? (
+                    <Video className="w-6 h-6 text-purple-400" />
+                  ) : (
+                    <Image className="w-6 h-6 text-purple-400" />
+                  )}
+                </div>
+              </div>
+              <p className="text-sm font-medium text-white mb-1">
+                {regeneratingType === 'video' ? 'Generating New Video...' : 'Generating New Image...'}
+              </p>
+              <p className="text-xs text-white/60 mb-3">
+                {regeneratingType === 'video' ? 'This typically takes 1-3 minutes' : 'This typically takes 15-30 seconds'}
+              </p>
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 border border-white/10">
+                <div className="w-2 h-2 rounded-full bg-purple-400 animate-pulse" />
+                <span className="text-xs text-white/80 font-mono">
+                  {Math.floor(regenElapsed / 60)}:{(regenElapsed % 60).toString().padStart(2, '0')} elapsed
+                </span>
+              </div>
+            </div>
+          )}
           {hasVideo ? (
             <div className="relative">
               <video
@@ -597,10 +680,12 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose }: E
               <button
                 onClick={() => regenVideoMutation.mutate()}
                 disabled={isRegenerating}
-                className="text-xs px-3 py-1.5 rounded-lg bg-purple-600 text-white font-medium flex items-center gap-1.5 hover:bg-purple-500 disabled:opacity-50 transition-colors"
+                className={`text-xs px-3 py-1.5 rounded-lg font-medium flex items-center gap-1.5 disabled:opacity-50 transition-colors ${
+                  regeneratingType ? 'bg-purple-600/60 text-white/80' : 'bg-purple-600 text-white hover:bg-purple-500'
+                }`}
               >
-                {regenVideoMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-                Regenerate
+                {(regenVideoMutation.isPending || regeneratingType === 'video') ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                {regeneratingType === 'video' ? 'Generating...' : regeneratingType === 'image' ? 'Working...' : 'Regenerate'}
               </button>
             </div>
           </div>
