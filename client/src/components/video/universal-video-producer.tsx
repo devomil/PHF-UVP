@@ -22,7 +22,6 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/h
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { VoiceSelector } from "./voice-selector";
 import { QualityReport } from "./quality-report";
-import { QADashboard } from "./qa-dashboard";
 import { BrandSettingsPanel, BrandSettings as UIBrandSettings } from "./brand-settings-panel";
 import { EndCardSettingsPanel, EndCardSettings, DEFAULT_END_CARD_SETTINGS } from "./video/EndCardSettingsPanel";
 import { SoundDesignSettingsPanel, SoundDesignSettings, DEFAULT_SOUND_DESIGN_SETTINGS } from "./video/SoundDesignSettingsPanel";
@@ -894,20 +893,6 @@ function VideoCreatorForm({
 
 type StepKey = keyof typeof STEP_ICONS;
 
-interface QAReportSummary {
-  overallScore: number;
-  approvedCount: number;
-  needsReviewCount: number;
-  rejectedCount: number;
-}
-
-interface ProgressTrackerProps {
-  project: VideoProject;
-  qaScore?: number;
-  qaStatus?: 'pending' | 'analyzing' | 'completed';
-  qaReport?: QAReportSummary;
-  onQAClick?: () => void;
-}
 
 function getQAScoreLabel(score: number): string {
   if (score >= 85) return 'Passed';
@@ -921,7 +906,14 @@ function getQAScoreColors(score: number) {
   return { bg: 'bg-red-500', text: 'text-white', label: 'text-red-600' };
 }
 
-function ProgressTracker({ project, qaScore, qaStatus = 'pending', qaReport, onQAClick }: ProgressTrackerProps) {
+interface ProgressTrackerProps {
+  project: VideoProject;
+  qaScore?: number;
+  qaStatus?: 'pending' | 'analyzing' | 'completed';
+}
+
+
+function ProgressTracker({ project, qaScore, qaStatus = 'pending' }: ProgressTrackerProps) {
   const steps: StepKey[] = ["script", "voiceover", "images", "videos", "music", "assembly", "qa", "rendering"];
   
   return (
@@ -945,8 +937,7 @@ function ProgressTracker({ project, qaScore, qaStatus = 'pending', qaReport, onQ
             
             const qaStepContent = (
               <div 
-                className={`flex flex-col items-center ${onQAClick ? 'cursor-pointer hover:opacity-80' : ''}`}
-                onClick={onQAClick}
+                className="flex flex-col items-center"
                 data-testid="step-qa"
               >
                 <div className={`
@@ -976,47 +967,6 @@ function ProgressTracker({ project, qaScore, qaStatus = 'pending', qaReport, onQ
                 )}
               </div>
             );
-            
-            // Wrap with HoverCard if completed with report
-            if (qaIsCompleted && qaReport) {
-              return (
-                <HoverCard key={step} openDelay={200}>
-                  <HoverCardTrigger asChild>
-                    {qaStepContent}
-                  </HoverCardTrigger>
-                  <HoverCardContent className="w-64" side="bottom">
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="font-medium text-sm">Quality Score</span>
-                        <span className={`font-bold text-lg ${
-                          qaScore >= 85 ? 'text-green-600' :
-                          qaScore >= 70 ? 'text-yellow-600' : 'text-red-600'
-                        }`}>
-                          {qaScore}/100
-                        </span>
-                      </div>
-                      <div className="text-xs text-muted-foreground space-y-1.5">
-                        <div className="flex justify-between">
-                          <span>Approved:</span>
-                          <span className="text-green-600 font-medium">{qaReport.approvedCount} scenes</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Needs Review:</span>
-                          <span className="text-yellow-600 font-medium">{qaReport.needsReviewCount} scenes</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Rejected:</span>
-                          <span className="text-red-600 font-medium">{qaReport.rejectedCount} scenes</span>
-                        </div>
-                      </div>
-                      <div className="pt-2 border-t border-gray-200">
-                        <span className="text-xs text-blue-600">Click to open QA Dashboard</span>
-                      </div>
-                    </div>
-                  </HoverCardContent>
-                </HoverCard>
-              );
-            }
             
             return <div key={step}>{qaStepContent}</div>;
           }
@@ -4813,34 +4763,6 @@ export default function UniversalVideoProducer() {
   const [musicEnabled, setMusicEnabled] = useState(true);
   const [showGenerationPreview, setShowGenerationPreview] = useState(false);
   const [showProviderRegistry, setShowProviderRegistry] = useState(false);
-  const [showQADashboard, setShowQADashboard] = useState(false);
-  const [qaReport, setQAReport] = useState<{
-    projectId: string;
-    overallScore: number;
-    sceneStatuses: Array<{
-      sceneIndex: number;
-      score: number;
-      status: 'approved' | 'needs_review' | 'rejected' | 'pending';
-      issues: Array<{ severity: string; description: string }>;
-      userApproved: boolean;
-      autoApproved?: boolean;
-      regenerationCount?: number;
-    }>;
-    approvedCount: number;
-    needsReviewCount: number;
-    rejectedCount: number;
-    pendingCount: number;
-    criticalIssueCount: number;
-    majorIssueCount: number;
-    minorIssueCount: number;
-    passesThreshold: boolean;
-    canRender: boolean;
-    blockingReasons: string[];
-    lastAnalyzedAt: string;
-  } | null>(null);
-  const [isAnalyzingQA, setIsAnalyzingQA] = useState(false);
-  const [isFixingIssues, setIsFixingIssues] = useState(false);
-  const [fixingProgress, setFixingProgress] = useState<{ current: number; total: number } | undefined>(undefined);
   const previewTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const createProductMutation = useMutation({
@@ -5022,22 +4944,6 @@ export default function UniversalVideoProducer() {
       }
     },
     onError: (error: Error) => {
-      // Phase 10D: Handle QA gate blocked errors specially
-      if (error.message.startsWith('QA_GATE_BLOCKED:')) {
-        try {
-          const data = JSON.parse(error.message.replace('QA_GATE_BLOCKED:', ''));
-          toast({
-            title: "Rendering Blocked",
-            description: data.blockingReasons?.join(', ') || data.error || 'Quality gate not passed',
-            variant: "destructive",
-          });
-          setShowQADashboard(true);
-          return;
-        } catch {
-          // Fall through to generic error handling
-        }
-      }
-      
       toast({
         title: "Render Failed",
         description: error.message,
@@ -5452,13 +5358,6 @@ export default function UniversalVideoProducer() {
                     }}
                     onCancel={() => setShowGenerationPreview(false)}
                     isGenerating={generateStepMutation.isPending}
-                    qaStats={qaReport ? {
-                      approved: qaReport.approvedCount,
-                      needsReview: qaReport.needsReviewCount,
-                      rejected: qaReport.rejectedCount,
-                      score: qaReport.overallScore,
-                    } : null}
-                    onOpenQADashboard={() => setShowQADashboard(true)}
                     scenes={project.scenes.map((s, idx) => ({
                       id: s.id,
                       order: idx + 1,
@@ -5724,57 +5623,18 @@ export default function UniversalVideoProducer() {
                   {(project.status === 'ready' || project.status === 'error') && (
                     <div className="flex flex-col gap-2">
                       <Button
-                        onClick={() => {
-                          // Phase 10D: Check QA gate before rendering
-                          if (qaReport && !qaReport.canRender) {
-                            toast({
-                              variant: 'destructive',
-                              title: 'Cannot render',
-                              description: qaReport.blockingReasons?.join(', ') || 'Quality gate not passed. Review and approve scenes first.',
-                            });
-                            setShowQADashboard(true);
-                            return;
-                          }
-                          renderMutation.mutate();
-                        }}
-                        disabled={renderMutation.isPending || !!(qaReport && qaReport.canRender === false)}
-                        className={qaReport && !qaReport.canRender ? 'bg-gray-400 cursor-not-allowed' : ''}
+                        onClick={() => renderMutation.mutate()}
+                        disabled={renderMutation.isPending}
                         data-testid="button-render-video"
                       >
                         {renderMutation.isPending ? (
                           <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        ) : qaReport && !qaReport.canRender ? (
-                          <AlertTriangle className="w-4 h-4 mr-2" />
                         ) : (
                           <Play className="w-4 h-4 mr-2" />
                         )}
-                        {qaReport && !qaReport.canRender 
-                          ? 'Cannot Render - QA Issues' 
-                          : project.status === 'error' 
-                            ? 'Retry Render' 
-                            : 'Render Video'}
+                        {project.status === 'error' ? 'Retry Render' : 'Render Video'}
                       </Button>
-                      
-                      {qaReport && !qaReport.canRender && qaReport.blockingReasons && qaReport.blockingReasons.length > 0 && (
-                        <div className="bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded p-2">
-                          <div className="text-xs font-medium text-red-800 dark:text-red-200 mb-1">
-                            Rendering blocked:
-                          </div>
-                          <ul className="text-xs text-red-700 dark:text-red-300 space-y-0.5">
-                            {qaReport.blockingReasons.map((reason, i) => (
-                              <li key={i}>• {reason}</li>
-                            ))}
-                          </ul>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="w-full mt-2 text-xs"
-                            onClick={() => setShowQADashboard(true)}
-                          >
-                            Review Issues in QA Dashboard
-                          </Button>
-                        </div>
-                      )}
+
                     </div>
                   )}
                   
@@ -5826,15 +5686,6 @@ export default function UniversalVideoProducer() {
               
               <ProgressTracker 
                 project={project}
-                qaScore={qaReport?.overallScore}
-                qaStatus={isAnalyzingQA ? 'analyzing' : qaReport ? 'completed' : 'pending'}
-                qaReport={qaReport ? {
-                  overallScore: qaReport.overallScore,
-                  approvedCount: qaReport.approvedCount,
-                  needsReviewCount: qaReport.needsReviewCount,
-                  rejectedCount: qaReport.rejectedCount,
-                } : undefined}
-                onQAClick={() => setShowQADashboard(true)}
               />
               
               {project.status !== 'draft' && project.assets?.music && (
@@ -6257,236 +6108,6 @@ export default function UniversalVideoProducer() {
         </DialogContent>
       </Dialog>
 
-      {/* QA Dashboard Modal - Full Screen */}
-      <Dialog open={showQADashboard} onOpenChange={setShowQADashboard}>
-        <DialogContent className="w-[calc(100vw-2rem)] h-[calc(100vh-2rem)] max-w-[calc(100vw-2rem)] flex flex-col overflow-hidden">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <ShieldCheck className="w-5 h-5" />
-              Quality Assurance Dashboard
-            </DialogTitle>
-            <DialogDescription>
-              Review and approve scenes before rendering
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="flex-1 overflow-auto">
-          <QADashboard
-            report={qaReport}
-            isLoading={isAnalyzingQA}
-            isFixingIssues={isFixingIssues}
-            fixingProgress={fixingProgress}
-            onRunAnalysis={async () => {
-              if (!project) return;
-              setIsAnalyzingQA(true);
-              try {
-                const res = await fetch(`/api/universal-video/${project.id}/analyze-quality`, {
-                  method: 'POST',
-                  credentials: 'include'
-                });
-                const data = await res.json();
-                if (data.success) {
-                  // Backend returns report fields directly on response, not nested under 'report'
-                  const report = {
-                    projectId: data.projectId || project.id,
-                    overallScore: data.overallScore,
-                    sceneStatuses: data.sceneStatuses || data.sceneResults || [],
-                    approvedCount: data.approvedCount || 0,
-                    needsReviewCount: data.needsReviewCount || 0,
-                    rejectedCount: data.rejectedCount || 0,
-                    pendingCount: data.pendingCount || 0,
-                    criticalIssueCount: data.criticalIssueCount || 0,
-                    majorIssueCount: data.majorIssueCount || 0,
-                    minorIssueCount: data.minorIssueCount || 0,
-                    passesThreshold: data.passesThreshold,
-                    canRender: data.canRender,
-                    blockingReasons: data.blockingReasons || [],
-                    lastAnalyzedAt: data.lastAnalyzedAt || new Date().toISOString(),
-                  };
-                  setQAReport(report);
-                  toast({
-                    title: "Analysis Complete",
-                    description: `Quality score: ${report.overallScore}/100`,
-                  });
-                } else {
-                  toast({
-                    title: "Analysis Failed",
-                    description: data.error || "Could not run quality analysis",
-                    variant: "destructive",
-                  });
-                }
-              } catch (err) {
-                toast({
-                  title: "Analysis Failed",
-                  description: "Could not run quality analysis",
-                  variant: "destructive",
-                });
-              } finally {
-                setIsAnalyzingQA(false);
-              }
-            }}
-            onApproveScene={async (sceneIndex) => {
-              if (!project || !qaReport) return;
-              try {
-                const res = await fetch(`/api/universal-video/${project.id}/approve-scene/${sceneIndex}`, {
-                  method: 'POST',
-                  credentials: 'include'
-                });
-                const data = await res.json();
-                if (data.success) {
-                  setQAReport(data.report);
-                  toast({ title: "Scene Approved" });
-                }
-              } catch (err) {
-                toast({
-                  title: "Approval Failed",
-                  variant: "destructive",
-                });
-              }
-            }}
-            onRejectScene={async (sceneIndex, reason) => {
-              if (!project || !qaReport) return;
-              try {
-                const res = await fetch(`/api/universal-video/${project.id}/reject-scene/${sceneIndex}`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ reason }),
-                  credentials: 'include'
-                });
-                const data = await res.json();
-                if (data.success) {
-                  setQAReport(data.report);
-                  toast({ title: "Scene Rejected" });
-                }
-              } catch (err) {
-                toast({
-                  title: "Rejection Failed",
-                  variant: "destructive",
-                });
-              }
-            }}
-            onRegenerateScene={async (sceneIndex) => {
-              if (!project) return;
-              try {
-                toast({ title: "Starting Regeneration", description: `Scene ${sceneIndex + 1} is being regenerated...` });
-                const res = await fetch(`/api/universal-video/projects/${project.id}/scenes/${sceneIndex}/auto-regenerate`, {
-                  method: 'POST',
-                  credentials: 'include'
-                });
-                const data = await res.json();
-                if (data.success) {
-                  if (data.project) setProject(data.project);
-                  if (data.isVideoRegeneration) {
-                    toast({ title: "Video Regenerating", description: `Job started: ${data.jobId}` });
-                  } else {
-                    toast({ title: "Scene Regenerated", description: "Image has been regenerated" });
-                  }
-                  queryClient.invalidateQueries({ queryKey: ['/api/universal-video/projects', project.id] });
-                  setTimeout(async () => {
-                    try {
-                      const refreshRes = await fetch(`/api/universal-video/projects/${project.id}`, { credentials: 'include' });
-                      const refreshData = await refreshRes.json();
-                      if (refreshData.project) setProject(refreshData.project);
-                    } catch {}
-                  }, 2000);
-                } else {
-                  toast({ title: "Regeneration Failed", description: data.error || "Unknown error", variant: "destructive" });
-                }
-              } catch (err) {
-                toast({
-                  title: "Regeneration Failed",
-                  variant: "destructive",
-                });
-              }
-            }}
-            onApproveAll={async () => {
-              if (!project || !qaReport) return;
-              try {
-                const res = await fetch(`/api/universal-video/${project.id}/approve-all-scenes`, {
-                  method: 'POST',
-                  credentials: 'include'
-                });
-                const data = await res.json();
-                if (data.success) {
-                  setQAReport(data.report);
-                  toast({ title: "All Scenes Approved" });
-                }
-              } catch (err) {
-                toast({
-                  title: "Approval Failed",
-                  variant: "destructive",
-                });
-              }
-            }}
-            onProceedToRender={() => {
-              setShowQADashboard(false);
-              renderMutation.mutate();
-            }}
-            onFixAllIssues={async () => {
-              if (!project || !qaReport) return;
-              const rejectedScenes = qaReport.sceneStatuses.filter(
-                s => s.status === 'rejected' || (s.score < 50 && !s.userApproved)
-              );
-              if (rejectedScenes.length === 0) {
-                toast({ title: "No Issues to Fix", description: "All scenes are approved" });
-                return;
-              }
-              
-              setIsFixingIssues(true);
-              setFixingProgress({ current: 0, total: rejectedScenes.length });
-              
-              let successCount = 0;
-              let failCount = 0;
-              
-              for (let i = 0; i < rejectedScenes.length; i++) {
-                const scene = rejectedScenes[i];
-                setFixingProgress({ current: i + 1, total: rejectedScenes.length });
-                
-                try {
-                  const res = await fetch(`/api/universal-video/projects/${project.id}/scenes/${scene.sceneIndex}/auto-regenerate`, {
-                    method: 'POST',
-                    credentials: 'include'
-                  });
-                  const data = await res.json();
-                  if (data.success) {
-                    successCount++;
-                  } else {
-                    failCount++;
-                  }
-                } catch {
-                  failCount++;
-                }
-              }
-              
-              setIsFixingIssues(false);
-              setFixingProgress(undefined);
-              
-              if (successCount > 0) {
-                toast({ 
-                  title: "Issues Fixed", 
-                  description: `Successfully regenerated ${successCount} scene(s)${failCount > 0 ? `, ${failCount} failed` : ''}. Click Re-Analyze to verify.`
-                });
-              } else {
-                toast({ 
-                  title: "Regeneration Failed", 
-                  description: "Could not regenerate any scenes", 
-                  variant: "destructive" 
-                });
-              }
-              
-              queryClient.invalidateQueries({ queryKey: ['/api/universal-video/projects', project.id] });
-              
-              // Refresh project data
-              try {
-                const refreshRes = await fetch(`/api/universal-video/projects/${project.id}`, { credentials: 'include' });
-                const refreshData = await refreshRes.json();
-                if (refreshData.project) setProject(refreshData.project);
-              } catch {}
-            }}
-          />
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

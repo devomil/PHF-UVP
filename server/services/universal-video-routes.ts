@@ -24,7 +24,6 @@ import { soundDesignService } from '../services/sound-design-service';
 import { transitionService, TransitionPlan, SceneTransition } from '../services/transition-service';
 import { textPlacementService, TextOverlay as TextOverlayType, TextPlacement } from '../services/text-placement-service';
 import { brandInjectionService, BrandInjectionPlan } from '../services/brand-injection-service';
-import { qualityGateService, ProjectQualityReport, SceneQualityStatus } from '../services/quality-gate-service';
 import { assetUrlResolver } from '../services/asset-url-resolver';
 import { s3RenderAssetService } from '../services/s3-render-asset-service';
 import { VIDEO_PROVIDERS } from '../../shared/provider-config';
@@ -1383,9 +1382,12 @@ router.get('/projects/:projectId/render-settings', isAuthenticated, async (req: 
     
     const hasVoiceover = !!(projectData.assets?.voiceover?.fullTrackUrl);
     const hasMusic = !!(projectData.assets?.music?.url);
+    const scenes = projectData.scenes || [];
+    const hasSceneVideos = scenes.some((s: any) => s.assets?.videoUrl || s.background?.videoUrl);
     
     res.json({ 
       success: true,
+      hasSceneVideos,
       settings: {
         voiceover: {
           enabled: (projectData as any).voiceoverSettings?.enabled ?? true,
@@ -1957,223 +1959,7 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
       });
     }
     
-    // Phase 10D: QA Gate Enforcement - check quality gate before rendering
-    console.log('[UniversalVideo] Phase 10D: Checking QA gate for project:', projectId);
-    
-    // Get existing quality report from project or generate one
-    let qaReport: ProjectQualityReport | null = null;
-    
-    if (projectData.qualityReport) {
-      // Phase 10D: Use existing quality report - preserve stored status and userApproved flags
-      const existingReport = projectData.qualityReport as any;
-      
-      // Reconstruct scene statuses preserving all stored values
-      const sceneStatuses = (existingReport.sceneScores || existingReport.sceneStatuses || []).map((s: any, idx: number) => {
-        const score = s.score ?? s.overallScore ?? 0;
-        const userApproved = s.userApproved ?? false; // Preserve stored userApproved
-        const autoApproved = s.autoApproved ?? (score >= 85);
-        
-        // Preserve stored status or recalculate based on score and approvals
-        let status = s.status;
-        if (!status || status === 'pending') {
-          // Only recalculate if status was not set or was pending
-          if (userApproved || autoApproved) {
-            status = 'approved';
-          } else if (score < 70) {
-            status = 'rejected';
-          } else {
-            status = 'needs_review';
-          }
-        }
-        
-        return {
-          sceneIndex: s.sceneIndex ?? idx,
-          score,
-          status,
-          issues: s.issues || [],
-          userApproved,
-          autoApproved,
-          regenerationCount: s.regenerationCount ?? 0,
-        };
-      });
-      
-      // Calculate counts based on scene statuses
-      const approvedCount = sceneStatuses.filter((s: any) => s.status === 'approved').length;
-      const needsReviewCount = sceneStatuses.filter((s: any) => s.status === 'needs_review').length;
-      const rejectedCount = sceneStatuses.filter((s: any) => s.status === 'rejected').length;
-      const pendingCount = sceneStatuses.filter((s: any) => s.status === 'pending').length;
-      
-      // Phase 10D: Recompute blocking reasons based on current data
-      const blockingReasons: string[] = [];
-      if (rejectedCount > 0) {
-        blockingReasons.push(`${rejectedCount} scene(s) rejected - must regenerate`);
-      }
-      if (needsReviewCount > 0) {
-        blockingReasons.push(`${needsReviewCount} scene(s) need review - approve or regenerate`);
-      }
-      
-      const overallScore = existingReport.overallScore || 0;
-      if (overallScore < 75) {
-        blockingReasons.push(`Overall score ${overallScore} below minimum 75`);
-      }
-      
-      const criticalIssueCount = existingReport.criticalIssues?.length || 0;
-      if (criticalIssueCount > 0) {
-        blockingReasons.push(`${criticalIssueCount} critical issue(s) must be resolved`);
-      }
-      
-      // Phase 10D: Check major issues threshold (max 3 allowed)
-      const majorIssueCount = existingReport.majorIssues?.length || existingReport.overallIssues?.filter((i: any) => i.severity === 'major')?.length || 0;
-      if (majorIssueCount > 3) {
-        blockingReasons.push(`${majorIssueCount} major issues (max 3)`);
-      }
-      
-      const passesThreshold = blockingReasons.length === 0;
-      const canRender = passesThreshold;
-      
-      qaReport = {
-        projectId: projectId,
-        overallScore,
-        sceneStatuses,
-        approvedCount,
-        needsReviewCount,
-        rejectedCount,
-        pendingCount,
-        criticalIssueCount,
-        majorIssueCount: existingReport.majorIssues?.length || existingReport.overallIssues?.filter((i: any) => i.severity === 'major')?.length || 0,
-        minorIssueCount: existingReport.overallIssues?.filter((i: any) => i.severity === 'minor')?.length || 0,
-        passesThreshold,
-        canRender,
-        blockingReasons,
-        lastAnalyzedAt: existingReport.evaluatedAt || new Date().toISOString(),
-      };
-    }
-    
-    // Check QA gate
-    if (qaReport) {
-      const renderCheck = qualityGateService.canProceedToRender(qaReport);
-      
-      console.log('[UniversalVideo] QA gate check result:', {
-        allowed: renderCheck.allowed,
-        reason: renderCheck.reason,
-        blockingReasons: renderCheck.blockingReasons,
-        forceRender: !!forceRender,
-      });
-      
-      if (!renderCheck.allowed && !isAdminForceRender) {
-        console.log('[UniversalVideo] RENDER BLOCKED by QA gate:', renderCheck.reason);
-        
-        // Log if non-admin tried to force render
-        if (forceRender && userRole !== 'admin') {
-          console.warn(`[UniversalVideo] Non-admin user ${userId} attempted forceRender - denied`);
-        }
-        
-        return res.status(400).json({
-          success: false,
-          error: 'Cannot render: Quality gate not passed',
-          qaGateBlocked: true,
-          blockingReasons: renderCheck.blockingReasons,
-          qaReport: {
-            overallScore: qaReport.overallScore,
-            passesThreshold: qaReport.passesThreshold,
-            canRender: qaReport.canRender,
-            approvedCount: qaReport.approvedCount,
-            needsReviewCount: qaReport.needsReviewCount,
-            rejectedCount: qaReport.rejectedCount,
-            criticalIssueCount: qaReport.criticalIssueCount,
-          },
-          action: 'Review and approve flagged scenes, or regenerate rejected scenes',
-        });
-      }
-      
-      if (isAdminForceRender && !renderCheck.allowed) {
-        console.warn(`[UniversalVideo] ADMIN FORCE RENDER by user ${userId} - bypassing QA gate`);
-      }
-    } else {
-      // Auto-generate a basic quality report for scenes with assets ready
-      console.log('[UniversalVideo] No QA report found - auto-generating from scene assets');
-      
-      // Create automatic quality report based on scene asset presence
-      const renderScenes = projectData.scenes || [];
-      
-      if (renderScenes.length === 0) {
-        qaReport = {
-          projectId: projectId,
-          overallScore: 85,
-          sceneStatuses: [],
-          approvedCount: 0,
-          needsReviewCount: 0,
-          rejectedCount: 0,
-          pendingCount: 0,
-          criticalIssueCount: 0,
-          majorIssueCount: 0,
-          minorIssueCount: 0,
-          passesThreshold: true,
-          canRender: true,
-          blockingReasons: [],
-        };
-      }
-      
-      const sceneStatuses = renderScenes.map((scene, idx) => {
-        const hasImage = !!scene.assets?.imageUrl;
-        const hasVideo = !!scene.assets?.videoUrl;
-        const hasAsset = hasImage || hasVideo;
-        const score = hasAsset ? 85 : 50; // Auto-approve if assets exist
-        
-        return {
-          sceneIndex: idx,
-          score,
-          status: hasAsset ? 'approved' : 'needs_review',
-          issues: hasAsset ? [] : [{ type: 'missing-asset', message: 'Scene missing visual assets' }],
-          userApproved: false,
-          autoApproved: hasAsset,
-          regenerationCount: 0,
-        };
-      });
-      
-      const approvedCount = sceneStatuses.filter(s => s.status === 'approved').length;
-      const needsReviewCount = sceneStatuses.filter(s => s.status === 'needs_review').length;
-      const allScenesHaveAssets = approvedCount === sceneStatuses.length;
-      
-      qaReport = {
-        projectId: projectId,
-        overallScore: allScenesHaveAssets ? 85 : 60,
-        sceneStatuses,
-        approvedCount,
-        needsReviewCount,
-        rejectedCount: 0,
-        pendingCount: 0,
-        criticalIssueCount: 0,
-        majorIssueCount: 0,
-        minorIssueCount: 0,
-        passesThreshold: allScenesHaveAssets,
-        canRender: allScenesHaveAssets,
-        blockingReasons: allScenesHaveAssets ? [] : ['Some scenes missing visual assets'],
-      };
-      
-      // Save the auto-generated report for future use
-      projectData.qualityReport = {
-        overallScore: qaReport.overallScore,
-        sceneScores: sceneStatuses,
-        criticalIssues: [],
-        overallIssues: [],
-      };
-      await saveProjectToDb(projectData, userId);
-      console.log('[UniversalVideo] Auto-generated quality report:', { approvedCount, needsReviewCount, canRender: qaReport.canRender });
-      
-      // Check if auto-generated report passes
-      if (!qaReport.canRender && !isAdminForceRender) {
-        return res.status(400).json({
-          success: false,
-          error: 'Cannot render: Some scenes missing visual assets',
-          qaGateBlocked: true,
-          blockingReasons: qaReport.blockingReasons,
-          action: 'Generate images/videos for all scenes before rendering',
-        });
-      }
-    }
-    
-    console.log('[UniversalVideo] QA gate PASSED - starting render for project:', projectId);
+    console.log('[UniversalVideo] Starting render for project:', projectId);
     
     // Ensure Quick Create visual asset is populated (fix race condition where voiceover/music overwrites visual)
     const qcAssets = (projectData as any).assets?.quickCreate;
@@ -5330,40 +5116,23 @@ router.post('/:projectId/analyze-quality', isAuthenticated, async (req: Request,
     projectData.scenes = scenes;
     await saveProjectToDb(projectData, userId);
     
-    // Build scene metadata for quality report
-    const sceneMetadata = new Map<number, { thumbnailUrl?: string; narration?: string; provider?: string; regenerationCount?: number }>();
-    scenes.forEach((scene, idx) => {
-      const thumbnailUrl = scene.assets?.imageUrl || scene.assets?.videoUrl || (scene.background as any)?.url;
-      sceneMetadata.set(idx, {
-        thumbnailUrl,
-        narration: scene.narration,
-        provider: (scene.assets as any)?.videoProvider || (scene.assets as any)?.imageProvider || (scene.assets as any)?.provider,
-        regenerationCount: (scene as any).regenerationCount || 0,
-      });
-    });
+    const overallScore = analyses.length > 0
+      ? Math.round(analyses.reduce((sum, a) => sum + a.overallScore, 0) / analyses.length)
+      : 0;
     
-    // Build approvals map
-    const approvals = new Map<number, boolean>();
-    scenes.forEach((scene, idx) => {
-      if ((scene as any).userApproved) {
-        approvals.set(idx, true);
-      }
-    });
-    
-    // Generate QA report using quality gate service
-    const report = qualityGateService.generateReport(
-      projectId,
-      analyses,
-      approvals,
-      undefined,
-      sceneMetadata
-    );
-    
-    console.log(`[Phase10A] Quality report generated - Overall: ${report.overallScore}, Approved: ${report.approvedCount}, NeedsReview: ${report.needsReviewCount}`);
+    console.log(`[Phase10A] Quality analysis complete - Overall: ${overallScore}, Scenes: ${analyses.length}`);
     
     return res.json({
       success: true,
-      ...report,
+      projectId,
+      overallScore,
+      sceneCount: analyses.length,
+      analyses: analyses.map(a => ({
+        sceneIndex: a.sceneIndex,
+        score: a.overallScore,
+        issues: a.issues,
+        recommendation: a.recommendation,
+      })),
     });
     
   } catch (error: any) {
@@ -8042,42 +7811,17 @@ router.get('/projects/:projectId/quality-report', isAuthenticated, async (req: R
       };
     });
     
-    const approvals = new Map<number, boolean>(
-      projectData.scenes
-        .filter(s => (s as any).userApproved)
-        .map((s, idx) => [idx, true])
-    );
-    
-    // Build scene metadata with thumbnails, narration, and provider info
-    const sceneMetadata = new Map<number, { thumbnailUrl?: string; narration?: string; provider?: string; regenerationCount?: number }>();
-    projectData.scenes.forEach((scene, idx) => {
-      const thumbnailUrl = scene.assets?.imageUrl || scene.assets?.videoUrl || (scene.background as any)?.url;
-      sceneMetadata.set(idx, {
-        thumbnailUrl,
-        narration: scene.narration,
-        provider: (scene.assets as any)?.videoProvider || (scene.assets as any)?.imageProvider || (scene.assets as any)?.provider,
-        regenerationCount: (scene as any).regenerationCount || 0,
-      });
-    });
-    
-    const report = qualityGateService.generateReport(
-      projectId,
-      analyses,
-      approvals,
-      undefined,
-      sceneMetadata
-    );
-
-    const unanalyzedCount = projectData.scenes.filter(s => !s.analysisResult).length;
-    if (unanalyzedCount > 0 && !report.blockingReasons.some(r => r.includes('not analyzed'))) {
-      report.blockingReasons.push(`${unanalyzedCount} scenes not yet analyzed`);
-      report.canRender = false;
-      report.passesThreshold = false;
-    }
+    const overallScore = analyses.length > 0
+      ? Math.round(analyses.reduce((sum, a) => sum + a.overallScore, 0) / analyses.length)
+      : 0;
 
     res.json({
       success: true,
-      report,
+      report: {
+        projectId,
+        overallScore,
+        sceneCount: analyses.length,
+      },
     });
 
   } catch (error: any) {
@@ -8212,29 +7956,17 @@ router.post('/projects/:projectId/analyze-all', isAuthenticated, async (req: Req
       })
       .where(eq(universalVideoProjects.projectId, projectId));
 
-    // Build scene metadata with thumbnails
-    const sceneMetadata = new Map<number, { thumbnailUrl?: string; narration?: string; provider?: string; regenerationCount?: number }>();
-    projectData.scenes.forEach((scene, idx) => {
-      const thumbnailUrl = scene.assets?.imageUrl || scene.assets?.videoUrl || (scene.background as any)?.url;
-      sceneMetadata.set(idx, {
-        thumbnailUrl,
-        narration: scene.narration,
-        provider: (scene.assets as any)?.videoProvider || (scene.assets as any)?.imageProvider || (scene.assets as any)?.provider,
-        regenerationCount: (scene as any).regenerationCount || 0,
-      });
-    });
-
-    const report = qualityGateService.generateReport(
-      projectId,
-      analyses,
-      new Map(),
-      undefined,
-      sceneMetadata
-    );
+    const overallScore = analyses.length > 0
+      ? Math.round(analyses.reduce((sum, a) => sum + a.overallScore, 0) / analyses.length)
+      : 0;
 
     res.json({
       success: true,
-      report,
+      report: {
+        projectId,
+        overallScore,
+        sceneCount: analyses.length,
+      },
       analyzedCount: analyses.length,
     });
 
@@ -8367,109 +8099,6 @@ router.post('/projects/:projectId/approve-all', isAuthenticated, async (req: Req
   }
 });
 
-router.get('/projects/:projectId/can-render', isAuthenticated, async (req: Request, res: Response) => {
-  try {
-    const { projectId } = req.params;
-
-    const projectRows = await db.select().from(universalVideoProjects)
-      .where(eq(universalVideoProjects.projectId, projectId))
-      .limit(1);
-
-    if (projectRows.length === 0) {
-      return res.status(404).json({ success: false, error: 'Project not found' });
-    }
-
-    const projectData = dbRowToVideoProject(projectRows[0]);
-    
-    const scenes = projectData.scenes || [];
-    
-    if (scenes.length === 0) {
-      const quickCreateReady = ['ready', 'complete', 'completed'].includes(projectData.status);
-      return res.json({
-        success: true,
-        allowed: quickCreateReady,
-        reason: quickCreateReady 
-          ? 'Quick Create project ready for rendering' 
-          : 'Quick Create project - waiting for asset generation',
-        blockingReasons: quickCreateReady 
-          ? [] 
-          : ['Project is still generating assets - please wait for completion'],
-      });
-    }
-    
-    const analyses: Phase8AnalysisResult[] = scenes.map((scene, idx) => {
-      if (scene.analysisResult) {
-        return scene.analysisResult;
-      }
-      return {
-        sceneIndex: idx,
-        overallScore: 0,
-        technicalScore: 0,
-        contentMatchScore: 0,
-        brandComplianceScore: 0,
-        compositionScore: 0,
-        aiArtifactsDetected: false,
-        aiArtifactDetails: [],
-        contentMatchDetails: 'Not yet analyzed',
-        brandComplianceDetails: 'Not yet analyzed',
-        frameAnalysis: {
-          subjectPosition: 'center' as const,
-          faceDetected: false,
-          busyRegions: [],
-          dominantColors: [],
-          lightingType: 'neutral' as const,
-          safeTextZones: [],
-        },
-        issues: [{ 
-          category: 'technical' as const, 
-          severity: 'critical' as const, 
-          description: 'Scene has not been analyzed yet', 
-          suggestion: 'Run quality analysis on all scenes' 
-        }],
-        recommendation: 'regenerate' as const,
-        analysisTimestamp: '',
-        analysisModel: 'pending',
-      };
-    });
-    
-    const approvals = new Map<number, boolean>(
-      scenes
-        .filter(s => (s as any).userApproved)
-        .map((s, idx) => [idx, true])
-    );
-    
-    const report = qualityGateService.generateReport(
-      projectId,
-      analyses,
-      approvals
-    );
-
-    const unanalyzedCount = scenes.filter(s => !s.analysisResult).length;
-    if (unanalyzedCount > 0) {
-      report.blockingReasons.push(`${unanalyzedCount} scenes not yet analyzed`);
-      report.canRender = false;
-      report.passesThreshold = false;
-    }
-
-    const renderCheck = qualityGateService.canProceedToRender(report);
-
-    res.json({
-      success: true,
-      ...renderCheck,
-      report: {
-        overallScore: report.overallScore,
-        approvedCount: report.approvedCount,
-        needsReviewCount: report.needsReviewCount,
-        rejectedCount: report.rejectedCount,
-        blockingReasons: report.blockingReasons,
-      },
-    });
-
-  } catch (error: any) {
-    console.error('[Phase8F] Check render permission failed:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
 
 // Phase 10C: Score Integrity Check - Debug endpoint to verify real vs fake scores
 router.get('/api/debug/score-integrity', isAuthenticated, async (req, res) => {
