@@ -901,7 +901,6 @@ export default function ProjectDetail({ params }: { params?: { id: string } }) {
   const progress = project.progress || {};
   const scenes = Array.isArray(project.scenes) ? project.scenes : [];
   const jobs = Array.isArray(project.jobs) ? project.jobs : [];
-  const qualityReport = project.qualityReport || {};
   const isQuickCreate = outputFormat.platform === "quick-create";
   const projectStatus = getStatusInfo(project.status);
 
@@ -1021,14 +1020,7 @@ export default function ProjectDetail({ params }: { params?: { id: string } }) {
               </div>
             ) : (
               <div className="flex items-center gap-2">
-                {qualityReport.overallScore ? (
-                  <>
-                    <div className={`w-3 h-3 rounded-full ${(qualityReport.overallScore || 0) >= 70 ? "bg-emerald-400" : "bg-amber-400"}`} />
-                    <p className="text-xl font-bold" style={{ color: "var(--text-primary)" }}>{qualityReport.overallScore}/100</p>
-                  </>
-                ) : (
-                  <p className="text-xl font-bold" style={{ color: "var(--text-muted)" }}>--</p>
-                )}
+                <p className="text-xl font-bold" style={{ color: "var(--text-muted)" }}>--</p>
               </div>
             )}
           </div>
@@ -1175,26 +1167,6 @@ export default function ProjectDetail({ params }: { params?: { id: string } }) {
           </div>
         )}
 
-        {!isQuickCreate && (
-          <div>
-            <h2 className="text-sm font-medium uppercase tracking-wider mb-4" style={{ color: "var(--text-secondary)" }}>Quality Report</h2>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {[
-                { label: "Visual Quality", value: qualityReport.visualQuality },
-                { label: "Brand Consistency", value: qualityReport.brandConsistency },
-                { label: "Scene Transitions", value: qualityReport.sceneTransitions },
-                { label: "Overall Score", value: qualityReport.overallScore },
-              ].map((metric) => (
-                <div key={metric.label} className="border rounded-xl p-4" style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)" }}>
-                  <p className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>{metric.label}</p>
-                  <p className="text-xl font-bold" style={{ color: metric.value ? "var(--text-primary)" : "var(--text-muted)" }}>
-                    {metric.value ?? "--"}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
 
         {isQuickCreate && (
           <QuickCreateAssetPanel projectId={projectId} project={project} />
@@ -1428,8 +1400,10 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
   const voiceoverReady = quickAssets.voiceover?.status === "completed" && !!quickAssets.voiceover?.url;
   const musicReady = quickAssets.music?.status === "completed" && !!quickAssets.music?.url;
 
-  const scenes = Array.isArray(projectScenes) ? projectScenes : [];
-  const scenesHaveVideo = scenes.some((s: any) => s.assets?.videoUrl || (s.background as any)?.videoUrl);
+  const scenesFromProps = Array.isArray(projectScenes) ? projectScenes : [];
+  const scenesHaveVideoFromProps = scenesFromProps.some((s: any) => s.assets?.videoUrl || s.background?.videoUrl);
+  const scenesHaveVideoFromSettings = settingsQuery.data?.hasSceneVideos === true;
+  const scenesHaveVideo = scenesHaveVideoFromProps || scenesHaveVideoFromSettings;
 
   const rawSettings = settingsQuery.data?.settings || {
     voiceover: { enabled: true, voiceId: null, hasGenerated: false },
@@ -1832,16 +1806,6 @@ function PostProductionPanel({ projectId, project }: { projectId: string; projec
     retry: false,
   });
 
-  const canRenderQuery = useQuery({
-    queryKey: ["can-render", projectId],
-    queryFn: async () => {
-      const res = await fetch(`/api/universal-video/projects/${projectId}/can-render`, { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to check render eligibility");
-      return res.json();
-    },
-    enabled: !!projectId && !["generating", "processing", "queued", "pending"].includes(project.status),
-  });
-
   const renderStatusQuery = useQuery({
     queryKey: ["render-status", projectId, renderId],
     queryFn: async () => {
@@ -2064,20 +2028,6 @@ function PostProductionPanel({ projectId, project }: { projectId: string; projec
               className="border rounded-lg p-4"
               style={{ backgroundColor: "var(--app-bg)", borderColor: "var(--border-subtle)" }}
             >
-              {canRenderQuery.data && !canRenderQuery.data.allowed && (
-                <div className="mb-4 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
-                  <div className="flex items-start gap-2">
-                    <AlertCircle className="w-4 h-4 text-amber-400 mt-0.5 flex-shrink-0" />
-                    <div>
-                      <p className="text-xs font-medium text-amber-400 mb-1">Cannot render yet</p>
-                      {canRenderQuery.data.blockingReasons?.map((reason: string, i: number) => (
-                        <p key={i} className="text-xs text-amber-300/70">{reason}</p>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-
               {renderError && (
                 <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20">
                   <div className="flex items-start gap-2">
