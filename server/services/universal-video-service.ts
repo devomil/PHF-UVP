@@ -53,6 +53,22 @@ interface ImageGenerationResult {
   error?: string;
 }
 
+type FalImageSize = "portrait_16_9" | "square" | "landscape_4_3" | "landscape_16_9" | "square_hd" | "portrait_4_3";
+
+function getImageDimensionsForAspectRatio(aspectRatio: string): { width: number; height: number; falSize: FalImageSize } {
+  switch (aspectRatio) {
+    case '9:16':
+      return { width: 1080, height: 1920, falSize: 'portrait_16_9' as FalImageSize };
+    case '1:1':
+      return { width: 1024, height: 1024, falSize: 'square' as FalImageSize };
+    case '4:3':
+      return { width: 1440, height: 1080, falSize: 'landscape_4_3' as FalImageSize };
+    case '16:9':
+    default:
+      return { width: 1920, height: 1080, falSize: 'landscape_16_9' as FalImageSize };
+  }
+}
+
 interface VoiceoverResult {
   url: string;
   duration: number;
@@ -794,7 +810,7 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
     return sanitized;
   }
 
-  async generateImage(prompt: string, sceneId: string, isProductVideo: boolean = false, sceneType: string = 'content'): Promise<ImageGenerationResult> {
+  async generateImage(prompt: string, sceneId: string, isProductVideo: boolean = false, sceneType: string = 'content', aspectRatio: string = '16:9'): Promise<ImageGenerationResult> {
     const falKey = process.env.FAL_KEY;
     
     // Phase 11A: Sanitize prompt to remove text/logo requests before AI generation
@@ -810,8 +826,11 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
       : sanitized.cleanPrompt;
     const enhancedPrompt = this.enhanceImagePrompt(basePrompt);
 
+    const imgDims = getImageDimensionsForAspectRatio(aspectRatio);
+    console.log(`[GenerateImage] Aspect ratio: ${aspectRatio} → ${imgDims.width}x${imgDims.height}`);
+    
     if (falKey) {
-      const falResult = await this.generateImageWithFalPrimary(enhancedPrompt, falKey);
+      const falResult = await this.generateImageWithFalPrimary(enhancedPrompt, falKey, aspectRatio);
       if (falResult.success) {
         return falResult;
       }
@@ -823,7 +842,7 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
         fallbackUsed: 'Hugging Face SDXL',
       });
     } else {
-      const piapiResult = await this.generateImageWithPiAPI(enhancedPrompt);
+      const piapiResult = await this.generateImageWithPiAPI(enhancedPrompt, aspectRatio);
       if (piapiResult.success) {
         this.addNotification({
           type: 'info',
@@ -951,8 +970,11 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
     return `${subjectEnforcement}${prompt}, ${styleModifiers.join(', ')}. ${focusClause}`;
   }
 
-  private async generateImageWithFalPrimary(prompt: string, falKey: string): Promise<ImageGenerationResult> {
+  private async generateImageWithFalPrimary(prompt: string, falKey: string, aspectRatio: string = '16:9'): Promise<ImageGenerationResult> {
     fal.config({ credentials: falKey });
+    
+    const dims = getImageDimensionsForAspectRatio(aspectRatio);
+    console.log(`[FAL] Using dimensions ${dims.width}x${dims.height} for aspect ratio ${aspectRatio}`);
 
     const models = [
       {
@@ -960,7 +982,7 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
         name: "FLUX-Pro-1.1",
         params: {
           prompt,
-          image_size: { width: 1920, height: 1080 },
+          image_size: { width: dims.width, height: dims.height },
           num_inference_steps: 28,
           guidance_scale: 3.5,
         },
@@ -970,7 +992,7 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
         name: "FLUX-Dev",
         params: {
           prompt,
-          image_size: { width: 1920, height: 1080 },
+          image_size: { width: dims.width, height: dims.height },
           num_inference_steps: 28,
         },
       },
@@ -979,7 +1001,7 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
         name: "FLUX-Schnell",
         params: {
           prompt,
-          image_size: { width: 1920, height: 1080 },
+          image_size: { width: dims.width, height: dims.height },
           num_inference_steps: 4,
         },
       },
@@ -1155,11 +1177,23 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
     return this.generateImage(prompt, sceneId, false);
   }
 
-  private async generateImageWithPiAPI(prompt: string): Promise<ImageGenerationResult> {
+  private async generateImageWithPiAPI(prompt: string, aspectRatio: string = '16:9'): Promise<ImageGenerationResult> {
     const piapiKey = process.env.PIAPI_API_KEY;
     if (!piapiKey) {
       return { url: '', source: 'piapi-flux', success: false, error: 'PIAPI_API_KEY not configured' };
     }
+
+    const dims = getImageDimensionsForAspectRatio(aspectRatio);
+    const maxDim = 1280;
+    let piapiWidth: number, piapiHeight: number;
+    if (dims.width >= dims.height) {
+      piapiWidth = Math.min(dims.width, maxDim);
+      piapiHeight = Math.round(piapiWidth * (dims.height / dims.width));
+    } else {
+      piapiHeight = Math.min(dims.height, maxDim);
+      piapiWidth = Math.round(piapiHeight * (dims.width / dims.height));
+    }
+    console.log(`[PiAPI Flux] Using dimensions ${piapiWidth}x${piapiHeight} for aspect ratio ${aspectRatio}`);
 
     try {
       console.log('[PiAPI Flux] Generating image with Flux Schnell...');
@@ -1175,8 +1209,8 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
           input: {
             prompt: prompt,
             negative_prompt: 'text, words, letters, numbers, writing, signage, logos, watermarks, labels, captions, titles, subtitles, UI elements, buttons, banners, badges, stamps, certificates, menus, price tags, phone numbers, URLs, addresses, blurry, low quality, distorted',
-            width: 1280,
-            height: 720,
+            width: piapiWidth,
+            height: piapiHeight,
           },
         }),
       });
@@ -1333,7 +1367,8 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
 
   private async generateAIBackground(
     backgroundPrompt: string,
-    sceneType: string
+    sceneType: string,
+    aspectRatio: string = '16:9'
   ): Promise<{ backgroundUrl: string | null; source: string; extractedText?: string[]; extractedLogos?: string[] }> {
     const falKey = process.env.FAL_KEY;
     if (!falKey) {
@@ -1365,10 +1400,13 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
       
       console.log(`[UniversalVideoService] Environment-only prompt: ${environmentOnlyPrompt}`);
 
+      const bgDims = getImageDimensionsForAspectRatio(aspectRatio);
+      console.log(`[GenerateBackground] Using ${bgDims.falSize} for aspect ratio ${aspectRatio}`);
+      
       const backgroundResult = await fal.subscribe("fal-ai/flux-pro/v1.1", {
         input: {
           prompt: environmentOnlyPrompt,
-          image_size: "landscape_16_9",
+          image_size: bgDims.falSize,
           num_images: 1,
           safety_tolerance: "2",
           enable_safety_checker: true,
@@ -1404,7 +1442,8 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
 
   private async generateContentImage(
     scene: Scene,
-    productName: string
+    productName: string,
+    aspectRatio: string = '16:9'
   ): Promise<{ imageUrl: string | null; source: string; extractedText?: string[]; extractedLogos?: string[] }> {
     const falKey = process.env.FAL_KEY;
     if (!falKey) {
@@ -1419,10 +1458,13 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
       const contentPromptResult = this.buildContentPrompt(scene, productName);
       console.log(`[UniversalVideoService] Content prompt: ${contentPromptResult.prompt}`);
 
+      const contentDims = getImageDimensionsForAspectRatio(aspectRatio);
+      console.log(`[GenerateContent] Using ${contentDims.falSize} for aspect ratio ${aspectRatio}`);
+      
       const result = await fal.subscribe("fal-ai/flux-pro/v1.1", {
         input: {
           prompt: contentPromptResult.prompt,
-          image_size: "landscape_16_9",
+          image_size: contentDims.falSize,
           num_images: 1,
           safety_tolerance: "2",
           enable_safety_checker: true,
@@ -3268,9 +3310,11 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
           
           if (shouldEnhanceBackground) {
             console.log(`[UniversalVideoService] Generating AI background for ${scene.type} scene: ${scene.id}`);
+            const projAR = project.outputFormat?.aspectRatio || '16:9';
             const backgroundResult = await this.generateAIBackground(
               scene.background.source,
-              scene.type
+              scene.type,
+              projAR
             );
             
             // Resolve product image URL for browser access - ensure proper public path
@@ -3334,7 +3378,8 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
         }
       } else {
         // This is in createProductVideoProject context - always sanitize product terms
-        const imageResult = await this.generateImage(scene.background.source, scene.id, true);
+        const projAR2 = project.outputFormat?.aspectRatio || '16:9';
+        const imageResult = await this.generateImage(scene.background.source, scene.id, true, 'content', projAR2);
 
         if (imageResult.success) {
           updatedProject.assets.images.push({
@@ -4677,7 +4722,8 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
     customPrompt?: string,
     provider?: string,
     generationMode?: string,
-    sourceImageUrl?: string
+    sourceImageUrl?: string,
+    aspectRatio?: string
   ): Promise<{ success: boolean; newImageUrl?: string; source?: string; error?: string }> {
     const sceneIndex = project.scenes.findIndex(s => s.id === sceneId);
     if (sceneIndex < 0) {
@@ -4689,8 +4735,9 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
     
     const isProductVideo = (project.assets?.productImages?.length ?? 0) > 0;
     const mode = generationMode || 'auto';
+    const imgAspectRatio = aspectRatio || '16:9';
     
-    console.log(`[Regenerate] Image for scene ${sceneId} with prompt: ${prompt.substring(0, 60)}... (mode: ${mode}, isProductVideo: ${isProductVideo}, provider: ${provider || 'default'})`);
+    console.log(`[Regenerate] Image for scene ${sceneId} with prompt: ${prompt.substring(0, 60)}... (mode: ${mode}, isProductVideo: ${isProductVideo}, provider: ${provider || 'default'}, aspectRatio: ${imgAspectRatio})`);
     console.log(`[Regenerate] Scene type: ${scene.type}, Visual direction: ${(scene.visualDirection || 'none').substring(0, 50)}`);
     
     if (provider) {
@@ -4722,7 +4769,7 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
     if (mode === 't2i') {
       console.log(`[Regenerate] Explicit T2I mode - generating from text only`);
       try {
-        const imageResult = await this.generateImage(prompt, sceneId, isProductVideo);
+        const imageResult = await this.generateImage(prompt, sceneId, isProductVideo, 'content', imgAspectRatio);
         if (imageResult.success && imageResult.url) {
           return { success: true, newImageUrl: imageResult.url, source: imageResult.source };
         }
@@ -4773,9 +4820,8 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
     
     if (wantsPerson) {
       console.log(`[Regenerate] Prompt requests person - using generateImage (not background-only)`);
-      // Use generateImage which allows people and enforces gender via enhanceImagePrompt
       try {
-        const imageResult = await this.generateImage(prompt, sceneId, isProductVideo);
+        const imageResult = await this.generateImage(prompt, sceneId, isProductVideo, 'content', imgAspectRatio);
         if (imageResult.success && imageResult.url) {
           return { success: true, newImageUrl: imageResult.url, source: imageResult.source };
         }
@@ -4788,7 +4834,7 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
     // Try content image generation first (for non-person prompts)
     if (this.isContentScene(scene.type)) {
       try {
-        const result = await this.generateContentImage(scene, project.title);
+        const result = await this.generateContentImage(scene, project.title, imgAspectRatio);
         if (result.imageUrl) {
           return { success: true, newImageUrl: result.imageUrl, source: result.source };
         }
@@ -4800,7 +4846,7 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
     
     // Try AI background generation (NO PEOPLE - for product overlays)
     try {
-      const bgResult = await this.generateAIBackground(prompt, scene.type);
+      const bgResult = await this.generateAIBackground(prompt, scene.type, imgAspectRatio);
       if (bgResult.backgroundUrl) {
         return { success: true, newImageUrl: bgResult.backgroundUrl, source: bgResult.source };
       }
