@@ -4122,13 +4122,15 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, asy
     console.log(`[Phase9B-Async] Relative source image URL: ${relativeSourceUrl?.substring(0, 80) || 'none (T2V mode)'}`);
     
     // Convert relative URL to signed public URL for external video providers
+    // CRITICAL: For I2V, do NOT pad/crop the reference image - send original as-is
+    // AI video models handle aspect ratio internally and padding distorts the reference
     let finalSourceImageUrl: string | undefined = undefined;
     if (relativeSourceUrl) {
       const projectAspectRatio = (projectData as any).outputFormat?.aspectRatio || (projectData as any).settings?.aspectRatio || '16:9';
-      const publicUrl = await getPublicUrlForBrandAsset(relativeSourceUrl, projectAspectRatio);
+      const publicUrl = await getPublicUrlForBrandAsset(relativeSourceUrl);
       if (publicUrl) {
         finalSourceImageUrl = publicUrl;
-        console.log(`[Phase9B-Async] ✓ Converted to public signed URL for I2V (aspect ratio: ${projectAspectRatio})`);
+        console.log(`[Phase9B-Async] ✓ Converted to public URL for I2V (NO padding - original image preserved)`);
       } else {
         console.log(`[Phase9B-Async] ⚠ Could not convert to public URL, falling back to T2V mode`);
       }
