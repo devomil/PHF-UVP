@@ -108,22 +108,29 @@ export function SceneOverlayEditor({
 
     const formData = new FormData();
     formData.append("file", file);
-    formData.append("type", "image");
     formData.append("name", file.name);
+    formData.append("category", "overlay");
 
     try {
-      const res = await fetch("/api/asset-library/upload", {
+      const res = await fetch("/api/videos/uploads", {
         method: "POST",
         credentials: "include",
         body: formData,
       });
-      const data = await res.json();
-      if (data.url || data.asset?.url) {
-        addOverlay(data.url || data.asset.url, file.name);
-        toast({ title: "Overlay Added", description: file.name });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || "Upload failed");
       }
-    } catch {
-      toast({ title: "Upload failed", variant: "destructive" });
+      const data = await res.json();
+      const url = data.url;
+      if (url) {
+        addOverlay(url, file.name);
+        toast({ title: "Overlay Added", description: file.name });
+      } else {
+        toast({ title: "Upload failed", description: "No URL returned", variant: "destructive" });
+      }
+    } catch (err: any) {
+      toast({ title: "Upload failed", description: err.message || "Unknown error", variant: "destructive" });
     }
 
     if (fileInputRef.current) fileInputRef.current.value = "";
