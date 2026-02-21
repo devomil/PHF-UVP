@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import {
   Play, Pause, Volume2, VolumeX, Maximize2, MoreVertical,
@@ -6,6 +6,7 @@ import {
   CheckCircle2, ImagePlus, ChevronDown, Edit2, FolderOpen
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { SceneOverlayEditor, type SceneOverlayItem } from "./scene-overlay-editor";
 
 const sceneTypes = [
   "hook", "problem", "agitation", "solution", "benefit",
@@ -40,9 +41,10 @@ interface EnhancedSceneEditorProps {
   sceneIndex: number;
   projectId: string;
   onClose: () => void;
+  aspectRatio?: string;
 }
 
-export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose }: EnhancedSceneEditorProps) {
+export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, aspectRatio = "16:9" }: EnhancedSceneEditorProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -72,10 +74,48 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose }: E
   const [regeneratingType, setRegeneratingType] = useState<'video' | 'image' | null>(null);
   const [regenStartedAt, setRegenStartedAt] = useState<number | null>(null);
   const [regenElapsed, setRegenElapsed] = useState(0);
+  const [sceneOverlays, setSceneOverlays] = useState<SceneOverlayItem[]>(
+    () => scene.overlayItems || []
+  );
+  const overlayDebounceRef = useRef<NodeJS.Timeout | null>(null);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const prevVideoUrl = useRef(videoUrl);
   const prevImageUrl = useRef(imageUrl);
+
+  const handleOverlayChange = useCallback((newOverlays: SceneOverlayItem[]) => {
+    setSceneOverlays(newOverlays);
+    if (overlayDebounceRef.current) clearTimeout(overlayDebounceRef.current);
+    overlayDebounceRef.current = setTimeout(() => {
+      fetch(`/api/universal-video/projects/${projectId}/scenes/${sceneId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ overlayItems: newOverlays }),
+      }).then((res) => {
+        if (res.ok) {
+          queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+        } else {
+          toast({ title: "Failed to save overlays", variant: "destructive" });
+        }
+      }).catch(() => {
+        toast({ title: "Failed to save overlays", variant: "destructive" });
+      });
+    }, 800);
+  }, [projectId, sceneId, queryClient, toast]);
+
+  useEffect(() => {
+    return () => {
+      if (overlayDebounceRef.current) clearTimeout(overlayDebounceRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    const incoming = scene.overlayItems || [];
+    if (JSON.stringify(incoming) !== JSON.stringify(sceneOverlays)) {
+      setSceneOverlays(incoming);
+    }
+  }, [scene.overlayItems]);
 
   useEffect(() => {
     if (regeneratingType && (
@@ -716,6 +756,22 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose }: E
           </div>
         </div>
       </div>
+
+      {/* Scene Overlays Section */}
+      <SceneOverlayEditor
+        overlays={sceneOverlays}
+        onChange={handleOverlayChange}
+        previewWidth={(() => {
+          const parts = aspectRatio.split(":");
+          return parseInt(parts[0]) || 16;
+        })()}
+        previewHeight={(() => {
+          const parts = aspectRatio.split(":");
+          return parseInt(parts[1]) || 9;
+        })()}
+        backgroundUrl={hasVideo ? videoUrl : hasImage ? imageUrl : undefined}
+        backgroundType={hasVideo ? "video" : hasImage ? "image" : undefined}
+      />
 
       {/* Divider */}
       <div className="border-t" style={{ borderColor: "var(--border-subtle)" }} />
