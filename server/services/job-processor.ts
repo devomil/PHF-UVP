@@ -48,7 +48,7 @@ export async function processVideoJob(jobId: string) {
             visual: {
               status: "generating",
               url: null,
-              provider: job.provider || "kling",
+              provider: job.provider || "auto",
               error: null,
               updatedAt: new Date().toISOString(),
             },
@@ -63,7 +63,7 @@ export async function processVideoJob(jobId: string) {
       duration: job.duration || 6,
       aspectRatio: (job.aspectRatio as "16:9" | "9:16" | "1:1") || "16:9",
       sceneType: job.sceneType || "general",
-      preferredProvider: job.provider || "kling",
+      preferredProvider: job.provider || "auto",
       negativePrompt: job.negativePrompt || undefined,
       imageUrl: job.sourceImageUrl || undefined,
     });
@@ -106,7 +106,7 @@ export async function processVideoJob(jobId: string) {
                 videoUrl: isVideo ? finalUrl : undefined,
                 imageUrl: !isVideo ? finalUrl : undefined,
                 type: isVideo ? 'video' : 'image',
-                provider: result.provider || job.provider || "kling",
+                provider: result.provider || job.provider || "auto",
                 duration: result.duration,
                 cost: result.cost,
                 generationTimeMs: result.generationTimeMs,
@@ -144,7 +144,7 @@ export async function processVideoJob(jobId: string) {
               visual: {
                 status: "failed",
                 url: null,
-                provider: job.provider || "kling",
+                provider: job.provider || "auto",
                 error: errorMsg,
                 updatedAt: new Date().toISOString(),
               },
@@ -189,7 +189,7 @@ export async function processVideoJob(jobId: string) {
             visual: {
               status: "failed",
               url: null,
-              provider: job.provider || "kling",
+              provider: job.provider || "auto",
               error: errorMsg,
               updatedAt: new Date().toISOString(),
             },

@@ -143,7 +143,7 @@ class AIVideoService {
     // PHASE 6R: Optimize prompt - strip jargon, simplify for AI video generation
     const generationMode = options.imageUrl ? 'i2v' : 't2v';
     
-    const rawProvider = options.preferredProvider || 'kling';
+    const rawProvider = options.preferredProvider && options.preferredProvider !== 'auto' ? options.preferredProvider : 'kling';
     const normalizedProvider = rawProvider.split('-')[0];
     
     // Detect if product should be included based on scene type
@@ -179,7 +179,7 @@ class AIVideoService {
     let providerOrder: string[];
     const qualityTier = options.qualityTier || 'standard';
     
-    if (enhancedOptions.preferredProvider) {
+    if (enhancedOptions.preferredProvider && enhancedOptions.preferredProvider !== 'auto') {
       providerOrder = [enhancedOptions.preferredProvider];
       console.log(`[AIVideo] Using STRICT user-selected provider: ${enhancedOptions.preferredProvider} (no fallbacks)`);
     } else if (options.narration && options.prompt) {
@@ -194,7 +194,7 @@ class AIVideoService {
 
     // Map base providers to tier-appropriate versions
     // Skip tier mapping when user explicitly selected a provider
-    const isExplicitSelection = !!enhancedOptions.preferredProvider;
+    const isExplicitSelection = !!enhancedOptions.preferredProvider && enhancedOptions.preferredProvider !== 'auto';
     const tierAdjustedOrder = isExplicitSelection ? providerOrder : providerOrder.map(baseProvider => {
       const baseName = baseProvider.split('-')[0];
       const tierVersions = TIER_PROVIDER_VERSIONS[baseName];
