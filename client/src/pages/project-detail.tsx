@@ -1176,9 +1176,9 @@ export default function ProjectDetail({ params }: { params?: { id: string } }) {
                 Aspect Ratio
               </p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="relative">
               <select
-                className="text-xl font-bold bg-transparent border-none outline-none cursor-pointer appearance-none pr-6"
+                className="text-xl font-bold bg-transparent border-none outline-none cursor-pointer appearance-none w-full pr-8"
                 style={{ color: "var(--text-primary)" }}
                 value={outputFormat.aspectRatio || "16:9"}
                 onChange={async (e) => {
@@ -1200,12 +1200,12 @@ export default function ProjectDetail({ params }: { params?: { id: string } }) {
                   }
                 }}
               >
-                <option value="16:9">16:9</option>
-                <option value="9:16">9:16</option>
-                <option value="1:1">1:1</option>
-                <option value="4:3">4:3</option>
+                <option value="16:9" style={{ backgroundColor: "var(--surface)", color: "var(--text-primary)" }}>16:9</option>
+                <option value="9:16" style={{ backgroundColor: "var(--surface)", color: "var(--text-primary)" }}>9:16</option>
+                <option value="1:1" style={{ backgroundColor: "var(--surface)", color: "var(--text-primary)" }}>1:1</option>
+                <option value="4:3" style={{ backgroundColor: "var(--surface)", color: "var(--text-primary)" }}>4:3</option>
               </select>
-              <ChevronDown className="w-4 h-4 absolute right-4 bottom-4 pointer-events-none" style={{ color: "var(--text-muted)" }} />
+              <ChevronDown className="w-4 h-4 absolute right-0 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: "var(--text-muted)" }} />
             </div>
           </div>
         </div>
