@@ -1169,16 +1169,44 @@ export default function ProjectDetail({ params }: { params?: { id: string } }) {
               </div>
             )}
           </div>
-          <div className="border rounded-xl p-4" style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)" }}>
+          <div className="border rounded-xl p-4 group relative" style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)" }}>
             <div className="flex items-center gap-2 mb-2">
               <Monitor className="w-4 h-4" style={{ color: "var(--text-muted)" }} />
               <p className="text-xs uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
-                {isQuickCreate ? "Aspect Ratio" : "Platform"}
+                Aspect Ratio
               </p>
             </div>
-            <p className="text-xl font-bold" style={{ color: "var(--text-primary)" }}>
-              {isQuickCreate ? (outputFormat.aspectRatio || "16:9") : (outputFormat.platform || "YouTube")}
-            </p>
+            <div className="flex items-center gap-2">
+              <select
+                className="text-xl font-bold bg-transparent border-none outline-none cursor-pointer appearance-none pr-6"
+                style={{ color: "var(--text-primary)" }}
+                value={outputFormat.aspectRatio || "16:9"}
+                onChange={async (e) => {
+                  const newRatio = e.target.value;
+                  try {
+                    const res = await fetch(`/api/universal-video/projects/${project.id}/aspect-ratio`, {
+                      method: 'PATCH',
+                      headers: { 'Content-Type': 'application/json' },
+                      credentials: 'include',
+                      body: JSON.stringify({ aspectRatio: newRatio }),
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                      queryClient.invalidateQueries({ queryKey: ["project", project.id] });
+                      toast({ title: "Aspect Ratio Updated", description: `Set to ${newRatio}` });
+                    }
+                  } catch (err) {
+                    toast({ title: "Error", description: "Failed to update aspect ratio", variant: "destructive" });
+                  }
+                }}
+              >
+                <option value="16:9">16:9</option>
+                <option value="9:16">9:16</option>
+                <option value="1:1">1:1</option>
+                <option value="4:3">4:3</option>
+              </select>
+              <ChevronDown className="w-4 h-4 absolute right-4 bottom-4 pointer-events-none" style={{ color: "var(--text-muted)" }} />
+            </div>
           </div>
         </div>
 

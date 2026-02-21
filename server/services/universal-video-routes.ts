@@ -1379,6 +1379,48 @@ router.patch('/projects/:projectId/media-mode', isAuthenticated, async (req: Req
   }
 });
 
+router.patch('/projects/:projectId/aspect-ratio', isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const userId = (req.user as any)?.id;
+    const { projectId } = req.params;
+    const { aspectRatio } = req.body;
+    
+    const validRatios = ['16:9', '9:16', '1:1', '4:3'];
+    
+    if (!validRatios.includes(aspectRatio)) {
+      return res.status(400).json({ success: false, error: 'Invalid aspect ratio. Must be one of: ' + validRatios.join(', ') });
+    }
+    
+    const projectData = await getProjectFromDb(projectId);
+    if (!projectData) {
+      return res.status(404).json({ success: false, error: 'Project not found' });
+    }
+    
+    if (projectData.ownerId !== userId) {
+      return res.status(403).json({ success: false, error: 'Access denied' });
+    }
+    
+    if (!projectData.outputFormat) {
+      (projectData as any).outputFormat = {};
+    }
+    projectData.outputFormat!.aspectRatio = aspectRatio;
+    projectData.updatedAt = new Date().toISOString();
+    await saveProjectToDb(projectData, projectData.ownerId);
+    
+    console.log(`[AspectRatio] Updated aspect ratio for project ${projectId}: ${aspectRatio}`);
+    
+    res.json({ 
+      success: true, 
+      aspectRatio,
+      project: projectData,
+      message: `Aspect ratio set to ${aspectRatio}`
+    });
+  } catch (error: any) {
+    console.error('[AspectRatio] Error updating aspect ratio:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 router.patch('/projects/:projectId/render-settings', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
