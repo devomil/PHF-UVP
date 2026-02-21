@@ -4436,6 +4436,7 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
           },
           textOverlays: [],
           transitions: { type: 'fade', duration: 0.5 },
+          overlayItems: qcAssets.overlayItems || [],
         };
         
         preparedProject.scenes = [scene];

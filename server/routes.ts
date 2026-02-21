@@ -436,6 +436,7 @@ export function registerRoutes(app: Express) {
           mood: qc.music?.mood || null,
           error: qc.music?.error || null,
         },
+        overlayItems: qc.overlayItems || [],
         jobs: jobs.map((j) => ({
           jobId: j.jobId,
           status: j.status,
@@ -457,6 +458,50 @@ export function registerRoutes(app: Express) {
     } catch (error) {
       console.error("Failed to fetch Quick Create assets:", error);
       res.status(500).json({ error: "Failed to fetch assets" });
+    }
+  });
+
+  app.patch("/api/projects/:projectId/quick-create/overlays", async (req, res) => {
+    try {
+      if (!req.isAuthenticated() || !req.user) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+      const { projectId } = req.params;
+      const userId = (req.user as any).id;
+      const { overlayItems } = req.body;
+
+      const [project] = await db
+        .select()
+        .from(universalVideoProjects)
+        .where(eq(universalVideoProjects.projectId, projectId))
+        .limit(1);
+
+      if (!project || project.ownerId !== userId) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+
+      const outputFormat = (project.outputFormat as any) || {};
+      if (outputFormat.platform !== "quick-create") {
+        return res.status(400).json({ error: "Not a Quick Create project" });
+      }
+
+      const currentAssets = (project.assets as any) || {};
+      const updatedAssets = {
+        ...currentAssets,
+        quickCreate: {
+          ...currentAssets.quickCreate,
+          overlayItems: Array.isArray(overlayItems) ? overlayItems : [],
+        },
+      };
+
+      await db.update(universalVideoProjects).set({
+        assets: updatedAssets,
+      }).where(eq(universalVideoProjects.projectId, projectId));
+
+      res.json({ success: true, overlayItems: updatedAssets.quickCreate.overlayItems });
+    } catch (error) {
+      console.error("Failed to save Quick Create overlays:", error);
+      res.status(500).json({ error: "Failed to save overlays" });
     }
   });
 

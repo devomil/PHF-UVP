@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { ProviderCatalogSelector } from "@/components/video/provider-catalog-selector";
 import { useToast } from "@/hooks/use-toast";
 import { EnhancedSceneEditor } from "@/components/video/enhanced-scene-editor";
+import { SceneOverlayEditor, SceneOverlayItem } from "@/components/video/scene-overlay-editor";
 
 const statusDot: Record<string, string> = {
   pending: "bg-gray-500",
@@ -2540,6 +2541,8 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
   const [voiceFilter, setVoiceFilter] = useState<"all" | "male" | "female">("all");
   const [musicMood, setMusicMood] = useState("auto");
   const [musicGenerator, setMusicGenerator] = useState("auto");
+  const [overlayItems, setOverlayItems] = useState<SceneOverlayItem[]>([]);
+  const [overlaysLoaded, setOverlaysLoaded] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -2566,6 +2569,10 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
     }
     if (assetsQuery.data?.visual?.provider) {
       setSelectedProvider(assetsQuery.data.visual.provider);
+    }
+    if (assetsQuery.data?.overlayItems && !overlaysLoaded) {
+      setOverlayItems(assetsQuery.data.overlayItems);
+      setOverlaysLoaded(true);
     }
   }, [assetsQuery.data]);
 
@@ -2632,6 +2639,20 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
       toast({ title: "Error", description: err.message, variant: "destructive" });
     },
   });
+
+  const saveOverlayTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleOverlayChange = useCallback((items: SceneOverlayItem[]) => {
+    setOverlayItems(items);
+    if (saveOverlayTimeout.current) clearTimeout(saveOverlayTimeout.current);
+    saveOverlayTimeout.current = setTimeout(() => {
+      fetch(`/api/projects/${projectId}/quick-create/overlays`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ overlayItems: items }),
+      }).catch(() => {});
+    }, 800);
+  }, [projectId]);
 
   const assets = assetsQuery.data || { visual: { status: "pending" }, voiceover: { status: "pending" }, music: { status: "pending" } };
   const isVideoMode = project.mediaMode !== "image";
@@ -2785,6 +2806,38 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
               </div>
             </div>
           </div>
+
+          {assets.visual?.status === "completed" && assets.visual?.url && (
+            <div className="border rounded-xl p-4" style={{ borderColor: "var(--border-subtle)", backgroundColor: "rgba(0,0,0,0.15)" }}>
+              <div className="flex items-center gap-2 mb-3">
+                <ImagePlus className="w-5 h-5 text-cyan-400" />
+                <h3 className="font-medium text-sm" style={{ color: "var(--text-primary)" }}>Scene Overlays</h3>
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
+                  {overlayItems.length} overlay{overlayItems.length !== 1 ? "s" : ""}
+                </span>
+              </div>
+              <SceneOverlayEditor
+                overlays={overlayItems}
+                onChange={handleOverlayChange}
+                previewWidth={(() => {
+                  const ar = (project.outputFormat?.aspectRatio || "16:9");
+                  if (ar === "9:16") return 1080;
+                  if (ar === "1:1") return 1024;
+                  if (ar === "4:3") return 1440;
+                  return 1920;
+                })()}
+                previewHeight={(() => {
+                  const ar = (project.outputFormat?.aspectRatio || "16:9");
+                  if (ar === "9:16") return 1920;
+                  if (ar === "1:1") return 1024;
+                  if (ar === "4:3") return 1080;
+                  return 1080;
+                })()}
+                backgroundUrl={assets.visual.url}
+                backgroundType={project.mediaMode === "image" ? "image" : "video"}
+              />
+            </div>
+          )}
 
           {isVideoMode && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
