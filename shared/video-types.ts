@@ -189,6 +189,18 @@ export interface Scene {
   // Phase 13: Audio and motion control settings
   audioSettings?: AudioGenerationSettings;
   motionControlSettings?: MotionControlSettings;
+  // Custom image overlays (logos, badges, watermarks) positioned by user
+  overlayItems?: Array<{
+    id: string;
+    url: string;
+    name: string;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    opacity: number;
+    locked: boolean;
+  }>;
   // Phase 13D: Reference image configuration
   referenceConfig?: ReferenceConfig;
   // Phase 14A: Brand requirement analysis results
