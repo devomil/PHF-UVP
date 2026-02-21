@@ -1274,11 +1274,11 @@ class PiAPIVideoService {
       
       // Map user's Image Fidelity slider (0-1 where 1 = max fidelity) to cfg_scale
       // cfg_scale: 0.0 = preserve source exactly, 1.0 = follow prompt completely
-      // Too low (0.05) produces a nearly static image that looks like an overlay
-      // We need enough freedom for actual camera/environmental animation
-      // Default fidelity=1.0 → cfg=0.3 (good product fidelity with real motion)
-      // fidelity=0.5 → cfg=0.45, fidelity=0.0 → cfg=0.6 (creative)
-      const cfgScale = Math.max(0.25, 0.6 - imageControlStrength * 0.35); // Range: 0.6 (creative) to 0.25 (high fidelity)
+      // For I2V product shots: keep LOW to preserve the actual product image
+      // cfg_scale 0.25+ causes Kling to reimagine the product entirely (wrong bottle/labels)
+      // Motion comes from the prompt directives, NOT from cfg_scale freedom
+      // Default fidelity=1.0 → cfg=0.1 (preserve product), fidelity=0.0 → cfg=0.5 (creative)
+      const cfgScale = Math.max(0.1, 0.5 - imageControlStrength * 0.4); // Range: 0.5 (creative) to 0.1 (high fidelity)
       
       // Map motion strength to animation intensity
       // Kling uses a subtle approach - lower values mean less dramatic motion
@@ -1318,20 +1318,22 @@ class PiAPIVideoService {
       
       console.log(`[PiAPI I2V] Kling prompt: ${klingI2vPrompt}`);
       
-      // Include camera_control from intelligent motion control system (Phase 16)
-      const motionParams = options.motionControl ? mapToKlingMotion(options.motionControl) : {};
+      // For I2V mode: Do NOT include camera_control params - they conflict with first-frame animation
+      // camera_control type "none" was suppressing I2V motion entirely, making the video static
+      // Motion direction is controlled via the prompt text instead (e.g., "smooth push towards product")
+      // Only use camera_control for reference mode (new content generation)
+      const motionParams = (options.motionControl && requiresNewContent) ? mapToKlingMotion(options.motionControl) : {};
       if (options.motionControl) {
-        console.log(`[PiAPI I2V] Motion control: ${options.motionControl.camera_movement} @ ${options.motionControl.intensity}`);
+        console.log(`[PiAPI I2V] Motion control: ${options.motionControl.camera_movement} @ ${options.motionControl.intensity} (${requiresNewContent ? 'APPLIED' : 'SKIPPED for I2V animate mode - using prompt-based motion'})`);
       }
       
       if (requiresNewContent) {
-        // Reference mode: use reference_images for style guidance while generating new content
         return {
           model: 'kling',
           task_type: 'video_generation',
           input: {
             prompt: klingI2vPrompt,
-            reference_images: [options.imageUrl],  // Style reference for new content
+            reference_images: [options.imageUrl],
             duration: options.duration,
             aspect_ratio: options.aspectRatio,
             negative_prompt: i2vNegativePrompt,
@@ -1344,6 +1346,7 @@ class PiAPIVideoService {
       }
       
       // Animation mode: use image_url for first-frame animation
+      // No camera_control here - motion comes from prompt directives
       const isLegacyVersion = version === '1.6' || version === '1.0';
       const klingInput: any = {
         prompt: klingI2vPrompt,
@@ -1354,7 +1357,6 @@ class PiAPIVideoService {
         mode,
         version,
         cfg_scale: cfgScale,
-        ...motionParams,
       };
       if (isLegacyVersion) {
         klingInput.elements = [{ image_url: options.imageUrl }];
