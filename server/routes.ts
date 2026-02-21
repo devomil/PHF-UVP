@@ -14,7 +14,7 @@ import mediaAssetRouter from "./services/media-asset-routes";
 import assetLibraryRouter from "./services/asset-library-routes";
 import uploadRouter from "./services/upload-routes";
 import brandSettingsRouter from "./services/brand-settings-routes";
-import { processVideoJob } from "./services/job-processor";
+import { processVideoJob, recoverStuckJobs } from "./services/job-processor";
 import { universalVideoService } from "./services/universal-video-service";
 import { aiMusicService } from "./services/ai-music-service";
 import { getBrandContext } from "./services/brand-settings-service";
@@ -57,6 +57,12 @@ export function registerRoutes(app: Express) {
     .catch((err: any) => {
       console.warn("[Routes] Scene video generation worker not started:", err.message?.substring(0, 100));
     });
+
+  setTimeout(() => {
+    recoverStuckJobs().then(() => {
+      console.log("[Routes] Stuck job recovery check completed");
+    });
+  }, 3000);
   app.get("/api/health", (_req, res) => {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
   });
@@ -255,8 +261,8 @@ export function registerRoutes(app: Express) {
         await db.insert(videoGenerationJobs).values({
           jobId,
           projectId,
-          sceneId: "scene-1",
-          provider: provider === "auto" ? "kling" : (provider || "kling"),
+          sceneId: "quick-create",
+          provider: provider || "auto",
           status: "pending",
           prompt: prompt || "",
           duration: outputType === "video" ? (duration || 6) : undefined,
@@ -352,8 +358,8 @@ export function registerRoutes(app: Express) {
       await db.insert(videoGenerationJobs).values({
         jobId,
         projectId,
-        sceneId: "scene-1",
-        provider: originalProvider,
+        sceneId: "quick-create",
+        provider: originalProvider || "auto",
         status: "pending",
         prompt: project.description || "",
         duration: project.totalDuration || 6,
@@ -514,7 +520,7 @@ export function registerRoutes(app: Express) {
       await db.insert(videoGenerationJobs).values({
         jobId,
         projectId,
-        sceneId: "scene-1",
+        sceneId: "quick-create",
         provider: finalProvider,
         status: "pending",
         prompt: finalPrompt,

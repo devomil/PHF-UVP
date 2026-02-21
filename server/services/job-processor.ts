@@ -3,6 +3,34 @@ import { videoGenerationJobs, universalVideoProjects } from "../../shared/schema
 import { eq } from "drizzle-orm";
 import { aiVideoService } from "./ai-video-service";
 
+export async function recoverStuckJobs() {
+  try {
+    const stuckJobs = await db
+      .select()
+      .from(videoGenerationJobs)
+      .where(eq(videoGenerationJobs.status, "processing"));
+
+    for (const job of stuckJobs) {
+      const stuckMinutes = (Date.now() - new Date(job.updatedAt || job.createdAt || Date.now()).getTime()) / 60000;
+      if (stuckMinutes > 2) {
+        console.log(`[JobProcessor] Recovering stuck job ${job.jobId} (stuck ${Math.round(stuckMinutes)}min, provider: ${job.provider})`);
+        await db
+          .update(videoGenerationJobs)
+          .set({ status: "pending", startedAt: null, updatedAt: new Date() })
+          .where(eq(videoGenerationJobs.jobId, job.jobId));
+        processVideoJob(job.jobId).catch((err) => {
+          console.error(`[JobProcessor] Recovery retry failed for ${job.jobId}:`, err.message);
+        });
+      }
+    }
+    if (stuckJobs.length > 0) {
+      console.log(`[JobProcessor] Checked ${stuckJobs.length} processing jobs for recovery`);
+    }
+  } catch (err: any) {
+    console.error("[JobProcessor] Stuck job recovery error:", err.message);
+  }
+}
+
 export async function processVideoJob(jobId: string) {
   console.log(`[JobProcessor] Processing job ${jobId}`);
 

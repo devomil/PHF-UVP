@@ -1,6 +1,6 @@
 import { db } from "./db";
 import { users, videoGenerationJobs } from "../shared/schema";
-import { eq, and, desc, or, lt, sql } from "drizzle-orm";
+import { eq, and, ne, desc, or, lt, sql } from "drizzle-orm";
 import type { VideoGenerationJob, InsertVideoGenerationJob } from "../shared/schema";
 
 export interface IStorage {
@@ -60,7 +60,10 @@ export class DatabaseStorage implements IStorage {
 
   async getPendingVideoGenerationJobs(): Promise<VideoGenerationJob[]> {
     return db.select().from(videoGenerationJobs)
-      .where(eq(videoGenerationJobs.status, "pending"))
+      .where(and(
+        eq(videoGenerationJobs.status, "pending"),
+        ne(videoGenerationJobs.sceneId, "quick-create")
+      ))
       .orderBy(videoGenerationJobs.createdAt);
   }
 
