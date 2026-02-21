@@ -587,6 +587,7 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
                         sceneIndex={index}
                         projectId={projectId}
                         onClose={() => setExpandedSceneId(null)}
+                        aspectRatio={project?.outputFormat?.aspectRatio || "16:9"}
                       />
                     )}
                   </div>
