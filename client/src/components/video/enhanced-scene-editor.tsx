@@ -146,7 +146,8 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose }: E
     enabled: showLibrary,
   });
 
-  const providerUsed = scene.assets?.videoProvider || scene.assets?.imageProvider || scene.generationMethod || null;
+  const rawProvider = scene.assets?.videoProvider || scene.assets?.imageProvider || null;
+  const providerUsed = rawProvider && !['t2i', 't2v', 'i2v', 'auto'].includes(rawProvider.toLowerCase()) ? rawProvider : null;
   const promptUsed = scene.assets?.prompt || scene.visualDirection || "";
 
   useEffect(() => {

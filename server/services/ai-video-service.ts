@@ -120,60 +120,66 @@ class AIVideoService {
       styleConfig.defaultContentTypes[options.sceneType as keyof typeof styleConfig.defaultContentTypes] ||
       'lifestyle';
     
-    // Build enhanced prompt with style modifiers
-    const styleEnhancedPrompt = this.applyStyleToPrompt(options.prompt, styleConfig);
-    
-    console.log(`[AIVideo] Using style: ${styleConfig.name}`);
-
-    // ENHANCE PROMPT WITH BRAND CONTEXT AND SAFETY
-    console.log(`[PromptEnhance] Enhancing prompt for ${options.sceneType} scene`);
-    const enhanced = await promptEnhancementService.enhanceVideoPrompt(
-      styleEnhancedPrompt,
-      {
-        sceneType: options.sceneType,
-        narration: options.narration,
-        mood: options.mood || styleConfig.promptModifiers.mood,
-        contentType,
-        excludeElements: styleConfig.negativePromptAdditions,
-      }
-    );
-    
-    console.log(`[AIVideo] Enhanced prompt for ${options.sceneType} scene`);
-    
-    // PHASE 6R: Optimize prompt - strip jargon, simplify for AI video generation
     const generationMode = options.imageUrl ? 'i2v' : 't2v';
     
-    const rawProvider = options.preferredProvider && options.preferredProvider !== 'auto' ? options.preferredProvider : 'kling';
-    const normalizedProvider = rawProvider.split('-')[0];
+    let enhancedOptions: AIVideoOptions;
     
-    // Detect if product should be included based on scene type
-    const includeProduct = ['product', 'solution', 'cta', 'feature'].includes(options.sceneType?.toLowerCase() || '');
-    
-    const optimized = optimizePrompt({
-      visualDescription: enhanced.prompt,
-      sceneType: options.sceneType || 'general',
-      includeProduct,
-      productName: 'product',
-      visualStyle: options.visualStyle || 'lifestyle',
-      generationMode,
-      provider: normalizedProvider,
-    });
-    
-    logPromptOptimization(options.prompt, optimized);
-    
-    // Analyze prompt quality
-    const analysis = analyzePrompt(optimized.prompt);
-    if (analysis.score < 70) {
-      console.log(`[AIVideo] Prompt quality warning (score: ${analysis.score}): ${analysis.issues.join(', ')}`);
+    if (generationMode === 'i2v') {
+      console.log(`[AIVideo] I2V mode - using minimal prompt (no style bloat)`);
+      console.log(`[AIVideo] Original I2V prompt: ${options.prompt.substring(0, 100)}...`);
+      enhancedOptions = {
+        ...options,
+        contentType,
+      };
+    } else {
+      // Build enhanced prompt with style modifiers
+      const styleEnhancedPrompt = this.applyStyleToPrompt(options.prompt, styleConfig);
+      
+      console.log(`[AIVideo] Using style: ${styleConfig.name}`);
+
+      console.log(`[PromptEnhance] Enhancing prompt for ${options.sceneType} scene`);
+      const enhanced = await promptEnhancementService.enhanceVideoPrompt(
+        styleEnhancedPrompt,
+        {
+          sceneType: options.sceneType,
+          narration: options.narration,
+          mood: options.mood || styleConfig.promptModifiers.mood,
+          contentType,
+          excludeElements: styleConfig.negativePromptAdditions,
+        }
+      );
+      
+      console.log(`[AIVideo] Enhanced prompt for ${options.sceneType} scene`);
+      
+      const rawProvider = options.preferredProvider && options.preferredProvider !== 'auto' ? options.preferredProvider : 'kling';
+      const normalizedProvider = rawProvider.split('-')[0];
+      
+      const includeProduct = ['product', 'solution', 'cta', 'feature'].includes(options.sceneType?.toLowerCase() || '');
+      
+      const optimized = optimizePrompt({
+        visualDescription: enhanced.prompt,
+        sceneType: options.sceneType || 'general',
+        includeProduct,
+        productName: 'product',
+        visualStyle: options.visualStyle || 'lifestyle',
+        generationMode,
+        provider: normalizedProvider,
+      });
+      
+      logPromptOptimization(options.prompt, optimized);
+      
+      const analysis = analyzePrompt(optimized.prompt);
+      if (analysis.score < 70) {
+        console.log(`[AIVideo] Prompt quality warning (score: ${analysis.score}): ${analysis.issues.join(', ')}`);
+      }
+      
+      enhancedOptions = {
+        ...options,
+        prompt: optimized.prompt,
+        negativePrompt: optimized.negativePrompt || enhanced.negativePrompt,
+        contentType,
+      };
     }
-    
-    // Create enhanced options with brand context, optimized prompt, and negative prompt
-    const enhancedOptions: AIVideoOptions = {
-      ...options,
-      prompt: optimized.prompt,
-      negativePrompt: optimized.negativePrompt || enhanced.negativePrompt,
-      contentType,
-    };
 
     // Select providers using intelligent Claude-based analysis when narration available
     let providerOrder: string[];
