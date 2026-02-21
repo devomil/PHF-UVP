@@ -3189,14 +3189,14 @@ router.get('/projects/:projectId/render-status', isAuthenticated, async (req: Re
 
 router.post('/generate-image', isAuthenticated, async (req: Request, res: Response) => {
   try {
-    const { prompt, sceneId } = req.body;
+    const { prompt, sceneId, aspectRatio } = req.body;
     
     if (!prompt) {
       return res.status(400).json({ success: false, error: 'Prompt required' });
     }
     
     universalVideoService.clearNotifications();
-    const result = await universalVideoService.generateImage(prompt, sceneId || 'standalone');
+    const result = await universalVideoService.generateImage(prompt, sceneId || 'standalone', false, 'content', aspectRatio || '16:9');
     const notifications = universalVideoService.getNotifications();
     
     res.json({
@@ -3922,7 +3922,8 @@ router.post('/:projectId/scenes/:sceneId/regenerate-image', isAuthenticated, asy
       return res.status(403).json({ success: false, error: 'Access denied' });
     }
     
-    const result = await universalVideoService.regenerateSceneImage(projectData, sceneId, prompt, provider, generationMode, sourceImageUrl);
+    const projectAspectRatio = (projectData as any).outputFormat?.aspectRatio || (projectData as any).settings?.aspectRatio || '16:9';
+    const result = await universalVideoService.regenerateSceneImage(projectData, sceneId, prompt, provider, generationMode, sourceImageUrl, projectAspectRatio);
     
     if (result.success && result.newImageUrl) {
       const sceneIndex = projectData.scenes.findIndex((s: Scene) => s.id === sceneId);
