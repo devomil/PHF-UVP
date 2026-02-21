@@ -30,6 +30,7 @@ import { BulletList } from "./components/BulletList";
 import { CTAButton } from "./components/CTAButton";
 import { KenBurnsImage } from "./components/KenBurnsImage";
 import { mapSceneToOverlays, shouldShowLogo, shouldShowWatermark } from "./utils/overlay-mapper";
+import { CustomImageOverlay } from "./components/CustomImageOverlay";
 import { MotionGraphicsScene } from "./compositions/MotionGraphicsScene";
 import { AnimatedEndCard } from "./components/endcard/AnimatedEndCard";
 import { EndCardConfig, PINE_HILL_FARM_END_CARD } from "../shared/config/end-card";
@@ -2613,6 +2614,20 @@ export const UniversalVideoComposition: React.FC<UniversalVideoProps> = ({
               fps={fps}
             />
           )}
+          
+          {/* Custom user-positioned image overlays (logos, badges, watermarks) */}
+          {scene.overlayItems?.map((overlay, overlayIdx) => (
+            <CustomImageOverlay
+              key={`custom-overlay-${scene.id}-${overlayIdx}`}
+              url={overlay.url}
+              x={overlay.x}
+              y={overlay.y}
+              width={overlay.width}
+              height={overlay.height}
+              opacity={overlay.opacity}
+              durationInFrames={durationInFrames}
+            />
+          ))}
         </AbsoluteFill>
       </Sequence>
     );

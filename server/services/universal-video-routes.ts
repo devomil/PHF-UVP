@@ -2822,6 +2822,16 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
       filmTreatmentConfig,
     };
     
+    // Resolve overlay item URLs to absolute for Lambda rendering
+    const appBaseUrl = `https://${req.get("host") || process.env.REPLIT_DEV_DOMAIN || process.env.REPLIT_DOMAINS || "localhost:5000"}`;
+    inputProps.scenes.forEach((scene: any) => {
+      if (scene.overlayItems && Array.isArray(scene.overlayItems)) {
+        scene.overlayItems = scene.overlayItems.map((item: any) => ({
+          ...item,
+          url: item.url && !item.url.startsWith("http") ? `${appBaseUrl}${item.url.startsWith("/") ? "" : "/"}${item.url}` : item.url,
+        }));
+      }
+    });
     // Log video B-roll details for each scene
     const videoScenes = inputProps.scenes.filter((s: any) => s.assets?.videoUrl);
     console.log('[UniversalVideo] Prepared input props for Lambda:', {
