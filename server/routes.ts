@@ -479,7 +479,7 @@ export function registerRoutes(app: Express) {
       }
 
       const finalPrompt = newPrompt || project.description || "";
-      const finalProvider = newProvider || "kling";
+      const finalProvider = newProvider || "auto";
       const finalDuration = newDuration || project.totalDuration || 6;
       const finalAspectRatio = newAspectRatio || outputFormat.aspectRatio || "16:9";
 

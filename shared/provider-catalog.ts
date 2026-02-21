@@ -15,9 +15,9 @@ export interface ProviderCatalogEntry {
 export const VIDEO_PROVIDER_CATALOG: ProviderCatalogEntry[] = [
   {
     id: 'kling',
-    name: 'Kling 1.0',
+    name: 'Kling 1.0 (Legacy)',
     family: 'Kling',
-    description: 'Original Kling model with solid video generation fundamentals. Good balance of speed and quality for general-purpose clips.',
+    description: 'Original Kling model. Superseded by Kling 2.6 — use Kling 2.6 or Auto-select for best results.',
     capabilities: ['T2V', 'I2V'],
     maxDuration: 10,
     costTier: 'standard',

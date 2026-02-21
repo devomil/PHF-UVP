@@ -2506,7 +2506,7 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
   const [expanded, setExpanded] = useState(true);
   const [editPrompt, setEditPrompt] = useState(false);
   const [promptText, setPromptText] = useState("");
-  const [selectedProvider, setSelectedProvider] = useState("kling");
+  const [selectedProvider, setSelectedProvider] = useState("auto");
   const [selectedVoiceId, setSelectedVoiceId] = useState("21m00Tcm4TlvDq8ikWAM");
   const [voiceFilter, setVoiceFilter] = useState<"all" | "male" | "female">("all");
   const [musicMood, setMusicMood] = useState("auto");
