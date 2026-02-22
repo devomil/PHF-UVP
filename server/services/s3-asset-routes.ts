@@ -24,6 +24,7 @@ const ASSET_CATEGORIES = {
   'badges': { prefix: 'brand/badges/', label: 'Awards & Badges', accept: '.png,.jpg,.jpeg,.svg,.webp' },
   'overlays': { prefix: 'brand/overlays/', label: 'Overlays & Watermarks', accept: '.png,.svg,.webp' },
   'end-cards': { prefix: 'brand/end-cards/', label: 'End Card Assets', accept: '.png,.jpg,.jpeg,.webp' },
+  'intro-backgrounds': { prefix: 'brand/intro-backgrounds/', label: 'Intro Backgrounds', accept: '.png,.jpg,.jpeg,.webp' },
   'fonts': { prefix: 'brand/fonts/', label: 'Custom Fonts', accept: '.ttf,.otf,.woff,.woff2' },
 } as const;
 

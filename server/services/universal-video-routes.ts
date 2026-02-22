@@ -476,6 +476,10 @@ const endCardSettingsSchema = z.object({
   socialAnimation: z.enum(['pop', 'fade', 'stagger']).default('pop'),
   ambientEffect: z.enum(['particles', 'bokeh', 'none']).default('bokeh'),
   ambientIntensity: z.number().min(0).max(100).default(40),
+  // Intro/Outro template selection
+  introTemplate: z.enum(['classic-glow', 'minimal', 'cinematic', 'elegant-fade']).default('classic-glow').optional(),
+  outroTemplate: z.enum(['animated', 'minimal', 'cinematic']).default('animated').optional(),
+  introBackgroundRandom: z.boolean().default(false).optional(),
 }).optional();
 
 // Phase 16: Sound design settings schema
@@ -2445,7 +2449,7 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
       }
       // Default to enabled if not explicitly disabled
       // Check S3 Render Assets (brand/end-cards/) for end card background image
-      const s3EndCard = await s3RenderAssetService.getEndCardAsset();
+      const s3EndCard = await s3RenderAssetService.getRandomEndCard();
       const endCardBgUrl = s3EndCard ? s3EndCard.url : null;
       if (s3EndCard) {
         console.log('[UniversalVideo] End card background from S3 Render Assets (brand/end-cards/):', s3EndCard.name);
@@ -2779,8 +2783,27 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
         }
       }
       
+      // Apply intro template from project settings
+      const introTemplate = (preparedProject as any).endCardSettings?.introTemplate || 'classic-glow';
+      plan.logoIntro.template = introTemplate;
+      plan.logoIntro.logoScale = 1.0;
+      
+      // Fetch S3 intro background for cinematic template or random variety
+      if (introTemplate === 'cinematic' || (preparedProject as any).endCardSettings?.introBackgroundRandom) {
+        try {
+          const introBg = await s3RenderAssetService.getRandomIntroBackground();
+          if (introBg) {
+            plan.logoIntro.backgroundImageUrl = introBg.url;
+            console.log('[Render]   Intro background from S3:', introBg.name);
+          }
+        } catch (bgErr: any) {
+          console.warn('[Render]   Intro background fetch failed:', bgErr.message);
+        }
+      }
+      
       brandInjectionPlan = plan;
       console.log('[Render] Brand injection plan:');
+      console.log(`[Render]   Intro template: ${introTemplate}`);
       console.log(`[Render]   Logo intro: ${plan.logoIntro.enabled ? 'ENABLED' : 'disabled'} (${plan.logoIntro.duration}s)`);
       console.log(`[Render]   Watermark: ${plan.watermark.enabled ? 'ENABLED' : 'disabled'} (${plan.watermark.position})`);
       console.log(`[Render]   CTA outro: ${plan.ctaOutro.enabled ? 'ENABLED' : 'disabled'} (${plan.ctaOutro.duration}s)`);

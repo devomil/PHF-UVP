@@ -1,4 +1,5 @@
 export interface EndCardConfig {
+  template?: 'animated' | 'minimal' | 'cinematic';
   enabled?: boolean;  // Phase 18E: Optional enabled flag (defaults to true)
   duration: number;
   background: {

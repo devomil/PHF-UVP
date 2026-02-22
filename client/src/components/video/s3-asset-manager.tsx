@@ -48,7 +48,7 @@ interface AssetCategory {
   accept: string;
 }
 
-type CategoryKey = 'sfx' | 'music' | 'logos' | 'badges' | 'overlays' | 'end-cards' | 'fonts';
+type CategoryKey = 'sfx' | 'music' | 'logos' | 'badges' | 'overlays' | 'end-cards' | 'intro-backgrounds' | 'fonts';
 
 const CATEGORY_ICONS: Record<CategoryKey, typeof Music> = {
   'sfx': Volume2,
@@ -57,6 +57,7 @@ const CATEGORY_ICONS: Record<CategoryKey, typeof Music> = {
   'badges': Award,
   'overlays': Layers,
   'end-cards': Film,
+  'intro-backgrounds': Film,
   'fonts': Type,
 };
 
@@ -119,6 +120,14 @@ const EXPECTED_FILES: Record<CategoryKey, { name: string; description: string; r
     { name: 'cta-visit-website.png', description: 'Visit website button overlay', required: false },
     { name: 'social-icons.png', description: 'Social media icons strip for end card', required: false },
   ],
+  'intro-backgrounds': [
+    { name: 'nature-landscape.jpg', description: 'Nature landscape intro background (1920x1080)', required: false },
+    { name: 'abstract-dark.jpg', description: 'Dark abstract intro background', required: false },
+    { name: 'cinematic-blur.jpg', description: 'Cinematic bokeh/blur background', required: false },
+    { name: 'farm-scenery.jpg', description: 'Farm/countryside scenery background', required: false },
+    { name: 'gradient-warm.jpg', description: 'Warm gradient background', required: false },
+    { name: 'gradient-cool.jpg', description: 'Cool gradient background', required: false },
+  ],
   'fonts': [
     { name: 'heading.ttf', description: 'Primary heading/title font', required: true },
     { name: 'body.ttf', description: 'Body text font', required: true },
@@ -135,6 +144,7 @@ const CATEGORY_FILE_HINTS: Record<CategoryKey, { examples: string[]; hint: strin
   'badges': { examples: ['organic-certified.png', 'award-2024.png', 'best-seller.png'], hint: 'Select a target filename below, then pick your image file', formatTip: 'PNG with transparent background recommended so badges layer cleanly over video. Minimum 400px wide.' },
   'overlays': { examples: ['watermark.png', 'lower-third.png', 'frame-border.png'], hint: 'Select a target filename below, then pick your image file', formatTip: 'PNG with transparency required for overlays. Match your video resolution (1920x1080 for HD) for best results.' },
   'end-cards': { examples: ['background-default.png', 'background-seasonal.jpg', 'cta-subscribe.png'], hint: 'Select a target filename below, then pick your image file', formatTip: 'PNG or JPG at 1920x1080 recommended. Use PNG for elements with transparency.' },
+  'intro-backgrounds': { examples: ['nature-landscape.jpg', 'cinematic-blur.jpg', 'farm-scenery.jpg'], hint: 'Select a target filename below, then pick your image file', formatTip: 'JPG or PNG at 1920x1080 recommended. Multiple backgrounds enable random selection for video variety.' },
   'fonts': { examples: ['heading.ttf', 'body.otf', 'accent.woff2'], hint: 'Select a target filename below, then pick your font file', formatTip: 'TTF or OTF formats work best for video rendering. WOFF/WOFF2 are web-only and may not render in videos.' },
 };
 
