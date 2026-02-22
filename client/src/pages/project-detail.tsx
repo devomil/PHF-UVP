@@ -1541,6 +1541,9 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
     soundDesign: { enabled: true, transitionSounds: true, impactSounds: true, ambientLayer: true, ambientType: "nature", masterVolume: 1.0 },
     filmTreatment: { enabled: true, colorGrade: "warm-cinematic", grainIntensity: 0.03, vignetteIntensity: 0.2, letterbox: "none" },
     transitions: { style: "crossfade", duration: 0.5 },
+    introTemplate: "classic-glow",
+    outroTemplate: "classic-glow",
+    introBackgroundRandom: false,
   };
 
   const settings = {
@@ -1895,6 +1898,75 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
               <p className="text-xs" style={{ color: "var(--text-muted)" }}>
                 Applied between scenes during final render composition.
               </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="border rounded-lg p-4 space-y-3" style={{ backgroundColor: "var(--app-bg)", borderColor: "var(--border-subtle)" }}>
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-purple-400" />
+                <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>Intro Template</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { value: 'classic-glow', label: 'Classic Glow', desc: 'Radiant glow behind logo' },
+                  { value: 'minimal', label: 'Minimal', desc: 'Clean fade-in' },
+                  { value: 'cinematic', label: 'Cinematic', desc: 'Full-screen background' },
+                  { value: 'elegant-fade', label: 'Elegant Fade', desc: 'Gradient sweep' },
+                ].map((t) => (
+                  <button
+                    key={t.value}
+                    onClick={() => saveMutation.mutate({ introTemplate: t.value })}
+                    className={`p-2 rounded-lg border text-left transition-all ${
+                      settings.introTemplate === t.value
+                        ? 'border-purple-500 bg-purple-500/10 ring-1 ring-purple-500'
+                        : 'hover:border-purple-500/40'
+                    }`}
+                    style={{ borderColor: settings.introTemplate === t.value ? undefined : "var(--border-subtle)" }}
+                  >
+                    <p className="text-xs font-medium" style={{ color: "var(--text-primary)" }}>{t.label}</p>
+                    <p className="text-[10px] mt-0.5" style={{ color: "var(--text-muted)" }}>{t.desc}</p>
+                  </button>
+                ))}
+              </div>
+              {settings.introTemplate === 'cinematic' && (
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <ToggleSwitch
+                    enabled={settings.introBackgroundRandom ?? false}
+                    onChange={(v) => saveMutation.mutate({ introBackgroundRandom: v })}
+                    label="Random background"
+                  />
+                </label>
+              )}
+            </div>
+
+            <div className="border rounded-lg p-4 space-y-3" style={{ backgroundColor: "var(--app-bg)", borderColor: "var(--border-subtle)" }}>
+              <div className="flex items-center gap-2">
+                <Film className="w-4 h-4 text-indigo-400" />
+                <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>Outro Template</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { value: 'classic-glow', label: 'Classic Glow', desc: 'Radiant glow behind logo' },
+                  { value: 'minimal', label: 'Minimal', desc: 'Clean fade-in' },
+                  { value: 'cinematic', label: 'Cinematic', desc: 'Full-screen background' },
+                  { value: 'elegant-fade', label: 'Elegant Fade', desc: 'Gradient sweep' },
+                ].map((t) => (
+                  <button
+                    key={t.value}
+                    onClick={() => saveMutation.mutate({ outroTemplate: t.value })}
+                    className={`p-2 rounded-lg border text-left transition-all ${
+                      settings.outroTemplate === t.value
+                        ? 'border-indigo-500 bg-indigo-500/10 ring-1 ring-indigo-500'
+                        : 'hover:border-indigo-500/40'
+                    }`}
+                    style={{ borderColor: settings.outroTemplate === t.value ? undefined : "var(--border-subtle)" }}
+                  >
+                    <p className="text-xs font-medium" style={{ color: "var(--text-primary)" }}>{t.label}</p>
+                    <p className="text-[10px] mt-0.5" style={{ color: "var(--text-muted)" }}>{t.desc}</p>
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
