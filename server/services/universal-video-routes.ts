@@ -2829,14 +2829,15 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
         for (const item of scene.overlayItems) {
           if (!item.url) continue;
           let resolvedUrl = item.url;
-          if (!item.url.startsWith("http")) {
+          const needsResolution = !item.url.startsWith("http") || item.url.includes(".replit.dev");
+          if (needsResolution) {
             const publicUrl = await getPublicAssetUrl(item.url);
             if (publicUrl) {
               resolvedUrl = publicUrl;
             }
           }
           resolvedOverlays.push({ ...item, url: resolvedUrl });
-          console.log(`[UniversalVideo] Overlay item "${item.name}": ${item.url} -> ${resolvedUrl.substring(0, 80)}`);
+          console.log(`[UniversalVideo] Overlay item "${item.name}": ${item.url.substring(0, 60)} -> ${resolvedUrl.substring(0, 80)}`);
         }
         scene.overlayItems = resolvedOverlays;
         console.log(`[UniversalVideo] Resolved ${resolvedOverlays.length} overlay items for scene ${scene.id}`);
