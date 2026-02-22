@@ -46,7 +46,9 @@ export function dbRowToVideoProject(row: any): VideoProject {
   if (progress.soundDesignSettings) result.soundDesignSettings = progress.soundDesignSettings;
   if (progress.filmTreatmentSettings) result.filmTreatmentSettings = progress.filmTreatmentSettings;
   if (progress.transitionSettings) result.transitionSettings = progress.transitionSettings;
+  if (progress.introEnabled !== undefined) result.introEnabled = progress.introEnabled;
   if (progress.introTemplate) result.introTemplate = progress.introTemplate;
+  if (progress.outroEnabled !== undefined) result.outroEnabled = progress.outroEnabled;
   if (progress.outroTemplate) result.outroTemplate = progress.outroTemplate;
   if (progress.introBackgroundRandom !== undefined) result.introBackgroundRandom = progress.introBackgroundRandom;
   return result as VideoProject;
@@ -70,7 +72,9 @@ export async function saveProjectToDb(
   if (project.soundDesignSettings !== undefined) progressToSave.soundDesignSettings = project.soundDesignSettings;
   if (project.filmTreatmentSettings !== undefined) progressToSave.filmTreatmentSettings = project.filmTreatmentSettings;
   if (project.transitionSettings !== undefined) progressToSave.transitionSettings = project.transitionSettings;
+  if (project.introEnabled !== undefined) progressToSave.introEnabled = project.introEnabled;
   if (project.introTemplate !== undefined) progressToSave.introTemplate = project.introTemplate;
+  if (project.outroEnabled !== undefined) progressToSave.outroEnabled = project.outroEnabled;
   if (project.outroTemplate !== undefined) progressToSave.outroTemplate = project.outroTemplate;
   if (project.introBackgroundRandom !== undefined) progressToSave.introBackgroundRandom = project.introBackgroundRandom;
 
