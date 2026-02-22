@@ -1313,7 +1313,7 @@ export default function ProjectDetail({ params }: { params?: { id: string } }) {
           </div>
         )}
 
-        <RenderConfigPanel projectId={projectId} projectOutputUrl={project.outputUrl} projectStatus={project.status} projectScenes={project.scenes} />
+        <RenderConfigPanel projectId={projectId} projectOutputUrl={project.outputUrl} projectStatus={project.status} projectScenes={project.scenes} projectRenderId={project.renderId} />
       </div>
     </div>
   );
@@ -1333,13 +1333,14 @@ function ToggleSwitch({ enabled, onChange, label }: { enabled: boolean; onChange
   );
 }
 
-function RenderButton({ projectId, hasVisual, hasVoiceover, hasMusic, initialOutputUrl, initialStatus }: { projectId: string; hasVisual: boolean; hasVoiceover: boolean; hasMusic: boolean; initialOutputUrl?: string | null; initialStatus?: string }) {
+function RenderButton({ projectId, hasVisual, hasVoiceover, hasMusic, initialOutputUrl, initialStatus, initialRenderId }: { projectId: string; hasVisual: boolean; hasVoiceover: boolean; hasMusic: boolean; initialOutputUrl?: string | null; initialStatus?: string; initialRenderId?: string | null }) {
   const { toast } = useToast();
   const isAlreadyCompleted = (initialStatus === 'completed' || initialStatus === 'complete') && !!initialOutputUrl;
-  const [renderStatus, setRenderStatus] = useState<"idle" | "rendering" | "completed" | "failed">(isAlreadyCompleted ? "completed" : "idle");
+  const isAlreadyRendering = initialStatus === 'rendering' || initialStatus === 'render_queued' || initialStatus === 'lambda_pending';
+  const [renderStatus, setRenderStatus] = useState<"idle" | "rendering" | "completed" | "failed">(isAlreadyCompleted ? "completed" : isAlreadyRendering ? "rendering" : "idle");
   const [renderProgress, setRenderProgress] = useState(isAlreadyCompleted ? 100 : 0);
-  const [renderMessage, setRenderMessage] = useState(isAlreadyCompleted ? "Render complete!" : "");
-  const [renderId, setRenderId] = useState<string | null>(null);
+  const [renderMessage, setRenderMessage] = useState(isAlreadyCompleted ? "Render complete!" : isAlreadyRendering ? "Resuming render progress..." : "");
+  const [renderId, setRenderId] = useState<string | null>(initialRenderId || null);
   const [outputUrl, setOutputUrl] = useState<string | null>(initialOutputUrl || null);
 
   const startRenderMutation = useMutation({
@@ -1501,7 +1502,7 @@ function RenderButton({ projectId, hasVisual, hasVoiceover, hasMusic, initialOut
   );
 }
 
-function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, projectScenes }: { projectId: string; projectOutputUrl?: string | null; projectStatus?: string; projectScenes?: any[] }) {
+function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, projectScenes, projectRenderId }: { projectId: string; projectOutputUrl?: string | null; projectStatus?: string; projectScenes?: any[]; projectRenderId?: string | null }) {
   const [expanded, setExpanded] = useState(true);
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -1989,7 +1990,7 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
             </div>
           </div>
 
-          <RenderButton projectId={projectId} hasVisual={!!quickAssets.visual?.url || scenesHaveVideo} hasVoiceover={voiceoverReady || settings.voiceover.hasGenerated} hasMusic={musicReady || settings.music.hasGenerated} initialOutputUrl={projectOutputUrl} initialStatus={projectStatus} />
+          <RenderButton projectId={projectId} hasVisual={!!quickAssets.visual?.url || scenesHaveVideo} hasVoiceover={voiceoverReady || settings.voiceover.hasGenerated} hasMusic={musicReady || settings.music.hasGenerated} initialOutputUrl={projectOutputUrl} initialStatus={projectStatus} initialRenderId={projectRenderId} />
         </div>
       )}
     </div>
