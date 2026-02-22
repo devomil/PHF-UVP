@@ -29,6 +29,7 @@ export const ASSET_PREFIXES = {
   badges: 'brand/badges/',
   overlays: 'brand/overlays/',
   'end-cards': 'brand/end-cards/',
+  'intro-backgrounds': 'brand/intro-backgrounds/',
   fonts: 'brand/fonts/',
 } as const;
 
@@ -148,6 +149,18 @@ class S3RenderAssetService {
 
   async getOverlayAsset(): Promise<S3RenderAsset | null> {
     return this.getFirstAsset('overlays');
+  }
+
+  async getIntroBackgroundAssets(): Promise<S3RenderAsset[]> {
+    return this.listAssets('intro-backgrounds');
+  }
+
+  async getRandomIntroBackground(): Promise<S3RenderAsset | null> {
+    return this.getRandomAsset('intro-backgrounds');
+  }
+
+  async getRandomEndCard(): Promise<S3RenderAsset | null> {
+    return this.getRandomAsset('end-cards');
   }
 
   async getBackgroundMusicAssets(): Promise<S3RenderAsset[]> {

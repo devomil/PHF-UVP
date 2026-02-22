@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronUp, Sparkles, Info } from 'lucide-react';
+import { ChevronDown, ChevronUp, Sparkles, Info, Film, Clapperboard } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
@@ -20,6 +20,9 @@ export interface EndCardSettings {
   contactEmail: string;
   ambientEffect: 'particles' | 'bokeh' | 'none';
   ambientIntensity: number;
+  introTemplate?: 'classic-glow' | 'minimal' | 'cinematic' | 'elegant-fade';
+  outroTemplate?: 'animated' | 'minimal' | 'cinematic';
+  introBackgroundRandom?: boolean;
 }
 
 export const DEFAULT_END_CARD_SETTINGS: EndCardSettings = {
@@ -34,7 +37,23 @@ export const DEFAULT_END_CARD_SETTINGS: EndCardSettings = {
   contactEmail: '',
   ambientEffect: 'bokeh',
   ambientIntensity: 40,
+  introTemplate: 'classic-glow',
+  outroTemplate: 'animated',
+  introBackgroundRandom: false,
 };
+
+const INTRO_TEMPLATES = [
+  { id: 'classic-glow', label: 'Classic Glow', desc: 'Centered logo with radial glow and subtle pulse' },
+  { id: 'minimal', label: 'Minimal', desc: 'Clean, simple layout with decorative line divider' },
+  { id: 'cinematic', label: 'Cinematic', desc: 'Dramatic look with optional background image from S3' },
+  { id: 'elegant-fade', label: 'Elegant Fade', desc: 'Sophisticated entrance with shimmer effect' },
+];
+
+const OUTRO_TEMPLATES = [
+  { id: 'animated', label: 'Animated', desc: 'Full animated end card with logo reveal and effects' },
+  { id: 'minimal', label: 'Minimal', desc: 'Clean logo and contact info without effects' },
+  { id: 'cinematic', label: 'Cinematic', desc: 'Dramatic end card with image background' },
+];
 
 interface EndCardSettingsPanelProps {
   settings: EndCardSettings;
@@ -66,7 +85,7 @@ export const EndCardSettingsPanel: React.FC<EndCardSettingsPanelProps> = ({
           <div className="flex items-center justify-between">
             <CardTitle className="text-sm font-medium flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-amber-500" />
-              End Card
+              Opening & Closing
               {settings.useDefaults && (
                 <span className="text-xs font-normal text-green-600 bg-green-50 px-2 py-0.5 rounded">
                   Using optimized defaults
@@ -82,12 +101,64 @@ export const EndCardSettingsPanel: React.FC<EndCardSettingsPanelProps> = ({
 
         {settings.enabled && (
           <CardContent className="pt-0 pb-4 space-y-4">
-            <div className="flex items-center justify-between p-3 bg-gradient-to-r from-green-50 to-amber-50 rounded-lg border border-green-100">
-              <div className="flex items-center gap-2">
-                <Info className="h-4 w-4 text-green-600" />
-                <span className="text-xs text-green-700">
-                  Professional Pine Hill Farm end card with animated logo reveal, tagline, and ambient effects.
-                </span>
+            <div className="space-y-3">
+              <div className="space-y-2">
+                <Label className="text-xs font-medium flex items-center gap-1.5">
+                  <Clapperboard className="h-3.5 w-3.5 text-purple-500" />
+                  Opening Scene Style
+                </Label>
+                <div className="grid grid-cols-2 gap-2">
+                  {INTRO_TEMPLATES.map((t) => (
+                    <button
+                      key={t.id}
+                      onClick={() => handleChange('introTemplate', t.id as EndCardSettings['introTemplate'])}
+                      className={`p-2.5 rounded-lg border text-left transition-all ${
+                        (settings.introTemplate || 'classic-glow') === t.id
+                          ? 'border-purple-500 bg-purple-50 ring-1 ring-purple-200'
+                          : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                      }`}
+                    >
+                      <div className="text-xs font-medium">{t.label}</div>
+                      <div className="text-[10px] text-gray-500 mt-0.5 leading-tight">{t.desc}</div>
+                    </button>
+                  ))}
+                </div>
+                {(settings.introTemplate === 'cinematic') && (
+                  <div className="flex items-center gap-2 mt-1 p-2 bg-blue-50 rounded-lg border border-blue-100">
+                    <input
+                      type="checkbox"
+                      checked={settings.introBackgroundRandom ?? false}
+                      onChange={(e) => handleChange('introBackgroundRandom', e.target.checked)}
+                      className="rounded border-gray-300"
+                    />
+                    <span className="text-xs text-blue-700">
+                      Use random background from S3 intro-backgrounds
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-xs font-medium flex items-center gap-1.5">
+                  <Film className="h-3.5 w-3.5 text-amber-500" />
+                  Closing Scene Style
+                </Label>
+                <div className="grid grid-cols-3 gap-2">
+                  {OUTRO_TEMPLATES.map((t) => (
+                    <button
+                      key={t.id}
+                      onClick={() => handleChange('outroTemplate', t.id as EndCardSettings['outroTemplate'])}
+                      className={`p-2.5 rounded-lg border text-left transition-all ${
+                        (settings.outroTemplate || 'animated') === t.id
+                          ? 'border-amber-500 bg-amber-50 ring-1 ring-amber-200'
+                          : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                      }`}
+                    >
+                      <div className="text-xs font-medium">{t.label}</div>
+                      <div className="text-[10px] text-gray-500 mt-0.5 leading-tight">{t.desc}</div>
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 

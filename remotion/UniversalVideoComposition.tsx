@@ -2670,6 +2670,9 @@ export const UniversalVideoComposition: React.FC<UniversalVideoProps> = ({
             duration={brandInjectionPlan.logoIntro.duration || 2.5}
             position={brandInjectionPlan.logoIntro.position || 'center'}
             tagline={brandInjectionPlan.logoIntro.includeTagline ? brandInjectionPlan.logoIntro.tagline : undefined}
+            template={brandInjectionPlan.logoIntro.template || 'classic-glow'}
+            backgroundImageUrl={brandInjectionPlan.logoIntro.backgroundImageUrl}
+            logoScale={brandInjectionPlan.logoIntro.logoScale}
           />
         </Sequence>
       )}

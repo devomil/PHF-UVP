@@ -19,6 +19,9 @@ export interface LogoIntroConfig {
   position: 'center' | 'lower-third';
   includeTagline: boolean;
   tagline?: string;
+  template?: 'classic-glow' | 'minimal' | 'cinematic' | 'elegant-fade';
+  backgroundImageUrl?: string;
+  logoScale?: number;
 }
 
 export interface WatermarkConfig {
