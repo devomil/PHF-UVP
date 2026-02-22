@@ -724,11 +724,9 @@ const IntelligentTextOverlay: React.FC<{
         fontSize: instruction.style.fontSize,
         fontWeight: instruction.style.fontWeight as any,
         fontFamily: brand.fonts.body,
-        color: instruction.style.color,
-        textShadow: instruction.style.textShadow,
-        backgroundColor: instruction.style.backgroundColor,
-        padding: instruction.style.padding,
-        borderRadius: instruction.style.backgroundColor ? 4 : undefined,
+        color: instruction.style.color || '#ffffff',
+        textShadow: instruction.style.textShadow || '2px 2px 8px rgba(0,0,0,0.9), 0 0 20px rgba(0,0,0,0.5)',
+
         maxWidth: '80%',
         textAlign: 'center',
         lineHeight: 1.3,
@@ -855,7 +853,7 @@ const KenBurnsBackground: React.FC<{
           src={src}
           style={{ width: '100%', height: '100%', objectFit: 'cover' }}
           muted
-          startFrom={0}
+          startFrom={3}
         />
       );
     }
@@ -912,7 +910,7 @@ const KenBurnsBackground: React.FC<{
         src={src}
         style={style}
         muted
-        startFrom={0}
+        startFrom={3}
       />
     );
   }
@@ -1404,7 +1402,7 @@ const SceneRenderer: React.FC<{
             src={brandAssetUrl}
             style={{ width: '100%', height: '100%', objectFit: 'cover' }}
             muted
-            startFrom={0}
+            startFrom={3}
           />
         ) : hasValidBrandAsset && brandAssetType === 'image' ? (
           <KenBurnsImage
@@ -2784,17 +2782,17 @@ export const UniversalVideoComposition: React.FC<UniversalVideoProps> = ({
             transitions: {
               enabled: effectiveSoundConfig.transitionSounds,
               defaultSound: 'whoosh-soft',
-              volume: 0.1,
+              volume: 0.04,
             },
             logoReveal: {
               enabled: effectiveSoundConfig.impactSounds,
               sound: 'logo-impact',
-              volume: 0.15,
+              volume: 0.06,
             },
             riseSwell: {
               enabled: effectiveSoundConfig.impactSounds,
               durationBeforeCTA: 3,
-              volume: 0.1,
+              volume: 0.04,
             },
             audioDucking: soundDesignConfig?.audioDucking || {
               enabled: true,
@@ -2818,7 +2816,7 @@ export const UniversalVideoComposition: React.FC<UniversalVideoProps> = ({
                   sceneIndex: index,
                   startFrame: frameOffset - Math.round(fps * 0.3),
                   sound: 'whoosh-soft',
-                  volume: 0.1,
+                  volume: 0.04,
                 });
               }
               frameOffset += Math.round((scene.duration || 5) * fps);

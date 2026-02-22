@@ -2545,6 +2545,37 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
         },
       };
       console.log('[UniversalVideo] Phase 18E: End card config built with logo:', endCardConfig.logo.url?.substring(0, 50));
+      
+      const selectedOutroTemplate = (preparedProject as any).outroTemplate || 'animated';
+      console.log(`[Render] Outro template: ${selectedOutroTemplate}`);
+      if (selectedOutroTemplate === 'cinematic') {
+        if (!endCardBgUrl) {
+          endCardConfig.background = {
+            type: 'animated-gradient' as const,
+            gradient: { colors: ['#0a0a1a', '#1a0a2e', '#0d1b2a'], angle: 160 },
+          };
+        }
+        if (endCardConfig.logo) {
+          endCardConfig.logo.animation = 'fade';
+          endCardConfig.logo.size = 32;
+        }
+        if (endCardConfig.tagline) {
+          endCardConfig.tagline.animation = 'fade';
+          endCardConfig.tagline.style = { ...endCardConfig.tagline.style, fontSize: 32, letterSpacing: 3 };
+        }
+        endCardConfig.ambientEffect = { type: 'bokeh' as const, color: 'rgba(200, 180, 255, 0.2)', intensity: 25 };
+      } else if (selectedOutroTemplate === 'minimal') {
+        endCardConfig.background = { type: 'solid' as const, color: '#111111' };
+        if (endCardConfig.logo) {
+          endCardConfig.logo.animation = 'fade';
+          endCardConfig.logo.size = 24;
+        }
+        if (endCardConfig.tagline) {
+          endCardConfig.tagline.animation = 'fade';
+          endCardConfig.tagline.style = { ...endCardConfig.tagline.style, fontSize: 24 };
+        }
+        endCardConfig.ambientEffect = { type: 'none' as const, color: 'transparent', intensity: 0 };
+      }
     }
     
     // Phase 16: Build sound design config from settings
