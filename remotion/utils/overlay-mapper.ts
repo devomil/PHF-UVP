@@ -162,7 +162,7 @@ export function mapSceneToOverlays(
   const extractedWatermarkUrl = extractedLogos.length > 1 ? extractedLogos[1] : null;
   const effectiveWatermarkUrl = extractedWatermarkUrl || brandWatermarkUrl;
 
-  if ((isIntroScene || isCTAScene) && effectiveLogoUrl) {
+  if (isIntroScene && effectiveLogoUrl) {
     const logoConfig = overlayConfig?.logoPosition || 'center';
     const logoSize = overlayConfig?.logoSize || 15;
 
@@ -228,7 +228,7 @@ export function detectOverlayType(text: string): 'cta' | 'bullet' | 'title' | 's
 }
 
 export function shouldShowLogo(sceneType: string): boolean {
-  return ['intro', 'cta', 'outro', 'brand'].includes(sceneType);
+  return ['intro', 'brand'].includes(sceneType);
 }
 
 export function shouldShowWatermark(sceneType: string): boolean {

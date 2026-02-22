@@ -223,7 +223,9 @@ const ClassicGlowIntro: React.FC<TemplateBaseProps> = ({
               maxHeight: isLowerThird ? height * 0.35 : height * 0.4,
               objectFit: 'contain',
               transform: `scale(${scale}) translateY(${translateY}px)`,
-              filter: `drop-shadow(0 0 30px rgba(255,255,255,0.25)) drop-shadow(0 6px 16px rgba(0,0,0,0.5))`,
+              filter: isDarkBackground(backgroundColor)
+                ? 'brightness(0) invert(1) drop-shadow(0 0 30px rgba(255,255,255,0.25)) drop-shadow(0 6px 16px rgba(0,0,0,0.5))'
+                : 'drop-shadow(0 0 30px rgba(255,255,255,0.25)) drop-shadow(0 6px 16px rgba(0,0,0,0.5))',
             }}
           />
 
@@ -327,7 +329,9 @@ const MinimalIntro: React.FC<TemplateBaseProps> = ({
               maxHeight: isLowerThird ? height * 0.3 : height * 0.35,
               objectFit: 'contain',
               transform: `scale(${scale}) translateY(${translateY}px)`,
-              filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.3))',
+              filter: isDarkBackground(backgroundColor)
+                ? 'brightness(0) invert(1) drop-shadow(0 4px 12px rgba(255,255,255,0.15))'
+                : 'drop-shadow(0 4px 12px rgba(0,0,0,0.3))',
             }}
           />
 
@@ -335,7 +339,7 @@ const MinimalIntro: React.FC<TemplateBaseProps> = ({
             style={{
               width: lineWidth,
               height: 1,
-              backgroundColor: 'rgba(255,255,255,0.3)',
+              backgroundColor: isDarkBackground(backgroundColor) ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.2)',
             }}
           />
 
@@ -647,6 +651,16 @@ const ElegantFadeIntro: React.FC<ElegantFadeIntroProps> = ({
     </AbsoluteFill>
   );
 };
+
+function isDarkBackground(color: string): boolean {
+  const hex = color.replace('#', '');
+  if (hex.length !== 6) return true;
+  const r = parseInt(hex.substring(0, 2), 16);
+  const g = parseInt(hex.substring(2, 4), 16);
+  const b = parseInt(hex.substring(4, 6), 16);
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance < 0.4;
+}
 
 function lightenColor(hex: string, amount: number): string {
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);

@@ -65,6 +65,7 @@ export const AnimatedEndCard: React.FC<AnimatedEndCardProps> = ({ config }) => {
             startFrame={Math.round(0.3 * fps)}
             fps={fps}
             width={width}
+            invertLogo={isDarkBackground(config.background)}
           />
         )}
         
@@ -258,6 +259,29 @@ const BokehCircle: React.FC<{
   );
 };
 
+function isDarkBackground(bg: EndCardConfig['background']): boolean {
+  if (!bg) return true;
+  if (bg.type === 'solid') {
+    const hex = bg.color?.replace('#', '') || '111111';
+    const r = parseInt(hex.substring(0, 2), 16);
+    const g = parseInt(hex.substring(2, 4), 16);
+    const b = parseInt(hex.substring(4, 6), 16);
+    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    return luminance < 0.5;
+  }
+  if (bg.type === 'animated-gradient' && bg.gradient?.colors) {
+    const avgLuminance = bg.gradient.colors.reduce((sum: number, c: string) => {
+      const hex = c.replace('#', '');
+      const r = parseInt(hex.substring(0, 2), 16);
+      const g = parseInt(hex.substring(2, 4), 16);
+      const b = parseInt(hex.substring(4, 6), 16);
+      return sum + (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    }, 0) / bg.gradient.colors.length;
+    return avgLuminance < 0.5;
+  }
+  return true;
+}
+
 const LogoReveal: React.FC<{
   logoUrl: string;
   size: number;
@@ -265,7 +289,8 @@ const LogoReveal: React.FC<{
   startFrame: number;
   fps: number;
   width: number;
-}> = ({ logoUrl, size, animation, startFrame, fps, width }) => {
+  invertLogo?: boolean;
+}> = ({ logoUrl, size, animation, startFrame, fps, width, invertLogo = false }) => {
   const frame = useCurrentFrame();
   const localFrame = frame - startFrame;
   
@@ -313,7 +338,9 @@ const LogoReveal: React.FC<{
           style={{
             width: logoWidth,
             height: 'auto',
-            filter: 'drop-shadow(0 0 15px rgba(255,255,255,0.2)) drop-shadow(0 4px 12px rgba(0,0,0,0.4))',
+            filter: invertLogo
+              ? 'brightness(0) invert(1) drop-shadow(0 0 15px rgba(255,255,255,0.2)) drop-shadow(0 4px 12px rgba(0,0,0,0.4))'
+              : 'drop-shadow(0 0 15px rgba(255,255,255,0.2)) drop-shadow(0 4px 12px rgba(0,0,0,0.4))',
           }}
         />
         <div
