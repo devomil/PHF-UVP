@@ -4294,7 +4294,7 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, asy
       prompt,
       fallbackPrompt,
       duration: scene.duration || 6,
-      aspectRatio: (projectData as any).settings?.aspectRatio || '16:9',
+      aspectRatio: (projectData as any).outputFormat?.aspectRatio || (projectData as any).settings?.aspectRatio || '16:9',
       style: (projectData as any).settings?.visualStyle || 'professional',
       triggeredBy: userId,
       sourceImageUrl: finalSourceImageUrl, // For I2V: publicly accessible signed URL
@@ -4615,7 +4615,7 @@ router.post('/:projectId/scenes/:sceneId/replace-object', isAuthenticated, async
       prompt: replacementPrompt,
       objectDescription: objectDescription || 'the product bottle',
       duration: scene.duration || 5,
-      aspectRatio: (projectData as any).settings?.aspectRatio || '16:9',
+      aspectRatio: (projectData as any).outputFormat?.aspectRatio || (projectData as any).settings?.aspectRatio || '16:9',
     });
     
     if (!result.success) {
@@ -7448,7 +7448,7 @@ router.post('/projects/:projectId/scenes/:sceneIndex/improve-prompt', isAuthenti
       brandAssetTypes,
       generationType,
       qualityTier: qualityTier as 'standard' | 'premium' | 'ultra',
-      aspectRatio: projectData.aspectRatio as '16:9' | '9:16' | '1:1' || '16:9',
+      aspectRatio: ((projectData as any).outputFormat?.aspectRatio || (projectData as any).settings?.aspectRatio || '16:9') as '16:9' | '9:16' | '1:1',
     };
     
     const issueContext = {
