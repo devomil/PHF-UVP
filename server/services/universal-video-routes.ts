@@ -1429,7 +1429,7 @@ router.patch('/projects/:projectId/render-settings', isAuthenticated, async (req
   try {
     const userId = (req.user as any)?.id;
     const { projectId } = req.params;
-    const { voiceover, music, soundDesign, filmTreatment, transitions, introTemplate, outroTemplate, introBackgroundRandom } = req.body;
+    const { voiceover, music, soundDesign, filmTreatment, transitions, introEnabled, introTemplate, outroEnabled, outroTemplate, introBackgroundRandom } = req.body;
     
     const projectData = await getProjectFromDb(projectId);
     if (!projectData) {
@@ -1501,9 +1501,17 @@ router.patch('/projects/:projectId/render-settings', isAuthenticated, async (req
       };
     }
 
+    if (introEnabled !== undefined) {
+      (projectData as any).introEnabled = !!introEnabled;
+    }
+
     if (introTemplate !== undefined) {
       const validTemplates = ['classic-glow', 'minimal', 'cinematic', 'elegant-fade'];
       (projectData as any).introTemplate = validTemplates.includes(introTemplate) ? introTemplate : 'classic-glow';
+    }
+
+    if (outroEnabled !== undefined) {
+      (projectData as any).outroEnabled = !!outroEnabled;
     }
 
     if (outroTemplate !== undefined) {
@@ -1529,7 +1537,9 @@ router.patch('/projects/:projectId/render-settings', isAuthenticated, async (req
         soundDesign: (projectData as any).soundDesignSettings,
         filmTreatment: (projectData as any).filmTreatmentSettings,
         transitions: (projectData as any).transitionSettings,
+        introEnabled: (projectData as any).introEnabled ?? true,
         introTemplate: (projectData as any).introTemplate || 'classic-glow',
+        outroEnabled: (projectData as any).outroEnabled ?? true,
         outroTemplate: (projectData as any).outroTemplate || 'classic-glow',
         introBackgroundRandom: (projectData as any).introBackgroundRandom ?? false,
       }
@@ -1595,7 +1605,9 @@ router.get('/projects/:projectId/render-settings', isAuthenticated, async (req: 
           style: (projectData as any).transitionSettings?.style || 'crossfade',
           duration: (projectData as any).transitionSettings?.duration ?? 0.5,
         },
+        introEnabled: (projectData as any).introEnabled ?? true,
         introTemplate: (projectData as any).introTemplate || 'classic-glow',
+        outroEnabled: (projectData as any).outroEnabled ?? true,
         outroTemplate: (projectData as any).outroTemplate || 'classic-glow',
         introBackgroundRandom: (projectData as any).introBackgroundRandom ?? false,
       }
@@ -2803,13 +2815,25 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
         }
       }
       
+      // Apply intro/outro enabled flags from render settings
+      const introEnabled = (preparedProject as any).introEnabled ?? true;
+      const outroEnabled = (preparedProject as any).outroEnabled ?? true;
+      if (!introEnabled) {
+        plan.logoIntro.enabled = false;
+        console.log('[Render]   Intro disabled by user');
+      }
+      if (!outroEnabled) {
+        plan.ctaOutro.enabled = false;
+        console.log('[Render]   Outro disabled by user');
+      }
+
       // Apply intro template from project settings
-      const introTemplate = (preparedProject as any).endCardSettings?.introTemplate || 'classic-glow';
+      const introTemplate = (preparedProject as any).introTemplate || (preparedProject as any).endCardSettings?.introTemplate || 'classic-glow';
       plan.logoIntro.template = introTemplate;
       plan.logoIntro.logoScale = 1.0;
       
       // Fetch S3 intro background for cinematic template or random variety
-      if (introTemplate === 'cinematic' || (preparedProject as any).endCardSettings?.introBackgroundRandom) {
+      if (introEnabled && (introTemplate === 'cinematic' || (preparedProject as any).introBackgroundRandom || (preparedProject as any).endCardSettings?.introBackgroundRandom)) {
         try {
           const introBg = await s3RenderAssetService.getRandomIntroBackground();
           if (introBg) {
