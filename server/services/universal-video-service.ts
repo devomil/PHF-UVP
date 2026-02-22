@@ -4444,7 +4444,9 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
           hasImage: !!visualUrl && !isVideo, 
           hasVideo: isVideo, 
           videoUrl: finalVideoUrl?.substring(0, 60),
-          duration 
+          duration,
+          overlayItemCount: scene.overlayItems?.length || 0,
+          overlayItems: scene.overlayItems?.map((o: any) => ({ id: o.id, url: o.url?.substring(0, 50) })),
         });
         
         if (!visualUrl && !finalVideoUrl) {

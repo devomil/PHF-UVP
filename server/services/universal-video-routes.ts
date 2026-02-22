@@ -2822,16 +2822,26 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
       filmTreatmentConfig,
     };
     
-    // Resolve overlay item URLs to absolute for Lambda rendering
-    const appBaseUrl = `https://${req.get("host") || process.env.REPLIT_DEV_DOMAIN || process.env.REPLIT_DOMAINS || "localhost:5000"}`;
-    inputProps.scenes.forEach((scene: any) => {
+    // Resolve overlay item URLs to Lambda-accessible public URLs
+    for (const scene of inputProps.scenes as any[]) {
       if (scene.overlayItems && Array.isArray(scene.overlayItems)) {
-        scene.overlayItems = scene.overlayItems.map((item: any) => ({
-          ...item,
-          url: item.url && !item.url.startsWith("http") ? `${appBaseUrl}${item.url.startsWith("/") ? "" : "/"}${item.url}` : item.url,
-        }));
+        const resolvedOverlays = [];
+        for (const item of scene.overlayItems) {
+          if (!item.url) continue;
+          let resolvedUrl = item.url;
+          if (!item.url.startsWith("http")) {
+            const publicUrl = await getPublicAssetUrl(item.url);
+            if (publicUrl) {
+              resolvedUrl = publicUrl;
+            }
+          }
+          resolvedOverlays.push({ ...item, url: resolvedUrl });
+          console.log(`[UniversalVideo] Overlay item "${item.name}": ${item.url} -> ${resolvedUrl.substring(0, 80)}`);
+        }
+        scene.overlayItems = resolvedOverlays;
+        console.log(`[UniversalVideo] Resolved ${resolvedOverlays.length} overlay items for scene ${scene.id}`);
       }
-    });
+    }
     // Log video B-roll details for each scene
     const videoScenes = inputProps.scenes.filter((s: any) => s.assets?.videoUrl);
     console.log('[UniversalVideo] Prepared input props for Lambda:', {
