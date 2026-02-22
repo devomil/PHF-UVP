@@ -1429,7 +1429,7 @@ router.patch('/projects/:projectId/render-settings', isAuthenticated, async (req
   try {
     const userId = (req.user as any)?.id;
     const { projectId } = req.params;
-    const { voiceover, music, soundDesign, filmTreatment, transitions } = req.body;
+    const { voiceover, music, soundDesign, filmTreatment, transitions, introTemplate, outroTemplate, introBackgroundRandom } = req.body;
     
     const projectData = await getProjectFromDb(projectId);
     if (!projectData) {
@@ -1500,6 +1500,20 @@ router.patch('/projects/:projectId/render-settings', isAuthenticated, async (req
         duration: Math.min(2.0, Math.max(0.1, transitions.duration ?? 0.5)),
       };
     }
+
+    if (introTemplate !== undefined) {
+      const validTemplates = ['classic-glow', 'minimal', 'cinematic', 'elegant-fade'];
+      (projectData as any).introTemplate = validTemplates.includes(introTemplate) ? introTemplate : 'classic-glow';
+    }
+
+    if (outroTemplate !== undefined) {
+      const validTemplates = ['classic-glow', 'minimal', 'cinematic', 'elegant-fade'];
+      (projectData as any).outroTemplate = validTemplates.includes(outroTemplate) ? outroTemplate : 'classic-glow';
+    }
+
+    if (introBackgroundRandom !== undefined) {
+      (projectData as any).introBackgroundRandom = !!introBackgroundRandom;
+    }
     
     projectData.updatedAt = new Date().toISOString();
     await saveProjectToDb(projectData, projectData.ownerId);
@@ -1515,6 +1529,9 @@ router.patch('/projects/:projectId/render-settings', isAuthenticated, async (req
         soundDesign: (projectData as any).soundDesignSettings,
         filmTreatment: (projectData as any).filmTreatmentSettings,
         transitions: (projectData as any).transitionSettings,
+        introTemplate: (projectData as any).introTemplate || 'classic-glow',
+        outroTemplate: (projectData as any).outroTemplate || 'classic-glow',
+        introBackgroundRandom: (projectData as any).introBackgroundRandom ?? false,
       }
     });
   } catch (error: any) {
@@ -1578,6 +1595,9 @@ router.get('/projects/:projectId/render-settings', isAuthenticated, async (req: 
           style: (projectData as any).transitionSettings?.style || 'crossfade',
           duration: (projectData as any).transitionSettings?.duration ?? 0.5,
         },
+        introTemplate: (projectData as any).introTemplate || 'classic-glow',
+        outroTemplate: (projectData as any).outroTemplate || 'classic-glow',
+        introBackgroundRandom: (projectData as any).introBackgroundRandom ?? false,
       }
     });
   } catch (error: any) {

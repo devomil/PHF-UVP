@@ -11,7 +11,8 @@ export type VideoProjectWithMeta = VideoProject & {
 };
 
 export function dbRowToVideoProject(row: any): VideoProject {
-  return {
+  const progress = row.progress || {};
+  const result: any = {
     ...(row.projectData || {}),
     id: row.id,
     projectId: row.projectId,
@@ -26,7 +27,7 @@ export function dbRowToVideoProject(row: any): VideoProject {
     brand: row.brand || {},
     scenes: row.scenes || [],
     assets: row.assets || {},
-    progress: row.progress || {},
+    progress: progress,
     status: row.status,
     history: row.history || [],
     qualityReport: row.qualityReport,
@@ -39,7 +40,16 @@ export function dbRowToVideoProject(row: any): VideoProject {
     outputUrl: row.outputUrl,
     createdAt: row.createdAt?.toISOString?.() || row.createdAt,
     updatedAt: row.updatedAt?.toISOString?.() || row.updatedAt,
-  } as VideoProject;
+  };
+  if (progress.voiceoverSettings) result.voiceoverSettings = progress.voiceoverSettings;
+  if (progress.musicSettings) result.musicSettings = progress.musicSettings;
+  if (progress.soundDesignSettings) result.soundDesignSettings = progress.soundDesignSettings;
+  if (progress.filmTreatmentSettings) result.filmTreatmentSettings = progress.filmTreatmentSettings;
+  if (progress.transitionSettings) result.transitionSettings = progress.transitionSettings;
+  if (progress.introTemplate) result.introTemplate = progress.introTemplate;
+  if (progress.outroTemplate) result.outroTemplate = progress.outroTemplate;
+  if (progress.introBackgroundRandom !== undefined) result.introBackgroundRandom = progress.introBackgroundRandom;
+  return result as VideoProject;
 }
 
 export async function saveProjectToDb(
@@ -54,9 +64,19 @@ export async function saveProjectToDb(
     .from(universalVideoProjects)
     .where(eq(universalVideoProjects.projectId, projectId));
 
+  const progressToSave = { ...(project.progress || {}) };
+  if (project.voiceoverSettings !== undefined) progressToSave.voiceoverSettings = project.voiceoverSettings;
+  if (project.musicSettings !== undefined) progressToSave.musicSettings = project.musicSettings;
+  if (project.soundDesignSettings !== undefined) progressToSave.soundDesignSettings = project.soundDesignSettings;
+  if (project.filmTreatmentSettings !== undefined) progressToSave.filmTreatmentSettings = project.filmTreatmentSettings;
+  if (project.transitionSettings !== undefined) progressToSave.transitionSettings = project.transitionSettings;
+  if (project.introTemplate !== undefined) progressToSave.introTemplate = project.introTemplate;
+  if (project.outroTemplate !== undefined) progressToSave.outroTemplate = project.outroTemplate;
+  if (project.introBackgroundRandom !== undefined) progressToSave.introBackgroundRandom = project.introBackgroundRandom;
+
   const updateData: any = {
     status: project.status,
-    progress: project.progress,
+    progress: progressToSave,
     updatedAt: new Date(),
   };
   if (project.scenes !== undefined) updateData.scenes = project.scenes;
@@ -81,7 +101,7 @@ export async function saveProjectToDb(
       projectId,
       ownerId: typeof ownerId === 'string' ? parseInt(ownerId) || 0 : ownerId,
       status: project.status,
-      progress: project.progress,
+      progress: progressToSave,
       title: project.title || 'Untitled',
       scenes: project.scenes || [],
       brand: project.brand || {},
