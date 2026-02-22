@@ -88,7 +88,7 @@ async function cropImageToAspectRatio(
   inputPath: string,
   targetAspectRatio: string
 ): Promise<string> {
-  const { execSync } = await import('child_process');
+  const sharp = (await import('sharp')).default;
   const fs = await import('fs');
   const path = await import('path');
   
@@ -97,9 +97,9 @@ async function cropImageToAspectRatio(
   
   const targetRatio = targetW / targetH;
   
-  const identifyOutput = execSync(`identify -format "%wx%h" "${inputPath}"`, { encoding: 'utf-8' }).trim();
-  const dims = identifyOutput.replace(/"/g, '');
-  const [imgW, imgH] = dims.split('x').map(Number);
+  const metadata = await sharp(inputPath).metadata();
+  const imgW = metadata.width || 0;
+  const imgH = metadata.height || 0;
   if (!imgW || !imgH) return inputPath;
   
   const imgRatio = imgW / imgH;
@@ -110,53 +110,57 @@ async function cropImageToAspectRatio(
   }
   
   const ext = path.default.extname(inputPath);
-  const outputPath = inputPath.replace(ext, `_cropped${ext}`);
+  const outputPath = inputPath.replace(ext, `_cropped.png`);
   
-  if (imgRatio < targetRatio) {
-    const canvasW = 1920;
-    const canvasH = 1080;
-    const fitH = canvasH;
-    const fitW = Math.round(fitH * imgRatio);
-    
-    console.log(`[ImageCrop] Portrait→Landscape: Padding ${imgW}x${imgH} into ${canvasW}x${canvasH} (seamless blend)`);
-    
-    try {
-      // Attempt feathered edges: heavy blur background + alpha-feathered sharp overlay
-      execSync(
-        `magick "${inputPath}" -resize ${canvasW}x${canvasH}^ -gravity center -crop ${canvasW}x${canvasH}+0+0 +repage -blur 0x60 -brightness-contrast -40x-10 -modulate 100,80,100 ` +
-        `\\( "${inputPath}" -resize x${fitH} ` +
-        `\\( +clone -alpha extract -virtual-pixel black -morphology Distance Euclidean:1,40! -auto-level -negate \\) -compose CopyOpacity -composite \\) ` +
-        `-gravity center -composite "${outputPath}"`,
-        { timeout: 30000 }
-      );
-    } catch (featherErr) {
-      console.warn('[ImageCrop] Feathered edge command failed, using simple blend fallback:', featherErr);
+  try {
+    if (imgRatio < targetRatio) {
+      const canvasW = 1920;
+      const canvasH = Math.round(canvasW / targetRatio);
+      const fitH = canvasH;
+      const fitW = Math.round(fitH * imgRatio);
+      
+      console.log(`[ImageCrop] Portrait→Landscape: Padding ${imgW}x${imgH} into ${canvasW}x${canvasH} with blurred background`);
+      
+      const blurredBg = await sharp(inputPath)
+        .resize(canvasW, canvasH, { fit: 'cover' })
+        .blur(60)
+        .modulate({ brightness: 0.6 })
+        .toBuffer();
+      
+      const foreground = await sharp(inputPath)
+        .resize({ height: fitH, fit: 'inside' })
+        .toBuffer();
+      
+      const fgMeta = await sharp(foreground).metadata();
+      const fgW = fgMeta.width || fitW;
+      const fgH = fgMeta.height || fitH;
+      const leftOffset = Math.round((canvasW - fgW) / 2);
+      const topOffset = Math.round((canvasH - fgH) / 2);
+      
+      await sharp(blurredBg)
+        .composite([{ input: foreground, left: leftOffset, top: topOffset }])
+        .png()
+        .toFile(outputPath);
+    } else {
+      const cropW = Math.round(imgH * targetRatio);
+      const cropH = imgH;
+      const left = Math.round((imgW - cropW) / 2);
+      
+      console.log(`[ImageCrop] Landscape crop: ${imgW}x${imgH} to ${cropW}x${cropH} (target ${targetAspectRatio})`);
+      
+      await sharp(inputPath)
+        .extract({ left, top: 0, width: cropW, height: cropH })
+        .resize(1920, Math.round(1920 / targetRatio))
+        .png()
+        .toFile(outputPath);
     }
     
-    const fs2 = await import('fs');
-    if (!fs2.default.existsSync(outputPath)) {
-      try {
-        execSync(
-          `magick "${inputPath}" -resize ${canvasW}x${canvasH}^ -gravity center -crop ${canvasW}x${canvasH}+0+0 +repage -blur 0x60 -brightness-contrast -40x-10 ` +
-          `\\( "${inputPath}" -resize x${fitH} \\) -gravity center -composite "${outputPath}"`,
-          { timeout: 30000 }
-        );
-      } catch (fallbackErr) {
-        console.warn('[ImageCrop] Simple blend also failed:', fallbackErr);
-      }
+    if (fs.default.existsSync(outputPath)) {
+      console.log(`[ImageCrop] ✓ Processed image saved: ${outputPath}`);
+      return outputPath;
     }
-  } else {
-    // Landscape image wider than target - center crop width (minimal loss)
-    const cropH = imgH;
-    const cropW = Math.round(imgH * targetRatio);
-    
-    console.log(`[ImageCrop] Landscape crop: ${imgW}x${imgH} to ${cropW}x${cropH} (target ${targetAspectRatio})`);
-    execSync(`magick "${inputPath}" -gravity center -crop ${cropW}x${cropH}+0+0 +repage -resize 1920x1080 "${outputPath}"`, { timeout: 15000 });
-  }
-  
-  if (fs.default.existsSync(outputPath)) {
-    console.log(`[ImageCrop] ✓ Processed image saved: ${outputPath}`);
-    return outputPath;
+  } catch (err) {
+    console.warn('[ImageCrop] Processing failed, using original:', err);
   }
   
   console.log(`[ImageCrop] ⚠ Processing failed, using original`);
@@ -269,11 +273,28 @@ async function getPublicUrlForBrandAsset(relativeUrl: string, targetAspectRatio?
       
       console.log('[PublicURL] Downloaded from object storage, size:', fileBuffer.length, 'bytes');
       
-      // Upload to PiAPI storage for public access
+      let processedBuffer = fileBuffer;
+      if (targetAspectRatio) {
+        try {
+          const fs = await import('fs');
+          const os = await import('os');
+          const path = await import('path');
+          const tmpPath = path.default.join(os.default.tmpdir(), `objstore_${Date.now()}.png`);
+          fs.default.writeFileSync(tmpPath, fileBuffer);
+          const croppedPath = await cropImageToAspectRatio(tmpPath, targetAspectRatio);
+          processedBuffer = fs.default.readFileSync(croppedPath);
+          try { fs.default.unlinkSync(tmpPath); } catch {}
+          if (croppedPath !== tmpPath) { try { fs.default.unlinkSync(croppedPath); } catch {} }
+          console.log(`[PublicURL] Padded object storage image to ${targetAspectRatio}`);
+        } catch (cropErr) {
+          console.warn('[PublicURL] Object storage image crop failed, using original:', cropErr);
+        }
+      }
+      
       const ext = objectPath.split('.').pop() || 'png';
       const filename = `scene_source_${Date.now()}.${ext}`;
       
-      const piapiUrl = await uploadImageToPiAPIStorage(fileBuffer, filename);
+      const piapiUrl = await uploadImageToPiAPIStorage(processedBuffer as Buffer, filename);
       
       if (piapiUrl) {
         console.log('[PublicURL] ✓ Uploaded to PiAPI storage:', piapiUrl);
@@ -4253,15 +4274,16 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, asy
     console.log(`[Phase9B-Async] Relative source image URL: ${relativeSourceUrl?.substring(0, 80) || 'none (T2V mode)'}`);
     
     // Convert relative URL to signed public URL for external video providers
-    // CRITICAL: For I2V, do NOT pad/crop the reference image - send original as-is
-    // AI video models handle aspect ratio internally and padding distorts the reference
+    // Pad/crop the source image to match the project's target aspect ratio
+    // because providers like Kling I2V use the source image dimensions for output
     let finalSourceImageUrl: string | undefined = undefined;
     if (relativeSourceUrl) {
       const projectAspectRatio = (projectData as any).outputFormat?.aspectRatio || (projectData as any).settings?.aspectRatio || '16:9';
-      const publicUrl = await getPublicUrlForBrandAsset(relativeSourceUrl);
+      console.log(`[Phase9B-Async] Target aspect ratio for I2V source image: ${projectAspectRatio}`);
+      const publicUrl = await getPublicUrlForBrandAsset(relativeSourceUrl, projectAspectRatio);
       if (publicUrl) {
         finalSourceImageUrl = publicUrl;
-        console.log(`[Phase9B-Async] ✓ Converted to public URL for I2V (NO padding - original image preserved)`);
+        console.log(`[Phase9B-Async] ✓ Converted to public URL for I2V (padded to ${projectAspectRatio})`);
       } else {
         console.log(`[Phase9B-Async] ⚠ Could not convert to public URL, falling back to T2V mode`);
       }
