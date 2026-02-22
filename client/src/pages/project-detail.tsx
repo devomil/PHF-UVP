@@ -653,7 +653,7 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
                   <ImagePlus className="w-4 h-4 text-purple-400" />
                   <span className="text-xs font-medium uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>Reference Images</span>
                 </div>
-                <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>Add images for I2V (image-to-video) generation</p>
+                <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>Add images for I2V (image-to-video) generation. Best results: use landscape (16:9) images at 1920×1080px or larger.</p>
                 <input
                   ref={refFileInputRef}
                   type="file"

@@ -112,48 +112,23 @@ async function cropImageToAspectRatio(
   const ext = path.default.extname(inputPath);
   const outputPath = inputPath.replace(ext, `_cropped.png`);
   
+  const maxW = Math.max(imgW, 1280);
+  const outW = Math.min(maxW, 1920);
+  const outH = Math.round(outW / targetRatio);
+  
   try {
-    if (imgRatio < targetRatio) {
-      const canvasW = 1920;
-      const canvasH = Math.round(canvasW / targetRatio);
-      const fitH = canvasH;
-      const fitW = Math.round(fitH * imgRatio);
-      
-      console.log(`[ImageCrop] Portrait→Landscape: Padding ${imgW}x${imgH} into ${canvasW}x${canvasH} with blurred background`);
-      
-      const blurredBg = await sharp(inputPath)
-        .resize(canvasW, canvasH, { fit: 'cover' })
-        .blur(60)
-        .modulate({ brightness: 0.6 })
-        .toBuffer();
-      
-      const foreground = await sharp(inputPath)
-        .resize({ height: fitH, fit: 'inside' })
-        .toBuffer();
-      
-      const fgMeta = await sharp(foreground).metadata();
-      const fgW = fgMeta.width || fitW;
-      const fgH = fgMeta.height || fitH;
-      const leftOffset = Math.round((canvasW - fgW) / 2);
-      const topOffset = Math.round((canvasH - fgH) / 2);
-      
-      await sharp(blurredBg)
-        .composite([{ input: foreground, left: leftOffset, top: topOffset }])
-        .png()
-        .toFile(outputPath);
-    } else {
-      const cropW = Math.round(imgH * targetRatio);
-      const cropH = imgH;
-      const left = Math.round((imgW - cropW) / 2);
-      
-      console.log(`[ImageCrop] Landscape crop: ${imgW}x${imgH} to ${cropW}x${cropH} (target ${targetAspectRatio})`);
-      
-      await sharp(inputPath)
-        .extract({ left, top: 0, width: cropW, height: cropH })
-        .resize(1920, Math.round(1920 / targetRatio))
-        .png()
-        .toFile(outputPath);
+    console.log(`[ImageCrop] Cover-crop: ${imgW}x${imgH} (ratio ${imgRatio.toFixed(2)}) → ${outW}x${outH} (target ${targetAspectRatio}, ratio ${targetRatio.toFixed(2)})`);
+    if (imgW < 1280 || imgH < 720) {
+      console.warn(`[ImageCrop] ⚠ Source image is small (${imgW}x${imgH}), output quality may be reduced. Recommend 1920x1080+ for best results.`);
     }
+    
+    await sharp(inputPath)
+      .resize(outW, outH, {
+        fit: 'cover',
+        position: 'centre',
+      })
+      .png()
+      .toFile(outputPath);
     
     if (fs.default.existsSync(outputPath)) {
       console.log(`[ImageCrop] ✓ Processed image saved: ${outputPath}`);
