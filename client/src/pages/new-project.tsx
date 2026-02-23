@@ -3,7 +3,7 @@ import { useLocation, Link } from "wouter";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Sparkles, FileText, Zap, ArrowLeft, Video, Image, Info } from "lucide-react";
+import { Sparkles, FileText, Zap, ArrowLeft, Video, Image, Info, Plus, Trash2, ChevronUp, ChevronDown, GripVertical } from "lucide-react";
 import { ProviderCatalogSelector } from "@/components/video/provider-catalog-selector";
 import { getAvailableStyles } from "@shared/visual-style-config";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -245,10 +245,27 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
   );
 }
 
+interface CustomScene {
+  id: string;
+  type: string;
+  narration: string;
+}
+
+const SCENE_TYPES = [
+  { value: "hook", label: "Opening / Hook", description: "Grabs attention and introduces the video" },
+  { value: "intro", label: "Introduction", description: "Sets context and introduces the topic" },
+  { value: "benefit", label: "Benefit / Point", description: "Highlights a key benefit or talking point" },
+  { value: "feature", label: "Feature / Detail", description: "Showcases a specific feature or detail" },
+  { value: "content", label: "Content", description: "General content or storytelling scene" },
+  { value: "cta", label: "Call to Action", description: "Encourages the viewer to take action" },
+  { value: "outro", label: "Closing / Outro", description: "Wraps up the video with a final message" },
+];
+
 function CustomScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onSubmit: (data: any) => void; isLoading: boolean }) {
   const [title, setTitle] = useState("");
-  const [script, setScript] = useState("");
-  const [numScenes, setNumScenes] = useState("5");
+  const [scenes, setScenes] = useState<CustomScene[]>([
+    { id: crypto.randomUUID(), type: "hook", narration: "" },
+  ]);
   const [duration, setDuration] = useState("60");
   const [platform, setPlatform] = useState("YouTube");
   const [aspectRatio, setAspectRatio] = useState("16:9");
@@ -261,14 +278,48 @@ function CustomScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void;
     setAspectRatio(platformAspectMap[platform] || "16:9");
   }, [platform]);
 
+  const addScene = (type?: string) => {
+    const lastScene = scenes[scenes.length - 1];
+    const nextType = type || (lastScene?.type === "hook" ? "benefit" : lastScene?.type === "benefit" ? "feature" : "content");
+    setScenes([...scenes, { id: crypto.randomUUID(), type: nextType, narration: "" }]);
+  };
+
+  const removeScene = (id: string) => {
+    if (scenes.length <= 1) return;
+    setScenes(scenes.filter((s) => s.id !== id));
+  };
+
+  const updateScene = (id: string, field: keyof CustomScene, value: string) => {
+    setScenes(scenes.map((s) => (s.id === id ? { ...s, [field]: value } : s)));
+  };
+
+  const moveScene = (index: number, direction: "up" | "down") => {
+    const newIndex = direction === "up" ? index - 1 : index + 1;
+    if (newIndex < 0 || newIndex >= scenes.length) return;
+    const updated = [...scenes];
+    [updated[index], updated[newIndex]] = [updated[newIndex], updated[index]];
+    setScenes(updated);
+  };
+
+  const hasNarration = scenes.some((s) => s.narration.trim().length > 0);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const totalDuration = parseInt(duration);
+    const sceneDuration = Math.round(totalDuration / scenes.length);
     onSubmit({
       mode: "custom-script",
       title,
-      script,
-      numScenes: parseInt(numScenes),
-      duration: parseInt(duration),
+      script: scenes.map((s) => s.narration).join("\n\n"),
+      customScenes: scenes.map((s, i) => ({
+        id: s.id,
+        type: s.type,
+        narration: s.narration,
+        order: i,
+        duration: sceneDuration,
+      })),
+      numScenes: scenes.length,
+      duration: totalDuration,
       platform,
       aspectRatio,
       visualStyle,
@@ -292,26 +343,84 @@ function CustomScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void;
         </div>
 
         <div>
-          <Label style={{ color: "var(--text-secondary)" }}>Script</Label>
-          <Textarea value={script} onChange={(e) => setScript(e.target.value)} placeholder="Write or paste your script here..." rows={8} className="mt-1.5" style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }} />
+          <div className="flex items-center justify-between mb-2">
+            <div>
+              <Label style={{ color: "var(--text-secondary)" }}>Scenes ({scenes.length})</Label>
+              <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>Add scenes and enter the exact narration for each</p>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            {scenes.map((scene, index) => (
+              <div
+                key={scene.id}
+                className="rounded-lg border p-4 transition-all"
+                style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)" }}
+              >
+                <div className="flex items-center gap-2 mb-3">
+                  <GripVertical className="w-4 h-4 flex-shrink-0" style={{ color: "var(--text-muted)" }} />
+                  <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ backgroundColor: "var(--surface-active)", color: "var(--text-secondary)" }}>
+                    {index + 1}
+                  </span>
+                  <Select value={scene.type} onValueChange={(v) => updateScene(scene.id, "type", v)}>
+                    <SelectTrigger className="flex-1 h-8 text-sm" style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent style={{ backgroundColor: "var(--menu-bg)", borderColor: "var(--border-medium)" }}>
+                      {SCENE_TYPES.map((t) => (
+                        <SelectItem key={t.value} value={t.value} style={{ color: "var(--text-primary)" }}>
+                          <div className="flex flex-col">
+                            <span>{t.label}</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <div className="flex items-center gap-0.5">
+                    <button type="button" onClick={() => moveScene(index, "up")} disabled={index === 0} className="p-1 rounded hover:bg-white/5 disabled:opacity-30 transition-opacity" title="Move up">
+                      <ChevronUp className="w-4 h-4" style={{ color: "var(--text-muted)" }} />
+                    </button>
+                    <button type="button" onClick={() => moveScene(index, "down")} disabled={index === scenes.length - 1} className="p-1 rounded hover:bg-white/5 disabled:opacity-30 transition-opacity" title="Move down">
+                      <ChevronDown className="w-4 h-4" style={{ color: "var(--text-muted)" }} />
+                    </button>
+                    <button type="button" onClick={() => removeScene(scene.id)} disabled={scenes.length <= 1} className="p-1 rounded hover:bg-red-500/10 disabled:opacity-30 transition-all" title="Remove scene">
+                      <Trash2 className="w-4 h-4 text-red-400" />
+                    </button>
+                  </div>
+                </div>
+                <Textarea
+                  value={scene.narration}
+                  onChange={(e) => updateScene(scene.id, "narration", e.target.value)}
+                  placeholder={`Enter narration for ${SCENE_TYPES.find((t) => t.value === scene.type)?.label || "this scene"}...`}
+                  rows={3}
+                  className="text-sm"
+                  style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }}
+                />
+              </div>
+            ))}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => addScene()}
+            className="mt-3 w-full flex items-center justify-center gap-2 py-2.5 rounded-lg border-2 border-dashed transition-all hover:border-purple-500/50 hover:bg-purple-500/5"
+            style={{ borderColor: "var(--border-subtle)", color: "var(--text-secondary)" }}
+          >
+            <Plus className="w-4 h-4" />
+            <span className="text-sm font-medium">Add Scene</span>
+          </button>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <Label style={{ color: "var(--text-secondary)" }}>Number of Scenes</Label>
-            <Input type="number" value={numScenes} onChange={(e) => setNumScenes(e.target.value)} min="1" max="50" className="mt-1.5" style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }} />
-          </div>
-          <div>
-            <Label style={{ color: "var(--text-secondary)" }}>Target Duration</Label>
-            <Select value={duration} onValueChange={setDuration}>
-              <SelectTrigger className="mt-1.5" style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }}><SelectValue /></SelectTrigger>
-              <SelectContent style={{ backgroundColor: "var(--menu-bg)", borderColor: "var(--border-medium)" }}>
-                {["15", "30", "60", "90", "120", "180"].map((d) => (
-                  <SelectItem key={d} value={d} style={{ color: "var(--text-primary)" }}>{d}s</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+        <div>
+          <Label style={{ color: "var(--text-secondary)" }}>Target Duration</Label>
+          <Select value={duration} onValueChange={setDuration}>
+            <SelectTrigger className="mt-1.5" style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }}><SelectValue /></SelectTrigger>
+            <SelectContent style={{ backgroundColor: "var(--menu-bg)", borderColor: "var(--border-medium)" }}>
+              {["15", "30", "60", "90", "120", "180"].map((d) => (
+                <SelectItem key={d} value={d} style={{ color: "var(--text-primary)" }}>{d}s</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         <div className="grid grid-cols-2 gap-4">

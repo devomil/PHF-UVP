@@ -197,7 +197,7 @@ export function registerRoutes(app: Express) {
         return res.status(401).json({ error: "Not authenticated" });
       }
 
-      const { mode, title, description, targetAudience, duration, platform, aspectRatio, mediaMode, videoGenerationMode, qualityTier, script, numScenes, visualStyle, voiceStyle, outputType, prompt, imageStyle, provider, saveToLibrary } = req.body;
+      const { mode, title, description, targetAudience, duration, platform, aspectRatio, mediaMode, videoGenerationMode, qualityTier, script, numScenes, visualStyle, voiceStyle, outputType, prompt, imageStyle, provider, saveToLibrary, customScenes } = req.body;
 
       const projectId = crypto.randomUUID();
 
@@ -213,6 +213,23 @@ export function registerRoutes(app: Express) {
         const type = mode === "ai-script" ? "product" : "script-based";
         const userId = (req.user as any).id;
         const brandData = await getBrandContext(userId);
+
+        let preSeededScenes: any[] = [];
+        if (mode === "custom-script" && customScenes && Array.isArray(customScenes) && customScenes.length > 0) {
+          const totalDur = duration || 60;
+          const sceneDur = Math.floor(totalDur / customScenes.length);
+          const remainder = totalDur - (sceneDur * customScenes.length);
+          preSeededScenes = customScenes.map((cs: any, index: number) => ({
+            id: cs.id || crypto.randomUUID(),
+            type: cs.type || "content",
+            narration: cs.narration || "",
+            visualDirection: "",
+            duration: cs.duration || (sceneDur + (index === customScenes.length - 1 ? remainder : 0)),
+            order: index,
+          }));
+          console.log(`[Routes] Custom script with ${preSeededScenes.length} pre-defined scenes`);
+        }
+
         const [project] = await db.insert(universalVideoProjects).values({
           projectId,
           ownerId: userId,
@@ -224,13 +241,14 @@ export function registerRoutes(app: Express) {
           fps: 30,
           outputFormat: { aspectRatio: aspectRatio || "16:9", resolution, platform: platform || "YouTube" },
           brand: brandData.brandName ? { name: brandData.brandName, tagline: brandData.tagline, website: brandData.website, colors: { primary: brandData.primaryColor, secondary: brandData.secondaryColor, accent: brandData.accentColor }, logoUrl: brandData.logoUrl, guidelines: brandData.guidelines } : {},
-          scenes: [],
+          scenes: preSeededScenes,
           assets: {},
-          progress: { phase: "draft", percentage: 0, currentStep: "" },
+          progress: preSeededScenes.length > 0 ? { phase: "scenes-ready", percentage: 20, currentStep: "Scenes defined" } : { phase: "draft", percentage: 0, currentStep: "" },
           status: "draft",
           qualityTier: qualityTier || "premium",
           mediaMode: mediaMode || "video",
           videoGenerationMode: videoGenerationMode || null,
+          voiceStyle: voiceStyle || null,
         }).returning();
 
         return res.json({ projectId: project.projectId, id: project.id, status: "draft" });
