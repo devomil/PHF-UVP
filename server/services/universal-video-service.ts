@@ -2916,6 +2916,135 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
       return updatedProject;
     }
 
+    // ===== AUTO-GENERATE VISUAL DIRECTIONS FOR SCENES MISSING THEM =====
+    const scenesNeedingDirection = updatedProject.scenes.filter(
+      (s: any) => !s.visualDirection || s.visualDirection.trim().length < 10
+    );
+    
+    if (scenesNeedingDirection.length > 0) {
+      console.log(`[Assets] Auto-generating visual directions for ${scenesNeedingDirection.length} scenes...`);
+      updatedProject.progress.currentStep = 'images';
+      updatedProject.progress.overallPercent = 12;
+      await saveProgress();
+      
+      const projectVisualStyle = (project as any).visualStyle || 'lifestyle';
+      const projectTitle = project.title || '';
+      
+      let brandContextStr = '';
+      try {
+        brandContextStr = await brandContextService.getVisualDirectionGenerationContext();
+      } catch (err: any) {
+        console.warn(`[Assets] Brand context load failed: ${err.message}`);
+      }
+      
+      const anthropicKey = process.env.ANTHROPIC_API_KEY;
+      if (anthropicKey) {
+        const anthropic = new Anthropic({ apiKey: anthropicKey });
+        
+        for (let i = 0; i < updatedProject.scenes.length; i++) {
+          const scene = updatedProject.scenes[i];
+          if (scene.visualDirection && scene.visualDirection.trim().length >= 10) {
+            continue;
+          }
+          
+          const narration = scene.narration || '';
+          if (!narration.trim()) {
+            console.log(`[Assets] Scene ${scene.id} has no narration, skipping visual direction generation`);
+            continue;
+          }
+          
+          try {
+            const systemPrompt = `You are an expert visual director for professional marketing and content videos. You create broadcast-quality visual directions optimized for AI video generation.
+
+${brandContextStr}
+
+## YOUR TASK
+Create a visual direction for a single video scene that is:
+1. HIGHLY SPECIFIC - Include exact lighting, camera angle, composition, colors, and mood
+2. AI-GENERATION READY - Achievable with current AI video models (avoid complex multi-person scenes, text overlays, or impossible physics)
+3. VISUALLY COMPELLING - Create imagery that captivates viewers and enhances the narration
+4. SCENE-TYPE APPROPRIATE - Match the purpose of this scene in the video
+
+## VISUAL STYLE: ${projectVisualStyle}
+${projectVisualStyle === 'hero' || projectVisualStyle === 'cinematic' ? 'Dramatic, film-quality visuals with cinematic lighting and composition.' : ''}
+${projectVisualStyle === 'lifestyle' ? 'Warm, relatable visuals with natural lighting and authentic settings.' : ''}
+${projectVisualStyle === 'product' ? 'Clean, focused visuals with studio lighting and professional presentation.' : ''}
+${projectVisualStyle === 'educational' ? 'Clear, informative visuals with good contrast and readable compositions.' : ''}
+${projectVisualStyle === 'social' ? 'Fast-paced, attention-grabbing visuals with bold colors and dynamic movement.' : ''}
+${projectVisualStyle === 'premium' ? 'Luxurious, sophisticated visuals with elegant composition and rich tones.' : ''}
+
+## BEST PRACTICES FOR AI VIDEO PROMPTS
+- Describe ONE clear subject or focal point per scene
+- Specify camera movement (slow zoom in, gentle pan, static wide shot, tracking shot)
+- Include lighting details (golden hour, soft diffused, dramatic side-light, warm ambient)
+- Mention color palette (earth tones, warm golds, cool blues, muted pastels)
+- Describe mood and atmosphere (peaceful, energetic, contemplative, uplifting)
+- Keep descriptions concrete and visual - avoid abstract concepts
+- Use 3-4 detailed sentences maximum
+
+## OUTPUT FORMAT
+Return ONLY a JSON object:
+{
+  "visualDirection": "3-4 sentences with SPECIFIC visual details"
+}`;
+
+            const userPrompt = `Scene Type: ${scene.type || 'content'}
+Scene Title: ${(scene as any).title || 'Untitled'}
+Project: ${projectTitle}
+Scene ${i + 1} of ${updatedProject.scenes.length}
+
+Narration for this scene:
+"${narration}"
+
+Create a vivid, specific visual direction optimized for AI video generation. Return JSON with visualDirection field.`;
+
+            const response = await anthropic.messages.create({
+              model: 'claude-sonnet-4-20250514',
+              max_tokens: 400,
+              system: systemPrompt,
+              messages: [{ role: 'user', content: userPrompt }],
+            });
+            
+            const textContent = response.content?.[0]?.type === 'text' ? response.content[0].text : '';
+            if (textContent) {
+              let visualDirection = textContent.trim();
+              try {
+                const jsonMatch = textContent.match(/\{[\s\S]*\}/);
+                if (jsonMatch) {
+                  const parsed = JSON.parse(jsonMatch[0]);
+                  visualDirection = parsed.visualDirection || visualDirection;
+                }
+              } catch {}
+              
+              updatedProject.scenes[i].visualDirection = visualDirection;
+              if (!updatedProject.scenes[i].background) {
+                updatedProject.scenes[i].background = { type: 'ai' as any, source: visualDirection };
+              } else {
+                updatedProject.scenes[i].background!.source = visualDirection;
+              }
+              console.log(`[Assets] Visual direction generated for scene ${i + 1} (${scene.type}): ${visualDirection.substring(0, 100)}...`);
+            }
+          } catch (err: any) {
+            console.warn(`[Assets] Visual direction generation failed for scene ${i + 1}: ${err.message} - using narration-based fallback`);
+            const sceneTitle = (scene as any).title ? `${(scene as any).title}: ` : '';
+            const fallback = `Cinematic ${projectVisualStyle} scene depicting: ${sceneTitle}${narration.substring(0, 200)}. Warm natural lighting, smooth camera movement, professional composition.`;
+            updatedProject.scenes[i].visualDirection = fallback;
+            if (!updatedProject.scenes[i].background) {
+              updatedProject.scenes[i].background = { type: 'ai' as any, source: fallback };
+            } else {
+              updatedProject.scenes[i].background!.source = fallback;
+            }
+          }
+        }
+        
+        await saveProgress();
+        console.log(`[Assets] Visual direction generation complete`);
+      } else {
+        console.warn('[Assets] No ANTHROPIC_API_KEY - cannot auto-generate visual directions');
+      }
+    }
+    // ===== END AUTO-GENERATE VISUAL DIRECTIONS =====
+
     updatedProject.progress.currentStep = 'images';
     updatedProject.progress.overallPercent = 15;
 
