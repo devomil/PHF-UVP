@@ -222,6 +222,7 @@ export function registerRoutes(app: Express) {
           preSeededScenes = customScenes.map((cs: any, index: number) => ({
             id: cs.id || crypto.randomUUID(),
             type: cs.type || "content",
+            title: cs.title || "",
             narration: cs.narration || "",
             visualDirection: "",
             duration: cs.duration || (sceneDur + (index === customScenes.length - 1 ? remainder : 0)),

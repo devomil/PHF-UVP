@@ -248,6 +248,7 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
 interface CustomScene {
   id: string;
   type: string;
+  title: string;
   narration: string;
 }
 
@@ -264,7 +265,7 @@ const SCENE_TYPES = [
 function CustomScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onSubmit: (data: any) => void; isLoading: boolean }) {
   const [title, setTitle] = useState("");
   const [scenes, setScenes] = useState<CustomScene[]>([
-    { id: crypto.randomUUID(), type: "hook", narration: "" },
+    { id: crypto.randomUUID(), type: "hook", title: "", narration: "" },
   ]);
   const [duration, setDuration] = useState("60");
   const [platform, setPlatform] = useState("YouTube");
@@ -281,7 +282,7 @@ function CustomScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void;
   const addScene = (type?: string) => {
     const lastScene = scenes[scenes.length - 1];
     const nextType = type || (lastScene?.type === "hook" ? "benefit" : lastScene?.type === "benefit" ? "feature" : "content");
-    setScenes([...scenes, { id: crypto.randomUUID(), type: nextType, narration: "" }]);
+    setScenes([...scenes, { id: crypto.randomUUID(), type: nextType, title: "", narration: "" }]);
   };
 
   const removeScene = (id: string) => {
@@ -314,6 +315,7 @@ function CustomScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void;
       customScenes: scenes.map((s, i) => ({
         id: s.id,
         type: s.type,
+        title: s.title || undefined,
         narration: s.narration,
         order: i,
         duration: sceneDuration,
@@ -388,6 +390,13 @@ function CustomScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void;
                     </button>
                   </div>
                 </div>
+                <Input
+                  value={scene.title}
+                  onChange={(e) => updateScene(scene.id, "title", e.target.value)}
+                  placeholder="Scene title (optional)"
+                  className="text-sm mb-2"
+                  style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }}
+                />
                 <Textarea
                   value={scene.narration}
                   onChange={(e) => updateScene(scene.id, "narration", e.target.value)}
