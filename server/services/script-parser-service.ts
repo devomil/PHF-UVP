@@ -156,45 +156,38 @@ SCENE TYPES:
 
 VISUAL DIRECTION RULES - CRITICAL:
 
-1. APPLY THE AESTHETIC, DON'T FORCE THE LOCATION
-   
-   WRONG: "${brandName} kitchen with woman preparing food"
-   RIGHT: "Warm, sunlit home kitchen with natural wood counters, woman preparing fresh vegetables, golden morning light, earth tones"
-   
-   WRONG: "${brandName} consultation room"
-   RIGHT: "Cozy wellness space with plants, natural light, warm wood furniture"
+## CORE PRINCIPLE: AUTHENTICITY AND RELATABILITY
+The visual direction MUST match the emotional reality of the narration. Social media and TV audiences connect with visuals that mirror their own experience, not cinematic productions.
 
-2. WHEN TO EXPLICITLY MENTION "${brandName.toUpperCase()}":
-   - CTA scenes (call to action, visit us, contact us)
-   - Outro scenes (final branding moment)
-   - Product showcase scenes
-   - NEVER in educational/informational scenes
+1. MATCH THE NARRATION'S REALITY
+   - If the narration is about struggling with weight, show someone who looks like they actually struggle with weight
+   - If it's about stress, show a real person looking stressed in a normal room
+   - The subject must visually reflect the situation being described
    
-3. BRAND AESTHETIC (apply to ALL scenes):
-   - Warm, golden lighting (NOT clinical/cold)
-   - Earth tones: greens, browns, warm golds
-   - Natural textures: wood, plants, organic materials
-   - Real people with authentic expressions
-   - Home, garden, or wellness settings
-   - Cozy, inviting atmosphere
+   WRONG: "Close-up shot of a frustrated woman in her 30s standing on a modern bathroom scale, soft morning light filtering through frosted glass window creating gentle shadows, camera slowly pulls back..."
+   RIGHT: "A woman measuring her waist with a tape measure, looking frustrated"
    
-4. SCENE TYPE VISUAL GUIDELINES:
-   - HOOK/PROBLEM: Home setting, relatable environment, authentic person
-   - EDUCATIONAL: Clean background, warm lighting, focus on subject matter
-   - SOLUTION: Bright, hopeful, natural ingredients or wellness imagery
-   - BENEFIT: Lifestyle imagery, transformation, vitality
-   - CTA: ${hasBrand ? `${brandName} branding, logo, contact info` : 'Brand logo, contact info'}, welcoming entrance
+   WRONG: "${brandName} consultation room with cinematic lighting"
+   RIGHT: "Person sitting at their kitchen table reading about health solutions"
 
-5. WHAT THE VISUAL DIRECTION SHOULD DESCRIBE:
-   - Lighting quality and color temperature
-   - Setting type (home kitchen, living room, garden, wellness space)
-   - Subject (person demographics, expression, activity)
-   - Textures and materials visible
-   - Color palette${brand.primaryColor !== '#9333ea' ? ` (brand colors: ${brand.primaryColor}, ${brand.secondaryColor}, ${brand.accentColor})` : ''}
-   - Camera framing/angle
-   - Mood and atmosphere
-   
-   DO NOT describe fictional "${brandName}" locations that don't exist.
+2. KEEP IT SIMPLE - 1-2 plain sentences max
+   - ONE subject, ONE action, ONE setting
+   - Describe what we SEE in plain language
+   - NO camera angles, NO color palettes, NO lighting descriptions, NO cinematic language
+   - Write as if describing a scene to a friend, not a film crew
+
+3. REAL SETTINGS
+   - Kitchen, bathroom, living room, bedroom, office, park
+   - Places that look lived-in, not styled or cinematic
+   - Everyday environments audiences recognize from their own life
+
+4. WHEN TO MENTION "${brandName.toUpperCase()}":
+   - Only in CTA, outro, or product showcase scenes
+   - NEVER in educational/informational/hook/problem scenes
+   - DO NOT describe fictional "${brandName}" locations
+
+5. NEVER include text, words, signs, labels, logos, or written content in visual directions
+   - AI video models cannot render readable text
 
 OUTPUT FORMAT:
 Return a JSON object with scenes array. Each scene should include:
@@ -240,17 +233,18 @@ ${script}
 Parse this into scenes with brand awareness. For each scene:
 1. Identify the scene type and purpose
 2. Connect to relevant brand services/products
-3. Write visual directions that match the brand's warm, natural aesthetic
+3. Write SIMPLE, AUTHENTIC visual directions (1-2 sentences) that match the emotional reality of the narration
 4. Note audience resonance and brand opportunities
 5. Create searchQuery for stock video (3-5 concise words)
 6. Create fallbackQuery as alternative search approach
 
 CRITICAL VISUAL DIRECTION RULES:
-- For hook/problem/solution/benefit/educational scenes: Use GENERIC aesthetic settings like "warm sunlit home kitchen" or "cozy living room" - do NOT say "${brandName} kitchen" or "${brandName} consultation room"
-- Only mention "${brandName}" explicitly in CTA, outro, product, or testimonial scenes
-- Apply the brand aesthetic (warm lighting, earth tones, natural textures) to ALL scenes
-- Do NOT invent fictional ${brandName} locations
-- NEVER include text, words, signs, labels, logos, or written content in visual directions. AI video models cannot render readable text. Describe ONLY visual imagery, actions, lighting, and composition. Instead of "storefront with sign" write "exterior entrance". Instead of "label showing ingredients" write "close-up of product packaging".
+- Keep visual directions to 1-2 plain sentences. Describe what we SEE, not cinematic production details.
+- The subject must visually match the situation in the narration (e.g., weight loss = someone with realistic body, not a fit model)
+- Use everyday settings (kitchen, living room, bathroom) not styled cinematic locations
+- NO camera angles, lighting rigs, color palettes, or film language
+- Only mention "${brandName}" in CTA, outro, or product scenes
+- NEVER include text, words, signs, labels, logos in visual directions - AI cannot render readable text.
 
 Return ONLY valid JSON matching this structure:
 {
@@ -260,7 +254,7 @@ Return ONLY valid JSON matching this structure:
       "type": "hook|problem|solution|benefit|cta|etc",
       "narration": "exact script text for this scene",
       "duration": 5,
-      "visualDirection": "detailed visual matching brand aesthetic",
+      "visualDirection": "1-2 simple sentences describing what we see - authentic and relatable",
       "searchQuery": "3-5 word stock video search",
       "fallbackQuery": "alternative search query",
       "keyPoints": ["main point for text overlay"],
