@@ -551,6 +551,11 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
                               {scene.duration}s
                             </span>
                           )}
+                          {scene.microScenes && scene.microScenes.length > 1 && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
+                              {scene.microScenes.length} micro
+                            </span>
+                          )}
                         </div>
                         <p className="text-xs truncate mt-0.5" style={{ color: "var(--text-muted)" }}>
                           {narration.substring(0, 80)}{narration.length > 80 ? "..." : ""}

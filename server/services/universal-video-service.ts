@@ -2956,64 +2956,95 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
 ${brandContextStr}
 
 ## CORE PRINCIPLE: AUTHENTICITY OVER PRODUCTION VALUE
-The #1 priority is that the visual MATCHES the emotional reality of the narration. If the narration is about struggling with weight, show someone who actually looks like they struggle with weight - not a fit model in a glamorous setting. If it's about financial stress, show a real kitchen table with bills, not a cinematic office. Audiences on social media and TV connect with visuals that mirror their own experience.
+The #1 priority is that the visual MATCHES the emotional reality of the narration. If the narration is about struggling with weight, show someone who actually looks like they struggle with weight - not a fit model in a glamorous setting. Audiences connect with visuals that mirror their own experience.
 
-## RULES
-1. MATCH THE NARRATION'S REALITY - The subject must visually reflect the situation described. A scene about weight loss struggle should show someone with a realistic body type, not an athletic person.
-2. KEEP IT SIMPLE - One subject, one action, one setting. No elaborate camera movements or production descriptions.
-3. BE DIRECT - Describe what we SEE in plain language. "A woman measuring her waist with a tape measure" is better than "Close-up tracking shot of a contemplative figure with soft diffused golden-hour lighting revealing her silhouette."
-4. REAL SETTINGS, NOT SETS - Kitchen, bathroom, living room, office - places that look lived-in and real, not styled or cinematic.
-5. NO CINEMATIC LANGUAGE - Do not describe camera angles, color palettes, lighting rigs, or post-production effects. Just describe the scene as if you're telling someone what they'd see in real life.
-6. EMOTIONAL HONESTY - The person's expression and body language should match what the narration says they're feeling.
+## MICRO-SCENES
+Split the narration into micro-scenes. Each micro-scene covers 1-2 sentences that share a single visual idea. Each micro-scene gets its own distinct visual direction, so the final video has visual variety instead of one static image for the whole scene.
+
+Guidelines for splitting:
+- Split at natural topic/image shifts in the narration
+- Each micro-scene should represent ONE clear visual moment
+- 2-4 micro-scenes per scene is ideal (minimum 1, maximum 5)
+- Short scenes (under 5 seconds or 1-2 sentences) should stay as 1 micro-scene
+- Estimate duration proportionally based on word count of each segment
+
+## RULES FOR VISUAL DIRECTIONS
+1. MATCH THE NARRATION'S REALITY - The subject must visually reflect the situation described.
+2. KEEP IT SIMPLE - One subject, one action, one setting per micro-scene.
+3. BE DIRECT - Describe what we SEE in plain language.
+4. REAL SETTINGS, NOT SETS - Everyday places that look lived-in and real.
+5. NO CINEMATIC LANGUAGE - No camera angles, color palettes, or lighting rigs.
+6. EMOTIONAL HONESTY - Expression and body language should match the narration.
+7. VISUAL VARIETY - Each micro-scene should show something DIFFERENT. Don't repeat the same visual across micro-scenes.
 
 ## VISUAL STYLE: ${projectVisualStyle}
-
-## PROMPT FORMAT
-Write 1-2 plain sentences describing:
-- WHO is in the scene (realistic appearance matching the narration context)
-- WHAT they are doing (simple, relatable action)
-- WHERE they are (everyday, authentic setting)
 
 ## OUTPUT FORMAT
 Return ONLY a JSON object:
 {
-  "visualDirection": "1-2 simple, authentic sentences"
+  "visualDirection": "overall 1-sentence summary for the whole scene",
+  "microScenes": [
+    { "narration": "exact text from the narration for this segment", "visualDirection": "1-2 sentences describing what we see", "duration": 4 },
+    { "narration": "next segment text", "visualDirection": "different visual for this part", "duration": 3 }
+  ]
 }`;
 
             const userPrompt = `Scene Type: ${scene.type || 'content'}
 ${(scene as any).title ? `Scene Title: ${(scene as any).title}` : ''}
 Scene ${i + 1} of ${updatedProject.scenes.length}
+Scene Duration: ${scene.duration || 10} seconds
 
 Narration:
 "${narration}"
 
-Describe what we see in this scene in 1-2 simple sentences. Focus on showing something real and relatable that matches what the narration is saying. Return JSON with visualDirection field.`;
+Split this narration into micro-scenes (2-4 segments) at natural topic shifts. Each micro-scene gets its own simple, authentic visual direction. Return JSON with visualDirection and microScenes array.`;
 
             const response = await anthropic.messages.create({
               model: 'claude-sonnet-4-20250514',
-              max_tokens: 200,
+              max_tokens: 600,
               system: systemPrompt,
               messages: [{ role: 'user', content: userPrompt }],
             });
             
             const textContent = response.content?.[0]?.type === 'text' ? response.content[0].text : '';
             if (textContent) {
-              let visualDirection = textContent.trim();
+              let visualDirection = '';
+              let microScenes: any[] = [];
               try {
                 const jsonMatch = textContent.match(/\{[\s\S]*\}/);
                 if (jsonMatch) {
                   const parsed = JSON.parse(jsonMatch[0]);
-                  visualDirection = parsed.visualDirection || visualDirection;
+                  visualDirection = parsed.visualDirection || '';
+                  if (parsed.microScenes && Array.isArray(parsed.microScenes) && parsed.microScenes.length > 0) {
+                    microScenes = parsed.microScenes.map((ms: any, idx: number) => ({
+                      id: `${scene.id}-micro-${idx + 1}`,
+                      narration: ms.narration || '',
+                      visualDirection: ms.visualDirection || '',
+                      duration: ms.duration || Math.round((scene.duration || 10) / parsed.microScenes.length),
+                    }));
+                  }
                 }
               } catch {}
               
-              updatedProject.scenes[i].visualDirection = visualDirection;
-              if (!updatedProject.scenes[i].background) {
-                updatedProject.scenes[i].background = { type: 'ai' as any, source: visualDirection };
-              } else {
-                updatedProject.scenes[i].background!.source = visualDirection;
+              if (!visualDirection && textContent.trim().length > 10) {
+                visualDirection = textContent.trim();
               }
-              console.log(`[Assets] Visual direction generated for scene ${i + 1} (${scene.type}): ${visualDirection.substring(0, 100)}...`);
+              
+              if (visualDirection) {
+                updatedProject.scenes[i].visualDirection = visualDirection;
+                if (!updatedProject.scenes[i].background) {
+                  updatedProject.scenes[i].background = { type: 'ai' as any, source: visualDirection };
+                } else {
+                  updatedProject.scenes[i].background!.source = visualDirection;
+                }
+              }
+              
+              if (microScenes.length > 0) {
+                (updatedProject.scenes[i] as any).microScenes = microScenes;
+                console.log(`[Assets] Scene ${i + 1} split into ${microScenes.length} micro-scenes: ${microScenes.map(ms => ms.visualDirection.substring(0, 40)).join(' | ')}`);
+              } else {
+                console.log(`[Assets] Visual direction generated for scene ${i + 1} (${scene.type}): ${visualDirection.substring(0, 100)}...`);
+              }
             }
           } catch (err: any) {
             console.warn(`[Assets] Visual direction generation failed for scene ${i + 1}: ${err.message} - using narration-based fallback`);
@@ -3647,7 +3678,55 @@ Describe what we see in this scene in 1-2 simple sentences. Focus on showing som
         const sceneQualityTier = getSceneQualityTier(scene);
         const shouldGenerateVideo = true; // All scenes in scenesNeedingVideo list need video
         
-        if (shouldGenerateVideo && aiVideoService.isAvailable()) {
+        const sceneIdx = updatedProject.scenes.findIndex(s => s.id === scene.id);
+        const microScenes = sceneIdx >= 0 ? (updatedProject.scenes[sceneIdx] as any).microScenes as any[] : null;
+        
+        if (shouldGenerateVideo && aiVideoService.isAvailable() && microScenes && microScenes.length > 1) {
+          console.log(`[Assets] Scene ${scene.id} has ${microScenes.length} micro-scenes — generating video for each`);
+          let microSuccessCount = 0;
+          
+          for (let msIdx = 0; msIdx < microScenes.length; msIdx++) {
+            const ms = microScenes[msIdx];
+            if (ms.videoUrl) {
+              console.log(`[Assets] Micro-scene ${ms.id} already has video, skipping`);
+              microSuccessCount++;
+              continue;
+            }
+            
+            const msPrompt = ms.visualDirection || visualPrompt;
+            console.log(`[Assets] Generating video for micro-scene ${msIdx + 1}/${microScenes.length}: ${msPrompt.substring(0, 80)}...`);
+            
+            const msResult = await aiVideoService.generateVideo({
+              prompt: msPrompt,
+              duration: Math.min(ms.duration || 5, 10),
+              aspectRatio: (project.outputFormat?.aspectRatio as '16:9' | '9:16' | '1:1') || '16:9',
+              sceneType: scene.type,
+              narration: ms.narration,
+              qualityTier: sceneQualityTier,
+            });
+            
+            if (msResult.success && msResult.s3Url) {
+              microScenes[msIdx].videoUrl = msResult.s3Url;
+              microSuccessCount++;
+              aiVideosGenerated++;
+              console.log(`[Assets] Micro-scene ${ms.id} video ready (${msResult.provider}): ${msResult.s3Url}`);
+            } else {
+              console.warn(`[Assets] Micro-scene ${ms.id} video failed: ${msResult.error}`);
+            }
+          }
+          
+          if (sceneIdx >= 0) {
+            (updatedProject.scenes[sceneIdx] as any).microScenes = microScenes;
+          }
+          
+          if (microSuccessCount > 0) {
+            videoResult = { url: microScenes[0].videoUrl || '', source: 'ai-micro', duration: scene.duration };
+            videosGenerated++;
+            console.log(`[Assets] ${microSuccessCount}/${microScenes.length} micro-scene videos generated for scene ${scene.id}`);
+          }
+          
+          await saveProgress();
+        } else if (shouldGenerateVideo && aiVideoService.isAvailable()) {
           const sceneRefImageUrl = (scene as any).brandAssetUrl || 
                                    scene.referenceConfig?.imageUrl ||
                                    updatedProject.assets.images.find(img => img.sceneId === scene.id && img.source === 'uploaded')?.url;

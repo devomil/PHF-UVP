@@ -862,6 +862,56 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
           />
         </div>
 
+        {/* Micro-Scenes */}
+        {scene.microScenes && scene.microScenes.length > 1 && (
+          <div>
+            <label className="text-[11px] font-medium uppercase tracking-wider mb-2 flex items-center gap-2" style={{ color: "var(--text-secondary)" }}>
+              Micro-Scenes
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-500/15 text-purple-400 border border-purple-500/25">
+                {scene.microScenes.length}
+              </span>
+            </label>
+            <div className="space-y-2">
+              {scene.microScenes.map((ms: any, msIdx: number) => (
+                <div
+                  key={ms.id || msIdx}
+                  className="rounded-lg border p-3 space-y-1.5"
+                  style={{ borderColor: "var(--border-subtle)", backgroundColor: "rgba(124,58,237,0.03)" }}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-medium uppercase tracking-wider text-purple-400">
+                      Micro {msIdx + 1} · {ms.duration != null ? `${ms.duration}s` : '—'}
+                    </span>
+                    {ms.videoUrl && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/15 text-green-400 border border-green-500/25">
+                        Video Ready
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs leading-relaxed" style={{ color: "var(--text-primary)" }}>
+                    "{ms.narration}"
+                  </p>
+                  <p className="text-[11px] leading-relaxed" style={{ color: "var(--text-muted)" }}>
+                    {ms.visualDirection}
+                  </p>
+                  {ms.videoUrl && (
+                    <video
+                      src={ms.videoUrl}
+                      className="w-full rounded-md mt-1.5"
+                      style={{ maxHeight: '120px', objectFit: 'cover' }}
+                      muted
+                      playsInline
+                      preload="metadata"
+                      onMouseEnter={(e) => (e.target as HTMLVideoElement).play()}
+                      onMouseLeave={(e) => { const v = e.target as HTMLVideoElement; v.pause(); v.currentTime = 0; }}
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Action Buttons */}
         <div className="flex items-center justify-end pt-1">
           <div className="flex gap-2">
