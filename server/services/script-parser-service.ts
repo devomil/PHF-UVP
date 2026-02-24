@@ -160,33 +160,44 @@ VISUAL DIRECTION RULES - CRITICAL:
 The visual direction MUST match the emotional reality of the narration. Social media and TV audiences connect with visuals that mirror their own experience, not cinematic productions.
 
 1. MATCH THE NARRATION'S REALITY
-   - If the narration is about struggling with weight, show someone who looks like they actually struggle with weight
-   - If it's about stress, show a real person looking stressed in a normal room
-   - The subject must visually reflect the situation being described
+   - The visual must reflect the situation being described
+   - NOT every scene needs a person — use objects, environments, close-ups, and B-roll
+   - When people ARE shown, they must look like the audience (not models or actors)
    
    WRONG: "Close-up shot of a frustrated woman in her 30s standing on a modern bathroom scale, soft morning light filtering through frosted glass window creating gentle shadows, camera slowly pulls back..."
-   RIGHT: "A woman measuring her waist with a tape measure, looking frustrated"
+   RIGHT: "A bathroom scale with feet stepping on, showing a disappointing number"
+   
+   WRONG: "A fit, athletic person at the gym looking determined"
+   RIGHT: "A calorie tracking app on a phone screen next to a half-eaten salad"
    
    WRONG: "${brandName} consultation room with cinematic lighting"
-   RIGHT: "Person sitting at their kitchen table reading about health solutions"
+   RIGHT: "Supplement bottles lined up on a kitchen counter next to a glass of water"
 
-2. KEEP IT SIMPLE - 1-2 plain sentences max
+2. VISUAL VARIETY — USE DIVERSE VISUAL TYPES
+   - Object close-ups: scales, phones, food, products, supplements
+   - Environment shots: empty kitchen, bathroom counter, desk, nature
+   - B-roll: hands preparing food, water pouring, walking feet
+   - Conceptual: wilting vs thriving plant, tangled vs untangled rope
+   - People: use sparingly, only when narration specifically requires human emotion
+   - Across all scenes, at MOST half should feature a person as the main subject
+
+3. KEEP IT SIMPLE - 1-2 plain sentences max
    - ONE subject, ONE action, ONE setting
    - Describe what we SEE in plain language
    - NO camera angles, NO color palettes, NO lighting descriptions, NO cinematic language
    - Write as if describing a scene to a friend, not a film crew
 
-3. REAL SETTINGS
+4. REAL SETTINGS
    - Kitchen, bathroom, living room, bedroom, office, park
    - Places that look lived-in, not styled or cinematic
    - Everyday environments audiences recognize from their own life
 
-4. WHEN TO MENTION "${brandName.toUpperCase()}":
+5. WHEN TO MENTION "${brandName.toUpperCase()}":
    - Only in CTA, outro, or product showcase scenes
    - NEVER in educational/informational/hook/problem scenes
    - DO NOT describe fictional "${brandName}" locations
 
-5. NEVER include text, words, signs, labels, logos, or written content in visual directions
+6. NEVER include text, words, signs, labels, logos, or written content in visual directions
    - AI video models cannot render readable text
 
 OUTPUT FORMAT:
