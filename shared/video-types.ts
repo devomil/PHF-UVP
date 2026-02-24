@@ -153,6 +153,9 @@ export interface MicroScene {
   duration: number;
   videoUrl?: string;
   imageUrl?: string;
+  originalAudioVolume?: number;
+  originalAudioFadeIn?: number;
+  originalAudioFadeOut?: number;
 }
 
 export interface Scene {
