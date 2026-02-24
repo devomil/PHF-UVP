@@ -757,6 +757,9 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
         </div>
       </div>
 
+      {/* Divider between video controls and overlays */}
+      <div className="border-t mt-4 pt-4" style={{ borderColor: "var(--border-subtle)" }} />
+
       {/* Scene Overlays Section */}
       <SceneOverlayEditor
         overlays={sceneOverlays}

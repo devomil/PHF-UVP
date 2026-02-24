@@ -221,7 +221,7 @@ export function SceneOverlayEditor({
             </span>
           )}
         </div>
-        <div className="flex gap-1.5">
+        <div className="flex gap-2">
           <input
             ref={fileInputRef}
             type="file"
@@ -231,22 +231,23 @@ export function SceneOverlayEditor({
           />
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="text-[10px] px-2 py-1 rounded-md border flex items-center gap-1 transition-colors hover:border-purple-500/30"
+            className="text-xs px-3 py-1.5 rounded-lg border flex items-center gap-1.5 transition-colors hover:border-purple-500/40 hover:bg-purple-500/10"
             style={{ borderColor: "var(--border-subtle)", color: "var(--text-secondary)" }}
             title="Upload overlay image"
           >
-            <Upload className="w-3 h-3" /> Upload
+            <Upload className="w-3.5 h-3.5" /> Upload
           </button>
           <button
             onClick={() => setShowLibrary(!showLibrary)}
-            className="text-[10px] px-2 py-1 rounded-md border flex items-center gap-1 transition-colors hover:border-purple-500/30"
+            className="text-xs px-3 py-1.5 rounded-lg border flex items-center gap-1.5 transition-colors hover:border-purple-500/40 hover:bg-purple-500/10"
             style={{
               borderColor: showLibrary ? "rgba(124,58,237,0.4)" : "var(--border-subtle)",
               color: showLibrary ? "rgb(124,58,237)" : "var(--text-secondary)",
+              backgroundColor: showLibrary ? "rgba(124,58,237,0.1)" : "transparent",
             }}
             title="Browse asset library"
           >
-            <FolderOpen className="w-3 h-3" /> Library
+            <FolderOpen className="w-3.5 h-3.5" /> Library
           </button>
         </div>
       </div>
