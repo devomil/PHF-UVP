@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
-import { eq, desc, inArray } from 'drizzle-orm';
+import { eq, desc, inArray, and, or, like } from 'drizzle-orm';
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { isAuthenticated, requireRole } from '../auth';
 import { universalVideoService } from '../services/universal-video-service';
@@ -4413,6 +4413,39 @@ router.post('/:projectId/scenes/:sceneId/micro-scene/:microSceneIndex/regenerate
     });
   } catch (error: any) {
     console.error('[MicroScene-Regen] Error:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.get('/:projectId/scenes/:sceneId/micro-scene-jobs', isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const userId = (req.user as any)?.id;
+    const { projectId, sceneId } = req.params;
+    const projectData = await getProjectFromDb(projectId);
+    if (!projectData || projectData.ownerId !== userId) {
+      return res.status(404).json({ success: false, error: 'Not found' });
+    }
+    const runningJobs = await db.select().from(videoGenerationJobs)
+      .where(and(
+        eq(videoGenerationJobs.projectId, projectId),
+        like(videoGenerationJobs.sceneId, `${sceneId}__micro_%`),
+        or(
+          eq(videoGenerationJobs.status, 'pending'),
+          eq(videoGenerationJobs.status, 'running')
+        )
+      ));
+    const activeJobs: Record<number, { jobId: string; status: string; createdAt: string }> = {};
+    for (const job of runningJobs) {
+      const match = job.sceneId.match(/__micro_(\d+)$/);
+      if (match) {
+        const idx = parseInt(match[1]);
+        if (!activeJobs[idx] || new Date(job.createdAt!) > new Date(activeJobs[idx].createdAt)) {
+          activeJobs[idx] = { jobId: job.jobId, status: job.status, createdAt: job.createdAt!.toISOString() };
+        }
+      }
+    }
+    return res.json({ success: true, activeJobs });
+  } catch (error: any) {
     return res.status(500).json({ success: false, error: error.message });
   }
 });
