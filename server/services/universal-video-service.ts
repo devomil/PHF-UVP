@@ -1557,27 +1557,27 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
       let baseContext = '';
       switch (sceneType) {
         case 'hook':
-          baseContext = `${demographicContext}Real person dealing with the problem described in the narration, in an everyday setting.`;
+          baseContext = `${demographicContext}Everyday objects or environment showing the problem described in the narration — a scale, a cluttered desk, an empty plate.`;
           break;
         case 'benefit':
-          baseContext = `${demographicContext}Person looking genuinely happier or healthier, natural everyday moment.`;
+          baseContext = `${demographicContext}Visual showing positive change — fresh ingredients, bright natural setting, organized space.`;
           break;
         case 'story':
-          baseContext = `${demographicContext}Authentic real-life moment, natural setting, honest expression.`;
+          baseContext = `${demographicContext}Authentic real-life moment, natural setting, everyday objects that tell the story.`;
           break;
         case 'explanation':
         case 'process':
-          baseContext = `${demographicContext}Simple visual showing the concept clearly, easy to understand.`;
+          baseContext = `${demographicContext}Simple visual showing the concept clearly — ingredients, products, or nature imagery.`;
           break;
         case 'testimonial':
         case 'social_proof':
-          baseContext = `${demographicContext}Satisfied person at home, relaxed and genuine.`;
+          baseContext = `${demographicContext}Warm, inviting home environment with natural light, cozy and genuine.`;
           break;
         case 'problem':
-          baseContext = `${demographicContext}Person experiencing the struggle or challenge, relatable and honest.`;
+          baseContext = `${demographicContext}Objects or environment conveying the struggle — a bathroom scale, pill bottles, an empty fridge.`;
           break;
         default:
-          baseContext = `${demographicContext}Real person in a natural everyday setting.`;
+          baseContext = `${demographicContext}Natural everyday setting with relevant objects, warm and authentic.`;
       }
       
       const extractedConcepts = this.extractVisualConcepts(cleanVisualDirection, narration);
@@ -2956,7 +2956,7 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
 ${brandContextStr}
 
 ## CORE PRINCIPLE: AUTHENTICITY OVER PRODUCTION VALUE
-The #1 priority is that the visual MATCHES the emotional reality of the narration. If the narration is about struggling with weight, show someone who actually looks like they struggle with weight - not a fit model in a glamorous setting. Audiences connect with visuals that mirror their own experience.
+The #1 priority is that the visual MATCHES the emotional reality of the narration. If the narration is about struggling with weight, the visuals should feel real and relatable — not polished fitness models. Audiences connect with visuals that mirror their own experience.
 
 ## MICRO-SCENES
 Split the narration into micro-scenes. Each micro-scene covers 1-2 sentences that share a single visual idea. Each micro-scene gets its own distinct visual direction, so the final video has visual variety instead of one static image for the whole scene.
@@ -2968,14 +2968,42 @@ Guidelines for splitting:
 - Short scenes (under 5 seconds or 1-2 sentences) should stay as 1 micro-scene
 - Estimate duration proportionally based on word count of each segment
 
+## CRITICAL: VISUAL DIVERSITY — NOT EVERY MICRO-SCENE NEEDS A PERSON
+This is the most important rule. Vary the VISUAL TYPE across micro-scenes. Use a MIX of these approaches:
+- **Object close-up**: A bathroom scale, a tape measure, a pill bottle, a plate of food, a phone screen
+- **Environment/setting**: An empty kitchen counter with supplements lined up, a cluttered desk, a gym entrance
+- **Conceptual/metaphor**: A wilting plant vs a thriving plant, a tangled knot slowly unraveling
+- **Product/item focus**: A calorie tracking app on a tablet surrounded by healthy food, supplement bottles on a shelf
+- **Nature/organic**: Fresh vegetables, flowing water, sunlight through leaves
+- **B-roll**: Hands preparing a meal, feet walking on a path, water pouring into a glass
+- **Person/human**: Use sparingly — only when the narration specifically calls for human emotion or interaction
+
+RULES:
+- Do NOT put a person/someone/a woman/a man in every micro-scene
+- Within a single scene, at MOST 1-2 micro-scenes (out of 3-4) should feature a person
+- NEVER show fit, athletic, or above-average bodies when the narration is about health struggles
+- Vary the visual type — don't use the same approach in consecutive micro-scenes
+
+## EXAMPLES
+Narration: "Have you been doing everything right but still struggling to lose weight? Counting calories, hitting the gym, but the scale won't budge?"
+
+WRONG (all people):
+- Micro 1: "A person looking frustrated while standing on a bathroom scale"
+- Micro 2: "Someone sitting at their kitchen table with a food tracking app"
+- Micro 3: "A person sitting quietly, hand on their stomach, looking concerned"
+
+RIGHT (visual variety):
+- Micro 1: "A bathroom scale with feet stepping onto it, the number not changing"
+- Micro 2: "A calorie tracking app open on a tablet next to a measured portion of salad and a water bottle"
+- Micro 3: "A gym bag sitting untouched by a front door, keys tossed next to it"
+
 ## RULES FOR VISUAL DIRECTIONS
-1. MATCH THE NARRATION'S REALITY - The subject must visually reflect the situation described.
-2. KEEP IT SIMPLE - One subject, one action, one setting per micro-scene.
+1. MATCH THE NARRATION'S REALITY - The visual must reflect the situation described.
+2. KEEP IT SIMPLE - One subject, one setting per micro-scene.
 3. BE DIRECT - Describe what we SEE in plain language.
 4. REAL SETTINGS, NOT SETS - Everyday places that look lived-in and real.
 5. NO CINEMATIC LANGUAGE - No camera angles, color palettes, or lighting rigs.
-6. EMOTIONAL HONESTY - Expression and body language should match the narration.
-7. VISUAL VARIETY - Each micro-scene should show something DIFFERENT. Don't repeat the same visual across micro-scenes.
+6. VISUAL VARIETY - Each micro-scene should use a DIFFERENT visual type. Mix objects, environments, and people.
 
 ## VISUAL STYLE: ${projectVisualStyle}
 
@@ -2985,7 +3013,7 @@ Return ONLY a JSON object:
   "visualDirection": "overall 1-sentence summary for the whole scene",
   "microScenes": [
     { "narration": "exact text from the narration for this segment", "visualDirection": "1-2 sentences describing what we see", "duration": 4 },
-    { "narration": "next segment text", "visualDirection": "different visual for this part", "duration": 3 }
+    { "narration": "next segment text", "visualDirection": "different visual type for this part", "duration": 3 }
   ]
 }`;
 
