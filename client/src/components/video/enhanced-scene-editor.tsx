@@ -1074,6 +1074,9 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                       <p className="text-xs truncate flex-1" style={{ color: "var(--text-primary)" }}>
                         {ms.narration}
                       </p>
+                      {(ms.originalAudioVolume || 0) > 0 && (
+                        <Volume2 className="w-3 h-3 flex-shrink-0 text-blue-400" title="Native audio enabled" />
+                      )}
                       <span className="text-[10px] px-1.5 py-0.5 rounded-md flex-shrink-0" style={{ backgroundColor: "rgba(124,58,237,0.1)", color: "rgb(192,132,252)" }}>
                         {ms.duration != null ? `${ms.duration}s` : '—'}
                       </span>
@@ -1356,6 +1359,70 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                             )}
                           </div>
                         )}
+                      </div>
+
+                      <div className="mt-3 pt-3" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-[11px] font-medium text-white/50 flex items-center gap-1.5">
+                            {(fsMs.originalAudioVolume || 0) > 0 ? <Volume2 className="w-3 h-3 text-blue-400" /> : <VolumeX className="w-3 h-3" />}
+                            Original Audio
+                          </span>
+                        </div>
+                        <div className="p-3 rounded-lg" style={{ backgroundColor: "rgba(59,130,246,0.06)", border: "1px solid rgba(59,130,246,0.15)" }}>
+                          <div className="flex items-center justify-between mb-2">
+                            <div>
+                              <span className="text-xs text-white/80">Include native video audio</span>
+                              <p className="text-[10px] text-white/30 mt-0.5">Fade in the AI-generated audio from this clip during rendering</p>
+                            </div>
+                            <button
+                              onClick={async () => {
+                                const currentVol = fsMs.originalAudioVolume || 0;
+                                const newVol = currentVol > 0 ? 0 : 0.4;
+                                const updatedMicroScenes = [...(scene.microScenes || [])];
+                                updatedMicroScenes[fullscreenMicroScene] = { ...updatedMicroScenes[fullscreenMicroScene], originalAudioVolume: newVol };
+                                try {
+                                  const res = await fetch(`/api/universal-video/projects/${projectId}/scenes/${sceneId}`, {
+                                    method: "PATCH", headers: { "Content-Type": "application/json" }, credentials: "include",
+                                    body: JSON.stringify({ microScenes: updatedMicroScenes }),
+                                  });
+                                  if (!res.ok) throw new Error("Failed to save");
+                                  queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+                                  toast({ title: newVol > 0 ? "Native audio enabled" : "Native audio disabled" });
+                                } catch (err: any) { toast({ title: "Error", description: err.message, variant: "destructive" }); }
+                              }}
+                              className={`relative w-9 h-5 rounded-full transition-colors ${(fsMs.originalAudioVolume || 0) > 0 ? 'bg-blue-500' : 'bg-white/20'}`}
+                            >
+                              <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${(fsMs.originalAudioVolume || 0) > 0 ? 'left-[18px]' : 'left-0.5'}`} />
+                            </button>
+                          </div>
+                          {(fsMs.originalAudioVolume || 0) > 0 && (
+                            <div className="mt-2 pt-2" style={{ borderTop: "1px solid rgba(59,130,246,0.1)" }}>
+                              <div className="flex items-center gap-3">
+                                <span className="text-[10px] text-white/40 w-12">Volume</span>
+                                <input
+                                  type="range" min="0" max="100" step="5"
+                                  value={Math.round((fsMs.originalAudioVolume || 0.4) * 100)}
+                                  onChange={async (e) => {
+                                    const newVol = parseInt(e.target.value) / 100;
+                                    const updatedMicroScenes = [...(scene.microScenes || [])];
+                                    updatedMicroScenes[fullscreenMicroScene] = { ...updatedMicroScenes[fullscreenMicroScene], originalAudioVolume: newVol };
+                                    try {
+                                      const res = await fetch(`/api/universal-video/projects/${projectId}/scenes/${sceneId}`, {
+                                        method: "PATCH", headers: { "Content-Type": "application/json" }, credentials: "include",
+                                        body: JSON.stringify({ microScenes: updatedMicroScenes }),
+                                      });
+                                      if (!res.ok) throw new Error("Failed to save");
+                                      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+                                    } catch (err: any) { toast({ title: "Error", description: err.message, variant: "destructive" }); }
+                                  }}
+                                  className="flex-1 h-1 appearance-none rounded-full cursor-pointer"
+                                  style={{ background: `linear-gradient(to right, rgb(59,130,246) ${Math.round((fsMs.originalAudioVolume || 0.4) * 100)}%, rgba(255,255,255,0.15) ${Math.round((fsMs.originalAudioVolume || 0.4) * 100)}%)` }}
+                                />
+                                <span className="text-[10px] text-blue-300 w-8 text-right font-mono">{Math.round((fsMs.originalAudioVolume || 0.4) * 100)}%</span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
                       </div>
 
                       <div className="mt-3 pt-3" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>

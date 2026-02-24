@@ -7,6 +7,12 @@ export interface VolumeKeyframe {
   volume: number;
 }
 
+export interface NativeAudioRange {
+  startFrame: number;
+  endFrame: number;
+  volume: number;
+}
+
 // Legacy interface (used with volumeKeyframes)
 interface DuckedMusicLegacyProps {
   musicUrl: string;
@@ -22,6 +28,7 @@ interface DuckedMusicPhase18DProps {
   baseVolume: number;
   duckLevel: number;
   voiceoverRanges: VoiceoverRange[];
+  nativeAudioRanges?: NativeAudioRange[];
   fadeFrames: number;
 }
 
@@ -37,45 +44,88 @@ export const DuckedMusic: React.FC<DuckedMusicProps> = (props) => {
   
   const volume = useMemo(() => {
     if (isPhase18DProps(props)) {
-      // Phase 18D: VoiceoverRange-based ducking
-      const { baseVolume, duckLevel, voiceoverRanges, fadeFrames } = props;
+      const { baseVolume, duckLevel, voiceoverRanges, nativeAudioRanges, fadeFrames } = props;
       
+      let targetVolume = baseVolume;
+      let isInVoiceover = false;
+      let isInNativeAudio = false;
+
       for (const range of voiceoverRanges) {
-        // Fade down into voiceover
         if (frame >= range.startFrame - fadeFrames && frame < range.startFrame) {
-          return interpolate(
+          targetVolume = interpolate(
             frame,
             [range.startFrame - fadeFrames, range.startFrame],
             [baseVolume, duckLevel],
             { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }
           );
+          isInVoiceover = true;
+          break;
         }
         
-        // During voiceover - stay ducked
         if (frame >= range.startFrame && frame < range.endFrame) {
-          return duckLevel;
+          targetVolume = duckLevel;
+          isInVoiceover = true;
+          break;
         }
         
-        // Fade up after voiceover
         if (frame >= range.endFrame && frame < range.endFrame + fadeFrames) {
-          return interpolate(
+          targetVolume = interpolate(
             frame,
             [range.endFrame, range.endFrame + fadeFrames],
             [duckLevel, baseVolume],
             { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }
           );
+          isInVoiceover = true;
+          break;
         }
       }
+
+      if (nativeAudioRanges && nativeAudioRanges.length > 0) {
+        for (const range of nativeAudioRanges) {
+          if (frame >= range.startFrame && frame < range.endFrame) {
+            isInNativeAudio = true;
+            const nativeDuckFactor = 0.3;
+            targetVolume = targetVolume * nativeDuckFactor;
+            break;
+          }
+          if (frame >= range.startFrame - fadeFrames && frame < range.startFrame) {
+            isInNativeAudio = true;
+            const nativeDuckFactor = interpolate(
+              frame,
+              [range.startFrame - fadeFrames, range.startFrame],
+              [1, 0.3],
+              { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }
+            );
+            targetVolume = targetVolume * nativeDuckFactor;
+            break;
+          }
+          if (frame >= range.endFrame && frame < range.endFrame + fadeFrames) {
+            isInNativeAudio = true;
+            const nativeDuckFactor = interpolate(
+              frame,
+              [range.endFrame, range.endFrame + fadeFrames],
+              [0.3, 1],
+              { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }
+            );
+            targetVolume = targetVolume * nativeDuckFactor;
+            break;
+          }
+        }
+      }
+
+      const endFadeStart = durationInFrames - 60;
+      if (frame >= endFadeStart) {
+        const endFadeFactor = interpolate(
+          frame,
+          [endFadeStart, durationInFrames],
+          [1, 0],
+          { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }
+        );
+        targetVolume = targetVolume * endFadeFactor;
+      }
       
-      // Fade out at the end
-      return interpolate(
-        frame,
-        [durationInFrames - 60, durationInFrames],
-        [baseVolume, 0],
-        { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }
-      );
+      return targetVolume;
     } else {
-      // Legacy: VolumeKeyframe-based ducking
       const { baseVolume, volumeKeyframes, fps } = props;
       const currentTime = frame / fps;
       

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import {
   AbsoluteFill,
   Audio,
@@ -36,7 +36,7 @@ import { MotionGraphicsScene } from "./compositions/MotionGraphicsScene";
 import { AnimatedEndCard } from "./components/endcard/AnimatedEndCard";
 import { EndCardConfig, PINE_HILL_FARM_END_CARD } from "../shared/config/end-card";
 import { SoundDesignLayer } from "./components/audio/SoundDesignLayer";
-import { DuckedMusic, VolumeKeyframe } from "./components/audio/DuckedMusic";
+import { DuckedMusic, VolumeKeyframe, type NativeAudioRange } from "./components/audio/DuckedMusic";
 import { TransitionConfig, SoundDesignConfig, PINE_HILL_FARM_SOUND_CONFIG } from "../shared/config/sound-design";
 import { SoundDesignConfig as Phase18DSoundDesignConfig, TransitionSound, DEFAULT_SOUND_DESIGN_CONFIG } from "../shared/types/sound-design";
 import { FilmTreatment, FilmTreatmentConfig, FILM_TREATMENT_PRESETS } from "./components/post-processing";
@@ -1310,6 +1310,37 @@ const ProductReveal: React.FC<{
 // SCENE RENDERER - WITH FULL ERROR HANDLING
 // ============================================================
 
+const MicroSceneAudioVideo: React.FC<{
+  src: string;
+  volume: number;
+  fadeInFrames: number;
+  fadeOutFrames: number;
+  durationInFrames: number;
+}> = ({ src, volume, fadeInFrames, fadeOutFrames, durationInFrames }) => {
+  const frame = useCurrentFrame();
+  const computedVolume = useMemo(() => {
+    if (volume <= 0 || durationInFrames <= 0) return 0;
+    const maxFadeTotal = Math.max(1, durationInFrames - 1);
+    const clampedFadeIn = Math.min(fadeInFrames, Math.floor(maxFadeTotal * 0.4));
+    const clampedFadeOut = Math.min(fadeOutFrames, Math.floor(maxFadeTotal * 0.4));
+    if (clampedFadeIn > 0 && frame < clampedFadeIn) {
+      return interpolate(frame, [0, clampedFadeIn], [0, volume], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+    }
+    if (clampedFadeOut > 0 && frame > durationInFrames - clampedFadeOut) {
+      return interpolate(frame, [durationInFrames - clampedFadeOut, durationInFrames], [volume, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+    }
+    return volume;
+  }, [frame, volume, fadeInFrames, fadeOutFrames, durationInFrames]);
+
+  return (
+    <OffthreadVideo
+      src={src}
+      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+      volume={computedVolume}
+    />
+  );
+};
+
 const MicroSceneBackground: React.FC<{
   microScenes: MicroScene[];
   sceneDuration: number;
@@ -1328,6 +1359,9 @@ const MicroSceneBackground: React.FC<{
         frameOffset += msFrames;
 
         const crossfadeFrames = Math.min(Math.round(fps * 0.3), Math.round(msFrames * 0.15));
+        const audioVolume = ms.originalAudioVolume || 0;
+        const fadeInFrames = Math.round((ms.originalAudioFadeIn ?? 0.3) * fps);
+        const fadeOutFrames = Math.round((ms.originalAudioFadeOut ?? 0.5) * fps);
 
         if (ms.videoUrl) {
           return (
@@ -1340,11 +1374,21 @@ const MicroSceneBackground: React.FC<{
                   isFirst={idx === 0}
                   isLast={idx === microScenes.length - 1}
                 >
-                  <OffthreadVideo
-                    src={ms.videoUrl}
-                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                    muted
-                  />
+                  {audioVolume > 0 ? (
+                    <MicroSceneAudioVideo
+                      src={ms.videoUrl}
+                      volume={audioVolume}
+                      fadeInFrames={fadeInFrames}
+                      fadeOutFrames={fadeOutFrames}
+                      durationInFrames={msFrames}
+                    />
+                  ) : (
+                    <OffthreadVideo
+                      src={ms.videoUrl}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      muted
+                    />
+                  )}
                 </MicroSceneCrossfade>
               </AbsoluteFill>
             </Sequence>
@@ -2956,15 +3000,42 @@ export const UniversalVideoComposition: React.FC<UniversalVideoProps> = ({
       )}
       
       {/* Phase 18D: Ducked Music with VoiceoverRanges (preferred) - uses soundDesignConfig values */}
-      {musicUrl && voiceoverRanges && voiceoverRanges.length > 0 && (
-        <DuckedMusic
-          musicUrl={musicUrl}
-          baseVolume={soundDesignConfig?.audioDucking?.baseVolume ?? musicVolume}
-          duckLevel={soundDesignConfig?.audioDucking?.duckLevel ?? 0.1}
-          voiceoverRanges={voiceoverRanges}
-          fadeFrames={soundDesignConfig?.audioDucking?.fadeFrames ?? 15}
-        />
-      )}
+      {musicUrl && voiceoverRanges && voiceoverRanges.length > 0 && (() => {
+        const nativeAudioRanges: NativeAudioRange[] = [];
+        let sceneFramePos = logoIntroDuration;
+        for (const scene of scenes) {
+          const sceneDurationSec = scene.duration || 5;
+          const sceneFrames = sceneDurationSec * fps;
+          const microScenes = scene.microScenes || [];
+          if (microScenes.length > 0) {
+            const totalMsDuration = microScenes.reduce((sum: number, ms: any) => sum + (ms.duration || 0), 0) || sceneDurationSec;
+            let msFrameOffset = 0;
+            for (const ms of microScenes) {
+              const msDur = ms.duration || (sceneDurationSec / microScenes.length);
+              const msFrameCount = Math.round((msDur / totalMsDuration) * sceneFrames);
+              if ((ms.originalAudioVolume || 0) > 0 && ms.videoUrl) {
+                nativeAudioRanges.push({
+                  startFrame: sceneFramePos + msFrameOffset,
+                  endFrame: sceneFramePos + msFrameOffset + msFrameCount,
+                  volume: ms.originalAudioVolume,
+                });
+              }
+              msFrameOffset += msFrameCount;
+            }
+          }
+          sceneFramePos += sceneFrames;
+        }
+        return (
+          <DuckedMusic
+            musicUrl={musicUrl}
+            baseVolume={soundDesignConfig?.audioDucking?.baseVolume ?? musicVolume}
+            duckLevel={soundDesignConfig?.audioDucking?.duckLevel ?? 0.1}
+            voiceoverRanges={voiceoverRanges}
+            nativeAudioRanges={nativeAudioRanges.length > 0 ? nativeAudioRanges : undefined}
+            fadeFrames={soundDesignConfig?.audioDucking?.fadeFrames ?? 15}
+          />
+        );
+      })()}
       
       {/* Legacy: Enhanced Ducked Music with Keyframes (Phase 16) - fallback if no voiceoverRanges */}
       {musicUrl && (!voiceoverRanges || voiceoverRanges.length === 0) && audioDuckingKeyframes && audioDuckingKeyframes.length > 0 && (
