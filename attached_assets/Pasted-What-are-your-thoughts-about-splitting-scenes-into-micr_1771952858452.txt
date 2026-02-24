@@ -1,0 +1,21 @@
+What are your thoughts about splitting scenes into micro scenes to make one scene? What I mean is that, if you look at the Original Narration below, the media asset could be composed of micro-scenes, aligned with one or two sentences. For example:
+
+Micro scene 1: True weight loss isn't just about calories versus calories out. It's about whole-body healing.
+Prompt/visual direction: "Cinematic close-up of a glowing human body, dark particles swirling around it, slowly dissolving into clean light. Warm, hopeful tone."
+
+Micro scene 2:When your body is overwhelmed by toxins, pathogens, and mold, it goes into survival mode. Your metabolism slows down.
+Prompt/visual direction: "Cinematic close-up of a wilting plant in dim, foggy light. Leaves are drooping slowly. Dark, muted tones. Slow motion."
+
+Micro scene 3: Inflammation increases. And your body literally holds onto weight as a protective mechanism. 
+Prompt/visual direction: "Cinematic slow motion shot of a river clogged with debris, water barely moving. Heavy, stagnant. Muted grey tones."
+
+Micro scene 4: Think of it like trying to renovate a house while it's on fire. First, you need to put out the fire.
+Prompt/visual direction: "Cinematic shot of a house on fire, flames slowly extinguished by rain, smoke clearing to reveal a peaceful home. Golden hour lighting."
+
+Then all these micro scenes make up scene one.
+
+Here's the Original Narration: 
+True weight loss isn't just about calories versus calories out. It's about whole-body healing. When your body is overwhelmed by toxins, pathogens, and mold, it goes into survival mode. Your metabolism slows down. Inflammation increases. And your body literally holds onto weight as a protective mechanism
+Think of it like trying to renovate a house while it's on fire. First, you need to put out the fire.
+
+Prompt/visual direction: Close-up shot of cupped hands slowly opening to reveal a glowing, warm golden orb of light that gently pulses like a heartbeat, representing the body's healing energy. The scene transitions with a smooth push-in camera movement to show the golden light expanding and flowing through translucent, anatomical silhouettes of vital organs - heart, liver, digestive system - all bathed in soft, warm amber and honey tones. Gentle particles of light dance around the organs, suggesting detoxification and renewal, while the background features a subtle gradient from deep forest green to warm golden yellow. The lighting is soft and diffused with a ethereal glow, creating a peaceful, hopeful atmosphere that conveys the body's natural ability to heal and restore balance.
