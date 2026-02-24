@@ -146,6 +146,15 @@ export interface VideoSettings {
   playbackRate: number; // 0.5 = slow mo, 1.0 = normal, 2.0 = speed up
 }
 
+export interface MicroScene {
+  id: string;
+  narration: string;
+  visualDirection: string;
+  duration: number;
+  videoUrl?: string;
+  imageUrl?: string;
+}
+
 export interface Scene {
   id: string;
   order: number;
@@ -153,6 +162,7 @@ export interface Scene {
   duration: number;
   narration: string;
   visualDirection?: string;
+  microScenes?: MicroScene[];
   qualityTier?: 'standard' | 'premium' | 'ultra'; // Per-scene quality tier override
   searchQuery?: string;
   fallbackQuery?: string;

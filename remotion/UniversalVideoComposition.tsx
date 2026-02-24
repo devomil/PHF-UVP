@@ -16,6 +16,7 @@ import {
 } from "remotion";
 import type {
   Scene,
+  MicroScene,
   BrandSettings,
   TextOverlay,
   OutputFormat,
@@ -1309,6 +1310,96 @@ const ProductReveal: React.FC<{
 // SCENE RENDERER - WITH FULL ERROR HANDLING
 // ============================================================
 
+const MicroSceneBackground: React.FC<{
+  microScenes: MicroScene[];
+  sceneDuration: number;
+  fps: number;
+  fallback: React.ReactNode;
+}> = ({ microScenes, sceneDuration, fps, fallback }) => {
+  const totalDuration = microScenes.reduce((sum, ms) => sum + (ms.duration || 0), 0) || sceneDuration;
+  let frameOffset = 0;
+
+  return (
+    <AbsoluteFill>
+      {microScenes.map((ms, idx) => {
+        const msDuration = ms.duration || (sceneDuration / microScenes.length);
+        const msFrames = Math.round((msDuration / totalDuration) * sceneDuration * fps);
+        const from = frameOffset;
+        frameOffset += msFrames;
+
+        const crossfadeFrames = Math.min(Math.round(fps * 0.3), Math.round(msFrames * 0.15));
+
+        if (ms.videoUrl) {
+          return (
+            <Sequence key={ms.id} from={from} durationInFrames={msFrames + crossfadeFrames}>
+              <AbsoluteFill style={{ opacity: 1 }}>
+                <MicroSceneCrossfade
+                  frameInSequence={0}
+                  durationInFrames={msFrames + crossfadeFrames}
+                  crossfadeFrames={crossfadeFrames}
+                  isFirst={idx === 0}
+                  isLast={idx === microScenes.length - 1}
+                >
+                  <OffthreadVideo
+                    src={ms.videoUrl}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    muted
+                  />
+                </MicroSceneCrossfade>
+              </AbsoluteFill>
+            </Sequence>
+          );
+        }
+        if (ms.imageUrl) {
+          return (
+            <Sequence key={ms.id} from={from} durationInFrames={msFrames + crossfadeFrames}>
+              <AbsoluteFill>
+                <MicroSceneCrossfade
+                  frameInSequence={0}
+                  durationInFrames={msFrames + crossfadeFrames}
+                  crossfadeFrames={crossfadeFrames}
+                  isFirst={idx === 0}
+                  isLast={idx === microScenes.length - 1}
+                >
+                  <SafeImage
+                    src={ms.imageUrl}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    fallback={fallback}
+                  />
+                </MicroSceneCrossfade>
+              </AbsoluteFill>
+            </Sequence>
+          );
+        }
+        return (
+          <Sequence key={ms.id} from={from} durationInFrames={msFrames}>
+            <AbsoluteFill>{fallback}</AbsoluteFill>
+          </Sequence>
+        );
+      })}
+    </AbsoluteFill>
+  );
+};
+
+const MicroSceneCrossfade: React.FC<{
+  children: React.ReactNode;
+  frameInSequence: number;
+  durationInFrames: number;
+  crossfadeFrames: number;
+  isFirst: boolean;
+  isLast: boolean;
+}> = ({ children, durationInFrames, crossfadeFrames, isFirst, isLast }) => {
+  const frame = useCurrentFrame();
+  let opacity = 1;
+  if (!isFirst && frame < crossfadeFrames) {
+    opacity = frame / crossfadeFrames;
+  }
+  if (!isLast && frame > durationInFrames - crossfadeFrames) {
+    opacity = Math.max(0, (durationInFrames - frame) / crossfadeFrames);
+  }
+  return <AbsoluteFill style={{ opacity }}>{children}</AbsoluteFill>;
+};
+
 const SceneRenderer: React.FC<{
   scene: Scene;
   brand: BrandSettings;
@@ -1363,9 +1454,15 @@ const SceneRenderer: React.FC<{
   const hasMotionGraphics = motionGraphicsData?.enabled && motionGraphicsData?.config;
   const isMotionGraphicScene = scene.background?.type === 'motion-graphic' as any || hasMotionGraphics;
   
+  const microScenes = scene.microScenes || [];
+  const hasMicroScenes = microScenes.length > 1 && microScenes.some(ms => ms.videoUrl || ms.imageUrl);
+  
   React.useEffect(() => {
     console.log(`[SceneRenderer] Scene ${scene.id} (${scene.type}):`);
     console.log(`  - videoUrl: ${videoUrl?.substring(0, 60) || 'none'}`);
+    if (hasMicroScenes) {
+      console.log(`  - microScenes: ${microScenes.length} (${microScenes.filter(ms => ms.videoUrl).length} with video)`);
+    }
     console.log(`  - hasAIInstructions: ${hasAIInstructions}`);
     if (hasAIInstructions && instructions?.kenBurns) {
       console.log(`  - kenBurns: ${instructions.kenBurns.startScale.toFixed(2)} → ${instructions.kenBurns.endScale.toFixed(2)}`);
@@ -1396,6 +1493,13 @@ const SceneRenderer: React.FC<{
               props: motionGraphicsData.renderInstructions || motionGraphicsData.config,
             }]}
             backgroundColor="transparent"
+          />
+        ) : hasMicroScenes ? (
+          <MicroSceneBackground
+            microScenes={microScenes}
+            sceneDuration={scene.duration || 5}
+            fps={fps}
+            fallback={gradientFallback}
           />
         ) : hasValidBrandAsset && brandAssetType === 'video' ? (
           <OffthreadVideo
