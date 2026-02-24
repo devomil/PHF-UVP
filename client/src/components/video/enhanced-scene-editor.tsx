@@ -134,6 +134,28 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
   }, [scene.overlayItems]);
 
   useEffect(() => {
+    const checkActiveMsJobs = async () => {
+      try {
+        const res = await fetch(`/api/universal-video/${projectId}/scenes/${sceneId}/micro-scene-jobs`, { credentials: "include" });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.success && data.activeJobs) {
+          const indices = Object.keys(data.activeJobs).map(Number);
+          if (indices.length > 0) {
+            const idx = indices[0];
+            const job = data.activeJobs[idx];
+            const jobAge = Date.now() - new Date(job.createdAt).getTime();
+            setRegeneratingMicroScene(idx);
+            setMsRegenStartedAt(Date.now() - jobAge);
+            setMsRegenElapsed(Math.floor(jobAge / 1000));
+          }
+        }
+      } catch {}
+    };
+    checkActiveMsJobs();
+  }, [projectId, sceneId]);
+
+  useEffect(() => {
     if (fullscreenMicroScene !== null && scene.microScenes?.[fullscreenMicroScene]) {
       const ms = scene.microScenes[fullscreenMicroScene];
       setMsModalPrompt(ms.visualDirection || "");
