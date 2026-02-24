@@ -5,7 +5,7 @@ import type { VideoGenerationJob } from "@shared/schema";
 import { createLogger } from "../utils/logger";
 import { intelligentRegenerationService } from "./intelligent-regeneration-service";
 import { db } from "../db";
-import { universalVideoProjects } from "@shared/schema";
+import { universalVideoProjects, videoGenerationJobs } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { preparePromptForProvider, type SanitizedPrompt } from "./prompt-sanitizer";
 
@@ -217,6 +217,17 @@ class VideoGenerationWorker {
     this.workerInterval = setInterval(async () => {
       await this.processNextJob();
     }, intervalMs);
+
+    db.update(videoGenerationJobs)
+      .set({ status: "pending", startedAt: null } as any)
+      .where(eq(videoGenerationJobs.status, "running"))
+      .returning()
+      .then((reset) => {
+        if (reset.length > 0) {
+          log.info(`[STARTUP] Reset ${reset.length} orphaned running jobs back to pending`);
+        }
+      })
+      .catch((err) => log.error("[STARTUP] Error resetting orphaned jobs:", err));
 
     storage
       .recoverStuckVideoGenerationJobs(10)
