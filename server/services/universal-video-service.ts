@@ -1531,14 +1531,11 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
       console.log(`[BuildContentPrompt] Using visual direction as PRIMARY prompt (${wantsPeople ? 'includes people' : isEnvironmentFocused ? 'environment-only' : 'general'})`);
       
       if (isEnvironmentFocused) {
-        // Environment-only: explicitly exclude people
-        fullPrompt = `${cleanVisualDirection}. Empty scene, NO PEOPLE, NO FACES, NO HUMANS - ONLY the environment, setting, and objects described. Professional photography, 4K, high quality.`;
+        fullPrompt = `${cleanVisualDirection}. No people, only the setting and objects described. High quality.`;
       } else if (wantsPeople) {
-        // Includes people: let the visual direction define who
-        fullPrompt = `${cleanVisualDirection}. Professional lifestyle photography, 4K, photorealistic. NO text, NO logos, NO product shots, NO watermarks. IMPORTANT: Show ADULTS only.`;
+        fullPrompt = `${cleanVisualDirection}. Photorealistic, natural look. NO text, NO logos. Adults only.`;
       } else {
-        // General case: follow visual direction, add quality modifiers
-        fullPrompt = `${cleanVisualDirection}. Professional photography, 4K, high quality, photorealistic. NO text, NO logos, NO watermarks.`;
+        fullPrompt = `${cleanVisualDirection}. Photorealistic, high quality. NO text, NO logos.`;
       }
     } else {
       // Fallback: No substantial visual direction, use old heuristic-based approach
@@ -1560,27 +1557,27 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
       let baseContext = '';
       switch (sceneType) {
         case 'hook':
-          baseContext = `${demographicContext}Emotional cinematic scene showing the problem or challenge. Realistic lifestyle photography, dramatic lighting.`;
+          baseContext = `${demographicContext}Real person dealing with the problem described in the narration, in an everyday setting.`;
           break;
         case 'benefit':
-          baseContext = `${demographicContext}Positive transformation scene showing wellness. Bright natural lighting, optimistic mood.`;
+          baseContext = `${demographicContext}Person looking genuinely happier or healthier, natural everyday moment.`;
           break;
         case 'story':
-          baseContext = `${demographicContext}Authentic storytelling scene with emotional depth. Documentary style, warm tones.`;
+          baseContext = `${demographicContext}Authentic real-life moment, natural setting, honest expression.`;
           break;
         case 'explanation':
         case 'process':
-          baseContext = `${demographicContext}Educational visual showing scientific or natural process. Clean informational style.`;
+          baseContext = `${demographicContext}Simple visual showing the concept clearly, easy to understand.`;
           break;
         case 'testimonial':
         case 'social_proof':
-          baseContext = `${demographicContext}Happy satisfied person in natural home setting. Warm inviting atmosphere.`;
+          baseContext = `${demographicContext}Satisfied person at home, relaxed and genuine.`;
           break;
         case 'problem':
-          baseContext = `${demographicContext}Person dealing with challenge. Empathetic perspective, muted colors.`;
+          baseContext = `${demographicContext}Person experiencing the struggle or challenge, relatable and honest.`;
           break;
         default:
-          baseContext = `${demographicContext}Professional lifestyle photography with natural lighting.`;
+          baseContext = `${demographicContext}Real person in a natural everyday setting.`;
       }
       
       const extractedConcepts = this.extractVisualConcepts(cleanVisualDirection, narration);
@@ -2954,53 +2951,47 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
           }
           
           try {
-            const systemPrompt = `You are an expert visual director for professional marketing and content videos. You create broadcast-quality visual directions optimized for AI video generation.
+            const systemPrompt = `You are a visual director for social media and television content. Your job is to create simple, authentic visual directions that produce RELATABLE imagery audiences connect with emotionally.
 
 ${brandContextStr}
 
-## YOUR TASK
-Create a visual direction for a single video scene that is:
-1. HIGHLY SPECIFIC - Include exact lighting, camera angle, composition, colors, and mood
-2. AI-GENERATION READY - Achievable with current AI video models (avoid complex multi-person scenes, text overlays, or impossible physics)
-3. VISUALLY COMPELLING - Create imagery that captivates viewers and enhances the narration
-4. SCENE-TYPE APPROPRIATE - Match the purpose of this scene in the video
+## CORE PRINCIPLE: AUTHENTICITY OVER PRODUCTION VALUE
+The #1 priority is that the visual MATCHES the emotional reality of the narration. If the narration is about struggling with weight, show someone who actually looks like they struggle with weight - not a fit model in a glamorous setting. If it's about financial stress, show a real kitchen table with bills, not a cinematic office. Audiences on social media and TV connect with visuals that mirror their own experience.
+
+## RULES
+1. MATCH THE NARRATION'S REALITY - The subject must visually reflect the situation described. A scene about weight loss struggle should show someone with a realistic body type, not an athletic person.
+2. KEEP IT SIMPLE - One subject, one action, one setting. No elaborate camera movements or production descriptions.
+3. BE DIRECT - Describe what we SEE in plain language. "A woman measuring her waist with a tape measure" is better than "Close-up tracking shot of a contemplative figure with soft diffused golden-hour lighting revealing her silhouette."
+4. REAL SETTINGS, NOT SETS - Kitchen, bathroom, living room, office - places that look lived-in and real, not styled or cinematic.
+5. NO CINEMATIC LANGUAGE - Do not describe camera angles, color palettes, lighting rigs, or post-production effects. Just describe the scene as if you're telling someone what they'd see in real life.
+6. EMOTIONAL HONESTY - The person's expression and body language should match what the narration says they're feeling.
 
 ## VISUAL STYLE: ${projectVisualStyle}
-${projectVisualStyle === 'hero' || projectVisualStyle === 'cinematic' ? 'Dramatic, film-quality visuals with cinematic lighting and composition.' : ''}
-${projectVisualStyle === 'lifestyle' ? 'Warm, relatable visuals with natural lighting and authentic settings.' : ''}
-${projectVisualStyle === 'product' ? 'Clean, focused visuals with studio lighting and professional presentation.' : ''}
-${projectVisualStyle === 'educational' ? 'Clear, informative visuals with good contrast and readable compositions.' : ''}
-${projectVisualStyle === 'social' ? 'Fast-paced, attention-grabbing visuals with bold colors and dynamic movement.' : ''}
-${projectVisualStyle === 'premium' ? 'Luxurious, sophisticated visuals with elegant composition and rich tones.' : ''}
 
-## BEST PRACTICES FOR AI VIDEO PROMPTS
-- Describe ONE clear subject or focal point per scene
-- Specify camera movement (slow zoom in, gentle pan, static wide shot, tracking shot)
-- Include lighting details (golden hour, soft diffused, dramatic side-light, warm ambient)
-- Mention color palette (earth tones, warm golds, cool blues, muted pastels)
-- Describe mood and atmosphere (peaceful, energetic, contemplative, uplifting)
-- Keep descriptions concrete and visual - avoid abstract concepts
-- Use 3-4 detailed sentences maximum
+## PROMPT FORMAT
+Write 1-2 plain sentences describing:
+- WHO is in the scene (realistic appearance matching the narration context)
+- WHAT they are doing (simple, relatable action)
+- WHERE they are (everyday, authentic setting)
 
 ## OUTPUT FORMAT
 Return ONLY a JSON object:
 {
-  "visualDirection": "3-4 sentences with SPECIFIC visual details"
+  "visualDirection": "1-2 simple, authentic sentences"
 }`;
 
             const userPrompt = `Scene Type: ${scene.type || 'content'}
-Scene Title: ${(scene as any).title || 'Untitled'}
-Project: ${projectTitle}
+${(scene as any).title ? `Scene Title: ${(scene as any).title}` : ''}
 Scene ${i + 1} of ${updatedProject.scenes.length}
 
-Narration for this scene:
+Narration:
 "${narration}"
 
-Create a vivid, specific visual direction optimized for AI video generation. Return JSON with visualDirection field.`;
+Describe what we see in this scene in 1-2 simple sentences. Focus on showing something real and relatable that matches what the narration is saying. Return JSON with visualDirection field.`;
 
             const response = await anthropic.messages.create({
               model: 'claude-sonnet-4-20250514',
-              max_tokens: 400,
+              max_tokens: 200,
               system: systemPrompt,
               messages: [{ role: 'user', content: userPrompt }],
             });
@@ -3026,8 +3017,7 @@ Create a vivid, specific visual direction optimized for AI video generation. Ret
             }
           } catch (err: any) {
             console.warn(`[Assets] Visual direction generation failed for scene ${i + 1}: ${err.message} - using narration-based fallback`);
-            const sceneTitle = (scene as any).title ? `${(scene as any).title}: ` : '';
-            const fallback = `Cinematic ${projectVisualStyle} scene depicting: ${sceneTitle}${narration.substring(0, 200)}. Warm natural lighting, smooth camera movement, professional composition.`;
+            const fallback = `A real person in an everyday setting, ${narration.substring(0, 150).trim()}.`;
             updatedProject.scenes[i].visualDirection = fallback;
             if (!updatedProject.scenes[i].background) {
               updatedProject.scenes[i].background = { type: 'ai' as any, source: fallback };
