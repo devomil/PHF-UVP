@@ -80,6 +80,10 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
   const [editingMicroScene, setEditingMicroScene] = useState<number | null>(null);
   const [microSceneEditValue, setMicroSceneEditValue] = useState("");
   const [regeneratingMicroScene, setRegeneratingMicroScene] = useState<number | null>(null);
+  const [msRegenStartedAt, setMsRegenStartedAt] = useState<number | null>(null);
+  const [msRegenElapsed, setMsRegenElapsed] = useState(0);
+  const msRegenTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const prevMicroSceneVideos = useRef<Record<number, string | undefined>>({});
   const [expandedMicroScene, setExpandedMicroScene] = useState<number | null>(null);
   const [fullscreenMicroScene, setFullscreenMicroScene] = useState<number | null>(null);
   const [msModalPrompt, setMsModalPrompt] = useState("");
@@ -140,6 +144,34 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
       setMsModalShowLibrary(false);
     }
   }, [fullscreenMicroScene]);
+
+  useEffect(() => {
+    if (regeneratingMicroScene !== null && scene.microScenes) {
+      const currentUrl = scene.microScenes[regeneratingMicroScene]?.videoUrl;
+      const prevUrl = prevMicroSceneVideos.current[regeneratingMicroScene];
+      if (currentUrl && currentUrl !== prevUrl && prevUrl !== undefined) {
+        setRegeneratingMicroScene(null);
+        setMsRegenStartedAt(null);
+        setMsRegenElapsed(0);
+        if (msRegenTimerRef.current) clearInterval(msRegenTimerRef.current);
+        toast({ title: "Micro-scene video ready", description: "New video has been generated." });
+      }
+    }
+    if (scene.microScenes) {
+      scene.microScenes.forEach((ms: any, i: number) => {
+        prevMicroSceneVideos.current[i] = ms.videoUrl;
+      });
+    }
+  }, [scene.microScenes]);
+
+  useEffect(() => {
+    if (msRegenStartedAt) {
+      msRegenTimerRef.current = setInterval(() => {
+        setMsRegenElapsed(Math.floor((Date.now() - msRegenStartedAt) / 1000));
+      }, 1000);
+    }
+    return () => { if (msRegenTimerRef.current) clearInterval(msRegenTimerRef.current); };
+  }, [msRegenStartedAt]);
 
   useEffect(() => {
     if (regeneratingType && (
@@ -378,6 +410,8 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
 
   const regenMicroSceneVideo = async (msIdx: number, opts?: { query?: string; provider?: string; generationMode?: string; sourceImageUrl?: string }) => {
     setRegeneratingMicroScene(msIdx);
+    setMsRegenStartedAt(Date.now());
+    setMsRegenElapsed(0);
     try {
       const selectedProvider = opts?.provider || (provider === "auto" ? undefined : provider);
       const res = await fetch(`/api/universal-video/${projectId}/scenes/${sceneId}/micro-scene/${msIdx}/regenerate-video`, {
@@ -391,13 +425,16 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
           sourceImageUrl: opts?.sourceImageUrl,
         }),
       });
-      if (!res.ok) throw new Error("Failed to regenerate micro-scene video");
+      if (!res.ok) {
+        throw new Error("Failed to regenerate micro-scene video");
+      }
       queryClient.invalidateQueries({ queryKey: ["project", projectId] });
       toast({ title: "Micro-scene video regenerating", description: "This may take 1-3 minutes." });
     } catch (err: any) {
       toast({ title: "Error", description: err.message, variant: "destructive" });
-    } finally {
       setRegeneratingMicroScene(null);
+      setMsRegenStartedAt(null);
+      setMsRegenElapsed(0);
     }
   };
 
@@ -1018,7 +1055,9 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                       <span className="text-[10px] px-1.5 py-0.5 rounded-md flex-shrink-0" style={{ backgroundColor: "rgba(124,58,237,0.1)", color: "rgb(192,132,252)" }}>
                         {ms.duration != null ? `${ms.duration}s` : '—'}
                       </span>
-                      {ms.videoUrl ? (
+                      {regeneratingMicroScene === msIdx ? (
+                        <Loader2 className="w-3.5 h-3.5 flex-shrink-0 text-purple-400 animate-spin" />
+                      ) : ms.videoUrl ? (
                         <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0 text-green-400" />
                       ) : (
                         <span className="w-3.5 h-3.5 flex-shrink-0 rounded-full border border-yellow-500/40" />
@@ -1150,7 +1189,11 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                         <span className="text-xs px-2 py-0.5 rounded-md bg-purple-500/15 text-purple-300">
                           {fsMs.duration != null ? `${fsMs.duration}s` : ''}
                         </span>
-                        {fsMs.videoUrl ? (
+                        {regeneratingMicroScene === fullscreenMicroScene ? (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/25 flex items-center gap-1">
+                            <Loader2 className="w-2.5 h-2.5 animate-spin" /> Generating...
+                          </span>
+                        ) : fsMs.videoUrl ? (
                           <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-500/15 text-green-400 border border-green-500/25 flex items-center gap-1">
                             <CheckCircle2 className="w-2.5 h-2.5" /> Ready
                           </span>
@@ -1293,22 +1336,51 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                         )}
                       </div>
 
-                      <div className="mt-3 pt-3 flex items-center justify-end gap-2" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
-                        <button
-                          onClick={() => {
-                            regenMicroSceneVideo(fullscreenMicroScene, {
-                              query: msModalPrompt || undefined,
-                              provider: msModalProvider === "auto" ? undefined : msModalProvider,
-                              generationMode: msModalMode === "auto" ? undefined : msModalMode,
-                              sourceImageUrl: msModalRefImages.length > 0 ? msModalRefImages[0] : undefined,
-                            });
-                          }}
-                          disabled={regeneratingMicroScene === fullscreenMicroScene}
-                          className="text-xs px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-medium flex items-center gap-1.5 transition-colors disabled:opacity-50"
-                        >
-                          {regeneratingMicroScene === fullscreenMicroScene ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-                          Regenerate Video
-                        </button>
+                      <div className="mt-3 pt-3" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+                        {regeneratingMicroScene === fullscreenMicroScene && msRegenStartedAt && (
+                          <div className="mb-3 p-3 rounded-lg" style={{ backgroundColor: "rgba(124,58,237,0.1)", border: "1px solid rgba(124,58,237,0.2)" }}>
+                            <div className="flex items-center gap-2 mb-2">
+                              <Loader2 className="w-4 h-4 animate-spin text-purple-400" />
+                              <span className="text-xs font-medium text-purple-300">Generating new video...</span>
+                              <span className="text-[10px] text-white/40 ml-auto">
+                                {Math.floor(msRegenElapsed / 60)}:{(msRegenElapsed % 60).toString().padStart(2, '0')}
+                              </span>
+                            </div>
+                            <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: "rgba(124,58,237,0.2)" }}>
+                              <div
+                                className="h-full rounded-full transition-all duration-1000"
+                                style={{
+                                  width: `${Math.min(95, (msRegenElapsed / 120) * 100)}%`,
+                                  background: "linear-gradient(90deg, rgb(124,58,237), rgb(168,85,247))",
+                                }}
+                              />
+                            </div>
+                            <p className="text-[10px] text-white/30 mt-1.5">
+                              Video generation typically takes 1-3 minutes. The video will appear automatically when ready.
+                            </p>
+                          </div>
+                        )}
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => {
+                              regenMicroSceneVideo(fullscreenMicroScene, {
+                                query: msModalPrompt || undefined,
+                                provider: msModalProvider === "auto" ? undefined : msModalProvider,
+                                generationMode: msModalMode === "auto" ? undefined : msModalMode,
+                                sourceImageUrl: msModalRefImages.length > 0 ? msModalRefImages[0] : undefined,
+                              });
+                            }}
+                            disabled={regeneratingMicroScene === fullscreenMicroScene}
+                            className={`text-xs px-4 py-2 rounded-lg font-medium flex items-center gap-1.5 transition-colors disabled:opacity-50 ${
+                              regeneratingMicroScene === fullscreenMicroScene
+                                ? 'bg-purple-600/50 text-white/70 cursor-not-allowed'
+                                : 'bg-purple-600 hover:bg-purple-500 text-white'
+                            }`}
+                          >
+                            {regeneratingMicroScene === fullscreenMicroScene ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                            {regeneratingMicroScene === fullscreenMicroScene ? 'Generating...' : 'Regenerate Video'}
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
