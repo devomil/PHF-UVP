@@ -82,6 +82,13 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
   const [regeneratingMicroScene, setRegeneratingMicroScene] = useState<number | null>(null);
   const [expandedMicroScene, setExpandedMicroScene] = useState<number | null>(null);
   const [fullscreenMicroScene, setFullscreenMicroScene] = useState<number | null>(null);
+  const [msModalPrompt, setMsModalPrompt] = useState("");
+  const [msModalEditingPrompt, setMsModalEditingPrompt] = useState(false);
+  const [msModalProvider, setMsModalProvider] = useState("auto");
+  const [msModalMode, setMsModalMode] = useState("auto");
+  const [msModalRefImages, setMsModalRefImages] = useState<string[]>([]);
+  const [msModalShowLibrary, setMsModalShowLibrary] = useState(false);
+  const msModalFileRef = useRef<HTMLInputElement>(null);
   const overlayDebounceRef = useRef<NodeJS.Timeout | null>(null);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -121,6 +128,18 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
       setSceneOverlays(incoming);
     }
   }, [scene.overlayItems]);
+
+  useEffect(() => {
+    if (fullscreenMicroScene !== null && scene.microScenes?.[fullscreenMicroScene]) {
+      const ms = scene.microScenes[fullscreenMicroScene];
+      setMsModalPrompt(ms.visualDirection || "");
+      setMsModalEditingPrompt(false);
+      setMsModalProvider("auto");
+      setMsModalMode("auto");
+      setMsModalRefImages([]);
+      setMsModalShowLibrary(false);
+    }
+  }, [fullscreenMicroScene]);
 
   useEffect(() => {
     if (regeneratingType && (
@@ -357,14 +376,20 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
     }
   };
 
-  const regenMicroSceneVideo = async (msIdx: number) => {
+  const regenMicroSceneVideo = async (msIdx: number, opts?: { query?: string; provider?: string; generationMode?: string; sourceImageUrl?: string }) => {
     setRegeneratingMicroScene(msIdx);
     try {
+      const selectedProvider = opts?.provider || (provider === "auto" ? undefined : provider);
       const res = await fetch(`/api/universal-video/${projectId}/scenes/${sceneId}/micro-scene/${msIdx}/regenerate-video`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ provider: provider === "auto" ? undefined : provider }),
+        body: JSON.stringify({
+          provider: selectedProvider,
+          query: opts?.query,
+          generationMode: opts?.generationMode,
+          sourceImageUrl: opts?.sourceImageUrl,
+        }),
       });
       if (!res.ok) throw new Error("Failed to regenerate micro-scene video");
       queryClient.invalidateQueries({ queryKey: ["project", projectId] });
@@ -374,6 +399,25 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
     } finally {
       setRegeneratingMicroScene(null);
     }
+  };
+
+  const handleMsModalRefUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append("file", file);
+    try {
+      const res = await fetch("/api/upload", { method: "POST", credentials: "include", body: formData });
+      if (!res.ok) throw new Error("Upload failed");
+      const data = await res.json();
+      if (data.url) {
+        setMsModalRefImages(prev => [...prev, data.url]);
+        toast({ title: "Reference image added" });
+      }
+    } catch (err: any) {
+      toast({ title: "Upload failed", description: err.message, variant: "destructive" });
+    }
+    e.target.value = "";
   };
 
   const setMediaMutation = useMutation({
@@ -1083,91 +1127,194 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
               })}
             </div>
 
-            {fullscreenMicroScene !== null && scene.microScenes[fullscreenMicroScene] && (
-              <div
-                className="fixed inset-0 z-[9999] flex items-center justify-center"
-                style={{ backgroundColor: "rgba(0,0,0,0.85)", backdropFilter: "blur(8px)" }}
-                onClick={() => setFullscreenMicroScene(null)}
-              >
+            {fullscreenMicroScene !== null && scene.microScenes[fullscreenMicroScene] && (() => {
+              const fsMs = scene.microScenes[fullscreenMicroScene];
+              const msActiveMode = msModalMode === "auto" ? (msModalRefImages.length > 0 ? "i2v" : "t2v") : msModalMode;
+              const msModeInfo = GENERATION_MODES.find(m => m.id === msActiveMode);
+              return (
                 <div
-                  className="relative w-full max-w-4xl mx-4"
-                  onClick={(e) => e.stopPropagation()}
+                  className="fixed inset-0 z-[9999] flex items-center justify-center overflow-y-auto py-8"
+                  style={{ backgroundColor: "rgba(0,0,0,0.9)", backdropFilter: "blur(12px)" }}
+                  onClick={() => setFullscreenMicroScene(null)}
                 >
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      <span className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30">
-                        {fullscreenMicroScene + 1}
-                      </span>
-                      <div>
-                        <span className="text-sm font-medium text-white">Micro-Scene {fullscreenMicroScene + 1}</span>
-                        <span className="text-xs ml-2" style={{ color: "rgb(192,132,252)" }}>
-                          {scene.microScenes[fullscreenMicroScene].duration != null ? `${scene.microScenes[fullscreenMicroScene].duration}s` : ''}
+                  <div
+                    className="relative w-full max-w-4xl mx-4"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-3">
+                        <span className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                          {fullscreenMicroScene + 1}
                         </span>
+                        <span className="text-sm font-medium text-white">Micro-Scene {fullscreenMicroScene + 1}</span>
+                        <span className="text-xs px-2 py-0.5 rounded-md bg-purple-500/15 text-purple-300">
+                          {fsMs.duration != null ? `${fsMs.duration}s` : ''}
+                        </span>
+                        {fsMs.videoUrl ? (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-500/15 text-green-400 border border-green-500/25 flex items-center gap-1">
+                            <CheckCircle2 className="w-2.5 h-2.5" /> Ready
+                          </span>
+                        ) : (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-yellow-500/10 text-yellow-400/70 border border-yellow-500/20">No Video</span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="flex gap-1">
+                          {fullscreenMicroScene > 0 && (
+                            <button onClick={() => setFullscreenMicroScene(fullscreenMicroScene - 1)} className="text-xs px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors">Prev</button>
+                          )}
+                          {fullscreenMicroScene < scene.microScenes.length - 1 && (
+                            <button onClick={() => setFullscreenMicroScene(fullscreenMicroScene + 1)} className="text-xs px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors">Next</button>
+                          )}
+                        </div>
+                        <button onClick={() => setFullscreenMicroScene(null)} className="w-8 h-8 rounded-full flex items-center justify-center bg-white/10 hover:bg-white/20 transition-colors text-white">
+                          <X className="w-4 h-4" />
+                        </button>
                       </div>
                     </div>
-                    <button
-                      onClick={() => setFullscreenMicroScene(null)}
-                      className="w-8 h-8 rounded-full flex items-center justify-center bg-white/10 hover:bg-white/20 transition-colors text-white"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
 
-                  {scene.microScenes[fullscreenMicroScene].videoUrl ? (
-                    <video
-                      src={scene.microScenes[fullscreenMicroScene].videoUrl}
-                      className="w-full rounded-xl"
-                      style={{ maxHeight: '70vh' }}
-                      controls
-                      autoPlay
-                      playsInline
-                    />
-                  ) : (
-                    <div className="w-full rounded-xl flex items-center justify-center py-20" style={{ backgroundColor: "rgba(124,58,237,0.1)", border: "1px solid rgba(124,58,237,0.2)" }}>
-                      <span className="text-sm" style={{ color: "var(--text-muted)" }}>No video generated yet</span>
-                    </div>
-                  )}
+                    {fsMs.videoUrl ? (
+                      <video src={fsMs.videoUrl} className="w-full rounded-xl" style={{ maxHeight: '60vh' }} controls autoPlay playsInline />
+                    ) : (
+                      <div className="w-full rounded-xl flex items-center justify-center py-20" style={{ backgroundColor: "rgba(124,58,237,0.08)", border: "1px solid rgba(124,58,237,0.2)" }}>
+                        <div className="text-center">
+                          <Video className="w-8 h-8 mx-auto mb-2 text-purple-400/50" />
+                          <span className="text-sm text-white/40">No video generated yet</span>
+                        </div>
+                      </div>
+                    )}
 
-                  <div className="mt-4 space-y-2">
-                    <p className="text-sm leading-relaxed text-white/90">
-                      "{scene.microScenes[fullscreenMicroScene].narration}"
-                    </p>
-                    <p className="text-xs leading-relaxed text-white/50">
-                      {scene.microScenes[fullscreenMicroScene].visualDirection}
-                    </p>
-                  </div>
+                    <div className="mt-4 p-4 rounded-xl" style={{ backgroundColor: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}>
+                      <p className="text-sm leading-relaxed text-white/90 mb-3">"{fsMs.narration}"</p>
 
-                  <div className="mt-4 flex items-center justify-between">
-                    <div className="flex gap-2">
-                      {fullscreenMicroScene > 0 && (
+                      <div className="grid grid-cols-[1fr_auto] gap-4">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 mb-1">
+                            <span className="text-[11px] font-medium text-white/50">Prompt</span>
+                            {!msModalEditingPrompt && (
+                              <button onClick={() => setMsModalEditingPrompt(true)} className="p-0.5 rounded hover:bg-purple-500/10 transition-colors">
+                                <Edit2 className="w-2.5 h-2.5 text-white/40" />
+                              </button>
+                            )}
+                          </div>
+                          {msModalEditingPrompt ? (
+                            <div className="space-y-1.5">
+                              <textarea
+                                value={msModalPrompt}
+                                onChange={(e) => setMsModalPrompt(e.target.value)}
+                                rows={3}
+                                autoFocus
+                                className="w-full text-xs rounded-lg border px-2.5 py-2 outline-none resize-none"
+                                style={{ borderColor: "rgba(124,58,237,0.3)", color: "white", backgroundColor: "rgba(124,58,237,0.08)" }}
+                              />
+                              <div className="flex gap-1.5">
+                                <button
+                                  onClick={() => { saveMicroSceneDirection(fullscreenMicroScene, msModalPrompt); setMsModalEditingPrompt(false); }}
+                                  className="text-[10px] px-2.5 py-1 rounded-md bg-purple-600 text-white font-medium flex items-center gap-1 hover:bg-purple-500 transition-colors"
+                                >
+                                  <Save className="w-2.5 h-2.5" /> Save
+                                </button>
+                                <button
+                                  onClick={() => { setMsModalPrompt(fsMs.visualDirection || ""); setMsModalEditingPrompt(false); }}
+                                  className="text-[10px] px-2.5 py-1 rounded-md bg-white/10 text-white/70 transition-colors"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <p className="text-xs leading-relaxed text-white/60 cursor-pointer hover:text-purple-300 transition-colors" onClick={() => setMsModalEditingPrompt(true)}>
+                              {msModalPrompt || "No prompt — click to add"}
+                            </p>
+                          )}
+                        </div>
+
+                        <div className="flex flex-col items-end gap-2">
+                          <div className="flex gap-2">
+                            <div>
+                              <span className="text-[11px] font-medium text-white/50 block mb-1 text-right">Mode</span>
+                              <select value={msModalMode} onChange={(e) => setMsModalMode(e.target.value)} className="text-xs rounded-lg border px-2 py-1.5 bg-transparent outline-none w-24" style={{ borderColor: "rgba(255,255,255,0.15)", color: "white" }}>
+                                {GENERATION_MODES.map((m) => (<option key={m.id} value={m.id} style={{ backgroundColor: "#1a1a2e" }}>{m.label}</option>))}
+                              </select>
+                            </div>
+                            <div>
+                              <span className="text-[11px] font-medium text-white/50 block mb-1 text-right">Provider</span>
+                              <select value={msModalProvider} onChange={(e) => setMsModalProvider(e.target.value)} className="text-xs rounded-lg border px-2 py-1.5 bg-transparent outline-none w-44" style={{ borderColor: "rgba(255,255,255,0.15)", color: "white" }}>
+                                {VIDEO_PROVIDERS.map((p) => (<option key={p.id} value={p.id} style={{ backgroundColor: "#1a1a2e" }}>{p.label}</option>))}
+                              </select>
+                            </div>
+                          </div>
+                          <span className="text-[10px] text-right max-w-[260px]" style={{ color: msActiveMode === "i2v" || msActiveMode === "i2i" ? "rgb(192,132,252)" : "rgba(255,255,255,0.4)" }}>
+                            {msModeInfo?.description || "Select a generation mode"}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 pt-3" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-[11px] font-medium text-white/50 flex items-center gap-1">
+                            <Image className="w-3 h-3" /> Reference Images
+                            <span className="text-[10px] text-white/30">For I2V (image-to-video)</span>
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {msModalRefImages.map((url, i) => (
+                            <div key={i} className="relative w-10 h-10 rounded-md overflow-hidden border group" style={{ borderColor: "rgba(124,58,237,0.3)" }}>
+                              <img src={url} alt="" className="w-full h-full object-cover" />
+                              <button onClick={() => setMsModalRefImages(prev => prev.filter((_, idx) => idx !== i))} className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white flex items-center justify-center text-[8px] opacity-0 group-hover:opacity-100 transition-opacity">
+                                <X className="w-2.5 h-2.5" />
+                              </button>
+                            </div>
+                          ))}
+                          <input type="file" ref={msModalFileRef} className="hidden" accept="image/*" onChange={handleMsModalRefUpload} />
+                          <button onClick={() => msModalFileRef.current?.click()} className="w-10 h-10 rounded-md border border-dashed flex items-center justify-center transition-colors hover:border-purple-500/40" style={{ borderColor: "rgba(255,255,255,0.15)", color: "rgba(255,255,255,0.4)" }} title="Upload reference">
+                            <Upload className="w-3.5 h-3.5" />
+                          </button>
+                          <button onClick={() => setMsModalShowLibrary(!msModalShowLibrary)} className="w-10 h-10 rounded-md border border-dashed flex items-center justify-center transition-colors hover:border-purple-500/40" style={{ borderColor: msModalShowLibrary ? "rgba(124,58,237,0.4)" : "rgba(255,255,255,0.15)", color: msModalShowLibrary ? "rgb(124,58,237)" : "rgba(255,255,255,0.4)" }} title="Browse library">
+                            <FolderOpen className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                        {msModalShowLibrary && (
+                          <div className="border rounded-lg p-2 mt-2 max-h-32 overflow-y-auto" style={{ borderColor: "rgba(255,255,255,0.1)", backgroundColor: "rgba(0,0,0,0.3)" }}>
+                            {libraryQuery.isLoading ? (
+                              <div className="flex items-center justify-center py-3"><Loader2 className="w-4 h-4 animate-spin text-white/40" /></div>
+                            ) : !libraryQuery.data || libraryQuery.data.length === 0 ? (
+                              <p className="text-xs text-center py-3 text-white/30">No images in library</p>
+                            ) : (
+                              <div className="grid grid-cols-8 gap-1.5">
+                                {libraryQuery.data.slice(0, 24).map((asset: any) => (
+                                  <button key={asset.id} onClick={() => { const url = asset.url || asset.thumbnailUrl; if (url) { setMsModalRefImages(prev => [...prev, url]); setMsModalShowLibrary(false); toast({ title: "Reference Added" }); } }} className="aspect-square rounded overflow-hidden border hover:border-purple-500/50 transition-colors" style={{ borderColor: "rgba(255,255,255,0.1)" }}>
+                                    <img src={asset.url || asset.thumbnailUrl} alt={asset.name || ""} className="w-full h-full object-cover" />
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="mt-3 pt-3 flex items-center justify-end gap-2" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
                         <button
-                          onClick={() => setFullscreenMicroScene(fullscreenMicroScene - 1)}
-                          className="text-xs px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors"
+                          onClick={() => {
+                            regenMicroSceneVideo(fullscreenMicroScene, {
+                              query: msModalPrompt || undefined,
+                              provider: msModalProvider === "auto" ? undefined : msModalProvider,
+                              generationMode: msModalMode === "auto" ? undefined : msModalMode,
+                              sourceImageUrl: msModalRefImages.length > 0 ? msModalRefImages[0] : undefined,
+                            });
+                          }}
+                          disabled={regeneratingMicroScene === fullscreenMicroScene}
+                          className="text-xs px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-medium flex items-center gap-1.5 transition-colors disabled:opacity-50"
                         >
-                          Previous
+                          {regeneratingMicroScene === fullscreenMicroScene ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                          Regenerate Video
                         </button>
-                      )}
-                      {fullscreenMicroScene < scene.microScenes.length - 1 && (
-                        <button
-                          onClick={() => setFullscreenMicroScene(fullscreenMicroScene + 1)}
-                          className="text-xs px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors"
-                        >
-                          Next
-                        </button>
-                      )}
+                      </div>
                     </div>
-                    <button
-                      onClick={() => { regenMicroSceneVideo(fullscreenMicroScene); setFullscreenMicroScene(null); }}
-                      disabled={regeneratingMicroScene === fullscreenMicroScene}
-                      className="text-xs px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-medium flex items-center gap-1.5 transition-colors disabled:opacity-50"
-                    >
-                      {regeneratingMicroScene === fullscreenMicroScene ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
-                      Regenerate Video
-                    </button>
                   </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
           </div>
         )}
 
