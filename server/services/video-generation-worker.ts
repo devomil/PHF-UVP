@@ -45,6 +45,16 @@ async function updateSceneMedia(projectId: string, sceneId: string, videoUrl: st
         microScenes[microIndex].videoUrl = videoUrl;
         scenes[sceneIndex].microScenes = microScenes;
         log.info(`[SCENE_UPDATE ${timestamp}] Updated micro-scene ${microIndex} of scene ${realSceneId} with new videoUrl`);
+
+        if (microIndex === 0) {
+          scenes[sceneIndex].background = scenes[sceneIndex].background || {};
+          scenes[sceneIndex].background.videoUrl = videoUrl;
+          scenes[sceneIndex].background.mediaUrl = videoUrl;
+          scenes[sceneIndex].background.type = 'video';
+          scenes[sceneIndex].assets = scenes[sceneIndex].assets || {};
+          scenes[sceneIndex].assets.videoUrl = videoUrl;
+          log.info(`[SCENE_UPDATE ${timestamp}] Also updated main scene asset to match micro-scene 0`);
+        }
       } else {
         log.warn(`[SCENE_UPDATE ${timestamp}] Micro-scene index ${microIndex} out of range for scene ${realSceneId}`);
         return false;
