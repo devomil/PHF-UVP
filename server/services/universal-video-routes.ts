@@ -1807,7 +1807,7 @@ router.patch('/projects/:projectId/scenes/:sceneId', isAuthenticated, async (req
       return res.status(404).json({ success: false, error: 'Scene not found' });
     }
 
-    const allowedFields = ['narration', 'visualDirection', 'duration', 'type', 'name', 'title', 'searchQuery', 'keyPoints', 'overlayItems'];
+    const allowedFields = ['narration', 'visualDirection', 'duration', 'type', 'name', 'title', 'searchQuery', 'keyPoints', 'overlayItems', 'microScenes'];
     for (const field of allowedFields) {
       if (updates[field] !== undefined) {
         (scenes[sceneIndex] as any)[field] = updates[field];
@@ -4343,6 +4343,65 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, asy
     
   } catch (error: any) {
     console.error('[UniversalVideo] Regenerate video error:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.post('/:projectId/scenes/:sceneId/micro-scene/:microSceneIndex/regenerate-video', isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const userId = (req.user as any)?.id;
+    const { projectId, sceneId, microSceneIndex } = req.params;
+    const { provider, generationMode } = req.body;
+    const msIdx = parseInt(microSceneIndex, 10);
+
+    const projectData = await getProjectFromDb(projectId);
+    if (!projectData) {
+      return res.status(404).json({ success: false, error: 'Project not found' });
+    }
+    if (projectData.ownerId !== userId) {
+      return res.status(403).json({ success: false, error: 'Access denied' });
+    }
+
+    const scene = projectData.scenes.find((s: Scene) => s.id === sceneId);
+    if (!scene) {
+      return res.status(404).json({ success: false, error: 'Scene not found' });
+    }
+
+    const microScenes = (scene as any).microScenes || [];
+    if (msIdx < 0 || msIdx >= microScenes.length) {
+      return res.status(404).json({ success: false, error: 'Micro-scene not found' });
+    }
+
+    const ms = microScenes[msIdx];
+    const prompt = ms.visualDirection || scene.visualDirection || 'Professional video';
+    console.log(`[MicroScene-Regen] Regenerating micro-scene ${msIdx} for scene ${sceneId}, prompt: ${prompt.substring(0, 100)}`);
+
+    const { videoGenerationWorker } = await import('../services/video-generation-worker');
+
+    const job = await videoGenerationWorker.createJob({
+      projectId,
+      sceneId: `${sceneId}__micro_${msIdx}`,
+      provider: provider || undefined,
+      prompt,
+      fallbackPrompt: ms.narration || 'professional video',
+      duration: ms.duration || 5,
+      aspectRatio: (projectData as any).outputFormat?.aspectRatio || (projectData as any).settings?.aspectRatio || '16:9',
+      style: (projectData as any).settings?.visualStyle || 'professional',
+      triggeredBy: userId,
+      sceneType: scene.type || 'content',
+    });
+
+    console.log(`[MicroScene-Regen] Created job ${job.jobId} for micro-scene ${msIdx}`);
+
+    return res.json({
+      success: true,
+      jobId: job.jobId,
+      status: job.status,
+      microSceneIndex: msIdx,
+      message: 'Micro-scene video generation job created'
+    });
+  } catch (error: any) {
+    console.error('[MicroScene-Regen] Error:', error);
     return res.status(500).json({ success: false, error: error.message });
   }
 });

@@ -77,6 +77,9 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
   const [sceneOverlays, setSceneOverlays] = useState<SceneOverlayItem[]>(
     () => scene.overlayItems || []
   );
+  const [editingMicroScene, setEditingMicroScene] = useState<number | null>(null);
+  const [microSceneEditValue, setMicroSceneEditValue] = useState("");
+  const [regeneratingMicroScene, setRegeneratingMicroScene] = useState<number | null>(null);
   const overlayDebounceRef = useRef<NodeJS.Timeout | null>(null);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -332,6 +335,44 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
       toast({ title: "Error", description: err.message, variant: "destructive" });
     },
   });
+
+  const saveMicroSceneDirection = async (msIdx: number, newDirection: string) => {
+    const updatedMicroScenes = [...(scene.microScenes || [])];
+    updatedMicroScenes[msIdx] = { ...updatedMicroScenes[msIdx], visualDirection: newDirection };
+    try {
+      const res = await fetch(`/api/universal-video/projects/${projectId}/scenes/${sceneId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ microScenes: updatedMicroScenes }),
+      });
+      if (!res.ok) throw new Error("Failed to save");
+      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+      setEditingMicroScene(null);
+      toast({ title: "Micro-scene updated" });
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    }
+  };
+
+  const regenMicroSceneVideo = async (msIdx: number) => {
+    setRegeneratingMicroScene(msIdx);
+    try {
+      const res = await fetch(`/api/universal-video/${projectId}/scenes/${sceneId}/micro-scene/${msIdx}/regenerate-video`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ provider: provider === "auto" ? undefined : provider }),
+      });
+      if (!res.ok) throw new Error("Failed to regenerate micro-scene video");
+      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+      toast({ title: "Micro-scene video regenerating", description: "This may take 1-3 minutes." });
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    } finally {
+      setRegeneratingMicroScene(null);
+    }
+  };
 
   const setMediaMutation = useMutation({
     mutationFn: async (mediaUrl: string) => {
@@ -865,47 +906,163 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
         {/* Micro-Scenes */}
         {scene.microScenes && scene.microScenes.length > 1 && (
           <div>
-            <label className="text-[11px] font-medium uppercase tracking-wider mb-2 flex items-center gap-2" style={{ color: "var(--text-secondary)" }}>
+            <label className="text-[11px] font-medium uppercase tracking-wider mb-3 flex items-center gap-2" style={{ color: "var(--text-secondary)" }}>
               Micro-Scenes
               <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-500/15 text-purple-400 border border-purple-500/25">
                 {scene.microScenes.length}
               </span>
             </label>
-            <div className="space-y-2">
+
+            <div className="flex items-center gap-1 mb-3 rounded-lg p-2" style={{ backgroundColor: "rgba(124,58,237,0.06)", border: "1px solid rgba(124,58,237,0.15)" }}>
+              <div className="flex w-full gap-0.5">
+                {scene.microScenes.map((ms: any, msIdx: number) => {
+                  const totalDuration = scene.microScenes.reduce((sum: number, m: any) => sum + (m.duration || 0), 0) || 1;
+                  const widthPct = ((ms.duration || 0) / totalDuration) * 100;
+                  return (
+                    <div
+                      key={ms.id || msIdx}
+                      className="relative rounded-md overflow-hidden flex items-center justify-center"
+                      style={{
+                        width: `${Math.max(widthPct, 10)}%`,
+                        height: "24px",
+                        backgroundColor: ms.videoUrl ? "rgba(34,197,94,0.2)" : "rgba(124,58,237,0.15)",
+                        border: ms.videoUrl ? "1px solid rgba(34,197,94,0.3)" : "1px solid rgba(124,58,237,0.25)",
+                      }}
+                    >
+                      <span className="text-[9px] font-medium" style={{ color: ms.videoUrl ? "rgb(134,239,172)" : "rgb(192,132,252)" }}>
+                        {msIdx + 1} · {ms.duration != null ? `${ms.duration}s` : '?'}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {sceneOverlays.length > 0 && (
+              <div className="flex items-center gap-1.5 mb-3 px-2 py-1.5 rounded-md text-[10px]" style={{ backgroundColor: "rgba(251,191,36,0.08)", border: "1px solid rgba(251,191,36,0.2)", color: "rgb(252,211,77)" }}>
+                <Maximize2 className="w-3 h-3 flex-shrink-0" />
+                Scene overlay active — overlays span all micro-scenes during render
+              </div>
+            )}
+
+            <div className="space-y-3">
               {scene.microScenes.map((ms: any, msIdx: number) => (
                 <div
                   key={ms.id || msIdx}
-                  className="rounded-lg border p-3 space-y-1.5"
+                  className="rounded-xl border overflow-hidden"
                   style={{ borderColor: "var(--border-subtle)", backgroundColor: "rgba(124,58,237,0.03)" }}
                 >
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-medium uppercase tracking-wider text-purple-400">
-                      Micro {msIdx + 1} · {ms.duration != null ? `${ms.duration}s` : '—'}
-                    </span>
-                    {ms.videoUrl && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/15 text-green-400 border border-green-500/25">
-                        Video Ready
+                  <div className="flex items-center justify-between px-4 py-2.5" style={{ borderBottom: "1px solid var(--border-subtle)", backgroundColor: "rgba(124,58,237,0.06)" }}>
+                    <div className="flex items-center gap-2">
+                      <span className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold" style={{ backgroundColor: ms.videoUrl ? "rgba(34,197,94,0.2)" : "rgba(124,58,237,0.2)", color: ms.videoUrl ? "rgb(134,239,172)" : "rgb(192,132,252)", border: ms.videoUrl ? "1px solid rgba(34,197,94,0.3)" : "1px solid rgba(124,58,237,0.3)" }}>
+                        {msIdx + 1}
                       </span>
+                      <span className="text-[11px] font-medium uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
+                        Micro {msIdx + 1}
+                      </span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-md" style={{ backgroundColor: "rgba(124,58,237,0.1)", color: "rgb(192,132,252)" }}>
+                        {ms.duration != null ? `${ms.duration}s` : '—'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      {ms.videoUrl ? (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-500/15 text-green-400 border border-green-500/25 font-medium flex items-center gap-1">
+                          <CheckCircle2 className="w-2.5 h-2.5" /> Video Ready
+                        </span>
+                      ) : (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-yellow-500/10 text-yellow-400/70 border border-yellow-500/20">
+                          No Video
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="p-4 space-y-3">
+                    <p className="text-sm leading-relaxed" style={{ color: "var(--text-primary)" }}>
+                      "{ms.narration}"
+                    </p>
+
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[10px] font-medium uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>Visual Direction</span>
+                        {editingMicroScene !== msIdx && (
+                          <button
+                            onClick={() => { setEditingMicroScene(msIdx); setMicroSceneEditValue(ms.visualDirection || ""); }}
+                            className="text-[10px] px-1.5 py-0.5 rounded hover:bg-purple-500/10 transition-colors flex items-center gap-1"
+                            style={{ color: "rgb(192,132,252)" }}
+                          >
+                            <Edit2 className="w-2.5 h-2.5" /> Edit
+                          </button>
+                        )}
+                      </div>
+                      {editingMicroScene === msIdx ? (
+                        <div className="space-y-2">
+                          <textarea
+                            value={microSceneEditValue}
+                            onChange={(e) => setMicroSceneEditValue(e.target.value)}
+                            className="w-full text-xs rounded-lg border p-2.5 resize-none focus:outline-none focus:ring-1 focus:ring-purple-500"
+                            style={{ borderColor: "var(--border-subtle)", backgroundColor: "var(--bg-secondary)", color: "var(--text-primary)", minHeight: "60px" }}
+                            rows={2}
+                          />
+                          <div className="flex gap-1.5 justify-end">
+                            <button
+                              onClick={() => setEditingMicroScene(null)}
+                              className="text-[10px] px-2.5 py-1 rounded-md border transition-colors"
+                              style={{ borderColor: "var(--border-subtle)", color: "var(--text-muted)" }}
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              onClick={() => saveMicroSceneDirection(msIdx, microSceneEditValue)}
+                              className="text-[10px] px-2.5 py-1 rounded-md bg-purple-600 text-white font-medium flex items-center gap-1 hover:bg-purple-500 transition-colors"
+                            >
+                              <Save className="w-2.5 h-2.5" /> Save
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-xs leading-relaxed" style={{ color: "var(--text-muted)" }}>
+                          {ms.visualDirection}
+                        </p>
+                      )}
+                    </div>
+
+                    {ms.videoUrl ? (
+                      <div className="relative group">
+                        <video
+                          src={ms.videoUrl}
+                          className="w-full rounded-lg"
+                          style={{ maxHeight: '200px', objectFit: 'cover' }}
+                          muted
+                          playsInline
+                          preload="metadata"
+                          onMouseEnter={(e) => (e.target as HTMLVideoElement).play()}
+                          onMouseLeave={(e) => { const v = e.target as HTMLVideoElement; v.pause(); v.currentTime = 0; }}
+                        />
+                        <button
+                          onClick={() => regenMicroSceneVideo(msIdx)}
+                          disabled={regeneratingMicroScene === msIdx}
+                          className="absolute bottom-2 right-2 text-[10px] px-2.5 py-1.5 rounded-lg bg-black/70 text-white font-medium flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/90 disabled:opacity-50 backdrop-blur-sm"
+                        >
+                          {regeneratingMicroScene === msIdx ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                          Regenerate
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => regenMicroSceneVideo(msIdx)}
+                        disabled={regeneratingMicroScene === msIdx}
+                        className="w-full flex items-center justify-center gap-2 py-3 rounded-lg border-2 border-dashed transition-colors hover:border-purple-500/40 hover:bg-purple-500/05 disabled:opacity-50"
+                        style={{ borderColor: "var(--border-subtle)", color: "var(--text-muted)" }}
+                      >
+                        {regeneratingMicroScene === msIdx ? (
+                          <><Loader2 className="w-3.5 h-3.5 animate-spin" /> <span className="text-xs">Generating...</span></>
+                        ) : (
+                          <><Video className="w-3.5 h-3.5" /> <span className="text-xs">Generate Video</span></>
+                        )}
+                      </button>
                     )}
                   </div>
-                  <p className="text-xs leading-relaxed" style={{ color: "var(--text-primary)" }}>
-                    "{ms.narration}"
-                  </p>
-                  <p className="text-[11px] leading-relaxed" style={{ color: "var(--text-muted)" }}>
-                    {ms.visualDirection}
-                  </p>
-                  {ms.videoUrl && (
-                    <video
-                      src={ms.videoUrl}
-                      className="w-full rounded-md mt-1.5"
-                      style={{ maxHeight: '120px', objectFit: 'cover' }}
-                      muted
-                      playsInline
-                      preload="metadata"
-                      onMouseEnter={(e) => (e.target as HTMLVideoElement).play()}
-                      onMouseLeave={(e) => { const v = e.target as HTMLVideoElement; v.pause(); v.currentTime = 0; }}
-                    />
-                  )}
                 </div>
               ))}
             </div>

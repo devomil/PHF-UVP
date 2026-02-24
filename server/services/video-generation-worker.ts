@@ -29,31 +29,47 @@ async function updateSceneMedia(projectId: string, sceneId: string, videoUrl: st
     const project = rows[0];
     const scenes = project.scenes as any[];
     
-    const sceneIndex = scenes.findIndex((s: any) => s.id === sceneId);
+    const microMatch = sceneId.match(/^(.+)__micro_(\d+)$/);
+    const realSceneId = microMatch ? microMatch[1] : sceneId;
+    const microIndex = microMatch ? parseInt(microMatch[2], 10) : -1;
+
+    const sceneIndex = scenes.findIndex((s: any) => s.id === realSceneId);
     if (sceneIndex === -1) {
-      log.warn(`[SCENE_UPDATE ${timestamp}] Scene ${sceneId} not found in project ${projectId}`);
+      log.warn(`[SCENE_UPDATE ${timestamp}] Scene ${realSceneId} not found in project ${projectId}`);
       return false;
     }
-    
-    const oldVideoUrl = scenes[sceneIndex].background?.videoUrl || scenes[sceneIndex].assets?.videoUrl || 'none';
-    log.info(`[SCENE_UPDATE ${timestamp}] Previous video URL: ${oldVideoUrl}`);
-    
-    scenes[sceneIndex].background = scenes[sceneIndex].background || {};
-    scenes[sceneIndex].background.videoUrl = videoUrl;
-    scenes[sceneIndex].background.mediaUrl = videoUrl;
-    scenes[sceneIndex].background.type = 'video';
-    
-    scenes[sceneIndex].assets = scenes[sceneIndex].assets || {};
-    scenes[sceneIndex].assets.videoUrl = videoUrl;
-    
+
+    if (microIndex >= 0) {
+      const microScenes = scenes[sceneIndex].microScenes || [];
+      if (microIndex < microScenes.length) {
+        microScenes[microIndex].videoUrl = videoUrl;
+        scenes[sceneIndex].microScenes = microScenes;
+        log.info(`[SCENE_UPDATE ${timestamp}] Updated micro-scene ${microIndex} of scene ${realSceneId} with new videoUrl`);
+      } else {
+        log.warn(`[SCENE_UPDATE ${timestamp}] Micro-scene index ${microIndex} out of range for scene ${realSceneId}`);
+        return false;
+      }
+    } else {
+      const oldVideoUrl = scenes[sceneIndex].background?.videoUrl || scenes[sceneIndex].assets?.videoUrl || 'none';
+      log.info(`[SCENE_UPDATE ${timestamp}] Previous video URL: ${oldVideoUrl}`);
+
+      scenes[sceneIndex].background = scenes[sceneIndex].background || {};
+      scenes[sceneIndex].background.videoUrl = videoUrl;
+      scenes[sceneIndex].background.mediaUrl = videoUrl;
+      scenes[sceneIndex].background.type = 'video';
+
+      scenes[sceneIndex].assets = scenes[sceneIndex].assets || {};
+      scenes[sceneIndex].assets.videoUrl = videoUrl;
+    }
+
     await db.update(universalVideoProjects)
       .set({
         scenes: scenes,
         updatedAt: new Date(),
       })
       .where(eq(universalVideoProjects.projectId, projectId));
-    
-    log.info(`[SCENE_UPDATE ${timestamp}] SUCCESS - Scene ${sceneId} updated. Old: ${oldVideoUrl.substring(0, 40)}... -> New: ${videoUrl.substring(0, 40)}...`);
+
+    log.info(`[SCENE_UPDATE ${timestamp}] SUCCESS - Scene ${realSceneId} updated.`);
     return true;
   } catch (error: any) {
     log.error(`[SCENE_UPDATE ${timestamp}] FAILED - Error updating scene ${sceneId}:`, error.message);
