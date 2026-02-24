@@ -4351,7 +4351,7 @@ router.post('/:projectId/scenes/:sceneId/micro-scene/:microSceneIndex/regenerate
   try {
     const userId = (req.user as any)?.id;
     const { projectId, sceneId, microSceneIndex } = req.params;
-    const { provider, generationMode } = req.body;
+    const { provider, generationMode, query, sourceImageUrl } = req.body;
     const msIdx = parseInt(microSceneIndex, 10);
 
     const projectData = await getProjectFromDb(projectId);
@@ -4373,8 +4373,18 @@ router.post('/:projectId/scenes/:sceneId/micro-scene/:microSceneIndex/regenerate
     }
 
     const ms = microScenes[msIdx];
-    const prompt = ms.visualDirection || scene.visualDirection || 'Professional video';
+    const prompt = query || ms.visualDirection || scene.visualDirection || 'Professional video';
     console.log(`[MicroScene-Regen] Regenerating micro-scene ${msIdx} for scene ${sceneId}, prompt: ${prompt.substring(0, 100)}`);
+
+    let finalSourceImageUrl: string | undefined = undefined;
+    if (sourceImageUrl && generationMode !== 't2v') {
+      const projectAspectRatio = (projectData as any).outputFormat?.aspectRatio || (projectData as any).settings?.aspectRatio || '16:9';
+      const publicUrl = await getPublicUrlForBrandAsset(sourceImageUrl, projectAspectRatio);
+      if (publicUrl) {
+        finalSourceImageUrl = publicUrl;
+        console.log(`[MicroScene-Regen] I2V mode with source image`);
+      }
+    }
 
     const { videoGenerationWorker } = await import('../services/video-generation-worker');
 
@@ -4388,6 +4398,7 @@ router.post('/:projectId/scenes/:sceneId/micro-scene/:microSceneIndex/regenerate
       aspectRatio: (projectData as any).outputFormat?.aspectRatio || (projectData as any).settings?.aspectRatio || '16:9',
       style: (projectData as any).settings?.visualStyle || 'professional',
       triggeredBy: userId,
+      sourceImageUrl: finalSourceImageUrl,
       sceneType: scene.type || 'content',
     });
 
