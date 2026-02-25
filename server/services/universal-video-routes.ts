@@ -2164,7 +2164,7 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
     
     // Allow rendering for ready/draft/error/complete projects
     // Quick Create projects may stay in 'draft' status with assets ready
-    const renderableStatuses = ['ready', 'draft', 'error', 'complete', 'completed'];
+    const renderableStatuses = ['ready', 'draft', 'error', 'complete', 'completed', 'scenes-ready'];
     if (!renderableStatuses.includes(projectData.status)) {
       return res.status(400).json({ 
         success: false, 
