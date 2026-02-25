@@ -2576,10 +2576,20 @@ export const UniversalVideoComposition: React.FC<UniversalVideoProps> = ({
           .filter(s => s.assets?.videoUrl && s.background?.type === 'video')
           .map(s => s.assets!.videoUrl!);
         
-        console.log(`[Asset Loader] Prefetching ${videoUrls.length} videos`);
+        const microSceneUrls: string[] = [];
+        for (const s of scenes) {
+          if (s.microScenes && s.microScenes.length > 1) {
+            for (const ms of s.microScenes) {
+              if (ms.videoUrl) microSceneUrls.push(ms.videoUrl);
+            }
+          }
+        }
+        
+        const allUrls = [...new Set([...videoUrls, ...microSceneUrls])];
+        console.log(`[Asset Loader] Prefetching ${allUrls.length} videos (${videoUrls.length} scene + ${microSceneUrls.length} micro-scene)`);
         
         await Promise.all(
-          videoUrls.map(url => 
+          allUrls.map(url => 
             prefetch(url, { method: 'blob-url' })
               .then(() => console.log(`[Asset Loader] Prefetched: ${url.substring(0, 60)}`))
               .catch(e => console.warn(`[Asset Loader] Failed to prefetch: ${url.substring(0, 60)}`, e))
@@ -2694,13 +2704,9 @@ export const UniversalVideoComposition: React.FC<UniversalVideoProps> = ({
             ) : null
           )}
           
-          {/* Brand watermark on middle scenes (respects scene-level showWatermark flag) */}
-          {/* Phase 18B: Use sceneOverlayConfig.watermark if available, then fall back to brandInstructions */}
-          {!isFirstScene && !isLastScene && (
-            // Use scene-level watermark if provided, otherwise use global watermark
-            // Only show if showWatermark is true (defaults to true if not specified)
+          {/* Brand watermark on middle scenes - SKIP if global Phase 18C watermark is active */}
+          {!isFirstScene && !isLastScene && !watermarkEnabled && (
             (sceneBrandOverlays?.showWatermark !== false) && (
-              // Priority: sceneOverlayConfig (Phase 18B) > sceneBrandOverlays > brandInstructions
               sceneOverlayConfig?.watermark?.enabled && sceneOverlayConfig.watermark.url ? (
                 <WatermarkOverlay
                   logoUrl={sceneOverlayConfig.watermark.url}
