@@ -23,7 +23,6 @@ import { motionGraphicsGenerator } from '../services/motion-graphics-generator';
 import { soundDesignService } from '../services/sound-design-service';
 import { transitionService, TransitionPlan, SceneTransition } from '../services/transition-service';
 import { textPlacementService, TextOverlay as TextOverlayType, TextPlacement } from '../services/text-placement-service';
-import { brandInjectionService, BrandInjectionPlan } from '../services/brand-injection-service';
 import { assetUrlResolver } from '../services/asset-url-resolver';
 import { s3RenderAssetService } from '../services/s3-render-asset-service';
 import { VIDEO_PROVIDERS } from '../../shared/provider-config';
@@ -2249,50 +2248,19 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
     if (!preparedProject.outputFormat) preparedProject.outputFormat = { aspectRatio: '16:9', resolution: '1080p' } as any;
     const compositionId = getCompositionId(preparedProject.outputFormat.aspectRatio || '16:9');
     
-    // Map scene-level overlayConfig to brandInstructions format for Remotion
-    const sceneBrandOverlays: Record<string, any> = {};
-    
-    // Helper to convert relative API URLs to full public URLs for Remotion Lambda
-    // Phase 17A: Use assetUrlResolver to get publicly accessible URLs
     const getPublicAssetUrl = async (relativeUrl: string): Promise<string> => {
       if (!relativeUrl) return '';
       
-      // Priority 1: Check if it is already a public URL
       if (relativeUrl.startsWith('https://') && !relativeUrl.includes('.replit.dev')) {
         return relativeUrl;
       }
       
-      // Priority 2: Try the asset URL resolver for relative/replit URLs
       const resolved = await assetUrlResolver.resolve(relativeUrl);
       if (resolved) {
         console.log(`[UniversalVideo] Resolved asset URL: ${relativeUrl} -> ${resolved.substring(0, 60)}...`);
         return resolved;
       }
       
-      // Priority 3: Try S3 Render Assets by category based on URL hints
-      if (relativeUrl.includes('logo') || relativeUrl.includes('brand')) {
-        const s3Logo = await s3RenderAssetService.getLogoAsset();
-        if (s3Logo) {
-          console.log(`[UniversalVideo] Fallback to S3 Render Assets logo: ${s3Logo.name}`);
-          return s3Logo.url;
-        }
-      }
-      if (relativeUrl.includes('overlay') || relativeUrl.includes('watermark')) {
-        const s3Overlay = await s3RenderAssetService.getOverlayAsset();
-        if (s3Overlay) {
-          console.log(`[UniversalVideo] Fallback to S3 Render Assets overlay: ${s3Overlay.name}`);
-          return s3Overlay.url;
-        }
-      }
-      if (relativeUrl.includes('badge')) {
-        const s3Badges = await s3RenderAssetService.getBadgeAssets();
-        if (s3Badges.length > 0) {
-          console.log(`[UniversalVideo] Fallback to S3 Render Assets badge: ${s3Badges[0].name}`);
-          return s3Badges[0].url;
-        }
-      }
-      
-      // Fallback: If it is already a full URL, return as-is
       if (relativeUrl.startsWith('http://') || relativeUrl.startsWith('https://')) {
         console.warn(`[UniversalVideo] Asset URL resolver failed, using original URL: ${relativeUrl.substring(0, 60)}...`);
         return relativeUrl;
@@ -2305,171 +2273,19 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
       return `${baseUrl}${relativeUrl}`;
     };
     
-    // Normalize anchor to supported BrandOverlay types: 'top-left'|'top-right'|'bottom-left'|'bottom-right'|'center'
-    // Map center variants to corners but use x/y coordinates to maintain correct position
-    const normalizeAnchor = (pos: string): 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'center' => {
-      if (pos === 'top-center') return 'top-left'; // Use top-left anchor with x=50 for horizontal center
-      if (pos === 'bottom-center') return 'bottom-left'; // Use bottom-left anchor with x=50 for horizontal center
-      if (pos === 'center-left') return 'top-left'; // Use top-left anchor with y=50 for vertical center
-      if (pos === 'center-right') return 'top-right'; // Use top-right anchor with y=50 for vertical center
-      if (['top-left', 'top-right', 'bottom-left', 'bottom-right', 'center'].includes(pos)) {
-        return pos as any;
-      }
-      return 'center';
-    };
-    
-    for (const scene of preparedProject.scenes) {
-      const overlayConfig = (scene as any).overlayConfig;
-      if (overlayConfig) {
-        const sceneOverlays: any = {
-          sceneId: scene.id,
-          overlays: [],
-          showWatermark: overlayConfig.watermark?.enabled !== false,
-        };
-        
-        // Map logo to brand overlay format
-        if (overlayConfig.logo?.enabled && overlayConfig.logo?.logoUrl) {
-          const positionMap: Record<string, { x: number; y: number }> = {
-            'top-left': { x: 5, y: 5 },
-            'top-center': { x: 50, y: 5 },
-            'top-right': { x: 95, y: 5 },
-            'center-left': { x: 5, y: 50 },
-            'center': { x: 50, y: 50 },
-            'center-right': { x: 95, y: 50 },
-            'bottom-left': { x: 5, y: 95 },
-            'bottom-center': { x: 50, y: 95 },
-            'bottom-right': { x: 95, y: 95 },
-          };
-          const pos = positionMap[overlayConfig.logo.position] || { x: 50, y: 50 };
-          const sizePercent = overlayConfig.logo.sizePercent || 25;
-          const normalizedAnchor = normalizeAnchor(overlayConfig.logo.position);
-          const resolvedLogoUrl = await getPublicAssetUrl(overlayConfig.logo.logoUrl);
-          
-          sceneOverlays.overlays.push({
-            type: 'logo',
-            assetUrl: resolvedLogoUrl,
-            position: { x: pos.x, y: pos.y, anchor: normalizedAnchor },
-            size: { width: sizePercent, maxHeight: 30 }, // Width/maxHeight in percentage
-            animation: { type: 'fade', duration: 0.5 },
-            timing: { startTime: 0, duration: scene.duration || 5 },
-            opacity: 1,
-          });
-        }
-        
-        // Map watermark to brand overlay format
-        if (overlayConfig.watermark?.enabled && overlayConfig.watermark?.watermarkUrl) {
-          const watermarkPos = overlayConfig.watermark.position || 'bottom-right';
-          const watermarkPosMap: Record<string, { x: number; y: number }> = {
-            'top-left': { x: 5, y: 5 },
-            'top-center': { x: 50, y: 5 },
-            'top-right': { x: 95, y: 5 },
-            'bottom-left': { x: 5, y: 95 },
-            'bottom-center': { x: 50, y: 95 },
-            'bottom-right': { x: 95, y: 95 },
-          };
-          const wPos = watermarkPosMap[watermarkPos] || { x: 95, y: 95 };
-          const watermarkOpacity = (overlayConfig.watermark.opacity || 70) / 100;
-          const watermarkSizePercent = overlayConfig.watermark.sizePercent || 15;
-          const normalizedWatermarkAnchor = normalizeAnchor(watermarkPos);
-          const resolvedWatermarkUrl = await getPublicAssetUrl(overlayConfig.watermark.watermarkUrl);
-          
-          sceneOverlays.watermark = {
-            type: 'watermark',
-            assetUrl: resolvedWatermarkUrl,
-            position: { x: wPos.x, y: wPos.y, anchor: normalizedWatermarkAnchor },
-            size: { width: watermarkSizePercent }, // Width in percentage
-            animation: { type: 'fade', duration: 0.3 },
-            timing: { startTime: 0, duration: scene.duration || 5 },
-            opacity: watermarkOpacity,
-          };
-        }
-        
-        // Map additional logos (badges/certifications) - use 'logo' type for compatibility
-        if (overlayConfig.additionalLogos && overlayConfig.additionalLogos.length > 0) {
-          for (const badge of overlayConfig.additionalLogos) {
-            if (badge.logoUrl) {
-              const badgePosMap: Record<string, { x: number; y: number }> = {
-                'top-left': { x: 5, y: 5 },
-                'top-center': { x: 50, y: 5 },
-                'top-right': { x: 95, y: 5 },
-                'bottom-left': { x: 5, y: 95 },
-                'bottom-center': { x: 50, y: 95 },
-                'bottom-right': { x: 95, y: 95 },
-              };
-              const bPos = badgePosMap[badge.position] || { x: 95, y: 5 };
-              const badgeSizePercent = badge.sizePercent || 12;
-              const normalizedBadgeAnchor = normalizeAnchor(badge.position);
-              const resolvedBadgeUrl = await getPublicAssetUrl(badge.logoUrl);
-              
-              sceneOverlays.overlays.push({
-                type: 'logo', // Use 'logo' type for compatibility with BrandOverlay types
-                assetUrl: resolvedBadgeUrl,
-                position: { x: bPos.x, y: bPos.y, anchor: normalizedBadgeAnchor },
-                size: { width: badgeSizePercent }, // Width in percentage
-                animation: { type: 'fade', duration: 0.3 },
-                timing: { startTime: 0, duration: scene.duration || 5 },
-                opacity: (badge.opacity || 100) / 100,
-              });
-            }
-          }
-        }
-        
-        // Map logoEnding to scene-level end card config
-        if (overlayConfig.logoEnding?.enabled && overlayConfig.logoEnding?.logoUrl) {
-          const resolvedLogoEndingUrl = await getPublicAssetUrl(overlayConfig.logoEnding.logoUrl);
-          sceneOverlays.logoEnding = {
-            enabled: true,
-            logoUrl: resolvedLogoEndingUrl,
-            backgroundColor: overlayConfig.logoEnding.backgroundColor || '#4A7C59',
-            duration: overlayConfig.logoEnding.duration || 3,
-            animation: overlayConfig.logoEnding.animation || 'elegant',
-          };
-          console.log(`[UniversalVideo] Scene ${scene.id} has logo ending: ${sceneOverlays.logoEnding.duration}s`);
-        }
-        
-        sceneBrandOverlays[scene.id] = sceneOverlays;
-      }
-    }
-    
-    // Build brandInstructions from project-level settings and scene overlays
-    const projectBrandInstructions = (preparedProject as any).brandInstructions || {};
-    const mergedBrandInstructions = {
-      ...projectBrandInstructions,
-      sceneOverlays: {
-        ...projectBrandInstructions.sceneOverlays,
-        ...sceneBrandOverlays,
-      },
-    };
-    
-    console.log('[UniversalVideo] Brand instructions prepared:', {
-      hasProjectBrandInstructions: !!projectBrandInstructions.watermark,
-      sceneOverlaysCount: Object.keys(mergedBrandInstructions.sceneOverlays || {}).length,
-    });
-    
     // Phase 16: Build end card config from settings
     const endCardSettings = (preparedProject as any).endCardSettings;
     let endCardConfig: any = undefined;
     console.log('[UniversalVideo] Phase 16 End Card - endCardSettings:', JSON.stringify(endCardSettings || 'undefined'));
     console.log('[UniversalVideo] Phase 16 End Card - brand.logoUrl:', preparedProject.brand?.logoUrl || 'EMPTY');
     if (endCardSettings?.enabled !== false) {
-      // Phase 17A: Try S3 Render Assets (brand/logos/) first, then fallback to asset resolver
       let cachedLogoUrl = '';
       
-      // Priority 1: Check S3 Render Assets (brand/logos/) - managed via Asset Library UI
-      const s3Logo = await s3RenderAssetService.getLogoAsset();
-      if (s3Logo) {
-        cachedLogoUrl = s3Logo.url;
-        console.log('[UniversalVideo] End card logo from S3 Render Assets (brand/logos/):', s3Logo.name, '->'     , cachedLogoUrl);
-      }
-      
-      // Priority 2: Try brand logoUrl through asset resolver
-      if (!cachedLogoUrl) {
-        const defaultLogoUrl = '/uploads/16045ec5-d8e6-4b90-a65f-eb7e39e280ab.png';
-        const sourceLogoUrl = preparedProject.brand?.logoUrl || defaultLogoUrl;
-        cachedLogoUrl = await assetUrlResolver.resolve(sourceLogoUrl) || '';
-        if (cachedLogoUrl) {
-          console.log('[UniversalVideo] End card logo from asset resolver:', sourceLogoUrl, '->'     , cachedLogoUrl);
-        }
+      const defaultLogoUrl = '/uploads/16045ec5-d8e6-4b90-a65f-eb7e39e280ab.png';
+      const sourceLogoUrl = preparedProject.brand?.logoUrl || defaultLogoUrl;
+      cachedLogoUrl = await assetUrlResolver.resolve(sourceLogoUrl) || '';
+      if (cachedLogoUrl) {
+        console.log('[UniversalVideo] End card logo from asset resolver:', sourceLogoUrl, '->', cachedLogoUrl);
       }
       
       if (!cachedLogoUrl) {
@@ -2801,98 +2617,7 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
       // Continue with empty configs rather than failing render
     }
     
-    // ═══════════════════════════════════════════════════════════════
-    // PHASE 18C: Generate brand injection plan (logo intro, watermark, CTA outro)
-    // ═══════════════════════════════════════════════════════════════
-    console.log('[Render] Step 3: Generating brand injection plan...');
-    let brandInjectionPlan: BrandInjectionPlan | undefined;
-    try {
-      const plan = await brandInjectionService.createInjectionPlan(projectId);
-      
-      // Resolve all logo URLs to Lambda-accessible URLs
-      if (plan.logoIntro.enabled && plan.logoIntro.asset?.url) {
-        const resolvedIntroUrl = await assetUrlResolver.resolve(plan.logoIntro.asset.url);
-        if (resolvedIntroUrl && assetUrlResolver.isLambdaAccessible(resolvedIntroUrl)) {
-          plan.logoIntro.asset = { ...plan.logoIntro.asset, url: resolvedIntroUrl };
-          console.log('[Render]   Logo intro: URL resolved ✓');
-        } else {
-          console.warn('[Render]   Logo intro: URL resolution failed, disabling');
-          plan.logoIntro.enabled = false;
-        }
-      }
-      
-      if (plan.watermark.enabled && plan.watermark.asset?.url) {
-        const resolvedWatermarkUrl = await assetUrlResolver.resolve(plan.watermark.asset.url);
-        if (resolvedWatermarkUrl && assetUrlResolver.isLambdaAccessible(resolvedWatermarkUrl)) {
-          plan.watermark.asset = { ...plan.watermark.asset, url: resolvedWatermarkUrl };
-          console.log('[Render]   Watermark: URL resolved ✓');
-        } else {
-          console.warn('[Render]   Watermark: URL resolution failed, disabling');
-          plan.watermark.enabled = false;
-        }
-      }
-      
-      if (plan.ctaOutro.enabled && plan.ctaOutro.logo?.url) {
-        const resolvedOutroUrl = await assetUrlResolver.resolve(plan.ctaOutro.logo.url);
-        if (resolvedOutroUrl && assetUrlResolver.isLambdaAccessible(resolvedOutroUrl)) {
-          plan.ctaOutro.logo = { ...plan.ctaOutro.logo, url: resolvedOutroUrl };
-          console.log('[Render]   CTA outro: URL resolved ✓');
-        } else {
-          console.warn('[Render]   CTA outro: URL resolution failed');
-        }
-      }
-      
-      // Apply intro/outro enabled flags from render settings
-      const introEnabled = (preparedProject as any).introEnabled ?? true;
-      const outroEnabled = (preparedProject as any).outroEnabled ?? true;
-      if (!introEnabled) {
-        plan.logoIntro.enabled = false;
-        console.log('[Render]   Intro disabled by user');
-      }
-      if (!outroEnabled) {
-        plan.ctaOutro.enabled = false;
-        console.log('[Render]   Outro disabled by user');
-      }
-
-      // Apply intro template from project settings
-      const introTemplate = (preparedProject as any).introTemplate || (preparedProject as any).endCardSettings?.introTemplate || 'classic-glow';
-      plan.logoIntro.template = introTemplate;
-      plan.logoIntro.logoScale = 1.0;
-      
-      // Fetch S3 intro background for cinematic template or random variety
-      if (introEnabled && (introTemplate === 'cinematic' || (preparedProject as any).introBackgroundRandom || (preparedProject as any).endCardSettings?.introBackgroundRandom)) {
-        try {
-          const introBg = await s3RenderAssetService.getRandomIntroBackground();
-          if (introBg) {
-            plan.logoIntro.backgroundImageUrl = introBg.url;
-            console.log('[Render]   Intro background from S3:', introBg.name);
-          }
-        } catch (bgErr: any) {
-          console.warn('[Render]   Intro background fetch failed:', bgErr.message);
-        }
-      }
-      
-      brandInjectionPlan = plan;
-      console.log('[Render] Brand injection plan:');
-      console.log(`[Render]   Intro template: ${introTemplate}`);
-      console.log(`[Render]   Logo intro: ${plan.logoIntro.enabled ? 'ENABLED' : 'disabled'} (${plan.logoIntro.duration}s)`);
-      console.log(`[Render]   Watermark: ${plan.watermark.enabled ? 'ENABLED' : 'disabled'} (${plan.watermark.position})`);
-      console.log(`[Render]   CTA outro: ${plan.ctaOutro.enabled ? 'ENABLED' : 'disabled'} (${plan.ctaOutro.duration}s)`);
-      console.log(`[Render]   Total added duration: ${plan.totalAddedDuration}s`);
-    } catch (brandError: any) {
-      console.error('[Render] Error generating brand injection plan:', brandError.message);
-      // Continue without brand injection
-    }
-    
-    // S3 Render Assets: Fallback for background music from audio/music/ if project has no music
-    let resolvedMusicUrl = preparedProject.assets.music?.url || null;
-    if (!resolvedMusicUrl) {
-      const s3Music = await soundDesignService.getBackgroundMusicFromS3();
-      if (s3Music) {
-        resolvedMusicUrl = s3Music.url;
-        console.log(`[UniversalVideo] Background music from S3 Render Assets (audio/music/): ${s3Music.name}`);
-      }
-    }
+    const resolvedMusicUrl = preparedProject.assets.music?.url || null;
     
     const inputProps = {
       scenes: preparedProject.scenes,
@@ -2901,18 +2626,11 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
       musicVolume: preparedProject.assets.music?.volume || 0.18,
       brand: brandWithCachedLogo,
       outputFormat: preparedProject.outputFormat,
-      brandInstructions: Object.keys(mergedBrandInstructions).length > 0 ? mergedBrandInstructions : undefined,
-      // Phase 16: End card and sound design configs
       endCardConfig,
       soundDesignConfig,
-      // Phase 18B: Scene overlay configurations
       sceneOverlayConfigs,
-      // Phase 18C: Brand injection plan (logo intro, watermark, CTA outro)
-      brandInjectionPlan,
-      // Phase 18D: Voiceover ranges for audio ducking
       voiceoverRanges,
       soundEffectsBaseUrl: process.env.SOUND_EFFECTS_URL || `https://${process.env.REMOTION_S3_BUCKET || 'remotionlambda-useast2-1vc2l6a56o'}.s3.${process.env.REMOTION_AWS_REGION || 'us-east-2'}.amazonaws.com/audio/sfx`,
-      // Phase 18F: Film treatment config
       filmTreatmentConfig,
     };
     
@@ -8064,109 +7782,20 @@ router.get('/transitions/mood-mapping', isAuthenticated, async (req: Request, re
 // PHASE 8E: Brand Asset Injection Endpoints
 // ============================================
 
-router.get('/projects/:projectId/brand-injection', isAuthenticated, async (req: Request, res: Response) => {
-  try {
-    const { projectId } = req.params;
-
-    const projectRows = await db.select().from(universalVideoProjects)
-      .where(eq(universalVideoProjects.projectId, projectId))
-      .limit(1);
-
-    if (projectRows.length === 0) {
-      return res.status(404).json({ success: false, error: 'Project not found' });
-    }
-
-    const plan = await brandInjectionService.createInjectionPlan(projectId);
-
-    res.json({
-      success: true,
-      plan,
-      defaults: brandInjectionService.getDefaultSettings(),
-    });
-
-  } catch (error: any) {
-    console.error('[Phase8E] Get brand injection plan failed:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
+router.get('/projects/:projectId/brand-injection', isAuthenticated, async (_req: Request, res: Response) => {
+  res.json({ success: true, plan: null, message: 'Brand injection has been consolidated into scene overlay system' });
 });
 
-router.put('/projects/:projectId/brand-injection', isAuthenticated, async (req: Request, res: Response) => {
-  try {
-    const { projectId } = req.params;
-    const overrides = req.body as Partial<BrandInjectionPlan>;
-
-    const projectRows = await db.select().from(universalVideoProjects)
-      .where(eq(universalVideoProjects.projectId, projectId))
-      .limit(1);
-
-    if (projectRows.length === 0) {
-      return res.status(404).json({ success: false, error: 'Project not found' });
-    }
-
-    const plan = await brandInjectionService.createInjectionPlan(projectId, overrides);
-
-    res.json({
-      success: true,
-      plan,
-    });
-
-  } catch (error: any) {
-    console.error('[Phase8E] Update brand injection plan failed:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
+router.put('/projects/:projectId/brand-injection', isAuthenticated, async (_req: Request, res: Response) => {
+  res.json({ success: true, plan: null, message: 'Brand injection has been consolidated into scene overlay system' });
 });
 
-router.get('/projects/:projectId/brand-injection/remotion-props', isAuthenticated, async (req: Request, res: Response) => {
-  try {
-    const { projectId } = req.params;
-    const { fps = 30 } = req.query;
-
-    const projectRows = await db.select().from(universalVideoProjects)
-      .where(eq(universalVideoProjects.projectId, projectId))
-      .limit(1);
-
-    if (projectRows.length === 0) {
-      return res.status(404).json({ success: false, error: 'Project not found' });
-    }
-
-    const projectData = dbRowToVideoProject(projectRows[0]);
-    const plan = await brandInjectionService.createInjectionPlan(projectId);
-
-    const totalContentDuration = projectData.scenes.reduce((sum, scene) => sum + (scene.duration || 5), 0);
-    const totalContentFrames = Math.round(totalContentDuration * Number(fps));
-
-    const remotionProps = brandInjectionService.getRemotionBrandProps(plan, totalContentFrames, Number(fps));
-
-    res.json({
-      success: true,
-      projectId,
-      plan,
-      remotionProps,
-      contentDuration: totalContentDuration,
-      totalDurationWithBrand: totalContentDuration + plan.totalAddedDuration,
-    });
-
-  } catch (error: any) {
-    console.error('[Phase8E] Get brand injection Remotion props failed:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
+router.get('/projects/:projectId/brand-injection/remotion-props', isAuthenticated, async (_req: Request, res: Response) => {
+  res.json({ success: true, remotionProps: null, message: 'Brand injection has been consolidated into scene overlay system' });
 });
 
-router.get('/brand-injection/defaults', isAuthenticated, async (req: Request, res: Response) => {
-  try {
-    const defaults = brandInjectionService.getDefaultSettings();
-    const hasAssets = await brandInjectionService.hasBrandAssets();
-
-    res.json({
-      success: true,
-      defaults,
-      hasAssets,
-    });
-
-  } catch (error: any) {
-    console.error('[Phase8E] Get brand injection defaults failed:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
+router.get('/brand-injection/defaults', isAuthenticated, async (_req: Request, res: Response) => {
+  res.json({ success: true, defaults: null, hasAssets: false, message: 'Brand injection has been consolidated into scene overlay system' });
 });
 
 // ============================================

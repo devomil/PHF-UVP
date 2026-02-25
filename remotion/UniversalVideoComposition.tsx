@@ -26,11 +26,7 @@ import type {
 import { EnhancedTextOverlay } from "./components/TextOverlay";
 import { LogoOverlay } from "./components/LogoOverlay";
 import { WatermarkOverlay } from "./components/WatermarkOverlay";
-import { LowerThird as Phase11BLowerThird } from "./components/LowerThird";
-import { BulletList } from "./components/BulletList";
-import { CTAButton } from "./components/CTAButton";
 import { KenBurnsImage } from "./components/KenBurnsImage";
-import { mapSceneToOverlays, shouldShowLogo, shouldShowWatermark } from "./utils/overlay-mapper";
 import { CustomImageOverlay } from "./components/CustomImageOverlay";
 import { MotionGraphicsScene } from "./compositions/MotionGraphicsScene";
 import { AnimatedEndCard } from "./components/endcard/AnimatedEndCard";
@@ -41,120 +37,8 @@ import { TransitionConfig, SoundDesignConfig, PINE_HILL_FARM_SOUND_CONFIG } from
 import { SoundDesignConfig as Phase18DSoundDesignConfig, TransitionSound, DEFAULT_SOUND_DESIGN_CONFIG } from "../shared/types/sound-design";
 import { FilmTreatment, FilmTreatmentConfig, FILM_TREATMENT_PRESETS } from "./components/post-processing";
 
-// ============================================================
-// BRAND OVERLAY TYPES (Phase 4E)
-// ============================================================
-
-export interface BrandOverlay {
-  type: 'logo' | 'watermark' | 'cta' | 'intro' | 'outro';
-  assetUrl: string;
-  position: {
-    x: number;
-    y: number;
-    anchor: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'center';
-  };
-  size: {
-    width: number;
-    maxHeight?: number;
-  };
-  animation: {
-    type: 'fade' | 'slide' | 'zoom' | 'none';
-    duration: number;
-    delay?: number;
-  };
-  timing: {
-    startTime: number;
-    duration: number;
-  };
-  opacity: number;
-}
-
-export interface CTAOverlay {
-  type: 'cta';
-  ctaData: {
-    headline: string;
-    subtext?: string;
-    url: string;
-    buttonColor?: string;
-  };
-  timing: {
-    startTime: number;
-    duration: number;
-  };
-}
-
-export interface LogoEndingConfig {
-  enabled: boolean;
-  logoUrl: string;
-  backgroundColor: string;
-  duration: number;
-  animation: 'fade' | 'zoom' | 'slide' | 'elegant';
-}
-
-// ============================================================
-// PHASE 17A: URL Validation Helper
-// ============================================================
-
-function isValidImageUrl(url: string | undefined): boolean {
-  if (!url) return false;
-  
-  if (!url.startsWith('http://') && !url.startsWith('https://')) {
-    console.warn('[Remotion] Invalid image URL (not absolute):', url);
-    return false;
-  }
-  
-  if (url.includes('.picard.replit.dev') || url.includes('.replit.dev/')) {
-    console.error('[Remotion] Invalid image URL (Replit dev URL):', url);
-    console.error('[Remotion] This URL is not accessible from Lambda!');
-    return false;
-  }
-  
-  return true;
-}
-
-export interface SceneBrandOverlays {
-  sceneId: string;
-  overlays: BrandOverlay[];
-  showWatermark: boolean;
-  watermark?: BrandOverlay;
-  ctaText?: {
-    headline: string;
-    subtext?: string;
-    url: string;
-  };
-  logoEnding?: LogoEndingConfig;
-}
-
-export interface ProjectBrandInstructions {
-  introAnimation?: BrandOverlay;
-  watermark?: BrandOverlay;
-  outroSequence?: BrandOverlay[];
-  ctaOverlay?: CTAOverlay;
-  sceneOverlays: Record<string, SceneBrandOverlays>;
-  colors: {
-    primary: string;
-    secondary: string;
-    accent: string;
-    text: string;
-    background: string;
-  };
-  typography: {
-    headingFont: string;
-    bodyFont: string;
-  };
-  callToAction: {
-    text: string;
-    subtext?: string;
-    url: string;
-  };
-}
-
 // Phase 18B: Scene overlay configurations from overlay-configuration-service
 import type { SceneOverlayConfig } from '../shared/types/scene-overlays';
-import type { BrandInjectionPlan } from '../shared/types/brand-injection';
-// Phase 18C: Brand injection components
-import { LogoIntro } from './components/brand/LogoIntro';
-import { CTAOutro } from './components/brand/CTAOutro';
 
 export interface UniversalVideoProps {
   scenes: Scene[];
@@ -163,15 +47,11 @@ export interface UniversalVideoProps {
   musicVolume: number;
   brand: BrandSettings;
   outputFormat: OutputFormat;
-  brandInstructions?: ProjectBrandInstructions;
   endCardConfig?: EndCardConfig;
   soundDesignConfig?: SoundDesignConfig;
   audioDuckingKeyframes?: VolumeKeyframe[];
   transitions?: TransitionConfig[];
-  // Phase 18B: Scene overlay configurations
   sceneOverlayConfigs?: Record<string, SceneOverlayConfig>;
-  // Phase 18C: Brand injection plan (logo intro, watermark, CTA outro)
-  brandInjectionPlan?: BrandInjectionPlan;
   // Phase 18D: Voiceover ranges for audio ducking
   voiceoverRanges?: Array<{ startFrame: number; endFrame: number }>;
   soundEffectsBaseUrl?: string;
@@ -1450,8 +1330,7 @@ const SceneRenderer: React.FC<{
   isFirst: boolean;
   isLast: boolean;
   showDebugInfo: boolean;
-  brandInstructions?: ProjectBrandInstructions;
-}> = ({ scene, brand, isFirst, isLast, showDebugInfo, brandInstructions }) => {
+}> = ({ scene, brand, isFirst, isLast, showDebugInfo }) => {
   const frame = useCurrentFrame();
   const { fps, width, height } = useVideoConfig();
   const durationInFrames = (scene.duration || 5) * fps;
@@ -1714,80 +1593,6 @@ const SceneRenderer: React.FC<{
         );
       })()}
 
-      {/* Phase 11B: Extracted Overlay Rendering - Skip TEXT if other overlays exist, but ALWAYS render logos */}
-      {(() => {
-        // Check if we should skip TEXT overlays (to prevent duplicates)
-        const hasRegularTextOverlays = (scene.textOverlays?.length ?? 0) > 0 && scene.textOverlays![0]?.text;
-        const hasIntelligentOverlays = ((scene as any).compositionInstructions?.textOverlays?.length ?? 0) > 0;
-        const skipTextOverlays = hasRegularTextOverlays || hasIntelligentOverlays;
-        
-        // CTA scenes should use CTA buttons from mapped overlays unless brandInstructions provide them
-        const isCTAScene = scene.type === 'cta' || scene.type === 'outro';
-        // Check top-level brandInstructions (passed as prop) for CTA overlay
-        const hasBrandCTAOverlay = !!(brandInstructions?.ctaOverlay);
-        const showCTAButtons = isCTAScene && !hasBrandCTAOverlay;
-        
-        // Get logo URL with fallback from brandInstructions
-        const effectiveLogoUrl = brand.logoUrl || 
-          brandInstructions?.outroSequence?.[0]?.assetUrl ||
-          brandInstructions?.watermark?.assetUrl;
-        
-        // Always get mapped overlays for logos/watermarks
-        const mappedOverlays = mapSceneToOverlays(
-          scene,
-          fps,
-          effectiveLogoUrl,
-          (brand as any).watermarkUrl || brandInstructions?.watermark?.assetUrl
-        );
-        
-        // Debug: Log overlay rendering info (only in development)
-        if (typeof window !== 'undefined' && (window as any).__REMOTION_DEV__) {
-          console.log(`[OverlayDebug] Scene ${scene.id} (${scene.type}):`, {
-            brandLogoUrl: brand.logoUrl?.substring(0, 50) || 'MISSING',
-            effectiveLogoUrl: effectiveLogoUrl?.substring(0, 50) || 'NONE',
-            shouldShowLogo: shouldShowLogo(scene.type),
-            hasLogoInMapped: !!mappedOverlays.logo,
-            logoUrlInMapped: mappedOverlays.logo?.logoUrl?.substring(0, 50) || 'NONE',
-            ctaButtonsCount: mappedOverlays.ctaButtons?.length || 0,
-            showCTAButtons,
-            hasBrandCTAOverlay,
-          });
-        }
-        
-        return (
-          <>
-            {/* Text overlays - only if no other text sources exist and NOT a CTA scene */}
-            {!skipTextOverlays && !isCTAScene && mappedOverlays.textOverlays.map((textProps, idx) => (
-              <EnhancedTextOverlay key={`ext-text-${scene.id}-${idx}`} {...textProps} />
-            ))}
-            
-            {/* Bullet lists - only if no other text sources exist and NOT a CTA scene */}
-            {!skipTextOverlays && !isCTAScene && mappedOverlays.bulletLists.map((listProps, idx) => (
-              <BulletList key={`ext-bullets-${scene.id}-${idx}`} {...listProps} />
-            ))}
-            
-            {/* Lower thirds - only if no other text sources exist and NOT a CTA scene */}
-            {!skipTextOverlays && !isCTAScene && mappedOverlays.lowerThirds.map((ltProps, idx) => (
-              <Phase11BLowerThird key={`ext-lt-${scene.id}-${idx}`} {...ltProps} />
-            ))}
-            
-            {/* CTA buttons - ALWAYS render for CTA scenes if no brand CTA overlay exists */}
-            {showCTAButtons && mappedOverlays.ctaButtons.map((ctaProps, idx) => (
-              <CTAButton key={`ext-cta-${scene.id}-${idx}`} {...ctaProps} />
-            ))}
-            
-            {/* Logo - ALWAYS render regardless of text overlay state */}
-            {shouldShowLogo(scene.type) && mappedOverlays.logo && (
-              <LogoOverlay {...mappedOverlays.logo} />
-            )}
-            
-            {/* Watermark - ALWAYS render regardless of text overlay state */}
-            {shouldShowWatermark(scene.type) && mappedOverlays.watermark && (
-              <WatermarkOverlay {...mappedOverlays.watermark} />
-            )}
-          </>
-        );
-      })()}
 
       {/* Debug overlay showing scene info */}
       {showDebugInfo && (
@@ -1812,531 +1617,9 @@ const SceneRenderer: React.FC<{
   );
 };
 
-// ============================================================
-// WATERMARK
-// ============================================================
 
-const Watermark: React.FC<{ brand: BrandSettings }> = ({ brand }) => {
-  const { width } = useVideoConfig();
-  const frame = useCurrentFrame();
 
-  // Skip if no logo
-  if (!brand.logoUrl || !isValidHttpUrl(brand.logoUrl)) {
-    return null;
-  }
 
-  const fadeIn = interpolate(frame, [0, 30], [0, 1], {
-    extrapolateLeft: 'clamp',
-    extrapolateRight: 'clamp',
-  });
-
-  const positionStyles: Record<string, React.CSSProperties> = {
-    'top-left': { top: 30, left: 30 },
-    'top-right': { top: 30, right: 30 },
-    'bottom-left': { bottom: 30, left: 30 },
-    'bottom-right': { bottom: 30, right: 30 },
-  };
-
-  const watermarkSize = width * 0.08;
-
-  return (
-    <AbsoluteFill style={{ pointerEvents: 'none' }}>
-      <div
-        style={{
-          position: 'absolute',
-          ...positionStyles[brand.watermarkPosition],
-          opacity: brand.watermarkOpacity * fadeIn,
-        }}
-      >
-        <Img
-          src={brand.logoUrl}
-          style={{
-            width: watermarkSize,
-            height: 'auto',
-            maxHeight: watermarkSize,
-            objectFit: 'contain',
-          }}
-        />
-      </div>
-    </AbsoluteFill>
-  );
-};
-
-// ============================================================
-// BRAND OVERLAY COMPONENT (Phase 4E)
-// ============================================================
-
-interface BrandOverlayComponentProps {
-  overlay: BrandOverlay;
-  sceneDuration: number;
-  fps: number;
-}
-
-const BrandOverlayComponent: React.FC<BrandOverlayComponentProps> = ({
-  overlay,
-  sceneDuration,
-  fps,
-}) => {
-  const frame = useCurrentFrame();
-  const startFrame = overlay.timing.startTime * fps;
-  const animationFrames = overlay.animation.duration * fps;
-  const delayFrames = (overlay.animation.delay || 0) * fps;
-  const totalDuration = overlay.timing.duration === -1 
-    ? sceneDuration * fps 
-    : overlay.timing.duration * fps;
-  
-  // Validate asset URL
-  if (!overlay.assetUrl || !isValidHttpUrl(overlay.assetUrl)) {
-    return null;
-  }
-  
-  // Don't render if before start time
-  if (frame < startFrame) return null;
-  
-  // Don't render if after end time (unless duration is -1 for "entire scene")
-  if (overlay.timing.duration !== -1 && frame > startFrame + totalDuration) return null;
-  
-  const adjustedFrame = frame - startFrame - delayFrames;
-  
-  // Calculate opacity based on animation
-  let opacity = 0;
-  if (adjustedFrame < 0) {
-    opacity = 0;
-  } else if (adjustedFrame < animationFrames) {
-    // Fade in
-    opacity = interpolate(
-      adjustedFrame,
-      [0, animationFrames],
-      [0, overlay.opacity],
-      { extrapolateRight: 'clamp' }
-    );
-  } else if (overlay.timing.duration !== -1 && adjustedFrame > totalDuration - animationFrames) {
-    // Fade out
-    const fadeOutFrame = adjustedFrame - (totalDuration - animationFrames);
-    opacity = interpolate(
-      fadeOutFrame,
-      [0, animationFrames],
-      [overlay.opacity, 0],
-      { extrapolateRight: 'clamp' }
-    );
-  } else {
-    opacity = overlay.opacity;
-  }
-  
-  // Calculate scale for zoom animation
-  let scale = 1;
-  if (overlay.animation.type === 'zoom' && adjustedFrame >= 0 && adjustedFrame < animationFrames) {
-    scale = interpolate(
-      adjustedFrame,
-      [0, animationFrames],
-      [0.7, 1],
-      { extrapolateRight: 'clamp' }
-    );
-  }
-  
-  // Calculate slide offset
-  let translateY = 0;
-  if (overlay.animation.type === 'slide' && adjustedFrame >= 0 && adjustedFrame < animationFrames) {
-    translateY = interpolate(
-      adjustedFrame,
-      [0, animationFrames],
-      [50, 0],
-      { extrapolateRight: 'clamp' }
-    );
-  }
-  
-  // Position calculation based on anchor
-  const getPositionStyle = (): React.CSSProperties => {
-    const style: React.CSSProperties = {
-      position: 'absolute',
-    };
-    const { x, y, anchor } = overlay.position;
-    
-    if (anchor === 'center') {
-      style.left = '50%';
-      style.top = '50%';
-      style.transform = `translate(-50%, -50%) scale(${scale}) translateY(${translateY}px)`;
-    } else {
-      if (anchor.includes('left')) {
-        style.left = `${x}%`;
-      } else if (anchor.includes('right')) {
-        style.right = `${100 - x}%`;
-      }
-      
-      if (anchor.includes('top')) {
-        style.top = `${y}%`;
-      } else if (anchor.includes('bottom')) {
-        style.bottom = `${100 - y}%`;
-      }
-      
-      style.transform = `scale(${scale}) translateY(${translateY}px)`;
-    }
-    
-    return style;
-  };
-  
-  return (
-    <div
-      style={{
-        ...getPositionStyle(),
-        opacity,
-        width: `${overlay.size.width}%`,
-        maxHeight: overlay.size.maxHeight ? `${overlay.size.maxHeight}%` : undefined,
-        zIndex: overlay.type === 'watermark' ? 10 : 20,
-        pointerEvents: 'none',
-      }}
-    >
-      <Img
-        src={overlay.assetUrl}
-        style={{
-          width: '100%',
-          height: 'auto',
-          objectFit: 'contain',
-        }}
-      />
-    </div>
-  );
-};
-
-// ============================================================
-// INTRO ANIMATION COMPONENT (Phase 4E)
-// ============================================================
-
-interface IntroAnimationProps {
-  overlay: BrandOverlay;
-  fps: number;
-}
-
-const IntroAnimation: React.FC<IntroAnimationProps> = ({ overlay, fps }) => {
-  const durationFrames = Math.ceil(overlay.timing.duration * fps);
-  
-  return (
-    <Sequence from={0} durationInFrames={durationFrames}>
-      <BrandOverlayComponent
-        overlay={overlay}
-        sceneDuration={overlay.timing.duration}
-        fps={fps}
-      />
-    </Sequence>
-  );
-};
-
-// ============================================================
-// BRAND WATERMARK COMPONENT (Phase 4E)
-// ============================================================
-
-interface BrandWatermarkProps {
-  overlay: BrandOverlay;
-  sceneDuration: number;
-  fps: number;
-}
-
-const BrandWatermark: React.FC<BrandWatermarkProps> = ({ overlay, sceneDuration, fps }) => {
-  return (
-    <BrandOverlayComponent
-      overlay={{
-        ...overlay,
-        timing: {
-          ...overlay.timing,
-          duration: -1,  // Show for entire scene
-        },
-      }}
-      sceneDuration={sceneDuration}
-      fps={fps}
-    />
-  );
-};
-
-// ============================================================
-// CTA OUTRO COMPONENT (Phase 4E) - Legacy version for brandInstructions
-// ============================================================
-
-interface LegacyCTAOutroProps {
-  logo: BrandOverlay;
-  ctaOverlay: CTAOverlay;
-  colors: ProjectBrandInstructions['colors'];
-  sceneDuration: number;
-  fps: number;
-}
-
-const LegacyCTAOutro: React.FC<LegacyCTAOutroProps> = ({
-  logo,
-  ctaOverlay,
-  colors,
-  sceneDuration,
-  fps,
-}) => {
-  const frame = useCurrentFrame();
-  // Use timing from ctaOverlay if provided, otherwise default to 4 seconds before end
-  const ctaStartTime = ctaOverlay.timing?.startTime ?? Math.max(0, sceneDuration - 4);
-  const startFrame = ctaStartTime * fps;
-  
-  // Validate logo URL
-  if (!logo.assetUrl || !isValidHttpUrl(logo.assetUrl)) {
-    return null;
-  }
-  
-  // Don't render before CTA start time
-  if (frame < startFrame) return null;
-  
-  const adjustedFrame = frame - startFrame;
-  const fadeInFrames = 0.8 * fps;
-  
-  // Fade in the entire CTA
-  const fadeIn = interpolate(
-    adjustedFrame,
-    [0, fadeInFrames],
-    [0, 1],
-    { extrapolateRight: 'clamp' }
-  );
-  
-  // Stagger the elements
-  const logoOpacity = interpolate(
-    adjustedFrame,
-    [0, fadeInFrames],
-    [0, 1],
-    { extrapolateRight: 'clamp' }
-  );
-  
-  const headlineOpacity = interpolate(
-    adjustedFrame,
-    [fadeInFrames * 0.3, fadeInFrames * 1.2],
-    [0, 1],
-    { extrapolateRight: 'clamp' }
-  );
-  
-  const subtextOpacity = interpolate(
-    adjustedFrame,
-    [fadeInFrames * 0.5, fadeInFrames * 1.4],
-    [0, 1],
-    { extrapolateRight: 'clamp' }
-  );
-  
-  const urlOpacity = interpolate(
-    adjustedFrame,
-    [fadeInFrames * 0.7, fadeInFrames * 1.6],
-    [0, 1],
-    { extrapolateRight: 'clamp' }
-  );
-  
-  const ctaData = ctaOverlay.ctaData;
-  
-  return (
-    <AbsoluteFill
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: `rgba(0, 0, 0, ${fadeIn * 0.75})`,
-        zIndex: 100,
-      }}
-    >
-      {/* Logo */}
-      <div
-        style={{
-          marginBottom: '2rem',
-          opacity: logoOpacity,
-          width: '200px',
-        }}
-      >
-        <Img
-          src={logo.assetUrl}
-          style={{
-            width: '100%',
-            height: 'auto',
-            objectFit: 'contain',
-          }}
-        />
-      </div>
-      
-      {/* Headline */}
-      <h2
-        style={{
-          fontSize: '48px',
-          fontWeight: 'bold',
-          color: colors.text || '#ffffff',
-          textAlign: 'center',
-          marginBottom: '0.75rem',
-          textShadow: '2px 2px 8px rgba(0,0,0,0.5)',
-          opacity: headlineOpacity,
-          maxWidth: '80%',
-          lineHeight: 1.2,
-        }}
-      >
-        {ctaData.headline}
-      </h2>
-      
-      {/* Subtext */}
-      {ctaData.subtext && (
-        <p
-          style={{
-            fontSize: '24px',
-            color: colors.text || '#ffffff',
-            marginBottom: '1.5rem',
-            textShadow: '1px 1px 4px rgba(0,0,0,0.5)',
-            opacity: subtextOpacity,
-          }}
-        >
-          {ctaData.subtext}
-        </p>
-      )}
-      
-      {/* Website URL Button */}
-      <div
-        style={{
-          padding: '14px 36px',
-          backgroundColor: ctaData.buttonColor || colors.primary || '#2D5A27',
-          borderRadius: '8px',
-          fontSize: '28px',
-          fontWeight: 'bold',
-          color: colors.text || '#ffffff',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-          opacity: urlOpacity,
-        }}
-      >
-        {ctaData.url}
-      </div>
-    </AbsoluteFill>
-  );
-};
-
-// ============================================================
-// SCENE LOGO ENDING (Phase 16G - Logo reveal at end of scene)
-// ============================================================
-
-interface SceneLogoEndingProps {
-  logoUrl: string;
-  backgroundColor: string;
-  duration: number;
-  animation: 'fade' | 'zoom' | 'slide' | 'elegant';
-  sceneDuration: number;
-  fps: number;
-}
-
-const SceneLogoEnding: React.FC<SceneLogoEndingProps> = ({
-  logoUrl,
-  backgroundColor,
-  duration,
-  animation,
-  sceneDuration,
-  fps,
-}) => {
-  const frame = useCurrentFrame();
-  const { width, height } = useVideoConfig();
-  
-  // Clamp duration to ensure it doesn't exceed scene duration
-  const clampedDuration = Math.min(duration, sceneDuration - 0.5); // Leave at least 0.5s of content
-  const effectiveDuration = clampedDuration > 0 ? clampedDuration : 1; // Minimum 1s if scene is too short
-  
-  const endingDurationFrames = Math.round(effectiveDuration * fps);
-  const endingStartFrame = Math.round((sceneDuration - effectiveDuration) * fps);
-  
-  // Only render when in the ending sequence
-  if (frame < endingStartFrame) {
-    return null;
-  }
-  
-  const relativeFrame = frame - endingStartFrame;
-  
-  // Background fade in
-  const bgOpacity = interpolate(
-    relativeFrame,
-    [0, fps * 0.5],
-    [0, 1],
-    { extrapolateRight: 'clamp' }
-  );
-  
-  // Logo animation based on type
-  let logoOpacity = 1;
-  let logoScale = 1;
-  let logoTranslateY = 0;
-  
-  switch (animation) {
-    case 'fade':
-      logoOpacity = interpolate(
-        relativeFrame,
-        [fps * 0.3, fps * 0.8],
-        [0, 1],
-        { extrapolateRight: 'clamp' }
-      );
-      break;
-    case 'zoom':
-      logoOpacity = interpolate(
-        relativeFrame,
-        [fps * 0.3, fps * 0.6],
-        [0, 1],
-        { extrapolateRight: 'clamp' }
-      );
-      logoScale = interpolate(
-        relativeFrame,
-        [fps * 0.3, fps * 0.8],
-        [0.5, 1],
-        { extrapolateRight: 'clamp' }
-      );
-      break;
-    case 'slide':
-      logoOpacity = interpolate(
-        relativeFrame,
-        [fps * 0.2, fps * 0.5],
-        [0, 1],
-        { extrapolateRight: 'clamp' }
-      );
-      logoTranslateY = interpolate(
-        relativeFrame,
-        [fps * 0.2, fps * 0.7],
-        [50, 0],
-        { extrapolateRight: 'clamp' }
-      );
-      break;
-    case 'elegant':
-    default:
-      // Spring-based elegant reveal
-      const logoSpring = spring({
-        frame: relativeFrame - Math.round(fps * 0.3),
-        fps,
-        config: { damping: 20, stiffness: 100, mass: 0.5 },
-      });
-      logoOpacity = logoSpring;
-      logoScale = interpolate(logoSpring, [0, 1], [0.85, 1]);
-      break;
-  }
-  
-  return (
-    <AbsoluteFill
-      style={{
-        opacity: bgOpacity,
-        backgroundColor,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 200,
-      }}
-    >
-      <div
-        style={{
-          opacity: logoOpacity,
-          transform: `scale(${logoScale}) translateY(${logoTranslateY}px)`,
-          maxWidth: '40%',
-          maxHeight: '40%',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        <Img
-          src={logoUrl}
-          style={{
-            maxWidth: '100%',
-            maxHeight: '100%',
-            objectFit: 'contain',
-            filter: 'drop-shadow(0 4px 20px rgba(0,0,0,0.3))',
-          }}
-        />
-      </div>
-    </AbsoluteFill>
-  );
-};
 
 // ============================================================
 // INTRO SLATE (shown when no scenes)
@@ -2552,16 +1835,14 @@ export const UniversalVideoComposition: React.FC<UniversalVideoProps> = ({
   musicVolume = 0.18,
   brand,
   outputFormat,
-  brandInstructions,
   endCardConfig,
   soundDesignConfig,
   audioDuckingKeyframes,
   transitions,
-  sceneOverlayConfigs, // Phase 18B: Scene overlay configurations
-  brandInjectionPlan, // Phase 18C: Brand injection plan
-  voiceoverRanges, // Phase 18D: Voiceover ranges for audio ducking
-  soundEffectsBaseUrl, // Phase 18D: Base URL for sound effects
-  filmTreatmentConfig, // Phase 18F: Film treatment config
+  sceneOverlayConfigs,
+  voiceoverRanges,
+  soundEffectsBaseUrl,
+  filmTreatmentConfig,
 }) => {
   const { fps, durationInFrames } = useVideoConfig();
   
@@ -2624,24 +1905,13 @@ export const UniversalVideoComposition: React.FC<UniversalVideoProps> = ({
   const endCardDuration = Math.round((effectiveEndCardConfig.duration || 5) * fps);
   const endCardStartFrame = durationInFrames - endCardDuration;
 
-  // Phase 18C: Calculate logo intro timing BEFORE scene building
-  // Logo intro plays at the very start, then scenes start after it
-  const logoIntroEnabled = brandInjectionPlan?.logoIntro?.enabled && brandInjectionPlan?.logoIntro?.asset?.url;
-  const logoIntroDuration = logoIntroEnabled ? Math.round((brandInjectionPlan?.logoIntro?.duration || 2.5) * fps) : 0;
-
-  // Build scene sequences with brand overlays
-  // Phase 18C: Offset scene start by logo intro duration so intro plays BEFORE content
-  let currentFrame = logoIntroDuration;
+  let currentFrame = 0;
   const sceneSequences = scenes.map((scene, index) => {
     const durationInFrames = (scene.duration || 5) * fps;
     const isFirstScene = index === 0;
     const isLastScene = index === scenes.length - 1;
     const sceneStartFrame = currentFrame;
     
-    // Get scene-specific brand overlays
-    const sceneBrandOverlays = brandInstructions?.sceneOverlays?.[scene.id];
-    
-    // Phase 18B: Get scene overlay config from overlay-configuration-service
     const sceneOverlayConfig = sceneOverlayConfigs?.[scene.id];
     
     const sequence = (
@@ -2651,123 +1921,57 @@ export const UniversalVideoComposition: React.FC<UniversalVideoProps> = ({
         durationInFrames={durationInFrames}
       >
         <AbsoluteFill>
-          {/* Scene content */}
           <SceneRenderer
             scene={scene}
             brand={brand}
             isFirst={isFirstScene}
             isLast={isLastScene}
             showDebugInfo={showDebugInfo}
-            brandInstructions={brandInstructions}
           />
           
-          {/* BRAND OVERLAYS (Phase 4E + Phase 18B) */}
-          
-          {/* Intro animation on first scene */}
-          {/* Phase 18B: Use sceneOverlayConfig.logo if available for intro, then fall back to brandInstructions */}
-          {isFirstScene && (
-            sceneOverlayConfig?.logo?.enabled && sceneOverlayConfig.logo.url ? (
-              (() => {
-                const logoStartTime = sceneOverlayConfig.logo.timing?.startTime || 0.5;
-                const logoDuration = sceneOverlayConfig.logo.timing?.duration || 2.5;
-                const logoStartFrame = Math.round(logoStartTime * fps);
-                const logoDurationFrames = Math.round(logoDuration * fps);
-                
-                return (
-                  <Sequence
-                    from={logoStartFrame}
-                    durationInFrames={logoDurationFrames}
-                  >
-                    <LogoOverlay
-                      logoUrl={sceneOverlayConfig.logo.url}
-                      position={sceneOverlayConfig.logo.position || 'center'}
-                      size={sceneOverlayConfig.logo.size || 25}
-                      opacity={sceneOverlayConfig.logo.opacity || 1}
-                      animation={{
-                        type: (sceneOverlayConfig.logo.animation as any) || 'fade-in',
-                        duration: Math.round(fps * 0.8),
-                        delay: 0,
-                      }}
-                      timing={{
-                        startFrame: 0,
-                        endFrame: logoDurationFrames,
-                      }}
-                    />
-                  </Sequence>
-                );
-              })()
-            ) : brandInstructions?.introAnimation ? (
-              <IntroAnimation
-                overlay={brandInstructions.introAnimation}
-                fps={fps}
-              />
-            ) : null
+          {/* Scene logo overlay (Phase 18B) */}
+          {isFirstScene && sceneOverlayConfig?.logo?.enabled && sceneOverlayConfig.logo.url && (
+            (() => {
+              const logoStartTime = sceneOverlayConfig.logo.timing?.startTime || 0.5;
+              const logoDuration = sceneOverlayConfig.logo.timing?.duration || 2.5;
+              const logoStartFrame = Math.round(logoStartTime * fps);
+              const logoDurationFrames = Math.round(logoDuration * fps);
+              
+              return (
+                <Sequence from={logoStartFrame} durationInFrames={logoDurationFrames}>
+                  <LogoOverlay
+                    logoUrl={sceneOverlayConfig.logo.url}
+                    position={sceneOverlayConfig.logo.position || 'center'}
+                    size={sceneOverlayConfig.logo.size || 25}
+                    opacity={sceneOverlayConfig.logo.opacity || 1}
+                    animation={{
+                      type: (sceneOverlayConfig.logo.animation as any) || 'fade-in',
+                      duration: Math.round(fps * 0.8),
+                      delay: 0,
+                    }}
+                    timing={{
+                      startFrame: 0,
+                      endFrame: logoDurationFrames,
+                    }}
+                  />
+                </Sequence>
+              );
+            })()
           )}
           
-          {/* Brand watermark on middle scenes - SKIP if global Phase 18C watermark is active */}
-          {!isFirstScene && !isLastScene && !watermarkEnabled && (
-            (sceneBrandOverlays?.showWatermark !== false) && (
-              sceneOverlayConfig?.watermark?.enabled && sceneOverlayConfig.watermark.url ? (
-                <WatermarkOverlay
-                  logoUrl={sceneOverlayConfig.watermark.url}
-                  position={sceneOverlayConfig.watermark.position || 'bottom-right'}
-                  size={sceneOverlayConfig.watermark.size || 8}
-                  opacity={sceneOverlayConfig.watermark.opacity || 0.6}
-                  margin={20}
-                  showDuring="all"
-                />
-              ) : sceneBrandOverlays?.watermark ? (
-                <BrandWatermark
-                  overlay={sceneBrandOverlays.watermark}
-                  sceneDuration={scene.duration || 5}
-                  fps={fps}
-                />
-              ) : brandInstructions?.watermark ? (
-                <BrandWatermark
-                  overlay={brandInstructions.watermark}
-                  sceneDuration={scene.duration || 5}
-                  fps={fps}
-                />
-              ) : null
-            )
-          )}
-          
-          {/* CTA outro on last scene */}
-          {isLastScene && 
-           brandInstructions?.outroSequence?.[0] && 
-           brandInstructions?.ctaOverlay && (
-            <CTAOutro
-              logo={brandInstructions.outroSequence[0]}
-              ctaOverlay={brandInstructions.ctaOverlay}
-              colors={brandInstructions.colors}
-              sceneDuration={scene.duration || 5}
-              fps={fps}
+          {/* Scene watermark overlay (Phase 18B) */}
+          {!isFirstScene && !isLastScene && sceneOverlayConfig?.watermark?.enabled && sceneOverlayConfig.watermark.url && (
+            <WatermarkOverlay
+              logoUrl={sceneOverlayConfig.watermark.url}
+              position={sceneOverlayConfig.watermark.position || 'bottom-right'}
+              size={sceneOverlayConfig.watermark.size || 8}
+              opacity={sceneOverlayConfig.watermark.opacity || 0.6}
+              margin={20}
+              showDuring="all"
             />
           )}
           
-          {/* Scene-specific brand overlays */}
-          {sceneBrandOverlays?.overlays?.map((overlay, overlayIndex) => (
-            <BrandOverlayComponent
-              key={`brand-overlay-${overlayIndex}`}
-              overlay={overlay}
-              sceneDuration={scene.duration || 5}
-              fps={fps}
-            />
-          ))}
-          
-          {/* Scene-level Logo Ending (renders at end of scene) */}
-          {sceneBrandOverlays?.logoEnding?.enabled && sceneBrandOverlays?.logoEnding?.logoUrl && (
-            <SceneLogoEnding
-              logoUrl={sceneBrandOverlays.logoEnding.logoUrl}
-              backgroundColor={sceneBrandOverlays.logoEnding.backgroundColor || '#4A7C59'}
-              duration={sceneBrandOverlays.logoEnding.duration || 3}
-              animation={sceneBrandOverlays.logoEnding.animation || 'elegant'}
-              sceneDuration={scene.duration || 5}
-              fps={fps}
-            />
-          )}
-          
-          {/* Custom user-positioned image overlays (logos, badges, watermarks) */}
+          {/* Custom user-positioned image overlays (drag-and-drop via SceneOverlayEditor) */}
           {scene.overlayItems?.map((overlay, overlayIdx) => (
             <CustomImageOverlay
               key={`custom-overlay-${scene.id}-${overlayIdx}`}
@@ -2787,75 +1991,21 @@ export const UniversalVideoComposition: React.FC<UniversalVideoProps> = ({
     return sequence;
   });
 
-  // Phase 18C: Watermark timing (skip intro and outro)
-  // Note: logoIntroEnabled and logoIntroDuration are calculated above scene building
-  const watermarkEnabled = brandInjectionPlan?.watermark?.enabled && brandInjectionPlan?.watermark?.asset?.url;
-  const watermarkStartFrame = logoIntroDuration + Math.round(fps); // Start 1s after intro ends
-  const watermarkEndFrame = endCardStartFrame - Math.round(fps); // End 1s before end card
-  
-  // Phase 18C Note: CTA outro is not rendered separately - the existing AnimatedEndCard 
-  // (Phase 16) serves as the CTA outro with Pine Hill Farm branding
-
   return (
     <AbsoluteFill style={{ backgroundColor: '#000' }}>
-      {/* Validation logging (development only) */}
       <AssetValidationSummary 
         scenes={scenes} 
         voiceoverUrl={voiceoverUrl} 
         musicUrl={musicUrl} 
       />
       
-      {/* Phase 18F: Film Treatment - applies color grading, grain, vignette, letterbox */}
       <FilmTreatment config={effectiveFilmTreatment}>
       
-      {/* Phase 18C: Logo Intro (first 2-3 seconds) */}
-      {logoIntroEnabled && brandInjectionPlan?.logoIntro?.asset?.url && (
-        <Sequence
-          from={0}
-          durationInFrames={logoIntroDuration}
-          name="Phase18C-LogoIntro"
-        >
-          <LogoIntro
-            logoUrl={brandInjectionPlan.logoIntro.asset.url}
-            backgroundColor={brandInjectionPlan.logoIntro.backgroundColor || '#1a1a1a'}
-            animation={brandInjectionPlan.logoIntro.animation || 'fade'}
-            duration={brandInjectionPlan.logoIntro.duration || 2.5}
-            position={brandInjectionPlan.logoIntro.position || 'center'}
-            tagline={brandInjectionPlan.logoIntro.includeTagline ? brandInjectionPlan.logoIntro.tagline : undefined}
-            template={brandInjectionPlan.logoIntro.template || 'classic-glow'}
-            backgroundImageUrl={brandInjectionPlan.logoIntro.backgroundImageUrl}
-            logoScale={brandInjectionPlan.logoIntro.logoScale}
-          />
-        </Sequence>
-      )}
-      
-      {/* Main content */}
       {scenes.length === 0 ? (
         <IntroSlate brand={brand} />
       ) : (
         sceneSequences
       )}
-      
-      {/* Phase 18C: Watermark from brand injection plan */}
-      {watermarkEnabled && brandInjectionPlan?.watermark?.asset?.url && watermarkEndFrame > watermarkStartFrame && (
-        <Sequence
-          from={watermarkStartFrame}
-          durationInFrames={watermarkEndFrame - watermarkStartFrame}
-          name="Phase18C-Watermark"
-        >
-          <WatermarkOverlay
-            logoUrl={brandInjectionPlan.watermark.asset.url}
-            position={brandInjectionPlan.watermark.position || 'bottom-right'}
-            size={Math.round((brandInjectionPlan.watermark.scale || 0.08) * 100)}
-            opacity={brandInjectionPlan.watermark.opacity || 0.7}
-            margin={40}
-            showDuring="middle"
-          />
-        </Sequence>
-      )}
-
-      {/* Fallback watermark - only if no brand instructions AND no brand injection watermark */}
-      {!brandInstructions?.watermark && !watermarkEnabled && <Watermark brand={brand} />}
 
       {/* Background Music - legacy ducking (only when no keyframes provided) */}
       {(!audioDuckingKeyframes || audioDuckingKeyframes.length === 0) && (
@@ -2895,33 +2045,9 @@ export const UniversalVideoComposition: React.FC<UniversalVideoProps> = ({
         });
       })()}
       
-      {/* Animated End Card (Phase 16) - serves as CTA outro with Pine Hill Farm branding */}
-      {/* Phase 18C Note: brandInjectionPlan.ctaOutro is available but AnimatedEndCard takes precedence */}
       {hasEndCard && (
         <Sequence from={endCardStartFrame} durationInFrames={endCardDuration}>
           <AnimatedEndCard config={effectiveEndCardConfig} />
-        </Sequence>
-      )}
-      
-      {/* Phase 18C: Alternative CTA Outro (only if end card disabled and CTA outro enabled) */}
-      {!hasEndCard && brandInjectionPlan?.ctaOutro?.enabled && brandInjectionPlan.ctaOutro.logo?.url && (
-        <Sequence
-          from={durationInFrames - Math.round((brandInjectionPlan.ctaOutro.duration || 5) * fps)}
-          durationInFrames={Math.round((brandInjectionPlan.ctaOutro.duration || 5) * fps)}
-          name="Phase18C-CTAOutro"
-        >
-          <CTAOutro
-            logoUrl={brandInjectionPlan.ctaOutro.logo.url}
-            headline={brandInjectionPlan.ctaOutro.headline}
-            subheadline={brandInjectionPlan.ctaOutro.subheadline}
-            website={brandInjectionPlan.ctaOutro.contactInfo?.website}
-            phone={brandInjectionPlan.ctaOutro.contactInfo?.phone}
-            email={brandInjectionPlan.ctaOutro.contactInfo?.email}
-            backgroundColor={brandInjectionPlan.ctaOutro.backgroundColor}
-            animation={brandInjectionPlan.ctaOutro.animation === 'build' ? 'build' : 
-                       brandInjectionPlan.ctaOutro.animation === 'slide-up' ? 'slide-up' : 'fade'}
-            buttonText={brandInjectionPlan.ctaOutro.buttonText}
-          />
         </Sequence>
       )}
       
@@ -2963,7 +2089,7 @@ export const UniversalVideoComposition: React.FC<UniversalVideoProps> = ({
           transitions={(() => {
             // Build TransitionSound array from scenes
             const transitionSounds: TransitionSound[] = [];
-            let frameOffset = logoIntroDuration;
+            let frameOffset = 0;
             scenes.forEach((scene, index) => {
               if (index > 0) {
                 transitionSounds.push({
@@ -3008,7 +2134,7 @@ export const UniversalVideoComposition: React.FC<UniversalVideoProps> = ({
       {/* Phase 18D: Ducked Music with VoiceoverRanges (preferred) - uses soundDesignConfig values */}
       {musicUrl && voiceoverRanges && voiceoverRanges.length > 0 && (() => {
         const nativeAudioRanges: NativeAudioRange[] = [];
-        let sceneFramePos = logoIntroDuration;
+        let sceneFramePos = 0;
         for (const scene of scenes) {
           const sceneDurationSec = scene.duration || 5;
           const sceneFrames = sceneDurationSec * fps;
