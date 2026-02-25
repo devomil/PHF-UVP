@@ -1221,20 +1221,63 @@ const MicroSceneAudioVideo: React.FC<{
   );
 };
 
+const SafeVideo: React.FC<{
+  src: string;
+  style?: React.CSSProperties;
+  muted?: boolean;
+  fallback: React.ReactNode;
+}> = ({ src, style, muted, fallback }) => {
+  const [error, setError] = React.useState(false);
+
+  if (error || !src) {
+    return <AbsoluteFill>{fallback}</AbsoluteFill>;
+  }
+
+  return (
+    <OffthreadVideo
+      src={src}
+      style={style}
+      muted={muted}
+      onError={() => {
+        console.warn(`[SafeVideo] Failed to load: ${src.substring(0, 80)}`);
+        setError(true);
+      }}
+    />
+  );
+};
+
 const MicroSceneBackground: React.FC<{
   microScenes: MicroScene[];
   sceneDuration: number;
   fps: number;
   fallback: React.ReactNode;
 }> = ({ microScenes, sceneDuration, fps, fallback }) => {
-  const totalDuration = microScenes.reduce((sum, ms) => sum + (ms.duration || 0), 0) || sceneDuration;
+  const totalMsDuration = microScenes.reduce((sum, ms) => sum + (ms.duration || 0), 0);
+  const totalDuration = totalMsDuration > 0 ? totalMsDuration : sceneDuration;
+  const totalSceneFrames = Math.round(sceneDuration * fps);
+
+  React.useEffect(() => {
+    console.log(`[MicroSceneBackground] ${microScenes.length} micro-scenes, sceneDuration=${sceneDuration}s, totalMsDuration=${totalMsDuration}s, totalSceneFrames=${totalSceneFrames}`);
+    let offset = 0;
+    microScenes.forEach((ms, idx) => {
+      const msDur = ms.duration || (sceneDuration / microScenes.length);
+      const msFrames = Math.round((msDur / totalDuration) * totalSceneFrames);
+      console.log(`  MS[${idx}]: dur=${msDur}s, frames=${msFrames}, from=${offset}, video=${ms.videoUrl?.substring(0, 60) || 'none'}`);
+      offset += msFrames;
+    });
+    console.log(`  Total allocated frames: ${offset} / ${totalSceneFrames}`);
+  }, []);
+
   let frameOffset = 0;
 
   return (
     <AbsoluteFill>
       {microScenes.map((ms, idx) => {
         const msDuration = ms.duration || (sceneDuration / microScenes.length);
-        const msFrames = Math.round((msDuration / totalDuration) * sceneDuration * fps);
+        const isLast = idx === microScenes.length - 1;
+        const msFrames = isLast
+          ? totalSceneFrames - frameOffset
+          : Math.round((msDuration / totalDuration) * totalSceneFrames);
         const from = frameOffset;
         frameOffset += msFrames;
 
@@ -1245,14 +1288,14 @@ const MicroSceneBackground: React.FC<{
 
         if (ms.videoUrl) {
           return (
-            <Sequence key={ms.id} from={from} durationInFrames={msFrames + crossfadeFrames}>
+            <Sequence key={ms.id || `ms-${idx}`} from={from} durationInFrames={msFrames + (isLast ? 0 : crossfadeFrames)}>
               <AbsoluteFill style={{ opacity: 1 }}>
                 <MicroSceneCrossfade
                   frameInSequence={0}
-                  durationInFrames={msFrames + crossfadeFrames}
+                  durationInFrames={msFrames + (isLast ? 0 : crossfadeFrames)}
                   crossfadeFrames={crossfadeFrames}
                   isFirst={idx === 0}
-                  isLast={idx === microScenes.length - 1}
+                  isLast={isLast}
                 >
                   {audioVolume > 0 ? (
                     <MicroSceneAudioVideo
@@ -1263,10 +1306,11 @@ const MicroSceneBackground: React.FC<{
                       durationInFrames={msFrames}
                     />
                   ) : (
-                    <OffthreadVideo
+                    <SafeVideo
                       src={ms.videoUrl}
                       style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                       muted
+                      fallback={fallback}
                     />
                   )}
                 </MicroSceneCrossfade>
@@ -1276,14 +1320,14 @@ const MicroSceneBackground: React.FC<{
         }
         if (ms.imageUrl) {
           return (
-            <Sequence key={ms.id} from={from} durationInFrames={msFrames + crossfadeFrames}>
+            <Sequence key={ms.id || `ms-${idx}`} from={from} durationInFrames={msFrames + (isLast ? 0 : crossfadeFrames)}>
               <AbsoluteFill>
                 <MicroSceneCrossfade
                   frameInSequence={0}
-                  durationInFrames={msFrames + crossfadeFrames}
+                  durationInFrames={msFrames + (isLast ? 0 : crossfadeFrames)}
                   crossfadeFrames={crossfadeFrames}
                   isFirst={idx === 0}
-                  isLast={idx === microScenes.length - 1}
+                  isLast={isLast}
                 >
                   <SafeImage
                     src={ms.imageUrl}
@@ -1296,7 +1340,7 @@ const MicroSceneBackground: React.FC<{
           );
         }
         return (
-          <Sequence key={ms.id} from={from} durationInFrames={msFrames}>
+          <Sequence key={ms.id || `ms-${idx}`} from={from} durationInFrames={msFrames}>
             <AbsoluteFill>{fallback}</AbsoluteFill>
           </Sequence>
         );
