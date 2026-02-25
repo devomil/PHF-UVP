@@ -119,7 +119,7 @@ async function startupRecovery() {
 
     for (const row of inFlightProjects) {
       const projectData = dbRowToVideoProject(row);
-      const projectId = projectData.id;
+      const projectId = projectData.projectId;
       const progress = projectData.progress as any;
       const lambdaState = progress?.lambdaChunkState as LambdaChunkState | null;
 
@@ -246,7 +246,7 @@ async function finishChunkedRender(
   completedChunks: ChunkResult[],
   totalChunks: number
 ) {
-  const projectId = projectData.id;
+  const projectId = projectData.projectId;
   currentProjectId = projectId;
 
   try {
@@ -317,7 +317,7 @@ async function finishChunkedRender(
 }
 
 function resumeLambdaMonitoring(projectData: VideoProjectWithMeta, lambdaState: LambdaChunkState) {
-  const projectId = projectData.id;
+  const projectId = projectData.projectId;
 
   (async () => {
     try {
@@ -393,7 +393,7 @@ function resumeLambdaMonitoring(projectData: VideoProjectWithMeta, lambdaState: 
 }
 
 async function processProject(projectData: VideoProjectWithMeta) {
-  const projectId = projectData.id;
+  const projectId = projectData.projectId;
   currentProjectId = projectId;
 
   log(`Processing project: ${projectId} (${projectData.title})`);
@@ -474,7 +474,7 @@ async function processProject(projectData: VideoProjectWithMeta) {
 }
 
 async function processChunkedRender(projectData: VideoProjectWithMeta) {
-  const projectId = projectData.id;
+  const projectId = projectData.projectId;
   currentProjectId = projectId;
 
   log(`=== CHUNKED RENDER STARTED (worker process) ===`);
@@ -567,6 +567,9 @@ async function processChunkedRender(projectData: VideoProjectWithMeta) {
           if (renderProgress.phase === 'error') {
             currentProject.status = 'error';
             currentProject.progress.steps.rendering.status = 'error';
+          } else if (renderProgress.phase === 'rendering' || renderProgress.phase === 'preparing' || renderProgress.phase === 'downloading' || renderProgress.phase === 'concatenating') {
+            currentProject.status = 'rendering';
+            currentProject.progress.steps.rendering.status = 'in-progress';
           }
           await saveProjectToDb(currentProject, projectData.ownerId);
         }
