@@ -250,6 +250,12 @@ async function finishChunkedRender(
   currentProjectId = projectId;
 
   try {
+    const audioConfig = {
+      voiceoverUrl: (projectData as any).assets?.voiceover?.fullTrackUrl || null,
+      musicUrl: (projectData as any).assets?.music?.url || null,
+      musicVolume: (projectData as any).assets?.music?.volume ?? 0.18,
+    };
+
     const outputUrl = await chunkedRenderService.resumeFromCompletedChunks(
       projectId,
       completedChunks,
@@ -273,7 +279,8 @@ async function finishChunkedRender(
         } catch (e: any) {
           log(`Failed to save finish progress: ${e.message}`);
         }
-      }
+      },
+      audioConfig
     );
 
     const latestProject = await getProjectFromDb(projectId);

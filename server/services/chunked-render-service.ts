@@ -1,11 +1,12 @@
 import { S3Client, GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
 import { remotionLambdaService } from "./remotion-lambda-service";
-import { exec } from "child_process";
+import { exec, execFile } from "child_process";
 import { promisify } from "util";
 import * as fs from "fs";
 import * as path from "path";
 
 const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 const REGION = process.env.REMOTION_AWS_REGION || "us-east-2";
 const BUCKET_NAME = process.env.REMOTION_S3_BUCKET || process.env.REMOTION_AWS_BUCKET || "remotionlambda-useast2-1vc2l6a56o";
@@ -186,9 +187,12 @@ class ChunkedRenderService {
       scenes: chunk.scenes,
       isChunk: true,
       chunkIndex: chunk.chunkIndex,
-      // Only include overlays relevant to this chunk
       sceneOverlayConfigs: filteredOverlayConfigs,
       voiceoverRanges: undefined,
+      voiceoverUrl: null,
+      musicUrl: null,
+      musicVolume: 0,
+      audioDuckingKeyframes: undefined,
       endCardConfig: chunk.chunkIndex === (inputProps._totalChunks || 999) - 1 ? inputProps.endCardConfig : undefined,
     };
 
@@ -442,6 +446,143 @@ class ChunkedRenderService {
     }
   }
 
+  async downloadAudioFile(url: string, label: string): Promise<string | null> {
+    if (!url) return null;
+    const localPath = path.join(TEMP_DIR, `${label}_${Date.now()}.mp3`);
+    console.log(`[ChunkedRender] Downloading ${label} from ${url.substring(0, 80)}...`);
+
+    try {
+      const urlParts = url.match(/https?:\/\/([^.]+)\.s3\.([^.]+)\.amazonaws\.com\/(.+)/);
+      if (!urlParts) {
+        const response = await fetch(url);
+        if (!response.ok) {
+          throw new Error(`HTTP error: ${response.status}`);
+        }
+        const buffer = await response.arrayBuffer();
+        fs.writeFileSync(localPath, Buffer.from(buffer));
+      } else {
+        const [, bucket, region, key] = urlParts;
+        const command = new GetObjectCommand({
+          Bucket: bucket,
+          Key: decodeURIComponent(key),
+        });
+        const response = await this.getS3Client().send(command);
+        const stream = response.Body as NodeJS.ReadableStream;
+        await new Promise<void>((resolve, reject) => {
+          const writeStream = fs.createWriteStream(localPath);
+          stream.pipe(writeStream);
+          writeStream.on("finish", resolve);
+          writeStream.on("error", reject);
+        });
+      }
+      const stats = fs.statSync(localPath);
+      console.log(`[ChunkedRender] Downloaded ${label}: ${(stats.size / 1024).toFixed(1)} KB`);
+      return localPath;
+    } catch (error) {
+      console.warn(`[ChunkedRender] Failed to download ${label}:`, error);
+      return null;
+    }
+  }
+
+  async mixAudioIntoVideo(
+    videoPath: string,
+    voiceoverPath: string | null,
+    musicPath: string | null,
+    musicVolume: number,
+    outputPath: string
+  ): Promise<void> {
+    console.log(`[ChunkedRender] Mixing audio into final video (voiceover: ${!!voiceoverPath}, music: ${!!musicPath}, musicVol: ${musicVolume})...`);
+
+    if (!voiceoverPath && !musicPath) {
+      fs.copyFileSync(videoPath, outputPath);
+      console.log(`[ChunkedRender] No audio to mix, copied video as-is`);
+      return;
+    }
+
+    const args: string[] = ['-y', '-i', videoPath];
+    if (voiceoverPath) args.push('-i', voiceoverPath);
+    if (musicPath) args.push('-i', musicPath);
+
+    if (voiceoverPath && musicPath) {
+      const volFilter = Math.max(0.01, Math.min(1, musicVolume)).toFixed(2);
+      args.push(
+        '-filter_complex',
+        `[1:a]aresample=44100[vo];[2:a]aresample=44100,volume=${volFilter}[mu];[vo][mu]amix=inputs=2:duration=longest:dropout_transition=2[aout]`,
+        '-map', '0:v', '-map', '[aout]'
+      );
+    } else if (voiceoverPath) {
+      args.push('-map', '0:v', '-map', '1:a');
+    } else if (musicPath) {
+      const volFilter = Math.max(0.01, Math.min(1, musicVolume)).toFixed(2);
+      args.push(
+        '-filter_complex', `[1:a]volume=${volFilter}[mu]`,
+        '-map', '0:v', '-map', '[mu]'
+      );
+    }
+
+    args.push('-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-shortest', outputPath);
+    console.log(`[ChunkedRender] Running FFmpeg audio mix with ${args.length} args...`);
+
+    try {
+      const { stderr } = await execFileAsync('ffmpeg', args, { maxBuffer: 50 * 1024 * 1024 });
+      if (stderr) {
+        console.log(`[ChunkedRender] FFmpeg audio mix stderr:`, stderr.substring(0, 500));
+      }
+      const stats = fs.statSync(outputPath);
+      console.log(`[ChunkedRender] Audio mix complete: ${(stats.size / 1024 / 1024).toFixed(2)} MB`);
+    } catch (error: any) {
+      console.error(`[ChunkedRender] Audio mix failed, falling back to video-only:`, error.message);
+      fs.copyFileSync(videoPath, outputPath);
+    }
+  }
+
+  async mixAudioPostConcat(
+    concatVideoPath: string,
+    voiceoverUrl: string | null,
+    musicUrl: string | null,
+    musicVolume: number,
+    projectId: string,
+    totalChunks: number,
+    tempFiles: string[],
+    updateProgress: (progress: ChunkedRenderProgress) => Promise<void>
+  ): Promise<string> {
+    if (!voiceoverUrl && !musicUrl) {
+      return concatVideoPath;
+    }
+
+    await updateProgress({
+      phase: 'concatenating',
+      totalChunks,
+      completedChunks: totalChunks,
+      overallPercent: 83,
+      message: 'Downloading audio tracks...',
+    });
+
+    const [voiceoverPath, musicPath] = await Promise.all([
+      voiceoverUrl ? this.downloadAudioFile(voiceoverUrl, 'voiceover') : Promise.resolve(null),
+      musicUrl ? this.downloadAudioFile(musicUrl, 'music') : Promise.resolve(null),
+    ]);
+    if (voiceoverPath) tempFiles.push(voiceoverPath);
+    if (musicPath) tempFiles.push(musicPath);
+
+    if (!voiceoverPath && !musicPath) {
+      return concatVideoPath;
+    }
+
+    await updateProgress({
+      phase: 'concatenating',
+      totalChunks,
+      completedChunks: totalChunks,
+      overallPercent: 86,
+      message: 'Mixing audio into video...',
+    });
+
+    const mixedPath = path.join(TEMP_DIR, `mixed_${projectId}_${Date.now()}.mp4`);
+    tempFiles.push(mixedPath);
+    await this.mixAudioIntoVideo(concatVideoPath, voiceoverPath, musicPath, musicVolume, mixedPath);
+    return mixedPath;
+  }
+
   async uploadFinalVideo(localPath: string, projectId: string): Promise<string> {
     const key = `renders/chunked/${projectId}_${Date.now()}.mp4`;
     console.log(`[ChunkedRender] Uploading final video to S3: ${key}`);
@@ -677,9 +818,17 @@ class ChunkedRenderService {
         message: 'Concatenating video chunks...',
       });
 
-      const outputPath = path.join(TEMP_DIR, `final_${projectId}_${Date.now()}.mp4`);
-      tempFiles.push(outputPath);
-      await this.concatenateChunks(chunkPaths, outputPath);
+      const concatPath = path.join(TEMP_DIR, `concat_${projectId}_${Date.now()}.mp4`);
+      tempFiles.push(concatPath);
+      await this.concatenateChunks(chunkPaths, concatPath);
+
+      const finalVideoPath = await this.mixAudioPostConcat(
+        concatPath,
+        inputProps.voiceoverUrl || null,
+        inputProps.musicUrl || null,
+        inputProps.musicVolume ?? 0.18,
+        projectId, totalChunks, tempFiles, updateProgress
+      );
 
       await updateProgress({
         phase: 'uploading',
@@ -689,7 +838,7 @@ class ChunkedRenderService {
         message: 'Uploading final video...',
       });
 
-      const finalUrl = await this.uploadFinalVideo(outputPath, projectId);
+      const finalUrl = await this.uploadFinalVideo(finalVideoPath, projectId);
 
       await updateProgress({
         phase: 'complete',
@@ -719,7 +868,8 @@ class ChunkedRenderService {
     projectId: string,
     completedChunkResults: ChunkResult[],
     totalChunks: number,
-    onProgress?: (progress: ChunkedRenderProgress) => void | Promise<void>
+    onProgress?: (progress: ChunkedRenderProgress) => void | Promise<void>,
+    audioConfig?: { voiceoverUrl?: string | null; musicUrl?: string | null; musicVolume?: number }
   ): Promise<string> {
     const tempFiles: string[] = [];
 
@@ -770,9 +920,17 @@ class ChunkedRenderService {
         message: 'Concatenating video chunks...',
       });
 
-      const outputPath = path.join(TEMP_DIR, `final_${projectId}_${Date.now()}.mp4`);
-      tempFiles.push(outputPath);
-      await this.concatenateChunks(chunkPaths, outputPath);
+      const concatPath = path.join(TEMP_DIR, `concat_resume_${projectId}_${Date.now()}.mp4`);
+      tempFiles.push(concatPath);
+      await this.concatenateChunks(chunkPaths, concatPath);
+
+      const finalVideoPath = await this.mixAudioPostConcat(
+        concatPath,
+        audioConfig?.voiceoverUrl || null,
+        audioConfig?.musicUrl || null,
+        audioConfig?.musicVolume ?? 0.18,
+        projectId, totalChunks, tempFiles, updateProgress
+      );
 
       await updateProgress({
         phase: 'uploading',
@@ -782,7 +940,7 @@ class ChunkedRenderService {
         message: 'Uploading final video...',
       });
 
-      const finalUrl = await this.uploadFinalVideo(outputPath, projectId);
+      const finalUrl = await this.uploadFinalVideo(finalVideoPath, projectId);
 
       await updateProgress({
         phase: 'complete',
