@@ -241,7 +241,7 @@ class ChunkedRenderService {
     renderId: string,
     bucketName: string,
     chunkIndex: number,
-    onLambdaProgress?: (lambdaPercent: number) => void
+    onLambdaProgress?: (lambdaPercent: number) => void | Promise<void>
   ): Promise<string> {
     console.log(`[ChunkedRender] Polling chunk ${chunkIndex} render ${renderId} to completion...`);
 
@@ -485,7 +485,7 @@ class ChunkedRenderService {
     projectId: string,
     inputProps: Record<string, any>,
     compositionId: string,
-    onProgress?: (progress: ChunkedRenderProgress) => void,
+    onProgress?: (progress: ChunkedRenderProgress) => void | Promise<void>,
     onChunkLambdaStarted?: (state: LambdaChunkState) => Promise<void>,
     onChunkComplete?: (chunkResult: ChunkResult) => Promise<void>
   ): Promise<string> {
@@ -493,15 +493,19 @@ class ChunkedRenderService {
     const fps = inputProps.fps || 30;
     const tempFiles: string[] = [];
 
-    const updateProgress = (progress: ChunkedRenderProgress) => {
+    const updateProgress = async (progress: ChunkedRenderProgress) => {
       console.log(`[ChunkedRender] Progress: ${progress.phase} - ${progress.overallPercent}% - ${progress.message}`);
       if (onProgress) {
-        onProgress(progress);
+        try {
+          await onProgress(progress);
+        } catch (e: any) {
+          console.error(`[ChunkedRender] Failed to save progress: ${e.message}`);
+        }
       }
     };
 
     try {
-      updateProgress({
+      await updateProgress({
         phase: 'preparing',
         totalChunks: 0,
         completedChunks: 0,
@@ -515,7 +519,7 @@ class ChunkedRenderService {
       // Pass total chunks count so buildChunkInputProps knows which is the last chunk
       inputProps._totalChunks = totalChunks;
 
-      updateProgress({
+      await updateProgress({
         phase: 'rendering',
         totalChunks,
         completedChunks: 0,
@@ -535,7 +539,7 @@ class ChunkedRenderService {
           await new Promise(resolve => setTimeout(resolve, INTER_CHUNK_COOLDOWN_MS));
         }
         
-        updateProgress({
+        await updateProgress({
           phase: 'rendering',
           totalChunks,
           completedChunks: i,
@@ -566,10 +570,10 @@ class ChunkedRenderService {
               renderId,
               bucketName,
               i,
-              (lambdaPct: number) => {
+              async (lambdaPct: number) => {
                 const chunkContribution = 50 / totalChunks;
                 const overallPct = 10 + Math.round((i / totalChunks) * 50) + Math.round((lambdaPct / 100) * chunkContribution);
-                updateProgress({
+                await updateProgress({
                   phase: 'rendering',
                   totalChunks,
                   completedChunks: i,
@@ -610,7 +614,7 @@ class ChunkedRenderService {
             if (isRateLimitError && chunkAttempt < MAX_CHUNK_RETRIES) {
               const cooldown = 60000 * chunkAttempt;
               console.warn(`[ChunkedRender] Chunk ${i} hit rate limit (attempt ${chunkAttempt}/${MAX_CHUNK_RETRIES}), cooling down ${cooldown / 1000}s before retry...`);
-              updateProgress({
+              await updateProgress({
                 phase: 'rendering',
                 totalChunks,
                 completedChunks: i,
@@ -624,7 +628,7 @@ class ChunkedRenderService {
 
             console.error(`[ChunkedRender] Chunk ${i} failed after ${(renderTimeMs / 1000).toFixed(1)}s (attempt ${chunkAttempt}/${MAX_CHUNK_RETRIES}): ${chunkError.message}`);
 
-            updateProgress({
+            await updateProgress({
               phase: 'error',
               totalChunks,
               completedChunks: chunkResults.length,
@@ -643,7 +647,7 @@ class ChunkedRenderService {
         }
       }
 
-      updateProgress({
+      await updateProgress({
         phase: 'downloading',
         totalChunks,
         completedChunks: totalChunks,
@@ -655,7 +659,7 @@ class ChunkedRenderService {
       for (let i = 0; i < chunkResults.length; i++) {
         const result = chunkResults[i];
         
-        updateProgress({
+        await updateProgress({
           phase: 'downloading',
           totalChunks,
           completedChunks: totalChunks,
@@ -669,7 +673,7 @@ class ChunkedRenderService {
         tempFiles.push(localPath);
       }
 
-      updateProgress({
+      await updateProgress({
         phase: 'concatenating',
         totalChunks,
         completedChunks: totalChunks,
@@ -681,7 +685,7 @@ class ChunkedRenderService {
       tempFiles.push(outputPath);
       await this.concatenateChunks(chunkPaths, outputPath);
 
-      updateProgress({
+      await updateProgress({
         phase: 'uploading',
         totalChunks,
         completedChunks: totalChunks,
@@ -691,7 +695,7 @@ class ChunkedRenderService {
 
       const finalUrl = await this.uploadFinalVideo(outputPath, projectId);
 
-      updateProgress({
+      await updateProgress({
         phase: 'complete',
         totalChunks,
         completedChunks: totalChunks,
@@ -719,19 +723,23 @@ class ChunkedRenderService {
     projectId: string,
     completedChunkResults: ChunkResult[],
     totalChunks: number,
-    onProgress?: (progress: ChunkedRenderProgress) => void
+    onProgress?: (progress: ChunkedRenderProgress) => void | Promise<void>
   ): Promise<string> {
     const tempFiles: string[] = [];
 
-    const updateProgress = (progress: ChunkedRenderProgress) => {
+    const updateProgress = async (progress: ChunkedRenderProgress) => {
       console.log(`[ChunkedRender] Resume progress: ${progress.phase} - ${progress.overallPercent}% - ${progress.message}`);
       if (onProgress) {
-        onProgress(progress);
+        try {
+          await onProgress(progress);
+        } catch (e: any) {
+          console.error(`[ChunkedRender] Failed to save resume progress: ${e.message}`);
+        }
       }
     };
 
     try {
-      updateProgress({
+      await updateProgress({
         phase: 'downloading',
         totalChunks,
         completedChunks: totalChunks,
@@ -744,7 +752,7 @@ class ChunkedRenderService {
       
       for (let i = 0; i < sorted.length; i++) {
         const result = sorted[i];
-        updateProgress({
+        await updateProgress({
           phase: 'downloading',
           totalChunks,
           completedChunks: totalChunks,
@@ -758,7 +766,7 @@ class ChunkedRenderService {
         tempFiles.push(localPath);
       }
 
-      updateProgress({
+      await updateProgress({
         phase: 'concatenating',
         totalChunks,
         completedChunks: totalChunks,
@@ -770,7 +778,7 @@ class ChunkedRenderService {
       tempFiles.push(outputPath);
       await this.concatenateChunks(chunkPaths, outputPath);
 
-      updateProgress({
+      await updateProgress({
         phase: 'uploading',
         totalChunks,
         completedChunks: totalChunks,
@@ -780,7 +788,7 @@ class ChunkedRenderService {
 
       const finalUrl = await this.uploadFinalVideo(outputPath, projectId);
 
-      updateProgress({
+      await updateProgress({
         phase: 'complete',
         totalChunks,
         completedChunks: totalChunks,
@@ -790,7 +798,7 @@ class ChunkedRenderService {
 
       return finalUrl;
     } catch (error: any) {
-      updateProgress({
+      await updateProgress({
         phase: 'error',
         totalChunks: 0,
         completedChunks: 0,

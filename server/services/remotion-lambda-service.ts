@@ -518,7 +518,7 @@ class RemotionLambdaService {
   async pollRenderToCompletion(
     renderId: string,
     bucketName: string,
-    onPollProgress?: (percent: number) => void
+    onPollProgress?: (percent: number) => void | Promise<void>
   ): Promise<string> {
     console.log(`[Remotion Lambda] Polling render ${renderId} to completion...`);
 
@@ -558,7 +558,7 @@ class RemotionLambdaService {
       console.log(`[Remotion Lambda] Progress: ${pct}% (frames: ${progress.framesRendered}, lambdas: ${progress.lambdasInvoked}, chunks: ${progress.chunks})`);
 
       if (onPollProgress) {
-        try { onPollProgress(pct); } catch {}
+        try { await onPollProgress(pct); } catch {}
       }
 
       // Check for fatal error flag (can be true even if errors array is empty)
@@ -598,7 +598,7 @@ class RemotionLambdaService {
     compositionId: string;
     inputProps: Record<string, any>;
     codec?: "h264" | "h265" | "vp8" | "vp9";
-    onPollProgress?: (percent: number) => void;
+    onPollProgress?: (percent: number) => void | Promise<void>;
   }): Promise<string> {
     const { renderId, bucketName } = await this.startRender(params);
     return this.pollRenderToCompletion(renderId, bucketName, params.onPollProgress);
