@@ -188,11 +188,7 @@ class ChunkedRenderService {
       chunkIndex: chunk.chunkIndex,
       // Only include overlays relevant to this chunk
       sceneOverlayConfigs: filteredOverlayConfigs,
-      // Chunks don't need voiceover ranges (audio ducking is per-chunk)
       voiceoverRanges: undefined,
-      // Chunks don't need brand injection (applied to full video only)
-      brandInjectionPlan: undefined,
-      // Chunks don't need end card (only final chunk gets it, handled separately)
       endCardConfig: chunk.chunkIndex === (inputProps._totalChunks || 999) - 1 ? inputProps.endCardConfig : undefined,
     };
 

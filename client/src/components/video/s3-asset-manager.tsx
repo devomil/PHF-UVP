@@ -13,8 +13,6 @@ import {
   Upload,
   Trash2,
   RefreshCw,
-  Music,
-  Image,
   FileText,
   CloudUpload,
   CheckCircle,
@@ -23,8 +21,6 @@ import {
   Pause,
   HardDrive,
   Volume2,
-  Award,
-  Layers,
   Type,
   Film,
   Info,
@@ -48,14 +44,10 @@ interface AssetCategory {
   accept: string;
 }
 
-type CategoryKey = 'sfx' | 'music' | 'logos' | 'badges' | 'overlays' | 'end-cards' | 'intro-backgrounds' | 'fonts';
+type CategoryKey = 'sfx' | 'end-cards' | 'intro-backgrounds' | 'fonts';
 
-const CATEGORY_ICONS: Record<CategoryKey, typeof Music> = {
+const CATEGORY_ICONS: Record<CategoryKey, typeof Volume2> = {
   'sfx': Volume2,
-  'music': Music,
-  'logos': Image,
-  'badges': Award,
-  'overlays': Layers,
   'end-cards': Film,
   'intro-backgrounds': Film,
   'fonts': Type,
@@ -76,41 +68,6 @@ const EXPECTED_FILES: Record<CategoryKey, { name: string; description: string; r
     { name: 'ambient-nature.mp3', description: 'Nature ambience track', required: false },
     { name: 'ambient-wellness.mp3', description: 'Calm/wellness ambience', required: false },
     { name: 'ambient-energy.mp3', description: 'Energetic ambient layer', required: false },
-  ],
-  'music': [
-    { name: 'background-upbeat.mp3', description: 'Upbeat background track for energetic scenes', required: true },
-    { name: 'background-calm.mp3', description: 'Calm background music for professional tone', required: true },
-    { name: 'intro-theme.mp3', description: 'Opening theme music for video intros', required: true },
-    { name: 'outro-theme.mp3', description: 'Closing theme music for video outros', required: true },
-    { name: 'background-corporate.mp3', description: 'Corporate/business style background', required: false },
-    { name: 'background-cinematic.mp3', description: 'Cinematic/dramatic background score', required: false },
-    { name: 'background-playful.mp3', description: 'Fun/playful background music', required: false },
-    { name: 'transition-sting.mp3', description: 'Short musical sting between sections', required: false },
-  ],
-  'logos': [
-    { name: 'primary.png', description: 'Main brand logo (transparent background)', required: true },
-    { name: 'primary-dark.png', description: 'Logo variant for dark backgrounds', required: true },
-    { name: 'primary-light.png', description: 'Logo variant for light backgrounds', required: true },
-    { name: 'icon.png', description: 'Square icon/mark only (no text)', required: true },
-    { name: 'wordmark.png', description: 'Text-only logo version', required: false },
-    { name: 'watermark.png', description: 'Semi-transparent watermark version', required: false },
-    { name: 'animated-logo.webp', description: 'Animated logo (WebP/APNG)', required: false },
-  ],
-  'badges': [
-    { name: 'award-badge.png', description: 'Primary award or recognition badge', required: false },
-    { name: 'certified-badge.png', description: 'Certification/compliance badge', required: false },
-    { name: 'best-seller.png', description: 'Best seller or top-rated badge', required: false },
-    { name: 'verified-badge.png', description: 'Verified/authenticated badge', required: false },
-    { name: 'quality-seal.png', description: 'Quality assurance seal', required: false },
-    { name: 'partner-badge.png', description: 'Partnership or affiliation badge', required: false },
-  ],
-  'overlays': [
-    { name: 'watermark.png', description: 'Brand watermark overlay (semi-transparent)', required: true },
-    { name: 'lower-third.png', description: 'Lower third title bar template', required: true },
-    { name: 'frame-border.png', description: 'Decorative frame border overlay', required: false },
-    { name: 'corner-logo.png', description: 'Corner-positioned logo overlay', required: false },
-    { name: 'subscribe-cta.png', description: 'Subscribe/follow call-to-action overlay', required: false },
-    { name: 'social-bar.png', description: 'Social media handles bar overlay', required: false },
   ],
   'end-cards': [
     { name: 'background-default.png', description: 'Default end card background (1920x1080)', required: true },
@@ -139,10 +96,6 @@ const EXPECTED_FILES: Record<CategoryKey, { name: string; description: string; r
 
 const CATEGORY_FILE_HINTS: Record<CategoryKey, { examples: string[]; hint: string; formatTip: string }> = {
   'sfx': { examples: [], hint: 'Select a required filename from the list above, or type a custom name', formatTip: 'MP3 is recommended for smaller file sizes. WAV for highest quality.' },
-  'music': { examples: ['background-upbeat.mp3', 'intro-theme.mp3', 'outro-calm.mp3'], hint: 'Select a target filename below, then pick your audio file', formatTip: 'MP3 (128-320kbps) recommended. Keep files under 10MB for faster rendering.' },
-  'logos': { examples: ['primary.png', 'dark.png', 'light.png', 'icon.png', 'wordmark.svg'], hint: 'Select a target filename below, then pick your image file', formatTip: 'PNG with transparent background is best for video overlays. SVG is ideal for perfect scaling at any resolution. Minimum 800px wide recommended.' },
-  'badges': { examples: ['organic-certified.png', 'award-2024.png', 'best-seller.png'], hint: 'Select a target filename below, then pick your image file', formatTip: 'PNG with transparent background recommended so badges layer cleanly over video. Minimum 400px wide.' },
-  'overlays': { examples: ['watermark.png', 'lower-third.png', 'frame-border.png'], hint: 'Select a target filename below, then pick your image file', formatTip: 'PNG with transparency required for overlays. Match your video resolution (1920x1080 for HD) for best results.' },
   'end-cards': { examples: ['background-default.png', 'background-seasonal.jpg', 'cta-subscribe.png'], hint: 'Select a target filename below, then pick your image file', formatTip: 'PNG or JPG at 1920x1080 recommended. Use PNG for elements with transparency.' },
   'intro-backgrounds': { examples: ['nature-landscape.jpg', 'cinematic-blur.jpg', 'farm-scenery.jpg'], hint: 'Select a target filename below, then pick your image file', formatTip: 'JPG or PNG at 1920x1080 recommended. Multiple backgrounds enable random selection for video variety.' },
   'fonts': { examples: ['heading.ttf', 'body.otf', 'accent.woff2'], hint: 'Select a target filename below, then pick your font file', formatTip: 'TTF or OTF formats work best for video rendering. WOFF/WOFF2 are web-only and may not render in videos.' },
@@ -795,7 +748,7 @@ export default function S3AssetManager() {
               S3 Render Assets
             </CardTitle>
             <p className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>
-              Manage files on AWS S3 used by the video rendering pipeline (sound effects, logos, badges, etc.)
+              Manage files on AWS S3 used by the video rendering pipeline (sound effects, end cards, intro backgrounds, fonts)
             </p>
           </div>
           <div className="flex gap-2">

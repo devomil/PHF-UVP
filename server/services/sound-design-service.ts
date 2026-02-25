@@ -479,16 +479,6 @@ class SoundDesignService {
     return undefined;
   }
 
-  async getBackgroundMusicFromS3(): Promise<{ url: string; name: string } | null> {
-    const musicAssets = await s3RenderAssetService.listAssets('music');
-    if (musicAssets.length > 0) {
-      const asset = musicAssets[0];
-      console.log(`[SoundDesign] Found background music from S3 Render Assets: ${asset.name}`);
-      return { url: asset.url, name: asset.name };
-    }
-    return null;
-  }
-
   private sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
   }

@@ -24,10 +24,6 @@ export interface S3RenderAsset {
 
 export const ASSET_PREFIXES = {
   sfx: 'audio/sfx/',
-  music: 'audio/music/',
-  logos: 'brand/logos/',
-  badges: 'brand/badges/',
-  overlays: 'brand/overlays/',
   'end-cards': 'brand/end-cards/',
   'intro-backgrounds': 'brand/intro-backgrounds/',
   fonts: 'brand/fonts/',
@@ -135,20 +131,8 @@ class S3RenderAssetService {
     return this.findAssetByName('sfx', type);
   }
 
-  async getLogoAsset(): Promise<S3RenderAsset | null> {
-    return this.getFirstAsset('logos');
-  }
-
   async getEndCardAsset(): Promise<S3RenderAsset | null> {
     return this.getFirstAsset('end-cards');
-  }
-
-  async getBadgeAssets(): Promise<S3RenderAsset[]> {
-    return this.listAssets('badges');
-  }
-
-  async getOverlayAsset(): Promise<S3RenderAsset | null> {
-    return this.getFirstAsset('overlays');
   }
 
   async getIntroBackgroundAssets(): Promise<S3RenderAsset[]> {
@@ -161,10 +145,6 @@ class S3RenderAssetService {
 
   async getRandomEndCard(): Promise<S3RenderAsset | null> {
     return this.getRandomAsset('end-cards');
-  }
-
-  async getBackgroundMusicAssets(): Promise<S3RenderAsset[]> {
-    return this.listAssets('music');
   }
 
   clearCache(): void {

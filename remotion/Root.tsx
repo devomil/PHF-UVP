@@ -44,15 +44,11 @@ const calculateUniversalMetadata: CalculateMetadataFunction<UniversalVideoProps>
     0
   );
 
-  const logoIntroDuration = (props as any).brandInjectionPlan?.logoIntro?.enabled && (props as any).brandInjectionPlan?.logoIntro?.asset?.url
-    ? ((props as any).brandInjectionPlan.logoIntro.duration || 2.5)
-    : 0;
-
   const endCardDuration = ((props as any).endCardConfig?.enabled !== false)
     ? ((props as any).endCardConfig?.duration || 5)
     : 0;
 
-  const totalDuration = logoIntroDuration + sceneDuration + endCardDuration;
+  const totalDuration = sceneDuration + endCardDuration;
 
   return {
     durationInFrames: Math.max(Math.ceil(totalDuration * 30), 150),
