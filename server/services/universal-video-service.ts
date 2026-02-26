@@ -398,6 +398,28 @@ class UniversalVideoService {
         }
       }
 
+      // Cache micro-scene videos to S3 (ephemeral URLs expire)
+      if (scene.microScenes && Array.isArray(scene.microScenes)) {
+        for (let j = 0; j < scene.microScenes.length; j++) {
+          const ms = scene.microScenes[j];
+          if (ms.videoUrl) {
+            const s3MsUrl = await this.cacheVideoToS3(ms.videoUrl, `${scene.id}_ms${j}`);
+            if (s3MsUrl) {
+              project.scenes[i].microScenes[j].videoUrl = s3MsUrl;
+              if (s3MsUrl !== ms.videoUrl) {
+                cachedCount++;
+                details.push(`✓ Scene ${i} micro-scene ${j} video cached`);
+              }
+            } else {
+              console.warn(`[CacheAssets] Scene ${i} micro-scene ${j} video cache failed, clearing dead URL`);
+              project.scenes[i].microScenes[j].videoUrl = undefined;
+              failedCount++;
+              details.push(`✗ Scene ${i} micro-scene ${j} video failed - cleared`);
+            }
+          }
+        }
+      }
+
       // Cache background image
       if (scene.assets?.backgroundUrl) {
         const s3ImageUrl = await this.cacheImageToS3(
