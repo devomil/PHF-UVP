@@ -3,6 +3,7 @@ import {
   AbsoluteFill,
   Audio,
   Img,
+  Loop,
   OffthreadVideo,
   Sequence,
   useCurrentFrame,
@@ -161,28 +162,26 @@ const AssetErrorPlaceholder: React.FC<{
   );
 };
 
-// Gradient fallback when image is missing but we want to continue
-// Uses Pine Hill Farm brand colors for professional branded look
+// Gradient fallback when video/image is missing
+// Uses dynamic brand colors for professional branded look
 const GradientFallback: React.FC<{ brand: BrandSettings; sceneType: string }> = ({ brand, sceneType }) => {
-  // Pine Hill Farm official colors
-  const forestGreen = '#2d5a27';
-  const sageGreen = '#607e66';
-  const gold = '#c9a227';
-  const slateBlue = '#5e637a';
-  const steelBlue = '#5b7c99';
-  const tealBlue = '#6c97ab';
-  const cream = '#f5f0e8';
+  const primary = brand?.colors?.primary || '#2d5a27';
+  const secondary = brand?.colors?.secondary || '#607e66';
+  const accent = brand?.colors?.accent || '#c9a227';
+  const dark1 = '#1a1a2e';
+  const dark2 = '#16213e';
+  const dark3 = '#0f3460';
   
   const gradients: Record<string, string> = {
-    hook: `linear-gradient(135deg, ${slateBlue} 0%, ${forestGreen} 50%, ${sageGreen} 100%)`,
-    intro: `linear-gradient(180deg, ${forestGreen} 0%, ${gold} 30%, ${cream} 100%)`,
-    benefit: `linear-gradient(135deg, ${tealBlue} 0%, ${forestGreen} 50%, ${sageGreen} 100%)`,
-    feature: `linear-gradient(135deg, ${gold} 0%, ${forestGreen} 50%, ${slateBlue} 100%)`,
-    cta: `linear-gradient(135deg, ${forestGreen} 0%, ${gold} 40%, ${forestGreen} 100%)`,
-    testimonial: `linear-gradient(135deg, ${steelBlue} 0%, ${sageGreen} 100%)`,
-    brand: `linear-gradient(180deg, ${forestGreen} 0%, ${sageGreen} 50%, ${cream} 100%)`,
-    outro: `linear-gradient(135deg, ${forestGreen} 0%, ${gold} 100%)`,
-    default: `linear-gradient(135deg, ${brand.colors.primary || forestGreen} 0%, ${brand.colors.secondary || sageGreen} 100%)`,
+    hook: `linear-gradient(135deg, ${dark1} 0%, ${primary} 50%, ${secondary} 100%)`,
+    intro: `linear-gradient(180deg, ${primary} 0%, ${accent} 30%, ${secondary} 100%)`,
+    benefit: `linear-gradient(135deg, ${dark3} 0%, ${primary} 50%, ${secondary} 100%)`,
+    feature: `linear-gradient(135deg, ${accent} 0%, ${primary} 50%, ${dark2} 100%)`,
+    cta: `linear-gradient(135deg, ${primary} 0%, ${accent} 40%, ${primary} 100%)`,
+    testimonial: `linear-gradient(135deg, ${dark2} 0%, ${secondary} 100%)`,
+    brand: `linear-gradient(180deg, ${primary} 0%, ${secondary} 50%, ${accent} 100%)`,
+    outro: `linear-gradient(135deg, ${primary} 0%, ${accent} 100%)`,
+    default: `linear-gradient(135deg, ${primary} 0%, ${secondary} 100%)`,
   };
   
   return (
@@ -1225,27 +1224,32 @@ const SafeVideo: React.FC<{
   src: string;
   style?: React.CSSProperties;
   muted?: boolean;
-  loop?: boolean;
+  loopDurationInFrames?: number;
   fallback: React.ReactNode;
-}> = ({ src, style, muted, loop, fallback }) => {
+}> = ({ src, style, muted, loopDurationInFrames, fallback }) => {
   const [error, setError] = React.useState(false);
 
   if (error || !src) {
     return <AbsoluteFill>{fallback}</AbsoluteFill>;
   }
 
-  return (
+  const video = (
     <OffthreadVideo
       src={src}
       style={style}
       muted={muted}
-      loop={loop}
       onError={() => {
         console.warn(`[SafeVideo] Failed to load: ${src.substring(0, 80)}`);
         setError(true);
       }}
     />
   );
+
+  if (loopDurationInFrames && loopDurationInFrames > 0) {
+    return <Loop durationInFrames={loopDurationInFrames}>{video}</Loop>;
+  }
+
+  return video;
 };
 
 const MicroSceneBackground: React.FC<{
@@ -1315,7 +1319,7 @@ const MicroSceneBackground: React.FC<{
                       src={videoSrc}
                       style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                       muted
-                      loop
+                      loopDurationInFrames={Math.round(5 * fps)}
                       fallback={fallback}
                     />
                   )}

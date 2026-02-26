@@ -336,8 +336,11 @@ const LogoReveal: React.FC<{
         <Img
           src={logoUrl}
           style={{
-            width: logoWidth,
+            maxWidth: logoWidth,
+            maxHeight: logoWidth * 0.6,
+            width: 'auto',
             height: 'auto',
+            objectFit: 'contain',
             mixBlendMode: invertLogo ? 'screen' : 'multiply',
             filter: invertLogo
               ? 'brightness(0) invert(1) drop-shadow(0 0 15px rgba(255,255,255,0.2)) drop-shadow(0 4px 12px rgba(0,0,0,0.4))'
