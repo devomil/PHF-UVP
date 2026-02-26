@@ -33,7 +33,7 @@ import { AnimatedEndCard } from "./components/endcard/AnimatedEndCard";
 import { EndCardConfig, DEFAULT_END_CARD_CONFIG } from "../shared/config/end-card";
 import { SoundDesignLayer } from "./components/audio/SoundDesignLayer";
 import { DuckedMusic, VolumeKeyframe, type NativeAudioRange } from "./components/audio/DuckedMusic";
-import { TransitionConfig, SoundDesignConfig, PINE_HILL_FARM_SOUND_CONFIG } from "../shared/config/sound-design";
+import { TransitionConfig, SoundDesignConfig, DEFAULT_SOUND_CONFIG } from "../shared/config/sound-design";
 import { SoundDesignConfig as Phase18DSoundDesignConfig, TransitionSound, DEFAULT_SOUND_DESIGN_CONFIG } from "../shared/types/sound-design";
 import { FilmTreatment, FilmTreatmentConfig, FILM_TREATMENT_PRESETS } from "./components/post-processing";
 
@@ -1225,8 +1225,9 @@ const SafeVideo: React.FC<{
   src: string;
   style?: React.CSSProperties;
   muted?: boolean;
+  loop?: boolean;
   fallback: React.ReactNode;
-}> = ({ src, style, muted, fallback }) => {
+}> = ({ src, style, muted, loop, fallback }) => {
   const [error, setError] = React.useState(false);
 
   if (error || !src) {
@@ -1238,6 +1239,7 @@ const SafeVideo: React.FC<{
       src={src}
       style={style}
       muted={muted}
+      loop={loop}
       onError={() => {
         console.warn(`[SafeVideo] Failed to load: ${src.substring(0, 80)}`);
         setError(true);
@@ -1251,7 +1253,8 @@ const MicroSceneBackground: React.FC<{
   sceneDuration: number;
   fps: number;
   fallback: React.ReactNode;
-}> = ({ microScenes, sceneDuration, fps, fallback }) => {
+  sceneVideoUrl?: string;
+}> = ({ microScenes, sceneDuration, fps, fallback, sceneVideoUrl }) => {
   const totalMsDuration = microScenes.reduce((sum, ms) => sum + (ms.duration || 0), 0);
   const totalDuration = totalMsDuration > 0 ? totalMsDuration : sceneDuration;
   const totalSceneFrames = Math.round(sceneDuration * fps);
@@ -1286,7 +1289,9 @@ const MicroSceneBackground: React.FC<{
         const fadeInFrames = Math.round((ms.originalAudioFadeIn ?? 0.3) * fps);
         const fadeOutFrames = Math.round((ms.originalAudioFadeOut ?? 0.5) * fps);
 
-        if (ms.videoUrl) {
+        const videoSrc = ms.videoUrl || sceneVideoUrl;
+
+        if (videoSrc) {
           return (
             <Sequence key={ms.id || `ms-${idx}`} from={from} durationInFrames={msFrames + (isLast ? 0 : crossfadeFrames)}>
               <AbsoluteFill style={{ opacity: 1 }}>
@@ -1297,7 +1302,7 @@ const MicroSceneBackground: React.FC<{
                   isFirst={idx === 0}
                   isLast={isLast}
                 >
-                  {audioVolume > 0 ? (
+                  {audioVolume > 0 && ms.videoUrl ? (
                     <MicroSceneAudioVideo
                       src={ms.videoUrl}
                       volume={audioVolume}
@@ -1307,9 +1312,10 @@ const MicroSceneBackground: React.FC<{
                     />
                   ) : (
                     <SafeVideo
-                      src={ms.videoUrl}
+                      src={videoSrc}
                       style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                       muted
+                      loop
                       fallback={fallback}
                     />
                   )}
@@ -1467,6 +1473,7 @@ const SceneRenderer: React.FC<{
             sceneDuration={scene.duration || 5}
             fps={fps}
             fallback={gradientFallback}
+            sceneVideoUrl={scene.assets?.videoUrl}
           />
         ) : hasValidBrandAsset && brandAssetType === 'video' ? (
           <OffthreadVideo
@@ -1933,7 +1940,7 @@ export const UniversalVideoComposition: React.FC<UniversalVideoProps> = ({
   }, [handle]);
 
   const effectiveEndCardConfig = endCardConfig ?? DEFAULT_END_CARD_CONFIG;
-  const effectiveSoundConfig = soundDesignConfig ?? PINE_HILL_FARM_SOUND_CONFIG;
+  const effectiveSoundConfig = soundDesignConfig ?? DEFAULT_SOUND_CONFIG;
   
   // Phase 18E: Check enabled flag on end card config
   // Render end card unless explicitly disabled (enabled defaults to true if not specified)
