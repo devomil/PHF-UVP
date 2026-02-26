@@ -168,7 +168,7 @@ export const DEFAULT_SOUND_DESIGN_CONFIG: SoundDesignConfig = {
   masterVolume: 0.5,
 };
 
-export const PINE_HILL_FARM_SOUND_CONFIG: SoundDesignConfig = {
+export const DEFAULT_SOUND_CONFIG: SoundDesignConfig = {
   enabled: false,
   transitionSounds: false,
   impactSounds: false,
@@ -176,3 +176,5 @@ export const PINE_HILL_FARM_SOUND_CONFIG: SoundDesignConfig = {
   ambientType: 'none',
   masterVolume: 0.5,
 };
+
+export const PINE_HILL_FARM_SOUND_CONFIG: SoundDesignConfig = DEFAULT_SOUND_CONFIG;
