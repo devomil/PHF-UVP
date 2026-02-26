@@ -193,7 +193,7 @@ class ChunkedRenderService {
       musicUrl: null,
       musicVolume: 0,
       audioDuckingKeyframes: undefined,
-      endCardConfig: chunk.chunkIndex === (inputProps._totalChunks || 999) - 1 ? inputProps.endCardConfig : undefined,
+      endCardConfig: chunk.chunkIndex === (inputProps._totalChunks || 999) - 1 ? inputProps.endCardConfig : { enabled: false },
     };
 
     chunkInputProps.soundDesignConfig = {

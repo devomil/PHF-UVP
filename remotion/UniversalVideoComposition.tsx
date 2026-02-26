@@ -30,7 +30,7 @@ import { KenBurnsImage } from "./components/KenBurnsImage";
 import { CustomImageOverlay } from "./components/CustomImageOverlay";
 import { MotionGraphicsScene } from "./compositions/MotionGraphicsScene";
 import { AnimatedEndCard } from "./components/endcard/AnimatedEndCard";
-import { EndCardConfig, PINE_HILL_FARM_END_CARD } from "../shared/config/end-card";
+import { EndCardConfig, DEFAULT_END_CARD_CONFIG } from "../shared/config/end-card";
 import { SoundDesignLayer } from "./components/audio/SoundDesignLayer";
 import { DuckedMusic, VolumeKeyframe, type NativeAudioRange } from "./components/audio/DuckedMusic";
 import { TransitionConfig, SoundDesignConfig, PINE_HILL_FARM_SOUND_CONFIG } from "../shared/config/sound-design";
@@ -1932,9 +1932,7 @@ export const UniversalVideoComposition: React.FC<UniversalVideoProps> = ({
     loadAssets();
   }, [handle]);
 
-  // Phase 16: Always use Pine Hill Farm defaults if no config provided
-  // endCardConfig being undefined or explicitly set means we use defaults
-  const effectiveEndCardConfig = endCardConfig ?? PINE_HILL_FARM_END_CARD;
+  const effectiveEndCardConfig = endCardConfig ?? DEFAULT_END_CARD_CONFIG;
   const effectiveSoundConfig = soundDesignConfig ?? PINE_HILL_FARM_SOUND_CONFIG;
   
   // Phase 18E: Check enabled flag on end card config
