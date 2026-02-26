@@ -540,6 +540,18 @@ import {
 } from '../services/video-project-db';
 
 
+router.post('/redeploy-site', isAuthenticated, requireRole(['admin', 'manager']), async (req: Request, res: Response) => {
+  try {
+    console.log('[UniversalVideo] Triggering Remotion site redeployment...');
+    const serveUrl = await remotionLambdaService.redeploySite();
+    console.log(`[UniversalVideo] Site redeployed successfully: ${serveUrl}`);
+    res.json({ success: true, serveUrl });
+  } catch (error: any) {
+    console.error('[UniversalVideo] Site redeployment failed:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 router.get('/api-connectivity-test', isAuthenticated, requireRole(['admin', 'manager']), async (req: Request, res: Response) => {
   try {
     console.log('[UniversalVideo] Running PiAPI connectivity test...');
