@@ -3735,7 +3735,8 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
         const mgSceneIndex = updatedProject.scenes.findIndex(s => s.id === scene.id);
         
         const useMotionGraphicsFromFormat = sceneVisualFormat === 'remotion-motion-graphics';
-        if ((routingDecision.useMotionGraphics && routingDecision.suggestedType) || useMotionGraphicsFromFormat) {
+        const skipMotionGraphicsForImageFormat = sceneVisualFormat === 'ai-image-remotion';
+        if (!skipMotionGraphicsForImageFormat && ((routingDecision.useMotionGraphics && routingDecision.suggestedType) || useMotionGraphicsFromFormat)) {
           console.log(`[Assets] Motion graphics route for scene ${scene.id}: ${routingDecision.suggestedType} (confidence: ${(routingDecision.confidence * 100).toFixed(0)}%)`);
           
           const motionResult = await motionGraphicsGenerator.generateMotionGraphic(
@@ -3816,36 +3817,44 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
         const microScenes = videoSceneIdx >= 0 ? (updatedProject.scenes[videoSceneIdx] as any).microScenes as any[] : null;
         
         if (shouldGenerateVideo && aiVideoService.isAvailable() && microScenes && microScenes.length > 1) {
-          console.log(`[Assets] Scene ${scene.id} has ${microScenes.length} micro-scenes — generating video for each`);
+          console.log(`[Assets] Scene ${scene.id} has ${microScenes.length} micro-scenes — generating ALL in parallel`);
           let microSuccessCount = 0;
           
-          for (let msIdx = 0; msIdx < microScenes.length; msIdx++) {
-            const ms = microScenes[msIdx];
+          const microScenePromises = microScenes.map((ms: any, msIdx: number) => {
             if (ms.videoUrl) {
               console.log(`[Assets] Micro-scene ${ms.id} already has video, skipping`);
-              microSuccessCount++;
-              continue;
+              return Promise.resolve({ msIdx, skipped: true, success: true });
             }
             
             const msPrompt = ms.visualDirection || visualPrompt;
-            console.log(`[Assets] Generating video for micro-scene ${msIdx + 1}/${microScenes.length}: ${msPrompt.substring(0, 80)}...`);
+            console.log(`[Assets] Launching parallel video generation for micro-scene ${msIdx + 1}/${microScenes.length}: ${msPrompt.substring(0, 80)}...`);
             
-            const msResult = await aiVideoService.generateVideo({
+            return aiVideoService.generateVideo({
               prompt: msPrompt,
               duration: Math.min(ms.duration || 5, 10),
               aspectRatio: (project.outputFormat?.aspectRatio as '16:9' | '9:16' | '1:1') || '16:9',
               sceneType: scene.type,
               narration: ms.narration,
               qualityTier: sceneQualityTier,
-            });
-            
+            }).then(msResult => ({ msIdx, skipped: false, ...msResult }))
+              .catch(err => ({ msIdx, skipped: false, success: false, error: err.message, s3Url: undefined, provider: undefined }));
+          });
+          
+          const msResults = await Promise.all(microScenePromises);
+          
+          for (const msResult of msResults) {
+            const msIdx = msResult.msIdx;
+            if (msResult.skipped) {
+              microSuccessCount++;
+              continue;
+            }
             if (msResult.success && msResult.s3Url) {
               microScenes[msIdx].videoUrl = msResult.s3Url;
               microSuccessCount++;
               aiVideosGenerated++;
-              console.log(`[Assets] Micro-scene ${ms.id} video ready (${msResult.provider}): ${msResult.s3Url}`);
+              console.log(`[Assets] Micro-scene ${microScenes[msIdx].id} video ready (${msResult.provider}): ${msResult.s3Url}`);
             } else {
-              console.warn(`[Assets] Micro-scene ${ms.id} video failed: ${msResult.error}`);
+              console.warn(`[Assets] Micro-scene ${microScenes[msIdx].id} video failed: ${(msResult as any).error}`);
             }
           }
           
