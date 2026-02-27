@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { PIAPI_TEST_DEFINITIONS, getTestById, getTestsByCategory } from './piapi-test-config';
+import { runwayVideoService } from './runway-video-service';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
@@ -264,6 +265,35 @@ router.post('/api/piapi-tests/submit/:testId', async (req: Request, res: Respons
     if (test.endpoint === 'chat-completions') {
       const result = await runChatCompletionTest(test, apiKey);
       return res.json(result);
+    }
+
+    if (test.taskType === 'runway-direct') {
+      if (!runwayVideoService.isAvailable()) {
+        return res.json({
+          id: test.id,
+          name: test.name,
+          category: test.category,
+          status: 'fail',
+          responseTime: 0,
+          error: 'RUNWAY_API_KEY not configured',
+        } as TestResult);
+      }
+      const result = await runwayVideoService.generateVideo({
+        prompt: test.input.prompt,
+        duration: test.input.duration || 5,
+        aspectRatio: test.input.aspect_ratio === '9:16' ? '9:16' : test.input.aspect_ratio === '1:1' ? '1:1' : '16:9',
+        model: test.id,
+      });
+      return res.json({
+        id: test.id,
+        name: test.name,
+        category: test.category,
+        status: result.success ? 'pass' : 'fail',
+        responseTime: result.generationTimeMs || (Date.now() - startTime),
+        taskId: result.taskId,
+        outputUrl: result.videoUrl,
+        error: result.error,
+      } as TestResult);
     }
 
     const inputData = { ...test.input };
@@ -639,6 +669,35 @@ async function runSingleTest(test: any, apiKey: string, req: Request): Promise<T
     return runChatCompletionTest(test, apiKey);
   }
 
+  if (test.taskType === 'runway-direct') {
+    if (!runwayVideoService.isAvailable()) {
+      return {
+        id: test.id,
+        name: test.name,
+        category: test.category,
+        status: 'fail',
+        responseTime: 0,
+        error: 'RUNWAY_API_KEY not configured',
+      };
+    }
+    const result = await runwayVideoService.generateVideo({
+      prompt: test.input.prompt,
+      duration: test.input.duration || 5,
+      aspectRatio: test.input.aspect_ratio === '9:16' ? '9:16' : test.input.aspect_ratio === '1:1' ? '1:1' : '16:9',
+      model: test.id,
+    });
+    return {
+      id: test.id,
+      name: test.name,
+      category: test.category,
+      status: result.success ? 'pass' : 'fail',
+      responseTime: result.generationTimeMs || (Date.now() - startTime),
+      taskId: result.taskId,
+      outputUrl: result.videoUrl,
+      error: result.error,
+    };
+  }
+
   try {
     const inputData = { ...test.input };
     if (test.requiresImage) {
@@ -790,5 +849,112 @@ async function runSingleTest(test: any, apiKey: string, req: Request): Promise<T
     };
   }
 }
+
+router.post('/api/runway-tests/generate', async (req: Request, res: Response) => {
+  if (!requireAuth(req, res)) return;
+  if (!runwayVideoService.isAvailable()) {
+    return res.status(400).json({ error: 'RUNWAY_API_KEY not configured' });
+  }
+
+  const { prompt, duration, aspect_ratio } = req.body;
+  const testId = req.query.testId as string || req.body.testId;
+
+  try {
+    const startTime = Date.now();
+    const modelKey = testId || 'runway';
+
+    const result = await runwayVideoService.generateVideo({
+      prompt: prompt || 'A gentle breeze moves through tall grass in golden sunlight',
+      duration: duration || 5,
+      aspectRatio: aspect_ratio === '9:16' ? '9:16' : aspect_ratio === '1:1' ? '1:1' : '16:9',
+      model: modelKey,
+    });
+
+    if (result.success && result.videoUrl) {
+      return res.json({
+        id: testId,
+        name: testId,
+        category: 'video',
+        status: 'pass',
+        responseTime: Date.now() - startTime,
+        taskId: result.taskId,
+        outputUrl: result.videoUrl,
+      });
+    }
+
+    return res.json({
+      id: testId,
+      name: testId,
+      category: 'video',
+      status: 'fail',
+      responseTime: Date.now() - startTime,
+      taskId: result.taskId,
+      error: result.error || 'Generation failed',
+    });
+  } catch (error: any) {
+    return res.json({
+      id: testId,
+      name: testId,
+      category: 'video',
+      status: 'fail',
+      responseTime: 0,
+      error: error.message,
+    });
+  }
+});
+
+router.post('/api/runway-tests/submit/:testId', async (req: Request, res: Response) => {
+  if (!requireAuth(req, res)) return;
+  if (!runwayVideoService.isAvailable()) {
+    return res.status(400).json({ error: 'RUNWAY_API_KEY not configured' });
+  }
+
+  const testId = req.params.testId as string;
+  const test = getTestById(testId);
+  if (!test) {
+    return res.status(404).json({ error: `Test "${testId}" not found` });
+  }
+
+  try {
+    const startTime = Date.now();
+    const result = await runwayVideoService.generateVideo({
+      prompt: test.input.prompt,
+      duration: test.input.duration || 5,
+      aspectRatio: test.input.aspect_ratio === '9:16' ? '9:16' : test.input.aspect_ratio === '1:1' ? '1:1' : '16:9',
+      model: testId,
+    });
+
+    if (result.success && result.videoUrl) {
+      return res.json({
+        id: testId,
+        name: test.name,
+        category: test.category,
+        status: 'pass',
+        responseTime: Date.now() - startTime,
+        taskId: result.taskId,
+        outputUrl: result.videoUrl,
+      });
+    }
+
+    return res.json({
+      id: testId,
+      name: test.name,
+      category: test.category,
+      status: 'fail',
+      responseTime: Date.now() - startTime,
+      taskId: result.taskId,
+      error: result.error || 'Generation failed',
+    });
+  } catch (error: any) {
+    return res.json({
+      id: testId,
+      name: test.name,
+      category: test.category,
+      status: 'fail',
+      responseTime: 0,
+      error: error.message,
+    });
+  }
+});
 
 export default router;

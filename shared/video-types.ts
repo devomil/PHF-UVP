@@ -129,6 +129,8 @@ export interface PromptComplexityAnalysis {
 }
 
 // Phase 11D: Animation settings for brand media/static images
+export type VisualFormat = 'ai-video' | 'ai-image-remotion' | 'remotion-motion-graphics';
+
 export type AnimationType = 'ken-burns' | 'zoom-in' | 'zoom-out' | 'pan-left' | 'pan-right' | 'static';
 export type AnimationIntensity = 'subtle' | 'medium' | 'dramatic';
 
@@ -156,6 +158,7 @@ export interface MicroScene {
   originalAudioVolume?: number;
   originalAudioFadeIn?: number;
   originalAudioFadeOut?: number;
+  visualFormat?: VisualFormat;
 }
 
 export interface Scene {
@@ -229,6 +232,7 @@ export interface Scene {
   useBrandAssets?: boolean;
   // Phase 15H: Generation method tracking - what method was used to generate the media
   generationMethod?: 'T2I' | 'I2I' | 'T2V' | 'I2V' | 'V2V' | 'stock';
+  visualFormat?: VisualFormat;
   // Phase 16: Pipeline intermediate results for step-by-step execution
   pipelineIntermediates?: {
     environmentImage?: string;

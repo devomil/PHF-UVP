@@ -41,6 +41,7 @@ import {
   getRelevantStatistics
 } from "./health-script-context";
 import { optimizePrompt, logPromptOptimization } from "./video-prompt-optimizer";
+import { intelligentProviderSelector, SceneContent } from "./intelligent-provider-selector";
 
 const AWS_REGION = process.env.REMOTION_AWS_REGION || "us-east-2";
 const REMOTION_BUCKET = process.env.REMOTION_S3_BUCKET || process.env.REMOTION_AWS_BUCKET || "remotionlambda-useast2-1vc2l6a56o";
@@ -3658,6 +3659,23 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
       console.log(`[UniversalVideoService] Target audience for video search: ${project.targetAudience || 'not specified'}`);
       const testedProviders = await aiVideoService.getTestedAvailableProviders();
       console.log(`[UniversalVideoService] AI Video providers (tested & passed): ${testedProviders.join(', ') || 'none'}`);
+      
+      const sceneContents: SceneContent[] = scenesNeedingVideo.map((scene, idx) => ({
+        sceneId: scene.id,
+        sceneIndex: idx,
+        sceneType: scene.type,
+        narration: scene.narration || '',
+        visualDirection: scene.visualDirection || '',
+        duration: scene.duration || 5,
+      }));
+      const formatRecommendations = await intelligentProviderSelector.analyzeAndRecommendProviders(sceneContents);
+      const formatMap = new Map(formatRecommendations.recommendations.map(r => [r.sceneId, r]));
+      
+      console.log(`[UniversalVideoService] Visual format decisions:`);
+      formatRecommendations.recommendations.forEach(r => {
+        console.log(`  Scene ${r.sceneId}: format=${r.visualFormat} | classification=${r.contentClassification} | provider=${r.recommendedProvider}`);
+      });
+      
       let videosGenerated = 0;
       let aiVideosGenerated = 0;
       
@@ -3680,6 +3698,27 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
         const isHeroScene = heroSceneTypes.includes(scene.type);
         let videoResult: { url: string; source: string; duration?: number } | null = null;
         
+        const formatRec = formatMap.get(scene.id);
+        const sceneVisualFormat = formatRec?.visualFormat || 'ai-video';
+        const sceneIdx = updatedProject.scenes.findIndex(s => s.id === scene.id);
+        if (sceneIdx >= 0) {
+          updatedProject.scenes[sceneIdx].visualFormat = sceneVisualFormat;
+          if (updatedProject.scenes[sceneIdx].microScenes) {
+            for (const ms of updatedProject.scenes[sceneIdx].microScenes!) {
+              ms.visualFormat = sceneVisualFormat;
+            }
+          }
+        }
+        console.log(`[Assets] Scene ${scene.id} visual format: ${sceneVisualFormat} (classification: ${formatRec?.contentClassification || 'unknown'})`);
+        
+        if (sceneVisualFormat === 'remotion-motion-graphics') {
+          console.log(`[Assets] Scene ${scene.id} routed to Remotion motion graphics by format decision layer`);
+        }
+        
+        if (sceneVisualFormat === 'ai-image-remotion') {
+          console.log(`[Assets] Scene ${scene.id} routed to AI image + Remotion animation by format decision layer`);
+        }
+        
         // ===== PHASE 12A: MOTION GRAPHICS ROUTING =====
         // Check if visual direction calls for motion graphics instead of AI video
         const visualPrompt = scene.visualDirection || 
@@ -3695,7 +3734,8 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
         // Update scene index for motion graphics storage
         const mgSceneIndex = updatedProject.scenes.findIndex(s => s.id === scene.id);
         
-        if (routingDecision.useMotionGraphics && routingDecision.suggestedType) {
+        const useMotionGraphicsFromFormat = sceneVisualFormat === 'remotion-motion-graphics';
+        if ((routingDecision.useMotionGraphics && routingDecision.suggestedType) || useMotionGraphicsFromFormat) {
           console.log(`[Assets] Motion graphics route for scene ${scene.id}: ${routingDecision.suggestedType} (confidence: ${(routingDecision.confidence * 100).toFixed(0)}%)`);
           
           const motionResult = await motionGraphicsGenerator.generateMotionGraphic(
@@ -3730,11 +3770,50 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
         }
         // ===== END PHASE 12A MOTION GRAPHICS ROUTING =====
         
+        if (sceneVisualFormat === 'ai-image-remotion') {
+          console.log(`[Assets] Scene ${scene.id} using AI image + Remotion animation format — generating image and applying ken-burns/pan/zoom`);
+          const imgSceneIndex = updatedProject.scenes.findIndex(s => s.id === scene.id);
+          if (imgSceneIndex >= 0) {
+            const imgPrompt = scene.visualDirection || scene.narration || 'Professional illustration';
+            const projAR = (updatedProject as any).outputFormat?.aspectRatio || '16:9';
+            try {
+              const imageResult = await this.generateImage(imgPrompt, scene.id, false, scene.type || 'content', projAR);
+              if (imageResult.success && imageResult.url) {
+                updatedProject.scenes[imgSceneIndex].background = {
+                  type: 'image' as any,
+                  source: imageResult.url,
+                };
+                console.log(`[Assets] AI image generated for scene ${scene.id}: ${imageResult.url.substring(0, 80)}...`);
+              } else {
+                console.warn(`[Assets] AI image generation failed for scene ${scene.id}: ${imageResult.error} — falling back to AI video`);
+                if (imgSceneIndex >= 0) {
+                  (updatedProject.scenes[imgSceneIndex] as any).visualFormat = 'ai-video';
+                }
+              }
+            } catch (imgErr: any) {
+              console.warn(`[Assets] AI image generation error for scene ${scene.id}: ${imgErr.message} — falling back to AI video`);
+              if (imgSceneIndex >= 0) {
+                (updatedProject.scenes[imgSceneIndex] as any).visualFormat = 'ai-video';
+              }
+            }
+            if (!updatedProject.scenes[imgSceneIndex].animationSettings) {
+              updatedProject.scenes[imgSceneIndex].animationSettings = {
+                type: 'ken-burns',
+                intensity: 'medium',
+              };
+            }
+            updatedProject.scenes[imgSceneIndex].mediaSource = 'ai';
+            updatedProject.scenes[imgSceneIndex].generationMethod = 'T2I';
+          }
+          videosGenerated++;
+          continue;
+        }
+        
         const sceneQualityTier = getSceneQualityTier(scene);
         const shouldGenerateVideo = true; // All scenes in scenesNeedingVideo list need video
         
-        const sceneIdx = updatedProject.scenes.findIndex(s => s.id === scene.id);
-        const microScenes = sceneIdx >= 0 ? (updatedProject.scenes[sceneIdx] as any).microScenes as any[] : null;
+        const videoSceneIdx = updatedProject.scenes.findIndex(s => s.id === scene.id);
+        const microScenes = videoSceneIdx >= 0 ? (updatedProject.scenes[videoSceneIdx] as any).microScenes as any[] : null;
         
         if (shouldGenerateVideo && aiVideoService.isAvailable() && microScenes && microScenes.length > 1) {
           console.log(`[Assets] Scene ${scene.id} has ${microScenes.length} micro-scenes — generating video for each`);
@@ -3770,8 +3849,8 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
             }
           }
           
-          if (sceneIdx >= 0) {
-            (updatedProject.scenes[sceneIdx] as any).microScenes = microScenes;
+          if (videoSceneIdx >= 0) {
+            (updatedProject.scenes[videoSceneIdx] as any).microScenes = microScenes;
           }
           
           if (microSuccessCount > 0) {

@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { SceneOverlayEditor, type SceneOverlayItem } from "./scene-overlay-editor";
+import { ProviderCapabilitySelector, getProviderRecommendationText } from "./ProviderCapabilityCard";
 
 const sceneTypes = [
   "hook", "problem", "agitation", "solution", "benefit",
@@ -852,16 +853,15 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
               </div>
               <div>
                 <p className="text-[11px] font-medium mb-1 text-right" style={{ color: "var(--text-secondary)" }}>Provider</p>
-                <select
-                  value={provider}
-                  onChange={(e) => setProvider(e.target.value)}
-                  className="text-xs rounded-lg border px-2 py-1.5 bg-transparent outline-none w-44"
-                  style={{ borderColor: "var(--border-subtle)", color: "var(--text-primary)" }}
-                >
-                  {VIDEO_PROVIDERS.map((p) => (
-                    <option key={p.id} value={p.id}>{p.label}</option>
-                  ))}
-                </select>
+                <div className="w-48">
+                  <ProviderCapabilitySelector
+                    selectedProvider={provider}
+                    onSelectProvider={setProvider}
+                    recommendedProvider={providerUsed || undefined}
+                    recommendationReason={providerUsed ? getProviderRecommendationText(providerUsed, scene.type) : undefined}
+                    compact
+                  />
+                </div>
               </div>
             </div>
             <p className="text-[10px] text-right max-w-[280px]" style={{ color: (() => {
@@ -1307,9 +1307,16 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                             </div>
                             <div>
                               <span className="text-[11px] font-medium text-white/50 block mb-1 text-right">Provider</span>
-                              <select value={msModalProvider} onChange={(e) => setMsModalProvider(e.target.value)} className="text-xs rounded-lg border px-2 py-1.5 bg-transparent outline-none w-44" style={{ borderColor: "rgba(255,255,255,0.15)", color: "white" }}>
-                                {VIDEO_PROVIDERS.map((p) => (<option key={p.id} value={p.id} style={{ backgroundColor: "#1a1a2e" }}>{p.label}</option>))}
-                              </select>
+                              <div className="w-48">
+                                <ProviderCapabilitySelector
+                                  selectedProvider={msModalProvider}
+                                  onSelectProvider={setMsModalProvider}
+                                  recommendedProvider={providerUsed || undefined}
+                                  recommendationReason={providerUsed ? getProviderRecommendationText(providerUsed, scene.type) : undefined}
+                                  darkMode
+                                  compact
+                                />
+                              </div>
                             </div>
                           </div>
                           <span className="text-[10px] text-right max-w-[260px]" style={{ color: msActiveMode === "i2v" || msActiveMode === "i2i" ? "rgb(192,132,252)" : "rgba(255,255,255,0.4)" }}>
