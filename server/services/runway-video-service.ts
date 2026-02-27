@@ -74,8 +74,10 @@ class RunwayVideoService {
     const isActTwo = providerKey === 'runway-act-two';
 
     try {
+      const clampedDuration = Math.min(options.duration || 5, 10);
       console.log(`[Runway] Starting generation with provider: ${providerKey}, API model: ${apiModel}`);
       console.log(`[Runway] Prompt: ${options.prompt.substring(0, 100)}...`);
+      console.log(`[Runway] Duration: ${clampedDuration}s (requested: ${options.duration || 5}s, max: 10s)`);
 
       const ratio = options.aspectRatio === '9:16' ? '720:1280' : '1280:720';
 
@@ -88,7 +90,7 @@ class RunwayVideoService {
           model: apiModel,
           promptImage: options.imageUrl,
           promptText: options.prompt,
-          duration: options.duration || 5,
+          duration: clampedDuration,
           ratio,
         };
       } else if (options.imageUrl) {
@@ -97,7 +99,7 @@ class RunwayVideoService {
           model: apiModel,
           promptImage: options.imageUrl,
           promptText: options.prompt,
-          duration: options.duration || 5,
+          duration: clampedDuration,
           ratio,
         };
       } else {
@@ -105,7 +107,7 @@ class RunwayVideoService {
         body = {
           model: apiModel,
           promptText: options.prompt,
-          duration: options.duration || 5,
+          duration: clampedDuration,
           ratio,
         };
       }
@@ -141,8 +143,8 @@ class RunwayVideoService {
       return {
         ...result,
         taskId,
-        duration: options.duration || 5,
-        cost: (options.duration || 5) * costPerSec,
+        duration: clampedDuration,
+        cost: clampedDuration * costPerSec,
         generationTimeMs: Date.now() - startTime,
       };
     } catch (error: any) {
