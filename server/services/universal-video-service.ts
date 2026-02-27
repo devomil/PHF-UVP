@@ -3060,7 +3060,11 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
               let visualDirection = '';
               let microScenes: any[] = [];
               try {
-                const jsonMatch = textContent.match(/\{[\s\S]*\}/);
+                const cleanedText = textContent
+                  .replace(/```json\s*/gi, '')
+                  .replace(/```\s*/g, '')
+                  .trim();
+                const jsonMatch = cleanedText.match(/\{[\s\S]*\}/);
                 if (jsonMatch) {
                   const parsed = JSON.parse(jsonMatch[0]);
                   visualDirection = parsed.visualDirection || '';
@@ -3073,10 +3077,12 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
                     }));
                   }
                 }
-              } catch {}
+              } catch (parseErr: any) {
+                console.warn(`[Assets] JSON parse failed for scene ${i + 1}: ${parseErr.message}`);
+              }
               
               if (!visualDirection && textContent.trim().length > 10) {
-                visualDirection = textContent.trim();
+                visualDirection = textContent.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
               }
               
               if (visualDirection) {
