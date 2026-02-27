@@ -72,17 +72,17 @@ export const ProviderCapabilityCard = memo(function ProviderCapabilityCard({
             )}
           </div>
 
+          {provider.description && (
+            <p
+              className="text-[11px] mt-0.5 leading-relaxed"
+              style={{ color: darkMode ? 'rgba(255,255,255,0.45)' : 'var(--text-muted)' }}
+            >
+              {provider.description}
+            </p>
+          )}
+
           {!compact && (
             <>
-              {provider.qualityNotes && (
-                <p
-                  className="text-[11px] mt-1 leading-relaxed"
-                  style={{ color: darkMode ? 'rgba(255,255,255,0.5)' : 'var(--text-muted)' }}
-                >
-                  {provider.qualityNotes}
-                </p>
-              )}
-
               {specialties.length > 0 && (
                 <div className="flex flex-wrap gap-1 mt-1.5">
                   {specialties.slice(0, 4).map((s) => (
@@ -265,11 +265,39 @@ export const ProviderCapabilitySelector = memo(function ProviderCapabilitySelect
   );
 });
 
-export function getProviderRecommendationText(providerId: string, contentType?: string): string {
+export function getProviderRecommendationText(providerId: string, sceneType?: string): string {
   const provider = VIDEO_PROVIDERS[providerId];
   if (!provider) return '';
+
+  const sceneReasons: Record<string, Record<string, string>> = {
+    hook: {
+      'runway-4.5': 'Photorealistic cinematic for attention-grabbing openers',
+      'runway-gen4-aleph': 'Dramatic visual effects for high-impact hooks',
+      'veo-3.1': '4K cinematic with native audio for immersive openers',
+      'kling-2.6': 'Character-driven hook with native audio support',
+    },
+    cta: {
+      'runway-4.5': 'Premium visual quality to inspire action',
+      'runway-gen4-aleph': 'Cinematic atmosphere for compelling call-to-action',
+      'kling-2.6': 'Human-focused visuals with audio for persuasive CTAs',
+    },
+    feature: {
+      'wan-2.6': 'Text rendering and conceptual visuals for feature explanations',
+      'luma': 'Smooth product reveals for feature showcases',
+      'kling-2.6': 'Character-consistent demonstrations',
+    },
+    testimonial: {
+      'runway-act-two': 'Character performance with emotional expression',
+      'kling-2.6': 'Natural human rendering with lip-sync audio',
+    },
+  };
+
+  const sceneMatch = sceneType && sceneReasons[sceneType]?.[providerId];
+  if (sceneMatch) return sceneMatch;
+
+  if (provider.description) return provider.description;
   const bestForStr = (provider.bestFor || []).slice(0, 3).join(', ');
-  return `Selected ${provider.displayName} — best for ${bestForStr}`;
+  return `Best for ${bestForStr}`;
 }
 
 export default ProviderCapabilityCard;
