@@ -3,11 +3,12 @@ import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import {
   Play, Pause, Volume2, VolumeX, Maximize2, MoreVertical,
   RefreshCw, Upload, Image, Video, Save, X, Loader2,
-  CheckCircle2, ImagePlus, ChevronDown, ChevronRight, Edit2, FolderOpen, Expand
+  CheckCircle2, ImagePlus, ChevronDown, ChevronRight, Edit2, FolderOpen, Expand, Sparkles
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { SceneOverlayEditor, type SceneOverlayItem } from "./scene-overlay-editor";
 import { ProviderCapabilitySelector, getProviderRecommendationText } from "./ProviderCapabilityCard";
+import { VIDEO_PROVIDERS as PROVIDER_CONFIG } from "@shared/provider-config";
 
 const sceneTypes = [
   "hook", "problem", "agitation", "solution", "benefit",
@@ -676,9 +677,17 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
           {/* Provider & Prompt Info */}
           <div className="min-w-0">
             {providerUsed && (
-              <p className="text-[11px] mb-0.5" style={{ color: "var(--text-muted)" }}>
-                Provider: <span className="font-medium" style={{ color: "var(--text-secondary)" }}>{providerUsed}</span>
-              </p>
+              <div className="mb-1">
+                <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+                  Provider: <span className="font-medium" style={{ color: "var(--text-secondary)" }}>
+                    {(() => { const p = PROVIDER_CONFIG[providerUsed]; return p ? p.displayName : providerUsed; })()}
+                  </span>
+                </p>
+                <p className="text-[10px] mt-0.5 flex items-center gap-1" style={{ color: "rgb(192,132,252)" }}>
+                  <Sparkles className="w-2.5 h-2.5 flex-shrink-0" />
+                  {getProviderRecommendationText(providerUsed, scene.type)}
+                </p>
+              </div>
             )}
             <div>
               <div className="flex items-center gap-1.5">

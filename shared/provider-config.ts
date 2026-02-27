@@ -14,6 +14,7 @@ export interface VideoProvider {
   id: string;
   name: string;
   displayName: string;
+  description?: string;
   costPerSecond: number;
   maxDuration: number;
   strengths: string[];
@@ -34,6 +35,7 @@ export const VIDEO_PROVIDERS: Record<string, VideoProvider> = {
     id: 'runway',
     name: 'runway',
     displayName: 'Runway Gen-3',
+    description: 'Cinematic storytelling with dramatic lighting and smooth motion',
     costPerSecond: 0.05,
     maxDuration: 10,
     family: 'runway',
@@ -51,6 +53,7 @@ export const VIDEO_PROVIDERS: Record<string, VideoProvider> = {
     id: 'runway-4.5',
     name: 'runway-4.5',
     displayName: 'Runway 4.5',
+    description: 'Top-tier photorealism, advanced camera control, best prompt adherence',
     costPerSecond: 0.08,
     maxDuration: 10,
     family: 'runway',
@@ -68,6 +71,7 @@ export const VIDEO_PROVIDERS: Record<string, VideoProvider> = {
     id: 'runway-gen4',
     name: 'runway-gen4',
     displayName: 'Runway Gen-4',
+    description: 'Advanced motion manipulation and dramatic storytelling',
     costPerSecond: 0.07,
     maxDuration: 10,
     family: 'runway',
@@ -85,6 +89,7 @@ export const VIDEO_PROVIDERS: Record<string, VideoProvider> = {
     id: 'runway-gen4-aleph',
     name: 'runway-gen4-aleph',
     displayName: 'Runway Gen-4 Aleph',
+    description: 'Creative visual effects, artistic interpretation, superior transitions',
     costPerSecond: 0.075,
     maxDuration: 10,
     family: 'runway',
@@ -102,6 +107,7 @@ export const VIDEO_PROVIDERS: Record<string, VideoProvider> = {
     id: 'runway-act-two',
     name: 'runway-act-two',
     displayName: 'Runway Act Two',
+    description: 'Character performance, acting, facial expression, and emotional control',
     costPerSecond: 0.07,
     maxDuration: 10,
     family: 'runway',
@@ -276,6 +282,7 @@ export const VIDEO_PROVIDERS: Record<string, VideoProvider> = {
     id: 'kling-2.6',
     name: 'kling-2.6',
     displayName: 'Kling 2.6',
+    description: 'Cinematic, character-consistent, motion-controlled with native audio',
     costPerSecond: 0.039,
     maxDuration: 10,
     family: 'kling',
@@ -294,6 +301,7 @@ export const VIDEO_PROVIDERS: Record<string, VideoProvider> = {
     id: 'kling-2.6-pro',
     name: 'kling-2.6-pro',
     displayName: 'Kling 2.6 Pro',
+    description: 'Premium audio fidelity with broadcast-ready dialogue and visuals',
     costPerSecond: 0.066,
     maxDuration: 10,
     family: 'kling',
@@ -349,6 +357,7 @@ export const VIDEO_PROVIDERS: Record<string, VideoProvider> = {
     id: 'luma',
     name: 'luma',
     displayName: 'Luma Dream Machine',
+    description: 'Product reveals, smooth 3D transitions, object-focused shots',
     costPerSecond: 0.04,
     maxDuration: 5,
     family: 'luma',
@@ -401,6 +410,7 @@ export const VIDEO_PROVIDERS: Record<string, VideoProvider> = {
     id: 'hailuo',
     name: 'hailuo',
     displayName: 'Hailuo MiniMax',
+    description: 'Cost-effective b-roll, nature scenes, fast generation',
     costPerSecond: 0.02,
     maxDuration: 6,
     family: 'hailuo',
@@ -488,6 +498,7 @@ export const VIDEO_PROVIDERS: Record<string, VideoProvider> = {
     id: 'veo-3.1',
     name: 'veo-3.1',
     displayName: 'Veo 3.1',
+    description: '4K cinematic quality with advanced physics and native audio/dialogue',
     costPerSecond: 0.065,
     maxDuration: 8,
     family: 'veo',
@@ -523,6 +534,7 @@ export const VIDEO_PROVIDERS: Record<string, VideoProvider> = {
     id: 'wan-2.6',
     name: 'wan-2.6',
     displayName: 'Wan 2.6',
+    description: 'Text rendering, character consistency, conceptual visuals',
     costPerSecond: 0.03,
     maxDuration: 5,
     family: 'wan',
@@ -541,6 +553,7 @@ export const VIDEO_PROVIDERS: Record<string, VideoProvider> = {
     id: 'sora-2',
     name: 'sora-2',
     displayName: 'Sora 2',
+    description: 'Consistent visual style with strong prompt understanding',
     costPerSecond: 0.06,
     maxDuration: 10,
     family: 'sora',
