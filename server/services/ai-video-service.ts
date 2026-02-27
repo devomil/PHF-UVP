@@ -131,10 +131,13 @@ class AIVideoService {
     let enhancedOptions: AIVideoOptions;
     
     if (generationMode === 'i2v') {
-      console.log(`[AIVideo] I2V mode - using minimal prompt (no style bloat)`);
+      console.log(`[AIVideo] I2V mode - using motion-focused prompt (no style bloat)`);
       console.log(`[AIVideo] Original I2V prompt: ${options.prompt.substring(0, 100)}...`);
+      const i2vPrompt = this.adaptPromptForI2V(options.prompt);
+      console.log(`[AIVideo] Adapted I2V prompt: ${i2vPrompt.substring(0, 100)}...`);
       enhancedOptions = {
         ...options,
+        prompt: i2vPrompt,
         contentType,
       };
     } else {
@@ -372,6 +375,23 @@ class AIVideoService {
   /**
    * Apply visual style modifiers to the prompt (Phase 5B)
    */
+  private adaptPromptForI2V(prompt: string): string {
+    const motionKeywords = ['slow pan', 'pan', 'zoom', 'dolly', 'orbit', 'track', 'motion', 'moving', 'walking', 'flowing', 'gentle movement', 'subtle movement', 'camera moves', 'parallax', 'drift', 'sway', 'breathe', 'animate'];
+    const hasMotionDirection = motionKeywords.some(kw => prompt.toLowerCase().includes(kw));
+
+    if (hasMotionDirection) {
+      return prompt;
+    }
+
+    const isSceneDescription = /^(a |an |the |warm|inviting|cozy|bright|dark|elegant|modern|rustic|professional|beautiful|stunning)/i.test(prompt.trim());
+
+    if (isSceneDescription) {
+      return `Gentle, subtle camera movement. Slow dolly forward with natural ambient motion — lights gently flickering, slight parallax depth. ${prompt.substring(0, 60).trim()}.`;
+    }
+
+    return `Subtle, natural motion and gentle camera movement. ${prompt}`;
+  }
+
   private applyStyleToPrompt(prompt: string, style: VisualStyleConfig): string {
     const modifiers = style.promptModifiers;
     const parts = [
