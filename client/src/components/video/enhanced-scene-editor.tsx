@@ -468,12 +468,13 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
     const formData = new FormData();
     formData.append("file", file);
     try {
-      const res = await fetch("/api/upload", { method: "POST", credentials: "include", body: formData });
+      const res = await fetch("/api/videos/uploads", { method: "POST", credentials: "include", body: formData });
       if (!res.ok) throw new Error("Upload failed");
       const data = await res.json();
-      if (data.url) {
-        setMsModalRefImages(prev => [...prev, data.url]);
-        toast({ title: "Reference image added" });
+      const url = data.url || data.fileUrl;
+      if (url) {
+        setMsModalRefImages(prev => [...prev, url]);
+        toast({ title: "Reference image added", description: "Image will be used for I2V generation." });
       }
     } catch (err: any) {
       toast({ title: "Upload failed", description: err.message, variant: "destructive" });
@@ -482,19 +483,19 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
   };
 
   const setMediaMutation = useMutation({
-    mutationFn: async (mediaUrl: string) => {
+    mutationFn: async ({ mediaUrl, mediaType }: { mediaUrl: string; mediaType: 'image' | 'video' }) => {
       const res = await fetch(`/api/universal-video/${projectId}/scenes/${sceneId}/set-media`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ mediaUrl, mediaType: "image", source: "upload" }),
+        body: JSON.stringify({ mediaUrl, mediaType, source: "upload" }),
       });
       if (!res.ok) throw new Error("Failed to set media");
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["project", projectId] });
-      toast({ title: "Image Updated" });
+      toast({ title: variables.mediaType === 'video' ? "Video Set" : "Image Set", description: variables.mediaType === 'video' ? "Custom video is now the scene visual." : "Image set as scene visual. Use I2V mode to add motion." });
     },
     onError: (err: Error) => {
       toast({ title: "Error", description: err.message, variant: "destructive" });
@@ -515,7 +516,16 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
       if (!uploadRes.ok) throw new Error("Upload failed");
       const data = await uploadRes.json();
       const url = data.url || data.fileUrl;
-      if (url) setMediaMutation.mutate(url);
+      if (url) {
+        const isVideo = file.type.startsWith('video/');
+        setMediaMutation.mutate({ mediaUrl: url, mediaType: isVideo ? 'video' : 'image' });
+        if (!isVideo) {
+          const newImages = [...referenceImageUrls, url];
+          setReferenceImageUrls(newImages);
+          persistReferenceImages(newImages);
+          setGenerationMode("i2v");
+        }
+      }
     } catch (err: any) {
       toast({ title: "Upload Error", description: err.message, variant: "destructive" });
     }
@@ -559,7 +569,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
 
   return (
     <div className="px-4 pb-4 space-y-4 border-t" style={{ borderColor: "var(--border-subtle)" }}>
-      <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleUpload} />
+      <input type="file" ref={fileInputRef} className="hidden" accept="image/*,video/*" onChange={handleUpload} />
       <input type="file" ref={refFileInputRef} className="hidden" accept="image/*" onChange={handleRefUpload} />
 
       {/* Visual Asset Section */}
@@ -752,6 +762,22 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                 </p>
               )}
             </div>
+          </div>
+
+          {/* Use Own Media */}
+          <div className="mb-2">
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="w-full text-xs px-3 py-2 rounded-lg border border-dashed flex items-center justify-center gap-2 transition-colors hover:border-purple-500/40 hover:bg-purple-500/5"
+              style={{ borderColor: "var(--border-subtle)", color: "var(--text-secondary)" }}
+            >
+              <Upload className="w-3.5 h-3.5" />
+              Upload Own Image or Video
+            </button>
+            <p className="text-[10px] mt-1" style={{ color: "var(--text-muted)" }}>
+              Upload your own image (AI adds motion via I2V) or video to use directly
+            </p>
           </div>
 
           {/* Reference Images */}
