@@ -13,6 +13,10 @@ const PROVIDER_TEST_ID_MAP: Record<string, string[]> = {
   'veo-3': ['veo-3'],
   'luma': ['luma'],
   'runway': ['runway'],
+  'runway-4.5': ['runway-4.5'],
+  'runway-gen4': ['runway-gen4'],
+  'runway-gen4-aleph': ['runway-gen4-aleph'],
+  'runway-act-two': ['runway-act-two'],
   'hailuo': ['hailuo'],
   'wan-2.6': ['wan-2.6'],
   'pika': ['pika'],
@@ -212,8 +216,49 @@ export const AI_VIDEO_PROVIDERS: Record<string, AIVideoProviderConfig> = {
   },
   'runway': {
     modelId: 'runway',
-    apiProvider: 'piapi',
+    apiProvider: 'runway',
+    type: 'direct',
     costPerSecond: 0.05,
+    maxDuration: 10,
+    capabilities: { t2v: true, i2v: true, v2v: false },
+    supportedAspectRatios: ['16:9', '9:16', '1:1'],
+  },
+  'runway-4.5': {
+    modelId: 'runway-4.5',
+    apiProvider: 'runway',
+    type: 'direct',
+    name: 'Runway 4.5',
+    costPerSecond: 0.07,
+    maxDuration: 10,
+    capabilities: { t2v: true, i2v: true, v2v: false },
+    supportedAspectRatios: ['16:9', '9:16', '1:1'],
+  },
+  'runway-gen4': {
+    modelId: 'runway-gen4',
+    apiProvider: 'runway',
+    type: 'direct',
+    name: 'Runway Gen-4',
+    costPerSecond: 0.05,
+    maxDuration: 10,
+    capabilities: { t2v: true, i2v: true, v2v: false },
+    supportedAspectRatios: ['16:9', '9:16', '1:1'],
+  },
+  'runway-gen4-aleph': {
+    modelId: 'runway-gen4-aleph',
+    apiProvider: 'runway',
+    type: 'direct',
+    name: 'Runway Gen-4 Aleph',
+    costPerSecond: 0.06,
+    maxDuration: 10,
+    capabilities: { t2v: true, i2v: true, v2v: false },
+    supportedAspectRatios: ['16:9', '9:16', '1:1'],
+  },
+  'runway-act-two': {
+    modelId: 'runway-act-two',
+    apiProvider: 'runway',
+    type: 'direct',
+    name: 'Runway Act Two',
+    costPerSecond: 0.06,
     maxDuration: 10,
     capabilities: { t2v: true, i2v: true, v2v: false },
     supportedAspectRatios: ['16:9', '9:16', '1:1'],
@@ -376,6 +421,9 @@ export function getAllConfiguredProviders(): string[] {
   const configured: string[] = [];
   if (process.env.PIAPI_API_KEY) {
     configured.push('kling-2.6', 'kling-2.6-pro', 'veo-3.1', 'luma', 'hailuo', 'wan-2.6', 'pika', 'seedance-1.0', 'sora-2', 'sora-2-pro');
+  }
+  if (process.env.RUNWAY_API_KEY) {
+    configured.push('runway', 'runway-4.5', 'runway-gen4', 'runway-gen4-aleph', 'runway-act-two');
   }
   return [...new Set(configured)];
 }

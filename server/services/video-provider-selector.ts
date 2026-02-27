@@ -108,22 +108,52 @@ class VideoProviderSelectorService {
   ): void {
     switch (contentType) {
       case 'person':
+      case 'human_subjects':
         this.scoreFamily('kling', 30, 'Best for human subjects', scores, reasons);
         this.scoreFamily('runway', 15, '', scores, reasons);
         this.scoreFamily('veo', 10, '', scores, reasons);
+        if (scores['runway-act-two'] !== undefined) {
+          scores['runway-act-two'] += 20;
+          reasons['runway-act-two'].push('Character performance for human subjects');
+        }
         break;
         
       case 'product':
+      case 'product_reveal':
         this.scoreFamily('luma', 30, 'Excellent product reveals', scores, reasons);
         this.scoreFamily('runway', 20, 'Premium product quality', scores, reasons);
         this.scoreFamily('veo', 15, '', scores, reasons);
+        if (scores['runway-4.5'] !== undefined) {
+          scores['runway-4.5'] += 10;
+          reasons['runway-4.5'].push('Photorealistic product quality');
+        }
         break;
         
       case 'nature':
+      case 'broll':
         this.scoreFamily('hailuo', 25, 'Cost-effective nature scenes', scores, reasons);
         this.scoreFamily('hunyuan', 20, '', scores, reasons);
         this.scoreFamily('wan', 20, 'Natural landscapes', scores, reasons);
         this.scoreFamily('runway', 20, 'Cinematic landscapes', scores, reasons);
+        if (scores['runway-4.5'] !== undefined) {
+          scores['runway-4.5'] += 10;
+          reasons['runway-4.5'].push('Photorealistic nature rendering');
+        }
+        break;
+      
+      case 'cinematic':
+        this.scoreFamily('veo', 30, 'Premium cinematic quality', scores, reasons);
+        this.scoreFamily('runway', 25, 'Cinematic creative control', scores, reasons);
+        if (scores['runway-4.5'] !== undefined) {
+          scores['runway-4.5'] += 20;
+          reasons['runway-4.5'].push('Top-tier photorealistic cinematic');
+        }
+        if (scores['runway-gen4-aleph'] !== undefined) {
+          scores['runway-gen4-aleph'] += 10;
+          reasons['runway-gen4-aleph'].push('Artistic cinematic interpretation');
+        }
+        this.scoreFamily('kling', 15, '', scores, reasons);
+        this.scoreFamily('sora', 15, '', scores, reasons);
         break;
         
       case 'abstract':
@@ -131,12 +161,73 @@ class VideoProviderSelectorService {
         this.scoreFamily('hunyuan', 15, '', scores, reasons);
         this.scoreFamily('runway', 15, '', scores, reasons);
         this.scoreFamily('seedance', 15, 'Expressive motion', scores, reasons);
+        if (scores['runway-gen4-aleph'] !== undefined) {
+          scores['runway-gen4-aleph'] += 15;
+          reasons['runway-gen4-aleph'].push('Artistic interpretation for abstract content');
+        }
         break;
         
       case 'lifestyle':
         this.scoreFamily('kling', 25, 'Natural lifestyle rendering', scores, reasons);
         this.scoreFamily('wan', 20, 'Good lifestyle quality', scores, reasons);
         this.scoreFamily('hailuo', 15, '', scores, reasons);
+        if (scores['runway-act-two'] !== undefined) {
+          scores['runway-act-two'] += 10;
+          reasons['runway-act-two'].push('Character performance for lifestyle');
+        }
+        break;
+
+      case 'conceptual_explanatory':
+        this.scoreFamily('wan', 30, 'Text rendering for conceptual content', scores, reasons);
+        this.scoreFamily('hailuo', 15, 'Cost-effective conceptual visuals', scores, reasons);
+        this.scoreFamily('runway', -10, '', scores, reasons);
+        this.scoreFamily('luma', -10, '', scores, reasons);
+        this.scoreFamily('veo', -10, '', scores, reasons);
+        if (scores['runway-4.5'] !== undefined) scores['runway-4.5'] -= 15;
+        if (scores['runway-gen4'] !== undefined) scores['runway-gen4'] -= 15;
+        if (scores['runway-gen4-aleph'] !== undefined) scores['runway-gen4-aleph'] -= 15;
+        if (scores['runway-act-two'] !== undefined) scores['runway-act-two'] -= 15;
+        break;
+
+      case 'infographic_diagram':
+        if (scores['remotion-motion-graphics'] !== undefined) {
+          scores['remotion-motion-graphics'] += 50;
+          reasons['remotion-motion-graphics'].push('Infographic best rendered as motion graphics');
+        }
+        this.scoreFamily('runway', -20, '', scores, reasons);
+        this.scoreFamily('kling', -20, '', scores, reasons);
+        this.scoreFamily('luma', -20, '', scores, reasons);
+        this.scoreFamily('hailuo', -15, '', scores, reasons);
+        this.scoreFamily('veo', -20, '', scores, reasons);
+        if (scores['runway-4.5'] !== undefined) scores['runway-4.5'] -= 25;
+        if (scores['runway-gen4'] !== undefined) scores['runway-gen4'] -= 25;
+        if (scores['runway-gen4-aleph'] !== undefined) scores['runway-gen4-aleph'] -= 25;
+        if (scores['runway-act-two'] !== undefined) scores['runway-act-two'] -= 25;
+        break;
+
+      case 'motion_graphics':
+        if (scores['remotion-motion-graphics'] !== undefined) {
+          scores['remotion-motion-graphics'] += 45;
+          reasons['remotion-motion-graphics'].push('Motion graphics specialization');
+        }
+        this.scoreFamily('runway', -15, '', scores, reasons);
+        this.scoreFamily('kling', -15, '', scores, reasons);
+        this.scoreFamily('veo', -15, '', scores, reasons);
+        if (scores['runway-4.5'] !== undefined) scores['runway-4.5'] -= 20;
+        if (scores['runway-gen4'] !== undefined) scores['runway-gen4'] -= 20;
+        if (scores['runway-gen4-aleph'] !== undefined) scores['runway-gen4-aleph'] -= 20;
+        if (scores['runway-act-two'] !== undefined) scores['runway-act-two'] -= 20;
+        break;
+
+      case 'mixed':
+      default:
+        this.scoreFamily('kling', 10, 'Reliable general-purpose', scores, reasons);
+        this.scoreFamily('sora', 10, 'Consistent style for mixed', scores, reasons);
+        this.scoreFamily('runway', 5, '', scores, reasons);
+        if (scores['runway-gen4'] !== undefined) {
+          scores['runway-gen4'] += 5;
+          reasons['runway-gen4'].push('Versatile mixed content');
+        }
         break;
     }
   }
@@ -151,33 +242,65 @@ class VideoProviderSelectorService {
         this.scoreFamily('runway', 25, 'Cinematic hook impact', scores, reasons);
         this.scoreFamily('veo', 25, 'High-quality opening', scores, reasons);
         if (scores['veo-3.1']) scores['veo-3.1'] += 5;
+        if (scores['runway-4.5'] !== undefined) {
+          scores['runway-4.5'] += 15;
+          reasons['runway-4.5'].push('Top-tier cinematic hook');
+        }
+        if (scores['runway-gen4'] !== undefined) {
+          scores['runway-gen4'] += 10;
+          reasons['runway-gen4'].push('Dramatic hook storytelling');
+        }
         break;
         
       case 'problem':
       case 'agitation':
         this.scoreFamily('kling', 20, 'Authentic emotional expressions', scores, reasons);
         if (scores['kling-2.1']) scores['kling-2.1'] += 5;
+        if (scores['runway-act-two'] !== undefined) {
+          scores['runway-act-two'] += 20;
+          reasons['runway-act-two'].push('Emotional character performance');
+        }
+        if (scores['runway-gen4-aleph'] !== undefined) {
+          scores['runway-gen4-aleph'] += 10;
+          reasons['runway-gen4-aleph'].push('Creative emotional storytelling');
+        }
         break;
         
       case 'solution':
         this.scoreFamily('runway', 15, '', scores, reasons);
         this.scoreFamily('kling', 15, '', scores, reasons);
         this.scoreFamily('veo', 10, '', scores, reasons);
+        if (scores['runway-4.5'] !== undefined) {
+          scores['runway-4.5'] += 10;
+          reasons['runway-4.5'].push('Photorealistic solution reveal');
+        }
         break;
         
       case 'benefit':
         this.scoreFamily('kling', 20, 'Lifestyle transformation scenes', scores, reasons);
         this.scoreFamily('wan', 15, '', scores, reasons);
+        if (scores['runway-act-two'] !== undefined) {
+          scores['runway-act-two'] += 10;
+          reasons['runway-act-two'].push('Character transformation performance');
+        }
         break;
         
       case 'product':
         this.scoreFamily('luma', 30, 'Product showcase specialty', scores, reasons);
         this.scoreFamily('runway', 15, '', scores, reasons);
+        if (scores['runway-4.5'] !== undefined) {
+          scores['runway-4.5'] += 10;
+          reasons['runway-4.5'].push('Photorealistic product quality');
+        }
         break;
         
       case 'testimonial':
         this.scoreFamily('kling', 30, 'Best for talking heads', scores, reasons);
         if (scores['kling-avatar']) scores['kling-avatar'] += 20;
+        if (scores['runway-act-two'] !== undefined) {
+          scores['runway-act-two'] += 25;
+          reasons['runway-act-two'].push('Character acting for testimonials');
+        }
         break;
         
       case 'cta':
@@ -186,6 +309,10 @@ class VideoProviderSelectorService {
         if (scores['remotion-motion-graphics']) {
           scores['remotion-motion-graphics'] += 25;
           reasons['remotion-motion-graphics'].push('CTA motion graphics');
+        }
+        if (scores['runway-4.5'] !== undefined) {
+          scores['runway-4.5'] += 10;
+          reasons['runway-4.5'].push('Premium CTA impact');
         }
         break;
         
@@ -211,11 +338,23 @@ class VideoProviderSelectorService {
       this.scoreFamily('runway', 20, 'Cinematic visual direction', scores, reasons);
       this.scoreFamily('veo', 20, 'Cinematic quality', scores, reasons);
       if (scores['veo-3.1']) scores['veo-3.1'] += 5;
+      if (scores['runway-4.5'] !== undefined) {
+        scores['runway-4.5'] += 15;
+        reasons['runway-4.5'].push('Top-tier cinematic quality');
+      }
+      if (scores['runway-gen4'] !== undefined) {
+        scores['runway-gen4'] += 10;
+        reasons['runway-gen4'].push('Dramatic storytelling');
+      }
     }
     
     if (/person|woman|man|face|expression|people|customer|talking|smiling/.test(lower)) {
       this.scoreFamily('kling', 25, 'Human subject in visual', scores, reasons);
       if (scores['kling-2.5-turbo']) scores['kling-2.5-turbo'] += 5;
+      if (scores['runway-act-two'] !== undefined) {
+        scores['runway-act-two'] += 20;
+        reasons['runway-act-two'].push('Character performance for people');
+      }
     }
     
     if (/avatar|talking head|presenter|spokesperson/.test(lower)) {
@@ -253,6 +392,27 @@ class VideoProviderSelectorService {
         reasons['seedance-1.0'].push('Dance motion specialty');
       }
     }
+
+    if (/acting|performance|emotion|feeling|react|cry|laugh|anger|joy|sorrow/.test(lower)) {
+      if (scores['runway-act-two'] !== undefined) {
+        scores['runway-act-two'] += 25;
+        reasons['runway-act-two'].push('Acting and emotional performance');
+      }
+    }
+
+    if (/artistic|creative|stylized|surreal|visual.?effect|abstract.?motion/.test(lower)) {
+      if (scores['runway-gen4-aleph'] !== undefined) {
+        scores['runway-gen4-aleph'] += 20;
+        reasons['runway-gen4-aleph'].push('Creative artistic interpretation');
+      }
+    }
+
+    if (/photorealistic|hyper.?real|photo.?real|ultra.?real/.test(lower)) {
+      if (scores['runway-4.5'] !== undefined) {
+        scores['runway-4.5'] += 20;
+        reasons['runway-4.5'].push('Photorealistic rendering');
+      }
+    }
     
     if (/text|infographic|chart|graph|motion graphic|lower.?third/.test(lower)) {
       if (scores['remotion-motion-graphics']) {
@@ -265,6 +425,18 @@ class VideoProviderSelectorService {
       if (scores['kling-2.5-turbo']) {
         scores['kling-2.5-turbo'] += 15;
         reasons['kling-2.5-turbo'].push('Fast turbo generation');
+      }
+    }
+
+    if (/root cause|how it works|mechanism|process|compare|versus|vs\b|metaphor|analogy|concept|cause and effect/.test(lower)) {
+      this.scoreFamily('wan', 20, 'Conceptual content - text rendering', scores, reasons);
+      this.scoreFamily('runway', -10, '', scores, reasons);
+    }
+
+    if (/diagram|step.?by.?step|flowchart|timeline|statistics|percentage|data viz/.test(lower)) {
+      if (scores['remotion-motion-graphics'] !== undefined) {
+        scores['remotion-motion-graphics'] += 35;
+        reasons['remotion-motion-graphics'].push('Diagram/infographic content');
       }
     }
   }
@@ -309,46 +481,43 @@ class VideoProviderSelectorService {
     scores: Record<string, number>,
     reasons: Record<string, string[]>
   ): void {
-    // Ultra tier: Favor highest-end providers (Veo 3.1, Kling 2.6 Pro variants, Runway, Luma)
-    // Use CORRECT provider IDs from shared/provider-config.ts
-    const ultraProviders = ['veo-3.1', 'veo-2', 'kling-2.6-pro', 'kling-2.6-motion-control-pro', 'kling-2.6', 'runway', 'luma'];
-    // Premium tier: Favor pro-level providers (Kling 2.6, 2.5, Veo, Runway)
-    const premiumProviders = ['kling-2.6', 'kling-2.6-pro', 'kling-2.5-turbo', 'kling-2.5', 'veo-2', 'veo-3.1', 'runway', 'kling-2.1'];
-    // Standard tier: Favor cost-effective providers (Kling basic, Wan)
+    const ultraProviders = ['veo-3.1', 'veo-2', 'kling-2.6-pro', 'kling-2.6-motion-control-pro', 'kling-2.6', 'runway', 'luma', 'runway-4.5', 'runway-gen4', 'runway-gen4-aleph', 'runway-act-two'];
+    const premiumProviders = ['kling-2.6', 'kling-2.6-pro', 'kling-2.5-turbo', 'kling-2.5', 'veo-2', 'veo-3.1', 'runway', 'kling-2.1', 'runway-4.5', 'runway-gen4', 'runway-gen4-aleph', 'runway-act-two'];
     const standardProviders = ['kling-1.6', 'kling-2.0', 'wan-2.1', 'wan-2.6', 'seedance-1.0'];
     
     if (qualityTier === 'ultra') {
-      // Give Veo 3.1 the highest boost - it should be the primary Ultra provider
       if (scores['veo-3.1'] !== undefined) {
-        scores['veo-3.1'] += 80; // Extra strong boost for top Ultra provider
+        scores['veo-3.1'] += 80;
         if (!reasons['veo-3.1'].includes('Top Ultra tier - Veo 3.1')) {
           reasons['veo-3.1'].push('Top Ultra tier - Veo 3.1');
         }
       }
-      // Strong boost for Veo 2 as secondary
       if (scores['veo-2'] !== undefined) {
         scores['veo-2'] += 60;
         if (!reasons['veo-2'].includes('Ultra tier - Veo 2')) {
           reasons['veo-2'].push('Ultra tier - Veo 2');
         }
       }
-      // Boost other ultra providers
+      if (scores['runway-4.5'] !== undefined) {
+        scores['runway-4.5'] += 70;
+        if (!reasons['runway-4.5'].includes('Ultra tier - Runway 4.5 top cinematic')) {
+          reasons['runway-4.5'].push('Ultra tier - Runway 4.5 top cinematic');
+        }
+      }
       ultraProviders.forEach(id => {
-        if (scores[id] !== undefined && id !== 'veo-3.1' && id !== 'veo-2') {
+        if (scores[id] !== undefined && id !== 'veo-3.1' && id !== 'veo-2' && id !== 'runway-4.5') {
           scores[id] += 40;
           if (!reasons[id].includes('Ultra tier provider')) {
             reasons[id].push('Ultra tier provider');
           }
         }
       });
-      // Penalize standard/budget providers for ultra tier
       standardProviders.forEach(id => {
         if (scores[id] !== undefined) {
           scores[id] -= 30;
         }
       });
     } else if (qualityTier === 'premium') {
-      // Boost premium providers, demote budget options
       premiumProviders.forEach(id => {
         if (scores[id] !== undefined) {
           scores[id] += 30;
@@ -357,14 +526,12 @@ class VideoProviderSelectorService {
           }
         }
       });
-      // Demote budget providers for premium tier
       standardProviders.forEach(id => {
         if (scores[id] !== undefined) {
           scores[id] -= 15;
         }
       });
     } else {
-      // Standard tier: Boost budget-friendly providers, penalize expensive ones
       standardProviders.forEach(id => {
         if (scores[id] !== undefined) {
           scores[id] += 40;
@@ -373,7 +540,6 @@ class VideoProviderSelectorService {
           }
         }
       });
-      // Penalize expensive providers for standard tier
       ultraProviders.forEach(id => {
         if (scores[id] !== undefined) {
           scores[id] -= 25;
@@ -414,6 +580,13 @@ class VideoProviderSelectorService {
         case 'motion-graphics':
           if (/text|chart|info|graphic|animation/.test(combined) || scene.sceneType === 'cta') {
             scores[id] += 15;
+          }
+          break;
+        case 'character-performance':
+          if (/acting|performance|emotion|character|feeling|react|testimonial|dialogue/.test(combined) ||
+              scene.sceneType === 'testimonial' || scene.sceneType === 'problem' || scene.sceneType === 'agitation') {
+            scores[id] += 25;
+            reasons[id].push('Character performance specialization');
           }
           break;
       }

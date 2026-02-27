@@ -1,7 +1,7 @@
 # AI Video Production Studio
 
 ## Overview
-The AI Video Production Studio is a full-stack platform designed to streamline video creation using multiple AI video providers (Kling, RunwayML, Luma, Pika, Veo). Its core purpose is to offer an intelligent system for provider selection, comprehensive brand asset management, quality evaluation, and advanced sound design capabilities. The platform leverages Remotion for flexible video composition, targeting a broad market with ambitions to be a leading tool for professional and efficient AI-driven video production.
+The AI Video Production Studio is a full-stack platform designed to streamline video creation using multiple AI video providers (Kling, Runway 4.5/Gen-4/Gen-4 Aleph/Act Two, Luma, Pika, Veo, Hailuo, Wan, Sora, Seedance, Hunyuan). Its core purpose is to offer an intelligent system for provider selection with content-aware classification, comprehensive brand asset management, quality evaluation, and advanced sound design capabilities. The platform leverages Remotion for flexible video composition, targeting a broad market with ambitions to be a leading tool for professional and efficient AI-driven video production.
 
 ## User Preferences
 - Focus on Video Production Platform only (no HR features)
@@ -22,7 +22,7 @@ The AI Video Production Studio is a full-stack platform designed to streamline v
 -   **UI/UX**: Canva-inspired persistent sidebar navigation, glassmorphism card surfaces, animated gradient landing page, split-panel authentication, and visual project cards with gradient thumbnails. A modern dark theme is applied throughout.
 -   **Dynamic Theming**: Light/dark mode toggle with `ThemeContext` managing state, `localStorage` persistence, and CSS custom properties for theme-dependent styling.
 -   **Brand Management**: Integrated brand settings (name, tagline, website, colors, logo_url, guidelines) persistent in the database, with dynamic injection into project creation, script parsing, and video prompt optimization. Supports drag-and-drop logo upload and brand media library.
--   **AI Video Generation**: Supports configurable T2V (Text-to-Video) and I2V (Image-to-Video) pipelines, allowing users to choose generation modes. Includes a system for persisting project-level reference images for I2V.
+-   **AI Video Generation**: Supports configurable T2V (Text-to-Video) and I2V (Image-to-Video) pipelines, allowing users to choose generation modes. Includes a system for persisting project-level reference images for I2V. Content-aware provider selection classifies scenes into 8 categories (cinematic, human_subjects, product_reveal, broll, conceptual_explanatory, infographic_diagram, motion_graphics, mixed) and routes to appropriate visual formats (AI video, AI image + Remotion animation, or Remotion motion graphics). Provider capability cards in the UI show tier badges, specialties, and auto-selection reasoning.
 -   **Micro-Scenes**: Claude automatically splits scene narrations into 2-4 micro-scenes at natural topic shifts. Each micro-scene gets its own visual direction and AI-generated video clip. Remotion stitches micro-scene clips with crossfade transitions within the parent scene. UI shows micro-scene breakdown with video previews in the scene editor. MicroScene type defined in `shared/video-types.ts`. Supports per-micro-scene original audio mixing: users can toggle native video audio on/off per micro-scene with volume control (0-100%), automatic fade in/out, and background music auto-ducking during native audio segments for TV-quality rendering.
 -   **Custom Script Workflow**: Scene-by-scene editor allowing users to add individual scenes with type selection (Opening/Hook, Introduction, Benefit, Feature, Content, CTA, Closing/Outro) and exact narration text. Scenes can be reordered, added, or removed before project creation. Pre-seeded scenes skip the AI script generation step and go directly to scene review/editing in the project detail page.
 -   **Quick Create Workflow**: Panel for quick asset creation including visual (prompt editing, provider selection), voiceover (AI narration), and background music generation.
@@ -35,7 +35,7 @@ The AI Video Production Studio is a full-stack platform designed to streamline v
 -   **Database Schema**: Drizzle ORM defines schema for users, sessions, video projects, production phases, brand assets, media assets, and various job queues.
 
 ## External Dependencies
--   **AI Video Providers**: Kling, RunwayML, Luma, Pika, Veo, Hailuo, Wan, Sora, Seedance, Hunyuan (via PiAPI). Provider selection is filtered by API test results from `piapi_test_results` table - only providers that passed testing are used in production pipelines.
+-   **AI Video Providers**: Kling, RunwayML, Luma, Pika, Veo, Hailuo, Wan, Sora, Seedance, Hunyuan (via PiAPI). Provider selection is filtered by API test results from `piapi_test_results` table - only providers that passed testing are used in production pipelines. Runway 4.5, Gen-4, Gen-4 Aleph, and Act Two use direct Runway API (`RUNWAY_API_KEY`) instead of PiAPI.
 -   **Database**: PostgreSQL (specifically Neon).
 -   **Object Storage**: S3 for render assets (sfx, end-cards, intro-backgrounds, fonts). Logos/badges/watermarks managed through the overlay UI and brand settings.
 -   **Rendering**: Remotion (for video composition and rendering via Remotion Lambda).

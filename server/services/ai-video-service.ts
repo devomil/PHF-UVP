@@ -1,6 +1,7 @@
 // server/services/ai-video-service.ts
 
 import { piapiVideoService } from './piapi-video-service';
+import { runwayVideoService } from './runway-video-service';
 import { promptEnhancementService } from './prompt-enhancement-service';
 import { intelligentProviderSelector, SceneContent } from './intelligent-provider-selector';
 import { 
@@ -80,6 +81,11 @@ const TIER_PROVIDER_VERSIONS: Record<string, Record<string, string>> = {
     ultra: 'wan-2.6',
     premium: 'wan-2.6',
     standard: 'wan-2.6',
+  },
+  runway: {
+    ultra: 'runway-4.5',
+    premium: 'runway-gen4-aleph',
+    standard: 'runway',
   },
 };
 
@@ -259,7 +265,41 @@ class AIVideoService {
     provider: typeof AI_VIDEO_PROVIDERS[string],
     options: AIVideoOptions
   ): Promise<AIVideoResult> {
+    if (provider.apiProvider === 'runway' || runwayVideoService.isRunwayModel(providerKey)) {
+      return this.generateViaRunway(providerKey, options);
+    }
     return this.generateViaPiAPI(providerKey, options);
+  }
+
+  private async generateViaRunway(
+    providerKey: string,
+    options: AIVideoOptions
+  ): Promise<AIVideoResult> {
+    if (!runwayVideoService.isAvailable()) {
+      return { success: false, error: 'RUNWAY_API_KEY not configured' };
+    }
+
+    console.log(`[AIVideo] Using direct Runway API for ${providerKey}`);
+
+    const result = await runwayVideoService.generateVideo({
+      prompt: options.prompt,
+      duration: options.duration,
+      aspectRatio: options.aspectRatio,
+      model: providerKey,
+      imageUrl: options.imageUrl,
+      negativePrompt: options.negativePrompt,
+      i2vSettings: options.i2vSettings,
+    });
+
+    return {
+      success: result.success,
+      videoUrl: result.videoUrl,
+      s3Url: result.s3Url || result.videoUrl,
+      duration: result.duration,
+      cost: result.cost,
+      error: result.error,
+      generationTimeMs: result.generationTimeMs,
+    };
   }
 
   private async generateViaPiAPI(
@@ -409,18 +449,40 @@ class AIVideoService {
       let recommendedProvider = result.recommendedProvider;
       let fallbackProvider = result.fallbackProvider;
       
+      const specificProvider = intelligentProviderSelector.resolveSpecificProvider(
+        recommendedProvider,
+        result.contentClassification,
+        options.sceneType
+      );
+      if (specificProvider !== recommendedProvider) {
+        console.log(`[AIVideo] Resolved ${recommendedProvider} → ${specificProvider} for ${result.contentClassification} content`);
+      }
+      
       const isProviderAvailable = (p: string) => configuredProviders.some(cp => cp === p || cp.startsWith(p + '-') || cp.startsWith(p));
       
-      if (!isProviderAvailable(recommendedProvider)) {
+      const resolvedAvailable = configuredProviders.includes(specificProvider);
+      const baseAvailable = isProviderAvailable(recommendedProvider);
+      
+      let primaryProvider: string;
+      if (resolvedAvailable) {
+        primaryProvider = specificProvider;
+      } else if (baseAvailable) {
+        primaryProvider = recommendedProvider;
+        console.log(`[AIVideo] Specific provider "${specificProvider}" not tested, using base "${recommendedProvider}"`);
+      } else {
+        primaryProvider = configuredProviders[0] || 'kling-2.6';
         console.log(`[AIVideo] Recommended provider "${recommendedProvider}" not in tested providers, using first available`);
-        recommendedProvider = configuredProviders[0]?.split('-')[0] as any || 'kling';
       }
+      
       if (fallbackProvider && !isProviderAvailable(fallbackProvider)) {
         fallbackProvider = configuredProviders[1]?.split('-')[0] || configuredProviders[0]?.split('-')[0] || 'hailuo';
       }
       
-      const providerOrder: string[] = [recommendedProvider];
-      if (fallbackProvider && fallbackProvider !== recommendedProvider && isProviderAvailable(fallbackProvider)) {
+      const providerOrder: string[] = [primaryProvider];
+      if (recommendedProvider !== primaryProvider && isProviderAvailable(recommendedProvider)) {
+        providerOrder.push(recommendedProvider);
+      }
+      if (fallbackProvider && !providerOrder.includes(fallbackProvider) && isProviderAvailable(fallbackProvider)) {
         providerOrder.push(fallbackProvider);
       }
       for (const p of configuredProviders) {
