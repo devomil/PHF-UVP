@@ -77,7 +77,7 @@ class RunwayVideoService {
       console.log(`[Runway] Starting generation with provider: ${providerKey}, API model: ${apiModel}`);
       console.log(`[Runway] Prompt: ${options.prompt.substring(0, 100)}...`);
 
-      const ratio = options.aspectRatio === '9:16' ? '768:1280' : options.aspectRatio === '1:1' ? '1024:1024' : '1280:768';
+      const ratio = options.aspectRatio === '9:16' ? '720:1280' : '1280:720';
 
       let endpoint: string;
       let body: any;
