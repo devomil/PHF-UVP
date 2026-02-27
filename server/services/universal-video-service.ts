@@ -3021,11 +3021,23 @@ RIGHT (visual variety):
 
 ## RULES FOR VISUAL DIRECTIONS
 1. MATCH THE NARRATION'S REALITY - The visual must reflect the situation described.
-2. KEEP IT SIMPLE - One subject, one setting per micro-scene.
-3. BE DIRECT - Describe what we SEE in plain language.
-4. REAL SETTINGS, NOT SETS - Everyday places that look lived-in and real.
-5. NO CINEMATIC LANGUAGE - No camera angles, color palettes, or lighting rigs.
-6. VISUAL VARIETY - Each micro-scene should use a DIFFERENT visual type. Mix objects, environments, and people.
+2. ONE VISUAL PER MICRO-SCENE - Each micro-scene describes EXACTLY ONE concrete image. NEVER join alternatives with "or", "alternatively", or commas listing options. Pick ONE and commit.
+3. KEEP IT SIMPLE - One subject, one setting per micro-scene. 10-20 words max.
+4. BE CONCRETE, NOT ABSTRACT - Describe physical objects and settings you can photograph. NEVER use abstract words like "progression", "journey", "transformation", "misconception", "overload", "deeper reality". Instead, show a SPECIFIC object or scene that represents the idea.
+5. BE DIRECT - Describe what we SEE in plain language.
+6. REAL SETTINGS, NOT SETS - Everyday places that look lived-in and real.
+7. NO CINEMATIC LANGUAGE - No camera angles, color palettes, or lighting rigs.
+8. VISUAL VARIETY - Each micro-scene should use a DIFFERENT visual type. Mix objects, environments, and people.
+
+## WRONG vs RIGHT EXAMPLES FOR VISUAL DIRECTION
+WRONG: "A progression from calorie counting misconceptions to the deeper reality of body toxin overload and healing needs"
+RIGHT: "A bathroom scale next to a measuring tape and an open diet journal on a kitchen counter"
+
+WRONG: "A progression from struggle to healing through natural wellness elements and supportive environments"
+RIGHT: "Fresh herbs and supplement bottles arranged on a sunlit wooden cutting board"
+
+WRONG: "An open refrigerator late at night, light spilling out, with someone's hand reaching for processed snacks, or a cluttered kitchen counter with empty fast food containers"
+RIGHT: "An open refrigerator at night with a hand reaching for processed snacks on the top shelf"
 
 ## VISUAL STYLE: ${projectVisualStyle}
 

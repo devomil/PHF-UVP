@@ -181,11 +181,20 @@ The visual direction MUST match the emotional reality of the narration. Social m
    - People: use sparingly, only when narration specifically requires human emotion
    - Across all scenes, at MOST half should feature a person as the main subject
 
-3. KEEP IT SIMPLE - 1-2 plain sentences max
+3. KEEP IT SIMPLE - 1-2 plain sentences max, 10-20 words
    - ONE subject, ONE action, ONE setting
    - Describe what we SEE in plain language
+   - NEVER join alternatives with "or" — pick ONE concrete visual and commit
+   - NEVER use abstract words like "progression", "journey", "transformation", "misconception", "overload"
+   - Instead of abstract concepts, describe a SPECIFIC physical object or setting
    - NO camera angles, NO color palettes, NO lighting descriptions, NO cinematic language
    - Write as if describing a scene to a friend, not a film crew
+   
+   WRONG: "A progression from calorie counting to the deeper reality of body toxin overload"
+   RIGHT: "A kitchen counter with a food journal, supplement bottles, and a glass of water"
+   
+   WRONG: "Someone struggling with weight loss, or a person looking at healthy food options, or a bathroom scale"
+   RIGHT: "A bathroom scale on a tile floor with bare feet stepping onto it"
 
 4. REAL SETTINGS
    - Kitchen, bathroom, living room, bedroom, office, park
