@@ -1,11 +1,11 @@
 const RUNWAY_API_BASE = 'https://api.dev.runwayml.com/v1';
 
 const RUNWAY_MODEL_MAP: Record<string, string> = {
-  'runway': 'gen4_turbo',
-  'runway-gen4': 'gen4',
-  'runway-gen4-aleph': 'gen4_aleph',
-  'runway-4.5': 'gen4.5_turbo',
-  'runway-act-two': 'gen4_turbo',
+  'runway': 'gen3a_turbo',
+  'runway-gen4': 'gen4.5',
+  'runway-gen4-aleph': 'gen4.5',
+  'runway-4.5': 'gen4.5',
+  'runway-act-two': 'gen4.5',
 };
 
 const RUNWAY_COST_PER_SECOND: Record<string, number> = {
