@@ -1367,21 +1367,30 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                             <span className="text-[10px] text-white/30">For I2V (image-to-video)</span>
                           </span>
                         </div>
+                        {msModalRefImages.length > 0 && (
+                          <div className="mb-2 space-y-1.5">
+                            {msModalRefImages.map((url, i) => (
+                              <div key={i} className="relative rounded-lg overflow-hidden border group" style={{ borderColor: "rgba(124,58,237,0.3)" }}>
+                                <img src={url} alt={`Reference ${i + 1}`} className="w-full h-24 object-cover" />
+                                <div className="absolute bottom-0 left-0 right-0 px-2 py-1 bg-gradient-to-t from-black/70 to-transparent">
+                                  <span className="text-[10px] text-white/70">Reference {i + 1}</span>
+                                </div>
+                                <button onClick={() => setMsModalRefImages(prev => prev.filter((_, idx) => idx !== i))} className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500">
+                                  <X className="w-3 h-3" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          {msModalRefImages.map((url, i) => (
-                            <div key={i} className="relative w-10 h-10 rounded-md overflow-hidden border group" style={{ borderColor: "rgba(124,58,237,0.3)" }}>
-                              <img src={url} alt="" className="w-full h-full object-cover" />
-                              <button onClick={() => setMsModalRefImages(prev => prev.filter((_, idx) => idx !== i))} className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white flex items-center justify-center text-[8px] opacity-0 group-hover:opacity-100 transition-opacity">
-                                <X className="w-2.5 h-2.5" />
-                              </button>
-                            </div>
-                          ))}
-                          <input type="file" ref={msModalFileRef} className="hidden" accept="image/*" onChange={handleMsModalRefUpload} />
-                          <button onClick={() => msModalFileRef.current?.click()} className="w-10 h-10 rounded-md border border-dashed flex items-center justify-center transition-colors hover:border-purple-500/40" style={{ borderColor: "rgba(255,255,255,0.15)", color: "rgba(255,255,255,0.4)" }} title="Upload reference">
+                          <input type="file" ref={msModalFileRef} className="hidden" accept="image/*,video/*" onChange={handleMsModalRefUpload} />
+                          <button onClick={() => msModalFileRef.current?.click()} className="flex-1 text-[11px] px-3 py-2 rounded-lg border border-dashed flex items-center justify-center gap-1.5 transition-colors hover:border-purple-500/40 hover:bg-purple-500/5" style={{ borderColor: "rgba(255,255,255,0.15)", color: "rgba(255,255,255,0.5)" }} title="Upload reference image">
                             <Upload className="w-3.5 h-3.5" />
+                            Upload Image
                           </button>
-                          <button onClick={() => setMsModalShowLibrary(!msModalShowLibrary)} className="w-10 h-10 rounded-md border border-dashed flex items-center justify-center transition-colors hover:border-purple-500/40" style={{ borderColor: msModalShowLibrary ? "rgba(124,58,237,0.4)" : "rgba(255,255,255,0.15)", color: msModalShowLibrary ? "rgb(124,58,237)" : "rgba(255,255,255,0.4)" }} title="Browse library">
+                          <button onClick={() => setMsModalShowLibrary(!msModalShowLibrary)} className="flex-1 text-[11px] px-3 py-2 rounded-lg border border-dashed flex items-center justify-center gap-1.5 transition-colors hover:border-purple-500/40 hover:bg-purple-500/5" style={{ borderColor: msModalShowLibrary ? "rgba(124,58,237,0.4)" : "rgba(255,255,255,0.15)", color: msModalShowLibrary ? "rgb(124,58,237)" : "rgba(255,255,255,0.5)" }} title="Browse asset library">
                             <FolderOpen className="w-3.5 h-3.5" />
+                            Library
                           </button>
                         </div>
                         {msModalShowLibrary && (
