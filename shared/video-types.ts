@@ -21,6 +21,7 @@ export interface VideoProject {
   qualityTier?: 'ultra' | 'premium' | 'standard';
   mediaMode?: 'image' | 'video';
   videoGenerationMode?: 'direct-t2v' | 'image-first-i2v' | 'auto';
+  artPresetId?: string;
 }
 
 export type VideoProjectStatus = 'draft' | 'queued' | 'generating' | 'ready' | 'render_queued' | 'rendering' | 'lambda_pending' | 'complete' | 'error';
@@ -228,6 +229,7 @@ export interface Scene {
     matchedProductCount: number;
     matchedLogoCount: number;
   };
+  textLabels?: TextLabel[];
   // Phase 15H: Workflow override - allows disabling brand asset matching per scene
   useBrandAssets?: boolean;
   // Phase 15H: Generation method tracking - what method was used to generate the media
@@ -403,6 +405,22 @@ export interface ProjectHistory {
   entries: ProjectHistoryEntry[];
   currentIndex: number;
   maxEntries: number;
+}
+
+export type TextLabelVisualTreatment = 'badge' | 'floating-tag' | 'holographic-panel' | 'handwritten' | 'neon-glow' | 'minimal' | 'pill' | 'underline';
+
+export interface TextLabel {
+  id: string;
+  text: string;
+  position: 'top-left' | 'top-center' | 'top-right' | 'center-left' | 'center' | 'center-right' | 'bottom-left' | 'bottom-center' | 'bottom-right';
+  visualTreatment: TextLabelVisualTreatment;
+  timing: {
+    startAt: number;
+    duration: number;
+  };
+  fontSize?: number;
+  color?: string;
+  backgroundColor?: string;
 }
 
 export const SCENE_OVERLAY_DEFAULTS: Record<string, boolean> = {

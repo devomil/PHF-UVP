@@ -197,7 +197,7 @@ export function registerRoutes(app: Express) {
         return res.status(401).json({ error: "Not authenticated" });
       }
 
-      const { mode, title, description, targetAudience, duration, platform, aspectRatio, mediaMode, videoGenerationMode, qualityTier, script, numScenes, visualStyle, voiceStyle, outputType, prompt, imageStyle, provider, saveToLibrary, customScenes } = req.body;
+      const { mode, title, description, targetAudience, duration, platform, aspectRatio, mediaMode, videoGenerationMode, qualityTier, script, numScenes, visualStyle, voiceStyle, outputType, prompt, imageStyle, provider, saveToLibrary, customScenes, artPresetId } = req.body;
 
       const projectId = crypto.randomUUID();
 
@@ -231,6 +231,16 @@ export function registerRoutes(app: Express) {
           console.log(`[Routes] Custom script with ${preSeededScenes.length} pre-defined scenes`);
         }
 
+        const progressData: any = preSeededScenes.length > 0 ? { phase: "scenes-ready", percentage: 20, currentStep: "Scenes defined" } : { phase: "draft", percentage: 0, currentStep: "" };
+        if (artPresetId && artPresetId !== "auto") {
+          const { getVisualArtPreset } = await import("../shared/config/visual-art-presets");
+          if (getVisualArtPreset(artPresetId)) {
+            progressData.artPresetId = artPresetId;
+          } else {
+            console.warn(`[Routes] Invalid artPresetId "${artPresetId}", ignoring`);
+          }
+        }
+
         const [project] = await db.insert(universalVideoProjects).values({
           projectId,
           ownerId: userId,
@@ -244,7 +254,7 @@ export function registerRoutes(app: Express) {
           brand: brandData.brandName ? { name: brandData.brandName, tagline: brandData.tagline, website: brandData.website, colors: { primary: brandData.primaryColor, secondary: brandData.secondaryColor, accent: brandData.accentColor }, logoUrl: brandData.logoUrl, guidelines: brandData.guidelines } : {},
           scenes: preSeededScenes,
           assets: {},
-          progress: preSeededScenes.length > 0 ? { phase: "scenes-ready", percentage: 20, currentStep: "Scenes defined" } : { phase: "draft", percentage: 0, currentStep: "" },
+          progress: progressData,
           status: "draft",
           qualityTier: qualityTier || "premium",
           mediaMode: mediaMode || "video",

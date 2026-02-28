@@ -15,6 +15,7 @@ import { getVisualStyleConfig, VisualStyleConfig } from '@shared/visual-style-co
 import { getMotionControl, MotionControlConfig } from '@shared/config/motion-control';
 import { optimizePrompt, logPromptOptimization, analyzePrompt } from './video-prompt-optimizer';
 import { getAnyBrandContext, getBrandNameOrDefault } from './brand-settings-service';
+import { getVisualArtPreset, VisualArtPreset } from '../../shared/config/visual-art-presets';
 
 interface AIVideoResult {
   success: boolean;
@@ -48,6 +49,7 @@ interface AIVideoOptions {
   qualityTier?: 'ultra' | 'premium' | 'standard';
   i2vSettings?: I2VSettingsInput; // I2V-specific settings from UI
   motionOverride?: MotionControlConfig; // Manual motion control override from UI
+  artPresetId?: string;
 }
 
 // Maps base provider + quality tier to the appropriate versioned provider
@@ -121,6 +123,12 @@ class AIVideoService {
     // Get visual style configuration (Phase 5B)
     const styleConfig = getVisualStyleConfig(options.visualStyle || 'professional');
     
+    // Resolve art preset if provided
+    const artPreset = options.artPresetId ? getVisualArtPreset(options.artPresetId) : null;
+    if (artPreset) {
+      console.log(`[AIVideo] Art preset active: ${artPreset.name} (${artPreset.id})`);
+    }
+    
     // Determine content type from style config if not provided
     const contentType = options.contentType || 
       styleConfig.defaultContentTypes[options.sceneType as keyof typeof styleConfig.defaultContentTypes] ||
@@ -133,7 +141,10 @@ class AIVideoService {
     if (generationMode === 'i2v') {
       console.log(`[AIVideo] I2V mode - using motion-focused prompt (no style bloat)`);
       console.log(`[AIVideo] Original I2V prompt: ${options.prompt.substring(0, 100)}...`);
-      const i2vPrompt = this.adaptPromptForI2V(options.prompt);
+      let i2vPrompt = this.adaptPromptForI2V(options.prompt);
+      if (artPreset) {
+        i2vPrompt = `${artPreset.imagePromptPrefix} ${i2vPrompt}`;
+      }
       console.log(`[AIVideo] Adapted I2V prompt: ${i2vPrompt.substring(0, 100)}...`);
       enhancedOptions = {
         ...options,
@@ -141,8 +152,15 @@ class AIVideoService {
         contentType,
       };
     } else {
+      // Apply art preset prefix/suffix to prompt before style enhancement
+      let basePrompt = options.prompt;
+      if (artPreset) {
+        basePrompt = `${artPreset.imagePromptPrefix} ${basePrompt}, ${artPreset.imagePromptSuffix}`;
+        console.log(`[AIVideo] Art preset applied to prompt: ${basePrompt.substring(0, 120)}...`);
+      }
+      
       // Build enhanced prompt with style modifiers
-      const styleEnhancedPrompt = this.applyStyleToPrompt(options.prompt, styleConfig);
+      const styleEnhancedPrompt = this.applyStyleToPrompt(basePrompt, styleConfig);
       
       console.log(`[AIVideo] Using style: ${styleConfig.name}`);
 
@@ -182,10 +200,15 @@ class AIVideoService {
         console.log(`[AIVideo] Prompt quality warning (score: ${analysis.score}): ${analysis.issues.join(', ')}`);
       }
       
+      let negativePrompt = optimized.negativePrompt || enhanced.negativePrompt;
+      if (artPreset && artPreset.negativePromptAdditions.length > 0) {
+        negativePrompt = `${negativePrompt}, ${artPreset.negativePromptAdditions.join(', ')}`;
+      }
+      
       enhancedOptions = {
         ...options,
         prompt: optimized.prompt,
-        negativePrompt: optimized.negativePrompt || enhanced.negativePrompt,
+        negativePrompt,
         contentType,
       };
     }

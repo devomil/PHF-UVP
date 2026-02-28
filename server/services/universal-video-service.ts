@@ -42,6 +42,7 @@ import {
 } from "./health-script-context";
 import { optimizePrompt, logPromptOptimization } from "./video-prompt-optimizer";
 import { intelligentProviderSelector, SceneContent } from "./intelligent-provider-selector";
+import { getVisualArtPreset, VisualArtPreset } from "../../shared/config/visual-art-presets";
 
 const AWS_REGION = process.env.REMOTION_AWS_REGION || "us-east-2";
 const REMOTION_BUCKET = process.env.REMOTION_S3_BUCKET || process.env.REMOTION_AWS_BUCKET || "remotionlambda-useast2-1vc2l6a56o";
@@ -1466,7 +1467,8 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
   private async generateContentImage(
     scene: Scene,
     productName: string,
-    aspectRatio: string = '16:9'
+    aspectRatio: string = '16:9',
+    artPresetId?: string
   ): Promise<{ imageUrl: string | null; source: string; extractedText?: string[]; extractedLogos?: string[] }> {
     const falKey = process.env.FAL_KEY;
     if (!falKey) {
@@ -1478,7 +1480,7 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
     try {
       console.log(`[UniversalVideoService] Generating content image for ${scene.type} scene...`);
       
-      const contentPromptResult = this.buildContentPrompt(scene, productName);
+      const contentPromptResult = this.buildContentPrompt(scene, productName, artPresetId);
       console.log(`[UniversalVideoService] Content prompt: ${contentPromptResult.prompt}`);
 
       const contentDims = getImageDimensionsForAspectRatio(aspectRatio);
@@ -1517,10 +1519,12 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
     return { ...stockResult, extractedText: [], extractedLogos: [] };
   }
 
-  private buildContentPrompt(scene: Scene, productName: string): { prompt: string; extractedText: string[]; extractedLogos: string[] } {
+  private buildContentPrompt(scene: Scene, productName: string, artPresetId?: string): { prompt: string; extractedText: string[]; extractedLogos: string[] } {
     const sceneType = scene.type;
     const visualDirection = scene.visualDirection || '';
     const narration = scene.narration || '';
+    
+    const artPresetForPrompt = artPresetId ? getVisualArtPreset(artPresetId) : null;
     
     // Phase 11A: Sanitize visual direction to remove text/logo requests
     const sanitized = sanitizePromptForAI(visualDirection, sceneType);
@@ -1605,6 +1609,11 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
       
       const extractedConcepts = this.extractVisualConcepts(cleanVisualDirection, narration);
       fullPrompt = `${baseContext} ${extractedConcepts}. High quality, 4K, photorealistic. NO text, NO logos, NO product shots, NO watermarks. IMPORTANT: Show ADULTS only.`;
+    }
+    
+    if (artPresetForPrompt) {
+      fullPrompt = `${artPresetForPrompt.imagePromptPrefix} ${fullPrompt}, ${artPresetForPrompt.imagePromptSuffix}`;
+      console.log(`[BuildContentPrompt] Art preset "${artPresetForPrompt.name}" applied to image prompt`);
     }
     
     console.log(`[BuildContentPrompt] Final prompt: ${fullPrompt.substring(0, 100)}...`);
@@ -3126,6 +3135,11 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
       
       const projectVisualStyle = (project as any).visualStyle || 'lifestyle';
       const projectTitle = project.title || '';
+      const projectArtPresetId = (project as any).artPresetId || project.artPresetId;
+      const artPreset = projectArtPresetId ? getVisualArtPreset(projectArtPresetId) : null;
+      if (artPreset) {
+        console.log(`[Assets] Art preset active for visual directions: ${artPreset.name}`);
+      }
       
       let brandContextStr = '';
       try {
@@ -3218,7 +3232,15 @@ WRONG: "An open refrigerator late at night, light spilling out, with someone's h
 RIGHT: "An open refrigerator at night with a hand reaching for processed snacks on the top shelf"
 
 ## VISUAL STYLE: ${projectVisualStyle}
-
+${artPreset ? `
+## ART DIRECTION PRESET: ${artPreset.name}
+All visual directions MUST be consistent with this art style: ${artPreset.description}.
+When describing visuals, incorporate this aesthetic naturally. For example:
+- Prefix style cues: "${artPreset.imagePromptPrefix}"
+- The overall look should feel: ${artPreset.imagePromptSuffix}
+- Avoid these visual elements: ${artPreset.negativePromptAdditions.join(', ')}
+Every micro-scene should maintain this ${artPreset.name} aesthetic for visual consistency across the entire video.
+` : ''}
 ## OUTPUT FORMAT
 Return ONLY a JSON object:
 {
@@ -3315,8 +3337,20 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
     updatedProject.progress.currentStep = 'images';
     updatedProject.progress.overallPercent = 15;
 
-    const videoGenMode = (project as any).videoGenerationMode as 'direct-t2v' | 'image-first-i2v' | 'auto' | undefined;
+    let videoGenMode = (project as any).videoGenerationMode as 'direct-t2v' | 'image-first-i2v' | 'auto' | undefined;
     const projectMediaMode2 = (project as any).mediaMode as 'image' | 'video' | undefined;
+    
+    const projectArtPresetForStrategy = project.artPresetId ? getVisualArtPreset(project.artPresetId) : null;
+    if (projectArtPresetForStrategy && projectMediaMode2 === 'video' && (!videoGenMode || videoGenMode === 'auto')) {
+      if (projectArtPresetForStrategy.generationStrategy === 'i2v') {
+        videoGenMode = 'image-first-i2v';
+        console.log(`[Assets] Art preset "${projectArtPresetForStrategy.name}" overrides generation mode to image-first-i2v`);
+      } else if (projectArtPresetForStrategy.generationStrategy === 't2v') {
+        videoGenMode = 'direct-t2v';
+        console.log(`[Assets] Art preset "${projectArtPresetForStrategy.name}" overrides generation mode to direct-t2v`);
+      }
+    }
+    
     const useDirectT2V = projectMediaMode2 === 'video' && (videoGenMode === 'direct-t2v' || videoGenMode === 'auto' || !videoGenMode);
     
     if (useDirectT2V) {
@@ -3379,6 +3413,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
 
     const productImages = project.assets.productImages || [];
     const primaryImage = productImages.find(img => img.isPrimary);
+    const imageGenArtPresetId = (project as any).artPresetId || project.artPresetId;
     
     console.log(`[UniversalVideoService] Product images available: ${productImages.length}`);
     if (productImages.length > 0) {
@@ -3662,7 +3697,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
         if (isContent && !useProductOverlay) {
           // CONTENT SCENE: Generate imagery that matches the script content
           console.log(`[UniversalVideoService] Generating CONTENT image for ${scene.type} scene: ${scene.id}`);
-          const contentResult = await this.generateContentImage(scene, project.title);
+          const contentResult = await this.generateContentImage(scene, project.title, undefined, imageGenArtPresetId);
           
           if (contentResult.imageUrl) {
             updatedProject.assets.images.push({
@@ -3829,6 +3864,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
     
     const projectQualityTier = (project as any).qualityTier || 'standard';
     const projectMediaMode = (project as any).mediaMode as 'image' | 'video' | undefined;
+    const projectArtPresetIdForVideo = (project as any).artPresetId || project.artPresetId;
     
     const getSceneQualityTier = (scene: any): 'ultra' | 'premium' | 'standard' => {
       return scene.qualityTier || projectQualityTier;
@@ -3858,7 +3894,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
         visualDirection: scene.visualDirection || '',
         duration: scene.duration || 5,
       }));
-      const formatRecommendations = await intelligentProviderSelector.analyzeAndRecommendProviders(sceneContents);
+      const formatRecommendations = await intelligentProviderSelector.analyzeAndRecommendProviders(sceneContents, projectArtPresetIdForVideo);
       const formatMap = new Map(formatRecommendations.recommendations.map(r => [r.sceneId, r]));
       
       console.log(`[UniversalVideoService] Visual format decisions:`);
@@ -4026,6 +4062,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
               sceneType: scene.type,
               narration: ms.narration,
               qualityTier: sceneQualityTier,
+              artPresetId: projectArtPresetIdForVideo,
             }).then(msResult => ({ msIdx, skipped: false, ...msResult }))
               .catch(err => ({ msIdx, skipped: false, success: false, error: err.message, s3Url: undefined, provider: undefined }));
           });
@@ -4081,6 +4118,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
             mood: (scene as any).analysis?.mood,
             contentType: (scene as any).analysis?.contentType as 'person' | 'product' | 'nature' | 'abstract' | 'lifestyle' | undefined,
             qualityTier: sceneQualityTier,
+            artPresetId: projectArtPresetIdForVideo,
             ...(sceneRefImageUrl ? { imageUrl: sceneRefImageUrl } : {}),
           });
           
@@ -4145,6 +4183,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
                 duration: scene.duration || 5,
                 aspectRatio: updatedProject.outputFormat?.aspectRatio || '16:9',
                 qualityTier: sceneQualityTier,
+                artPresetId: projectArtPresetIdForVideo,
                 imageUrl: sourceImageUrl,
               });
               
@@ -4170,6 +4209,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
                   duration: scene.duration || 5,
                   aspectRatio: updatedProject.outputFormat?.aspectRatio || '16:9',
                   qualityTier: sceneQualityTier,
+                  artPresetId: projectArtPresetIdForVideo,
                   imageUrl: aiGeneratedImage,
                 });
                 
@@ -4196,6 +4236,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
                 duration: scene.duration || 5,
                 aspectRatio: updatedProject.outputFormat?.aspectRatio || '16:9',
                 qualityTier: sceneQualityTier,
+                artPresetId: projectArtPresetIdForVideo,
               });
               
               if (t2vResult.success && t2vResult.s3Url) {
@@ -4401,6 +4442,18 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
     updatedProject.progress.overallPercent = 73;
     await saveProgress();
     // ========== END S3 CACHING ==========
+
+    // ========== TEXT LABEL EXTRACTION ==========
+    try {
+      const { extractSceneTextLabels } = await import('./text-label-extractor');
+      const projectArtPresetForLabels = (updatedProject as any).artPresetId || updatedProject.artPresetId;
+      console.log(`[Assets] Extracting text labels${projectArtPresetForLabels ? ` (art preset: ${projectArtPresetForLabels})` : ''}...`);
+      updatedProject.scenes = await extractSceneTextLabels(updatedProject.scenes, projectArtPresetForLabels);
+      await saveProgress();
+    } catch (labelErr: any) {
+      console.warn('[Assets] Text label extraction failed (non-critical):', labelErr.message);
+    }
+    // ========== END TEXT LABEL EXTRACTION ==========
 
     // ========== SOUND DESIGN ==========
     // Generate professional sound effects (whooshes, ambient, emphasis)
@@ -5292,7 +5345,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
     // Try content image generation first (for non-person prompts)
     if (this.isContentScene(scene.type)) {
       try {
-        const result = await this.generateContentImage(scene, project.title, imgAspectRatio);
+        const result = await this.generateContentImage(scene, project.title, imgAspectRatio, (project as any).artPresetId || project.artPresetId);
         if (result.imageUrl) {
           return { success: true, newImageUrl: result.imageUrl, source: result.source };
         }

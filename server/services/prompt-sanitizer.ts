@@ -6,6 +6,19 @@
  * added via Remotion overlays, not baked into the image.
  */
 
+const ART_PRESET_WHITELIST = [
+  '3d render', '3d rendered', '3d illustration', 'pixar style', 'isometric',
+  'claymation', 'clay figure', 'stop-motion', 'plasticine', 'miniature set',
+  'watercolor', 'watercolour', 'brush strokes', 'painterly',
+  'line art', 'vector illustration', 'flat design', 'geometric shapes',
+  'collage', 'paper cutout', 'mixed media', 'scrapbook',
+  'neon', 'cyberpunk', 'holographic', 'sci-fi', 'futuristic',
+  'cinematic', 'photorealistic', 'film-grade',
+  'minimalist', 'flat', 'bauhaus', 'scandinavian design',
+  'octane render', 'ambient occlusion', 'global illumination',
+  'diorama', 'handcrafted', 'tactile',
+];
+
 export interface SanitizedPrompt {
   cleanPrompt: string;
   removedElements: string[];
@@ -214,6 +227,14 @@ export function sanitizePromptForAI(
     }
     pattern.lastIndex = 0;
     cleanPrompt = cleanPrompt.replace(pattern, '');
+  }
+
+  // === STEP 5B: Restore any whitelisted art preset keywords that were accidentally stripped ===
+  for (const keyword of ART_PRESET_WHITELIST) {
+    const keywordLower = keyword.toLowerCase();
+    if (visualDirection.toLowerCase().includes(keywordLower) && !cleanPrompt.toLowerCase().includes(keywordLower)) {
+      cleanPrompt = `${keyword}, ${cleanPrompt}`;
+    }
   }
 
   // === STEP 6: Clean up the prompt ===

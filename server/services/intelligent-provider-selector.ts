@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type { VisualFormat } from '../../shared/video-types';
+import { getVisualArtPreset } from '../../shared/config/visual-art-presets';
 
 export interface SceneContent {
   sceneId: string;
@@ -41,9 +42,9 @@ class IntelligentProviderSelectorService {
     }
   }
 
-  async analyzeAndRecommendProviders(scenes: SceneContent[]): Promise<BatchProviderRecommendations> {
+  async analyzeAndRecommendProviders(scenes: SceneContent[], artPresetId?: string): Promise<BatchProviderRecommendations> {
     if (!this.anthropic || scenes.length === 0) {
-      return this.fallbackProviderSelection(scenes);
+      return this.fallbackProviderSelection(scenes, artPresetId);
     }
 
     console.log(`[IntelligentProvider] Analyzing ${scenes.length} scenes with Claude...`);
@@ -62,7 +63,11 @@ class IntelligentProviderSelectorService {
         throw new Error('Unexpected response type from Claude');
       }
 
-      const recommendations = this.parseRecommendations(content.text, scenes);
+      let recommendations = this.parseRecommendations(content.text, scenes);
+      
+      if (artPresetId) {
+        recommendations = this.applyArtPresetPreferences(recommendations, artPresetId);
+      }
       
       console.log('[IntelligentProvider] Claude analysis complete:');
       recommendations.forEach(r => {
@@ -76,7 +81,7 @@ class IntelligentProviderSelectorService {
       };
     } catch (error: any) {
       console.error('[IntelligentProvider] Claude analysis failed, using fallback:', error.message);
-      return this.fallbackProviderSelection(scenes);
+      return this.fallbackProviderSelection(scenes, artPresetId);
     }
   }
 
@@ -213,10 +218,42 @@ Respond with ONLY a JSON array (no markdown, no code blocks):
     }
   }
 
-  private fallbackProviderSelection(scenes: SceneContent[]): BatchProviderRecommendations {
+  private applyArtPresetPreferences(recommendations: ProviderRecommendation[], artPresetId: string): ProviderRecommendation[] {
+    const preset = getVisualArtPreset(artPresetId);
+    if (!preset) return recommendations;
+
+    const preferredImageProviders = preset.recommendedProviders.image || [];
+    const preferredVideoProviders = preset.recommendedProviders.video || [];
+
+    console.log(`[IntelligentProvider] Applying art preset "${preset.name}" provider preferences: image=[${preferredImageProviders}], video=[${preferredVideoProviders}]`);
+
+    return recommendations.map(rec => {
+      if (rec.visualFormat === 'remotion-motion-graphics') return rec;
+
+      const currentProvider = rec.recommendedProvider;
+      const isPreferred = preferredVideoProviders.includes(currentProvider);
+
+      if (!isPreferred && preferredVideoProviders.length > 0) {
+        const newProvider = this.validateProvider(preferredVideoProviders[0]);
+        if (rec.confidence < 85) {
+          console.log(`[IntelligentProvider] Art preset override: scene ${rec.sceneIndex} ${currentProvider} → ${newProvider} (preset: ${preset.name})`);
+          return {
+            ...rec,
+            recommendedProvider: newProvider,
+            fallbackProvider: this.validateProvider(preferredVideoProviders[1] || currentProvider),
+            reasoning: `${rec.reasoning} (adjusted for ${preset.name} art preset)`,
+          };
+        }
+      }
+
+      return rec;
+    });
+  }
+
+  private fallbackProviderSelection(scenes: SceneContent[], artPresetId?: string): BatchProviderRecommendations {
     console.log('[IntelligentProvider] Using rule-based fallback selection');
     
-    const recommendations = scenes.map(scene => {
+    let recommendations = scenes.map(scene => {
       const { provider, classification, confidence, reasoning } = this.classifySceneByRules(scene);
       const visualFormat = this.determineVisualFormat(classification);
       
@@ -233,6 +270,10 @@ Respond with ONLY a JSON array (no markdown, no code blocks):
         fallbackProvider: provider === 'runway' ? 'kling' : 'runway',
       };
     });
+
+    if (artPresetId) {
+      recommendations = this.applyArtPresetPreferences(recommendations, artPresetId);
+    }
 
     return {
       recommendations,

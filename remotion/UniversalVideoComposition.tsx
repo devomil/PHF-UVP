@@ -20,6 +20,7 @@ import type {
   MicroScene,
   BrandSettings,
   TextOverlay,
+  TextLabel,
   OutputFormat,
   SceneSoundDesign,
 } from "../shared/video-types";
@@ -39,6 +40,7 @@ import { SoundDesignConfig as Phase18DSoundDesignConfig, TransitionSound, DEFAUL
 import { FilmTreatment, FilmTreatmentConfig, FILM_TREATMENT_PRESETS } from "./components/post-processing";
 import { SyncedCaptions } from "./components/captions/SyncedCaptions";
 import type { CaptionStyle } from "../shared/config/caption-styles";
+import { TextLabelOverlay } from "./components/overlays/TextLabelOverlay";
 
 // Phase 18B: Scene overlay configurations from overlay-configuration-service
 import type { SceneOverlayConfig } from '../shared/types/scene-overlays';
@@ -1649,6 +1651,11 @@ const SceneRenderer: React.FC<{
         );
       })()}
 
+
+      {/* Text Labels - auto-extracted key terms rendered as crisp overlays */}
+      {scene.textLabels && scene.textLabels.length > 0 && (
+        <TextLabelOverlay labels={scene.textLabels} brand={brand} />
+      )}
 
       {/* Debug overlay showing scene info */}
       {showDebugInfo && (
