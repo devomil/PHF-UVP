@@ -27,25 +27,29 @@ export interface ProgressBarProps {
 }
 
 export const ProgressBar: React.FC<ProgressBarProps> = ({
-  items,
-  layout,
-  barHeight,
-  barWidth,
-  barRadius,
-  backgroundColor,
-  fillColor,
-  labelStyle,
-  showValue,
-  valuePosition,
-  valueStyle,
-  animationDuration,
-  staggerDelay,
-  animationStyle,
-  itemSpacing,
+  items = [],
+  layout = 'vertical',
+  barHeight = 24,
+  barWidth = 'full',
+  barRadius = 12,
+  backgroundColor = 'rgba(255,255,255,0.1)',
+  fillColor = '#7C3AED',
+  labelStyle = { fontSize: 18, fontWeight: '600', fontFamily: 'sans-serif', color: '#FFFFFF' },
+  showValue = true,
+  valuePosition = 'outside',
+  valueStyle = { fontSize: 16, fontWeight: '600', color: '#FFFFFF' },
+  animationDuration = 30,
+  staggerDelay = 10,
+  animationStyle = 'ease-out',
+  itemSpacing = 24,
   holdDuration = 60,
 }) => {
   const frame = useCurrentFrame();
   const { fps, durationInFrames } = useVideoConfig();
+
+  if (!items || items.length === 0) {
+    return <AbsoluteFill />;
+  }
   
   const totalAnimationTime = animationDuration + (items.length - 1) * staggerDelay;
   const exitStartFrame = totalAnimationTime + holdDuration;
