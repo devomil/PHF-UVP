@@ -1101,11 +1101,15 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                       <span className="w-5 h-5 rounded-full flex-shrink-0 flex items-center justify-center text-[10px] font-bold" style={{ backgroundColor: ms.videoUrl ? "rgba(34,197,94,0.2)" : "rgba(124,58,237,0.2)", color: ms.videoUrl ? "rgb(134,239,172)" : "rgb(192,132,252)", border: ms.videoUrl ? "1px solid rgba(34,197,94,0.3)" : "1px solid rgba(124,58,237,0.3)" }}>
                         {msIdx + 1}
                       </span>
-                      {ms.videoUrl && (
+                      {ms.videoUrl ? (
                         <div className="w-10 h-7 rounded overflow-hidden flex-shrink-0 border" style={{ borderColor: "var(--border-subtle)" }}>
                           <video src={ms.videoUrl} className="w-full h-full object-cover" muted preload="metadata" />
                         </div>
-                      )}
+                      ) : ms.imageUrl ? (
+                        <div className="w-10 h-7 rounded overflow-hidden flex-shrink-0 border" style={{ borderColor: "rgba(59,130,246,0.3)" }}>
+                          <img src={ms.imageUrl} className="w-full h-full object-cover" alt={`Micro-scene ${msIdx + 1} reference`} loading="lazy" />
+                        </div>
+                      ) : null}
                       <p className="text-xs truncate flex-1" style={{ color: "var(--text-primary)" }}>
                         {ms.narration}
                       </p>
@@ -1119,6 +1123,8 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                         <Loader2 className="w-3.5 h-3.5 flex-shrink-0 text-purple-400 animate-spin" />
                       ) : ms.videoUrl ? (
                         <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0 text-green-400" />
+                      ) : ms.imageUrl ? (
+                        <span className="w-3.5 h-3.5 flex-shrink-0 rounded-full bg-blue-500/30 border border-blue-500/50" title="Reference image ready" />
                       ) : (
                         <span className="w-3.5 h-3.5 flex-shrink-0 rounded-full border border-yellow-500/40" />
                       )}
@@ -1175,6 +1181,19 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                             </p>
                           )}
                         </div>
+
+                        {ms.imageUrl && !ms.videoUrl && (
+                          <div className="relative">
+                            <span className="text-[10px] font-medium uppercase tracking-wider block mb-1" style={{ color: "var(--text-muted)" }}>Reference Image (I2V)</span>
+                            <img
+                              src={ms.imageUrl}
+                              alt={`Micro-scene ${msIdx + 1} reference`}
+                              className="w-full rounded-lg"
+                              style={{ maxHeight: '140px', objectFit: 'cover', border: '1px solid rgba(59,130,246,0.25)' }}
+                              loading="lazy"
+                            />
+                          </div>
+                        )}
 
                         {ms.videoUrl ? (
                           <div className="relative group">

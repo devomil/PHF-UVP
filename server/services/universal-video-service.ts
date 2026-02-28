@@ -3695,6 +3695,60 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
         const isContent = this.isContentScene(scene.type);
         
         if (isContent && !useProductOverlay) {
+          const sceneMicroScenes = (updatedProject.scenes[i] as any).microScenes as any[] | undefined;
+          const isI2VMode = videoGenMode === 'image-first-i2v';
+          const hasMicroScenes = sceneMicroScenes && sceneMicroScenes.length > 1;
+
+          if (isI2VMode && hasMicroScenes) {
+            console.log(`[UniversalVideoService] I2V mode: Generating per-micro-scene images for scene ${scene.id} (${sceneMicroScenes!.length} micro-scenes)`);
+            
+            const msImagePromises = sceneMicroScenes!.map(async (ms: any, msIdx: number) => {
+              if (ms.imageUrl) {
+                console.log(`[Assets] Micro-scene ${ms.id} already has image, skipping`);
+                return { msIdx, imageUrl: ms.imageUrl, success: true };
+              }
+              const msVisualDir = ms.visualDirection || scene.visualDirection || '';
+              const tempScene: any = {
+                ...scene,
+                id: ms.id || `${scene.id}_ms${msIdx}`,
+                visualDirection: msVisualDir,
+                narration: ms.narration || scene.narration,
+                background: scene.background,
+              };
+              try {
+                const result = await this.generateContentImage(tempScene, project.title, undefined, imageGenArtPresetId);
+                return { msIdx, imageUrl: result.imageUrl, success: !!result.imageUrl };
+              } catch (err: any) {
+                console.warn(`[Assets] Micro-scene ${msIdx} image generation failed: ${err.message}`);
+                return { msIdx, imageUrl: null, success: false };
+              }
+            });
+
+            const msImageResults = await Promise.all(msImagePromises);
+            let firstImageUrl: string | null = null;
+
+            for (const result of msImageResults) {
+              if (result.success && result.imageUrl) {
+                sceneMicroScenes![result.msIdx].imageUrl = result.imageUrl;
+                if (!firstImageUrl) firstImageUrl = result.imageUrl;
+                console.log(`[Assets] Micro-scene ${result.msIdx + 1}/${sceneMicroScenes!.length} image ready: ${result.imageUrl.substring(0, 80)}...`);
+              }
+            }
+
+            if (firstImageUrl) {
+              updatedProject.assets.images.push({
+                sceneId: scene.id,
+                url: firstImageUrl,
+                prompt: scene.visualDirection || scene.background.source,
+                source: 'ai',
+              });
+              updatedProject.scenes[i].assets!.imageUrl = firstImageUrl;
+              updatedProject.scenes[i].assets!.backgroundUrl = firstImageUrl;
+              updatedProject.scenes[i].assets!.useProductOverlay = false;
+            }
+            (updatedProject.scenes[i] as any).microScenes = sceneMicroScenes;
+            console.log(`[UniversalVideoService] Per-micro-scene images: ${msImageResults.filter(r => r.success).length}/${sceneMicroScenes!.length} generated`);
+          } else {
           // CONTENT SCENE: Generate imagery that matches the script content
           console.log(`[UniversalVideoService] Generating CONTENT image for ${scene.type} scene: ${scene.id}`);
           const contentResult = await this.generateContentImage(scene, project.title, undefined, imageGenArtPresetId);
@@ -3711,7 +3765,6 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
             updatedProject.scenes[i].assets!.backgroundUrl = contentResult.imageUrl;
             updatedProject.scenes[i].assets!.useProductOverlay = false;
             
-            // Phase 11A: Store extracted overlay data in scene
             if (contentResult.extractedText && contentResult.extractedText.length > 0) {
               updatedProject.scenes[i].extractedOverlayText = contentResult.extractedText;
             }
@@ -3720,7 +3773,6 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
             }
             console.log(`[UniversalVideoService] Content image generated for ${scene.type}: ${contentResult.source}`);
           } else {
-            // Fallback to stock image search based on script content
             const stockResult = await this.getContentStockImage(scene);
             if (stockResult.imageUrl) {
               updatedProject.assets.images.push({
@@ -3734,6 +3786,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
               updatedProject.scenes[i].assets!.useProductOverlay = false;
               console.log(`[UniversalVideoService] Stock content image used for ${scene.type}: ${stockResult.source}`);
             }
+          }
           }
         } else {
           // PRODUCT OVERLAY SCENE: Generate empty background and layer product on top
@@ -4046,6 +4099,11 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
           console.log(`[Assets] Scene ${scene.id} has ${microScenes.length} micro-scenes — generating ALL in parallel`);
           let microSuccessCount = 0;
           
+          const parentSceneImageUrl = updatedProject.scenes.find(s => s.id === scene.id)?.assets?.imageUrl;
+          const parentRefImageUrl = (scene as any).brandAssetUrl || 
+                                     scene.referenceConfig?.imageUrl ||
+                                     updatedProject.assets.images.find(img => img.sceneId === scene.id && img.source === 'uploaded')?.url;
+          
           const microScenePromises = microScenes.map((ms: any, msIdx: number) => {
             if (ms.videoUrl) {
               console.log(`[Assets] Micro-scene ${ms.id} already has video, skipping`);
@@ -4053,7 +4111,12 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
             }
             
             const msPrompt = ms.visualDirection || visualPrompt;
-            console.log(`[Assets] Launching parallel video generation for micro-scene ${msIdx + 1}/${microScenes.length}: ${msPrompt.substring(0, 80)}...`);
+            const msImageUrl = ms.imageUrl || parentRefImageUrl || parentSceneImageUrl;
+            const msMode = msImageUrl ? 'I2V' : 'T2V';
+            console.log(`[Assets] Launching parallel ${msMode} video generation for micro-scene ${msIdx + 1}/${microScenes.length}: ${msPrompt.substring(0, 80)}...`);
+            if (msImageUrl) {
+              console.log(`[Assets]   Reference image: ${msImageUrl.substring(0, 80)}...`);
+            }
             
             return aiVideoService.generateVideo({
               prompt: msPrompt,
@@ -4063,6 +4126,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
               narration: ms.narration,
               qualityTier: sceneQualityTier,
               artPresetId: projectArtPresetIdForVideo,
+              ...(msImageUrl ? { imageUrl: msImageUrl } : {}),
             }).then(msResult => ({ msIdx, skipped: false, ...msResult }))
               .catch(err => ({ msIdx, skipped: false, success: false, error: err.message, s3Url: undefined, provider: undefined }));
           });
