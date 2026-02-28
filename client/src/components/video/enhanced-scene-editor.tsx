@@ -1429,6 +1429,43 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                           <span className="text-[10px] text-right max-w-[260px]" style={{ color: msActiveMode === "i2v" || msActiveMode === "i2i" ? "rgb(192,132,252)" : "rgba(255,255,255,0.4)" }}>
                             {msModeInfo?.description || "Select a generation mode"}
                           </span>
+                          <div className="mt-1">
+                            <span className="text-[11px] font-medium text-white/50 block mb-1 text-right">Content Tag</span>
+                            <div className="flex flex-wrap gap-1 justify-end">
+                              <button
+                                type="button"
+                                onClick={() => setContentTag(null)}
+                                className="text-[10px] px-2 py-0.5 rounded-full border transition-all"
+                                style={{
+                                  borderColor: contentTag === null ? 'rgba(124,58,237,0.5)' : 'rgba(255,255,255,0.12)',
+                                  backgroundColor: contentTag === null ? 'rgba(124,58,237,0.15)' : 'transparent',
+                                  color: contentTag === null ? 'rgb(167,139,250)' : 'rgba(255,255,255,0.5)',
+                                }}
+                              >
+                                None
+                              </button>
+                              {Object.values(SCENE_CONTENT_TAGS).map((tag) => (
+                                <button
+                                  key={tag.id}
+                                  type="button"
+                                  onClick={() => {
+                                    const newTag = contentTag === tag.id ? null : tag.id;
+                                    setContentTag(newTag);
+                                    updateSceneMutation.mutate({ contentTag: newTag });
+                                  }}
+                                  className="text-[10px] px-2 py-0.5 rounded-full border transition-all"
+                                  style={{
+                                    borderColor: contentTag === tag.id ? `${tag.color}80` : 'rgba(255,255,255,0.12)',
+                                    backgroundColor: contentTag === tag.id ? `${tag.color}20` : 'transparent',
+                                    color: contentTag === tag.id ? tag.color : 'rgba(255,255,255,0.5)',
+                                  }}
+                                  title={tag.description}
+                                >
+                                  {tag.label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
                         </div>
                       </div>
 
