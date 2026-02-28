@@ -9,6 +9,8 @@ import { useToast } from "@/hooks/use-toast";
 import { SceneOverlayEditor, type SceneOverlayItem } from "./scene-overlay-editor";
 import { ProviderCapabilitySelector, getProviderRecommendationText } from "./ProviderCapabilityCard";
 import { VIDEO_PROVIDERS as PROVIDER_CONFIG } from "@shared/provider-config";
+import { SCENE_CONTENT_TAGS, getSceneContentTag } from "@shared/config/scene-content-tags";
+import { getVisualArtPreset } from "@shared/config/visual-art-presets";
 
 const sceneTypes = [
   "hook", "problem", "agitation", "solution", "benefit",
@@ -44,9 +46,10 @@ interface EnhancedSceneEditorProps {
   projectId: string;
   onClose: () => void;
   aspectRatio?: string;
+  artPresetId?: string;
 }
 
-export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, aspectRatio = "16:9" }: EnhancedSceneEditorProps) {
+export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, aspectRatio = "16:9", artPresetId }: EnhancedSceneEditorProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -254,6 +257,12 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
     narration: scene.narration || "",
     visualDirection: scene.visualDirection || "",
   });
+  const [contentTag, setContentTag] = useState<string | null>(scene.contentTag || null);
+
+  const activeTag = contentTag ? getSceneContentTag(contentTag) : null;
+  const activePreset = artPresetId ? getVisualArtPreset(artPresetId) : null;
+  const styleRecProviders = activeTag?.recommendedProviders?.video || activePreset?.recommendedProviders?.video || [];
+  const styleRecLabel = activeTag ? `Recommended for ${activeTag.label}` : activePreset ? `Recommended for ${activePreset.name}` : undefined;
 
   const libraryQuery = useQuery({
     queryKey: ["asset-library-images"],
@@ -559,7 +568,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
   };
 
   const saveChanges = () => {
-    updateSceneMutation.mutate(editValues);
+    updateSceneMutation.mutate({ ...editValues, contentTag: contentTag || null });
     if (editValues.visualDirection) {
       setInlinePrompt(editValues.visualDirection);
     }
@@ -895,6 +904,8 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                     recommendedProvider={providerUsed || undefined}
                     recommendationReason={providerUsed ? getProviderRecommendationText(providerUsed, scene.type) : undefined}
                     compact
+                    styleRecommendedProviders={styleRecProviders}
+                    styleLabel={styleRecLabel}
                   />
                 </div>
               </div>
@@ -1002,6 +1013,46 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                 backgroundColor: isEditing ? "rgba(124,58,237,0.05)" : "transparent",
               }}
             />
+          </div>
+        </div>
+
+        {/* Content Tag */}
+        <div>
+          <label className="text-[11px] font-medium uppercase tracking-wider mb-1.5 block" style={{ color: "var(--text-secondary)" }}>
+            Content Tag
+            {contentTag && <span className="ml-1 text-[10px] normal-case tracking-normal" style={{ color: activeTag?.color || 'var(--text-muted)' }}>(overrides art style)</span>}
+          </label>
+          <div className="flex flex-wrap gap-1.5">
+            <button
+              type="button"
+              onClick={() => isEditing && setContentTag(null)}
+              disabled={!isEditing}
+              className="text-[11px] px-2.5 py-1 rounded-full border transition-all disabled:opacity-70"
+              style={{
+                borderColor: contentTag === null ? 'rgba(124,58,237,0.5)' : 'var(--border-subtle)',
+                backgroundColor: contentTag === null ? 'rgba(124,58,237,0.1)' : 'transparent',
+                color: contentTag === null ? 'rgb(167,139,250)' : 'var(--text-secondary)',
+              }}
+            >
+              None
+            </button>
+            {Object.values(SCENE_CONTENT_TAGS).map((tag) => (
+              <button
+                key={tag.id}
+                type="button"
+                onClick={() => isEditing && setContentTag(contentTag === tag.id ? null : tag.id)}
+                disabled={!isEditing}
+                className="text-[11px] px-2.5 py-1 rounded-full border transition-all disabled:opacity-70"
+                style={{
+                  borderColor: contentTag === tag.id ? `${tag.color}80` : 'var(--border-subtle)',
+                  backgroundColor: contentTag === tag.id ? `${tag.color}1a` : 'transparent',
+                  color: contentTag === tag.id ? tag.color : 'var(--text-secondary)',
+                }}
+                title={tag.description}
+              >
+                {tag.label}
+              </button>
+            ))}
           </div>
         </div>
 
@@ -1369,6 +1420,8 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                                   recommendationReason={providerUsed ? getProviderRecommendationText(providerUsed, scene.type) : undefined}
                                   darkMode
                                   compact
+                                  styleRecommendedProviders={styleRecProviders}
+                                  styleLabel={styleRecLabel}
                                 />
                               </div>
                             </div>

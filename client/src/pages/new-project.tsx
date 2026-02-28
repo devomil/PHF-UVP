@@ -35,6 +35,7 @@ const ART_PRESET_IMAGES: Record<string, string> = {
   'neon-futuristic': '/art-presets/neon-futuristic.png',
   'watercolor': '/art-presets/watercolor.png',
   'minimalist-flat': '/art-presets/minimalist-flat.png',
+  'scientific-medical': '/art-presets/scientific-medical.png',
 };
 
 function ArtStyleSelector({ value, onChange }: { value: string; onChange: (id: string) => void }) {

@@ -133,6 +133,21 @@ export const VISUAL_ART_PRESETS: Record<string, VisualArtPreset> = {
     },
     generationStrategy: 'i2v',
   },
+
+  'scientific-medical': {
+    id: 'scientific-medical',
+    name: 'Scientific / Medical',
+    description: '3D medical visualization with cellular structures, molecular diagrams, and scientific process animations',
+    thumbnailColors: ['#0f766e', '#06b6d4', '#a78bfa'],
+    imagePromptPrefix: 'Professional 3D medical visualization, scientific illustration, bioluminescent glow,',
+    imagePromptSuffix: 'detailed cellular structures, molecular diagrams, anatomical cross-section, volumetric lighting, particle effects, glowing organelles, mitochondria detail, DNA helix, laboratory environment, medical-grade 3D rendering, subsurface scattering, depth of field, dark background with illuminated subjects, scientific accuracy, clean professional look',
+    negativePromptAdditions: ['cartoon', 'flat 2D', 'sketch', 'hand-drawn', 'watercolor', 'collage', 'clay', 'low detail', 'blurry text', 'garbled labels'],
+    recommendedProviders: {
+      image: ['flux', 'ideogram'],
+      video: ['wan-2.6', 'kling-2.6'],
+    },
+    generationStrategy: 'i2v',
+  },
 };
 
 export type VisualArtPresetId = keyof typeof VISUAL_ART_PRESETS | 'auto';

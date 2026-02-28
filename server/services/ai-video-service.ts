@@ -16,6 +16,7 @@ import { getMotionControl, MotionControlConfig } from '@shared/config/motion-con
 import { optimizePrompt, logPromptOptimization, analyzePrompt } from './video-prompt-optimizer';
 import { getAnyBrandContext, getBrandNameOrDefault } from './brand-settings-service';
 import { getVisualArtPreset, VisualArtPreset } from '../../shared/config/visual-art-presets';
+import { getSceneContentTag, SceneContentTag } from '../../shared/config/scene-content-tags';
 
 interface AIVideoResult {
   success: boolean;
@@ -50,6 +51,7 @@ interface AIVideoOptions {
   i2vSettings?: I2VSettingsInput; // I2V-specific settings from UI
   motionOverride?: MotionControlConfig; // Manual motion control override from UI
   artPresetId?: string;
+  contentTag?: string;
 }
 
 // Maps base provider + quality tier to the appropriate versioned provider
@@ -129,6 +131,11 @@ class AIVideoService {
       console.log(`[AIVideo] Art preset active: ${artPreset.name} (${artPreset.id})`);
     }
     
+    const contentTag = options.contentTag ? getSceneContentTag(options.contentTag) : null;
+    if (contentTag) {
+      console.log(`[AIVideo] Content tag active: ${contentTag.label} (${contentTag.id}) — overrides prompt engineering for this scene`);
+    }
+    
     // Determine content type from style config if not provided
     const contentType = options.contentType || 
       styleConfig.defaultContentTypes[options.sceneType as keyof typeof styleConfig.defaultContentTypes] ||
@@ -142,7 +149,9 @@ class AIVideoService {
       console.log(`[AIVideo] I2V mode - using motion-focused prompt (no style bloat)`);
       console.log(`[AIVideo] Original I2V prompt: ${options.prompt.substring(0, 100)}...`);
       let i2vPrompt = this.adaptPromptForI2V(options.prompt);
-      if (artPreset) {
+      if (contentTag) {
+        i2vPrompt = `${contentTag.promptPrefix} ${i2vPrompt}`;
+      } else if (artPreset) {
         i2vPrompt = `${artPreset.imagePromptPrefix} ${i2vPrompt}`;
       }
       console.log(`[AIVideo] Adapted I2V prompt: ${i2vPrompt.substring(0, 100)}...`);
@@ -152,9 +161,11 @@ class AIVideoService {
         contentType,
       };
     } else {
-      // Apply art preset prefix/suffix to prompt before style enhancement
       let basePrompt = options.prompt;
-      if (artPreset) {
+      if (contentTag) {
+        basePrompt = `${contentTag.promptPrefix} ${basePrompt}, ${contentTag.promptSuffix}`;
+        console.log(`[AIVideo] Content tag '${contentTag.label}' applied to prompt: ${basePrompt.substring(0, 120)}...`);
+      } else if (artPreset) {
         basePrompt = `${artPreset.imagePromptPrefix} ${basePrompt}, ${artPreset.imagePromptSuffix}`;
         console.log(`[AIVideo] Art preset applied to prompt: ${basePrompt.substring(0, 120)}...`);
       }
@@ -201,7 +212,9 @@ class AIVideoService {
       }
       
       let negativePrompt = optimized.negativePrompt || enhanced.negativePrompt;
-      if (artPreset && artPreset.negativePromptAdditions.length > 0) {
+      if (contentTag && contentTag.negativePromptAdditions.length > 0) {
+        negativePrompt = `${negativePrompt}, ${contentTag.negativePromptAdditions.join(', ')}`;
+      } else if (artPreset && artPreset.negativePromptAdditions.length > 0) {
         negativePrompt = `${negativePrompt}, ${artPreset.negativePromptAdditions.join(', ')}`;
       }
       
@@ -221,13 +234,20 @@ class AIVideoService {
       providerOrder = [enhancedOptions.preferredProvider];
       console.log(`[AIVideo] Using STRICT user-selected provider: ${enhancedOptions.preferredProvider} (no fallbacks)`);
     } else if (options.narration && options.prompt) {
-      // Use Claude-based intelligent provider selection
       const recommendation = await this.getIntelligentProviderRecommendation(options, configuredProviders);
       providerOrder = recommendation.providerOrder;
       console.log(`[AIVideo] Intelligent selection: ${recommendation.reasoning}`);
     } else {
-      // Fallback to rule-based selection
       providerOrder = this.selectProvidersForStyle(styleConfig.preferredVideoProviders, enhancedOptions.sceneType, contentType, configuredProviders);
+    }
+    
+    if (contentTag && contentTag.recommendedProviders.video.length > 0 && (!enhancedOptions.preferredProvider || enhancedOptions.preferredProvider === 'auto')) {
+      const tagProviders = contentTag.recommendedProviders.video.filter(p => configuredProviders.some(cp => cp === p || cp.startsWith(p)));
+      if (tagProviders.length > 0) {
+        const remaining = providerOrder.filter(p => !tagProviders.includes(p));
+        providerOrder = [...tagProviders, ...remaining];
+        console.log(`[AIVideo] Content tag '${contentTag.label}' boosted providers: ${tagProviders.join(', ')} to front of order`);
+      }
     }
 
     // Map base providers to tier-appropriate versions

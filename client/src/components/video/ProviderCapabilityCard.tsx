@@ -131,6 +131,8 @@ interface ProviderCapabilitySelectorProps {
   recommendationReason?: string;
   darkMode?: boolean;
   compact?: boolean;
+  styleRecommendedProviders?: string[];
+  styleLabel?: string;
 }
 
 export const ProviderCapabilitySelector = memo(function ProviderCapabilitySelector({
@@ -140,6 +142,8 @@ export const ProviderCapabilitySelector = memo(function ProviderCapabilitySelect
   recommendationReason,
   darkMode = false,
   compact = false,
+  styleRecommendedProviders,
+  styleLabel,
 }: ProviderCapabilitySelectorProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -163,7 +167,14 @@ export const ProviderCapabilitySelector = memo(function ProviderCapabilitySelect
     'pika', 'seedance-1.0',
   ];
 
-  const displayProviders = mainProviderIds.filter(id => id === 'auto' || VIDEO_PROVIDERS[id]);
+  const filteredProviders = mainProviderIds.filter(id => id === 'auto' || VIDEO_PROVIDERS[id]);
+  const displayProviders = styleRecommendedProviders && styleRecommendedProviders.length > 0
+    ? [
+        ...filteredProviders.filter(id => id === 'auto'),
+        ...filteredProviders.filter(id => id !== 'auto' && styleRecommendedProviders.some(sp => id === sp || id.startsWith(sp))),
+        ...filteredProviders.filter(id => id !== 'auto' && !styleRecommendedProviders.some(sp => id === sp || id.startsWith(sp))),
+      ]
+    : filteredProviders;
 
   return (
     <div className="relative">
@@ -242,23 +253,33 @@ export const ProviderCapabilitySelector = memo(function ProviderCapabilitySelect
 
           <div className="mx-2 my-1 border-t" style={{ borderColor: darkMode ? 'rgba(255,255,255,0.06)' : 'var(--border-subtle)' }} />
 
-          {displayProviders.filter(id => id !== 'auto').map((id) => (
-            <div
-              key={id}
-              className="mx-1"
-              onClick={() => { onSelectProvider(id); setIsExpanded(false); }}
-            >
-              <ProviderCapabilityCard
-                providerId={id}
-                isSelected={selectedProvider === id}
-                isRecommended={recommendedProvider === id}
-                recommendationReason={recommendedProvider === id ? recommendationReason : undefined}
-                compact={compact}
-                darkMode={darkMode}
-                onClick={undefined}
-              />
-            </div>
-          ))}
+          {displayProviders.filter(id => id !== 'auto').map((id) => {
+            const isStyleRec = styleRecommendedProviders?.some(sp => id === sp || id.startsWith(sp));
+            return (
+              <div
+                key={id}
+                className="mx-1"
+                onClick={() => { onSelectProvider(id); setIsExpanded(false); }}
+              >
+                {isStyleRec && styleLabel && (
+                  <div className="flex items-center gap-1 px-2.5 pt-1.5 pb-0">
+                    <span className="text-[9px] px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: 'rgba(6,182,212,0.15)', color: 'rgb(103,232,249)', border: '1px solid rgba(6,182,212,0.25)' }}>
+                      {styleLabel}
+                    </span>
+                  </div>
+                )}
+                <ProviderCapabilityCard
+                  providerId={id}
+                  isSelected={selectedProvider === id}
+                  isRecommended={recommendedProvider === id}
+                  recommendationReason={recommendedProvider === id ? recommendationReason : undefined}
+                  compact={compact}
+                  darkMode={darkMode}
+                  onClick={undefined}
+                />
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
