@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
 import { ArrowLeft, Settings, Play, RefreshCw, Clock, Target, Monitor, BarChart3, Loader2, AlertCircle, Zap, Video, Image, Download, RotateCcw, Save, Trash2, ExternalLink, CheckCircle2, XCircle, X, Type, Film, ChevronDown, ChevronUp, CloudUpload, Mic, Music, Volume2, Palette, Shuffle, Sliders, Wand2, Sparkles, ImagePlus, Upload, Edit2, FileText, Plus, GripVertical, Eye, EyeOff } from "lucide-react";
 import { getVisualArtPreset } from "@shared/config/visual-art-presets";
+import { SCENE_CONTENT_TAGS } from "@shared/config/scene-content-tags";
 import { Button } from "@/components/ui/button";
 import { ProviderCatalogSelector } from "@/components/video/provider-catalog-selector";
 import { useToast } from "@/hooks/use-toast";
@@ -557,6 +558,18 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
                               {scene.microScenes.length} micro
                             </span>
                           )}
+                          {scene.contentTag && SCENE_CONTENT_TAGS[scene.contentTag] && (
+                            <span
+                              className="text-[10px] px-1.5 py-0.5 rounded-full border"
+                              style={{
+                                borderColor: `${SCENE_CONTENT_TAGS[scene.contentTag].color}40`,
+                                backgroundColor: `${SCENE_CONTENT_TAGS[scene.contentTag].color}15`,
+                                color: SCENE_CONTENT_TAGS[scene.contentTag].color,
+                              }}
+                            >
+                              {SCENE_CONTENT_TAGS[scene.contentTag].label}
+                            </span>
+                          )}
                         </div>
                         <p className="text-xs truncate mt-0.5" style={{ color: "var(--text-muted)" }}>
                           {narration.substring(0, 80)}{narration.length > 80 ? "..." : ""}
@@ -595,6 +608,7 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
                         projectId={projectId}
                         onClose={() => setExpandedSceneId(null)}
                         aspectRatio={project?.outputFormat?.aspectRatio || "16:9"}
+                        artPresetId={project?.progress?.artPresetId || (project as any)?.artPresetId}
                       />
                     )}
                   </div>

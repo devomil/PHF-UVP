@@ -160,6 +160,7 @@ export interface MicroScene {
   originalAudioFadeIn?: number;
   originalAudioFadeOut?: number;
   visualFormat?: VisualFormat;
+  contentTag?: string;
 }
 
 export interface Scene {
@@ -235,6 +236,7 @@ export interface Scene {
   // Phase 15H: Generation method tracking - what method was used to generate the media
   generationMethod?: 'T2I' | 'I2I' | 'T2V' | 'I2V' | 'V2V' | 'stock';
   visualFormat?: VisualFormat;
+  contentTag?: string;
   voiceoverUrl?: string;
   voiceoverDuration?: number;
   voiceoverWords?: import('./config/caption-styles').CaptionWord[];

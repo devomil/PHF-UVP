@@ -4132,6 +4132,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
               console.log(`[Assets]   Reference image: ${msImageUrl.substring(0, 80)}...`);
             }
             
+            const msContentTag = ms.contentTag || scene.contentTag;
             return aiVideoService.generateVideo({
               prompt: msPrompt,
               duration: Math.min(ms.duration || 5, 10),
@@ -4141,6 +4142,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
               qualityTier: sceneQualityTier,
               artPresetId: projectArtPresetIdForVideo,
               ...(msImageUrl ? { imageUrl: msImageUrl } : {}),
+              ...(msContentTag ? { contentTag: msContentTag } : {}),
             }).then(msResult => ({ msIdx, skipped: false, ...msResult }))
               .catch(err => ({ msIdx, skipped: false, success: false, error: err.message, s3Url: undefined, provider: undefined }));
           });
@@ -4198,6 +4200,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
             qualityTier: sceneQualityTier,
             artPresetId: projectArtPresetIdForVideo,
             ...(sceneRefImageUrl ? { imageUrl: sceneRefImageUrl } : {}),
+            ...(scene.contentTag ? { contentTag: scene.contentTag } : {}),
           });
           
           if (aiResult.success && aiResult.s3Url) {
