@@ -3988,13 +3988,27 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
             }
           }
         }
-        console.log(`[Assets] Scene ${scene.id} visual format: ${sceneVisualFormat} (classification: ${formatRec?.contentClassification || 'unknown'})`);
+        const hasMicroScenes = updatedProject.scenes[sceneIdx]?.microScenes && updatedProject.scenes[sceneIdx].microScenes!.length > 1;
+        if (hasMicroScenes && (sceneVisualFormat === 'ai-image-remotion' || sceneVisualFormat === 'remotion-motion-graphics')) {
+          console.log(`[Assets] Scene ${scene.id} has ${updatedProject.scenes[sceneIdx].microScenes!.length} micro-scenes — overriding format from '${sceneVisualFormat}' to 'ai-video' (micro-scenes need individual videos)`);
+          const overriddenFormat = 'ai-video';
+          if (sceneIdx >= 0) {
+            updatedProject.scenes[sceneIdx].visualFormat = overriddenFormat;
+            if (updatedProject.scenes[sceneIdx].microScenes) {
+              for (const ms of updatedProject.scenes[sceneIdx].microScenes!) {
+                ms.visualFormat = overriddenFormat;
+              }
+            }
+          }
+        }
+        const sceneVisualFormatFinal = hasMicroScenes ? 'ai-video' : sceneVisualFormat;
+        console.log(`[Assets] Scene ${scene.id} visual format: ${sceneVisualFormatFinal} (classification: ${formatRec?.contentClassification || 'unknown'}${hasMicroScenes && sceneVisualFormat !== sceneVisualFormatFinal ? `, original: ${sceneVisualFormat}` : ''})`);
         
-        if (sceneVisualFormat === 'remotion-motion-graphics') {
+        if (sceneVisualFormatFinal === 'remotion-motion-graphics') {
           console.log(`[Assets] Scene ${scene.id} routed to Remotion motion graphics by format decision layer`);
         }
         
-        if (sceneVisualFormat === 'ai-image-remotion') {
+        if (sceneVisualFormatFinal === 'ai-image-remotion') {
           console.log(`[Assets] Scene ${scene.id} routed to AI image + Remotion animation by format decision layer`);
         }
         
@@ -4013,8 +4027,8 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
         // Update scene index for motion graphics storage
         const mgSceneIndex = updatedProject.scenes.findIndex(s => s.id === scene.id);
         
-        const useMotionGraphicsFromFormat = sceneVisualFormat === 'remotion-motion-graphics';
-        const skipMotionGraphicsForImageFormat = sceneVisualFormat === 'ai-image-remotion';
+        const useMotionGraphicsFromFormat = sceneVisualFormatFinal === 'remotion-motion-graphics';
+        const skipMotionGraphicsForImageFormat = sceneVisualFormatFinal === 'ai-image-remotion';
         if (!skipMotionGraphicsForImageFormat && ((routingDecision.useMotionGraphics && routingDecision.suggestedType) || useMotionGraphicsFromFormat)) {
           console.log(`[Assets] Motion graphics route for scene ${scene.id}: ${routingDecision.suggestedType} (confidence: ${(routingDecision.confidence * 100).toFixed(0)}%)`);
           
@@ -4050,7 +4064,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
         }
         // ===== END PHASE 12A MOTION GRAPHICS ROUTING =====
         
-        if (sceneVisualFormat === 'ai-image-remotion') {
+        if (sceneVisualFormatFinal === 'ai-image-remotion') {
           console.log(`[Assets] Scene ${scene.id} using AI image + Remotion animation format — generating image and applying ken-burns/pan/zoom`);
           const imgSceneIndex = updatedProject.scenes.findIndex(s => s.id === scene.id);
           if (imgSceneIndex >= 0) {
