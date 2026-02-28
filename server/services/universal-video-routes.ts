@@ -122,6 +122,7 @@ async function cropImageToAspectRatio(
     }
     
     await sharp(inputPath)
+      .flatten({ background: { r: 255, g: 255, b: 255 } })
       .resize(outW, outH, {
         fit: 'cover',
         position: 'centre',
