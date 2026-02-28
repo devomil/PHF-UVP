@@ -857,28 +857,24 @@ class PiAPIVideoService {
     const animationStyle = options.i2vSettings?.animationStyle ?? 'product-hero';
     
     // Helper: Detect if prompt requires NEW content generation vs simple animation
-    // When prompt mentions people/activities/montages, use reference_images mode
-    // Otherwise, use image_url mode for simple animation
+    // IMPORTANT: Default to ANIMATE mode (preserve source image) for I2V.
+    // Only switch to REFERENCE mode when the prompt explicitly describes a scene 
+    // with multiple people doing activities — content that can't be achieved by 
+    // simply animating the source image.
+    // Single-word matches like "wellness" or "man" caused false positives, so we
+    // now require stronger multi-word activity patterns.
     const promptRequiresNewContent = (prompt: string): boolean => {
       const p = prompt.toLowerCase();
-      return p.includes('montage') || 
-             p.includes('people') || 
-             p.includes('person') ||
-             p.includes('adults') ||
-             p.includes('yoga') ||
-             p.includes('cooking') ||
-             p.includes('hiking') ||
-             p.includes('activity') ||
-             p.includes('engaging') ||
-             p.includes('couple') ||
-             p.includes('woman') ||
-             p.includes('man') ||
-             p.includes('customer') ||
-             p.includes('farmer') ||
-             p.includes('worker') ||
-             p.includes('wellness') ||
-             p.includes('exercise') ||
-             p.includes('shopping');
+
+      const humanSubjects = /\b(?:people|person|woman|man|child|children|kids|family|couple|adults|customer|customers|farmer|farmers|worker|workers|athlete|athletes|patient|patients|practitioner|nurse|doctor)\b/;
+      const activityVerbs = /\b(?:walk(?:s|ing)?|run(?:s|ning)?|talk(?:s|ing)?|danc(?:e|es|ing)|exercis(?:e|es|ing)|cook(?:s|ing)?|hik(?:e|es|ing)|shop(?:s|ping)?|eat(?:s|ing)?|laugh(?:s|ing)?|play(?:s|ing)?|sit(?:s|ting)?|stand(?:s|ing)?|brows(?:e|es|ing)|train(?:s|ing)?|practic(?:e|es|ing)|enjoy(?:s|ing)?|work(?:s|ing)?|gather(?:s|ing)?|celebrat(?:e|es|ing)|welcom(?:e|es|ing)|greet(?:s|ing)?|serv(?:e|es|ing)|present(?:s|ing)?|speak(?:s|ing)?|stretch(?:es|ing)?|meditat(?:e|es|ing))\b/;
+
+      if (/\bmontage\s+of\b/.test(p)) return true;
+      if (/\b(?:group|crowd|audience|team)\s+of\s+(?:people|workers|athletes|customers|patients)\b/.test(p)) return true;
+
+      if (humanSubjects.test(p) && activityVerbs.test(p)) return true;
+
+      return false;
     };
     
     // ===========================================
