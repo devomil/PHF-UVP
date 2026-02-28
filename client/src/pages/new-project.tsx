@@ -3,9 +3,10 @@ import { useLocation, Link } from "wouter";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Sparkles, FileText, Zap, ArrowLeft, Video, Image, Info, Plus, Trash2, ChevronUp, ChevronDown, GripVertical } from "lucide-react";
+import { Sparkles, FileText, Zap, ArrowLeft, Video, Image, Info, Plus, Trash2, ChevronUp, ChevronDown, GripVertical, Palette } from "lucide-react";
 import { ProviderCatalogSelector } from "@/components/video/provider-catalog-selector";
 import { getAvailableStyles } from "@shared/visual-style-config";
+import { getAllVisualArtPresets, type VisualArtPreset } from "@shared/config/visual-art-presets";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,6 +25,74 @@ const platformAspectMap: Record<string, string> = {
   "Instagram Reels": "9:16",
   "Instagram Post": "1:1",
 };
+
+function ArtStyleSelector({ value, onChange }: { value: string; onChange: (id: string) => void }) {
+  const presets = getAllVisualArtPresets();
+
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-1">
+        <Palette className="w-4 h-4 text-purple-400" />
+        <Label style={{ color: "var(--text-secondary)" }}>Art Style</Label>
+      </div>
+      <p className="text-xs mb-3" style={{ color: "var(--text-muted)" }}>
+        Choose a visual art direction that applies consistently across all scenes
+      </p>
+      <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1" style={{ scrollbarWidth: "thin" }}>
+        <button
+          type="button"
+          onClick={() => onChange("auto")}
+          className="flex-shrink-0 w-[140px] rounded-xl border-2 p-3 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg"
+          style={{
+            backgroundColor: value === "auto" ? "rgba(139, 92, 246, 0.15)" : "var(--surface)",
+            borderColor: value === "auto" ? "rgb(139, 92, 246)" : "var(--border-subtle)",
+            backdropFilter: "blur(12px)",
+          }}
+        >
+          <div
+            className="w-full h-16 rounded-lg mb-2 flex items-center justify-center"
+            style={{
+              background: "linear-gradient(135deg, rgba(139,92,246,0.3), rgba(99,102,241,0.3), rgba(168,85,247,0.3))",
+              border: "1px solid rgba(139,92,246,0.2)",
+            }}
+          >
+            <Sparkles className="w-5 h-5 text-purple-400" />
+          </div>
+          <span className="font-medium text-xs block" style={{ color: "var(--text-primary)" }}>Auto</span>
+          <span className="text-[10px] mt-0.5 block leading-snug" style={{ color: "var(--text-muted)" }}>
+            AI picks the best style for your content
+          </span>
+        </button>
+
+        {presets.map((preset) => (
+          <button
+            key={preset.id}
+            type="button"
+            onClick={() => onChange(preset.id)}
+            className="flex-shrink-0 w-[140px] rounded-xl border-2 p-3 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg"
+            style={{
+              backgroundColor: value === preset.id ? "rgba(139, 92, 246, 0.15)" : "var(--surface)",
+              borderColor: value === preset.id ? "rgb(139, 92, 246)" : "var(--border-subtle)",
+              backdropFilter: "blur(12px)",
+            }}
+          >
+            <div
+              className="w-full h-16 rounded-lg mb-2"
+              style={{
+                background: `linear-gradient(135deg, ${preset.thumbnailColors[0]}, ${preset.thumbnailColors[1]}, ${preset.thumbnailColors[2]})`,
+                border: `1px solid ${preset.thumbnailColors[0]}33`,
+              }}
+            />
+            <span className="font-medium text-xs block truncate" style={{ color: "var(--text-primary)" }}>{preset.name}</span>
+            <span className="text-[10px] mt-0.5 block leading-snug line-clamp-2" style={{ color: "var(--text-muted)" }}>
+              {preset.description}
+            </span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function ModeSelection({ onSelect }: { onSelect: (mode: Mode) => void }) {
   const modes = [
@@ -106,6 +175,7 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
   const [mediaMode, setMediaMode] = useState("video");
   const [videoGenerationMode, setVideoGenerationMode] = useState("auto");
   const [qualityTier, setQualityTier] = useState("premium");
+  const [artPresetId, setArtPresetId] = useState("auto");
 
   useEffect(() => {
     setAspectRatio(platformAspectMap[platform] || "16:9");
@@ -124,6 +194,7 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
       mediaMode,
       videoGenerationMode: mediaMode === "video" ? videoGenerationMode : undefined,
       qualityTier,
+      artPresetId,
     });
   };
 
@@ -144,6 +215,8 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
           <Label style={{ color: "var(--text-secondary)" }}>Description / Brief</Label>
           <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Describe what you want your video to be about..." rows={4} className="mt-1.5" style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }} />
         </div>
+
+        <ArtStyleSelector value={artPresetId} onChange={setArtPresetId} />
 
         <div>
           <Label style={{ color: "var(--text-secondary)" }}>Target Audience</Label>
@@ -274,6 +347,7 @@ function CustomScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void;
   const [voiceStyle, setVoiceStyle] = useState("Professional");
   const [mediaMode, setMediaMode] = useState("video");
   const [videoGenerationMode, setVideoGenerationMode] = useState("auto");
+  const [artPresetId, setArtPresetId] = useState("auto");
 
   useEffect(() => {
     setAspectRatio(platformAspectMap[platform] || "16:9");
@@ -328,6 +402,7 @@ function CustomScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void;
       voiceStyle,
       mediaMode,
       videoGenerationMode: mediaMode === "video" ? videoGenerationMode : undefined,
+      artPresetId,
     });
   };
 
@@ -419,6 +494,8 @@ function CustomScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void;
             <span className="text-sm font-medium">Add Scene</span>
           </button>
         </div>
+
+        <ArtStyleSelector value={artPresetId} onChange={setArtPresetId} />
 
         <div>
           <Label style={{ color: "var(--text-secondary)" }}>Target Duration</Label>

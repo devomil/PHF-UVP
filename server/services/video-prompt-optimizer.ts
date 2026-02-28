@@ -78,15 +78,50 @@ function pickBestSegment(segments: string[]): string {
   return segments[bestIdx];
 }
 
+const ART_PRESET_STYLE_TOKENS = [
+  '3d rendered illustration', '3d render', 'pixar style', 'isometric perspective',
+  'claymation stop-motion', 'clay figure', 'miniature set', 'plasticine',
+  'watercolor painting style', 'watercolor', 'brush strokes',
+  'clean vector illustration', 'line art style', 'vector illustration',
+  'mixed media collage', 'collage style', 'paper cutouts',
+  'futuristic cyberpunk', 'neon-lit', 'holographic', 'cyberpunk',
+  'photorealistic cinematic', 'film-grade', 'cinematic shot',
+  'minimalist flat design', 'flat design', 'geometric shapes',
+  'octane render', 'ambient occlusion', 'global illumination',
+  'soft global illumination', 'diorama', 'handcrafted',
+  'vibrant saturated colors', 'soft shadows', 'clay-like textures',
+  'anamorphic lens', 'shallow depth of field',
+  'delicate color washes', 'paint bleeding',
+  'crisp outlines', 'flat color fills',
+  'torn paper edges', 'scrapbook aesthetic',
+  'glowing neon accents', 'volumetric fog',
+  'ample white space', 'sans-serif typography feel',
+];
+
 function cleanPromptText(prompt: string): string {
   let cleaned = prompt;
 
   cleaned = cleaned.replace(/^["'\s]+|["'\s]+$/g, '');
 
+  const preservedTokens: { placeholder: string; original: string }[] = [];
+  for (const token of ART_PRESET_STYLE_TOKENS) {
+    const regex = new RegExp(token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+    const match = cleaned.match(regex);
+    if (match) {
+      const placeholder = `__ART_TOKEN_${preservedTokens.length}__`;
+      preservedTokens.push({ placeholder, original: match[0] });
+      cleaned = cleaned.replace(regex, placeholder);
+    }
+  }
+
   cleaned = cleaned.replace(/\b(cinematic|dramatic|epic|sweeping|ethereal|moody|atmospheric)\s+(shot|angle|lighting|camera|pan|zoom|dolly|tracking)\b/gi, '');
   cleaned = cleaned.replace(/\b(close-up shot|wide shot|medium shot|establishing shot|aerial shot|bird's eye view|low angle|high angle|dutch angle)\b/gi, '');
   cleaned = cleaned.replace(/\b(soft morning light|golden hour|natural lighting|rim lighting|backlit|silhouetted|lens flare|bokeh|shallow depth of field)\b/gi, '');
   cleaned = cleaned.replace(/\b(camera slowly|camera pans|camera tilts|camera tracks|camera dollies|camera zooms|camera pulls back|camera pushes in)\b/gi, '');
+
+  for (const { placeholder, original } of preservedTokens) {
+    cleaned = cleaned.replace(placeholder, original);
+  }
 
   cleaned = cleaned.replace(/\s{2,}/g, ' ').trim();
 
@@ -98,10 +133,15 @@ function cleanPromptText(prompt: string): string {
 }
 
 function enforcePromptLength(prompt: string, maxWords: number = 30): string {
+  const hasArtPresetTokens = ART_PRESET_STYLE_TOKENS.some(token => 
+    prompt.toLowerCase().includes(token.toLowerCase())
+  );
+  const effectiveMax = hasArtPresetTokens ? maxWords + 15 : maxWords;
+  
   const words = prompt.split(/\s+/);
-  if (words.length <= maxWords) return prompt;
+  if (words.length <= effectiveMax) return prompt;
 
-  const truncated = words.slice(0, maxWords).join(' ');
+  const truncated = words.slice(0, effectiveMax).join(' ');
   const lastPeriod = truncated.lastIndexOf('.');
   if (lastPeriod > truncated.length * 0.5) {
     return truncated.substring(0, lastPeriod + 1);
