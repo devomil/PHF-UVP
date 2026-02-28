@@ -26,6 +26,17 @@ const platformAspectMap: Record<string, string> = {
   "Instagram Post": "1:1",
 };
 
+const ART_PRESET_IMAGES: Record<string, string> = {
+  '3d-illustration': '/art-presets/3d-illustration.png',
+  'cinematic-realism': '/art-presets/cinematic-realism.png',
+  '2d-line-art': '/art-presets/2d-line-art.png',
+  'collage': '/art-presets/collage.png',
+  'claymation': '/art-presets/claymation.png',
+  'neon-futuristic': '/art-presets/neon-futuristic.png',
+  'watercolor': '/art-presets/watercolor.png',
+  'minimalist-flat': '/art-presets/minimalist-flat.png',
+};
+
 function ArtStyleSelector({ value, onChange }: { value: string; onChange: (id: string) => void }) {
   const presets = getAllVisualArtPresets();
 
@@ -77,12 +88,18 @@ function ArtStyleSelector({ value, onChange }: { value: string; onChange: (id: s
             }}
           >
             <div
-              className="w-full h-16 rounded-lg mb-2"
+              className="w-full h-16 rounded-lg mb-2 overflow-hidden"
               style={{
-                background: `linear-gradient(135deg, ${preset.thumbnailColors[0]}, ${preset.thumbnailColors[1]}, ${preset.thumbnailColors[2]})`,
                 border: `1px solid ${preset.thumbnailColors[0]}33`,
               }}
-            />
+            >
+              <img
+                src={ART_PRESET_IMAGES[preset.id] || ''}
+                alt={preset.name}
+                className="w-full h-full object-cover"
+                loading="lazy"
+              />
+            </div>
             <span className="font-medium text-xs block truncate" style={{ color: "var(--text-primary)" }}>{preset.name}</span>
             <span className="text-[10px] mt-0.5 block leading-snug line-clamp-2" style={{ color: "var(--text-muted)" }}>
               {preset.description}
