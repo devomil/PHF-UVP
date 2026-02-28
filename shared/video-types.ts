@@ -233,6 +233,10 @@ export interface Scene {
   // Phase 15H: Generation method tracking - what method was used to generate the media
   generationMethod?: 'T2I' | 'I2I' | 'T2V' | 'I2V' | 'V2V' | 'stock';
   visualFormat?: VisualFormat;
+  voiceoverUrl?: string;
+  voiceoverDuration?: number;
+  voiceoverWords?: import('./config/caption-styles').CaptionWord[];
+  captions?: import('./config/caption-styles').SceneCaptions;
   // Phase 16: Pipeline intermediate results for step-by-step execution
   pipelineIntermediates?: {
     environmentImage?: string;
@@ -428,7 +432,7 @@ export interface GeneratedAssets {
   voiceover: {
     fullTrackUrl: string;
     duration: number;
-    perScene: { sceneId: string; url: string; duration: number }[];
+    perScene: { sceneId: string; url: string; duration: number; words?: import('./config/caption-styles').CaptionWord[] }[];
   };
   music: {
     url: string;

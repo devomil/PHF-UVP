@@ -74,6 +74,7 @@ interface VoiceoverResult {
   duration: number;
   success: boolean;
   error?: string;
+  words?: Array<{ word: string; start: number; end: number }>;
 }
 
 interface ServiceNotification {
@@ -1930,6 +1931,192 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
     }
   }
 
+  async generateSceneVoiceover(
+    narration: string,
+    voiceId?: string,
+    options?: {
+      stability?: number;
+      similarityBoost?: number;
+      style?: number;
+    }
+  ): Promise<VoiceoverResult> {
+    const elevenLabsKey = process.env.ELEVENLABS_API_KEY;
+    if (!elevenLabsKey) {
+      return { url: '', duration: 0, success: false, error: 'ELEVENLABS_API_KEY not configured' };
+    }
+
+    const processedText = this.preprocessNarrationForTTS(narration);
+    const selectedVoiceId = voiceId || '21m00Tcm4TlvDq8ikWAM';
+    const voiceSettings = {
+      stability: options?.stability ?? 0.65,
+      similarity_boost: options?.similarityBoost ?? 0.75,
+      style: options?.style ?? 0.35,
+      use_speaker_boost: true,
+    };
+
+    try {
+      console.log(`[PerSceneVoiceover] Generating with timestamps for: "${processedText.substring(0, 60)}..."`);
+
+      const response = await fetch(
+        `https://api.elevenlabs.io/v1/text-to-speech/${selectedVoiceId}/with-timestamps`,
+        {
+          method: 'POST',
+          headers: {
+            'xi-api-key': elevenLabsKey,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            text: processedText,
+            model_id: 'eleven_multilingual_v2',
+            voice_settings: voiceSettings,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const errText = await response.text();
+        console.error(`[PerSceneVoiceover] ElevenLabs with-timestamps error: ${response.status}`, errText);
+        console.log('[PerSceneVoiceover] Falling back to standard voiceover generation...');
+        return this.generateVoiceover(narration, voiceId, options);
+      }
+
+      const result = await response.json();
+
+      const audioBase64 = result.audio_base64;
+      const alignment = result.alignment || result.normalized_alignment;
+
+      if (!audioBase64) {
+        console.error('[PerSceneVoiceover] No audio_base64 in response');
+        return this.generateVoiceover(narration, voiceId, options);
+      }
+
+      const audioBuffer = Buffer.from(audioBase64, 'base64');
+
+      let actualDuration = 0;
+      try {
+        const mm = await import('music-metadata');
+        const metadata = await mm.parseBuffer(audioBuffer, { mimeType: 'audio/mpeg' });
+        actualDuration = metadata.format.duration || 0;
+        console.log(`[PerSceneVoiceover] Actual audio duration: ${actualDuration.toFixed(2)}s`);
+      } catch {
+        const wordCount = narration.trim().split(/\s+/).length;
+        actualDuration = Math.ceil(wordCount / 2.5);
+        console.log(`[PerSceneVoiceover] Estimated duration: ${actualDuration}s (metadata parse failed)`);
+      }
+
+      let words: Array<{ word: string; start: number; end: number }> = [];
+
+      if (alignment?.characters && alignment?.character_start_times_seconds && alignment?.character_end_times_seconds) {
+        words = this.parseCharacterAlignmentToWords(
+          alignment.characters,
+          alignment.character_start_times_seconds,
+          alignment.character_end_times_seconds
+        );
+        console.log(`[PerSceneVoiceover] Parsed ${words.length} words from ElevenLabs alignment`);
+      }
+      
+      if (words.length === 0) {
+        console.log('[PerSceneVoiceover] No alignment data from ElevenLabs, attempting Whisper fallback...');
+        words = await this.getWordTimestampsFromWhisper(audioBuffer);
+      }
+
+      const fileName = `voiceover_${Date.now()}_scene_${Math.random().toString(36).substring(7)}.mp3`;
+      const s3Url = await this.uploadToS3(audioBuffer, fileName, 'audio/mpeg');
+
+      if (s3Url) {
+        console.log(`[PerSceneVoiceover] Uploaded to S3: ${s3Url.substring(0, 80)}... (${actualDuration.toFixed(1)}s, ${words.length} words)`);
+        return { url: s3Url, duration: actualDuration, success: true, words };
+      } else {
+        const base64Audio = `data:audio/mpeg;base64,${audioBase64}`;
+        return { url: base64Audio, duration: actualDuration, success: true, words };
+      }
+    } catch (e: any) {
+      console.error('[PerSceneVoiceover] Error:', e);
+      return this.generateVoiceover(narration, voiceId, options);
+    }
+  }
+
+  private parseCharacterAlignmentToWords(
+    characters: string[],
+    startTimes: number[],
+    endTimes: number[]
+  ): Array<{ word: string; start: number; end: number }> {
+    const words: Array<{ word: string; start: number; end: number }> = [];
+    let currentWord = '';
+    let wordStart = 0;
+    let wordEnd = 0;
+
+    for (let i = 0; i < characters.length; i++) {
+      const char = characters[i];
+      const charStart = startTimes[i];
+      const charEnd = endTimes[i];
+
+      if (char === ' ' || char === '\n' || char === '\t') {
+        if (currentWord.length > 0) {
+          words.push({ word: currentWord, start: wordStart, end: wordEnd });
+          currentWord = '';
+        }
+      } else {
+        if (currentWord.length === 0) {
+          wordStart = charStart;
+        }
+        currentWord += char;
+        wordEnd = charEnd;
+      }
+    }
+
+    if (currentWord.length > 0) {
+      words.push({ word: currentWord, start: wordStart, end: wordEnd });
+    }
+
+    return words;
+  }
+
+  private async getWordTimestampsFromWhisper(
+    audioBuffer: Buffer
+  ): Promise<Array<{ word: string; start: number; end: number }>> {
+    const openaiKey = process.env.OPENAI_API_KEY;
+    if (!openaiKey) {
+      console.log('[Whisper] OPENAI_API_KEY not configured, skipping word timestamps');
+      return [];
+    }
+
+    try {
+      const FormData = (await import('form-data')).default;
+      const formData = new FormData();
+      formData.append('file', audioBuffer, { filename: 'audio.mp3', contentType: 'audio/mpeg' });
+      formData.append('model', 'whisper-1');
+      formData.append('response_format', 'verbose_json');
+      formData.append('timestamp_granularities[]', 'word');
+
+      const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${openaiKey}`,
+          ...formData.getHeaders(),
+        },
+        body: formData as any,
+      });
+
+      if (!response.ok) {
+        console.error(`[Whisper] Transcription failed: ${response.status}`);
+        return [];
+      }
+
+      const data = await response.json() as any;
+      const words = (data.words || []).map((w: any) => ({
+        word: w.word,
+        start: w.start,
+        end: w.end,
+      }));
+      console.log(`[Whisper] Got ${words.length} word timestamps`);
+      return words;
+    } catch (e: any) {
+      console.error('[Whisper] Error:', e.message);
+      return [];
+    }
+  }
+
   private buildVideoSearchQuery(scene: Scene, targetAudience?: string): string {
     // PRIORITY 1: Use AI-generated optimized search query if available
     if (scene.searchQuery && scene.searchQuery.trim()) {
@@ -2820,110 +3007,101 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
     updatedProject.progress.steps.voiceover.status = 'in-progress';
     await saveProgress();
 
-    const fullNarration = (project.scenes || []).map(s => s.narration).join(' ... ');
-    const voiceoverResult = await this.generateVoiceover(fullNarration, project.voiceId);
+    console.log('[PerSceneVoiceover] Generating voiceover per-scene with word-level timestamps...');
+    const scenes = updatedProject.scenes || [];
+    const perSceneResults: VoiceoverResult[] = [];
+    let allSuccess = true;
+    let firstError = '';
 
-    if (voiceoverResult.success) {
-      updatedProject.assets.voiceover.fullTrackUrl = voiceoverResult.url;
-      updatedProject.assets.voiceover.duration = voiceoverResult.duration;
+    for (let i = 0; i < scenes.length; i++) {
+      const scene = scenes[i];
+      const narration = scene.narration || '';
+      if (!narration.trim()) {
+        perSceneResults.push({ url: '', duration: 3, success: true, words: [] });
+        console.log(`  Scene ${i} (${scene.type}): [empty narration] — skipping TTS`);
+        continue;
+      }
+
+      updatedProject.progress.steps.voiceover.progress = Math.round((i / scenes.length) * 90);
+      updatedProject.progress.steps.voiceover.message = `Generating scene ${i + 1}/${scenes.length}...`;
+      await saveProgress();
+
+      const result = await this.generateSceneVoiceover(narration, project.voiceId);
+      perSceneResults.push(result);
+
+      if (result.success) {
+        console.log(`  Scene ${i} (${scene.type}): ${result.duration.toFixed(1)}s, ${(result.words || []).length} words, ${result.url.substring(0, 60)}...`);
+      } else {
+        console.error(`  Scene ${i} (${scene.type}): FAILED — ${result.error}`);
+        allSuccess = false;
+        if (!firstError) firstError = result.error || 'Unknown error';
+      }
+    }
+
+    if (allSuccess || perSceneResults.some(r => r.success)) {
+      updatedProject.assets.voiceover.perScene = [];
+      let totalCalculatedDuration = 0;
+      const SCENE_PADDING = 1.0;
+
+      for (let i = 0; i < scenes.length; i++) {
+        const result = perSceneResults[i];
+        const scene = scenes[i];
+
+        updatedProject.assets.voiceover.perScene.push({
+          sceneId: scene.id,
+          url: result.url,
+          duration: result.duration,
+          words: result.words || [],
+        });
+
+        scene.voiceoverUrl = result.url;
+        scene.voiceoverDuration = result.duration;
+        scene.voiceoverWords = result.words || [];
+
+        const sceneDuration = Math.max(3, Math.round(result.duration + SCENE_PADDING));
+        scene.duration = sceneDuration;
+        totalCalculatedDuration += sceneDuration;
+        console.log(`  Scene ${i} (${scene.type}): duration set to ${sceneDuration}s (audio: ${result.duration.toFixed(1)}s + ${SCENE_PADDING}s padding)`);
+      }
+
+      updatedProject.totalDuration = totalCalculatedDuration;
+      updatedProject.assets.voiceover.duration = totalCalculatedDuration;
+
       updatedProject.progress.steps.voiceover.status = 'complete';
       updatedProject.progress.steps.voiceover.progress = 100;
-      
-      // ===== SYNC SCENE DURATIONS WITH VOICEOVER =====
-      // Calculate scene durations based on narration word count for proper audio sync
-      console.log('[UniversalVideoService] Syncing scene durations with voiceover...');
-      
-      // Scene pacing multipliers by type
-      const SCENE_PACING: Record<string, number> = {
-        hook: 1.0,        // Standard - grab attention quickly
-        intro: 1.2,       // Slightly longer - establish context
-        benefit: 1.1,     // Key selling points - give time to absorb
-        feature: 1.0,     // Technical details - keep moving
-        testimonial: 1.3, // Social proof - let it breathe
-        cta: 1.4,         // Call to action - give time to act
-        explanation: 1.1,
-        process: 1.1,
-        brand: 1.2,
-        outro: 1.3,
-      };
-      
-      const actualVoiceoverDuration = voiceoverResult.duration || 0;
-      
-      const rawDurations: number[] = [];
-      let totalRawDuration = 0;
-      
-      for (let i = 0; i < updatedProject.scenes.length; i++) {
-        const scene = updatedProject.scenes[i];
-        const narration = scene.narration || '';
-        const wordCount = narration.trim().split(/\s+/).filter(Boolean).length;
-        
-        const baseDuration = (wordCount / 2.5) + 1.5;
-        const pacingMultiplier = SCENE_PACING[scene.type] || 1.0;
-        const rawDuration = Math.max(3, baseDuration * pacingMultiplier);
-        rawDurations.push(rawDuration);
-        totalRawDuration += rawDuration;
-      }
-      
-      let totalCalculatedDuration = 0;
-      
-      const TAIL_BUFFER = 2;
-      
-      if (actualVoiceoverDuration > 0 && totalRawDuration > 0) {
-        const targetDuration = actualVoiceoverDuration + TAIL_BUFFER;
-        const scaleFactor = targetDuration / totalRawDuration;
-        console.log(`[VoiceoverSync] Voiceover: ${actualVoiceoverDuration.toFixed(1)}s + ${TAIL_BUFFER}s buffer = ${targetDuration.toFixed(1)}s target`);
-        console.log(`[VoiceoverSync] Estimated: ${totalRawDuration.toFixed(1)}s, scale: ${scaleFactor.toFixed(3)}`);
-        
-        for (let i = 0; i < updatedProject.scenes.length; i++) {
-          const scaledDuration = Math.max(3, Math.round(rawDurations[i] * scaleFactor));
-          updatedProject.scenes[i].duration = scaledDuration;
-          totalCalculatedDuration += scaledDuration;
-          console.log(`  Scene ${i} (${updatedProject.scenes[i].type}): ${rawDurations[i].toFixed(1)}s → ${scaledDuration}s (scaled)`);
-        }
-        
-        const durationDiff = targetDuration - totalCalculatedDuration;
-        if (Math.abs(durationDiff) >= 1) {
-          const lastIndex = updatedProject.scenes.length - 1;
-          if (lastIndex >= 0) {
-            const adjustment = Math.round(durationDiff);
-            updatedProject.scenes[lastIndex].duration = Math.max(3, updatedProject.scenes[lastIndex].duration + adjustment);
-            totalCalculatedDuration += adjustment;
-            console.log(`  Rounding correction: adjusted last scene by ${adjustment}s`);
-          }
-        }
-        
-        const drift = Math.abs(totalCalculatedDuration - targetDuration);
-        if (drift > 1) {
-          console.warn(`[VoiceoverSync] WARNING: ${drift.toFixed(1)}s drift between scene total (${totalCalculatedDuration}s) and target (${targetDuration.toFixed(1)}s)`);
-        }
-        console.log(`[VoiceoverSync] Final total: ${totalCalculatedDuration}s (voiceover ends at ${actualVoiceoverDuration.toFixed(1)}s, ${(totalCalculatedDuration - actualVoiceoverDuration).toFixed(1)}s visual tail)`);
-      } else {
-        for (let i = 0; i < updatedProject.scenes.length; i++) {
-          const sceneDuration = Math.max(5, Math.ceil(rawDurations[i]));
-          updatedProject.scenes[i].duration = sceneDuration;
-          totalCalculatedDuration += sceneDuration;
-          console.log(`  Scene ${i} (${updatedProject.scenes[i].type}): ${sceneDuration}s (word-count based)`);
-        }
-        const lastIdx = updatedProject.scenes.length - 1;
-        if (lastIdx >= 0) {
-          updatedProject.scenes[lastIdx].duration += TAIL_BUFFER;
-          totalCalculatedDuration += TAIL_BUFFER;
-        }
-      }
-      
-      updatedProject.totalDuration = totalCalculatedDuration;
-      console.log(`[UniversalVideoService] Total video duration: ${totalCalculatedDuration}s`);
-      // ===== END VOICEOVER SYNC =====
+      console.log(`[PerSceneVoiceover] Complete: ${scenes.length} scenes, total ${totalCalculatedDuration}s`);
     } else {
-      updatedProject.progress.steps.voiceover.status = 'error';
-      updatedProject.progress.steps.voiceover.message = voiceoverResult.error;
-      updatedProject.progress.errors.push(`Voiceover failed: ${voiceoverResult.error}`);
+      console.log('[PerSceneVoiceover] All scenes failed, falling back to legacy full-track voiceover...');
+      const fullNarration = scenes.map(s => s.narration).filter(Boolean).join(' ... ');
+      const fullTrackResult = await this.generateVoiceover(fullNarration, project.voiceId);
       
-      updatedProject.progress.serviceFailures.push({
-        service: 'elevenlabs',
-        timestamp: new Date().toISOString(),
-        error: voiceoverResult.error || 'Unknown error',
-      });
+      if (fullTrackResult.success) {
+        updatedProject.assets.voiceover.fullTrackUrl = fullTrackResult.url;
+        updatedProject.assets.voiceover.duration = fullTrackResult.duration;
+        updatedProject.progress.steps.voiceover.status = 'complete';
+        updatedProject.progress.steps.voiceover.progress = 100;
+        
+        const wordCount = fullNarration.trim().split(/\s+/).length;
+        const avgSecsPerWord = fullTrackResult.duration / Math.max(1, wordCount);
+        let totalDur = 0;
+        for (const scene of scenes) {
+          const sceneWords = (scene.narration || '').trim().split(/\s+/).filter(Boolean).length;
+          const dur = Math.max(3, Math.round(sceneWords * avgSecsPerWord + 1));
+          scene.duration = dur;
+          totalDur += dur;
+        }
+        updatedProject.totalDuration = totalDur;
+        console.log(`[PerSceneVoiceover] Full-track fallback succeeded: ${fullTrackResult.duration.toFixed(1)}s`);
+      } else {
+        updatedProject.progress.steps.voiceover.status = 'error';
+        updatedProject.progress.steps.voiceover.message = firstError;
+        updatedProject.progress.errors.push(`Voiceover failed: ${firstError}`);
+        updatedProject.progress.serviceFailures.push({
+          service: 'elevenlabs',
+          timestamp: new Date().toISOString(),
+          error: firstError || 'Unknown error',
+        });
+      }
     }
     } // end else (voiceover needs generation)
     } // end else (voiceover not skipped)

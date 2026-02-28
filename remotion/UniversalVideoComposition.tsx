@@ -37,6 +37,8 @@ import { DuckedMusic, VolumeKeyframe, type NativeAudioRange } from "./components
 import { TransitionConfig, SoundDesignConfig, DEFAULT_SOUND_CONFIG } from "../shared/config/sound-design";
 import { SoundDesignConfig as Phase18DSoundDesignConfig, TransitionSound, DEFAULT_SOUND_DESIGN_CONFIG } from "../shared/types/sound-design";
 import { FilmTreatment, FilmTreatmentConfig, FILM_TREATMENT_PRESETS } from "./components/post-processing";
+import { SyncedCaptions } from "./components/captions/SyncedCaptions";
+import type { CaptionStyle } from "../shared/config/caption-styles";
 
 // Phase 18B: Scene overlay configurations from overlay-configuration-service
 import type { SceneOverlayConfig } from '../shared/types/scene-overlays';
@@ -53,11 +55,10 @@ export interface UniversalVideoProps {
   audioDuckingKeyframes?: VolumeKeyframe[];
   transitions?: TransitionConfig[];
   sceneOverlayConfigs?: Record<string, SceneOverlayConfig>;
-  // Phase 18D: Voiceover ranges for audio ducking
   voiceoverRanges?: Array<{ startFrame: number; endFrame: number }>;
   soundEffectsBaseUrl?: string;
-  // Phase 18F: Film treatment config
   filmTreatmentConfig?: FilmTreatmentConfig;
+  captionStyle?: CaptionStyle | null;
 }
 
 // ============================================================
@@ -1898,6 +1899,7 @@ export const UniversalVideoComposition: React.FC<UniversalVideoProps> = ({
   voiceoverRanges,
   soundEffectsBaseUrl,
   filmTreatmentConfig,
+  captionStyle,
 }) => {
   const { fps, durationInFrames } = useVideoConfig();
   
@@ -2071,12 +2073,49 @@ export const UniversalVideoComposition: React.FC<UniversalVideoProps> = ({
         />
       )}
 
-      {/* Voiceover - full volume */}
-      <SafeAudio 
-        src={voiceoverUrl} 
-        volume={1.0} 
-        label="Voiceover"
-      />
+      {/* Voiceover - per-scene or full track */}
+      {(() => {
+        const hasPerSceneAudio = scenes.some(s => s.voiceoverUrl && isValidHttpUrl(s.voiceoverUrl));
+        if (hasPerSceneAudio) {
+          let frameOffset = 0;
+          return scenes.map((scene, index) => {
+            const sceneStartFrame = frameOffset;
+            const sceneDuration = scene.duration || 5;
+            const sceneDurationFrames = Math.ceil(sceneDuration * fps);
+            frameOffset += sceneDurationFrames;
+            
+            if (!scene.voiceoverUrl || !isValidHttpUrl(scene.voiceoverUrl)) return null;
+            
+            return (
+              <React.Fragment key={`vo-${scene.id || index}`}>
+                <Sequence from={sceneStartFrame} durationInFrames={sceneDurationFrames}>
+                  <SafeAudio
+                    src={scene.voiceoverUrl}
+                    volume={1.0}
+                    label={`Voiceover scene ${index}`}
+                  />
+                </Sequence>
+                {scene.captions?.enabled && scene.captions.words?.length > 0 && (
+                  <Sequence from={sceneStartFrame} durationInFrames={sceneDurationFrames}>
+                    <SyncedCaptions
+                      words={scene.captions.words}
+                      style={captionStyle || scene.captions.style || { preset: 'capcut' }}
+                      sceneStartFrame={0}
+                    />
+                  </Sequence>
+                )}
+              </React.Fragment>
+            );
+          });
+        }
+        return (
+          <SafeAudio 
+            src={voiceoverUrl} 
+            volume={1.0} 
+            label="Voiceover"
+          />
+        );
+      })()}
 
       {/* Sound Effects (whooshes, ambient, emphasis) */}
       {(() => {
