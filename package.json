@@ -46,6 +46,7 @@
     "express-session": "^1.19.0",
     "lucide-react": "^0.460.0",
     "multer": "^2.0.2",
+    "music-metadata": "^11.12.1",
     "passport": "^0.7.0",
     "passport-local": "^1.0.0",
     "react": "^18.3.1",

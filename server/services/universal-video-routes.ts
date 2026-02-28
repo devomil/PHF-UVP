@@ -1437,7 +1437,7 @@ router.patch('/projects/:projectId/render-settings', isAuthenticated, async (req
   try {
     const userId = (req.user as any)?.id;
     const { projectId } = req.params;
-    const { voiceover, music, soundDesign, filmTreatment, transitions, introEnabled, introTemplate, outroEnabled, outroTemplate, introBackgroundRandom } = req.body;
+    const { voiceover, music, soundDesign, filmTreatment, transitions, introEnabled, introTemplate, outroEnabled, outroTemplate, introBackgroundRandom, captions } = req.body;
     
     const projectData = await getProjectFromDb(projectId);
     if (!projectData) {
@@ -1530,6 +1530,21 @@ router.patch('/projects/:projectId/render-settings', isAuthenticated, async (req
     if (introBackgroundRandom !== undefined) {
       (projectData as any).introBackgroundRandom = !!introBackgroundRandom;
     }
+
+    if (captions !== undefined) {
+      const validPresets = ['karaoke', 'capcut', 'hormozi', 'broadcast', 'minimal'];
+      const validPositions = ['bottom', 'center', 'top'];
+      (projectData as any).captionSettings = {
+        enabled: captions.enabled ?? false,
+        style: {
+          preset: validPresets.includes(captions.style?.preset) ? captions.style.preset : 'capcut',
+          position: validPositions.includes(captions.style?.position) ? captions.style.position : 'bottom',
+          fontSize: captions.style?.fontSize ? Math.min(120, Math.max(16, captions.style.fontSize)) : undefined,
+          primaryColor: captions.style?.primaryColor || undefined,
+          activeColor: captions.style?.activeColor || undefined,
+        },
+      };
+    }
     
     projectData.updatedAt = new Date().toISOString();
     await saveProjectToDb(projectData, projectData.ownerId);
@@ -1550,6 +1565,7 @@ router.patch('/projects/:projectId/render-settings', isAuthenticated, async (req
         outroEnabled: (projectData as any).outroEnabled ?? true,
         outroTemplate: (projectData as any).outroTemplate || 'classic-glow',
         introBackgroundRandom: (projectData as any).introBackgroundRandom ?? false,
+        captions: (projectData as any).captionSettings || { enabled: false, style: { preset: 'capcut', position: 'bottom' } },
       }
     });
   } catch (error: any) {
@@ -1618,6 +1634,7 @@ router.get('/projects/:projectId/render-settings', isAuthenticated, async (req: 
         outroEnabled: (projectData as any).outroEnabled ?? true,
         outroTemplate: (projectData as any).outroTemplate || 'classic-glow',
         introBackgroundRandom: (projectData as any).introBackgroundRandom ?? false,
+        captions: (projectData as any).captionSettings || { enabled: false, style: { preset: 'capcut', position: 'bottom' } },
       }
     });
   } catch (error: any) {
@@ -2493,26 +2510,36 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
     const fps = 30; // Standard FPS
     const voiceoverRanges: Array<{ startFrame: number; endFrame: number }> = [];
     let currentFrame = 0;
+    const hasPerSceneVoiceover = preparedProject.assets?.voiceover?.perScene?.length > 0 &&
+      preparedProject.assets.voiceover.perScene.some((ps: any) => ps.url);
     
     for (const scene of preparedProject.scenes) {
       const sceneDurationFrames = Math.round((scene.duration || 5) * fps);
       
-      // Check if scene has voiceover audio
-      const hasVoiceover = scene.voiceover?.audioUrl || 
+      const hasSceneVoiceover = scene.voiceoverUrl ||
+                          scene.voiceover?.audioUrl || 
                           scene.assets?.voiceover?.url ||
                           preparedProject.assets?.voiceover?.fullTrackUrl;
       
-      if (hasVoiceover) {
-        voiceoverRanges.push({
-          startFrame: currentFrame,
-          endFrame: currentFrame + sceneDurationFrames,
-        });
+      if (hasSceneVoiceover) {
+        if (hasPerSceneVoiceover && scene.voiceoverDuration) {
+          const voiceoverFrames = Math.round(scene.voiceoverDuration * fps);
+          voiceoverRanges.push({
+            startFrame: currentFrame,
+            endFrame: currentFrame + voiceoverFrames,
+          });
+        } else {
+          voiceoverRanges.push({
+            startFrame: currentFrame,
+            endFrame: currentFrame + sceneDurationFrames,
+          });
+        }
       }
       
       currentFrame += sceneDurationFrames;
     }
     
-    console.log(`[UniversalVideo] Phase 18D: Calculated ${voiceoverRanges.length} voiceover ranges for audio ducking`);
+    console.log(`[UniversalVideo] Phase 18D: Calculated ${voiceoverRanges.length} voiceover ranges (per-scene: ${hasPerSceneVoiceover})`);
     
     // Create a brand copy with S3-cached logo URL for Lambda accessibility
     // Ensure brand always has complete colors to prevent render crashes
@@ -2632,9 +2659,28 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
     
     const resolvedMusicUrl = preparedProject.assets.music?.url || null;
     
+    const captionSettings = (projectData as any).captionSettings || {};
+    const captionStyle = captionSettings.enabled ? (captionSettings.style || { preset: 'capcut', position: 'bottom' }) : null;
+
+    if (hasPerSceneVoiceover && captionStyle) {
+      for (const scene of preparedProject.scenes as any[]) {
+        const perSceneEntry = preparedProject.assets.voiceover.perScene.find(
+          (ps: any) => ps.sceneId === scene.id
+        );
+        if (perSceneEntry?.words?.length) {
+          scene.captions = {
+            words: perSceneEntry.words,
+            style: captionStyle,
+            enabled: true,
+          };
+        }
+      }
+      console.log(`[UniversalVideo] Captions enabled with style: ${captionStyle.preset}`);
+    }
+
     const inputProps = {
       scenes: preparedProject.scenes,
-      voiceoverUrl: preparedProject.assets.voiceover.fullTrackUrl || null,
+      voiceoverUrl: hasPerSceneVoiceover ? null : (preparedProject.assets.voiceover.fullTrackUrl || null),
       musicUrl: resolvedMusicUrl,
       musicVolume: preparedProject.assets.music?.volume || 0.18,
       brand: brandWithCachedLogo,
@@ -2645,6 +2691,7 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
       voiceoverRanges,
       soundEffectsBaseUrl: process.env.SOUND_EFFECTS_URL || `https://${process.env.REMOTION_S3_BUCKET || 'remotionlambda-useast2-1vc2l6a56o'}.s3.${process.env.REMOTION_AWS_REGION || 'us-east-2'}.amazonaws.com/audio/sfx`,
       filmTreatmentConfig,
+      captionStyle: captionStyle || null,
     };
     
     // Resolve overlay item URLs to Lambda-accessible public URLs

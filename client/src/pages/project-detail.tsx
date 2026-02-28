@@ -1547,6 +1547,7 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
     soundDesign: { enabled: true, transitionSounds: true, impactSounds: true, ambientLayer: true, ambientType: "nature", masterVolume: 1.0 },
     filmTreatment: { enabled: true, colorGrade: "warm-cinematic", grainIntensity: 0.03, vignetteIntensity: 0.2, letterbox: "none" },
     transitions: { style: "crossfade", duration: 0.5 },
+    captions: { enabled: false, style: { preset: "capcut", fontSize: 52, position: "bottom" } },
     introEnabled: true,
     introTemplate: "classic-glow",
     outroEnabled: true,
@@ -1994,6 +1995,83 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
                 </div>
               )}
             </div>
+          </div>
+
+          <div className="border rounded-lg p-4 space-y-3" style={{ backgroundColor: "var(--app-bg)", borderColor: "var(--border-subtle)" }}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Type className="w-4 h-4 text-yellow-400" />
+                <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>Captions</span>
+              </div>
+              <ToggleSwitch
+                enabled={settings.captions?.enabled ?? false}
+                onChange={(v) => saveMutation.mutate({ captions: { ...settings.captions, enabled: v, style: settings.captions?.style } })}
+                label=""
+              />
+            </div>
+            {settings.captions?.enabled && (
+              <div className="space-y-3">
+                <div>
+                  <span className="text-xs block mb-1.5" style={{ color: "var(--text-secondary)" }}>Style Preset</span>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {[
+                      { value: 'karaoke', label: 'Karaoke', desc: 'Words highlight as spoken' },
+                      { value: 'capcut', label: 'CapCut', desc: 'Bold pop animation' },
+                      { value: 'hormozi', label: 'Hormozi', desc: 'Large bold, one word' },
+                      { value: 'broadcast', label: 'Broadcast', desc: 'Lower-third bar' },
+                      { value: 'minimal', label: 'Minimal', desc: 'Simple subtitles' },
+                    ].map((preset) => (
+                      <button
+                        key={preset.value}
+                        onClick={() => saveMutation.mutate({ captions: { ...settings.captions, style: { ...settings.captions?.style, preset: preset.value } } })}
+                        className={`p-2 rounded-lg border text-left transition-all ${
+                          (settings.captions?.style?.preset || 'capcut') === preset.value
+                            ? 'border-yellow-500 bg-yellow-500/10 ring-1 ring-yellow-500'
+                            : 'hover:border-yellow-500/40'
+                        }`}
+                        style={{ borderColor: (settings.captions?.style?.preset || 'capcut') === preset.value ? undefined : "var(--border-subtle)" }}
+                      >
+                        <p className="text-xs font-medium" style={{ color: "var(--text-primary)" }}>{preset.label}</p>
+                        <p className="text-[10px] mt-0.5" style={{ color: "var(--text-muted)" }}>{preset.desc}</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs" style={{ color: "var(--text-secondary)" }}>Font Size</span>
+                    <span className="text-xs font-mono" style={{ color: "var(--text-muted)" }}>
+                      {settings.captions?.style?.fontSize || 52}px
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min="20"
+                    max="96"
+                    value={settings.captions?.style?.fontSize || 52}
+                    onChange={(e) => saveMutation.mutate({ captions: { ...settings.captions, style: { ...settings.captions?.style, fontSize: parseInt(e.target.value) } } })}
+                    className="w-full h-1.5 rounded-full appearance-none cursor-pointer"
+                    style={{ background: `linear-gradient(to right, rgb(234 179 8) ${Math.round(((settings.captions?.style?.fontSize || 52) - 20) / 76 * 100)}%, var(--border-subtle) ${Math.round(((settings.captions?.style?.fontSize || 52) - 20) / 76 * 100)}%)` }}
+                  />
+                </div>
+                <div>
+                  <span className="text-xs block mb-1" style={{ color: "var(--text-secondary)" }}>Position</span>
+                  <select
+                    value={settings.captions?.style?.position || 'bottom'}
+                    onChange={(e) => saveMutation.mutate({ captions: { ...settings.captions, style: { ...settings.captions?.style, position: e.target.value } } })}
+                    className="w-full text-xs rounded-md border p-1.5 appearance-none"
+                    style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)", color: "var(--text-primary)" }}
+                  >
+                    <option value="bottom">Bottom</option>
+                    <option value="center">Center</option>
+                    <option value="top">Top</option>
+                  </select>
+                </div>
+                <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                  Synced captions will overlay on the video, highlighting words as they are spoken.
+                </p>
+              </div>
+            )}
           </div>
 
           <RenderButton projectId={projectId} hasVisual={!!quickAssets.visual?.url || scenesHaveVideo} hasVoiceover={voiceoverReady || settings.voiceover.hasGenerated} hasMusic={musicReady || settings.music.hasGenerated} initialOutputUrl={projectOutputUrl} initialStatus={projectStatus} initialRenderId={projectRenderId} />
