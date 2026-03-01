@@ -45,7 +45,6 @@ import type {
 } from '../../shared/video-types';
 import { 
   OUTPUT_FORMATS, 
-  PINE_HILL_FARM_BRAND,
   getCompositionId,
 } from '../../shared/video-types';
 import { imageCompositionService } from '../services/image-composition-service';
@@ -683,7 +682,7 @@ ${productNames ? `AVAILABLE PRODUCTS: ${productNames}` : ''}
 - DO NOT describe the product details - focus on the SCENE around it`;
     }
     
-    const systemPrompt = `You are Suzzie, an expert visual director for Pine Hill Farm marketing videos with deep brand knowledge. 
+    const systemPrompt = `You are an expert visual director for brand marketing videos with deep brand knowledge. 
 You create broadcast-quality visual directions that are ALREADY OPTIMIZED for AI generation - no "suggested improvements" needed.
 
 ${brandContext}
@@ -693,7 +692,7 @@ ${workflowContext}
 Create a visual direction that is:
 1. HIGHLY SPECIFIC - Include exact lighting, camera angle, composition, mood
 2. AI-GENERATION READY - Achievable with current AI video/image models (no complex multi-person scenes)
-3. BRAND-ALIGNED - Follows Pine Hill Farm aesthetic (warm, natural, organic, inviting)
+3. BRAND-ALIGNED - Follows the brand aesthetic described in the brand context above
 4. SCENE-TYPE APPROPRIATE - Matches the purpose of this scene in the video
 ${isProductWorkflow ? '5. I2V-OPTIMIZED - Focus on environment/background for product photo animation' : ''}
 
@@ -844,7 +843,7 @@ router.post('/projects/script', isAuthenticated, async (req: Request, res: Respo
     const scriptBrandCtx = await getAnyBrandContext();
     const scriptBrand = scriptBrandCtx.brandName
       ? { name: scriptBrandCtx.brandName, tagline: scriptBrandCtx.tagline, website: scriptBrandCtx.website, colors: { primary: scriptBrandCtx.primaryColor, secondary: scriptBrandCtx.secondaryColor, accent: scriptBrandCtx.accentColor }, logoUrl: scriptBrandCtx.logoUrl, guidelines: scriptBrandCtx.guidelines }
-      : PINE_HILL_FARM_BRAND;
+      : { name: '', tagline: '', website: '', colors: {}, logoUrl: '', guidelines: '' };
     
     const project: VideoProject = {
       id: `proj_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -2303,6 +2302,15 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
       return `${baseUrl}${relativeUrl}`;
     };
     
+    // Resolve brand context for end card and render
+    const renderBrandCtx = await getAnyBrandContext();
+    const brandCtxForEndCard = renderBrandCtx.brandName
+      ? { name: renderBrandCtx.brandName, tagline: renderBrandCtx.tagline, website: renderBrandCtx.website, colors: { primary: renderBrandCtx.primaryColor, secondary: renderBrandCtx.secondaryColor, accent: renderBrandCtx.accentColor }, logoUrl: renderBrandCtx.logoUrl }
+      : null;
+    const effectiveBrand = preparedProject.brand && Object.keys(preparedProject.brand).length > 0
+      ? preparedProject.brand
+      : brandCtxForEndCard;
+
     // Phase 16: Build end card config from settings
     const endCardSettings = (preparedProject as any).endCardSettings;
     let endCardConfig: any = undefined;
@@ -2311,8 +2319,7 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
     if (endCardSettings?.enabled !== false) {
       let cachedLogoUrl = '';
       
-      const defaultLogoUrl = '/uploads/16045ec5-d8e6-4b90-a65f-eb7e39e280ab.png';
-      const sourceLogoUrl = preparedProject.brand?.logoUrl || defaultLogoUrl;
+      const sourceLogoUrl = preparedProject.brand?.logoUrl || effectiveBrand?.logoUrl || '';
       cachedLogoUrl = await assetUrlResolver.resolve(sourceLogoUrl) || '';
       if (cachedLogoUrl) {
         console.log('[UniversalVideo] End card logo from asset resolver:', sourceLogoUrl, '->', cachedLogoUrl);
@@ -2338,7 +2345,11 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
         } : {
           type: 'animated-gradient' as const,
           gradient: {
-            colors: ['#1a3a2a', '#0d2818', '#0a1f12'],
+            colors: [
+              effectiveBrand?.colors?.primary || '#1a1a2e',
+              effectiveBrand?.colors?.secondary || '#16213e',
+              effectiveBrand?.colors?.accent ? effectiveBrand.colors.accent + '33' : '#0d1b2a'
+            ],
             angle: 145,
           },
         },
@@ -2349,7 +2360,7 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
           animation: (endCardSettings?.logoAnimation || 'scale-bounce') as 'scale-bounce' | 'fade' | 'slide-up' | 'none',
         },
         tagline: {
-          text: endCardSettings?.taglineText || 'Rooted in Nature, Grown with Care',
+          text: endCardSettings?.taglineText || effectiveBrand?.tagline || '',
           delay: 0.8,
           animation: (endCardSettings?.taglineAnimation || 'typewriter') as 'typewriter' | 'fade' | 'slide-up',
           style: {
@@ -2359,7 +2370,7 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
           },
         },
         contact: {
-          website: endCardSettings?.contactWebsite || 'www.pinehillfarm.co',
+          website: endCardSettings?.contactWebsite || effectiveBrand?.website || '',
           phone: endCardSettings?.contactPhone || '',
           email: endCardSettings?.contactEmail || '',
           delay: 1.8,
@@ -2376,10 +2387,7 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
           delay: endCardSettings.socialDelay || 2.5,
           animation: (endCardSettings.socialAnimation || 'pop') as 'pop' | 'fade' | 'stagger',
         } : {
-          icons: [
-            { platform: 'facebook', url: 'facebook.com/pinehillfarm' },
-            { platform: 'instagram', url: 'instagram.com/pinehillfarm' },
-          ],
+          icons: [],
           size: 36,
           delay: 2.5,
           animation: 'pop' as const,
@@ -2555,13 +2563,7 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
       body: 'Open Sans, Helvetica, sans-serif',
       weight: { heading: 700, body: 400 },
     };
-    const renderBrandCtx = await getAnyBrandContext();
-    const renderBrandFallback = renderBrandCtx.brandName
-      ? { name: renderBrandCtx.brandName, tagline: renderBrandCtx.tagline, website: renderBrandCtx.website, colors: { primary: renderBrandCtx.primaryColor, secondary: renderBrandCtx.secondaryColor, accent: renderBrandCtx.accentColor }, logoUrl: renderBrandCtx.logoUrl, guidelines: renderBrandCtx.guidelines }
-      : PINE_HILL_FARM_BRAND;
-    const baseBrand = preparedProject.brand && Object.keys(preparedProject.brand).length > 0 
-      ? preparedProject.brand 
-      : renderBrandFallback;
+    const baseBrand = effectiveBrand || { name: '', colors: {}, logoUrl: '' };
     const brandWithCachedLogo = {
       ...baseBrand,
       colors: { ...defaultBrandColors, ...(baseBrand.colors || {}) },
@@ -4516,7 +4518,7 @@ router.post('/:projectId/scenes/:sceneId/replace-object', isAuthenticated, async
     const { piapiVideoService } = await import('../services/piapi-video-service');
     
     const replacementPrompt = prompt || 
-      `Replace the product/bottle in this video with the Pine Hill Farm product shown in the reference image. Maintain the same motion, lighting, and camera movement.`;
+      `Replace the product/bottle in this video with the brand product shown in the reference image. Maintain the same motion, lighting, and camera movement.`;
     
     const result = await piapiVideoService.replaceObjectInVideo({
       videoUrl: currentVideoUrl,
@@ -6265,7 +6267,7 @@ router.get('/projects/:projectId/generation-estimate', isAuthenticated, async (r
         perScene: avgSceneGenTime,
       },
       brandElements,
-      brandName: 'Pine Hill Farm',
+      brandName: (await getAnyBrandContext()).brandName || '',
       warnings,
       qualityTier,
       tierSummaries,

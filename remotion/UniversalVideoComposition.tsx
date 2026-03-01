@@ -1322,7 +1322,6 @@ const MicroSceneBackground: React.FC<{
                       src={videoSrc}
                       style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                       muted
-                      loopDurationInFrames={Math.round(5 * fps)}
                       fallback={fallback}
                     />
                   )}
