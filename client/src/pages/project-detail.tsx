@@ -1571,6 +1571,7 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
   const musicReady = quickAssets.music?.status === "completed" && !!quickAssets.music?.url;
 
   const scenesFromProps = Array.isArray(projectScenes) ? projectScenes : [];
+  const perSceneVoiceoverReady = scenesFromProps.length > 0 && scenesFromProps.some((s: any) => s.voiceoverUrl);
   const scenesHaveVideoFromProps = scenesFromProps.some((s: any) => s.assets?.videoUrl || s.background?.videoUrl);
   const scenesHaveVideoFromSettings = settingsQuery.data?.hasSceneVideos === true;
   const scenesHaveVideo = scenesHaveVideoFromProps || scenesHaveVideoFromSettings;
@@ -1593,7 +1594,7 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
     ...rawSettings,
     voiceover: {
       ...rawSettings.voiceover,
-      hasGenerated: rawSettings.voiceover.hasGenerated || voiceoverReady,
+      hasGenerated: rawSettings.voiceover.hasGenerated || voiceoverReady || perSceneVoiceoverReady,
       duration: rawSettings.voiceover.duration || (voiceoverReady ? quickAssets.voiceover?.duration : undefined),
       url: rawSettings.voiceover.url || (voiceoverReady ? quickAssets.voiceover?.url : undefined),
     },
