@@ -383,6 +383,34 @@ class VideoGenerationWorker {
           log.info(`[VideoWorker] Original prompt: ${promptForGeneration.substring(0, 150)}...`);
         }
 
+        let jobArtPresetId: string | undefined;
+        let jobContentTag: string | undefined;
+        try {
+          const { getProjectFromDb } = await import('./video-project-db');
+          const projectData = await getProjectFromDb(job.projectId);
+          if (projectData) {
+            const isMicroScene = job.sceneId.includes('__micro_');
+            const baseSceneId = isMicroScene ? job.sceneId.split('__micro_')[0] : job.sceneId;
+            const scene = projectData.scenes?.find((s) => s.id === baseSceneId);
+            if (scene) {
+              const projectArtPreset = projectData.progress?.artPresetId || projectData.artPresetId;
+              jobArtPresetId = scene.artPresetId || projectArtPreset;
+              jobContentTag = scene.contentTag;
+              if (isMicroScene) {
+                const msIdx = parseInt(job.sceneId.split('__micro_')[1], 10);
+                const ms = scene.microScenes?.[msIdx];
+                if (ms) {
+                  jobArtPresetId = ms.artPresetId || scene.artPresetId || projectArtPreset;
+                  jobContentTag = ms.contentTag || scene.contentTag;
+                }
+              }
+              log.debug(` Job ${job.jobId} resolved artPresetId=${jobArtPresetId || 'none'}, contentTag=${jobContentTag || 'none'}`);
+            }
+          }
+        } catch (e) {
+          log.debug(` Job ${job.jobId} could not resolve art preset/content tag: ${(e).message}`);
+        }
+
         const result = await aiVideoService.generateVideo({
           prompt: promptForGeneration,
           duration: job.duration || 6,
@@ -391,14 +419,16 @@ class VideoGenerationWorker {
           preferredProvider: provider,
           negativePrompt: enhancedNegativePrompt,
           visualStyle: job.style || "professional",
-          imageUrl: job.sourceImageUrl || undefined, // For I2V: pass the matched brand asset image
-          i2vSettings: jobI2vSettings || undefined, // I2V-specific settings from UI
+          imageUrl: job.sourceImageUrl || undefined,
+          i2vSettings: jobI2vSettings || undefined,
           motionOverride: jobMotionControl ? {
             camera_movement: jobMotionControl.camera_movement as any,
             intensity: jobMotionControl.intensity,
             description: `User override: ${jobMotionControl.camera_movement}`,
             rationale: 'User selected via Motion Control UI',
-          } : undefined, // Phase 16: motion control override from UI
+          } : undefined,
+          ...(jobArtPresetId ? { artPresetId: jobArtPresetId } : {}),
+          ...(jobContentTag ? { contentTag: jobContentTag } : {}),
         });
 
         // Log which provider actually fulfilled the request
