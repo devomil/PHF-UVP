@@ -2680,6 +2680,99 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
       console.log(`[UniversalVideo] Captions enabled with style: ${captionStyle.preset}`);
     }
 
+    // Inject intro scene if enabled
+    const introEnabled = (projectData as any).introEnabled !== false;
+    const introTemplate = (projectData as any).introTemplate || 'classic-glow';
+    const introBackgroundRandom = (projectData as any).introBackgroundRandom || false;
+    
+    if (introEnabled) {
+      let introBackgroundUrl: string | null = null;
+      if (introBackgroundRandom) {
+        try {
+          const introBg = await s3RenderAssetService.getRandomIntroBackground();
+          if (introBg) {
+            introBackgroundUrl = introBg.url;
+            console.log('[Render] Intro background from S3:', introBg.name);
+          }
+        } catch (e: any) {
+          console.warn('[Render] Failed to get intro background:', e.message);
+        }
+      }
+      
+      const brandName = brandWithCachedLogo.name || effectiveBrand?.name || '';
+      const brandTagline = brandWithCachedLogo.tagline || effectiveBrand?.tagline || '';
+      const brandLogoUrl = brandWithCachedLogo.logoUrl || '';
+      const brandColors = brandWithCachedLogo.colors || {};
+      
+      const introScene: any = {
+        id: 'intro-scene-auto',
+        type: 'intro',
+        title: brandName || 'Introduction',
+        duration: 4,
+        narration: '',
+        background: introBackgroundUrl
+          ? { type: 'image', imageUrl: introBackgroundUrl }
+          : {
+              type: 'gradient',
+              gradient: {
+                colors: [brandColors.primary || '#1a1a2e', brandColors.secondary || '#16213e', brandColors.accent || '#0d1b2a'],
+                angle: 180,
+              },
+            },
+        assets: {
+          imageUrl: introBackgroundUrl || '',
+          backgroundUrl: introBackgroundUrl || '',
+        },
+        textOverlays: brandName ? [
+          { id: 'intro-title', text: brandName, position: 'center', style: { fontSize: 56, fontWeight: 700 } },
+          ...(brandTagline ? [{ id: 'intro-tagline', text: brandTagline, position: 'center-bottom', style: { fontSize: 24, fontWeight: 400 } }] : []),
+        ] : [],
+        transitions: { type: 'fade', duration: 0.8 },
+        microScenes: [],
+      };
+      
+      preparedProject.scenes = [introScene, ...preparedProject.scenes];
+      console.log('[Render] Intro scene injected (template: ' + introTemplate + ', background: ' + (introBackgroundUrl ? 'S3 image' : 'brand gradient') + ')');
+      
+      if (brandLogoUrl) {
+        sceneOverlayConfigs['intro-scene-auto'] = {
+          logo: {
+            enabled: true,
+            url: brandLogoUrl,
+            position: 'center',
+            size: 30,
+            opacity: 1,
+            animation: 'scale-bounce',
+            timing: { startTime: 0.3, duration: 3.2 },
+          },
+        };
+        console.log('[Render] Intro scene logo overlay configured');
+      }
+    } else {
+      console.log('[Render] Intro scene disabled, skipping');
+    }
+
+    // Recalculate voiceover ranges after intro scene injection (frame offsets may have shifted)
+    voiceoverRanges.length = 0;
+    let voRecalcFrame = 0;
+    for (const scene of preparedProject.scenes) {
+      const sceneDurationFrames = Math.round((scene.duration || 5) * fps);
+      const hasSceneVO = (scene as any).voiceoverUrl ||
+                          (scene as any).voiceover?.audioUrl || 
+                          (scene as any).assets?.voiceover?.url ||
+                          preparedProject.assets?.voiceover?.fullTrackUrl;
+      if (hasSceneVO) {
+        if (hasPerSceneVoiceover && (scene as any).voiceoverDuration) {
+          const voFrames = Math.round((scene as any).voiceoverDuration * fps);
+          voiceoverRanges.push({ startFrame: voRecalcFrame, endFrame: voRecalcFrame + voFrames });
+        } else {
+          voiceoverRanges.push({ startFrame: voRecalcFrame, endFrame: voRecalcFrame + sceneDurationFrames });
+        }
+      }
+      voRecalcFrame += sceneDurationFrames;
+    }
+    console.log('[Render] Voiceover ranges recalculated after intro injection:', voiceoverRanges.length, 'ranges');
+
     const inputProps = {
       scenes: preparedProject.scenes,
       voiceoverUrl: hasPerSceneVoiceover ? null : (preparedProject.assets.voiceover.fullTrackUrl || null),
