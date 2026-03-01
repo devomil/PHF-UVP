@@ -161,6 +161,7 @@ export interface MicroScene {
   originalAudioFadeOut?: number;
   visualFormat?: VisualFormat;
   contentTag?: string;
+  artPresetId?: string;
 }
 
 export interface Scene {
@@ -237,6 +238,7 @@ export interface Scene {
   generationMethod?: 'T2I' | 'I2I' | 'T2V' | 'I2V' | 'V2V' | 'stock';
   visualFormat?: VisualFormat;
   contentTag?: string;
+  artPresetId?: string;
   voiceoverUrl?: string;
   voiceoverDuration?: number;
   voiceoverWords?: import('./config/caption-styles').CaptionWord[];
