@@ -1,0 +1,30 @@
+Voice Generation Quality
+
+The pacing issues (pauses, speed changes) with ElevenLabs TTS typically come from a few factors:
+
+Long narration text — When you feed the entire scene narration as a single block, the TTS model can drift in pacing, especially on longer passages. A better approach is to generate voiceover per-scene (or even per-micro-scene) rather than as one long audio file. This gives you precise control over timing alignment.
+
+Voice stability settings — ElevenLabs has stability and similarity_boost parameters. Higher stability reduces variation but can sound monotone; lower stability gives more expressive speech but can cause unpredictable pacing. Tuning these helps.
+
+Alternative providers — For more consistent, broadcast-quality narration:
+
+OpenAI TTS (already supported via your PiAPI integration) — produces very natural, consistent pacing with fewer artifacts
+Google Cloud TTS (WaveNet/Neural2 voices) — extremely consistent pacing, good for professional/corporate tone
+Amazon Polly (Neural engine) — very reliable timing, good for longer content
+The biggest improvement would come from switching to per-scene voiceover generation with precise timing alignment, regardless of which TTS provider you use. That way each scene's narration is independently generated with clean start/end points, and Remotion can place each audio clip at the exact scene start frame.
+
+Text Caption Overlays (Subtitles/Captions)
+
+This is a really valuable feature for engagement — social media videos with captions see significantly higher watch time. There are several approaches:
+
+Word-level timestamps from TTS — ElevenLabs and OpenAI TTS can return word-level timing data. You'd parse these timestamps and render animated text overlays in Remotion that highlight each word as it's spoken (like karaoke-style captions).
+
+Whisper-based transcription — Run the generated voiceover through OpenAI Whisper to get word-level timestamps, then render captions. This works with any TTS provider.
+
+Caption styles — Modern video captions typically use bold, centered text with a word-by-word highlight effect (like CapCut or Hormozi-style captions). These are very achievable in Remotion with word-level timing data.
+
+The cleanest approach would be to combine both improvements: generate per-scene voiceover with word-level timestamps, then use those timestamps to render synced caption overlays in the Remotion composition.
+
+Would you like me to put together a plan for either or both of these? I'd suggest starting with per-scene voiceover generation (which fixes the pacing issue and provides the timing foundation), then adding caption overlays on top of that. We could implement them incrementally so you can test each improvement.
+
+Yes, please create a markdown file for both voice quality improvments, and the Text caption overlays with caption styles, world-level, etc. Because we have to pause this piece of development and focus on something else first.
