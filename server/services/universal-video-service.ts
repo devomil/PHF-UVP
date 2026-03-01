@@ -4133,6 +4133,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
             }
             
             const msContentTag = ms.contentTag || scene.contentTag;
+            const msArtPresetId = ms.artPresetId || scene.artPresetId || projectArtPresetIdForVideo;
             return aiVideoService.generateVideo({
               prompt: msPrompt,
               duration: Math.min(ms.duration || 5, 10),
@@ -4140,7 +4141,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
               sceneType: scene.type,
               narration: ms.narration,
               qualityTier: sceneQualityTier,
-              artPresetId: projectArtPresetIdForVideo,
+              artPresetId: msArtPresetId,
               ...(msImageUrl ? { imageUrl: msImageUrl } : {}),
               ...(msContentTag ? { contentTag: msContentTag } : {}),
             }).then(msResult => ({ msIdx, skipped: false, ...msResult }))
@@ -4198,7 +4199,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
             mood: (scene as any).analysis?.mood,
             contentType: (scene as any).analysis?.contentType as 'person' | 'product' | 'nature' | 'abstract' | 'lifestyle' | undefined,
             qualityTier: sceneQualityTier,
-            artPresetId: projectArtPresetIdForVideo,
+            artPresetId: scene.artPresetId || projectArtPresetIdForVideo,
             ...(sceneRefImageUrl ? { imageUrl: sceneRefImageUrl } : {}),
             ...(scene.contentTag ? { contentTag: scene.contentTag } : {}),
           });
@@ -4264,7 +4265,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
                 duration: scene.duration || 5,
                 aspectRatio: updatedProject.outputFormat?.aspectRatio || '16:9',
                 qualityTier: sceneQualityTier,
-                artPresetId: projectArtPresetIdForVideo,
+                artPresetId: scene.artPresetId || projectArtPresetIdForVideo,
                 imageUrl: sourceImageUrl,
               });
               
@@ -4290,7 +4291,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
                   duration: scene.duration || 5,
                   aspectRatio: updatedProject.outputFormat?.aspectRatio || '16:9',
                   qualityTier: sceneQualityTier,
-                  artPresetId: projectArtPresetIdForVideo,
+                  artPresetId: scene.artPresetId || projectArtPresetIdForVideo,
                   imageUrl: aiGeneratedImage,
                 });
                 
@@ -4317,7 +4318,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
                 duration: scene.duration || 5,
                 aspectRatio: updatedProject.outputFormat?.aspectRatio || '16:9',
                 qualityTier: sceneQualityTier,
-                artPresetId: projectArtPresetIdForVideo,
+                artPresetId: scene.artPresetId || projectArtPresetIdForVideo,
               });
               
               if (t2vResult.success && t2vResult.s3Url) {

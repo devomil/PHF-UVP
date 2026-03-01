@@ -570,6 +570,15 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
                               {SCENE_CONTENT_TAGS[scene.contentTag].label}
                             </span>
                           )}
+                          {scene.artPresetId && scene.artPresetId !== 'auto' && (() => {
+                            const preset = getVisualArtPreset(scene.artPresetId);
+                            if (!preset) return null;
+                            return (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded-full border flex items-center gap-0.5" style={{ borderColor: 'rgba(139,92,246,0.3)', backgroundColor: 'rgba(139,92,246,0.1)', color: 'rgb(167,139,250)' }}>
+                                <Palette className="w-2.5 h-2.5" /> {preset.name}
+                              </span>
+                            );
+                          })()}
                         </div>
                         <p className="text-xs truncate mt-0.5" style={{ color: "var(--text-muted)" }}>
                           {narration.substring(0, 80)}{narration.length > 80 ? "..." : ""}

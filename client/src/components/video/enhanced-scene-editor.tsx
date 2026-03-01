@@ -3,14 +3,14 @@ import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import {
   Play, Pause, Volume2, VolumeX, Maximize2, MoreVertical,
   RefreshCw, Upload, Image, Video, Save, X, Loader2,
-  CheckCircle2, ImagePlus, ChevronDown, ChevronRight, Edit2, FolderOpen, Expand, Sparkles
+  CheckCircle2, ImagePlus, ChevronDown, ChevronRight, Edit2, FolderOpen, Expand, Sparkles, Palette
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { SceneOverlayEditor, type SceneOverlayItem } from "./scene-overlay-editor";
 import { ProviderCapabilitySelector, getProviderRecommendationText } from "./ProviderCapabilityCard";
 import { VIDEO_PROVIDERS as PROVIDER_CONFIG } from "@shared/provider-config";
 import { SCENE_CONTENT_TAGS, getSceneContentTag } from "@shared/config/scene-content-tags";
-import { getVisualArtPreset } from "@shared/config/visual-art-presets";
+import { getVisualArtPreset, getAllVisualArtPresets } from "@shared/config/visual-art-presets";
 
 const sceneTypes = [
   "hook", "problem", "agitation", "solution", "benefit",
@@ -31,6 +31,18 @@ const VIDEO_PROVIDERS = [
   { id: "sora-2-pro", label: "Sora 2 Pro" },
   { id: "hunyuan", label: "Hunyuan" },
 ];
+
+const ART_PRESET_IMAGES: Record<string, string> = {
+  '3d-illustration': '/art-presets/3d-illustration.png',
+  'cinematic-realism': '/art-presets/cinematic-realism.png',
+  '2d-line-art': '/art-presets/2d-line-art.png',
+  'collage': '/art-presets/collage.png',
+  'claymation': '/art-presets/claymation.png',
+  'neon-futuristic': '/art-presets/neon-futuristic.png',
+  'watercolor': '/art-presets/watercolor.png',
+  'minimalist-flat': '/art-presets/minimalist-flat.png',
+  'scientific-medical': '/art-presets/scientific-medical.png',
+};
 
 const GENERATION_MODES = [
   { id: "auto", label: "Auto", description: "Automatically choose based on available assets" },
@@ -258,9 +270,11 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
     visualDirection: scene.visualDirection || "",
   });
   const [contentTag, setContentTag] = useState<string | null>(scene.contentTag || null);
+  const [sceneArtPreset, setSceneArtPreset] = useState<string>(scene.artPresetId || 'project');
 
+  const effectiveArtPresetId = sceneArtPreset === 'project' ? artPresetId : sceneArtPreset === 'auto' ? undefined : sceneArtPreset;
   const activeTag = contentTag ? getSceneContentTag(contentTag) : null;
-  const activePreset = artPresetId ? getVisualArtPreset(artPresetId) : null;
+  const activePreset = effectiveArtPresetId ? getVisualArtPreset(effectiveArtPresetId) : null;
   const styleRecProviders = activeTag?.recommendedProviders?.video || activePreset?.recommendedProviders?.video || [];
   const styleRecLabel = activeTag ? `Recommended for ${activeTag.label}` : activePreset ? `Recommended for ${activePreset.name}` : undefined;
 
@@ -568,7 +582,8 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
   };
 
   const saveChanges = () => {
-    updateSceneMutation.mutate({ ...editValues, contentTag: contentTag || null });
+    const artPresetValue = sceneArtPreset === 'project' ? null : sceneArtPreset;
+    updateSceneMutation.mutate({ ...editValues, contentTag: contentTag || null, artPresetId: artPresetValue });
     if (editValues.visualDirection) {
       setInlinePrompt(editValues.visualDirection);
     }
@@ -1056,6 +1071,75 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
           </div>
         </div>
 
+        {/* Art Style Override */}
+        <div>
+          <label className="text-[11px] font-medium uppercase tracking-wider mb-1.5 flex items-center gap-1.5" style={{ color: "var(--text-secondary)" }}>
+            <Palette className="w-3 h-3" />
+            Art Style
+            {sceneArtPreset !== 'project' && <span className="text-[10px] normal-case tracking-normal" style={{ color: 'rgb(167,139,250)' }}>(scene override)</span>}
+          </label>
+          <div className="flex gap-2 overflow-x-auto pb-1.5 -mx-1 px-1" style={{ scrollbarWidth: "thin" }}>
+            <button
+              type="button"
+              onClick={() => isEditing && setSceneArtPreset('project')}
+              disabled={!isEditing}
+              className="flex-shrink-0 w-[80px] rounded-lg border-2 p-1.5 transition-all disabled:opacity-70"
+              style={{
+                backgroundColor: sceneArtPreset === 'project' ? 'rgba(139,92,246,0.15)' : 'transparent',
+                borderColor: sceneArtPreset === 'project' ? 'rgb(139,92,246)' : 'var(--border-subtle)',
+              }}
+            >
+              <div className="w-full h-10 rounded flex items-center justify-center mb-1" style={{ background: 'linear-gradient(135deg, rgba(139,92,246,0.2), rgba(99,102,241,0.2))' }}>
+                <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+              </div>
+              <span className="text-[10px] font-medium block truncate" style={{ color: 'var(--text-primary)' }}>Project</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => isEditing && setSceneArtPreset('auto')}
+              disabled={!isEditing}
+              className="flex-shrink-0 w-[80px] rounded-lg border-2 p-1.5 transition-all disabled:opacity-70"
+              style={{
+                backgroundColor: sceneArtPreset === 'auto' ? 'rgba(139,92,246,0.15)' : 'transparent',
+                borderColor: sceneArtPreset === 'auto' ? 'rgb(139,92,246)' : 'var(--border-subtle)',
+              }}
+            >
+              <div className="w-full h-10 rounded flex items-center justify-center mb-1" style={{ background: 'linear-gradient(135deg, rgba(99,102,241,0.2), rgba(168,85,247,0.2))' }}>
+                <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+              </div>
+              <span className="text-[10px] font-medium block truncate" style={{ color: 'var(--text-primary)' }}>Auto</span>
+            </button>
+            {getAllVisualArtPresets().map((preset) => (
+              <button
+                key={preset.id}
+                type="button"
+                onClick={() => isEditing && setSceneArtPreset(preset.id)}
+                disabled={!isEditing}
+                className="flex-shrink-0 w-[80px] rounded-lg border-2 p-1.5 transition-all disabled:opacity-70"
+                style={{
+                  backgroundColor: sceneArtPreset === preset.id ? 'rgba(139,92,246,0.15)' : 'transparent',
+                  borderColor: sceneArtPreset === preset.id ? 'rgb(139,92,246)' : 'var(--border-subtle)',
+                }}
+                title={preset.description}
+              >
+                {ART_PRESET_IMAGES[preset.id] ? (
+                  <img
+                    src={ART_PRESET_IMAGES[preset.id]}
+                    alt={preset.name}
+                    className="w-full h-10 rounded object-cover mb-1"
+                  />
+                ) : (
+                  <div
+                    className="w-full h-10 rounded mb-1"
+                    style={{ background: `linear-gradient(135deg, ${preset.thumbnailColors[0]}, ${preset.thumbnailColors[1]}, ${preset.thumbnailColors[2]})` }}
+                  />
+                )}
+                <span className="text-[10px] font-medium block truncate" style={{ color: 'var(--text-primary)' }}>{preset.name}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* Narration */}
         <div>
           <label className="text-[11px] font-medium uppercase tracking-wider mb-1.5 block" style={{ color: "var(--text-secondary)" }}>
@@ -1466,6 +1550,64 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                               ))}
                             </div>
                           </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 pt-3" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+                        <div className="flex items-center gap-1.5 mb-2">
+                          <Palette className="w-3 h-3 text-white/50" />
+                          <span className="text-[11px] font-medium text-white/50">Art Style</span>
+                          {sceneArtPreset !== 'project' && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/25">Override</span>}
+                        </div>
+                        <div className="flex gap-1.5 overflow-x-auto pb-1.5" style={{ scrollbarWidth: "thin" }}>
+                          <button
+                            type="button"
+                            onClick={() => { setSceneArtPreset('project'); updateSceneMutation.mutate({ artPresetId: null }); }}
+                            className="flex-shrink-0 w-[60px] rounded-lg border p-1 transition-all"
+                            style={{
+                              borderColor: sceneArtPreset === 'project' ? 'rgb(139,92,246)' : 'rgba(255,255,255,0.1)',
+                              backgroundColor: sceneArtPreset === 'project' ? 'rgba(139,92,246,0.15)' : 'transparent',
+                            }}
+                          >
+                            <div className="w-full h-8 rounded flex items-center justify-center mb-0.5" style={{ background: 'linear-gradient(135deg, rgba(139,92,246,0.2), rgba(99,102,241,0.2))' }}>
+                              <Sparkles className="w-2.5 h-2.5 text-purple-400" />
+                            </div>
+                            <span className="text-[8px] font-medium block truncate text-white/70">Project</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { setSceneArtPreset('auto'); updateSceneMutation.mutate({ artPresetId: 'auto' }); }}
+                            className="flex-shrink-0 w-[60px] rounded-lg border p-1 transition-all"
+                            style={{
+                              borderColor: sceneArtPreset === 'auto' ? 'rgb(139,92,246)' : 'rgba(255,255,255,0.1)',
+                              backgroundColor: sceneArtPreset === 'auto' ? 'rgba(139,92,246,0.15)' : 'transparent',
+                            }}
+                          >
+                            <div className="w-full h-8 rounded flex items-center justify-center mb-0.5" style={{ background: 'linear-gradient(135deg, rgba(99,102,241,0.2), rgba(168,85,247,0.2))' }}>
+                              <Sparkles className="w-2.5 h-2.5 text-indigo-400" />
+                            </div>
+                            <span className="text-[8px] font-medium block truncate text-white/70">Auto</span>
+                          </button>
+                          {getAllVisualArtPresets().map((preset) => (
+                            <button
+                              key={preset.id}
+                              type="button"
+                              onClick={() => { setSceneArtPreset(preset.id); updateSceneMutation.mutate({ artPresetId: preset.id }); }}
+                              className="flex-shrink-0 w-[60px] rounded-lg border p-1 transition-all"
+                              style={{
+                                borderColor: sceneArtPreset === preset.id ? 'rgb(139,92,246)' : 'rgba(255,255,255,0.1)',
+                                backgroundColor: sceneArtPreset === preset.id ? 'rgba(139,92,246,0.15)' : 'transparent',
+                              }}
+                              title={preset.description}
+                            >
+                              {ART_PRESET_IMAGES[preset.id] ? (
+                                <img src={ART_PRESET_IMAGES[preset.id]} alt={preset.name} className="w-full h-8 rounded object-cover mb-0.5" />
+                              ) : (
+                                <div className="w-full h-8 rounded mb-0.5" style={{ background: `linear-gradient(135deg, ${preset.thumbnailColors[0]}, ${preset.thumbnailColors[1]}, ${preset.thumbnailColors[2]})` }} />
+                              )}
+                              <span className="text-[8px] font-medium block truncate text-white/70">{preset.name}</span>
+                            </button>
+                          ))}
                         </div>
                       </div>
 
