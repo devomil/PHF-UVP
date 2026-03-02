@@ -336,13 +336,15 @@ class ImageGenerationService {
         },
         body: JSON.stringify({
           model: usedProvider.modelId || 'Qubico/flux1-schnell',
-          task_type: 'txt2img',
+          task_type: usedProvider.defaultParams?.taskType || 'txt2img',
           input: {
             prompt: options.prompt,
             negative_prompt: options.negativePrompt || 'blurry, low quality, distorted, watermark, text',
             width,
             height,
             num_inference_steps: 4,
+            ...(usedProvider.defaultParams?.output_format ? { output_format: usedProvider.defaultParams.output_format } : {}),
+            ...(options.aspectRatio ? { aspect_ratio: options.aspectRatio } : {}),
           },
         }),
       });
@@ -366,7 +368,18 @@ class ImageGenerationService {
       }
       
       if (result.data?.task_id) {
-        console.log(`[ImageGen] Flux task created: ${result.data.task_id}`);
+        console.log(`[ImageGen] Task created: ${result.data.task_id}, polling for completion...`);
+        const polledUrl = await this.pollPiAPITask(result.data.task_id, apiKey);
+        if (polledUrl) {
+          return {
+            url: polledUrl,
+            provider: usedProvider.id,
+            prompt: options.prompt,
+            width,
+            height,
+            cost: usedProvider.costPerImage,
+          };
+        }
         return {
           url: `pending:${result.data.task_id}`,
           provider: usedProvider.id,
@@ -555,6 +568,46 @@ class ImageGenerationService {
       balance: balance.points,
       plan: balance.plan,
     };
+  }
+
+  private async pollPiAPITask(taskId: string, apiKey: string): Promise<string | null> {
+    const maxAttempts = 60;
+    const pollInterval = 3000;
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      await new Promise(resolve => setTimeout(resolve, pollInterval));
+
+      try {
+        const response = await fetch(`https://api.piapi.ai/api/v1/task/${taskId}`, {
+          headers: { 'X-API-Key': apiKey },
+        });
+
+        if (!response.ok) continue;
+
+        const data = await response.json();
+        const status = data.data?.status || data.status;
+
+        if (status === 'completed' || status === 'success') {
+          const output = data.data?.output;
+          if (typeof output === 'string') return output;
+          if (output?.image_url) return output.image_url;
+          if (Array.isArray(output) && output.length > 0) {
+            return typeof output[0] === 'string' ? output[0] : output[0]?.url || output[0]?.image_url;
+          }
+          return null;
+        }
+
+        if (status === 'failed' || status === 'error') {
+          console.error(`[ImageGen] PiAPI task ${taskId} failed`);
+          return null;
+        }
+      } catch (error: any) {
+        console.warn(`[ImageGen] Poll error for ${taskId}:`, error.message);
+      }
+    }
+
+    console.warn(`[ImageGen] PiAPI task ${taskId} timed out`);
+    return null;
   }
 }
 

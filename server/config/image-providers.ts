@@ -78,6 +78,14 @@ export const IMAGE_PROVIDERS: Record<string, ImageProvider> = {
     costPerImage: 0.04,
     apiProvider: 'openai',
   },
+  'nano-banana-pro': {
+    id: 'nano-banana-pro',
+    name: 'Nano Banana Pro',
+    modelId: 'gemini',
+    costPerImage: 0.105,
+    apiProvider: 'piapi',
+    defaultParams: { taskType: 'nano-banana-pro', output_format: 'png' },
+  },
 };
 
 export function getImageProviderForStyle(style: ImageStyle, qualityTier: string): ImageProvider {
