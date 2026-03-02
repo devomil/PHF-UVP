@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -33,12 +33,16 @@ import {
   X,
   AlertCircle,
   HardDrive,
+  Loader2,
+  CheckCircle2,
+  XCircle,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 import { AssetUploadModal, type AssetMetadata } from '@/components/video/AssetUploadModal';
 import { ASSET_CATEGORIES as TAXONOMY_CATEGORIES, getAssetType, getTypesByCategory } from '@shared/brand-asset-types';
 import S3AssetManager from '@/components/video/s3-asset-manager';
+import { AssetCreatorDialog } from '@/components/video/AssetCreatorDialog';
 
 type AssetType = 'image' | 'video' | 'music' | 'all';
 type ViewMode = 'grid' | 'list';
@@ -162,7 +166,37 @@ export default function AssetLibrary() {
   const [selectedAsset, setSelectedAsset] = useState<MediaAsset | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
-  
+  const [isCreatorOpen, setIsCreatorOpen] = useState(false);
+
+  const { data: activeJobs, refetch: refetchJobs } = useQuery<any[]>({
+    queryKey: ['/api/asset-library/jobs'],
+    refetchInterval: (query) => {
+      const jobs = query.state.data as any[] | undefined;
+      const hasActive = jobs?.some((j: any) => j.status === 'pending' || j.status === 'processing');
+      return hasActive ? 3000 : false;
+    },
+  });
+
+  const { data: libraryAssets, isLoading: isLoadingLibraryAssets, refetch: refetchLibraryAssets } = useQuery<any[]>({
+    queryKey: ['/api/asset-library'],
+    enabled: activeTab === 'library',
+  });
+
+  const pendingJobs = activeJobs?.filter((j: any) => j.status === 'pending' || j.status === 'processing') || [];
+  const recentCompletedJobs = activeJobs?.filter((j: any) => j.status === 'completed' && Date.now() - new Date(j.completedAt).getTime() < 60000) || [];
+
+  useEffect(() => {
+    if (recentCompletedJobs.length > 0) {
+      refetchLibraryAssets();
+      queryClient.invalidateQueries({ queryKey: ['/api/videos/assets'] });
+    }
+  }, [recentCompletedJobs.length]);
+
+  const handleJobStarted = useCallback((jobId: string) => {
+    refetchJobs();
+    setActiveTab('library');
+  }, [refetchJobs]);
+
   // Brand Media Library state
   const [selectedBrandAsset, setSelectedBrandAsset] = useState<BrandMedia | null>(null);
   const [isEditingBrand, setIsEditingBrand] = useState(false);
@@ -554,6 +588,14 @@ export default function AssetLibrary() {
             </div>
             <div className="flex items-center gap-2">
               <Button
+                onClick={() => setIsCreatorOpen(true)}
+                className="bg-purple-600 hover:bg-purple-700 text-white"
+                size="sm"
+              >
+                <Plus className="h-4 w-4 mr-1.5" />
+                Create Asset
+              </Button>
+              <Button
                 variant={viewMode === 'grid' ? 'default' : 'outline'}
                 size="sm"
                 onClick={() => setViewMode('grid')}
@@ -654,37 +696,114 @@ export default function AssetLibrary() {
                 </Select>
               </div>
 
-              {isLoadingAssets ? (
+              {pendingJobs.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-sm font-medium text-gray-400 flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin text-purple-400" />
+                    Active Generations ({pendingJobs.length})
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {pendingJobs.map((job: any) => (
+                      <div key={job.jobId} className="flex items-center gap-3 p-3 rounded-lg border border-purple-500/30 bg-purple-500/5">
+                        <div className="flex-shrink-0">
+                          <Loader2 className="h-5 w-5 animate-spin text-purple-400" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium text-white truncate">{job.prompt?.substring(0, 50)}{job.prompt?.length > 50 ? '...' : ''}</p>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-purple-500/40 text-purple-300">
+                              {(job.i2vSettings as any)?.assetLibraryMode?.toUpperCase() || job.sceneType?.toUpperCase()}
+                            </Badge>
+                            <span className="text-[10px] text-gray-500">{job.provider}</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {isLoadingAssets && isLoadingLibraryAssets ? (
                 <div className="flex items-center justify-center py-12">
                   <div className="text-center">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
                     <p className="text-gray-500">Loading assets...</p>
                   </div>
                 </div>
-              ) : assets.length === 0 ? (
+              ) : (libraryAssets?.length || 0) === 0 && assets.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 text-center">
-                  <Image className="h-16 w-16 text-gray-300 mb-4" />
-                  <h3 className="text-lg font-medium text-gray-900 mb-1">No assets found</h3>
+                  <Image className="h-16 w-16 text-gray-600 mb-4" />
+                  <h3 className="text-lg font-medium text-gray-300 mb-1">No assets yet</h3>
                   <p className="text-gray-500 mb-4">
-                    Assets will appear here after you generate videos with the AI Producer.
+                    Create images and videos with AI, or generate assets during video production.
                   </p>
-                  <Button variant="outline">
+                  <Button
+                    onClick={() => setIsCreatorOpen(true)}
+                    className="bg-purple-600 hover:bg-purple-700 text-white"
+                  >
                     <Sparkles className="h-4 w-4 mr-2" />
-                    Start AI Production
+                    Create Your First Asset
                   </Button>
                 </div>
               ) : (
                 <ScrollArea className="h-[500px]">
                   {viewMode === 'grid' ? (
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                      {(libraryAssets || []).map((la: any) => (
+                        <div
+                          key={`lib-${la.id}`}
+                          className="relative group cursor-pointer rounded-lg overflow-hidden border border-gray-700 bg-gray-900 hover:border-purple-500 transition-colors"
+                        >
+                          <div className="aspect-video bg-gray-800 relative">
+                            {la.assetType === 'image' ? (
+                              <img
+                                src={la.thumbnailUrl || la.assetUrl}
+                                alt={la.prompt?.substring(0, 40) || 'Generated asset'}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : la.assetType === 'video' ? (
+                              <video
+                                src={la.assetUrl}
+                                className="w-full h-full object-cover"
+                                muted
+                                onMouseEnter={(e) => (e.target as HTMLVideoElement).play().catch(() => {})}
+                                onMouseLeave={(e) => { const v = e.target as HTMLVideoElement; v.pause(); v.currentTime = 0; }}
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center">
+                                <Image className="h-8 w-8 text-gray-600" />
+                              </div>
+                            )}
+                            <div className="absolute top-1.5 left-1.5">
+                              <Badge className="text-[10px] px-1.5 py-0 bg-purple-600/90 text-white border-0">
+                                {la.contentType?.toUpperCase() || la.assetType?.toUpperCase()}
+                              </Badge>
+                            </div>
+                            {la.isFavorite && (
+                              <div className="absolute top-1.5 right-1.5 text-yellow-400 text-xs">★</div>
+                            )}
+                          </div>
+                          <div className="p-2">
+                            <p className="text-xs text-gray-300 truncate">{la.prompt?.substring(0, 60) || 'Untitled'}</p>
+                            <div className="flex items-center gap-1 mt-1">
+                              <Badge variant="outline" className="text-[10px] px-1 py-0 border-gray-600 text-gray-400">
+                                {la.provider || 'auto'}
+                              </Badge>
+                              {la.useCount > 1 && (
+                                <span className="text-[10px] text-gray-500">Used {la.useCount}x</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
                       {assets.map((asset) => (
                         <div
                           key={asset.id}
-                          className="relative group cursor-pointer rounded-lg overflow-hidden border bg-gray-50 hover:border-primary transition-colors"
+                          className="relative group cursor-pointer rounded-lg overflow-hidden border border-gray-700 bg-gray-900 hover:border-purple-500 transition-colors"
                           onClick={() => setSelectedAsset(asset)}
                           data-testid={`asset-card-${asset.id}`}
                         >
-                          <div className="aspect-video bg-gray-200 relative">
+                          <div className="aspect-video bg-gray-800 relative">
                             {asset.type === 'image' && (
                               <img
                                 src={asset.thumbnail_url || asset.url}
@@ -693,9 +812,13 @@ export default function AssetLibrary() {
                               />
                             )}
                             {asset.type === 'video' && (
-                              <div className="w-full h-full flex items-center justify-center bg-gray-900">
-                                <Video className="h-8 w-8 text-white/70" />
-                              </div>
+                              <video
+                                src={asset.url}
+                                className="w-full h-full object-cover"
+                                muted
+                                onMouseEnter={(e) => (e.target as HTMLVideoElement).play().catch(() => {})}
+                                onMouseLeave={(e) => { const v = e.target as HTMLVideoElement; v.pause(); v.currentTime = 0; }}
+                              />
                             )}
                             {asset.type === 'music' && (
                               <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-purple-500 to-pink-500">
@@ -709,9 +832,9 @@ export default function AssetLibrary() {
                             </div>
                           </div>
                           <div className="p-2">
-                            <p className="text-xs font-medium truncate">{asset.name}</p>
+                            <p className="text-xs font-medium text-gray-300 truncate">{asset.name}</p>
                             <div className="flex items-center gap-1 mt-1">
-                              <Badge variant="secondary" className={`text-xs ${getSourceBadgeColor(asset.source)}`}>
+                              <Badge variant="outline" className="text-[10px] px-1 py-0 border-gray-600 text-gray-400">
                                 {asset.source}
                               </Badge>
                             </div>
@@ -2214,6 +2337,12 @@ export default function AssetLibrary() {
         isOpen={isNewUploadModalOpen}
         onClose={() => setIsNewUploadModalOpen(false)}
         onUpload={handleNewUpload}
+      />
+
+      <AssetCreatorDialog
+        open={isCreatorOpen}
+        onOpenChange={setIsCreatorOpen}
+        onJobStarted={handleJobStarted}
       />
     </div>
   );
