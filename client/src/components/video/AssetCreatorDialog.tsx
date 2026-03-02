@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Slider } from '@/components/ui/slider';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 import {
@@ -19,9 +20,19 @@ import {
   X,
   Layers,
   Film,
+  ArrowUpCircle,
+  Scissors,
+  User,
+  Wand2,
 } from 'lucide-react';
 
-type GenerationMode = 't2i' | 't2v' | 'i2v' | 'i2i' | 'v2v';
+type GenerationMode =
+  | 't2i' | 't2v' | 'i2v' | 'i2i' | 'v2v'
+  | 'upscale-image' | 'upscale-video'
+  | 'bg-remove-image' | 'bg-remove-video'
+  | 'character-performance';
+
+type ModeCategory = 'generate' | 'transform' | 'toolkit';
 
 interface AssetCreatorDialogProps {
   open: boolean;
@@ -33,6 +44,7 @@ const VIDEO_PROVIDERS = [
   { id: 'auto', name: 'Auto (Best Match)' },
   { id: 'kling-2.6', name: 'Kling 2.6' },
   { id: 'kling-2.6-pro', name: 'Kling 2.6 Pro' },
+  { id: 'kling-effects', name: 'Kling Effects (VFX)' },
   { id: 'veo-3.1', name: 'Veo 3.1' },
   { id: 'luma', name: 'Luma Dream Machine' },
   { id: 'hailuo', name: 'Hailuo MiniMax' },
@@ -43,18 +55,26 @@ const VIDEO_PROVIDERS = [
   { id: 'runway', name: 'Runway Gen-3' },
   { id: 'runway-4.5', name: 'Runway 4.5' },
   { id: 'runway-gen4', name: 'Runway Gen-4' },
+  { id: 'runway-gen4-aleph', name: 'Runway Gen-4 Aleph' },
 ];
 
 const IMAGE_PROVIDERS = [
   { id: 'auto', name: 'Auto (Best Match)' },
-  { id: 'flux-schnell', name: 'Flux Schnell' },
-  { id: 'flux-dev', name: 'Flux Dev' },
+  { id: 'flux', name: 'Flux Schnell' },
+  { id: 'flux-1-dev', name: 'Flux Dev' },
   { id: 'ideogram', name: 'Ideogram' },
+  { id: 'nano-banana-pro', name: 'Nano Banana Pro' },
 ];
 
 const V2V_PROVIDERS = [
-  { id: 'auto', name: 'Auto (Kling V2V)' },
-  { id: 'kling-2.6', name: 'Kling 2.6' },
+  { id: 'auto', name: 'Auto (Kling Object Replace)' },
+  { id: 'kling-2.6', name: 'Kling 2.6 (Object Replace)' },
+  { id: 'runway-gen4-aleph', name: 'Runway Gen-4 Aleph (V2V)' },
+  { id: 'runway-4.5', name: 'Runway 4.5 (V2V)' },
+];
+
+const TOOLKIT_PROVIDER = [
+  { id: 'auto', name: 'Qubic Image Toolkit' },
 ];
 
 const ASPECT_RATIOS = [
@@ -91,34 +111,51 @@ const I2I_USE_CASES = [
   { id: 'product-placement', name: 'Product Placement', desc: 'Place a product into a new setting' },
 ];
 
-const MODE_CONFIG: Record<GenerationMode, { label: string; shortLabel: string; icon: any; description: string; outputType: 'image' | 'video' }> = {
-  t2i: { label: 'Text to Image', shortLabel: 'T2I', icon: Image, description: 'Generate an image from a text prompt', outputType: 'image' },
-  t2v: { label: 'Text to Video', shortLabel: 'T2V', icon: Video, description: 'Generate a video clip from a text prompt', outputType: 'video' },
-  i2v: { label: 'Image to Video', shortLabel: 'I2V', icon: ImagePlus, description: 'Animate a reference image into video', outputType: 'video' },
-  i2i: { label: 'Image to Image', shortLabel: 'I2I', icon: Layers, description: 'Transform an image with style transfer or edits', outputType: 'image' },
-  v2v: { label: 'Video to Video', shortLabel: 'V2V', icon: Film, description: 'Transform a video with object replacement or style changes', outputType: 'video' },
+const SCALE_FACTORS = [
+  { value: 2, label: '2x' },
+  { value: 4, label: '4x' },
+];
+
+interface ModeConfig {
+  label: string;
+  shortLabel: string;
+  icon: any;
+  description: string;
+  category: ModeCategory;
+  outputType: 'image' | 'video';
+  needsPrompt: boolean;
+  needsRefImage: boolean;
+  needsRefVideo: boolean;
+  needsReplacementImage: boolean;
+}
+
+const MODE_CONFIG: Record<GenerationMode, ModeConfig> = {
+  't2i': { label: 'Text to Image', shortLabel: 'T2I', icon: Image, description: 'Generate an image from a text prompt', category: 'generate', outputType: 'image', needsPrompt: true, needsRefImage: false, needsRefVideo: false, needsReplacementImage: false },
+  't2v': { label: 'Text to Video', shortLabel: 'T2V', icon: Video, description: 'Generate a video clip from a text prompt', category: 'generate', outputType: 'video', needsPrompt: true, needsRefImage: false, needsRefVideo: false, needsReplacementImage: false },
+  'i2v': { label: 'Image to Video', shortLabel: 'I2V', icon: ImagePlus, description: 'Animate a reference image into video', category: 'generate', outputType: 'video', needsPrompt: true, needsRefImage: true, needsRefVideo: false, needsReplacementImage: false },
+  'i2i': { label: 'Image to Image', shortLabel: 'I2I', icon: Layers, description: 'Transform an image with style transfer or edits', category: 'transform', outputType: 'image', needsPrompt: true, needsRefImage: true, needsRefVideo: false, needsReplacementImage: false },
+  'v2v': { label: 'Video to Video', shortLabel: 'V2V', icon: Film, description: 'Transform video with Runway Aleph or Kling object replace', category: 'transform', outputType: 'video', needsPrompt: true, needsRefImage: false, needsRefVideo: true, needsReplacementImage: false },
+  'character-performance': { label: 'Character Performance', shortLabel: 'Act Two', icon: User, description: 'Runway Act Two — animate a character from a reference video', category: 'transform', outputType: 'video', needsPrompt: false, needsRefImage: true, needsRefVideo: true, needsReplacementImage: false },
+  'upscale-image': { label: 'Upscale Image', shortLabel: 'Upscale', icon: ArrowUpCircle, description: 'Enhance image resolution with AI upscaling', category: 'toolkit', outputType: 'image', needsPrompt: false, needsRefImage: true, needsRefVideo: false, needsReplacementImage: false },
+  'upscale-video': { label: 'Upscale Video', shortLabel: 'Upscale', icon: ArrowUpCircle, description: 'Enhance video resolution with AI upscaling', category: 'toolkit', outputType: 'video', needsPrompt: false, needsRefImage: false, needsRefVideo: true, needsReplacementImage: false },
+  'bg-remove-image': { label: 'Remove BG (Image)', shortLabel: 'BG Remove', icon: Scissors, description: 'Remove background from an image', category: 'toolkit', outputType: 'image', needsPrompt: false, needsRefImage: true, needsRefVideo: false, needsReplacementImage: false },
+  'bg-remove-video': { label: 'Remove BG (Video)', shortLabel: 'BG Remove', icon: Scissors, description: 'Remove background from a video', category: 'toolkit', outputType: 'video', needsPrompt: false, needsRefImage: false, needsRefVideo: true, needsReplacementImage: false },
 };
 
-const MODE_ORDER: GenerationMode[] = ['t2i', 't2v', 'i2v', 'i2i', 'v2v'];
+const CATEGORY_MODES: Record<ModeCategory, GenerationMode[]> = {
+  generate: ['t2i', 't2v', 'i2v'],
+  transform: ['i2i', 'v2v', 'character-performance'],
+  toolkit: ['upscale-image', 'upscale-video', 'bg-remove-image', 'bg-remove-video'],
+};
 
-function needsReferenceImage(mode: GenerationMode): boolean {
-  return mode === 'i2v' || mode === 'i2i';
-}
+const CATEGORY_LABELS: Record<ModeCategory, string> = {
+  generate: 'Generate',
+  transform: 'Transform',
+  toolkit: 'Toolkit',
+};
 
-function needsReferenceVideo(mode: GenerationMode): boolean {
-  return mode === 'v2v';
-}
-
-function needsReplacementImage(mode: GenerationMode): boolean {
-  return mode === 'v2v';
-}
-
-function outputsVideo(mode: GenerationMode): boolean {
-  return mode === 't2v' || mode === 'i2v' || mode === 'v2v';
-}
-
-function outputsImage(mode: GenerationMode): boolean {
-  return mode === 't2i' || mode === 'i2i';
+function isRunwayV2V(provider: string) {
+  return provider.startsWith('runway');
 }
 
 export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCreatorDialogProps) {
@@ -128,6 +165,7 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
   const replacementInputRef = useRef<HTMLInputElement>(null);
 
   const [mode, setMode] = useState<GenerationMode>('t2v');
+  const [category, setCategory] = useState<ModeCategory>('generate');
   const [prompt, setPrompt] = useState('');
   const [provider, setProvider] = useState('auto');
   const [aspectRatio, setAspectRatio] = useState('16:9');
@@ -135,6 +173,8 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
   const [style, setStyle] = useState('Photorealistic');
   const [strength, setStrength] = useState(0.6);
   const [useCase, setUseCase] = useState('style-transfer');
+  const [scaleFactor, setScaleFactor] = useState(2);
+  const [bodyControl, setBodyControl] = useState(false);
   const [referenceImageUrl, setReferenceImageUrl] = useState('');
   const [referenceImagePreview, setReferenceImagePreview] = useState<string | null>(null);
   const [referenceVideoUrl, setReferenceVideoUrl] = useState('');
@@ -145,9 +185,15 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
   const [isUploadingVideo, setIsUploadingVideo] = useState(false);
   const [isUploadingReplacement, setIsUploadingReplacement] = useState(false);
 
+  const cfg = MODE_CONFIG[mode];
+
+  const needsReplacementForV2V = mode === 'v2v' && !isRunwayV2V(provider);
+
   const getProviders = () => {
-    if (outputsImage(mode)) return IMAGE_PROVIDERS;
     if (mode === 'v2v') return V2V_PROVIDERS;
+    if (cfg.category === 'toolkit') return TOOLKIT_PROVIDER;
+    if (mode === 'character-performance') return [{ id: 'runway-act-two', name: 'Runway Act Two' }];
+    if (cfg.outputType === 'image') return IMAGE_PROVIDERS;
     return VIDEO_PROVIDERS;
   };
 
@@ -177,23 +223,23 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
   };
 
   const handleSubmit = async () => {
-    if (!prompt.trim()) {
-      toast({ title: 'Prompt required', description: 'Please enter a description.', variant: 'destructive' });
+    if (cfg.needsPrompt && !prompt.trim()) {
+      toast({ title: 'Prompt required', variant: 'destructive' });
       return;
     }
 
-    if (needsReferenceImage(mode) && !referenceImageUrl) {
+    if (cfg.needsRefImage && !referenceImageUrl) {
       toast({ title: 'Reference image required', variant: 'destructive' });
       return;
     }
 
-    if (needsReferenceVideo(mode) && !referenceVideoUrl) {
+    if (cfg.needsRefVideo && !referenceVideoUrl) {
       toast({ title: 'Reference video required', variant: 'destructive' });
       return;
     }
 
-    if (needsReplacementImage(mode) && !replacementImageUrl) {
-      toast({ title: 'Replacement image required', description: 'Upload or paste the image of the object to insert.', variant: 'destructive' });
+    if (needsReplacementForV2V && !replacementImageUrl) {
+      toast({ title: 'Replacement image required', description: 'Kling V2V requires a replacement image for object insertion.', variant: 'destructive' });
       return;
     }
 
@@ -201,19 +247,25 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
     try {
       const body: any = {
         mode,
-        prompt: prompt.trim(),
+        prompt: prompt.trim() || undefined,
         provider: provider || 'auto',
         aspectRatio,
       };
 
-      if (outputsVideo(mode)) body.duration = duration;
+      if (cfg.outputType === 'video') body.duration = duration;
       if (mode === 't2i') body.style = style;
-      if (needsReferenceImage(mode)) body.referenceImageUrl = referenceImageUrl;
-      if (needsReferenceVideo(mode)) body.referenceVideoUrl = referenceVideoUrl;
-      if (needsReplacementImage(mode)) body.referenceImageUrl = replacementImageUrl;
+      if (cfg.needsRefImage) body.referenceImageUrl = referenceImageUrl;
+      if (cfg.needsRefVideo) body.referenceVideoUrl = referenceVideoUrl;
+      if (needsReplacementForV2V) body.referenceImageUrl = replacementImageUrl;
       if (mode === 'i2i') {
         body.strength = strength;
         body.useCase = useCase;
+      }
+      if (mode === 'upscale-image' || mode === 'upscale-video') {
+        body.scaleFactor = scaleFactor;
+      }
+      if (mode === 'character-performance') {
+        body.bodyControl = bodyControl;
       }
 
       const res = await apiRequest('POST', '/api/asset-library/generate', body);
@@ -221,7 +273,7 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
 
       toast({
         title: 'Generation started',
-        description: `Your ${MODE_CONFIG[mode].label.toLowerCase()} is being created.`,
+        description: `Your ${cfg.label.toLowerCase()} is being processed.`,
       });
 
       onJobStarted?.(data.jobId);
@@ -239,12 +291,13 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
     }
   };
 
-  const canSubmit = prompt.trim() &&
-    (!needsReferenceImage(mode) || referenceImageUrl) &&
-    (!needsReferenceVideo(mode) || referenceVideoUrl) &&
-    (!needsReplacementImage(mode) || replacementImageUrl);
+  const canSubmit =
+    (!cfg.needsPrompt || prompt.trim()) &&
+    (!cfg.needsRefImage || referenceImageUrl) &&
+    (!cfg.needsRefVideo || referenceVideoUrl) &&
+    (!needsReplacementForV2V || replacementImageUrl);
 
-  const promptPlaceholders: Record<GenerationMode, string> = {
+  const promptPlaceholders: Partial<Record<GenerationMode, string>> = {
     t2i: 'Describe the image you want to create...',
     t2v: 'Describe the video scene you want to generate...',
     i2v: 'Describe how you want the image to be animated...',
@@ -254,7 +307,7 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[640px] bg-gray-950 border-gray-800 text-white max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[680px] bg-gray-950 border-gray-800 text-white max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-lg">
             <Sparkles className="h-5 w-5 text-purple-400" />
@@ -262,11 +315,30 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-5">
+        <div className="space-y-4">
           <div>
-            <Label className="text-sm text-gray-400 mb-2 block">Generation Mode</Label>
-            <div className="grid grid-cols-5 gap-1.5">
-              {MODE_ORDER.map((m) => {
+            <div className="flex gap-1 mb-3">
+              {(Object.keys(CATEGORY_LABELS) as ModeCategory[]).map((cat) => (
+                <button
+                  key={cat}
+                  onClick={() => {
+                    setCategory(cat);
+                    setMode(CATEGORY_MODES[cat][0]);
+                    setProvider('auto');
+                  }}
+                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                    category === cat
+                      ? 'bg-purple-600 text-white'
+                      : 'bg-gray-800 text-gray-400 hover:bg-gray-750 hover:text-gray-300'
+                  }`}
+                >
+                  {CATEGORY_LABELS[cat]}
+                </button>
+              ))}
+            </div>
+
+            <div className={`grid gap-1.5 ${CATEGORY_MODES[category].length <= 3 ? 'grid-cols-3' : 'grid-cols-4'}`}>
+              {CATEGORY_MODES[category].map((m) => {
                 const config = MODE_CONFIG[m];
                 const Icon = config.icon;
                 return (
@@ -288,28 +360,33 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
                 );
               })}
             </div>
-            <p className="text-xs text-gray-500 mt-1.5">{MODE_CONFIG[mode].description}</p>
+            <p className="text-xs text-gray-500 mt-1.5">{cfg.description}</p>
           </div>
 
-          <div>
-            <Label htmlFor="prompt" className="text-sm text-gray-400 mb-1.5 block">Prompt</Label>
-            <Textarea
-              id="prompt"
-              placeholder={promptPlaceholders[mode]}
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              className="bg-gray-900 border-gray-700 text-white placeholder:text-gray-600 min-h-[80px] resize-none"
-              maxLength={2000}
-            />
-            <div className="flex justify-end mt-1">
-              <span className="text-xs text-gray-600">{prompt.length}/2000</span>
+          {cfg.needsPrompt && (
+            <div>
+              <Label htmlFor="prompt" className="text-sm text-gray-400 mb-1.5 block">Prompt</Label>
+              <Textarea
+                id="prompt"
+                placeholder={promptPlaceholders[mode] || 'Describe what you want...'}
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                className="bg-gray-900 border-gray-700 text-white placeholder:text-gray-600 min-h-[80px] resize-none"
+                maxLength={2000}
+              />
+              <div className="flex justify-end mt-1">
+                <span className="text-xs text-gray-600">{prompt.length}/2000</span>
+              </div>
             </div>
-          </div>
+          )}
 
-          {needsReferenceImage(mode) && (
+          {cfg.needsRefImage && (
             <div>
               <Label className="text-sm text-gray-400 mb-1.5 block">
-                {mode === 'i2i' ? 'Source Image' : 'Reference Image'}
+                {mode === 'character-performance' ? 'Character Image' :
+                 mode === 'i2i' ? 'Source Image' :
+                 mode === 'upscale-image' || mode === 'bg-remove-image' ? 'Input Image' :
+                 'Reference Image'}
               </Label>
               {referenceImagePreview ? (
                 <div className="relative rounded-lg overflow-hidden border border-gray-700 w-40 h-24">
@@ -345,9 +422,13 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
             </div>
           )}
 
-          {needsReferenceVideo(mode) && (
+          {cfg.needsRefVideo && (
             <div>
-              <Label className="text-sm text-gray-400 mb-1.5 block">Source Video</Label>
+              <Label className="text-sm text-gray-400 mb-1.5 block">
+                {mode === 'character-performance' ? 'Reference Performance Video' :
+                 mode === 'upscale-video' || mode === 'bg-remove-video' ? 'Input Video' :
+                 'Source Video'}
+              </Label>
               <div className="flex gap-2">
                 <Input
                   placeholder="Paste video URL..."
@@ -376,7 +457,7 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
             </div>
           )}
 
-          {needsReplacementImage(mode) && (
+          {needsReplacementForV2V && (
             <div>
               <Label className="text-sm text-gray-400 mb-1.5 block">Replacement Image (product/object to insert)</Label>
               {replacementImagePreview ? (
@@ -410,6 +491,7 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
                   />
                 </div>
               )}
+              <p className="text-[10px] text-gray-500 mt-1">Only needed for Kling object replacement. Runway V2V uses prompt-based transformation.</p>
             </div>
           )}
 
@@ -454,45 +536,81 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
             </>
           )}
 
-          <div className="grid grid-cols-2 gap-4">
+          {(mode === 'upscale-image' || mode === 'upscale-video') && (
             <div>
-              <Label className="text-sm text-gray-400 mb-1.5 block">Provider</Label>
-              <Select value={provider} onValueChange={setProvider}>
-                <SelectTrigger className="bg-gray-900 border-gray-700 text-white">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="bg-gray-900 border-gray-700">
-                  {getProviders().map((p) => (
-                    <SelectItem key={p.id} value={p.id} className="text-white hover:bg-gray-800">
-                      {p.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label className="text-sm text-gray-400 mb-1.5 block">Aspect Ratio</Label>
-              <div className="flex gap-1.5">
-                {ASPECT_RATIOS.map((ar) => (
+              <Label className="text-sm text-gray-400 mb-1.5 block">Scale Factor</Label>
+              <div className="flex gap-2">
+                {SCALE_FACTORS.map((sf) => (
                   <button
-                    key={ar.id}
-                    onClick={() => setAspectRatio(ar.id)}
-                    className={`flex-1 px-2 py-1.5 rounded text-xs font-medium border transition-all ${
-                      aspectRatio === ar.id
+                    key={sf.value}
+                    onClick={() => setScaleFactor(sf.value)}
+                    className={`px-6 py-2 rounded text-sm font-medium border transition-all ${
+                      scaleFactor === sf.value
                         ? 'border-purple-500 bg-purple-500/10 text-purple-300'
                         : 'border-gray-700 bg-gray-900 text-gray-500 hover:border-gray-600'
                     }`}
-                    title={ar.desc}
                   >
-                    {ar.label}
+                    {sf.label}
                   </button>
                 ))}
               </div>
             </div>
-          </div>
+          )}
 
-          {outputsVideo(mode) && (
+          {mode === 'character-performance' && (
+            <div className="flex items-center justify-between p-3 rounded-lg border border-gray-700 bg-gray-900">
+              <div>
+                <Label className="text-sm text-gray-300">Body Control</Label>
+                <p className="text-[10px] text-gray-500">Enable full body motion transfer (not just face)</p>
+              </div>
+              <Switch
+                checked={bodyControl}
+                onCheckedChange={setBodyControl}
+              />
+            </div>
+          )}
+
+          {cfg.category !== 'toolkit' && mode !== 'character-performance' && (
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label className="text-sm text-gray-400 mb-1.5 block">Provider</Label>
+                <Select value={provider} onValueChange={setProvider}>
+                  <SelectTrigger className="bg-gray-900 border-gray-700 text-white">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-gray-900 border-gray-700">
+                    {getProviders().map((p) => (
+                      <SelectItem key={p.id} value={p.id} className="text-white hover:bg-gray-800">
+                        {p.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label className="text-sm text-gray-400 mb-1.5 block">Aspect Ratio</Label>
+                <div className="flex gap-1.5">
+                  {ASPECT_RATIOS.map((ar) => (
+                    <button
+                      key={ar.id}
+                      onClick={() => setAspectRatio(ar.id)}
+                      className={`flex-1 px-2 py-1.5 rounded text-xs font-medium border transition-all ${
+                        aspectRatio === ar.id
+                          ? 'border-purple-500 bg-purple-500/10 text-purple-300'
+                          : 'border-gray-700 bg-gray-900 text-gray-500 hover:border-gray-600'
+                      }`}
+                      title={ar.desc}
+                    >
+                      {ar.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {cfg.outputType === 'video' && cfg.category !== 'toolkit' && mode !== 'character-performance' && (
             <div>
               <Label className="text-sm text-gray-400 mb-1.5 block">Duration</Label>
               <div className="flex gap-2">
@@ -539,12 +657,12 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
             {isSubmitting ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Starting Generation...
+                Starting...
               </>
             ) : (
               <>
                 <Sparkles className="h-4 w-4 mr-2" />
-                Generate {MODE_CONFIG[mode].label}
+                {cfg.category === 'toolkit' ? `Process ${cfg.label}` : `Generate ${cfg.label}`}
               </>
             )}
           </Button>

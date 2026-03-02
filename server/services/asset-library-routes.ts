@@ -7,6 +7,8 @@ import { eq, desc, and, or, ilike, sql } from 'drizzle-orm';
 import { aiVideoService } from './ai-video-service';
 import { imageGenerationService } from './image-generation-service';
 import { piapiVideoService } from './piapi-video-service';
+import { runwayVideoService } from './runway-video-service';
+import { qubicToolkitService } from './qubic-toolkit-service';
 
 const router = Router();
 
@@ -55,6 +57,16 @@ router.get('/', async (req: Request, res: Response) => {
   }
 });
 
+const ALL_MODES = [
+  't2i', 't2v', 'i2v', 'i2i', 'v2v',
+  'upscale-image', 'upscale-video', 'bg-remove-image', 'bg-remove-video',
+  'character-performance',
+];
+
+const IMAGE_OUTPUT_MODES = ['t2i', 'i2i', 'upscale-image', 'bg-remove-image'];
+const NEEDS_REF_IMAGE = ['i2v', 'i2i', 'upscale-image', 'bg-remove-image', 'character-performance'];
+const NEEDS_REF_VIDEO = ['v2v', 'upscale-video', 'bg-remove-video', 'character-performance'];
+
 router.post('/generate', async (req: Request, res: Response) => {
   try {
     const userId = getUserId(req);
@@ -63,32 +75,41 @@ router.post('/generate', async (req: Request, res: Response) => {
     const {
       mode, prompt, provider, aspectRatio, duration,
       referenceImageUrl, referenceVideoUrl, style,
-      strength, useCase,
+      strength, useCase, scaleFactor, bodyControl,
     } = req.body;
 
-    if (!prompt || !mode) {
-      return res.status(400).json({ error: 'prompt and mode are required' });
+    if (!mode) {
+      return res.status(400).json({ error: 'mode is required' });
     }
 
-    const validModes = ['t2i', 't2v', 'i2v', 'i2i', 'v2v'];
-    if (!validModes.includes(mode)) {
-      return res.status(400).json({ error: `Invalid mode. Must be one of: ${validModes.join(', ')}` });
+    if (!ALL_MODES.includes(mode)) {
+      return res.status(400).json({ error: `Invalid mode. Must be one of: ${ALL_MODES.join(', ')}` });
     }
 
-    if ((mode === 'i2v' || mode === 'i2i') && !referenceImageUrl) {
+    const promptOptionalModes = ['upscale-image', 'upscale-video', 'bg-remove-image', 'bg-remove-video', 'character-performance'];
+    const needsPrompt = !promptOptionalModes.includes(mode);
+    if (needsPrompt && !prompt) {
+      return res.status(400).json({ error: 'prompt is required for this mode' });
+    }
+
+    if (NEEDS_REF_IMAGE.includes(mode) && !referenceImageUrl) {
       return res.status(400).json({ error: 'referenceImageUrl is required for this mode' });
     }
 
-    if (mode === 'v2v' && !referenceVideoUrl) {
-      return res.status(400).json({ error: 'referenceVideoUrl is required for V2V mode' });
+    if (NEEDS_REF_VIDEO.includes(mode) && !referenceVideoUrl) {
+      return res.status(400).json({ error: 'referenceVideoUrl is required for this mode' });
     }
 
-    if (mode === 'v2v' && !referenceImageUrl) {
-      return res.status(400).json({ error: 'referenceImageUrl (replacement image) is required for V2V mode' });
+    if (mode === 'v2v' && provider?.startsWith('runway') && !referenceVideoUrl) {
+      return res.status(400).json({ error: 'referenceVideoUrl is required for Runway V2V' });
+    }
+
+    if (mode === 'v2v' && !provider?.startsWith('runway') && !referenceImageUrl) {
+      return res.status(400).json({ error: 'referenceImageUrl (replacement image) is required for Kling V2V' });
     }
 
     const jobId = crypto.randomUUID();
-    const outputsImage = mode === 't2i' || mode === 'i2i';
+    const outputsImage = IMAGE_OUTPUT_MODES.includes(mode);
     const projectId = `asset-lib-${jobId.slice(0, 8)}`;
 
     await db.insert(videoGenerationJobs).values({
@@ -97,10 +118,10 @@ router.post('/generate', async (req: Request, res: Response) => {
       sceneId: 'asset-library',
       provider: provider || 'auto',
       status: 'pending',
-      prompt: prompt,
+      prompt: prompt || `${mode} processing`,
       duration: outputsImage ? undefined : (duration || 6),
       aspectRatio: aspectRatio || '16:9',
-      style: outputsImage ? (style || 'Photorealistic') : undefined,
+      style: (mode === 't2i') ? (style || 'Photorealistic') : undefined,
       sourceImageUrl: referenceImageUrl || undefined,
       sceneType: outputsImage ? 'image' : 'video',
       i2vSettings: {
@@ -111,6 +132,8 @@ router.post('/generate', async (req: Request, res: Response) => {
         useCase: useCase,
         referenceVideoUrl: referenceVideoUrl || undefined,
         replacementImageUrl: mode === 'v2v' ? referenceImageUrl : undefined,
+        scaleFactor: scaleFactor,
+        bodyControl: bodyControl,
       },
       triggeredBy: userId,
     });
@@ -417,31 +440,166 @@ async function processAssetLibraryJob(jobId: string, userId: string, mode: strin
       }
 
       case 'v2v': {
-        const refVideoUrl = settings.referenceVideoUrl;
-        if (!refVideoUrl) throw new Error('No reference video URL provided for V2V');
+        const isRunwayV2V = job.provider?.startsWith('runway');
 
-        const replacementImg = settings.replacementImageUrl || job.sourceImageUrl;
-        if (!replacementImg) throw new Error('No replacement image URL provided for V2V');
+        if (isRunwayV2V) {
+          const refVideoUrl = settings.referenceVideoUrl;
+          if (!refVideoUrl) throw new Error('No reference video URL provided for Runway V2V');
 
-        const v2vResult = await piapiVideoService.replaceObjectInVideo({
-          videoUrl: refVideoUrl,
-          replacementImageUrl: replacementImg,
-          prompt: job.prompt || '',
-          duration: job.duration || 5,
-          aspectRatio: (job.aspectRatio as '16:9' | '9:16' | '1:1') || '16:9',
-        });
+          const v2vResult = await runwayVideoService.generateVideoToVideo({
+            videoUrl: refVideoUrl,
+            prompt: job.prompt || '',
+            model: job.provider || 'runway-gen4-aleph',
+            duration: job.duration || 5,
+            aspectRatio: job.aspectRatio || '16:9',
+          });
 
-        if (!v2vResult.success || !v2vResult.videoUrl) throw new Error(v2vResult.error || 'V2V generation failed');
+          if (!v2vResult.success || !v2vResult.videoUrl) throw new Error(v2vResult.error || 'Runway V2V failed');
 
-        const v2vFinalUrl = v2vResult.s3Url || v2vResult.videoUrl;
-        await saveCompletedJob(jobId, v2vFinalUrl, 'video', {
-          provider: v2vResult.provider || 'kling-v2v',
-          prompt: job.prompt || '',
-          contentType: 'v2v',
-          userId,
-          duration: String(v2vResult.duration || job.duration || 5),
-        });
+          await saveCompletedJob(jobId, v2vResult.videoUrl, 'video', {
+            provider: v2vResult.provider || job.provider || 'runway-gen4-aleph',
+            prompt: job.prompt || '',
+            contentType: 'v2v',
+            userId,
+            duration: String(v2vResult.duration || job.duration || 5),
+          });
+        } else {
+          const refVideoUrl = settings.referenceVideoUrl;
+          if (!refVideoUrl) throw new Error('No reference video URL provided for V2V');
+
+          const replacementImg = settings.replacementImageUrl || job.sourceImageUrl;
+          if (!replacementImg) throw new Error('No replacement image URL provided for V2V');
+
+          const v2vResult = await piapiVideoService.replaceObjectInVideo({
+            videoUrl: refVideoUrl,
+            replacementImageUrl: replacementImg,
+            prompt: job.prompt || '',
+            duration: job.duration || 5,
+            aspectRatio: (job.aspectRatio as '16:9' | '9:16' | '1:1') || '16:9',
+          });
+
+          if (!v2vResult.success || !v2vResult.videoUrl) throw new Error(v2vResult.error || 'V2V generation failed');
+
+          const v2vFinalUrl = v2vResult.s3Url || v2vResult.videoUrl;
+          await saveCompletedJob(jobId, v2vFinalUrl, 'video', {
+            provider: v2vResult.provider || 'kling-v2v',
+            prompt: job.prompt || '',
+            contentType: 'v2v',
+            userId,
+            duration: String(v2vResult.duration || job.duration || 5),
+          });
+        }
         console.log(`[AssetLibrary] V2V job ${jobId} completed`);
+        break;
+      }
+
+      case 'character-performance': {
+        const charImage = job.sourceImageUrl;
+        const refVideo = settings.referenceVideoUrl;
+        if (!charImage) throw new Error('No character image URL provided');
+        if (!refVideo) throw new Error('No reference video URL provided for character performance');
+
+        const cpResult = await runwayVideoService.generateCharacterPerformance({
+          characterImageUrl: charImage,
+          referenceVideoUrl: refVideo,
+          bodyControl: settings.bodyControl ?? false,
+        });
+
+        if (!cpResult.success || !cpResult.videoUrl) throw new Error(cpResult.error || 'Character performance failed');
+
+        await saveCompletedJob(jobId, cpResult.videoUrl, 'video', {
+          provider: 'runway-act-two',
+          prompt: job.prompt || 'Character performance',
+          contentType: 'character-performance',
+          userId,
+          duration: String(cpResult.duration || 5),
+        });
+        console.log(`[AssetLibrary] Character Performance job ${jobId} completed`);
+        break;
+      }
+
+      case 'upscale-image': {
+        const imgUrl = job.sourceImageUrl;
+        if (!imgUrl) throw new Error('No image URL provided for upscaling');
+
+        const upResult = await qubicToolkitService.upscaleImage({
+          imageUrl: imgUrl,
+          scaleFactor: settings.scaleFactor || 2,
+          prompt: job.prompt || '',
+        });
+
+        if (!upResult.success || !upResult.url) throw new Error(upResult.error || 'Image upscale failed');
+
+        await saveCompletedJob(jobId, upResult.url, 'image', {
+          provider: 'qubic-image-toolkit',
+          prompt: job.prompt || 'Image upscale',
+          contentType: 'upscale-image',
+          userId,
+          width: upResult.width,
+          height: upResult.height,
+        });
+        console.log(`[AssetLibrary] Image Upscale job ${jobId} completed`);
+        break;
+      }
+
+      case 'upscale-video': {
+        const vidUrl = settings.referenceVideoUrl;
+        if (!vidUrl) throw new Error('No video URL provided for upscaling');
+
+        const vUpResult = await qubicToolkitService.upscaleVideo({
+          videoUrl: vidUrl,
+          scaleFactor: settings.scaleFactor || 2,
+        });
+
+        if (!vUpResult.success || !vUpResult.url) throw new Error(vUpResult.error || 'Video upscale failed');
+
+        await saveCompletedJob(jobId, vUpResult.url, 'video', {
+          provider: 'qubic-image-toolkit',
+          prompt: job.prompt || 'Video upscale',
+          contentType: 'upscale-video',
+          userId,
+        });
+        console.log(`[AssetLibrary] Video Upscale job ${jobId} completed`);
+        break;
+      }
+
+      case 'bg-remove-image': {
+        const bgImgUrl = job.sourceImageUrl;
+        if (!bgImgUrl) throw new Error('No image URL provided for background removal');
+
+        const bgResult = await qubicToolkitService.removeImageBackground({
+          imageUrl: bgImgUrl,
+        });
+
+        if (!bgResult.success || !bgResult.url) throw new Error(bgResult.error || 'Background removal failed');
+
+        await saveCompletedJob(jobId, bgResult.url, 'image', {
+          provider: 'qubic-image-toolkit',
+          prompt: job.prompt || 'Background removal',
+          contentType: 'bg-remove-image',
+          userId,
+        });
+        console.log(`[AssetLibrary] Image BG Removal job ${jobId} completed`);
+        break;
+      }
+
+      case 'bg-remove-video': {
+        const bgVidUrl = settings.referenceVideoUrl;
+        if (!bgVidUrl) throw new Error('No video URL provided for background removal');
+
+        const vBgResult = await qubicToolkitService.removeVideoBackground({
+          videoUrl: bgVidUrl,
+        });
+
+        if (!vBgResult.success || !vBgResult.url) throw new Error(vBgResult.error || 'Video background removal failed');
+
+        await saveCompletedJob(jobId, vBgResult.url, 'video', {
+          provider: 'qubic-image-toolkit',
+          prompt: job.prompt || 'Video background removal',
+          contentType: 'bg-remove-video',
+          userId,
+        });
+        console.log(`[AssetLibrary] Video BG Removal job ${jobId} completed`);
         break;
       }
 
