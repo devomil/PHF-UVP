@@ -139,11 +139,10 @@ class QubicToolkitService {
         method: 'POST',
         headers: { 'X-API-Key': this.apiKey, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'Qubico/image-toolkit',
-          task_type: 'video-upscale',
+          model: 'Qubico/video-toolkit',
+          task_type: 'upscale',
           input: {
             video: options.videoUrl,
-            scale: options.scaleFactor || 2,
           },
         }),
       });
@@ -190,8 +189,8 @@ class QubicToolkitService {
         method: 'POST',
         headers: { 'X-API-Key': this.apiKey, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'Qubico/image-toolkit',
-          task_type: 'video-background-removal',
+          model: 'Qubico/video-toolkit',
+          task_type: 'background-removal',
           input: {
             video: options.videoUrl,
           },
