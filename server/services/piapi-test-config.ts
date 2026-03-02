@@ -1085,8 +1085,9 @@ export const PIAPI_TEST_DEFINITIONS: PiAPITestDefinition[] = [
     videoInputField: 'video',
     pollForResult: true,
     estimatedCost: '$0.10',
-    estimatedTime: '~60s',
-    notes: 'Upscales video using Qubic Video Toolkit',
+    estimatedTime: '~10min',
+    timeoutMs: 600000,
+    notes: 'Upscales video using Qubic Video Toolkit — may take 6-10 minutes',
   },
   {
     id: 'toolkit-bg-remove-image',
@@ -1113,8 +1114,9 @@ export const PIAPI_TEST_DEFINITIONS: PiAPITestDefinition[] = [
     videoInputField: 'video',
     pollForResult: true,
     estimatedCost: '$0.08',
-    estimatedTime: '~60s',
-    notes: 'Removes background from video using Qubic Video Toolkit',
+    estimatedTime: '~10min',
+    timeoutMs: 600000,
+    notes: 'Removes background from video using Qubic Video Toolkit — may take 6-10 minutes',
   },
 
   // ==================== CHARACTER PERFORMANCE ====================
