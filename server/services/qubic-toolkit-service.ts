@@ -37,11 +37,11 @@ class QubicToolkitService {
         headers: { 'X-API-Key': this.apiKey, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model: 'Qubico/image-toolkit',
-          task_type: 'image-upscale',
+          task_type: 'upscale',
           input: {
             image: options.imageUrl,
-            scale_factor: options.scaleFactor || 2,
-            prompt: options.prompt || '',
+            scale: options.scaleFactor || 2,
+            face_enhance: true,
           },
         }),
       });
@@ -143,7 +143,7 @@ class QubicToolkitService {
           task_type: 'video-upscale',
           input: {
             video: options.videoUrl,
-            scale_factor: options.scaleFactor || 2,
+            scale: options.scaleFactor || 2,
           },
         }),
       });
