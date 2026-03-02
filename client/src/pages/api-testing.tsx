@@ -20,6 +20,10 @@ import {
   Clapperboard,
   Paintbrush,
   RotateCcw,
+  Repeat,
+  Wrench,
+  User,
+  Film,
 } from "lucide-react";
 
 interface TestDefinition {
@@ -33,6 +37,7 @@ interface TestDefinition {
   timeoutMs?: number;
   notes?: string;
   requiresImage?: boolean;
+  requiresVideo?: boolean;
   input?: Record<string, any>;
   endpoint?: string;
   disabled?: boolean;
@@ -52,21 +57,27 @@ interface TestState {
 const categoryConfig: Record<string, { label: string; icon: any; color: string; description: string }> = {
   video: { label: "Video Generation (T2V)", icon: Video, color: "purple", description: "Text-to-Video" },
   i2v: { label: "Image-to-Video (I2V)", icon: Clapperboard, color: "indigo", description: "Image-to-Video — requires test image" },
+  v2v: { label: "Video-to-Video (V2V)", icon: Repeat, color: "pink", description: "Video-to-Video — requires test video" },
+  "character-performance": { label: "Character Performance", icon: User, color: "rose", description: "Runway Act Two — requires test image + test video" },
   image: { label: "Image Generation (T2I)", icon: Image, color: "blue", description: "Text-to-Image" },
   i2i: { label: "Image-to-Image (I2I)", icon: Paintbrush, color: "cyan", description: "Image-to-Image — requires test image" },
+  toolkit: { label: "Toolkit (Upscale / BG Remove)", icon: Wrench, color: "teal", description: "Image & video upscaling and background removal" },
   audio: { label: "Audio Generation", icon: Music, color: "green", description: "Text-to-Audio / Music" },
   llm: { label: "LLM", icon: MessageSquare, color: "amber", description: "Large Language Models" },
 };
 
-const categoryOrder = ["video", "i2v", "image", "i2i", "audio", "llm"];
+const categoryOrder = ["video", "i2v", "v2v", "character-performance", "image", "i2i", "toolkit", "audio", "llm"];
 
 export default function ApiTesting() {
   const [definitions, setDefinitions] = useState<Record<string, TestDefinition[]>>({});
   const [testStates, setTestStates] = useState<Record<string, TestState>>({});
   const [loading, setLoading] = useState(true);
   const [testImageUrl, setTestImageUrl] = useState<string | null>(null);
+  const [testVideoUrl, setTestVideoUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [uploadingVideo, setUploadingVideo] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     Promise.all([
@@ -76,6 +87,7 @@ export default function ApiTesting() {
       .then(([defData, resultsData]) => {
         setDefinitions(defData.definitions || {});
         setTestImageUrl(defData.testImageUrl || null);
+        setTestVideoUrl(defData.testVideoUrl || null);
         if (resultsData.results) {
           const savedStates: Record<string, TestState> = {};
           for (const r of resultsData.results) {
@@ -162,6 +174,34 @@ export default function ApiTesting() {
       setTestImageUrl(null);
     } catch (err) {
       console.error("Delete failed:", err);
+    }
+  };
+
+  const handleVideoUpload = async (file: File) => {
+    setUploadingVideo(true);
+    const formData = new FormData();
+    formData.append("video", file);
+    try {
+      const res = await fetch("/api/piapi-tests/upload-test-video", {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+      if (data.success) {
+        setTestVideoUrl(data.videoUrl);
+      }
+    } catch (err) {
+      console.error("Video upload failed:", err);
+    }
+    setUploadingVideo(false);
+  };
+
+  const handleDeleteVideo = async () => {
+    try {
+      await fetch("/api/piapi-tests/test-video", { method: "DELETE" });
+      setTestVideoUrl(null);
+    } catch (err) {
+      console.error("Video delete failed:", err);
     }
   };
 
@@ -366,7 +406,8 @@ export default function ApiTesting() {
   };
 
   const summary = getSummary();
-  const requiresImageCategories = ["i2v", "i2i"];
+  const requiresImageCategories = ["i2v", "i2i", "character-performance"];
+  const requiresVideoCategories = ["v2v", "character-performance"];
 
   if (loading) {
     return (
@@ -533,6 +574,111 @@ export default function ApiTesting() {
           />
         </div>
 
+        <div
+          className="border rounded-xl p-4 mb-6"
+          style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)" }}
+        >
+          <div className="flex items-center gap-2 mb-3">
+            <Film className="w-4 h-4 text-pink-400" />
+            <span className="text-sm font-semibold">Test Video for V2V, Character Performance & Toolkit</span>
+            <span className="text-[11px] px-2 py-0.5 rounded-full bg-pink-500/10 text-pink-400 border border-pink-500/20">
+              Required for video-based tests
+            </span>
+          </div>
+
+          {testVideoUrl ? (
+            <div className="flex items-center gap-4">
+              <div className="relative group">
+                <video
+                  src={testVideoUrl}
+                  className="w-28 h-20 object-cover rounded-lg border"
+                  style={{ borderColor: "var(--border-subtle)" }}
+                  muted
+                  loop
+                  playsInline
+                  onMouseOver={(e) => (e.target as HTMLVideoElement).play()}
+                  onMouseOut={(e) => { const v = e.target as HTMLVideoElement; v.pause(); v.currentTime = 0; }}
+                />
+                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
+                  <button
+                    onClick={handleDeleteVideo}
+                    className="p-1.5 rounded-full bg-red-500/80 hover:bg-red-500 text-white"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-medium text-emerald-400 flex items-center gap-1.5">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  Video uploaded
+                </p>
+                <p className="text-[11px] mt-0.5 break-all" style={{ color: "var(--text-tertiary)" }}>
+                  {testVideoUrl}
+                </p>
+                <div className="flex gap-2 mt-2">
+                  <button
+                    onClick={() => videoInputRef.current?.click()}
+                    className="text-[11px] px-2 py-1 rounded border transition-colors hover:brightness-110"
+                    style={{
+                      borderColor: "var(--border-subtle)",
+                      backgroundColor: "var(--surface-hover)",
+                      color: "var(--text-secondary)",
+                    }}
+                  >
+                    Replace Video
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div
+              className="border-2 border-dashed rounded-xl p-6 text-center cursor-pointer hover:brightness-110 transition-all"
+              style={{ borderColor: "var(--border-subtle)", backgroundColor: "var(--app-bg)" }}
+              onClick={() => videoInputRef.current?.click()}
+              onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+              onDrop={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const file = e.dataTransfer.files[0];
+                if (file && file.type.startsWith("video/")) {
+                  handleVideoUpload(file);
+                }
+              }}
+            >
+              {uploadingVideo ? (
+                <div className="flex flex-col items-center gap-2">
+                  <Loader2 className="w-6 h-6 text-pink-400 animate-spin" />
+                  <span className="text-sm" style={{ color: "var(--text-secondary)" }}>Uploading video...</span>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center gap-2">
+                  <Upload className="w-6 h-6 text-pink-400" />
+                  <span className="text-sm font-medium" style={{ color: "var(--text-secondary)" }}>
+                    Upload a test video (short clip, performance reference, etc.)
+                  </span>
+                  <span className="text-[11px]" style={{ color: "var(--text-tertiary)" }}>
+                    Click or drag & drop. MP4, WebM, MOV, or AVI (max 100MB).
+                    This video will be used for V2V, Character Performance, and Toolkit tests.
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
+          <input
+            ref={videoInputRef}
+            type="file"
+            accept="video/mp4,video/webm,video/quicktime,video/x-msvideo"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) handleVideoUpload(file);
+              e.target.value = "";
+            }}
+          />
+        </div>
+
         {categoryOrder.map((category) => {
           const config = categoryConfig[category];
           if (!config) return null;
@@ -540,7 +686,9 @@ export default function ApiTesting() {
           if (tests.length === 0) return null;
           const Icon = config.icon;
           const needsImage = requiresImageCategories.includes(category);
+          const needsVideo = requiresVideoCategories.includes(category);
           const hasImage = !!testImageUrl;
+          const hasVideo = !!testVideoUrl;
 
           const catStates = tests.map((t) => testStates[t.id]?.status || "idle");
           const catPassed = catStates.filter((s) => s === "pass").length;
@@ -578,10 +726,16 @@ export default function ApiTesting() {
                       Needs image
                     </span>
                   )}
+                  {needsVideo && !hasVideo && (
+                    <span className="text-xs text-pink-400 flex items-center gap-1">
+                      <AlertCircle className="w-3 h-3" />
+                      Needs video
+                    </span>
+                  )}
                 </div>
                 <button
                   onClick={() => runCategory(category)}
-                  disabled={catRunning > 0 || (needsImage && !hasImage)}
+                  disabled={catRunning > 0 || (needsImage && !hasImage) || (needsVideo && !hasVideo)}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-purple-600 hover:bg-purple-500 text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   {catRunning > 0 ? (
@@ -602,7 +756,9 @@ export default function ApiTesting() {
                 {tests.map((test) => {
                   const state = testStates[test.id] || { status: "idle" as const };
                   const isRunning = state.status === "submitting" || state.status === "polling";
-                  const isDisabled = isRunning || (needsImage && !hasImage) || !!test.disabled;
+                  const testNeedsImage = test.requiresImage;
+                  const testNeedsVideo = test.requiresVideo;
+                  const isDisabled = isRunning || (testNeedsImage && !hasImage) || (testNeedsVideo && !hasVideo) || !!test.disabled;
                   const badge = getStatusBadge(state.status);
                   const hasFinalResult = state.status === "pass" || state.status === "fail" || state.status === "timeout";
                   const prompt = test.input?.prompt
@@ -631,6 +787,11 @@ export default function ApiTesting() {
                           {test.requiresImage && (
                             <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
                               IMG
+                            </span>
+                          )}
+                          {test.requiresVideo && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-pink-500/10 text-pink-400 border border-pink-500/20">
+                              VID
                             </span>
                           )}
                           {test.disabled && (

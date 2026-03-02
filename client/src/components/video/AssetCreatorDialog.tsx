@@ -56,6 +56,7 @@ const VIDEO_PROVIDERS = [
   { id: 'runway-4.5', name: 'Runway 4.5' },
   { id: 'runway-gen4', name: 'Runway Gen-4' },
   { id: 'runway-gen4-aleph', name: 'Runway Gen-4 Aleph' },
+  { id: 'runway-act-two', name: 'Runway Act Two' },
 ];
 
 const IMAGE_PROVIDERS = [
