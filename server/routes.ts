@@ -30,6 +30,7 @@ export function registerRoutes(app: Express) {
   app.use("/api/brand-settings", brandSettingsRouter);
   app.use('/uploads', express.static('uploads'));
   app.use('/test-images', express.static('public/test-images'));
+  app.use('/test-videos', express.static('public/test-videos'));
 
   import("./services/universal-video-routes")
     .then((mod) => {

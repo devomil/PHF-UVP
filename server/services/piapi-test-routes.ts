@@ -16,8 +16,12 @@ const TASK_ENDPOINT = `${PIAPI_BASE}/api/v1/task`;
 const CHAT_ENDPOINT = `${PIAPI_BASE}/v1/chat/completions`;
 
 const TEST_IMAGE_DIR = path.join(process.cwd(), 'public', 'test-images');
+const TEST_VIDEO_DIR = path.join(process.cwd(), 'public', 'test-videos');
 if (!fs.existsSync(TEST_IMAGE_DIR)) {
   fs.mkdirSync(TEST_IMAGE_DIR, { recursive: true });
+}
+if (!fs.existsSync(TEST_VIDEO_DIR)) {
+  fs.mkdirSync(TEST_VIDEO_DIR, { recursive: true });
 }
 
 const upload = multer({
@@ -39,21 +43,47 @@ const upload = multer({
   },
 });
 
+const videoUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, TEST_VIDEO_DIR),
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname) || '.mp4';
+      cb(null, `test-video${ext}`);
+    },
+  }),
+  limits: { fileSize: 100 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const allowed = ['video/mp4', 'video/webm', 'video/quicktime', 'video/x-msvideo'];
+    if (allowed.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only MP4, WebM, MOV, and AVI videos are allowed'));
+    }
+  },
+});
+
+function buildPublicUrl(subPath: string): string {
+  const replitDomain = process.env.REPLIT_DEV_DOMAIN || process.env.REPLIT_DOMAINS;
+  if (replitDomain) {
+    return `https://${replitDomain}/${subPath}`;
+  }
+  const publicBaseUrl = process.env.PUBLIC_BASE_URL;
+  if (publicBaseUrl) {
+    return `${publicBaseUrl.replace(/\/$/, '')}/${subPath}`;
+  }
+  return `https://localhost:5000/${subPath}`;
+}
+
 function getTestImageUrl(_req: Request): string | null {
   const files = fs.readdirSync(TEST_IMAGE_DIR).filter(f => f.startsWith('test-image'));
   if (files.length === 0) return null;
+  return buildPublicUrl(`test-images/${files[0]}`);
+}
 
-  const replitDomain = process.env.REPLIT_DEV_DOMAIN || process.env.REPLIT_DOMAINS;
-  if (replitDomain) {
-    return `https://${replitDomain}/test-images/${files[0]}`;
-  }
-
-  const publicBaseUrl = process.env.PUBLIC_BASE_URL;
-  if (publicBaseUrl) {
-    return `${publicBaseUrl.replace(/\/$/, '')}/test-images/${files[0]}`;
-  }
-
-  return `https://localhost:5000/test-images/${files[0]}`;
+function getTestVideoUrl(_req: Request): string | null {
+  const files = fs.readdirSync(TEST_VIDEO_DIR).filter(f => f.startsWith('test-video'));
+  if (files.length === 0) return null;
+  return buildPublicUrl(`test-videos/${files[0]}`);
 }
 
 interface TestResult {
@@ -89,11 +119,15 @@ router.get('/api/piapi-tests/definitions', (req: Request, res: Response) => {
     image: getTestsByCategory('image'),
     i2v: getTestsByCategory('i2v'),
     i2i: getTestsByCategory('i2i'),
+    v2v: getTestsByCategory('v2v'),
+    toolkit: getTestsByCategory('toolkit'),
+    'character-performance': getTestsByCategory('character-performance'),
     audio: getTestsByCategory('audio'),
     llm: getTestsByCategory('llm'),
   };
   const imageUrl = getTestImageUrl(req);
-  res.json({ definitions: grouped, totalCount: PIAPI_TEST_DEFINITIONS.length, testImageUrl: imageUrl });
+  const videoUrl = getTestVideoUrl(req);
+  res.json({ definitions: grouped, totalCount: PIAPI_TEST_DEFINITIONS.length, testImageUrl: imageUrl, testVideoUrl: videoUrl });
 });
 
 router.post('/api/piapi-tests/upload-test-image', (req: Request, res: Response) => {
@@ -121,6 +155,35 @@ router.delete('/api/piapi-tests/test-image', (req: Request, res: Response) => {
   const files = fs.readdirSync(TEST_IMAGE_DIR).filter(f => f.startsWith('test-image'));
   for (const f of files) {
     fs.unlinkSync(path.join(TEST_IMAGE_DIR, f));
+  }
+  res.json({ success: true });
+});
+
+router.post('/api/piapi-tests/upload-test-video', (req: Request, res: Response) => {
+  if (!requireAuth(req, res)) return;
+  videoUpload.single('video')(req, res, (err) => {
+    if (err) {
+      return res.status(400).json({ error: err.message });
+    }
+    if (!req.file) {
+      return res.status(400).json({ error: 'No video file provided' });
+    }
+    const videoUrl = getTestVideoUrl(req);
+    res.json({ success: true, videoUrl, filename: req.file.filename });
+  });
+});
+
+router.get('/api/piapi-tests/test-video', (req: Request, res: Response) => {
+  if (!requireAuth(req, res)) return;
+  const videoUrl = getTestVideoUrl(req);
+  res.json({ videoUrl });
+});
+
+router.delete('/api/piapi-tests/test-video', (req: Request, res: Response) => {
+  if (!requireAuth(req, res)) return;
+  const files = fs.readdirSync(TEST_VIDEO_DIR).filter(f => f.startsWith('test-video'));
+  for (const f of files) {
+    fs.unlinkSync(path.join(TEST_VIDEO_DIR, f));
   }
   res.json({ success: true });
 });
@@ -267,7 +330,7 @@ router.post('/api/piapi-tests/submit/:testId', async (req: Request, res: Respons
       return res.json(result);
     }
 
-    if (test.taskType === 'runway-direct') {
+    if (test.taskType === 'runway-direct' || test.taskType === 'runway-direct-v2v' || test.taskType === 'runway-direct-cp') {
       if (!runwayVideoService.isAvailable()) {
         return res.json({
           id: test.id,
@@ -278,12 +341,54 @@ router.post('/api/piapi-tests/submit/:testId', async (req: Request, res: Respons
           error: 'RUNWAY_API_KEY not configured',
         } as TestResult);
       }
-      const result = await runwayVideoService.generateVideo({
-        prompt: test.input.prompt,
-        duration: test.input.duration || 5,
-        aspectRatio: test.input.aspect_ratio === '9:16' ? '9:16' : test.input.aspect_ratio === '1:1' ? '1:1' : '16:9',
-        model: test.id,
-      });
+
+      let result: any;
+
+      if (test.taskType === 'runway-direct-v2v') {
+        const videoUrl = getTestVideoUrl(req);
+        if (!videoUrl) {
+          return res.json({
+            id: test.id, name: test.name, category: test.category,
+            status: 'fail', responseTime: 0,
+            error: 'No test video uploaded. Please upload a test video first.',
+          } as TestResult);
+        }
+        result = await runwayVideoService.generateVideoToVideo({
+          videoUrl,
+          prompt: test.input.prompt || 'Transform this video with cinematic style',
+          model: 'runway-gen4-aleph',
+        });
+      } else if (test.taskType === 'runway-direct-cp') {
+        const imageUrl = getTestImageUrl(req);
+        const videoUrl = getTestVideoUrl(req);
+        if (!imageUrl) {
+          return res.json({
+            id: test.id, name: test.name, category: test.category,
+            status: 'fail', responseTime: 0,
+            error: 'No test image uploaded. Character Performance requires a character image.',
+          } as TestResult);
+        }
+        if (!videoUrl) {
+          return res.json({
+            id: test.id, name: test.name, category: test.category,
+            status: 'fail', responseTime: 0,
+            error: 'No test video uploaded. Character Performance requires a reference performance video.',
+          } as TestResult);
+        }
+        result = await runwayVideoService.generateCharacterPerformance({
+          characterImageUrl: imageUrl,
+          referenceVideoUrl: videoUrl,
+          bodyControl: test.input.body_control !== false,
+        });
+      } else {
+        result = await runwayVideoService.generateVideo({
+          prompt: test.input.prompt,
+          duration: test.input.duration || 5,
+          aspectRatio: test.input.aspect_ratio === '9:16' ? '9:16' : test.input.aspect_ratio === '1:1' ? '1:1' : '16:9',
+          model: test.id,
+        });
+      }
+
       return res.json({
         id: test.id,
         name: test.name,
@@ -297,6 +402,21 @@ router.post('/api/piapi-tests/submit/:testId', async (req: Request, res: Respons
     }
 
     const inputData = { ...test.input };
+    if (test.requiresVideo) {
+      const videoUrl = getTestVideoUrl(req);
+      if (!videoUrl) {
+        return res.json({
+          id: test.id,
+          name: test.name,
+          category: test.category,
+          status: 'fail',
+          responseTime: 0,
+          error: 'No test video uploaded. Please upload a test video first.',
+        } as TestResult);
+      }
+      const vField = test.videoInputField || 'video_url';
+      inputData[vField] = videoUrl;
+    }
     if (test.requiresImage) {
       const imageUrl = getTestImageUrl(req);
       if (!imageUrl) {
@@ -669,37 +789,43 @@ async function runSingleTest(test: any, apiKey: string, req: Request): Promise<T
     return runChatCompletionTest(test, apiKey);
   }
 
-  if (test.taskType === 'runway-direct') {
+  if (test.taskType === 'runway-direct' || test.taskType === 'runway-direct-v2v' || test.taskType === 'runway-direct-cp') {
     if (!runwayVideoService.isAvailable()) {
       return {
-        id: test.id,
-        name: test.name,
-        category: test.category,
-        status: 'fail',
-        responseTime: 0,
-        error: 'RUNWAY_API_KEY not configured',
+        id: test.id, name: test.name, category: test.category,
+        status: 'fail', responseTime: 0, error: 'RUNWAY_API_KEY not configured',
       };
     }
-    const result = await runwayVideoService.generateVideo({
-      prompt: test.input.prompt,
-      duration: test.input.duration || 5,
-      aspectRatio: test.input.aspect_ratio === '9:16' ? '9:16' : test.input.aspect_ratio === '1:1' ? '1:1' : '16:9',
-      model: test.id,
-    });
+    let result: any;
+    if (test.taskType === 'runway-direct-v2v') {
+      const videoUrl = getTestVideoUrl(req);
+      if (!videoUrl) return { id: test.id, name: test.name, category: test.category, status: 'fail', responseTime: 0, error: 'No test video uploaded' };
+      result = await runwayVideoService.generateVideoToVideo({ videoUrl, prompt: test.input.prompt || '', model: 'runway-gen4-aleph' });
+    } else if (test.taskType === 'runway-direct-cp') {
+      const imageUrl = getTestImageUrl(req);
+      const videoUrl = getTestVideoUrl(req);
+      if (!imageUrl) return { id: test.id, name: test.name, category: test.category, status: 'fail', responseTime: 0, error: 'No test image uploaded' };
+      if (!videoUrl) return { id: test.id, name: test.name, category: test.category, status: 'fail', responseTime: 0, error: 'No test video uploaded' };
+      result = await runwayVideoService.generateCharacterPerformance({ characterImageUrl: imageUrl, referenceVideoUrl: videoUrl, bodyControl: test.input.body_control !== false });
+    } else {
+      result = await runwayVideoService.generateVideo({ prompt: test.input.prompt, duration: test.input.duration || 5, aspectRatio: test.input.aspect_ratio === '9:16' ? '9:16' : test.input.aspect_ratio === '1:1' ? '1:1' : '16:9', model: test.id });
+    }
     return {
-      id: test.id,
-      name: test.name,
-      category: test.category,
+      id: test.id, name: test.name, category: test.category,
       status: result.success ? 'pass' : 'fail',
       responseTime: result.generationTimeMs || (Date.now() - startTime),
-      taskId: result.taskId,
-      outputUrl: result.videoUrl,
-      error: result.error,
+      taskId: result.taskId, outputUrl: result.videoUrl, error: result.error,
     };
   }
 
   try {
     const inputData = { ...test.input };
+    if (test.requiresVideo) {
+      const videoUrl = getTestVideoUrl(req);
+      if (!videoUrl) return { id: test.id, name: test.name, category: test.category, status: 'fail', responseTime: 0, error: 'No test video uploaded' };
+      const vField = test.videoInputField || 'video_url';
+      inputData[vField] = videoUrl;
+    }
     if (test.requiresImage) {
       const imageUrl = getTestImageUrl(req);
       if (!imageUrl) {

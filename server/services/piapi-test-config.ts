@@ -1,7 +1,7 @@
 export interface PiAPITestDefinition {
   id: string;
   name: string;
-  category: 'video' | 'image' | 'audio' | 'llm' | 'i2v' | 'i2i';
+  category: 'video' | 'image' | 'audio' | 'llm' | 'i2v' | 'i2i' | 'v2v' | 'toolkit' | 'character-performance';
   model: string;
   taskType: string;
   input: Record<string, any>;
@@ -15,6 +15,8 @@ export interface PiAPITestDefinition {
   notes?: string;
   requiresImage?: boolean;
   imageInputField?: string;
+  requiresVideo?: boolean;
+  videoInputField?: string;
   disabled?: boolean;
   disabledReason?: string;
 }
@@ -356,6 +358,25 @@ export const PIAPI_TEST_DEFINITIONS: PiAPITestDefinition[] = [
     estimatedTime: '~120s',
     disabled: true,
     disabledReason: 'OmniHuman requires both audio_url and image_url inputs - audio upload not yet supported in testing',
+  },
+  {
+    id: 'kling-effects',
+    name: 'Kling Effects (VFX)',
+    category: 'video',
+    model: 'kling',
+    taskType: 'video_generation',
+    input: {
+      prompt: 'Explosion of golden sparks and light trails emanating from a central point, cinematic VFX',
+      mode: 'std',
+      duration: 5,
+      aspect_ratio: '16:9',
+      version: '2.6',
+      effect_scene: 'sparkle',
+    },
+    pollForResult: true,
+    estimatedCost: '$0.14',
+    estimatedTime: '~60s',
+    notes: 'Kling VFX-specialized generation with effect_scene parameter',
   },
   {
     id: 'kling-avatar',
@@ -993,6 +1014,128 @@ export const PIAPI_TEST_DEFINITIONS: PiAPITestDefinition[] = [
     estimatedCost: '$0.01',
     estimatedTime: '~10s',
     notes: 'Deep research model - may take longer',
+  },
+
+  // ==================== VIDEO-TO-VIDEO (V2V) ====================
+  {
+    id: 'v2v-runway-gen4-aleph',
+    name: 'Runway Gen-4 Aleph V2V',
+    category: 'v2v',
+    model: 'runway',
+    taskType: 'runway-direct-v2v',
+    input: {
+      prompt: 'Transform this video into a dreamlike cinematic sequence with soft color grading and ethereal lighting',
+      duration: 5,
+      aspect_ratio: '16:9',
+    },
+    requiresVideo: true,
+    videoInputField: 'video_url',
+    pollForResult: true,
+    estimatedCost: '$0.35',
+    estimatedTime: '~180s',
+    notes: 'Direct Runway API — prompt-based video transformation with gen4_aleph model',
+  },
+  {
+    id: 'v2v-kling-object-replace',
+    name: 'Kling V2V Object Replace',
+    category: 'v2v',
+    model: 'kling',
+    taskType: 'video_generation',
+    input: {
+      prompt: 'Replace the main object with a golden statue, maintain motion and lighting',
+      mode: 'std',
+      version: '2.6',
+    },
+    requiresVideo: true,
+    videoInputField: 'video_url',
+    requiresImage: true,
+    imageInputField: 'replacement_image_url',
+    pollForResult: true,
+    estimatedCost: '$0.20',
+    estimatedTime: '~120s',
+    notes: 'Kling object replacement — requires both source video and replacement image',
+  },
+
+  // ==================== TOOLKIT (Upscale / BG Removal) ====================
+  {
+    id: 'toolkit-upscale-image',
+    name: 'Qubic Image Upscale',
+    category: 'toolkit',
+    model: 'Qubico/image-toolkit',
+    taskType: 'image-upscale',
+    input: {
+      upscale_factor: 2,
+    },
+    requiresImage: true,
+    imageInputField: 'image_url',
+    pollForResult: true,
+    estimatedCost: '$0.02',
+    estimatedTime: '~15s',
+    notes: 'Upscales image by 2x or 4x using Qubic Image Toolkit',
+  },
+  {
+    id: 'toolkit-upscale-video',
+    name: 'Qubic Video Upscale',
+    category: 'toolkit',
+    model: 'Qubico/image-toolkit',
+    taskType: 'video-upscale',
+    input: {
+      upscale_factor: 2,
+    },
+    requiresVideo: true,
+    videoInputField: 'video_url',
+    pollForResult: true,
+    estimatedCost: '$0.10',
+    estimatedTime: '~60s',
+    notes: 'Upscales video by 2x using Qubic Image Toolkit',
+  },
+  {
+    id: 'toolkit-bg-remove-image',
+    name: 'Qubic Image BG Removal',
+    category: 'toolkit',
+    model: 'Qubico/image-toolkit',
+    taskType: 'background-removal',
+    input: {},
+    requiresImage: true,
+    imageInputField: 'image_url',
+    pollForResult: true,
+    estimatedCost: '$0.01',
+    estimatedTime: '~10s',
+    notes: 'Removes background from image using Qubic Image Toolkit',
+  },
+  {
+    id: 'toolkit-bg-remove-video',
+    name: 'Qubic Video BG Removal',
+    category: 'toolkit',
+    model: 'Qubico/image-toolkit',
+    taskType: 'video-background-removal',
+    input: {},
+    requiresVideo: true,
+    videoInputField: 'video_url',
+    pollForResult: true,
+    estimatedCost: '$0.08',
+    estimatedTime: '~60s',
+    notes: 'Removes background from video using Qubic Image Toolkit',
+  },
+
+  // ==================== CHARACTER PERFORMANCE ====================
+  {
+    id: 'cp-runway-act-two',
+    name: 'Runway Act Two Character Performance',
+    category: 'character-performance',
+    model: 'runway',
+    taskType: 'runway-direct-cp',
+    input: {
+      body_control: true,
+    },
+    requiresImage: true,
+    imageInputField: 'character_image',
+    requiresVideo: true,
+    videoInputField: 'reference_video',
+    pollForResult: true,
+    estimatedCost: '$0.40',
+    estimatedTime: '~180s',
+    notes: 'Runway Act Two — animates a character image using motion from a reference performance video. Requires both a character image and a reference video.',
   },
 ];
 
