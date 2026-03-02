@@ -24,6 +24,7 @@ import {
   Wrench,
   User,
   Film,
+  ChevronDown,
 } from "lucide-react";
 
 interface TestDefinition {
@@ -76,6 +77,7 @@ export default function ApiTesting() {
   const [testVideoUrl, setTestVideoUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadingVideo, setUploadingVideo] = useState(false);
+  const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
 
@@ -695,6 +697,11 @@ export default function ApiTesting() {
           const catFailed = catStates.filter((s) => s === "fail").length;
           const catRunning = catStates.filter((s) => s === "submitting" || s === "polling").length;
 
+          const isCollapsed = collapsedCategories[category] ?? false;
+          const toggleCollapse = () => {
+            setCollapsedCategories((prev) => ({ ...prev, [category]: !prev[category] }));
+          };
+
           return (
             <div
               key={category}
@@ -702,10 +709,15 @@ export default function ApiTesting() {
               style={{ borderColor: "var(--border-subtle)" }}
             >
               <div
-                className="flex items-center justify-between px-4 py-3"
+                className="flex items-center justify-between px-4 py-3 cursor-pointer select-none hover:brightness-110 transition-all"
                 style={{ backgroundColor: "var(--surface)" }}
+                onClick={toggleCollapse}
               >
                 <div className="flex items-center gap-3">
+                  <ChevronDown
+                    className={`w-4 h-4 transition-transform duration-200 ${isCollapsed ? "-rotate-90" : ""}`}
+                    style={{ color: "var(--text-tertiary)" }}
+                  />
                   <Icon className={`w-5 h-5 text-${config.color}-400`} />
                   <span className="font-semibold text-sm">{config.label}</span>
                   <span
@@ -734,7 +746,7 @@ export default function ApiTesting() {
                   )}
                 </div>
                 <button
-                  onClick={() => runCategory(category)}
+                  onClick={(e) => { e.stopPropagation(); runCategory(category); }}
                   disabled={catRunning > 0 || (needsImage && !hasImage) || (needsVideo && !hasVideo)}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-purple-600 hover:bg-purple-500 text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
@@ -752,6 +764,7 @@ export default function ApiTesting() {
                 </button>
               </div>
 
+              {!isCollapsed && (
               <div className="divide-y" style={{ borderColor: "var(--border-subtle)" }}>
                 {tests.map((test) => {
                   const state = testStates[test.id] || { status: "idle" as const };
@@ -920,6 +933,7 @@ export default function ApiTesting() {
                   );
                 })}
               </div>
+              )}
             </div>
           );
         })}
