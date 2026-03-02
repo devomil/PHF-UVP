@@ -1110,8 +1110,10 @@ export const PIAPI_TEST_DEFINITIONS: PiAPITestDefinition[] = [
     name: 'Qubic Video BG Removal',
     category: 'toolkit',
     model: 'Qubico/video-toolkit',
-    taskType: 'background-removal',
-    input: {},
+    taskType: 'background-remove',
+    input: {
+      invert_output: false,
+    },
     requiresVideo: true,
     videoInputField: 'video',
     pollForResult: true,
