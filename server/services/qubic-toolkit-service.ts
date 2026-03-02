@@ -89,9 +89,10 @@ class QubicToolkitService {
         headers: { 'X-API-Key': this.apiKey, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model: 'Qubico/image-toolkit',
-          task_type: 'background-removal',
+          task_type: 'background-remove',
           input: {
             image: options.imageUrl,
+            rmbg_model: 'RMBG-2.0',
           },
         }),
       });
