@@ -191,9 +191,10 @@ class QubicToolkitService {
         headers: { 'X-API-Key': this.apiKey, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model: 'Qubico/video-toolkit',
-          task_type: 'background-removal',
+          task_type: 'background-remove',
           input: {
             video: options.videoUrl,
+            invert_output: false,
           },
         }),
       });
