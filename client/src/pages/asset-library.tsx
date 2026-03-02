@@ -164,6 +164,7 @@ export default function AssetLibrary() {
   const [moodFilter, setMoodFilter] = useState('all');
   const [sourceFilter, setSourceFilter] = useState('all');
   const [selectedAsset, setSelectedAsset] = useState<MediaAsset | null>(null);
+  const [selectedLibraryAsset, setSelectedLibraryAsset] = useState<any | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
   const [isCreatorOpen, setIsCreatorOpen] = useState(false);
@@ -753,6 +754,7 @@ export default function AssetLibrary() {
                         <div
                           key={`lib-${la.id}`}
                           className="relative group cursor-pointer rounded-lg overflow-hidden border border-gray-700 bg-gray-900 hover:border-purple-500 transition-colors"
+                          onClick={() => setSelectedLibraryAsset(la)}
                         >
                           <div className="aspect-video bg-gray-800 relative">
                             {la.assetType === 'image' ? (
@@ -782,6 +784,11 @@ export default function AssetLibrary() {
                             {la.isFavorite && (
                               <div className="absolute top-1.5 right-1.5 text-yellow-400 text-xs">★</div>
                             )}
+                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
+                              <Button size="sm" variant="secondary">
+                                View
+                              </Button>
+                            </div>
                           </div>
                           <div className="p-2">
                             <p className="text-xs text-gray-300 truncate">{la.prompt?.substring(0, 60) || 'Untitled'}</p>
@@ -2026,86 +2033,171 @@ export default function AssetLibrary() {
       </Dialog>
 
       <Dialog open={!!selectedAsset} onOpenChange={() => setSelectedAsset(null)}>
-        <DialogContent className="max-w-3xl">
+        <DialogContent className="max-w-4xl bg-gray-900 border-gray-700 text-white">
           {selectedAsset && (
             <>
               <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
+                <DialogTitle className="flex items-center gap-2 text-white">
                   {getAssetTypeIcon(selectedAsset.type)}
                   {selectedAsset.name}
                 </DialogTitle>
-                <DialogDescription>
-                  Asset details and metadata
+                <DialogDescription className="text-gray-400">
+                  Asset details and preview
                 </DialogDescription>
               </DialogHeader>
-              <div className="grid grid-cols-2 gap-6">
-                <div className="aspect-video bg-gray-200 rounded-lg overflow-hidden">
+              <div className="space-y-4">
+                <div className="bg-black rounded-lg overflow-hidden flex items-center justify-center" style={{ maxHeight: '60vh' }}>
                   {selectedAsset.type === 'image' && (
-                    <img src={selectedAsset.url} alt={selectedAsset.name} className="w-full h-full object-contain" />
+                    <img src={selectedAsset.url} alt={selectedAsset.name} className="max-w-full max-h-[60vh] object-contain" />
                   )}
                   {selectedAsset.type === 'video' && (
-                    <video src={selectedAsset.url} controls className="w-full h-full" />
+                    <video src={selectedAsset.url} controls autoPlay className="max-w-full max-h-[60vh]" />
                   )}
                   {selectedAsset.type === 'music' && (
-                    <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-purple-500 to-pink-500 text-white">
-                      <Music className="h-16 w-16 mb-4" />
-                      <audio src={selectedAsset.url} controls className="w-4/5" />
+                    <div className="w-full py-12 flex flex-col items-center justify-center bg-gradient-to-br from-purple-600/30 to-pink-600/30">
+                      <Music className="h-16 w-16 text-purple-400 mb-4" />
+                      <audio src={selectedAsset.url} controls autoPlay className="w-4/5" />
                     </div>
                   )}
                 </div>
-                <div className="space-y-4">
-                  <div>
-                    <Label className="text-xs text-gray-500">Source</Label>
-                    <Badge className={getSourceBadgeColor(selectedAsset.source)}>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div className="bg-gray-800/50 rounded-lg p-3">
+                    <Label className="text-[10px] uppercase tracking-wider text-gray-500">Source</Label>
+                    <Badge className={`mt-1 ${getSourceBadgeColor(selectedAsset.source)}`}>
                       {selectedAsset.source}
                     </Badge>
                   </div>
                   {selectedAsset.width && selectedAsset.height && (
-                    <div>
-                      <Label className="text-xs text-gray-500">Dimensions</Label>
-                      <p className="font-medium">{selectedAsset.width} x {selectedAsset.height}</p>
+                    <div className="bg-gray-800/50 rounded-lg p-3">
+                      <Label className="text-[10px] uppercase tracking-wider text-gray-500">Dimensions</Label>
+                      <p className="text-sm font-medium text-gray-200 mt-1">{selectedAsset.width} x {selectedAsset.height}</p>
                     </div>
                   )}
                   {selectedAsset.duration && (
-                    <div>
-                      <Label className="text-xs text-gray-500">Duration</Label>
-                      <p className="font-medium">{formatDuration(selectedAsset.duration)}</p>
+                    <div className="bg-gray-800/50 rounded-lg p-3">
+                      <Label className="text-[10px] uppercase tracking-wider text-gray-500">Duration</Label>
+                      <p className="text-sm font-medium text-gray-200 mt-1">{formatDuration(selectedAsset.duration)}</p>
                     </div>
                   )}
                   {selectedAsset.file_size && (
-                    <div>
-                      <Label className="text-xs text-gray-500">File Size</Label>
-                      <p className="font-medium">{formatFileSize(selectedAsset.file_size)}</p>
+                    <div className="bg-gray-800/50 rounded-lg p-3">
+                      <Label className="text-[10px] uppercase tracking-wider text-gray-500">File Size</Label>
+                      <p className="text-sm font-medium text-gray-200 mt-1">{formatFileSize(selectedAsset.file_size)}</p>
                     </div>
                   )}
-                  {selectedAsset.prompt && (
-                    <div>
-                      <Label className="text-xs text-gray-500">AI Prompt</Label>
-                      <p className="text-sm text-gray-700">{selectedAsset.prompt}</p>
-                    </div>
-                  )}
-                  {selectedAsset.tags && selectedAsset.tags.length > 0 && (
-                    <div>
-                      <Label className="text-xs text-gray-500">Tags</Label>
-                      <div className="flex flex-wrap gap-1 mt-1">
-                        {selectedAsset.tags.map((tag) => (
-                          <Badge key={tag} variant="outline" className="text-xs">
-                            <Tag className="h-3 w-3 mr-1" />
-                            {tag}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  <div className="flex items-center gap-2 pt-4">
-                    <Button className="flex-1">
-                      <Download className="h-4 w-4 mr-2" />
-                      Download
-                    </Button>
-                    <Button variant="outline" className="flex-1">
-                      Use in Production
-                    </Button>
+                </div>
+                {selectedAsset.prompt && (
+                  <div className="bg-gray-800/50 rounded-lg p-3">
+                    <Label className="text-[10px] uppercase tracking-wider text-gray-500">AI Prompt</Label>
+                    <p className="text-sm text-gray-300 mt-1">{selectedAsset.prompt}</p>
                   </div>
+                )}
+                {selectedAsset.tags && selectedAsset.tags.length > 0 && (
+                  <div className="flex flex-wrap gap-1">
+                    {selectedAsset.tags.map((tag) => (
+                      <Badge key={tag} variant="outline" className="text-xs border-gray-600 text-gray-300">
+                        <Tag className="h-3 w-3 mr-1" />
+                        {tag}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+                <div className="flex items-center gap-2 pt-2">
+                  <Button
+                    className="flex-1 bg-purple-600 hover:bg-purple-700"
+                    onClick={() => {
+                      const a = document.createElement('a');
+                      a.href = selectedAsset.url;
+                      a.download = selectedAsset.name || 'asset';
+                      a.target = '_blank';
+                      a.click();
+                    }}
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                    Download
+                  </Button>
+                </div>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!selectedLibraryAsset} onOpenChange={() => setSelectedLibraryAsset(null)}>
+        <DialogContent className="max-w-4xl bg-gray-900 border-gray-700 text-white">
+          {selectedLibraryAsset && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 text-white">
+                  {selectedLibraryAsset.assetType === 'video' ? <Video className="h-5 w-5 text-purple-400" /> : <Image className="h-5 w-5 text-purple-400" />}
+                  {selectedLibraryAsset.prompt?.substring(0, 80) || 'Generated Asset'}
+                </DialogTitle>
+                <DialogDescription className="text-gray-400">
+                  AI-generated {selectedLibraryAsset.assetType} preview
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="bg-black rounded-lg overflow-hidden flex items-center justify-center" style={{ maxHeight: '60vh' }}>
+                  {selectedLibraryAsset.assetType === 'image' && (
+                    <img
+                      src={selectedLibraryAsset.assetUrl}
+                      alt={selectedLibraryAsset.prompt?.substring(0, 40) || 'Generated'}
+                      className="max-w-full max-h-[60vh] object-contain"
+                    />
+                  )}
+                  {selectedLibraryAsset.assetType === 'video' && (
+                    <video
+                      src={selectedLibraryAsset.assetUrl}
+                      controls
+                      autoPlay
+                      className="max-w-full max-h-[60vh]"
+                    />
+                  )}
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div className="bg-gray-800/50 rounded-lg p-3">
+                    <Label className="text-[10px] uppercase tracking-wider text-gray-500">Type</Label>
+                    <Badge className="mt-1 bg-purple-600/90 text-white border-0">
+                      {selectedLibraryAsset.contentType?.toUpperCase() || selectedLibraryAsset.assetType?.toUpperCase()}
+                    </Badge>
+                  </div>
+                  <div className="bg-gray-800/50 rounded-lg p-3">
+                    <Label className="text-[10px] uppercase tracking-wider text-gray-500">Provider</Label>
+                    <p className="text-sm font-medium text-gray-200 mt-1">{selectedLibraryAsset.provider || 'auto'}</p>
+                  </div>
+                  {selectedLibraryAsset.width && selectedLibraryAsset.height && (
+                    <div className="bg-gray-800/50 rounded-lg p-3">
+                      <Label className="text-[10px] uppercase tracking-wider text-gray-500">Dimensions</Label>
+                      <p className="text-sm font-medium text-gray-200 mt-1">{selectedLibraryAsset.width} x {selectedLibraryAsset.height}</p>
+                    </div>
+                  )}
+                  {selectedLibraryAsset.duration && (
+                    <div className="bg-gray-800/50 rounded-lg p-3">
+                      <Label className="text-[10px] uppercase tracking-wider text-gray-500">Duration</Label>
+                      <p className="text-sm font-medium text-gray-200 mt-1">{selectedLibraryAsset.duration}s</p>
+                    </div>
+                  )}
+                </div>
+                {selectedLibraryAsset.prompt && (
+                  <div className="bg-gray-800/50 rounded-lg p-3">
+                    <Label className="text-[10px] uppercase tracking-wider text-gray-500">Prompt</Label>
+                    <p className="text-sm text-gray-300 mt-1">{selectedLibraryAsset.prompt}</p>
+                  </div>
+                )}
+                <div className="flex items-center gap-2 pt-2">
+                  <Button
+                    className="flex-1 bg-purple-600 hover:bg-purple-700"
+                    onClick={() => {
+                      const a = document.createElement('a');
+                      a.href = selectedLibraryAsset.assetUrl;
+                      a.download = `asset-${selectedLibraryAsset.id}`;
+                      a.target = '_blank';
+                      a.click();
+                    }}
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                    Download
+                  </Button>
                 </div>
               </div>
             </>
