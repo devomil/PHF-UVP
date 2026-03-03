@@ -410,6 +410,8 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
     if (refVideoInputRef.current) refVideoInputRef.current.value = "";
   };
 
+  const [saveSuccess, setSaveSuccess] = useState(false);
+
   const updateSceneMutation = useMutation({
     mutationFn: async (updates: any) => {
       const res = await fetch(`/api/universal-video/projects/${projectId}/scenes/${sceneId}`, {
@@ -424,10 +426,12 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["project", projectId] });
       setIsEditing(false);
-      toast({ title: "Scene Updated" });
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 2500);
+      toast({ title: "Scene Updated", description: "Your changes have been saved successfully." });
     },
     onError: (err: Error) => {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Save Failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -2090,17 +2094,25 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                   className="text-xs px-3 py-1.5 rounded-lg bg-purple-600 text-white font-medium flex items-center gap-1.5 disabled:opacity-50 hover:bg-purple-500 transition-colors"
                 >
                   {updateSceneMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
-                  Save Changes
+                  {updateSceneMutation.isPending ? 'Saving...' : 'Save Changes'}
                 </button>
               </>
             ) : (
-              <button
-                onClick={() => setIsEditing(true)}
-                className="text-xs px-3 py-1.5 rounded-lg border transition-colors hover:border-purple-500/30 flex items-center gap-1.5"
-                style={{ borderColor: "var(--border-subtle)", color: "var(--text-secondary)" }}
-              >
-                <Edit2 className="w-3 h-3" /> Edit
-              </button>
+              <div className="flex items-center gap-2">
+                {saveSuccess && (
+                  <span className="text-xs flex items-center gap-1 text-green-400 animate-in fade-in duration-300">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    Saved
+                  </span>
+                )}
+                <button
+                  onClick={() => setIsEditing(true)}
+                  className="text-xs px-3 py-1.5 rounded-lg border transition-colors hover:border-purple-500/30 flex items-center gap-1.5"
+                  style={{ borderColor: "var(--border-subtle)", color: "var(--text-secondary)" }}
+                >
+                  <Edit2 className="w-3 h-3" /> Edit
+                </button>
+              </div>
             )}
           </div>
         </div>
