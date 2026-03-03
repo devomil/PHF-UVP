@@ -928,25 +928,38 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                   <p className="text-xs text-center py-3" style={{ color: "var(--text-muted)" }}>No images in library</p>
                 ) : (
                   <div className="grid grid-cols-6 gap-1.5">
-                    {libraryQuery.data.slice(0, 18).map((asset: any) => (
-                      <button
-                        key={asset.id}
-                        onClick={() => {
-                          const url = asset.url || asset.thumbnailUrl;
-                          if (url) {
-                            const newImages = [...referenceImageUrls, url];
-                            setReferenceImageUrls(newImages);
-                            persistReferenceImages(newImages);
-                            setShowLibrary(false);
-                            toast({ title: "Reference Added" });
-                          }
-                        }}
-                        className="aspect-square rounded overflow-hidden border hover:border-purple-500/50 transition-colors"
-                        style={{ borderColor: "var(--border-subtle)" }}
-                      >
-                        <img src={asset.url || asset.thumbnailUrl} alt={asset.name || ""} className="w-full h-full object-cover" />
-                      </button>
-                    ))}
+                    {libraryQuery.data.slice(0, 18).map((asset: any) => {
+                      const assetUrl = asset.url || asset.thumbnailUrl;
+                      const isVid = asset.type === 'video';
+                      return (
+                        <button
+                          key={asset.id}
+                          onClick={() => {
+                            if (assetUrl) {
+                              const newImages = [...referenceImageUrls, assetUrl];
+                              setReferenceImageUrls(newImages);
+                              persistReferenceImages(newImages);
+                              setShowLibrary(false);
+                              toast({ title: "Reference Added" });
+                            }
+                          }}
+                          className="relative aspect-square rounded overflow-hidden border hover:border-purple-500/50 transition-colors"
+                          style={{ borderColor: "var(--border-subtle)" }}
+                          title={asset.name || ''}
+                        >
+                          {isVid ? (
+                            <video src={assetUrl} className="w-full h-full object-cover" muted />
+                          ) : (
+                            <img src={asset.thumbnailUrl || assetUrl} alt={asset.name || ""} className="w-full h-full object-cover" />
+                          )}
+                          {isVid && (
+                            <div className="absolute top-0.5 left-0.5">
+                              <span className="text-[7px] px-0.5 rounded bg-black/60 text-white">VID</span>
+                            </div>
+                          )}
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -1326,26 +1339,53 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                 ) : !libraryQuery.data || libraryQuery.data.length === 0 ? (
                   <p className="text-xs text-center py-3" style={{ color: "var(--text-muted)" }}>No images in library</p>
                 ) : (
-                  <div className="grid grid-cols-8 gap-1.5">
-                    {libraryQuery.data.slice(0, 24).map((asset: any) => (
-                      <button
-                        key={asset.id}
-                        onClick={() => {
-                          const url = asset.url || asset.thumbnailUrl;
-                          if (url) {
-                            const newImages = [...referenceImageUrls, url];
-                            setReferenceImageUrls(newImages);
-                            persistReferenceImages(newImages);
-                            setShowEditLibrary(false);
-                            toast({ title: "Reference Added" });
-                          }
-                        }}
-                        className="aspect-square rounded overflow-hidden border hover:border-purple-500/50 transition-colors"
-                        style={{ borderColor: "var(--border-subtle)" }}
-                      >
-                        <img src={asset.url || asset.thumbnailUrl} alt={asset.name || ""} className="w-full h-full object-cover" />
-                      </button>
-                    ))}
+                  <div className="grid grid-cols-6 gap-2">
+                    {libraryQuery.data.slice(0, 24).map((asset: any) => {
+                      const assetUrl = asset.url || asset.thumbnailUrl;
+                      const isVideo = asset.type === 'video';
+                      return (
+                        <button
+                          key={asset.id}
+                          onClick={() => {
+                            if (assetUrl) {
+                              if (isVideo) {
+                                setReferenceVideoUrl(assetUrl);
+                                persistReferenceVideo(assetUrl);
+                              } else {
+                                const newImages = [...referenceImageUrls, assetUrl];
+                                setReferenceImageUrls(newImages);
+                                persistReferenceImages(newImages);
+                              }
+                              setShowEditLibrary(false);
+                              toast({ title: `Reference ${isVideo ? 'Video' : 'Image'} Added` });
+                            }
+                          }}
+                          className="relative aspect-video rounded-md overflow-hidden border hover:border-purple-500/50 transition-colors group"
+                          style={{ borderColor: "var(--border-subtle)" }}
+                          title={asset.name || ''}
+                        >
+                          {isVideo ? (
+                            <video
+                              src={assetUrl}
+                              className="w-full h-full object-cover"
+                              muted
+                              onMouseEnter={(e) => (e.target as HTMLVideoElement).play().catch(() => {})}
+                              onMouseLeave={(e) => { const v = e.target as HTMLVideoElement; v.pause(); v.currentTime = 0; }}
+                            />
+                          ) : (
+                            <img src={asset.thumbnailUrl || assetUrl} alt={asset.name || ""} className="w-full h-full object-cover" />
+                          )}
+                          <div className="absolute top-0.5 left-0.5">
+                            <span className="text-[8px] px-1 py-0.5 rounded bg-black/60 text-white font-medium">
+                              {isVideo ? 'VID' : 'IMG'}
+                            </span>
+                          </div>
+                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
+                            <span className="text-[9px] text-white font-medium">Use</span>
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
               </div>
