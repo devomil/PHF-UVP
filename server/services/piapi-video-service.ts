@@ -709,6 +709,7 @@ class PiAPIVideoService {
   
   async generateImageToVideo(options: {
     imageUrl: string;
+    imageUrls?: string[];
     prompt: string;
     duration: number;
     aspectRatio: '16:9' | '9:16' | '1:1';
@@ -842,6 +843,7 @@ class PiAPIVideoService {
    */
   private buildI2VRequestBody(options: {
     imageUrl: string;
+    imageUrls?: string[];
     prompt: string;
     duration: number;
     aspectRatio: '16:9' | '9:16' | '1:1';
@@ -1323,6 +1325,13 @@ class PiAPIVideoService {
         console.log(`[PiAPI I2V] Motion control: ${options.motionControl.camera_movement} @ ${options.motionControl.intensity} (${requiresNewContent ? 'APPLIED' : 'SKIPPED for I2V animate mode - using prompt-based motion'})`);
       }
       
+      const allImageUrls = (options.imageUrls && options.imageUrls.length > 0) ? options.imageUrls : [options.imageUrl];
+      const hasMultipleImages = allImageUrls.length > 1;
+
+      if (hasMultipleImages) {
+        console.log(`[PiAPI I2V] Kling multi-image mode: ${allImageUrls.length} images via elements[]`);
+      }
+
       if (requiresNewContent) {
         return {
           model: 'kling',
@@ -1337,6 +1346,7 @@ class PiAPIVideoService {
             version,
             cfg_scale: cfgScale,
             ...motionParams,
+            ...(hasMultipleImages ? { elements: allImageUrls.map(url => ({ image_url: url })) } : {}),
           },
         };
       }
@@ -1354,7 +1364,9 @@ class PiAPIVideoService {
         version,
         cfg_scale: cfgScale,
       };
-      if (isLegacyVersion) {
+      if (hasMultipleImages) {
+        klingInput.elements = allImageUrls.map(url => ({ image_url: url }));
+      } else if (isLegacyVersion) {
         klingInput.elements = [{ image_url: options.imageUrl }];
         klingInput.first_frame_image = options.imageUrl;
       }

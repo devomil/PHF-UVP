@@ -8,7 +8,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { SceneOverlayEditor, type SceneOverlayItem } from "./scene-overlay-editor";
 import { ProviderCapabilitySelector, getProviderRecommendationText } from "./ProviderCapabilityCard";
-import { VIDEO_PROVIDERS as PROVIDER_CONFIG } from "@shared/provider-config";
+import { VIDEO_PROVIDERS as PROVIDER_CONFIG, getMultiImageSupport, type MultiImageSupport } from "@shared/provider-config";
 import { SCENE_CONTENT_TAGS, getSceneContentTag } from "@shared/config/scene-content-tags";
 import { getVisualArtPreset, getAllVisualArtPresets } from "@shared/config/visual-art-presets";
 
@@ -117,6 +117,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
   const msModalFileRef = useRef<HTMLInputElement>(null);
   const overlayDebounceRef = useRef<NodeJS.Timeout | null>(null);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const visualDirectionRef = useRef<HTMLTextAreaElement>(null);
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const prevVideoUrl = useRef(videoUrl);
   const prevImageUrl = useRef(imageUrl);
@@ -476,6 +477,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
           query: inlinePrompt || editValues.visualDirection,
           provider: provider === "auto" ? undefined : provider,
           sourceImageUrl: useSourceImage ? sourceImage : undefined,
+          sourceImageUrls: useSourceImage && referenceImageUrls.length > 1 ? referenceImageUrls : undefined,
           generationMode: activeMode,
         }),
       });
@@ -887,13 +889,16 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
               {referenceImageUrls.map((url, i) => (
                 <div key={i} className="relative w-10 h-10 rounded-md overflow-hidden border group" style={{ borderColor: "rgba(124,58,237,0.3)" }}>
                   <img src={url} alt="" className="w-full h-full object-cover" />
+                  <div className="absolute top-0 left-0 w-3.5 h-3.5 rounded-full bg-purple-600 text-white flex items-center justify-center text-[7px] font-bold">
+                    {i + 1}
+                  </div>
                   <button
                     onClick={() => {
                       const newImages = referenceImageUrls.filter((_, idx) => idx !== i);
                       setReferenceImageUrls(newImages);
                       persistReferenceImages(newImages);
                     }}
-                    className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white flex items-center justify-center text-[8px] opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white flex items-center justify-center text-[8px] opacity-0 group-hover:opacity-100 transition-opacity z-10"
                   >
                     <X className="w-2.5 h-2.5" />
                   </button>
@@ -1237,6 +1242,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
             Visual Direction (AI prompt for video generation)
           </label>
           <textarea
+            ref={visualDirectionRef}
             value={editValues.visualDirection}
             onChange={(e) => setEditValues({ ...editValues, visualDirection: e.target.value })}
             disabled={!isEditing}
@@ -1248,6 +1254,51 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
               backgroundColor: isEditing ? "rgba(124,58,237,0.05)" : "transparent",
             }}
           />
+          {isEditing && referenceImageUrls.length > 0 && (() => {
+            const multiImg = getMultiImageSupport(provider === "auto" ? "" : provider);
+            if (multiImg && multiImg.promptSyntax) {
+              return (
+                <div className="mt-1.5 rounded-md px-2.5 py-2" style={{ backgroundColor: "rgba(124,58,237,0.06)", border: "1px solid rgba(124,58,237,0.15)" }}>
+                  <div className="flex flex-wrap gap-1.5 mb-1.5">
+                    {referenceImageUrls.map((_, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => {
+                          const ta = visualDirectionRef.current;
+                          if (!ta) return;
+                          const tag = `@image_${i + 1}`;
+                          const start = ta.selectionStart;
+                          const end = ta.selectionEnd;
+                          const val = editValues.visualDirection || '';
+                          const newVal = val.substring(0, start) + tag + val.substring(end);
+                          setEditValues({ ...editValues, visualDirection: newVal });
+                          setTimeout(() => {
+                            ta.focus();
+                            ta.setSelectionRange(start + tag.length, start + tag.length);
+                          }, 0);
+                        }}
+                        className="px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold transition-colors hover:bg-purple-600 hover:text-white"
+                        style={{ backgroundColor: "rgba(124,58,237,0.15)", color: "rgb(167,139,250)" }}
+                      >
+                        @image_{i + 1}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-[10px] leading-relaxed" style={{ color: "var(--text-muted)" }}>
+                    {multiImg.hint}
+                  </p>
+                </div>
+              );
+            }
+            return (
+              <p className="mt-1 text-[10px]" style={{ color: "var(--text-muted)" }}>
+                {provider === "auto"
+                  ? "Auto-selected providers typically use image #1 as the starting frame. Kling providers support multi-image references."
+                  : "This provider uses image #1 as the starting frame for animation. Additional images are ignored."}
+              </p>
+            );
+          })()}
         </div>
 
         {/* Reference Media */}
@@ -1271,11 +1322,14 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                       setReferenceImageUrls(newImages);
                       persistReferenceImages(newImages);
                     }}
-                    className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-red-500 text-white flex items-center justify-center text-[8px] opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-red-500 text-white flex items-center justify-center text-[8px] opacity-0 group-hover:opacity-100 transition-opacity z-10"
                   >
                     <X className="w-2.5 h-2.5" />
                   </button>
-                  <div className="absolute bottom-0 left-0 right-0 text-[8px] text-center py-0.5 bg-black/60 text-white">IMG</div>
+                  <div className="absolute top-0.5 left-0.5 w-4.5 h-4.5 rounded-full bg-purple-600 text-white flex items-center justify-center text-[9px] font-bold shadow-sm">
+                    {i + 1}
+                  </div>
+                  <div className="absolute bottom-0 left-0 right-0 text-[8px] text-center py-0.5 bg-black/60 text-white">@image_{i + 1}</div>
                 </div>
               ))}
 
@@ -1299,12 +1353,20 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                 <button
                   type="button"
                   onClick={() => refFileInputRef.current?.click()}
-                  disabled={!isEditing}
+                  disabled={!isEditing || (() => {
+                    const multi = getMultiImageSupport(provider === "auto" ? "" : provider);
+                    const max = multi?.maxImages || 4;
+                    return referenceImageUrls.length >= max;
+                  })()}
                   className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-dashed text-[11px] transition-colors hover:border-purple-500/40 disabled:opacity-50"
                   style={{ borderColor: "var(--border-subtle)", color: "var(--text-muted)" }}
                 >
                   <Image className="w-3 h-3" />
-                  Add Image
+                  Add Image{(() => {
+                    const multi = getMultiImageSupport(provider === "auto" ? "" : provider);
+                    const max = multi?.maxImages || 4;
+                    return referenceImageUrls.length > 0 ? ` (${referenceImageUrls.length}/${max})` : '';
+                  })()}
                 </button>
                 <button
                   type="button"

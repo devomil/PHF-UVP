@@ -4063,7 +4063,7 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, asy
   try {
     const userId = (req.user as any)?.id;
     const { projectId, sceneId } = req.params;
-    const { query, provider, sourceImageUrl, i2vSettings, motionControl, forceRegenerate, generationMode } = req.body;
+    const { query, provider, sourceImageUrl, sourceImageUrls: reqImageUrls, i2vSettings, motionControl, forceRegenerate, generationMode } = req.body;
     
     console.log(`[Phase9B-Async] Creating async video generation job for scene ${sceneId} with provider: ${provider || 'default'}${sourceImageUrl ? ', using I2V with source image' : ''}${i2vSettings ? ', with I2V settings' : ''}${forceRegenerate ? ', FORCE REGENERATE' : ''}`);
     console.log(`[Phase9B-Async] Generation mode: ${generationMode || 'auto'}`);
@@ -4180,6 +4180,27 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, asy
     } else {
       console.log(`[Phase9B-Async] ✓ T2V mode - will generate from text prompt only`);
     }
+
+    let finalSourceImageUrls: string[] | undefined = undefined;
+    const sceneRefImages = (scene as any).assets?.referenceImages as string[] | undefined;
+    const allRefImages = (reqImageUrls && Array.isArray(reqImageUrls) && reqImageUrls.length > 0)
+      ? reqImageUrls
+      : (sceneRefImages && sceneRefImages.length > 0 ? sceneRefImages : undefined);
+    if (allRefImages && allRefImages.length > 0 && !forceT2V) {
+      const projectAR = (projectData as any).outputFormat?.aspectRatio || (projectData as any).settings?.aspectRatio || '16:9';
+      const resolvedUrls = await Promise.all(
+        allRefImages.map((url: string) => getPublicUrlForBrandAsset(url, projectAR))
+      );
+      finalSourceImageUrls = resolvedUrls.filter((u): u is string => !!u);
+      if (finalSourceImageUrls.length > 0) {
+        console.log(`[Phase9B-Async] ✓ Multi-image I2V: ${finalSourceImageUrls.length} reference images resolved`);
+        if (!finalSourceImageUrl && finalSourceImageUrls.length > 0) {
+          finalSourceImageUrl = finalSourceImageUrls[0];
+        }
+      } else {
+        finalSourceImageUrls = undefined;
+      }
+    }
     
     // Phase 16: Normalize motion control - 'auto' means no override (use intelligent defaults)
     // Intensity normalized from UI's 0-100 to backend's 0-1 scale
@@ -4194,7 +4215,6 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, asy
       console.log(`[Phase16] Using intelligent motion control for scene type: ${scene.type || 'content'}`);
     }
     
-    // Create async job - returns immediately
     const job = await videoGenerationWorker.createJob({
       projectId,
       sceneId,
@@ -4205,10 +4225,11 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, asy
       aspectRatio: (projectData as any).outputFormat?.aspectRatio || (projectData as any).settings?.aspectRatio || '16:9',
       style: (projectData as any).settings?.visualStyle || 'professional',
       triggeredBy: userId,
-      sourceImageUrl: finalSourceImageUrl, // For I2V: publicly accessible signed URL
-      i2vSettings: i2vSettings || undefined, // I2V-specific settings from UI
-      motionControl: normalizedMotionControl, // Phase 16: motion control override (undefined if 'auto')
-      sceneType: scene.type || 'content', // For intelligent motion control when no override
+      sourceImageUrl: finalSourceImageUrl,
+      sourceImageUrls: finalSourceImageUrls,
+      i2vSettings: i2vSettings || undefined,
+      motionControl: normalizedMotionControl,
+      sceneType: scene.type || 'content',
     });
     
     console.log(`[Phase9B-Async] Created job ${job.jobId} for scene ${sceneId}`);

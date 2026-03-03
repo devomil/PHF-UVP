@@ -47,6 +47,7 @@ interface AIVideoOptions {
   contentType?: 'person' | 'product' | 'nature' | 'abstract' | 'lifestyle';
   visualStyle?: string;
   imageUrl?: string;
+  imageUrls?: string[];
   qualityTier?: 'ultra' | 'premium' | 'standard';
   i2vSettings?: I2VSettingsInput; // I2V-specific settings from UI
   motionOverride?: MotionControlConfig; // Manual motion control override from UI
@@ -374,13 +375,14 @@ class AIVideoService {
       }
       const result = await piapiVideoService.generateImageToVideo({
         imageUrl: options.imageUrl,
+        imageUrls: options.imageUrls,
         prompt: options.prompt,
         duration: options.duration,
         aspectRatio: options.aspectRatio,
         model: providerKey,
         negativePrompt: options.negativePrompt,
-        i2vSettings: options.i2vSettings, // Pass I2V settings to provider
-        motionControl, // Pass motion control for I2V
+        i2vSettings: options.i2vSettings,
+        motionControl,
       });
       
       return {
