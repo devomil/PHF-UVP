@@ -284,12 +284,26 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
   const styleRecLabel = activeTag ? `Recommended for ${activeTag.label}` : activePreset ? `Recommended for ${activePreset.name}` : undefined;
 
   const libraryQuery = useQuery({
-    queryKey: ["asset-library-images"],
+    queryKey: ["asset-library-all-images"],
     queryFn: async () => {
-      const res = await fetch("/api/asset-library?type=image", { credentials: "include" });
-      if (!res.ok) return [];
-      const data = await res.json();
-      return Array.isArray(data) ? data : data.assets || [];
+      const [uploadedRes, generatedRes] = await Promise.all([
+        fetch("/api/asset-library?type=image", { credentials: "include" }),
+        fetch("/api/asset-library", { credentials: "include" }),
+      ]);
+      const uploaded = uploadedRes.ok ? await uploadedRes.json() : [];
+      const uploadedArr: any[] = Array.isArray(uploaded) ? uploaded : uploaded.assets || [];
+      const generated = generatedRes.ok ? await generatedRes.json() : [];
+      const generatedArr: any[] = (Array.isArray(generated) ? generated : [])
+        .filter((a: any) => a.assetType === 'image' || a.assetType === 'video')
+        .map((a: any) => ({
+          id: `gen-${a.id}`,
+          url: a.assetUrl,
+          thumbnailUrl: a.thumbnailUrl || a.assetUrl,
+          name: a.prompt?.substring(0, 40) || 'Generated asset',
+          type: a.assetType,
+          source: a.provider || 'ai-generated',
+        }));
+      return [...generatedArr, ...uploadedArr];
     },
     enabled: showLibrary || showEditLibrary,
   });
