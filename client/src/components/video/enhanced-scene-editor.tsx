@@ -67,6 +67,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
   const videoRef = useRef<HTMLVideoElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const refFileInputRef = useRef<HTMLInputElement>(null);
+  const refVideoInputRef = useRef<HTMLInputElement>(null);
 
   const sceneId = scene.id || `scene-${sceneIndex}`;
   const videoUrl = scene.assets?.videoUrl;
@@ -85,7 +86,11 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
   const [referenceImageUrls, setReferenceImageUrls] = useState<string[]>(
     () => scene.assets?.referenceImages || []
   );
+  const [referenceVideoUrl, setReferenceVideoUrl] = useState<string>(
+    () => scene.assets?.referenceVideoUrl || ''
+  );
   const [showLibrary, setShowLibrary] = useState(false);
+  const [showEditLibrary, setShowEditLibrary] = useState(false);
   const [isEditingPrompt, setIsEditingPrompt] = useState(false);
   const [inlinePrompt, setInlinePrompt] = useState(scene.assets?.prompt || scene.visualDirection || "");
   const [regeneratingType, setRegeneratingType] = useState<'video' | 'image' | null>(null);
@@ -286,7 +291,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
       const data = await res.json();
       return Array.isArray(data) ? data : data.assets || [];
     },
-    enabled: showLibrary,
+    enabled: showLibrary || showEditLibrary,
   });
 
   const rawProvider = scene.assets?.videoProvider || scene.assets?.imageProvider || null;
@@ -349,6 +354,45 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
     } catch (err) {
       console.error("[RefImages] Failed to persist reference images:", err);
     }
+  };
+
+  const persistReferenceVideo = async (videoUrl: string) => {
+    try {
+      await fetch(`/api/universal-video/projects/${projectId}/scenes/${sceneId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ referenceVideoUrl: videoUrl }),
+      });
+      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+    } catch (err) {
+      console.error("[RefVideo] Failed to persist reference video:", err);
+    }
+  };
+
+  const handleRefVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const uploadRes = await fetch("/api/videos/uploads", {
+        method: "POST",
+        credentials: "include",
+        body: formData,
+      });
+      if (!uploadRes.ok) throw new Error("Upload failed");
+      const data = await uploadRes.json();
+      const url = data.url || data.fileUrl;
+      if (url) {
+        setReferenceVideoUrl(url);
+        persistReferenceVideo(url);
+        toast({ title: "Reference Video Added", description: "Video will be used as style reference for generation." });
+      }
+    } catch (err: any) {
+      toast({ title: "Upload Error", description: err.message, variant: "destructive" });
+    }
+    if (refVideoInputRef.current) refVideoInputRef.current.value = "";
   };
 
   const updateSceneMutation = useMutation({
@@ -595,6 +639,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
     <div className="px-4 pb-4 space-y-4 border-t" style={{ borderColor: "var(--border-subtle)" }}>
       <input type="file" ref={fileInputRef} className="hidden" accept="image/*,video/*" onChange={handleUpload} />
       <input type="file" ref={refFileInputRef} className="hidden" accept="image/*" onChange={handleRefUpload} />
+      <input type="file" ref={refVideoInputRef} className="hidden" accept="video/*" onChange={handleRefVideoUpload} />
 
       {/* Visual Asset Section */}
       <div className="pt-4">
@@ -1176,6 +1221,128 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
               backgroundColor: isEditing ? "rgba(124,58,237,0.05)" : "transparent",
             }}
           />
+        </div>
+
+        {/* Reference Media */}
+        <div>
+          <label className="text-[11px] font-medium uppercase tracking-wider mb-1.5 flex items-center gap-2 block" style={{ color: "var(--text-secondary)" }}>
+            <ImagePlus className="w-3.5 h-3.5" />
+            Reference Media
+            <span className="text-[10px] font-normal normal-case tracking-normal" style={{ color: "var(--text-muted)" }}>
+              (guides AI generation toward your brand look)
+            </span>
+          </label>
+
+          <div className="rounded-lg border p-3" style={{ borderColor: "var(--border-subtle)", backgroundColor: "rgba(124,58,237,0.03)" }}>
+            <div className="flex flex-wrap gap-2 items-start">
+              {referenceImageUrls.map((url, i) => (
+                <div key={`ref-img-${i}`} className="relative w-16 h-16 rounded-lg overflow-hidden border group" style={{ borderColor: "rgba(124,58,237,0.3)" }}>
+                  <img src={url} alt="" className="w-full h-full object-cover" />
+                  <button
+                    onClick={() => {
+                      const newImages = referenceImageUrls.filter((_, idx) => idx !== i);
+                      setReferenceImageUrls(newImages);
+                      persistReferenceImages(newImages);
+                    }}
+                    className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-red-500 text-white flex items-center justify-center text-[8px] opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <X className="w-2.5 h-2.5" />
+                  </button>
+                  <div className="absolute bottom-0 left-0 right-0 text-[8px] text-center py-0.5 bg-black/60 text-white">IMG</div>
+                </div>
+              ))}
+
+              {referenceVideoUrl && (
+                <div className="relative w-16 h-16 rounded-lg overflow-hidden border group" style={{ borderColor: "rgba(59,130,246,0.4)" }}>
+                  <video src={referenceVideoUrl} className="w-full h-full object-cover" muted />
+                  <button
+                    onClick={() => {
+                      setReferenceVideoUrl('');
+                      persistReferenceVideo('');
+                    }}
+                    className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-red-500 text-white flex items-center justify-center text-[8px] opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <X className="w-2.5 h-2.5" />
+                  </button>
+                  <div className="absolute bottom-0 left-0 right-0 text-[8px] text-center py-0.5 bg-blue-600/80 text-white">VID</div>
+                </div>
+              )}
+
+              <div className="flex flex-col gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => refFileInputRef.current?.click()}
+                  disabled={!isEditing}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-dashed text-[11px] transition-colors hover:border-purple-500/40 disabled:opacity-50"
+                  style={{ borderColor: "var(--border-subtle)", color: "var(--text-muted)" }}
+                >
+                  <Image className="w-3 h-3" />
+                  Add Image
+                </button>
+                <button
+                  type="button"
+                  onClick={() => refVideoInputRef.current?.click()}
+                  disabled={!isEditing || !!referenceVideoUrl}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-dashed text-[11px] transition-colors hover:border-blue-500/40 disabled:opacity-50"
+                  style={{ borderColor: "var(--border-subtle)", color: "var(--text-muted)" }}
+                >
+                  <Video className="w-3 h-3" />
+                  Add Video
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowEditLibrary(!showEditLibrary); }}
+                disabled={!isEditing}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-dashed text-[11px] transition-colors hover:border-purple-500/40 disabled:opacity-50 self-center"
+                style={{ borderColor: showEditLibrary ? "rgba(124,58,237,0.4)" : "var(--border-subtle)", color: showEditLibrary ? "rgb(124,58,237)" : "var(--text-muted)" }}
+              >
+                <FolderOpen className="w-3 h-3" />
+                Library
+              </button>
+            </div>
+
+            {showEditLibrary && (
+              <div className="border rounded-lg p-2 mt-2 max-h-32 overflow-y-auto" style={{ borderColor: "var(--border-subtle)", backgroundColor: "var(--surface)" }}>
+                {libraryQuery.isLoading ? (
+                  <div className="flex items-center justify-center py-3">
+                    <Loader2 className="w-4 h-4 animate-spin" style={{ color: "var(--text-muted)" }} />
+                  </div>
+                ) : !libraryQuery.data || libraryQuery.data.length === 0 ? (
+                  <p className="text-xs text-center py-3" style={{ color: "var(--text-muted)" }}>No images in library</p>
+                ) : (
+                  <div className="grid grid-cols-8 gap-1.5">
+                    {libraryQuery.data.slice(0, 24).map((asset: any) => (
+                      <button
+                        key={asset.id}
+                        onClick={() => {
+                          const url = asset.url || asset.thumbnailUrl;
+                          if (url) {
+                            const newImages = [...referenceImageUrls, url];
+                            setReferenceImageUrls(newImages);
+                            persistReferenceImages(newImages);
+                            setShowEditLibrary(false);
+                            toast({ title: "Reference Added" });
+                          }
+                        }}
+                        className="aspect-square rounded overflow-hidden border hover:border-purple-500/50 transition-colors"
+                        style={{ borderColor: "var(--border-subtle)" }}
+                      >
+                        <img src={asset.url || asset.thumbnailUrl} alt={asset.name || ""} className="w-full h-full object-cover" />
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {referenceImageUrls.length === 0 && !referenceVideoUrl && (
+              <p className="text-[10px] mt-2" style={{ color: "var(--text-muted)" }}>
+                Add product photos, brand images, or style reference videos to guide AI generation. Images trigger I2V mode for better brand consistency.
+              </p>
+            )}
+          </div>
         </div>
 
         {/* Micro-Scenes */}

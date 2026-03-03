@@ -1849,6 +1849,13 @@ router.patch('/projects/:projectId/scenes/:sceneId', isAuthenticated, async (req
       (scenes[sceneIndex] as any).assets.referenceImages = updates.referenceImages;
     }
 
+    if (updates.referenceVideoUrl !== undefined) {
+      if (!scenes[sceneIndex].assets) {
+        (scenes[sceneIndex] as any).assets = {};
+      }
+      (scenes[sceneIndex] as any).assets.referenceVideoUrl = updates.referenceVideoUrl;
+    }
+
     if (updates.clearImage) {
       if (scenes[sceneIndex].assets) {
         scenes[sceneIndex].assets.imageUrl = '';
