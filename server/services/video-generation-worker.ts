@@ -113,7 +113,8 @@ interface VideoGenerationRequest {
   negativePrompt?: string;
   style?: string;
   triggeredBy?: string;
-  sourceImageUrl?: string; // For I2V: matched brand asset product photo URL
+  sourceImageUrl?: string;
+  sourceImageUrls?: string[];
   i2vSettings?: I2VSettings; // I2V-specific settings from UI
   motionControl?: MotionControlOverride; // Phase 16: motion control override from UI
   sceneType?: string; // For intelligent motion control when no override
@@ -173,7 +174,9 @@ class VideoGenerationWorker {
       retryCount: 0,
       maxRetries: 3,
       sourceImageUrl: request.sourceImageUrl || null,
-      i2vSettings: request.i2vSettings || null,
+      i2vSettings: (request.sourceImageUrls && request.sourceImageUrls.length > 0)
+        ? { ...(request.i2vSettings || {}), sourceImageUrls: request.sourceImageUrls }
+        : (request.i2vSettings || null),
       motionControl: request.motionControl || null,
       sceneType: request.sceneType || null,
     });
@@ -420,6 +423,7 @@ class VideoGenerationWorker {
           negativePrompt: enhancedNegativePrompt,
           visualStyle: job.style || "professional",
           imageUrl: job.sourceImageUrl || undefined,
+          imageUrls: (job.i2vSettings as any)?.sourceImageUrls || undefined,
           i2vSettings: jobI2vSettings || undefined,
           motionOverride: jobMotionControl ? {
             camera_movement: jobMotionControl.camera_movement as any,
