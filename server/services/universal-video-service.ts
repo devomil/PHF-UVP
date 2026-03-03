@@ -3437,8 +3437,11 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
       // that will just be used as I2V references. Go straight to T2V in the video step.
       // Only skip if scene has NO explicit user-uploaded reference image or brand asset.
       const sceneRefConfig = (scene as any).referenceConfig;
+      const sceneRefImages: string[] = (scene.assets as any)?.referenceImages || [];
+      const sceneRefVideo: string = (scene.assets as any)?.referenceVideoUrl || '';
       const hasUserReferenceImage = (sceneRefConfig?.mode === 'image-to-image' && sceneRefConfig?.sourceUrl) ||
-                                     (sceneRefConfig?.mode !== 'none' && sceneRefConfig?.imageUrl);
+                                     (sceneRefConfig?.mode !== 'none' && sceneRefConfig?.imageUrl) ||
+                                     sceneRefImages.length > 0;
       const hasExplicitBrandAsset = scene.assets?.assignedProductImageId || 
                                      (scene.assets?.useAIImage === false) ||
                                      (scene as any).brandAssetUrl;
@@ -3449,6 +3452,20 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
         updatedProject.progress.overallPercent = 15 + Math.round(((i + 1) / (project.scenes || []).length) * 25);
         await saveProgress();
         continue;
+      }
+
+      // ===== SCENE-LEVEL REFERENCE IMAGES: Assign as brandAssetUrl for I2V =====
+      if (sceneRefImages.length > 0 && !(scene as any).brandAssetUrl) {
+        const baseUrl = process.env.REPLIT_DEV_DOMAIN
+          ? `https://${process.env.REPLIT_DEV_DOMAIN}`
+          : (process.env.REPLIT_DOMAINS ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}` : 'http://localhost:5000');
+        const refUrl = sceneRefImages[0].startsWith('http') ? sceneRefImages[0] : `${baseUrl}${sceneRefImages[0].startsWith('/') ? '' : '/'}${sceneRefImages[0]}`;
+        (updatedProject.scenes[i] as any).brandAssetUrl = refUrl;
+        if (!updatedProject.scenes[i].assets) {
+          updatedProject.scenes[i].assets = {};
+        }
+        updatedProject.scenes[i].assets!.useAIImage = false;
+        console.log(`[Assets] Scene ${scene.id} has user-uploaded reference image, assigned as brandAssetUrl for I2V: ${refUrl}`);
       }
 
       // ===== PHASE 13D: IMAGE-TO-IMAGE REFERENCE PROCESSING =====
