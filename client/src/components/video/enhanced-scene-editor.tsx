@@ -650,13 +650,20 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
     }
   };
 
+  const [multiImageTipDismissed, setMultiImageTipDismissed] = useState(false);
+
   const addReferenceImage = (url: string) => {
     const newImages = [...referenceImageUrls, url];
     setReferenceImageUrls(newImages);
     persistReferenceImages(newImages);
-    if (newImages.length === 2) {
+    if (newImages.length >= 2 && !multiImageTipDismissed) {
       setShowMultiImageTip(true);
     }
+  };
+
+  const dismissMultiImageTip = () => {
+    setShowMultiImageTip(false);
+    setMultiImageTipDismissed(true);
   };
 
   const isRegenerating = regenImageMutation.isPending || regenVideoMutation.isPending || !!regeneratingType;
@@ -978,6 +985,65 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
               </div>
             )}
           </div>
+
+          {showMultiImageTip && referenceImageUrls.length >= 2 && !isEditing && (
+            <div
+              className="rounded-xl border p-3.5 relative animate-in slide-in-from-top-2 duration-300"
+              style={{
+                borderColor: "rgba(124,58,237,0.3)",
+                backgroundColor: "rgba(124,58,237,0.06)",
+                boxShadow: "0 4px 24px rgba(124,58,237,0.08)",
+              }}
+            >
+              <button
+                onClick={dismissMultiImageTip}
+                className="absolute top-2 right-2 w-5 h-5 rounded-full flex items-center justify-center hover:bg-white/10 transition-colors"
+                style={{ color: "var(--text-muted)" }}
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+
+              <div className="flex items-start gap-2 mb-2.5">
+                <Sparkles className="w-4 h-4 mt-0.5 text-purple-400 shrink-0" />
+                <div>
+                  <h4 className="text-xs font-semibold" style={{ color: "var(--text-primary)" }}>
+                    Multi-Image Reference Tips
+                  </h4>
+                  <p className="text-[10px] mt-0.5" style={{ color: "var(--text-muted)" }}>
+                    You have {referenceImageUrls.length} reference images. Use <code className="px-1 py-0.5 rounded bg-purple-500/10 text-purple-300 font-mono">@image_1</code>, <code className="px-1 py-0.5 rounded bg-purple-500/10 text-purple-300 font-mono">@image_2</code> in your prompt to reference each one.
+                  </p>
+                </div>
+              </div>
+
+              <div className="ml-6 space-y-1.5">
+                <div className="rounded-md p-2" style={{ backgroundColor: "rgba(0,0,0,0.15)" }}>
+                  <p className="text-[10px] font-medium mb-1" style={{ color: "rgb(167,139,250)" }}>Example prompts</p>
+                  <p className="text-[9px] font-mono leading-relaxed" style={{ color: "var(--text-muted)" }}>
+                    "Use @image_1 as the background. Place @image_2 product in the center with gentle zoom."
+                  </p>
+                </div>
+                <p className="text-[9px]" style={{ color: "var(--text-muted)" }}>
+                  <span className="font-semibold text-purple-300">Kling</span> providers support multi-image (up to 4). Other providers use only the first image.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 mt-2.5 ml-6">
+                <button
+                  onClick={() => { dismissMultiImageTip(); setIsEditing(true); }}
+                  className="text-[10px] px-3 py-1 rounded-md font-medium transition-colors bg-purple-600 hover:bg-purple-500 text-white"
+                >
+                  Edit Prompt
+                </button>
+                <button
+                  onClick={dismissMultiImageTip}
+                  className="text-[10px] px-3 py-1 rounded-md transition-colors hover:bg-purple-500/20"
+                  style={{ color: "rgb(167,139,250)", border: "1px solid rgba(124,58,237,0.2)" }}
+                >
+                  Got it
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Provider + Mode Selectors + Regenerate */}
           <div className="flex flex-col items-end gap-2">
@@ -1476,7 +1542,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
               }}
             >
               <button
-                onClick={() => setShowMultiImageTip(false)}
+                onClick={dismissMultiImageTip}
                 className="absolute top-2.5 right-2.5 w-5 h-5 rounded-full flex items-center justify-center hover:bg-white/10 transition-colors"
                 style={{ color: "var(--text-muted)" }}
               >
@@ -1531,7 +1597,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
               </div>
 
               <button
-                onClick={() => setShowMultiImageTip(false)}
+                onClick={dismissMultiImageTip}
                 className="mt-3 ml-7 text-[10px] px-3 py-1 rounded-md transition-colors hover:bg-purple-500/20"
                 style={{ color: "rgb(167,139,250)", border: "1px solid rgba(124,58,237,0.2)" }}
               >
