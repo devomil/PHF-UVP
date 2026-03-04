@@ -1914,6 +1914,29 @@ export const UniversalVideoComposition: React.FC<UniversalVideoProps> = ({
   const [handle] = React.useState(() => delayRender('Loading video assets'));
 
   React.useEffect(() => {
+    const PREFETCH_TIMEOUT_MS = 120_000;
+
+    const prefetchWithTimeout = (url: string): Promise<void> => {
+      return new Promise<void>((resolve) => {
+        const timer = setTimeout(() => {
+          console.warn(`[Asset Loader] Prefetch timed out after ${PREFETCH_TIMEOUT_MS / 1000}s: ${url.substring(0, 80)}`);
+          resolve();
+        }, PREFETCH_TIMEOUT_MS);
+
+        prefetch(url, { method: 'blob-url' })
+          .then(() => {
+            clearTimeout(timer);
+            console.log(`[Asset Loader] Prefetched: ${url.substring(0, 80)}`);
+            resolve();
+          })
+          .catch((e) => {
+            clearTimeout(timer);
+            console.warn(`[Asset Loader] Failed to prefetch: ${url.substring(0, 80)}`, e);
+            resolve();
+          });
+      });
+    };
+
     const loadAssets = async () => {
       try {
         const videoUrls = scenes
@@ -1932,13 +1955,7 @@ export const UniversalVideoComposition: React.FC<UniversalVideoProps> = ({
         const allUrls = [...new Set([...videoUrls, ...microSceneUrls])];
         console.log(`[Asset Loader] Prefetching ${allUrls.length} videos (${videoUrls.length} scene + ${microSceneUrls.length} micro-scene)`);
         
-        await Promise.all(
-          allUrls.map(url => 
-            prefetch(url, { method: 'blob-url' })
-              .then(() => console.log(`[Asset Loader] Prefetched: ${url.substring(0, 60)}`))
-              .catch(e => console.warn(`[Asset Loader] Failed to prefetch: ${url.substring(0, 60)}`, e))
-          )
-        );
+        await Promise.all(allUrls.map(prefetchWithTimeout));
         
         console.log('[Asset Loader] All assets loaded, continuing render');
         continueRender(handle);
