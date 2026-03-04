@@ -11,9 +11,6 @@ import {
   interpolate,
   spring,
   staticFile,
-  continueRender,
-  delayRender,
-  prefetch,
 } from "remotion";
 import type {
   Scene,
@@ -1911,62 +1908,18 @@ export const UniversalVideoComposition: React.FC<UniversalVideoProps> = ({
   
   const showDebugInfo = false;
   
-  const [handle] = React.useState(() => delayRender('Loading video assets'));
-
   React.useEffect(() => {
-    const PREFETCH_TIMEOUT_MS = 120_000;
-
-    const prefetchWithTimeout = (url: string): Promise<void> => {
-      return new Promise<void>((resolve) => {
-        const timer = setTimeout(() => {
-          console.warn(`[Asset Loader] Prefetch timed out after ${PREFETCH_TIMEOUT_MS / 1000}s: ${url.substring(0, 80)}`);
-          resolve();
-        }, PREFETCH_TIMEOUT_MS);
-
-        prefetch(url, { method: 'blob-url' })
-          .then(() => {
-            clearTimeout(timer);
-            console.log(`[Asset Loader] Prefetched: ${url.substring(0, 80)}`);
-            resolve();
-          })
-          .catch((e) => {
-            clearTimeout(timer);
-            console.warn(`[Asset Loader] Failed to prefetch: ${url.substring(0, 80)}`, e);
-            resolve();
-          });
-      });
-    };
-
-    const loadAssets = async () => {
-      try {
-        const videoUrls = scenes
-          .filter(s => s.assets?.videoUrl && s.background?.type === 'video')
-          .map(s => s.assets!.videoUrl!);
-        
-        const microSceneUrls: string[] = [];
-        for (const s of scenes) {
-          if (s.microScenes && s.microScenes.length > 1) {
-            for (const ms of s.microScenes) {
-              if (ms.videoUrl) microSceneUrls.push(ms.videoUrl);
-            }
-          }
+    const videoCount = scenes.filter(s => s.assets?.videoUrl && s.background?.type === 'video').length;
+    let microSceneCount = 0;
+    for (const s of scenes) {
+      if (s.microScenes && s.microScenes.length > 1) {
+        for (const ms of s.microScenes) {
+          if (ms.videoUrl) microSceneCount++;
         }
-        
-        const allUrls = [...new Set([...videoUrls, ...microSceneUrls])];
-        console.log(`[Asset Loader] Prefetching ${allUrls.length} videos (${videoUrls.length} scene + ${microSceneUrls.length} micro-scene)`);
-        
-        await Promise.all(allUrls.map(prefetchWithTimeout));
-        
-        console.log('[Asset Loader] All assets loaded, continuing render');
-        continueRender(handle);
-      } catch (e) {
-        console.error('[Asset Loader] Asset loading failed:', e);
-        continueRender(handle);
       }
-    };
-    
-    loadAssets();
-  }, [handle]);
+    }
+    console.log(`[Asset Loader] ${videoCount} scene videos + ${microSceneCount} micro-scene videos — loading on demand (no bulk prefetch)`);
+  }, []);
 
   const effectiveEndCardConfig = endCardConfig ?? DEFAULT_END_CARD_CONFIG;
   const effectiveSoundConfig = soundDesignConfig ?? DEFAULT_SOUND_CONFIG;
