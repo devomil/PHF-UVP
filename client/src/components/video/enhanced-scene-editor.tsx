@@ -91,6 +91,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
   );
   const [showLibrary, setShowLibrary] = useState(false);
   const [showEditLibrary, setShowEditLibrary] = useState(false);
+  const [showMultiImageTip, setShowMultiImageTip] = useState(false);
   const [isEditingPrompt, setIsEditingPrompt] = useState(false);
   const [inlinePrompt, setInlinePrompt] = useState(scene.assets?.prompt || scene.visualDirection || "");
   const [regeneratingType, setRegeneratingType] = useState<'video' | 'image' | null>(null);
@@ -607,9 +608,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
         const isVideo = file.type.startsWith('video/');
         setMediaMutation.mutate({ mediaUrl: url, mediaType: isVideo ? 'video' : 'image' });
         if (!isVideo) {
-          const newImages = [...referenceImageUrls, url];
-          setReferenceImageUrls(newImages);
-          persistReferenceImages(newImages);
+          addReferenceImage(url);
           setGenerationMode("i2v");
         }
       }
@@ -634,9 +633,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
       const data = await uploadRes.json();
       const url = data.url || data.fileUrl;
       if (url) {
-        const newImages = [...referenceImageUrls, url];
-        setReferenceImageUrls(newImages);
-        persistReferenceImages(newImages);
+        addReferenceImage(url);
         toast({ title: "Reference Image Added", description: "Image will be used for I2V video generation." });
       }
     } catch (err: any) {
@@ -650,6 +647,15 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
     updateSceneMutation.mutate({ ...editValues, contentTag: contentTag || null, artPresetId: artPresetValue });
     if (editValues.visualDirection) {
       setInlinePrompt(editValues.visualDirection);
+    }
+  };
+
+  const addReferenceImage = (url: string) => {
+    const newImages = [...referenceImageUrls, url];
+    setReferenceImageUrls(newImages);
+    persistReferenceImages(newImages);
+    if (newImages.length === 2) {
+      setShowMultiImageTip(true);
     }
   };
 
@@ -945,9 +951,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                           key={asset.id}
                           onClick={() => {
                             if (assetUrl) {
-                              const newImages = [...referenceImageUrls, assetUrl];
-                              setReferenceImageUrls(newImages);
-                              persistReferenceImages(newImages);
+                              addReferenceImage(assetUrl);
                               setShowLibrary(false);
                               toast({ title: "Reference Added" });
                             }
@@ -1330,7 +1334,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                   >
                     <X className="w-2.5 h-2.5" />
                   </button>
-                  <div className="absolute top-0.5 left-0.5 w-4.5 h-4.5 rounded-full bg-purple-600 text-white flex items-center justify-center text-[9px] font-bold shadow-sm">
+                  <div className="absolute top-0.5 left-0.5 w-[18px] h-[18px] rounded-full bg-purple-600 text-white flex items-center justify-center text-[9px] font-bold shadow-sm">
                     {i + 1}
                   </div>
                   <div className="absolute bottom-0 left-0 right-0 text-[8px] text-center py-0.5 bg-black/60 text-white">@image_{i + 1}</div>
@@ -1418,9 +1422,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                                 setReferenceVideoUrl(assetUrl);
                                 persistReferenceVideo(assetUrl);
                               } else {
-                                const newImages = [...referenceImageUrls, assetUrl];
-                                setReferenceImageUrls(newImages);
-                                persistReferenceImages(newImages);
+                                addReferenceImage(assetUrl);
                               }
                               setShowEditLibrary(false);
                               toast({ title: `Reference ${isVideo ? 'Video' : 'Image'} Added` });
@@ -1463,6 +1465,80 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
               </p>
             )}
           </div>
+
+          {showMultiImageTip && referenceImageUrls.length >= 2 && (
+            <div
+              className="mt-3 rounded-xl border p-4 relative animate-in slide-in-from-top-2 duration-300"
+              style={{
+                borderColor: "rgba(124,58,237,0.3)",
+                backgroundColor: "rgba(124,58,237,0.06)",
+                boxShadow: "0 4px 24px rgba(124,58,237,0.08)",
+              }}
+            >
+              <button
+                onClick={() => setShowMultiImageTip(false)}
+                className="absolute top-2.5 right-2.5 w-5 h-5 rounded-full flex items-center justify-center hover:bg-white/10 transition-colors"
+                style={{ color: "var(--text-muted)" }}
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+
+              <div className="flex items-start gap-2.5 mb-3">
+                <Sparkles className="w-4 h-4 mt-0.5 text-purple-400 shrink-0" />
+                <div>
+                  <h4 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                    Multi-Image Reference Tips
+                  </h4>
+                  <p className="text-[11px] mt-0.5" style={{ color: "var(--text-muted)" }}>
+                    You have {referenceImageUrls.length} reference images attached. Here's how to get the best results:
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-2.5 ml-7">
+                <div className="rounded-lg p-2.5" style={{ backgroundColor: "rgba(124,58,237,0.06)" }}>
+                  <p className="text-[11px] font-medium mb-1" style={{ color: "rgb(167,139,250)" }}>
+                    Use @image tags in your Visual Direction prompt
+                  </p>
+                  <p className="text-[10px] leading-relaxed" style={{ color: "var(--text-muted)" }}>
+                    Reference each image by number: <code className="px-1 py-0.5 rounded bg-purple-500/10 text-purple-300 font-mono">@image_1</code>, <code className="px-1 py-0.5 rounded bg-purple-500/10 text-purple-300 font-mono">@image_2</code>, etc.
+                  </p>
+                </div>
+
+                <div className="rounded-lg p-2.5" style={{ backgroundColor: "rgba(124,58,237,0.06)" }}>
+                  <p className="text-[11px] font-medium mb-1" style={{ color: "rgb(167,139,250)" }}>
+                    Example prompts
+                  </p>
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-mono leading-relaxed px-2 py-1 rounded" style={{ color: "var(--text-muted)", backgroundColor: "rgba(0,0,0,0.2)" }}>
+                      "Use @image_1 as the background. Place @image_2 product in the center with gentle zoom."
+                    </p>
+                    <p className="text-[10px] font-mono leading-relaxed px-2 py-1 rounded" style={{ color: "var(--text-muted)", backgroundColor: "rgba(0,0,0,0.2)" }}>
+                      "@image_1 as start frame, transition to @image_2 as end frame."
+                    </p>
+                  </div>
+                </div>
+
+                <div className="rounded-lg p-2.5" style={{ backgroundColor: "rgba(59,130,246,0.06)" }}>
+                  <p className="text-[11px] font-medium mb-1" style={{ color: "rgb(147,197,253)" }}>
+                    Supported providers
+                  </p>
+                  <p className="text-[10px] leading-relaxed" style={{ color: "var(--text-muted)" }}>
+                    <span className="font-semibold text-purple-300">Kling</span> providers (2.0, 2.1, 2.5, 2.6, etc.) support up to 4 reference images via the <code className="px-1 py-0.5 rounded bg-purple-500/10 text-purple-300 font-mono">@image_N</code> syntax.
+                    Other providers (Runway, Luma, Hailuo, etc.) will use only the first image as the starting frame.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setShowMultiImageTip(false)}
+                className="mt-3 ml-7 text-[10px] px-3 py-1 rounded-md transition-colors hover:bg-purple-500/20"
+                style={{ color: "rgb(167,139,250)", border: "1px solid rgba(124,58,237,0.2)" }}
+              >
+                Got it
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Micro-Scenes */}
