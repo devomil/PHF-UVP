@@ -549,6 +549,7 @@ export interface ScriptVideoInput {
   musicEnabled?: boolean;
   musicMood?: string;
   qualityTier?: 'standard' | 'premium' | 'ultra';
+  artPresetId?: string;
 }
 
 // Pine Hill Farm Official Brand Colors

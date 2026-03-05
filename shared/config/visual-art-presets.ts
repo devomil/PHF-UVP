@@ -13,6 +13,15 @@ export interface VisualArtPreset {
   generationStrategy: 'i2v' | 't2v' | 'auto';
 }
 
+export const STYLIZED_PRESET_IDS = [
+  '3d-illustration', 'claymation', '2d-line-art', 'neon-futuristic',
+  'watercolor', 'collage', 'minimalist-flat', 'scientific-medical',
+] as const;
+
+export function isStylizedPreset(presetId: string | undefined | null): boolean {
+  return !!presetId && (STYLIZED_PRESET_IDS as readonly string[]).includes(presetId);
+}
+
 export const VISUAL_ART_PRESETS: Record<string, VisualArtPreset> = {
   '3d-illustration': {
     id: '3d-illustration',
