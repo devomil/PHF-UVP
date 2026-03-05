@@ -269,6 +269,33 @@ export function registerRoutes(app: Express) {
       if (mode === "quick-create") {
         const qcUserId = (req.user as any).id;
         const qcBrandData = await getBrandContext(qcUserId);
+
+        const qcProgressData: any = { phase: "generating", percentage: 0, currentStep: "Queued for generation" };
+        if (artPresetId && artPresetId !== "auto") {
+          const { getVisualArtPreset } = await import("../shared/config/visual-art-presets");
+          if (getVisualArtPreset(artPresetId)) {
+            qcProgressData.artPresetId = artPresetId;
+          }
+        }
+
+        let enhancedPrompt = prompt || "";
+        if (qcProgressData.artPresetId) {
+          const { getVisualArtPreset, isStylizedPreset } = await import("../shared/config/visual-art-presets");
+          const qcPreset = getVisualArtPreset(qcProgressData.artPresetId);
+          if (qcPreset && isStylizedPreset(qcPreset.id)) {
+            const keywords = qcPreset.styleKeywords || [];
+            const promptLower = enhancedPrompt.toLowerCase();
+            const hasStyle = keywords.length > 0 ? keywords.some((kw: string) => promptLower.includes(kw)) : false;
+            if (!hasStyle) {
+              const prefix = qcPreset.styleMarkerPrefix || qcPreset.name;
+              enhancedPrompt = `${prefix} — ${enhancedPrompt}`;
+            }
+            if (qcPreset.globalStyleNotes) {
+              enhancedPrompt = `${enhancedPrompt}. Style: ${qcPreset.globalStyleNotes}`;
+            }
+          }
+        }
+
         const [project] = await db.insert(universalVideoProjects).values({
           projectId,
           ownerId: qcUserId,
@@ -281,7 +308,7 @@ export function registerRoutes(app: Express) {
           brand: qcBrandData.brandName ? { name: qcBrandData.brandName, tagline: qcBrandData.tagline, website: qcBrandData.website, colors: { primary: qcBrandData.primaryColor, secondary: qcBrandData.secondaryColor, accent: qcBrandData.accentColor }, logoUrl: qcBrandData.logoUrl, guidelines: qcBrandData.guidelines } : {},
           scenes: [],
           assets: {},
-          progress: { phase: "generating", percentage: 0, currentStep: "Queued for generation" },
+          progress: qcProgressData,
           status: "draft",
           qualityTier: "standard",
           mediaMode: outputType === "image" ? "image" : "video",
@@ -294,12 +321,12 @@ export function registerRoutes(app: Express) {
           sceneId: "quick-create",
           provider: provider || "auto",
           status: "pending",
-          prompt: prompt || "",
+          prompt: enhancedPrompt,
           duration: outputType === "video" ? (duration || 6) : undefined,
           aspectRatio: aspectRatio || "16:9",
           style: outputType === "image" ? (imageStyle || "Photorealistic") : undefined,
           sceneType: outputType === "image" ? "image" : "video",
-          i2vSettings: { saveToLibrary: saveToLibrary !== false, outputType: outputType || "video" },
+          i2vSettings: { saveToLibrary: saveToLibrary !== false, outputType: outputType || "video", artPresetId: qcProgressData.artPresetId || undefined },
           triggeredBy: (req.user as any).id,
         });
 
