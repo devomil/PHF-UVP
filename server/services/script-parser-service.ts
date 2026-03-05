@@ -160,33 +160,29 @@ SCENE TYPES:
 ${artPreset && isStylizedPreset(artPreset.id) ? `
 VISUAL DIRECTION RULES - ${artPreset.name.toUpperCase()} STYLE:
 
-## CORE PRINCIPLE: RICH, STYLE-SPECIFIC VISUAL DESCRIPTIONS
-You are writing visual directions for ${artPreset.name} style AI video generation. Write DETAILED, CINEMATIC descriptions that give AI models enough information to produce high-quality ${artPreset.name} imagery.
-
-## STYLE: ${artPreset.name}
+## STYLE CONTEXT
 ${artPreset.description}
-- Style prefix: "${artPreset.imagePromptPrefix}"
-- Style elements: ${artPreset.imagePromptSuffix}
-- Avoid: ${artPreset.negativePromptAdditions.join(', ')}
+Avoid: ${artPreset.negativePromptAdditions.join(', ')}
 
-## PROMPT DETAIL LEVEL
-Write 2-4 sentences per scene (40-80 words). Include:
-1. The art style identifier (e.g., "${artPreset.imagePromptPrefix.split(',')[0].trim()}")
-2. Specific subject descriptions (characters with features, objects with materials/textures)
-3. Setting/environment details
-4. Lighting and color palette
-5. Camera movement suggestion (slow push-in, gentle orbit, etc.)
+## HOW TO WRITE VISUAL DIRECTIONS
+Write each visual direction as a natural, vivid description — the way a skilled art director would describe a shot to an animator. DO NOT mechanically paste style labels or format prompts like a template. Instead, naturally weave the ${artPreset.name} aesthetic into concrete scene descriptions.
+
+Each scene visual direction should be 2-4 sentences (40-80 words) describing:
+- WHAT we see: specific characters, objects, environments — concrete and tangible
+- HOW it looks: lighting quality, color mood, atmosphere — woven naturally into the description
+- The FEELING: emotional tone matching the narration
+
+## CRITICAL RULES
+- Be CONCRETE, not abstract. Describe physical things, not concepts like "transformation" or "journey"
+- Do NOT start every prompt with the same words. Vary openings
+- Do NOT use meta-descriptions like "representing" or "symbolizing" — describe what is literally visible
+- NEVER include readable text, words, signs, labels, or logos — AI cannot render text
+- Vary visual types across scenes: characters, environments, object close-ups, nature, hands doing things
+- Only mention "${brandName}" in CTA/outro/product scenes
 
 ## EXAMPLES
-WRONG: "A warm, welcoming exploration through ${artPreset.name}"
-RIGHT: "${artPreset.imagePromptPrefix} a warm sunlit kitchen interior with soft golden morning light, a friendly round-faced character with expressive eyes at a wooden counter, houseplants in background, warm amber palette, ${artPreset.imagePromptSuffix}"
-
-## RULES
-- NEVER include readable text, words, signs, labels, or logos — AI cannot render text
-- Each scene describes ONE concrete visual moment with full stylistic detail
-- Vary visual approach across scenes (characters, environments, objects, concepts)
-- Match the emotional tone of the narration
-- Only mention "${brandName}" in CTA/outro/product scenes
+WRONG: "A warm, welcoming exploration through ${artPreset.name} depicting the healthcare journey"
+RIGHT: "A cheerful round-faced character with bright curious eyes waves from behind a sunny kitchen counter, morning light streaming through a window casting soft warm shadows across potted herbs and a steaming mug of tea"
 ` : `
 VISUAL DIRECTION RULES - CRITICAL:
 
@@ -248,16 +244,17 @@ Return a JSON object with scenes array. Each scene should include:
     const isStylized = artPreset && isStylizedPreset(artPreset.id);
 
     const visualDirectionGuidance = isStylized
-      ? `3. Write DETAILED, STYLE-SPECIFIC visual directions (2-4 sentences, 40-80 words) in ${artPreset.name} style. Include the style prefix "${artPreset.imagePromptPrefix.split(',')[0].trim()}", specific subject descriptions, environment details, lighting, color palette, and camera suggestions.`
+      ? `3. Write VIVID, NATURAL visual directions (2-4 sentences, 40-80 words) in ${artPreset.name} style. Describe concrete scenes like an art director would — specific characters, objects, environments, lighting, and mood woven naturally into the description. Do NOT mechanically paste style labels.`
       : `3. Write SIMPLE, AUTHENTIC visual directions (1-2 sentences) that match the emotional reality of the narration`;
 
     const visualRules = isStylized
       ? `CRITICAL VISUAL DIRECTION RULES (${artPreset.name.toUpperCase()} STYLE):
-- Write 2-4 detailed sentences per scene with style-specific elements
-- Start with or include "${artPreset.imagePromptPrefix.split(',')[0].trim()}" style marker
-- Include character features, lighting, color palette, and camera movement
-- Each scene should feel like a ${artPreset.name} production with full visual detail
-- Vary the visual approach across scenes (characters, environments, objects)
+- Write 2-4 sentences per scene describing CONCRETE visuals — what we literally see
+- Naturally convey the ${artPreset.name} look through your descriptions, don't paste style labels
+- Describe specific characters (features, expressions, poses), objects, and environments
+- Include lighting and color mood woven into the description, not listed separately
+- Do NOT use abstract words like "representing", "symbolizing", "journey", "transformation"
+- Vary openings — don't start every prompt the same way
 - Only mention "${brandName}" in CTA, outro, or product scenes
 - NEVER include readable text, words, signs, labels, logos — AI cannot render text`
       : `CRITICAL VISUAL DIRECTION RULES:
@@ -269,7 +266,7 @@ Return a JSON object with scenes array. Each scene should include:
 - NEVER include text, words, signs, labels, logos in visual directions - AI cannot render readable text.`;
 
     const visualDirectionExample = isStylized
-      ? `"${artPreset.imagePromptPrefix} a warm sunlit kitchen interior with soft golden morning light, a friendly character with expressive eyes at a wooden counter, warm amber palette, ${artPreset.imagePromptSuffix}"`
+      ? `"A cheerful round-faced character with bright curious eyes waves from behind a sunny kitchen counter, morning light streaming through a window casting soft warm shadows across potted herbs and a steaming mug of tea"`
       : `"1-2 simple sentences describing what we see - authentic and relatable"`;
 
     return `Parse this video script${brand.brandName?.trim() ? ` for ${brandName}` : ''}.

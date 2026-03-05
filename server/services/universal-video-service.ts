@@ -3170,40 +3170,38 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
             const isStylizedArtPreset = isStylizedPreset(artPreset?.id);
             
             const stylizedPromptRules = artPreset ? `
-## CORE PRINCIPLE: RICH, STYLE-SPECIFIC VISUAL DESCRIPTIONS
-You are creating prompts for AI video generation in ${artPreset.name} style. Each prompt must be detailed enough for an AI model to produce a high-quality ${artPreset.name} video. Include specific visual elements, character descriptions, lighting, color palette, and style markers.
-
-## STYLE REQUIREMENTS: ${artPreset.name.toUpperCase()}
+## STYLE: ${artPreset.name.toUpperCase()}
 ${artPreset.description}
+Avoid: ${artPreset.negativePromptAdditions.join(', ')}
 
-Every prompt MUST include these style anchors:
-- Style prefix: "${artPreset.imagePromptPrefix}"
-- Style elements: ${artPreset.imagePromptSuffix}
-- NEVER include: ${artPreset.negativePromptAdditions.join(', ')}
+## HOW TO WRITE VISUAL DIRECTIONS
+Write each visual direction as a natural, vivid description — the way a skilled art director would describe a shot to an animator. DO NOT mechanically paste style labels or format prompts like a template. Instead, naturally weave the ${artPreset.name} aesthetic into concrete scene descriptions.
 
-## PROMPT DETAIL LEVEL
-Write 2-4 sentences per micro-scene (40-80 words). Each prompt should include:
-1. The art style identifier (e.g., "${artPreset.imagePromptPrefix.split(',')[0].trim()}")
-2. SPECIFIC subject description (characters with features, objects with materials/textures)
-3. Setting/environment details (interior/exterior, time of day, atmosphere)
-4. Lighting and color palette (warm golden light, cool blue tones, etc.)
-5. Camera suggestion (slow push-in, gentle orbit, wide establishing shot)
-6. Mood/atmosphere keywords
+Each micro-scene visual direction should be 2-4 sentences (40-80 words) and describe:
+- WHAT we see: specific characters, objects, environments — concrete and tangible, not abstract
+- HOW it looks: lighting quality, color mood, atmosphere — woven naturally into the description
+- The FEELING: emotional tone that matches the narration
 
-## EXAMPLES FOR ${artPreset.name.toUpperCase()} STYLE
+## CRITICAL RULES
+1. Be CONCRETE, not abstract. Describe physical things we can see, not concepts like "transformation" or "journey" or "healthcare system"
+2. Do NOT start every prompt with the same words. Vary your opening — sometimes start with the setting, sometimes the character, sometimes the action
+3. Do NOT use meta-descriptions like "representing" or "symbolizing" — just describe what is literally visible
+4. NEVER include readable text, words, signs, labels, or logos — AI video cannot render text
+5. Each micro-scene = ONE clear visual moment. No "or" alternatives
+6. Vary visual types across micro-scenes: characters, environments, object close-ups, nature, hands doing things
+
+## EXAMPLES
 Narration: "Hi, and welcome."
-WRONG: "A warm, welcoming exploration through ${artPreset.name}"
-RIGHT: "${artPreset.imagePromptPrefix} a warm sunlit kitchen interior with soft golden morning light streaming through a large window, a friendly round-faced character with expressive eyes stands at a wooden counter giving a gentle wave, houseplants in the background, warm amber and cream color palette, ${artPreset.imagePromptSuffix}"
+WRONG: "3D rendered illustration, Pixar style, soft global illumination, isometric perspective, a warm welcoming exploration of the brand's healing journey"
+RIGHT: "A cheerful round-faced character with bright curious eyes waves from behind a sunny kitchen counter, morning light streaming through a window casting soft warm shadows across potted herbs and a steaming mug of tea"
 
 Narration: "If you've ever felt confused about why weight loss feels so hard"
-WRONG: "Someone feeling confused about their health journey"
-RIGHT: "${artPreset.imagePromptPrefix} a puzzled character sitting at a kitchen table holding a fork over an empty plate, a thought bubble with question marks floating above their head, soft slightly blue-tinted lighting suggesting mild frustration, cozy home setting with warm but slightly desaturated tones, ${artPreset.imagePromptSuffix}"
+WRONG: "3D rendered illustration depicting the struggle and confusion of weight loss challenges in a healthcare context"
+RIGHT: "A puzzled character sits at a cluttered kitchen table surrounded by conflicting diet books and an untouched salad, chin resting on one hand, a single overhead lamp casting a pool of warm light while the rest of the room fades into cool blue shadow"
 
-## IMPORTANT RULES
-- NEVER include readable text, words, signs, labels, or logos in visual directions — AI video cannot render readable text
-- Each micro-scene should describe ONE concrete visual moment with full detail
-- Vary the visual approach across micro-scenes (characters, environments, objects, concepts)
-- Match the emotional tone of the narration
+Narration: "Working alongside trusted wellness practitioners"
+WRONG: "A group of healthcare professionals collaborating in a warm, holistic setting representing teamwork and wellness"
+RIGHT: "Three friendly practitioners in a bright airy office lean over a large wooden table covered with colorful ingredient samples and glass jars, afternoon sunlight filtering through tall windows, one holds up a sprig of fresh rosemary while the others smile"
 ` : '';
 
             const defaultPromptRules = `
