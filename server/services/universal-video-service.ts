@@ -3196,6 +3196,7 @@ Each micro-scene visual direction should be 2-4 sentences (40-80 words) and desc
 4. NEVER include readable text, words, signs, labels, or logos — AI video cannot render text
 5. Each micro-scene = ONE clear visual moment. No "or" alternatives
 6. Vary visual types across micro-scenes: characters, environments, object close-ups, nature, hands doing things
+7. EVERY micro-scene prompt MUST include the art style marker (e.g. "Pixar-style 3D animated", "claymation", etc.) — AI video providers treat each prompt independently and will default to photorealistic if the style is not explicitly stated. Never rely on "the character" or "the same character" alone — always re-state the style.
 ${characterConsistencyNote}
 
 ## EXAMPLES
@@ -3204,8 +3205,12 @@ WRONG: "3D rendered illustration, Pixar style, soft global illumination, isometr
 RIGHT: "A Pixar-style 3D animated character with warm brown hair and a cozy green sweater waves cheerfully from behind a sunny kitchen counter. Morning light streams through a large window casting soft golden shadows across potted herbs and a steaming mug of tea. Cinematic animation quality, warm inviting tones."
 
 Narration: "If you've ever felt confused about why weight loss feels so hard"
-WRONG: "3D rendered illustration depicting the struggle and confusion of weight loss challenges in a healthcare context"
+WRONG: "Close-up of the same character's hands arranging food on a cutting board" (MISSING STYLE MARKER — provider will generate photorealistic)
 RIGHT: "A Pixar-style 3D animated character sits at a cluttered kitchen table, chin resting on one hand, surrounded by conflicting diet books and an untouched salad. A thought bubble floats above showing question marks. Soft blue-tinted lighting suggests mild frustration against a cozy home backdrop, warm but slightly desaturated tones."
+
+Narration: "This isn't about guilt or perfection"
+WRONG: "The character sits at a breakfast nook with tea, leaning forward with a smile" (MISSING STYLE — will be photorealistic)
+RIGHT: "Pixar-style 3D animated close-up of warm hands wrapped around a steaming ceramic mug on a sunlit wooden table. Soft morning light catches the steam rising in delicate wisps. A small potted succulent sits nearby. Rounded 3D shapes, warm amber tones, gentle depth of field."
 ` : '';
 
             const defaultPromptRules = `
@@ -3335,6 +3340,43 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
               }
               
               if (microScenes.length > 0) {
+                if (isStylizedArtPreset && artPreset) {
+                  const styleKeywords = [
+                    artPreset.id === '3d-illustration' ? 'pixar' : null,
+                    artPreset.id === '3d-illustration' ? '3d animated' : null,
+                    artPreset.id === '3d-illustration' ? '3d render' : null,
+                    artPreset.id === 'claymation' ? 'claymation' : null,
+                    artPreset.id === 'claymation' ? 'clay' : null,
+                    artPreset.id === '2d-line-art' ? '2d line art' : null,
+                    artPreset.id === '2d-line-art' ? 'line art' : null,
+                    artPreset.id === 'neon-futuristic' ? 'neon' : null,
+                    artPreset.id === 'watercolor' ? 'watercolor' : null,
+                    artPreset.id === 'collage' ? 'collage' : null,
+                    artPreset.id === 'minimalist-flat' ? 'minimalist flat' : null,
+                    artPreset.id === 'scientific-medical' ? 'scientific animation' : null,
+                  ].filter(Boolean) as string[];
+
+                  const stylePrefix: Record<string, string> = {
+                    '3d-illustration': 'Pixar-style 3D animated',
+                    'claymation': 'Claymation stop-motion style',
+                    '2d-line-art': '2D line art animated',
+                    'neon-futuristic': 'Neon futuristic cyberpunk style',
+                    'watercolor': 'Watercolor painted animation style',
+                    'collage': 'Mixed-media collage style',
+                    'minimalist-flat': 'Minimalist flat design animated',
+                    'scientific-medical': 'Scientific medical animation style',
+                  };
+
+                  const prefix = stylePrefix[artPreset.id] || artPreset.name;
+                  for (const ms of microScenes) {
+                    const dirLower = (ms.visualDirection || '').toLowerCase();
+                    const hasStyleMarker = styleKeywords.some(kw => dirLower.includes(kw));
+                    if (!hasStyleMarker && ms.visualDirection) {
+                      ms.visualDirection = `${prefix} — ${ms.visualDirection}`;
+                      console.log(`[Assets] Prepended style marker "${prefix}" to micro-scene ${ms.id}`);
+                    }
+                  }
+                }
                 (updatedProject.scenes[i] as any).microScenes = microScenes;
                 console.log(`[Assets] Scene ${i + 1} split into ${microScenes.length} micro-scenes: ${microScenes.map(ms => ms.visualDirection.substring(0, 40)).join(' | ')}`);
               } else {
