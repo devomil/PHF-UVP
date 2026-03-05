@@ -996,8 +996,10 @@ export default function ProjectDetail({ params }: { params?: { id: string } }) {
     enabled: !!projectId,
     refetchInterval: (query) => {
       const data = query.state.data;
-      if (data && ["completed", "failed"].includes(data.status)) return false;
-      return 5000;
+      if (!data) return 5000;
+      const activeStatuses = ["generating", "queued", "processing", "rendering", "render_queued", "lambda_pending"];
+      if (activeStatuses.includes(data.status)) return 5000;
+      return false;
     },
   });
 
@@ -1553,7 +1555,6 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
       if (!res.ok) throw new Error("Failed to fetch render settings");
       return res.json();
     },
-    refetchInterval: 5000,
   });
 
   const assetsQuery = useQuery({
@@ -1563,7 +1564,16 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
       if (!res.ok) return {};
       return res.json();
     },
-    refetchInterval: 5000,
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      if (data) {
+        const activeStatuses = ["generating", "queued", "processing"];
+        const voActive = data.voiceover?.status && activeStatuses.includes(data.voiceover.status);
+        const musicActive = data.music?.status && activeStatuses.includes(data.music.status);
+        if (voActive || musicActive) return 5000;
+      }
+      return false;
+    },
   });
 
   const quickAssets = assetsQuery.data || {};
@@ -1616,11 +1626,32 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
       if (!res.ok) throw new Error("Failed to save settings");
       return res.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["render-settings", projectId] });
+    onMutate: async (patch: any) => {
+      await queryClient.cancelQueries({ queryKey: ["render-settings", projectId] });
+      const previousData = queryClient.getQueryData(["render-settings", projectId]);
+      queryClient.setQueryData(["render-settings", projectId], (old: any) => {
+        if (!old) return old;
+        const oldSettings = old.settings || {};
+        const mergedSettings = { ...oldSettings };
+        for (const key of Object.keys(patch)) {
+          if (typeof patch[key] === "object" && patch[key] !== null && typeof mergedSettings[key] === "object") {
+            mergedSettings[key] = { ...mergedSettings[key], ...patch[key] };
+          } else {
+            mergedSettings[key] = patch[key];
+          }
+        }
+        return { ...old, settings: mergedSettings };
+      });
+      return { previousData };
     },
-    onError: (err: Error) => {
+    onError: (err: Error, _patch, context) => {
+      if (context?.previousData) {
+        queryClient.setQueryData(["render-settings", projectId], context.previousData);
+      }
       toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["render-settings", projectId] });
     },
   });
 
