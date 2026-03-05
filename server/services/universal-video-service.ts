@@ -4066,6 +4066,9 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
                              scene.background?.source || 
                              `Professional wellness video for: ${scene.narration?.substring(0, 100)}`;
         
+        const sceneArtPresetId = scene.artPresetId || projectArtPresetIdForVideo;
+        const isStylizedScene = isStylizedPreset(sceneArtPresetId);
+        
         const routingDecision = motionGraphicsRouter.analyzeVisualDirection(
           visualPrompt,
           scene.narration,
@@ -4077,7 +4080,11 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
         
         const useMotionGraphicsFromFormat = sceneVisualFormatFinal === 'remotion-motion-graphics';
         const skipMotionGraphicsForImageFormat = sceneVisualFormatFinal === 'ai-image-remotion';
-        if (!skipMotionGraphicsForImageFormat && ((routingDecision.useMotionGraphics && routingDecision.suggestedType) || useMotionGraphicsFromFormat)) {
+        const skipMotionGraphicsForStylizedPreset = isStylizedScene;
+        if (skipMotionGraphicsForStylizedPreset && routingDecision.useMotionGraphics) {
+          console.log(`[Assets] Skipping motion graphics routing for scene ${scene.id} — stylized art preset '${sceneArtPresetId}' requires AI video`);
+        }
+        if (!skipMotionGraphicsForImageFormat && !skipMotionGraphicsForStylizedPreset && ((routingDecision.useMotionGraphics && routingDecision.suggestedType) || useMotionGraphicsFromFormat)) {
           console.log(`[Assets] Motion graphics route for scene ${scene.id}: ${routingDecision.suggestedType} (confidence: ${(routingDecision.confidence * 100).toFixed(0)}%)`);
           
           const motionResult = await motionGraphicsGenerator.generateMotionGraphic(
