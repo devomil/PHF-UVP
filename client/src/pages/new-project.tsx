@@ -3,10 +3,10 @@ import { useLocation, Link } from "wouter";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Sparkles, FileText, Zap, ArrowLeft, Video, Image, Info, Plus, Trash2, ChevronUp, ChevronDown, GripVertical, Palette } from "lucide-react";
+import { Sparkles, FileText, Zap, ArrowLeft, Video, Image, Info, Plus, Trash2, ChevronUp, ChevronDown, GripVertical, Palette, Users } from "lucide-react";
 import { ProviderCatalogSelector } from "@/components/video/provider-catalog-selector";
 import { getAvailableStyles } from "@shared/visual-style-config";
-import { getAllVisualArtPresets, type VisualArtPreset } from "@shared/config/visual-art-presets";
+import { getAllVisualArtPresets, isStylizedPreset, type VisualArtPreset } from "@shared/config/visual-art-presets";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -194,10 +194,17 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
   const [videoGenerationMode, setVideoGenerationMode] = useState("auto");
   const [qualityTier, setQualityTier] = useState("premium");
   const [artPresetId, setArtPresetId] = useState("auto");
+  const [characterConsistency, setCharacterConsistency] = useState(false);
 
   useEffect(() => {
     setAspectRatio(platformAspectMap[platform] || "16:9");
   }, [platform]);
+
+  useEffect(() => {
+    if (isStylizedPreset(artPresetId)) {
+      setCharacterConsistency(true);
+    }
+  }, [artPresetId]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -213,6 +220,7 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
       videoGenerationMode: mediaMode === "video" ? videoGenerationMode : undefined,
       qualityTier,
       artPresetId,
+      characterConsistency,
     });
   };
 
@@ -235,6 +243,21 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
         </div>
 
         <ArtStyleSelector value={artPresetId} onChange={setArtPresetId} />
+
+        {mediaMode === "video" && (
+          <div className="flex items-start gap-3 p-3 rounded-lg" style={{ backgroundColor: "var(--surface-elevated)", border: "1px solid var(--border-subtle)" }}>
+            <input type="checkbox" id="charConsistency" checked={characterConsistency} onChange={(e) => setCharacterConsistency(e.target.checked)} className="mt-1 rounded" style={{ borderColor: "var(--border-medium)", backgroundColor: "var(--input-bg)" }} />
+            <div>
+              <Label htmlFor="charConsistency" className="cursor-pointer flex items-center gap-2" style={{ color: "var(--text-primary)" }}>
+                <Users className="w-4 h-4 text-purple-400" />
+                Character Consistency
+              </Label>
+              <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
+                Extract a reference frame from the first scene and use it as an I2V input for all subsequent scenes, keeping characters visually consistent
+              </p>
+            </div>
+          </div>
+        )}
 
         <div>
           <Label style={{ color: "var(--text-secondary)" }}>Target Audience</Label>
@@ -366,10 +389,17 @@ function CustomScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void;
   const [mediaMode, setMediaMode] = useState("video");
   const [videoGenerationMode, setVideoGenerationMode] = useState("auto");
   const [artPresetId, setArtPresetId] = useState("auto");
+  const [characterConsistency, setCharacterConsistency] = useState(false);
 
   useEffect(() => {
     setAspectRatio(platformAspectMap[platform] || "16:9");
   }, [platform]);
+
+  useEffect(() => {
+    if (isStylizedPreset(artPresetId)) {
+      setCharacterConsistency(true);
+    }
+  }, [artPresetId]);
 
   const addScene = (type?: string) => {
     const lastScene = scenes[scenes.length - 1];
@@ -421,6 +451,7 @@ function CustomScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void;
       mediaMode,
       videoGenerationMode: mediaMode === "video" ? videoGenerationMode : undefined,
       artPresetId,
+      characterConsistency,
     });
   };
 
@@ -514,6 +545,21 @@ function CustomScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void;
         </div>
 
         <ArtStyleSelector value={artPresetId} onChange={setArtPresetId} />
+
+        {mediaMode === "video" && (
+          <div className="flex items-start gap-3 p-3 rounded-lg" style={{ backgroundColor: "var(--surface-elevated)", border: "1px solid var(--border-subtle)" }}>
+            <input type="checkbox" id="charConsistencyCustom" checked={characterConsistency} onChange={(e) => setCharacterConsistency(e.target.checked)} className="mt-1 rounded" style={{ borderColor: "var(--border-medium)", backgroundColor: "var(--input-bg)" }} />
+            <div>
+              <Label htmlFor="charConsistencyCustom" className="cursor-pointer flex items-center gap-2" style={{ color: "var(--text-primary)" }}>
+                <Users className="w-4 h-4 text-purple-400" />
+                Character Consistency
+              </Label>
+              <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
+                Extract a reference frame from the first scene and use it as an I2V input for all subsequent scenes, keeping characters visually consistent
+              </p>
+            </div>
+          </div>
+        )}
 
         <div>
           <Label style={{ color: "var(--text-secondary)" }}>Target Duration</Label>

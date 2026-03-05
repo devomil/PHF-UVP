@@ -15,6 +15,7 @@ import {
   OUTPUT_FORMATS,
   SCENE_OVERLAY_DEFAULTS,
 } from "../../shared/video-types";
+import { videoFrameExtractor } from "./video-frame-extractor";
 import { brandAssetService } from "./brand-asset-service";
 import { brandRequirementAnalyzer } from "./brand-requirement-analyzer";
 import { brandAssetMatcher } from "./brand-asset-matcher";
@@ -138,6 +139,39 @@ class UniversalVideoService {
       return publicUrl;
     } catch (error: any) {
       console.error('[UniversalVideoService] S3 upload failed:', error.message);
+      return null;
+    }
+  }
+
+  private async extractCharacterReferenceFrame(videoUrl: string, projectId: string): Promise<string | null> {
+    try {
+      console.log(`[CharRef] Extracting character reference frame from: ${videoUrl.substring(0, 80)}...`);
+      const frameDataUrl = await videoFrameExtractor.extractFrame(videoUrl, 1.0);
+      if (!frameDataUrl) {
+        console.warn(`[CharRef] Frame extraction returned null for ${videoUrl.substring(0, 60)}`);
+        return null;
+      }
+
+      const base64Match = frameDataUrl.match(/^data:([^;]+);base64,(.+)$/);
+      if (!base64Match) {
+        console.warn(`[CharRef] Invalid data URL format from frame extraction`);
+        return null;
+      }
+
+      const contentType = base64Match[1];
+      const buffer = Buffer.from(base64Match[2], 'base64');
+      const ext = contentType.includes('png') ? 'png' : 'jpg';
+      const key = `character-references/${projectId}/${Date.now()}_ref.${ext}`;
+      const s3Url = await this.uploadToS3(buffer, key, contentType);
+
+      if (s3Url) {
+        console.log(`[CharRef] Character reference frame uploaded to S3: ${s3Url}`);
+      } else {
+        console.warn(`[CharRef] Failed to upload character reference frame to S3`);
+      }
+      return s3Url;
+    } catch (err: any) {
+      console.error(`[CharRef] Error extracting character reference frame: ${err.message}`);
       return null;
     }
   }
@@ -4025,6 +4059,13 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
       let aiVideosGenerated = 0;
       let videosFailed = 0;
       
+      const characterConsistencyEnabled = !!(updatedProject.progress as any)?.characterConsistency || 
+                                           isStylizedPreset(projectArtPresetIdForVideo);
+      let characterReferenceUrl: string | null = null;
+      if (characterConsistencyEnabled) {
+        console.log(`[CharRef] Character consistency ENABLED for project ${project.projectId} (stylized=${isStylizedPreset(projectArtPresetIdForVideo)}, explicit=${!!(updatedProject.progress as any)?.characterConsistency})`);
+      }
+      
       let videoSceneIndex = 0;
       for (const scene of scenesNeedingVideo) {
         // Update per-scene progress (40% to 60% range)
@@ -4199,8 +4240,9 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
             }
             
             const msPrompt = ms.visualDirection || visualPrompt;
-            const msImageUrl = ms.imageUrl || parentRefImageUrl || parentSceneImageUrl;
-            const msMode = msImageUrl ? 'I2V' : 'T2V';
+            const userOrParentRef = ms.imageUrl || parentRefImageUrl || parentSceneImageUrl;
+            const msImageUrl = userOrParentRef || (characterConsistencyEnabled ? characterReferenceUrl : null);
+            const msMode = msImageUrl ? (userOrParentRef ? 'I2V' : 'I2V-CharRef') : 'T2V';
             console.log(`[Assets] Launching parallel ${msMode} video generation for micro-scene ${msIdx + 1}/${microScenes.length}: ${msPrompt.substring(0, 80)}...`);
             if (msImageUrl) {
               console.log(`[Assets]   Reference image: ${msImageUrl.substring(0, 80)}...`);
@@ -4248,6 +4290,16 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
             videoResult = { url: microScenes[0].videoUrl || '', source: 'ai-micro', duration: scene.duration };
             videosGenerated++;
             console.log(`[Assets] ${microSuccessCount}/${microScenes.length} micro-scene videos generated for scene ${scene.id}`);
+            
+            if (characterConsistencyEnabled && !characterReferenceUrl) {
+              const firstMsVideoUrl = microScenes.find((ms: any) => ms.videoUrl)?.videoUrl;
+              if (firstMsVideoUrl) {
+                characterReferenceUrl = await this.extractCharacterReferenceFrame(firstMsVideoUrl, project.projectId);
+                if (characterReferenceUrl) {
+                  console.log(`[CharRef] Captured character reference from scene ${scene.id} micro-scene → will inject into ${scenesNeedingVideo.length - videoSceneIndex} remaining scenes`);
+                }
+              }
+            }
           }
           
           await saveProgress();
@@ -4255,13 +4307,16 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
           const sceneRefImageUrl = (scene as any).brandAssetUrl || 
                                    scene.referenceConfig?.imageUrl ||
                                    updatedProject.assets.images.find(img => img.sceneId === scene.id && img.source === 'uploaded')?.url;
-          const sceneImageUrl = sceneRefImageUrl || 
+          const sceneImageUrlBase = sceneRefImageUrl || 
                                 updatedProject.scenes.find(s => s.id === scene.id)?.assets?.imageUrl;
+          const sceneImageUrl = sceneImageUrlBase || (characterConsistencyEnabled ? characterReferenceUrl : null);
           
           if (sceneRefImageUrl) {
             console.log(`[Assets] Scene ${scene.id} has reference image → using I2V with: ${sceneRefImageUrl}`);
+          } else if (sceneImageUrl === characterReferenceUrl && characterReferenceUrl) {
+            console.log(`[Assets] Scene ${scene.id} using character reference image → I2V-CharRef with: ${characterReferenceUrl.substring(0, 80)}...`);
           }
-          console.log(`[Assets] Using AI video for ${scene.type} scene ${scene.id} (isHero=${isHeroScene}, sceneQualityTier=${sceneQualityTier}, mode=${sceneRefImageUrl ? 'I2V' : 'T2V'})...`);
+          console.log(`[Assets] Using AI video for ${scene.type} scene ${scene.id} (isHero=${isHeroScene}, sceneQualityTier=${sceneQualityTier}, mode=${sceneRefImageUrl ? 'I2V' : (sceneImageUrl ? 'I2V-CharRef' : 'T2V')})...`);
           console.log(`[Assets] Using quality tier: ${sceneQualityTier} (scene override: ${scene.qualityTier || 'none'})`);
           
           const aiResult = await aiVideoService.generateVideo({
@@ -4274,7 +4329,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
             contentType: (scene as any).analysis?.contentType as 'person' | 'product' | 'nature' | 'abstract' | 'lifestyle' | undefined,
             qualityTier: sceneQualityTier,
             artPresetId: scene.artPresetId || projectArtPresetIdForVideo,
-            ...(sceneRefImageUrl ? { imageUrl: sceneRefImageUrl } : {}),
+            ...(sceneImageUrl ? { imageUrl: sceneImageUrl } : {}),
             ...(scene.contentTag ? { contentTag: scene.contentTag } : {}),
           });
           
@@ -4286,6 +4341,13 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
             };
             aiVideosGenerated++;
             console.log(`[Assets] AI video ready (${aiResult.provider}) for scene ${scene.id}: ${aiResult.s3Url}`);
+            
+            if (characterConsistencyEnabled && !characterReferenceUrl) {
+              characterReferenceUrl = await this.extractCharacterReferenceFrame(aiResult.s3Url, project.projectId);
+              if (characterReferenceUrl) {
+                console.log(`[CharRef] Captured character reference from scene ${scene.id} → will inject into ${scenesNeedingVideo.length - videoSceneIndex} remaining scenes`);
+              }
+            }
           } else {
             console.warn(`[Assets] AI video failed for ${scene.type} scene ${scene.id}, falling back to stock: ${aiResult.error}`);
           }

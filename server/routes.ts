@@ -198,7 +198,7 @@ export function registerRoutes(app: Express) {
         return res.status(401).json({ error: "Not authenticated" });
       }
 
-      const { mode, title, description, targetAudience, duration, platform, aspectRatio, mediaMode, videoGenerationMode, qualityTier, script, numScenes, visualStyle, voiceStyle, outputType, prompt, imageStyle, provider, saveToLibrary, customScenes, artPresetId } = req.body;
+      const { mode, title, description, targetAudience, duration, platform, aspectRatio, mediaMode, videoGenerationMode, qualityTier, script, numScenes, visualStyle, voiceStyle, outputType, prompt, imageStyle, provider, saveToLibrary, customScenes, artPresetId, characterConsistency } = req.body;
 
       const projectId = crypto.randomUUID();
 
@@ -240,6 +240,9 @@ export function registerRoutes(app: Express) {
           } else {
             console.warn(`[Routes] Invalid artPresetId "${artPresetId}", ignoring`);
           }
+        }
+        if (characterConsistency) {
+          progressData.characterConsistency = true;
         }
 
         const [project] = await db.insert(universalVideoProjects).values({
