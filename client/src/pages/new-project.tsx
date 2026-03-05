@@ -308,7 +308,7 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
           <Label style={{ color: "var(--text-secondary)" }}>Video Generation Method</Label>
           <p className="text-xs mt-0.5 mb-2" style={{ color: "var(--text-muted)" }}>How AI creates video for each scene</p>
           <div className="flex gap-3">
-            <Button type="button" variant={videoGenerationMode === "auto" ? "default" : "outline"} className={`text-xs ${videoGenerationMode === "auto" ? "bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500" : ""}`} style={videoGenerationMode !== "auto" ? { borderColor: "var(--border-medium)", color: "var(--text-secondary)" } : {}} onClick={() => setVideoGenerationMode("auto")}>
+            <Button type="button" variant={videoGenerationMode === "direct-t2v" ? "default" : "outline"} className={`text-xs ${videoGenerationMode === "direct-t2v" ? "bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500" : ""}`} style={videoGenerationMode !== "direct-t2v" ? { borderColor: "var(--border-medium)", color: "var(--text-secondary)" } : {}} onClick={() => setVideoGenerationMode("direct-t2v")}>
               Direct T2V (faster)
             </Button>
             <Button type="button" variant={videoGenerationMode === "image-first-i2v" ? "default" : "outline"} className={`text-xs ${videoGenerationMode === "image-first-i2v" ? "bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500" : ""}`} style={videoGenerationMode !== "image-first-i2v" ? { borderColor: "var(--border-medium)", color: "var(--text-secondary)" } : {}} onClick={() => setVideoGenerationMode("image-first-i2v")}>
@@ -603,7 +603,7 @@ function CustomScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void;
           <Label style={{ color: "var(--text-secondary)" }}>Video Generation Method</Label>
           <p className="text-xs mt-0.5 mb-2" style={{ color: "var(--text-muted)" }}>How AI creates video for each scene</p>
           <div className="flex gap-3">
-            <Button type="button" variant={videoGenerationMode === "auto" ? "default" : "outline"} className={`text-xs ${videoGenerationMode === "auto" ? "bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500" : ""}`} style={videoGenerationMode !== "auto" ? { borderColor: "var(--border-medium)", color: "var(--text-secondary)" } : {}} onClick={() => setVideoGenerationMode("auto")}>
+            <Button type="button" variant={videoGenerationMode === "direct-t2v" ? "default" : "outline"} className={`text-xs ${videoGenerationMode === "direct-t2v" ? "bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500" : ""}`} style={videoGenerationMode !== "direct-t2v" ? { borderColor: "var(--border-medium)", color: "var(--text-secondary)" } : {}} onClick={() => setVideoGenerationMode("direct-t2v")}>
               Direct T2V (faster)
             </Button>
             <Button type="button" variant={videoGenerationMode === "image-first-i2v" ? "default" : "outline"} className={`text-xs ${videoGenerationMode === "image-first-i2v" ? "bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500" : ""}`} style={videoGenerationMode !== "image-first-i2v" ? { borderColor: "var(--border-medium)", color: "var(--text-secondary)" } : {}} onClick={() => setVideoGenerationMode("image-first-i2v")}>
