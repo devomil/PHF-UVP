@@ -3169,39 +3169,43 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
           try {
             const isStylizedArtPreset = isStylizedPreset(artPreset?.id);
             
+            const characterConsistencyNote = i > 0 ? `
+## CHARACTER CONSISTENCY
+If a scene features a recurring character, use the SAME character description as previous scenes — same hair color, clothing, body shape, and distinguishing features. The audience should recognize this is the same person across scenes.` : `
+## CHARACTER CONSISTENCY
+If scenes feature a recurring main character, define their appearance NOW (hair color, clothing, body shape, distinguishing features) and use the SAME description in every scene they appear. This character should be recognizable across the entire video.`;
+
             const stylizedPromptRules = artPreset ? `
 ## STYLE: ${artPreset.name.toUpperCase()}
 ${artPreset.description}
 Avoid: ${artPreset.negativePromptAdditions.join(', ')}
 
 ## HOW TO WRITE VISUAL DIRECTIONS
-Write each visual direction as a natural, vivid description — the way a skilled art director would describe a shot to an animator. DO NOT mechanically paste style labels or format prompts like a template. Instead, naturally weave the ${artPreset.name} aesthetic into concrete scene descriptions.
+Write like a skilled art director describing a shot to an animator. Each prompt should read naturally — like this real example:
+"A Pixar-style 3D animated character sitting at a kitchen table, looking puzzled, holding a fork over an empty plate. A thought bubble floats above their head, showing question marks and a tiny growling stomach icon. Soft, slightly blue-tinted lighting to suggest mild frustration. Cozy home setting. Cinematic animation quality, warm but slightly desaturated tones."
 
 Each micro-scene visual direction should be 2-4 sentences (40-80 words) and describe:
-- WHAT we see: specific characters, objects, environments — concrete and tangible, not abstract
-- HOW it looks: lighting quality, color mood, atmosphere — woven naturally into the description
+- WHAT we see: specific characters, objects, environments — concrete and tangible
+- HOW it looks: lighting, color mood, atmosphere — woven naturally into the description
 - The FEELING: emotional tone that matches the narration
 
 ## CRITICAL RULES
-1. Be CONCRETE, not abstract. Describe physical things we can see, not concepts like "transformation" or "journey" or "healthcare system"
-2. Do NOT start every prompt with the same words. Vary your opening — sometimes start with the setting, sometimes the character, sometimes the action
-3. Do NOT use meta-descriptions like "representing" or "symbolizing" — just describe what is literally visible
+1. Be CONCRETE, not abstract. Describe physical things we can see, not concepts like "transformation" or "journey"
+2. Do NOT start every prompt with the same words. Vary your opening
+3. Do NOT use meta-descriptions like "representing" or "symbolizing" — describe what is literally visible
 4. NEVER include readable text, words, signs, labels, or logos — AI video cannot render text
 5. Each micro-scene = ONE clear visual moment. No "or" alternatives
 6. Vary visual types across micro-scenes: characters, environments, object close-ups, nature, hands doing things
+${characterConsistencyNote}
 
 ## EXAMPLES
 Narration: "Hi, and welcome."
 WRONG: "3D rendered illustration, Pixar style, soft global illumination, isometric perspective, a warm welcoming exploration of the brand's healing journey"
-RIGHT: "A cheerful round-faced character with bright curious eyes waves from behind a sunny kitchen counter, morning light streaming through a window casting soft warm shadows across potted herbs and a steaming mug of tea"
+RIGHT: "A Pixar-style 3D animated character with warm brown hair and a cozy green sweater waves cheerfully from behind a sunny kitchen counter. Morning light streams through a large window casting soft golden shadows across potted herbs and a steaming mug of tea. Cinematic animation quality, warm inviting tones."
 
 Narration: "If you've ever felt confused about why weight loss feels so hard"
 WRONG: "3D rendered illustration depicting the struggle and confusion of weight loss challenges in a healthcare context"
-RIGHT: "A puzzled character sits at a cluttered kitchen table surrounded by conflicting diet books and an untouched salad, chin resting on one hand, a single overhead lamp casting a pool of warm light while the rest of the room fades into cool blue shadow"
-
-Narration: "Working alongside trusted wellness practitioners"
-WRONG: "A group of healthcare professionals collaborating in a warm, holistic setting representing teamwork and wellness"
-RIGHT: "Three friendly practitioners in a bright airy office lean over a large wooden table covered with colorful ingredient samples and glass jars, afternoon sunlight filtering through tall windows, one holds up a sprig of fresh rosemary while the others smile"
+RIGHT: "A Pixar-style 3D animated character sits at a cluttered kitchen table, chin resting on one hand, surrounded by conflicting diet books and an untouched salad. A thought bubble floats above showing question marks. Soft blue-tinted lighting suggests mild frustration against a cozy home backdrop, warm but slightly desaturated tones."
 ` : '';
 
             const defaultPromptRules = `
@@ -3267,19 +3271,26 @@ Return ONLY a JSON object:
   ]
 }`;
 
+            const previousDirections = isStylizedArtPreset ? updatedProject.scenes
+              .slice(0, i)
+              .filter((s: any) => s.visualDirection && s.visualDirection.trim().length >= 10)
+              .slice(-2)
+              .map((s: any, idx: number) => `Previous scene ${idx + 1}: "${s.visualDirection}"`)
+              .join('\n') : '';
+
             const userPrompt = `Scene Type: ${scene.type || 'content'}
 ${(scene as any).title ? `Scene Title: ${(scene as any).title}` : ''}
 Scene ${i + 1} of ${updatedProject.scenes.length}
 Scene Duration: ${scene.duration || 10} seconds
-
+${previousDirections ? `\nPREVIOUS SCENES (maintain character consistency with these):\n${previousDirections}\n` : ''}
 Narration:
 "${narration}"
 
-Split this narration into micro-scenes (2-4 segments) at natural topic shifts. Each micro-scene gets its own simple, authentic visual direction. Return JSON with visualDirection and microScenes array.`;
+Split this narration into micro-scenes (2-4 segments) at natural topic shifts. Each micro-scene gets its own ${isStylizedArtPreset ? 'vivid, naturally-written' : 'simple, authentic'} visual direction. Return JSON with visualDirection and microScenes array.`;
 
             const response = await anthropic.messages.create({
               model: 'claude-sonnet-4-20250514',
-              max_tokens: 600,
+              max_tokens: isStylizedArtPreset ? 1200 : 600,
               system: systemPrompt,
               messages: [{ role: 'user', content: userPrompt }],
             });
