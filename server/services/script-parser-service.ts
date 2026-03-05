@@ -108,7 +108,7 @@ class ScriptParserService {
         throw new Error("Unexpected response type");
       }
 
-      return this.parseResponse(content.text, serviceMatches);
+      return this.parseResponse(content.text, serviceMatches, artPreset);
     } catch (error: any) {
       console.error("[ScriptParser] Parsing failed:", error.message);
       throw error;
@@ -163,16 +163,20 @@ VISUAL DIRECTION RULES - ${artPreset.name.toUpperCase()} STYLE:
 ## STYLE CONTEXT
 ${artPreset.description}
 Avoid: ${artPreset.negativePromptAdditions.join(', ')}
+${artPreset.globalStyleNotes ? `\n## GLOBAL STYLE NOTES (include these qualities in every visual direction):\n${artPreset.globalStyleNotes}` : ''}
+${artPreset.cameraMotionHints ? `\n## CAMERA MOTION SUGGESTIONS:\nUse subtle camera moves for cinematic feel: ${artPreset.cameraMotionHints}` : ''}
 
 ## HOW TO WRITE VISUAL DIRECTIONS
-Write each visual direction as a natural, vivid description — the way a skilled art director would describe a shot to an animator. DO NOT mechanically paste style labels or format prompts like a template. Instead, naturally weave the ${artPreset.name} aesthetic into concrete scene descriptions.
+Write each visual direction as a natural, vivid description — the way a skilled art director would describe a shot to an animator. Each prompt MUST explicitly state the art style because AI video providers treat each prompt independently and will default to photorealistic if the style is not mentioned.
 
 Each scene visual direction should be 2-4 sentences (40-80 words) describing:
 - WHAT we see: specific characters, objects, environments — concrete and tangible
 - HOW it looks: lighting quality, color mood, atmosphere — woven naturally into the description
 - The FEELING: emotional tone matching the narration
+- Optional: a subtle camera motion hint (e.g., "slow push-in", "gentle orbit")
 
 ## CRITICAL RULES
+- EVERY visual direction MUST include the style marker "${artPreset.styleMarkerPrefix || artPreset.name}" — providers will generate photorealistic footage without it
 - Be CONCRETE, not abstract. Describe physical things, not concepts like "transformation" or "journey"
 - Do NOT start every prompt with the same words. Vary openings
 - Do NOT use meta-descriptions like "representing" or "symbolizing" — describe what is literally visible
@@ -180,9 +184,15 @@ Each scene visual direction should be 2-4 sentences (40-80 words) describing:
 - Vary visual types across scenes: characters, environments, object close-ups, nature, hands doing things
 - Only mention "${brandName}" in CTA/outro/product scenes
 
+## CHARACTER CONSISTENCY
+If the video features a recurring character, define their appearance in the FIRST scene (hair color/style, clothing, body type, distinguishing features) and reference the EXACT SAME description in every subsequent scene they appear in.
+
 ## EXAMPLES
 WRONG: "A warm, welcoming exploration through ${artPreset.name} depicting the healthcare journey"
-RIGHT: "A cheerful round-faced character with bright curious eyes waves from behind a sunny kitchen counter, morning light streaming through a window casting soft warm shadows across potted herbs and a steaming mug of tea"
+WRONG: "Woman in her 40s sitting at kitchen table, looking thoughtful and slightly frustrated." (MISSING STYLE — will generate photorealistic)
+WRONG: "Close-up of everyday packaged foods on kitchen counter." (MISSING STYLE — will generate photorealistic)
+RIGHT: "${artPreset.styleMarkerPrefix || artPreset.name} — A cheerful round-faced character with bright curious eyes and shoulder-length auburn hair waves from behind a sunny kitchen counter. Morning light streams through a large window, casting soft warm shadows across potted herbs and a steaming mug of tea. Soft cinematic lighting, warm inviting tones."
+RIGHT: "${artPreset.styleMarkerPrefix || artPreset.name} — Close-up of 3D rendered colorful cereal boxes and snack packages arranged on a glossy kitchen counter. Each package has smooth rounded shapes with vibrant saturated colors. Shallow depth of field with soft ambient occlusion."
 ` : `
 VISUAL DIRECTION RULES - CRITICAL:
 
@@ -244,19 +254,20 @@ Return a JSON object with scenes array. Each scene should include:
     const isStylized = artPreset && isStylizedPreset(artPreset.id);
 
     const visualDirectionGuidance = isStylized
-      ? `3. Write VIVID, NATURAL visual directions (2-4 sentences, 40-80 words) in ${artPreset.name} style. Describe concrete scenes like an art director would — specific characters, objects, environments, lighting, and mood woven naturally into the description. Do NOT mechanically paste style labels.`
+      ? `3. Write VIVID visual directions (2-4 sentences, 40-80 words) in ${artPreset.name} style. EVERY visual direction MUST explicitly include "${artPreset.styleMarkerPrefix || artPreset.name}" — AI video providers default to photorealistic without the style marker. Describe concrete scenes with characters, objects, environments, lighting, and mood.`
       : `3. Write SIMPLE, AUTHENTIC visual directions (1-2 sentences) that match the emotional reality of the narration`;
 
     const visualRules = isStylized
       ? `CRITICAL VISUAL DIRECTION RULES (${artPreset.name.toUpperCase()} STYLE):
-- Write 2-4 sentences per scene describing CONCRETE visuals — what we literally see
-- Naturally convey the ${artPreset.name} look through your descriptions, don't paste style labels
-- Describe specific characters (features, expressions, poses), objects, and environments
-- Include lighting and color mood woven into the description, not listed separately
+- EVERY visual direction MUST include the style marker "${artPreset.styleMarkerPrefix || artPreset.name}" — AI providers default to photorealistic without it
+- Write 2-4 sentences per scene (40-80 words) describing CONCRETE visuals — what we literally see
+- Describe specific characters (features, expressions, poses), objects, and environments in the ${artPreset.name} style
+- Include lighting, color mood, and optional camera motion woven into the description
 - Do NOT use abstract words like "representing", "symbolizing", "journey", "transformation"
 - Vary openings — don't start every prompt the same way
 - Only mention "${brandName}" in CTA, outro, or product scenes
-- NEVER include readable text, words, signs, labels, logos — AI cannot render text`
+- NEVER include readable text, words, signs, labels, logos — AI cannot render text
+${artPreset.globalStyleNotes ? `- Style qualities to convey: ${artPreset.globalStyleNotes}` : ''}`
       : `CRITICAL VISUAL DIRECTION RULES:
 - Keep visual directions to 1-2 plain sentences. Describe what we SEE, not cinematic production details.
 - The subject must visually match the situation in the narration
@@ -266,7 +277,7 @@ Return a JSON object with scenes array. Each scene should include:
 - NEVER include text, words, signs, labels, logos in visual directions - AI cannot render readable text.`;
 
     const visualDirectionExample = isStylized
-      ? `"A cheerful round-faced character with bright curious eyes waves from behind a sunny kitchen counter, morning light streaming through a window casting soft warm shadows across potted herbs and a steaming mug of tea"`
+      ? `"${artPreset.styleMarkerPrefix || artPreset.name} — A cheerful round-faced character with bright curious eyes and auburn hair waves from behind a sunny kitchen counter. Morning light streams through a window, casting soft warm shadows across potted herbs and a steaming mug. Soft cinematic lighting, shallow depth of field."`
       : `"1-2 simple sentences describing what we see - authentic and relatable"`;
 
     return `Parse this video script${brand.brandName?.trim() ? ` for ${brandName}` : ''}.
@@ -326,7 +337,8 @@ Return ONLY valid JSON matching this structure:
 
   private parseResponse(
     responseText: string,
-    serviceMatches: { services: string[]; products: string[]; conditions: string[] }
+    serviceMatches: { services: string[]; products: string[]; conditions: string[] },
+    artPreset?: any
   ): ParsedScript {
     try {
       const jsonMatch = responseText.match(/\{[\s\S]*\}/);
@@ -353,6 +365,26 @@ Return ONLY valid JSON matching this structure:
         audienceResonance: scene.audienceResonance || null,
         brandOpportunity: scene.brandOpportunity || null,
       }));
+
+      if (artPreset && isStylizedPreset(artPreset.id)) {
+        const keywords = artPreset.styleKeywords || [];
+        const prefix = artPreset.styleMarkerPrefix || artPreset.name;
+        let enforced = 0;
+        for (const scene of scenes) {
+          if (!scene.visualDirection) continue;
+          const dirLower = scene.visualDirection.toLowerCase();
+          const hasStyleMarker = keywords.length > 0
+            ? keywords.some((kw: string) => dirLower.includes(kw))
+            : false;
+          if (!hasStyleMarker) {
+            scene.visualDirection = `${prefix} — ${scene.visualDirection}`;
+            enforced++;
+          }
+        }
+        if (enforced > 0) {
+          console.log(`[ScriptParser] Style enforcement: prepended "${prefix}" to ${enforced}/${scenes.length} scenes missing style markers`);
+        }
+      }
 
       console.log(`[ScriptParser] Parsed ${scenes.length} scenes with brand awareness`);
 

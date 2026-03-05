@@ -3341,36 +3341,13 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
               
               if (microScenes.length > 0) {
                 if (isStylizedArtPreset && artPreset) {
-                  const styleKeywords = [
-                    artPreset.id === '3d-illustration' ? 'pixar' : null,
-                    artPreset.id === '3d-illustration' ? '3d animated' : null,
-                    artPreset.id === '3d-illustration' ? '3d render' : null,
-                    artPreset.id === 'claymation' ? 'claymation' : null,
-                    artPreset.id === 'claymation' ? 'clay' : null,
-                    artPreset.id === '2d-line-art' ? '2d line art' : null,
-                    artPreset.id === '2d-line-art' ? 'line art' : null,
-                    artPreset.id === 'neon-futuristic' ? 'neon' : null,
-                    artPreset.id === 'watercolor' ? 'watercolor' : null,
-                    artPreset.id === 'collage' ? 'collage' : null,
-                    artPreset.id === 'minimalist-flat' ? 'minimalist flat' : null,
-                    artPreset.id === 'scientific-medical' ? 'scientific animation' : null,
-                  ].filter(Boolean) as string[];
-
-                  const stylePrefix: Record<string, string> = {
-                    '3d-illustration': 'Pixar-style 3D animated',
-                    'claymation': 'Claymation stop-motion style',
-                    '2d-line-art': '2D line art animated',
-                    'neon-futuristic': 'Neon futuristic cyberpunk style',
-                    'watercolor': 'Watercolor painted animation style',
-                    'collage': 'Mixed-media collage style',
-                    'minimalist-flat': 'Minimalist flat design animated',
-                    'scientific-medical': 'Scientific medical animation style',
-                  };
-
-                  const prefix = stylePrefix[artPreset.id] || artPreset.name;
+                  const styleKeywords = artPreset.styleKeywords || [];
+                  const prefix = artPreset.styleMarkerPrefix || artPreset.name;
                   for (const ms of microScenes) {
                     const dirLower = (ms.visualDirection || '').toLowerCase();
-                    const hasStyleMarker = styleKeywords.some(kw => dirLower.includes(kw));
+                    const hasStyleMarker = styleKeywords.length > 0
+                      ? styleKeywords.some((kw: string) => dirLower.includes(kw))
+                      : false;
                     if (!hasStyleMarker && ms.visualDirection) {
                       ms.visualDirection = `${prefix} — ${ms.visualDirection}`;
                       console.log(`[Assets] Prepended style marker "${prefix}" to micro-scene ${ms.id}`);
