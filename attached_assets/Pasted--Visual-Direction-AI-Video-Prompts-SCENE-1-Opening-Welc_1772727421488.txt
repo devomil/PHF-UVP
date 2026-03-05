@@ -1,0 +1,57 @@
+🎬 Visual Direction & AI Video Prompts
+
+SCENE 1 — Opening / Welcome
+Narration: "Hi, and welcome."
+Visual Prompt:
+
+A warm, sunlit kitchen interior in Pixar 3D animation style. Soft golden morning light streams through a large window. A friendly, round-faced character with expressive eyes stands at a wooden kitchen counter, giving a gentle wave. Houseplants in the background. Warm amber and cream color palette. Shallow depth of field. Cinematic 3D render, 4K.
+
+
+SCENE 2 — Confusion / Frustration
+Narration: "If you've ever felt confused about why weight loss feels so hard, or why you're hungry an hour after eating, you're not alone."
+Visual Prompt:
+
+Pixar-style 3D animated character sitting at a kitchen table looking puzzled, holding a fork over an empty plate. A thought bubble floats above their head showing question marks and a tiny growling stomach icon. Soft, slightly blue-tinted lighting to suggest mild frustration. Cozy home setting. Cinematic animation quality, warm but slightly desaturated tones.
+
+
+SCENE 3 — The Big Reveal / Topic Introduction
+Narration: "Today, we're going to explore something that affects all of us: the foods we eat every day and how they're quietly working against our health goals."
+Visual Prompt:
+
+Macro close-up Pixar-style 3D render of everyday foods — white bread, a sugary cereal box, a soda can — arranged on a kitchen counter. The foods cast long, slightly ominous shadows despite cheerful packaging. Camera slowly pulls back to reveal the full spread. Warm lighting transitions to a slightly cooler tone. Photorealistic Pixar 3D style, cinematic depth of field.
+
+
+SCENE 4 — Reassurance / No Guilt
+Narration: "This isn't about guilt or perfection."
+Visual Prompt:
+
+A Pixar-style 3D character takes a deep breath, shoulders relaxing, face shifting from tense to calm. Soft, warm pink and peach light wraps around them. A gentle bokeh background of a cozy living room. The mood is reassuring and gentle. Smooth animated transition. Cinematic quality, soft focus edges.
+
+
+SCENE 5 — Body Science Visualization
+Narration: "It's about understanding what's really happening in your body—"
+Visual Prompt:
+
+Pixar-style 3D animation of a transparent, glowing human torso with a visible stomach and digestive tract. Colorful particles travel through the system like a gentle river. Blues, greens, and soft golds. The scene feels scientific but approachable and magical — like an inside-the-body adventure. Cinematic 3D render, smooth camera orbit around the figure.
+
+
+SCENE 6 — Hope / Transformation Tease
+Narration: "—and discovering simple, sustainable changes that actually work."
+Visual Prompt:
+
+A Pixar-style 3D kitchen counter split-screen: left side shows processed, packaged foods in dull, muted tones; right side reveals fresh whole foods — colorful vegetables, eggs, nuts, berries — glowing with vivid, saturated color and soft rim lighting. The camera slowly pans from left to right. Hopeful, uplifting mood. Warm golden lighting on the right side. Cinematic 3D animation.
+
+
+🎨 Global Style Notes (paste into every prompt)
+
+Style: Pixar/Disney 3D CGI animation quality • Subsurface skin scattering • Soft cinematic lighting • Shallow depth of field • 4K render • No text overlays • Warm, inviting color grading • Characters have expressive, rounded features
+
+
+⚡ Tips for Best Results
+
+Kling / Pika / Runway: Use the style note block at the end of every prompt for consistency
+Camera moves: Add "slow push-in", "gentle orbit", or "subtle zoom out" to control motion
+Consistency: Generate a reference character first, then use it as an image input for subsequent scenes
+Mood music cue: Soft piano or acoustic guitar at 85–95 BPM pairs well with this tone
+
+Want me to refine any specific scene, adjust the character design, or generate a reference prompt for a specific tool like Kling or Runway?
