@@ -325,25 +325,38 @@ export function enhancePromptForProvider(
 ): string {
   if (!sanitizedPrompt) return sanitizedPrompt;
 
+  const stylizedTokens = [
+    'pixar', '3d rendered', '3d illustration', '3d animated',
+    'claymation', 'clay style', 'stop motion',
+    '2d line art', 'line art', 'hand-drawn',
+    'neon futuristic', 'cyberpunk', 'neon glow',
+    'watercolor', 'watercolour', 'ink wash',
+    'collage', 'mixed media', 'scrapbook',
+    'minimalist flat', 'flat design',
+    'scientific animation', 'medical animation',
+  ];
+  const promptLower = sanitizedPrompt.toLowerCase();
+  const hasStylizedContent = stylizedTokens.some(token => promptLower.includes(token));
+
+  if (hasStylizedContent) {
+    return sanitizedPrompt;
+  }
+
   switch (provider.toLowerCase()) {
     case 'runway':
     case 'runway-gen4':
-      // Runway works well with cinematic descriptions
       return `Cinematic shot: ${sanitizedPrompt}`;
     
     case 'kling':
     case 'kling-ai':
-      // Kling handles realistic content well
       return `Natural, realistic: ${sanitizedPrompt}`;
     
     case 'luma':
     case 'luma-ai':
-      // Luma likes detailed descriptions
       return `High quality, detailed: ${sanitizedPrompt}`;
     
     case 'hailuo':
     case 'minimax':
-      // Hailuo/Minimax
       return `Professional quality: ${sanitizedPrompt}`;
     
     case 'hunyuan':
@@ -353,7 +366,6 @@ export function enhancePromptForProvider(
     case 'flux.1':
     case 'fal':
     case 'fal.ai':
-      // Flux works well with straightforward prompts
       return sanitizedPrompt;
     
     default:

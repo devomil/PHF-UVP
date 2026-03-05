@@ -15,7 +15,7 @@ import { getVisualStyleConfig, VisualStyleConfig } from '@shared/visual-style-co
 import { getMotionControl, MotionControlConfig } from '@shared/config/motion-control';
 import { optimizePrompt, logPromptOptimization, analyzePrompt } from './video-prompt-optimizer';
 import { getAnyBrandContext, getBrandNameOrDefault } from './brand-settings-service';
-import { getVisualArtPreset, VisualArtPreset } from '../../shared/config/visual-art-presets';
+import { getVisualArtPreset, VisualArtPreset, isStylizedPreset as isStylizedPresetCheck } from '../../shared/config/visual-art-presets';
 import { getSceneContentTag, SceneContentTag } from '../../shared/config/scene-content-tags';
 
 interface AIVideoResult {
@@ -146,13 +146,15 @@ class AIVideoService {
     
     let enhancedOptions: AIVideoOptions;
     
+    const isStylizedArt = artPreset && isStylizedPresetCheck(artPreset.id);
+
     if (generationMode === 'i2v') {
       console.log(`[AIVideo] I2V mode - using motion-focused prompt (no style bloat)`);
       console.log(`[AIVideo] Original I2V prompt: ${options.prompt.substring(0, 100)}...`);
       let i2vPrompt = this.adaptPromptForI2V(options.prompt);
       if (contentTag) {
         i2vPrompt = `${contentTag.promptPrefix} ${i2vPrompt}`;
-      } else if (artPreset) {
+      } else if (artPreset && !isStylizedArt) {
         i2vPrompt = `${artPreset.imagePromptPrefix} ${i2vPrompt}`;
       }
       console.log(`[AIVideo] Adapted I2V prompt: ${i2vPrompt.substring(0, 100)}...`);
@@ -166,9 +168,11 @@ class AIVideoService {
       if (contentTag) {
         basePrompt = `${contentTag.promptPrefix} ${basePrompt}, ${contentTag.promptSuffix}`;
         console.log(`[AIVideo] Content tag '${contentTag.label}' applied to prompt: ${basePrompt.substring(0, 120)}...`);
-      } else if (artPreset) {
+      } else if (artPreset && !isStylizedArt) {
         basePrompt = `${artPreset.imagePromptPrefix} ${basePrompt}, ${artPreset.imagePromptSuffix}`;
         console.log(`[AIVideo] Art preset applied to prompt: ${basePrompt.substring(0, 120)}...`);
+      } else if (isStylizedArt) {
+        console.log(`[AIVideo] Stylized preset "${artPreset!.name}" — skipping mechanical prefix/suffix wrapping (style already in prompt)`);
       }
       
       // Build enhanced prompt with style modifiers

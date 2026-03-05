@@ -1,6 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type { VisualFormat } from '../../shared/video-types';
-import { getVisualArtPreset } from '../../shared/config/visual-art-presets';
+import { getVisualArtPreset, isStylizedPreset } from '../../shared/config/visual-art-presets';
 
 export interface SceneContent {
   sceneId: string;
@@ -222,28 +222,31 @@ Respond with ONLY a JSON array (no markdown, no code blocks):
     const preset = getVisualArtPreset(artPresetId);
     if (!preset) return recommendations;
 
-    const preferredImageProviders = preset.recommendedProviders.image || [];
     const preferredVideoProviders = preset.recommendedProviders.video || [];
+    const isStylized = isStylizedPreset(artPresetId);
 
-    console.log(`[IntelligentProvider] Applying art preset "${preset.name}" provider preferences: image=[${preferredImageProviders}], video=[${preferredVideoProviders}]`);
+    console.log(`[IntelligentProvider] Applying art preset "${preset.name}" preferences: video=[${preferredVideoProviders}], stylized=${isStylized}`);
 
     return recommendations.map(rec => {
       if (rec.visualFormat === 'remotion-motion-graphics') return rec;
+
+      if (isStylized && rec.visualFormat === 'ai-image-remotion') {
+        console.log(`[IntelligentProvider] Stylized preset override: scene ${rec.sceneIndex} format ai-image-remotion → ai-video (${preset.name} needs full AI video)`);
+        rec = { ...rec, visualFormat: 'ai-video' };
+      }
 
       const currentProvider = rec.recommendedProvider;
       const isPreferred = preferredVideoProviders.includes(currentProvider);
 
       if (!isPreferred && preferredVideoProviders.length > 0) {
         const newProvider = this.validateProvider(preferredVideoProviders[0]);
-        if (rec.confidence < 85) {
-          console.log(`[IntelligentProvider] Art preset override: scene ${rec.sceneIndex} ${currentProvider} → ${newProvider} (preset: ${preset.name})`);
-          return {
-            ...rec,
-            recommendedProvider: newProvider,
-            fallbackProvider: this.validateProvider(preferredVideoProviders[1] || currentProvider),
-            reasoning: `${rec.reasoning} (adjusted for ${preset.name} art preset)`,
-          };
-        }
+        console.log(`[IntelligentProvider] Art preset provider override: scene ${rec.sceneIndex} ${currentProvider} → ${newProvider} (preset: ${preset.name})`);
+        return {
+          ...rec,
+          recommendedProvider: newProvider,
+          fallbackProvider: this.validateProvider(preferredVideoProviders[1] || currentProvider),
+          reasoning: `${rec.reasoning} (adjusted for ${preset.name} art preset)`,
+        };
       }
 
       return rec;
