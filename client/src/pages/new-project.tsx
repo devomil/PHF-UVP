@@ -636,9 +636,11 @@ function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () => void; 
   const [prompt, setPrompt] = useState("");
   const [duration, setDuration] = useState("6");
   const [imageStyle, setImageStyle] = useState("Photorealistic");
+  const [artPresetId, setArtPresetId] = useState<string>("");
   const [aspectRatio, setAspectRatio] = useState("16:9");
   const [provider, setProvider] = useState("auto");
   const [saveToLibrary, setSaveToLibrary] = useState(true);
+  const allPresets = getAllVisualArtPresets();
 
   useEffect(() => {
     setProvider("auto");
@@ -652,6 +654,7 @@ function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () => void; 
       prompt,
       duration: outputType === "video" ? parseInt(duration) : undefined,
       imageStyle: outputType === "image" ? imageStyle : undefined,
+      artPresetId: artPresetId || undefined,
       aspectRatio,
       provider,
       saveToLibrary,
@@ -714,6 +717,23 @@ function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () => void; 
             </Select>
           </div>
         )}
+
+        <div>
+          <Label style={{ color: "var(--text-secondary)" }}>Art Style (Optional)</Label>
+          <div className="flex gap-2 mt-1.5 overflow-x-auto pb-2">
+            <button type="button" onClick={() => setArtPresetId("")} className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${!artPresetId ? "bg-purple-600/20 border-purple-500 text-purple-300" : "border-transparent"}`} style={artPresetId ? { backgroundColor: "var(--surface)", color: "var(--text-secondary)", borderColor: "var(--border-subtle)" } : {}}>
+              None
+            </button>
+            {allPresets.map((preset) => (
+              <button type="button" key={preset.id} onClick={() => setArtPresetId(preset.id)} className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${artPresetId === preset.id ? "bg-purple-600/20 border-purple-500 text-purple-300" : "border-transparent"}`} style={artPresetId !== preset.id ? { backgroundColor: "var(--surface)", color: "var(--text-secondary)", borderColor: "var(--border-subtle)" } : {}}>
+                {preset.name}
+              </button>
+            ))}
+          </div>
+          {artPresetId && allPresets.find(p => p.id === artPresetId)?.globalStyleNotes && (
+            <p className="text-xs mt-1 opacity-70" style={{ color: "var(--text-tertiary)" }}>{allPresets.find(p => p.id === artPresetId)?.globalStyleNotes}</p>
+          )}
+        </div>
 
         <div>
           <Label style={{ color: "var(--text-secondary)" }}>Aspect Ratio</Label>
