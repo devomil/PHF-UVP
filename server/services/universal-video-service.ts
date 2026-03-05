@@ -3341,14 +3341,17 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
     const projectMediaMode2 = (project as any).mediaMode as 'image' | 'video' | undefined;
     
     const projectArtPresetForStrategy = project.artPresetId ? getVisualArtPreset(project.artPresetId) : null;
-    if (projectArtPresetForStrategy && projectMediaMode2 === 'video' && (!videoGenMode || videoGenMode === 'auto')) {
+    const userExplicitlyChoseMode = videoGenMode === 'direct-t2v' || videoGenMode === 'image-first-i2v';
+    if (projectArtPresetForStrategy && projectMediaMode2 === 'video' && !userExplicitlyChoseMode) {
       if (projectArtPresetForStrategy.generationStrategy === 'i2v') {
         videoGenMode = 'image-first-i2v';
-        console.log(`[Assets] Art preset "${projectArtPresetForStrategy.name}" overrides generation mode to image-first-i2v`);
+        console.log(`[Assets] Art preset "${projectArtPresetForStrategy.name}" overrides generation mode to image-first-i2v (user mode was auto/unset)`);
       } else if (projectArtPresetForStrategy.generationStrategy === 't2v') {
         videoGenMode = 'direct-t2v';
-        console.log(`[Assets] Art preset "${projectArtPresetForStrategy.name}" overrides generation mode to direct-t2v`);
+        console.log(`[Assets] Art preset "${projectArtPresetForStrategy.name}" overrides generation mode to direct-t2v (user mode was auto/unset)`);
       }
+    } else if (projectArtPresetForStrategy && userExplicitlyChoseMode) {
+      console.log(`[Assets] User explicitly selected ${videoGenMode}, art preset "${projectArtPresetForStrategy.name}" preference (${projectArtPresetForStrategy.generationStrategy}) not applied`);
     }
     
     const useDirectT2V = projectMediaMode2 === 'video' && (videoGenMode === 'direct-t2v' || videoGenMode === 'auto' || !videoGenMode);
