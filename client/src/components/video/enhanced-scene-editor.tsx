@@ -1246,6 +1246,11 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                 <Sparkles className="w-3.5 h-3.5 text-purple-400" />
               </div>
               <span className="text-[10px] font-medium block truncate" style={{ color: 'var(--text-primary)' }}>Project</span>
+              {artPresetId && getVisualArtPreset(artPresetId) && (
+                <span className="text-[8px] block truncate" style={{ color: 'var(--text-muted)' }}>
+                  ({getVisualArtPreset(artPresetId)!.name})
+                </span>
+              )}
             </button>
             <button
               type="button"
@@ -2004,6 +2009,11 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                               <Sparkles className="w-2.5 h-2.5 text-purple-400" />
                             </div>
                             <span className="text-[8px] font-medium block truncate text-white/70">Project</span>
+                            {artPresetId && getVisualArtPreset(artPresetId) && (
+                              <span className="text-[7px] block truncate text-white/40">
+                                ({getVisualArtPreset(artPresetId)!.name})
+                              </span>
+                            )}
                           </button>
                           <button
                             type="button"
