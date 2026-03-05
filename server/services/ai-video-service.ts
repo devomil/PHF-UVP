@@ -203,6 +203,7 @@ class AIVideoService {
         visualStyle: options.visualStyle || 'lifestyle',
         generationMode,
         provider: normalizedProvider,
+        artPresetId: options.artPresetId,
       });
       
       logPromptOptimization(options.prompt, optimized);

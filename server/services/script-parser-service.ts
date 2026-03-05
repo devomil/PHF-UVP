@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { brandContextService } from "./brand-context-service";
 import { projectInstructionsService } from "./project-instructions-service";
 import { getAnyBrandContext, getBrandNameOrDefault, type BrandContext } from "./brand-settings-service";
+import { getVisualArtPreset, isStylizedPreset } from "@shared/config/visual-art-presets";
 
 export interface ParsedScene {
   id: string;
@@ -43,6 +44,7 @@ export interface ScriptParseOptions {
   platform: string;
   visualStyle: string;
   targetDuration?: number;
+  artPresetId?: string;
 }
 
 class ScriptParserService {
@@ -84,8 +86,9 @@ class ScriptParserService {
       `[ScriptParser] Brand matches - Services: ${serviceMatches.services.length}, Products: ${serviceMatches.products.length}, Conditions: ${serviceMatches.conditions.length}`
     );
 
-    const systemPrompt = await this.buildBrandAwareSystemPrompt(brandContext, roleContext, aestheticContext);
-    const userPrompt = await this.buildParsingPrompt(script, options, serviceMatches);
+    const artPreset = options.artPresetId ? getVisualArtPreset(options.artPresetId) : null;
+    const systemPrompt = await this.buildBrandAwareSystemPrompt(brandContext, roleContext, aestheticContext, artPreset);
+    const userPrompt = await this.buildParsingPrompt(script, options, serviceMatches, artPreset);
 
     try {
       const response = await client.messages.create({
@@ -112,7 +115,7 @@ class ScriptParserService {
     }
   }
 
-  private async buildBrandAwareSystemPrompt(brandContext: string, roleContext: string, aestheticContext: string): Promise<string> {
+  private async buildBrandAwareSystemPrompt(brandContext: string, roleContext: string, aestheticContext: string, artPreset?: any): Promise<string> {
     const brand = await getAnyBrandContext();
     const brandName = getBrandNameOrDefault(brand);
     const hasBrand = brand.brandName?.trim();
@@ -154,6 +157,37 @@ SCENE TYPES:
 - "intro": Introduction and context setting
 - "brand": Brand values and mission
 
+${artPreset && isStylizedPreset(artPreset.id) ? `
+VISUAL DIRECTION RULES - ${artPreset.name.toUpperCase()} STYLE:
+
+## CORE PRINCIPLE: RICH, STYLE-SPECIFIC VISUAL DESCRIPTIONS
+You are writing visual directions for ${artPreset.name} style AI video generation. Write DETAILED, CINEMATIC descriptions that give AI models enough information to produce high-quality ${artPreset.name} imagery.
+
+## STYLE: ${artPreset.name}
+${artPreset.description}
+- Style prefix: "${artPreset.imagePromptPrefix}"
+- Style elements: ${artPreset.imagePromptSuffix}
+- Avoid: ${artPreset.negativePromptAdditions.join(', ')}
+
+## PROMPT DETAIL LEVEL
+Write 2-4 sentences per scene (40-80 words). Include:
+1. The art style identifier (e.g., "${artPreset.imagePromptPrefix.split(',')[0].trim()}")
+2. Specific subject descriptions (characters with features, objects with materials/textures)
+3. Setting/environment details
+4. Lighting and color palette
+5. Camera movement suggestion (slow push-in, gentle orbit, etc.)
+
+## EXAMPLES
+WRONG: "A warm, welcoming exploration through ${artPreset.name}"
+RIGHT: "${artPreset.imagePromptPrefix} a warm sunlit kitchen interior with soft golden morning light, a friendly round-faced character with expressive eyes at a wooden counter, houseplants in background, warm amber palette, ${artPreset.imagePromptSuffix}"
+
+## RULES
+- NEVER include readable text, words, signs, labels, or logos — AI cannot render text
+- Each scene describes ONE concrete visual moment with full stylistic detail
+- Vary visual approach across scenes (characters, environments, objects, concepts)
+- Match the emotional tone of the narration
+- Only mention "${brandName}" in CTA/outro/product scenes
+` : `
 VISUAL DIRECTION RULES - CRITICAL:
 
 ## CORE PRINCIPLE: AUTHENTICITY AND RELATABILITY
@@ -162,52 +196,29 @@ The visual direction MUST match the emotional reality of the narration. Social m
 1. MATCH THE NARRATION'S REALITY
    - The visual must reflect the situation being described
    - NOT every scene needs a person — use objects, environments, close-ups, and B-roll
-   - When people ARE shown, they must look like the audience (not models or actors)
-   
-   WRONG: "Close-up shot of a frustrated woman in her 30s standing on a modern bathroom scale, soft morning light filtering through frosted glass window creating gentle shadows, camera slowly pulls back..."
-   RIGHT: "A bathroom scale with feet stepping on, showing a disappointing number"
-   
-   WRONG: "A fit, athletic person at the gym looking determined"
-   RIGHT: "A calorie tracking app on a phone screen next to a half-eaten salad"
-   
-   WRONG: "${brandName} consultation room with cinematic lighting"
-   RIGHT: "Supplement bottles lined up on a kitchen counter next to a glass of water"
 
 2. VISUAL VARIETY — USE DIVERSE VISUAL TYPES
    - Object close-ups: scales, phones, food, products, supplements
-   - Environment shots: empty kitchen, bathroom counter, desk, nature
+   - Environment shots: kitchen, bathroom, desk, nature
    - B-roll: hands preparing food, water pouring, walking feet
-   - Conceptual: wilting vs thriving plant, tangled vs untangled rope
-   - People: use sparingly, only when narration specifically requires human emotion
-   - Across all scenes, at MOST half should feature a person as the main subject
+   - Conceptual: wilting vs thriving plant
+   - People: use sparingly, at MOST half of scenes should feature a person
 
 3. KEEP IT SIMPLE - 1-2 plain sentences max, 10-20 words
    - ONE subject, ONE action, ONE setting
-   - Describe what we SEE in plain language
-   - NEVER join alternatives with "or" — pick ONE concrete visual and commit
-   - NEVER use abstract words like "progression", "journey", "transformation", "misconception", "overload"
-   - Instead of abstract concepts, describe a SPECIFIC physical object or setting
+   - NEVER join alternatives with "or"
+   - NEVER use abstract words like "progression", "journey", "transformation"
    - NO camera angles, NO color palettes, NO lighting descriptions, NO cinematic language
-   - Write as if describing a scene to a friend, not a film crew
-   
-   WRONG: "A progression from calorie counting to the deeper reality of body toxin overload"
-   RIGHT: "A kitchen counter with a food journal, supplement bottles, and a glass of water"
-   
-   WRONG: "Someone struggling with weight loss, or a person looking at healthy food options, or a bathroom scale"
-   RIGHT: "A bathroom scale on a tile floor with bare feet stepping onto it"
 
-4. REAL SETTINGS
-   - Kitchen, bathroom, living room, bedroom, office, park
-   - Places that look lived-in, not styled or cinematic
-   - Everyday environments audiences recognize from their own life
+4. REAL SETTINGS - Kitchen, bathroom, living room, office, park
 
 5. WHEN TO MENTION "${brandName.toUpperCase()}":
    - Only in CTA, outro, or product showcase scenes
    - NEVER in educational/informational/hook/problem scenes
-   - DO NOT describe fictional "${brandName}" locations
 
 6. NEVER include text, words, signs, labels, logos, or written content in visual directions
    - AI video models cannot render readable text
+`}
 
 OUTPUT FORMAT:
 Return a JSON object with scenes array. Each scene should include:
@@ -229,15 +240,42 @@ Return a JSON object with scenes array. Each scene should include:
   private async buildParsingPrompt(
     script: string,
     options: ScriptParseOptions,
-    serviceMatches: { services: string[]; products: string[]; conditions: string[] }
+    serviceMatches: { services: string[]; products: string[]; conditions: string[] },
+    artPreset?: any
   ): Promise<string> {
     const brand = await getAnyBrandContext();
     const brandName = getBrandNameOrDefault(brand);
+    const isStylized = artPreset && isStylizedPreset(artPreset.id);
+
+    const visualDirectionGuidance = isStylized
+      ? `3. Write DETAILED, STYLE-SPECIFIC visual directions (2-4 sentences, 40-80 words) in ${artPreset.name} style. Include the style prefix "${artPreset.imagePromptPrefix.split(',')[0].trim()}", specific subject descriptions, environment details, lighting, color palette, and camera suggestions.`
+      : `3. Write SIMPLE, AUTHENTIC visual directions (1-2 sentences) that match the emotional reality of the narration`;
+
+    const visualRules = isStylized
+      ? `CRITICAL VISUAL DIRECTION RULES (${artPreset.name.toUpperCase()} STYLE):
+- Write 2-4 detailed sentences per scene with style-specific elements
+- Start with or include "${artPreset.imagePromptPrefix.split(',')[0].trim()}" style marker
+- Include character features, lighting, color palette, and camera movement
+- Each scene should feel like a ${artPreset.name} production with full visual detail
+- Vary the visual approach across scenes (characters, environments, objects)
+- Only mention "${brandName}" in CTA, outro, or product scenes
+- NEVER include readable text, words, signs, labels, logos — AI cannot render text`
+      : `CRITICAL VISUAL DIRECTION RULES:
+- Keep visual directions to 1-2 plain sentences. Describe what we SEE, not cinematic production details.
+- The subject must visually match the situation in the narration
+- Use everyday settings (kitchen, living room, bathroom) not styled cinematic locations
+- NO camera angles, lighting rigs, color palettes, or film language
+- Only mention "${brandName}" in CTA, outro, or product scenes
+- NEVER include text, words, signs, labels, logos in visual directions - AI cannot render readable text.`;
+
+    const visualDirectionExample = isStylized
+      ? `"${artPreset.imagePromptPrefix} a warm sunlit kitchen interior with soft golden morning light, a friendly character with expressive eyes at a wooden counter, warm amber palette, ${artPreset.imagePromptSuffix}"`
+      : `"1-2 simple sentences describing what we see - authentic and relatable"`;
 
     return `Parse this video script${brand.brandName?.trim() ? ` for ${brandName}` : ''}.
 
 PLATFORM: ${options.platform}
-VISUAL STYLE: ${options.visualStyle}
+VISUAL STYLE: ${options.visualStyle}${artPreset ? `\nART PRESET: ${artPreset.name} - ${artPreset.description}` : ''}
 ${options.targetDuration ? `TARGET DURATION: ${options.targetDuration} seconds` : ""}
 
 PRE-IDENTIFIED MATCHES (use these as hints):
@@ -253,18 +291,12 @@ ${script}
 Parse this into scenes with brand awareness. For each scene:
 1. Identify the scene type and purpose
 2. Connect to relevant brand services/products
-3. Write SIMPLE, AUTHENTIC visual directions (1-2 sentences) that match the emotional reality of the narration
+${visualDirectionGuidance}
 4. Note audience resonance and brand opportunities
 5. Create searchQuery for stock video (3-5 concise words)
 6. Create fallbackQuery as alternative search approach
 
-CRITICAL VISUAL DIRECTION RULES:
-- Keep visual directions to 1-2 plain sentences. Describe what we SEE, not cinematic production details.
-- The subject must visually match the situation in the narration (e.g., weight loss = someone with realistic body, not a fit model)
-- Use everyday settings (kitchen, living room, bathroom) not styled cinematic locations
-- NO camera angles, lighting rigs, color palettes, or film language
-- Only mention "${brandName}" in CTA, outro, or product scenes
-- NEVER include text, words, signs, labels, logos in visual directions - AI cannot render readable text.
+${visualRules}
 
 Return ONLY valid JSON matching this structure:
 {
@@ -274,7 +306,7 @@ Return ONLY valid JSON matching this structure:
       "type": "hook|problem|solution|benefit|cta|etc",
       "narration": "exact script text for this scene",
       "duration": 5,
-      "visualDirection": "1-2 simple sentences describing what we see - authentic and relatable",
+      "visualDirection": ${visualDirectionExample},
       "searchQuery": "3-5 word stock video search",
       "fallbackQuery": "alternative search query",
       "keyPoints": ["main point for text overlay"],

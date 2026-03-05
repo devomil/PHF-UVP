@@ -42,7 +42,7 @@ import {
 } from "./health-script-context";
 import { optimizePrompt, logPromptOptimization } from "./video-prompt-optimizer";
 import { intelligentProviderSelector, SceneContent } from "./intelligent-provider-selector";
-import { getVisualArtPreset, VisualArtPreset } from "../../shared/config/visual-art-presets";
+import { getVisualArtPreset, VisualArtPreset, isStylizedPreset } from "../../shared/config/visual-art-presets";
 
 const AWS_REGION = process.env.REMOTION_AWS_REGION || "us-east-2";
 const REMOTION_BUCKET = process.env.REMOTION_S3_BUCKET || process.env.REMOTION_AWS_BUCKET || "remotionlambda-useast2-1vc2l6a56o";
@@ -636,6 +636,7 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
         platform: input.platform || "youtube",
         visualStyle: "warm",
         targetDuration: input.targetDuration,
+        artPresetId: input.artPresetId,
       });
 
       return parsed.scenes.map((s, index: number) => this.createSceneFromRaw({
@@ -676,6 +677,7 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
         platform: input.platform || "youtube",
         visualStyle: "warm",
         targetDuration: input.targetDuration,
+        artPresetId: input.artPresetId,
       });
 
       const scenes = parsed.scenes.map((s, index: number) => this.createSceneFromRaw({
@@ -3165,15 +3167,88 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
           }
           
           try {
-            const systemPrompt = `You are a visual director for social media and television content. Your job is to create simple, authentic visual directions that produce RELATABLE imagery audiences connect with emotionally.
+            const isStylizedArtPreset = isStylizedPreset(artPreset?.id);
+            
+            const stylizedPromptRules = artPreset ? `
+## CORE PRINCIPLE: RICH, STYLE-SPECIFIC VISUAL DESCRIPTIONS
+You are creating prompts for AI video generation in ${artPreset.name} style. Each prompt must be detailed enough for an AI model to produce a high-quality ${artPreset.name} video. Include specific visual elements, character descriptions, lighting, color palette, and style markers.
+
+## STYLE REQUIREMENTS: ${artPreset.name.toUpperCase()}
+${artPreset.description}
+
+Every prompt MUST include these style anchors:
+- Style prefix: "${artPreset.imagePromptPrefix}"
+- Style elements: ${artPreset.imagePromptSuffix}
+- NEVER include: ${artPreset.negativePromptAdditions.join(', ')}
+
+## PROMPT DETAIL LEVEL
+Write 2-4 sentences per micro-scene (40-80 words). Each prompt should include:
+1. The art style identifier (e.g., "${artPreset.imagePromptPrefix.split(',')[0].trim()}")
+2. SPECIFIC subject description (characters with features, objects with materials/textures)
+3. Setting/environment details (interior/exterior, time of day, atmosphere)
+4. Lighting and color palette (warm golden light, cool blue tones, etc.)
+5. Camera suggestion (slow push-in, gentle orbit, wide establishing shot)
+6. Mood/atmosphere keywords
+
+## EXAMPLES FOR ${artPreset.name.toUpperCase()} STYLE
+Narration: "Hi, and welcome."
+WRONG: "A warm, welcoming exploration through ${artPreset.name}"
+RIGHT: "${artPreset.imagePromptPrefix} a warm sunlit kitchen interior with soft golden morning light streaming through a large window, a friendly round-faced character with expressive eyes stands at a wooden counter giving a gentle wave, houseplants in the background, warm amber and cream color palette, ${artPreset.imagePromptSuffix}"
+
+Narration: "If you've ever felt confused about why weight loss feels so hard"
+WRONG: "Someone feeling confused about their health journey"
+RIGHT: "${artPreset.imagePromptPrefix} a puzzled character sitting at a kitchen table holding a fork over an empty plate, a thought bubble with question marks floating above their head, soft slightly blue-tinted lighting suggesting mild frustration, cozy home setting with warm but slightly desaturated tones, ${artPreset.imagePromptSuffix}"
+
+## IMPORTANT RULES
+- NEVER include readable text, words, signs, labels, or logos in visual directions — AI video cannot render readable text
+- Each micro-scene should describe ONE concrete visual moment with full detail
+- Vary the visual approach across micro-scenes (characters, environments, objects, concepts)
+- Match the emotional tone of the narration
+` : '';
+
+            const defaultPromptRules = `
+## CORE PRINCIPLE: AUTHENTICITY OVER PRODUCTION VALUE
+The #1 priority is that the visual MATCHES the emotional reality of the narration. Audiences connect with visuals that mirror their own experience.
+
+## CRITICAL: VISUAL DIVERSITY — NOT EVERY MICRO-SCENE NEEDS A PERSON
+Vary the VISUAL TYPE across micro-scenes:
+- **Object close-up**: scales, phones, food, products
+- **Environment/setting**: kitchen counter, desk, gym entrance
+- **Conceptual/metaphor**: wilting vs thriving plant
+- **Nature/organic**: Fresh vegetables, flowing water
+- **B-roll**: Hands preparing a meal, feet walking
+- **Person/human**: Use sparingly — only when narration specifically requires human emotion
+
+RULES:
+- At MOST 1-2 micro-scenes (out of 3-4) should feature a person
+- Vary the visual type — don't repeat the same approach
+
+## RULES FOR VISUAL DIRECTIONS
+1. MATCH THE NARRATION'S REALITY - The visual must reflect the situation described.
+2. ONE VISUAL PER MICRO-SCENE - Describe EXACTLY ONE concrete image. NEVER join alternatives with "or".
+3. KEEP IT SIMPLE - One subject, one setting per micro-scene. 10-20 words max.
+4. BE CONCRETE, NOT ABSTRACT - Describe physical objects and settings. No abstract words like "progression", "journey", "transformation".
+5. BE DIRECT - Describe what we SEE in plain language.
+6. REAL SETTINGS, NOT SETS - Everyday places that look lived-in and real.
+7. NO CINEMATIC LANGUAGE - No camera angles, color palettes, or lighting rigs.
+8. VISUAL VARIETY - Each micro-scene should use a DIFFERENT visual type.
+
+## WRONG vs RIGHT EXAMPLES
+WRONG: "A progression from calorie counting misconceptions to the deeper reality of body toxin overload"
+RIGHT: "A bathroom scale next to a measuring tape and an open diet journal on a kitchen counter"
+
+WRONG: "An open refrigerator late at night, light spilling out, with someone's hand reaching for processed snacks, or a cluttered kitchen counter"
+RIGHT: "An open refrigerator at night with a hand reaching for processed snacks on the top shelf"
+`;
+
+            const systemPrompt = `You are a visual director for ${isStylizedArtPreset ? `${artPreset!.name} style AI video content` : 'social media and television content'}.
 
 ${brandContextStr}
 
-## CORE PRINCIPLE: AUTHENTICITY OVER PRODUCTION VALUE
-The #1 priority is that the visual MATCHES the emotional reality of the narration. If the narration is about struggling with weight, the visuals should feel real and relatable — not polished fitness models. Audiences connect with visuals that mirror their own experience.
+${isStylizedArtPreset ? stylizedPromptRules : defaultPromptRules}
 
 ## MICRO-SCENES
-Split the narration into micro-scenes. Each micro-scene covers 1-2 sentences that share a single visual idea. Each micro-scene gets its own distinct visual direction, so the final video has visual variety instead of one static image for the whole scene.
+Split the narration into micro-scenes. Each micro-scene covers 1-2 sentences that share a single visual idea. Each micro-scene gets its own distinct visual direction.
 
 Guidelines for splitting:
 - Split at natural topic/image shifts in the narration
@@ -3182,71 +3257,14 @@ Guidelines for splitting:
 - Short scenes (under 5 seconds or 1-2 sentences) should stay as 1 micro-scene
 - Estimate duration proportionally based on word count of each segment
 
-## CRITICAL: VISUAL DIVERSITY — NOT EVERY MICRO-SCENE NEEDS A PERSON
-This is the most important rule. Vary the VISUAL TYPE across micro-scenes. Use a MIX of these approaches:
-- **Object close-up**: A bathroom scale, a tape measure, a pill bottle, a plate of food, a phone screen
-- **Environment/setting**: An empty kitchen counter with supplements lined up, a cluttered desk, a gym entrance
-- **Conceptual/metaphor**: A wilting plant vs a thriving plant, a tangled knot slowly unraveling
-- **Product/item focus**: A calorie tracking app on a tablet surrounded by healthy food, supplement bottles on a shelf
-- **Nature/organic**: Fresh vegetables, flowing water, sunlight through leaves
-- **B-roll**: Hands preparing a meal, feet walking on a path, water pouring into a glass
-- **Person/human**: Use sparingly — only when the narration specifically calls for human emotion or interaction
-
-RULES:
-- Do NOT put a person/someone/a woman/a man in every micro-scene
-- Within a single scene, at MOST 1-2 micro-scenes (out of 3-4) should feature a person
-- NEVER show fit, athletic, or above-average bodies when the narration is about health struggles
-- Vary the visual type — don't use the same approach in consecutive micro-scenes
-
-## EXAMPLES
-Narration: "Have you been doing everything right but still struggling to lose weight? Counting calories, hitting the gym, but the scale won't budge?"
-
-WRONG (all people):
-- Micro 1: "A person looking frustrated while standing on a bathroom scale"
-- Micro 2: "Someone sitting at their kitchen table with a food tracking app"
-- Micro 3: "A person sitting quietly, hand on their stomach, looking concerned"
-
-RIGHT (visual variety):
-- Micro 1: "A bathroom scale with feet stepping onto it, the number not changing"
-- Micro 2: "A calorie tracking app open on a tablet next to a measured portion of salad and a water bottle"
-- Micro 3: "A gym bag sitting untouched by a front door, keys tossed next to it"
-
-## RULES FOR VISUAL DIRECTIONS
-1. MATCH THE NARRATION'S REALITY - The visual must reflect the situation described.
-2. ONE VISUAL PER MICRO-SCENE - Each micro-scene describes EXACTLY ONE concrete image. NEVER join alternatives with "or", "alternatively", or commas listing options. Pick ONE and commit.
-3. KEEP IT SIMPLE - One subject, one setting per micro-scene. 10-20 words max.
-4. BE CONCRETE, NOT ABSTRACT - Describe physical objects and settings you can photograph. NEVER use abstract words like "progression", "journey", "transformation", "misconception", "overload", "deeper reality". Instead, show a SPECIFIC object or scene that represents the idea.
-5. BE DIRECT - Describe what we SEE in plain language.
-6. REAL SETTINGS, NOT SETS - Everyday places that look lived-in and real.
-7. NO CINEMATIC LANGUAGE - No camera angles, color palettes, or lighting rigs.
-8. VISUAL VARIETY - Each micro-scene should use a DIFFERENT visual type. Mix objects, environments, and people.
-
-## WRONG vs RIGHT EXAMPLES FOR VISUAL DIRECTION
-WRONG: "A progression from calorie counting misconceptions to the deeper reality of body toxin overload and healing needs"
-RIGHT: "A bathroom scale next to a measuring tape and an open diet journal on a kitchen counter"
-
-WRONG: "A progression from struggle to healing through natural wellness elements and supportive environments"
-RIGHT: "Fresh herbs and supplement bottles arranged on a sunlit wooden cutting board"
-
-WRONG: "An open refrigerator late at night, light spilling out, with someone's hand reaching for processed snacks, or a cluttered kitchen counter with empty fast food containers"
-RIGHT: "An open refrigerator at night with a hand reaching for processed snacks on the top shelf"
-
 ## VISUAL STYLE: ${projectVisualStyle}
-${artPreset ? `
-## ART DIRECTION PRESET: ${artPreset.name}
-All visual directions MUST be consistent with this art style: ${artPreset.description}.
-When describing visuals, incorporate this aesthetic naturally. For example:
-- Prefix style cues: "${artPreset.imagePromptPrefix}"
-- The overall look should feel: ${artPreset.imagePromptSuffix}
-- Avoid these visual elements: ${artPreset.negativePromptAdditions.join(', ')}
-Every micro-scene should maintain this ${artPreset.name} aesthetic for visual consistency across the entire video.
-` : ''}
+
 ## OUTPUT FORMAT
 Return ONLY a JSON object:
 {
-  "visualDirection": "overall 1-sentence summary for the whole scene",
+  "visualDirection": "overall ${isStylizedArtPreset ? '1-2 sentence' : '1-sentence'} summary for the whole scene${isStylizedArtPreset ? ' including style markers' : ''}",
   "microScenes": [
-    { "narration": "exact text from the narration for this segment", "visualDirection": "1-2 sentences describing what we see", "duration": 4 },
+    { "narration": "exact text from the narration for this segment", "visualDirection": "${isStylizedArtPreset ? '2-4 detailed sentences with style-specific elements, lighting, characters, and camera' : '1-2 sentences describing what we see'}", "duration": 4 },
     { "narration": "next segment text", "visualDirection": "different visual type for this part", "duration": 3 }
   ]
 }`;
@@ -3977,13 +3995,14 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
       
       let videosGenerated = 0;
       let aiVideosGenerated = 0;
+      let videosFailed = 0;
       
       let videoSceneIndex = 0;
       for (const scene of scenesNeedingVideo) {
         // Update per-scene progress (40% to 60% range)
         updatedProject.progress.overallPercent = 40 + Math.round((videoSceneIndex / scenesNeedingVideo.length) * 20);
         updatedProject.progress.steps.videos.progress = Math.round((videoSceneIndex / scenesNeedingVideo.length) * 100);
-        updatedProject.progress.steps.videos.message = `Processing video ${videoSceneIndex + 1} of ${scenesNeedingVideo.length}`;
+        updatedProject.progress.steps.videos.message = `Generating video ${videoSceneIndex + 1} of ${scenesNeedingVideo.length}${videosGenerated > 0 ? ` (${videosGenerated} ready)` : ''}`;
         await saveProgress();
         videoSceneIndex++;
         
@@ -4378,11 +4397,11 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
             videosGenerated++;
             console.log(`[UniversalVideoService] Video APPLIED for scene ${scene.id} (${videoResult.source}): ${videoResult.url.substring(0, 80)}...`);
           } else {
-            // Fall back to AI image when video generation fails
+            videosFailed++;
             if (updatedProject.scenes[sceneIndex].background) {
               updatedProject.scenes[sceneIndex].background.type = 'image';
             }
-            console.log(`[UniversalVideoService] Using AI image for scene ${scene.id} - video not available (standard tier)`);
+            console.warn(`[UniversalVideoService] Video generation FAILED for scene ${scene.id} - falling back to AI image`);
           }
         }
       }
@@ -4390,8 +4409,15 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
       updatedProject.progress.steps.videos.progress = 100;
       updatedProject.progress.steps.videos.status = 'complete';
       updatedProject.progress.steps.videos.message = videosGenerated > 0 
-        ? `Generated ${aiVideosGenerated} AI videos, ${videosGenerated - aiVideosGenerated} stock clips`
+        ? `Generated ${aiVideosGenerated} AI videos${videosFailed > 0 ? `, ${videosFailed} failed` : ''}`
         : 'No suitable video found - using AI images';
+      if (videosFailed > 0) {
+        console.warn(`[UniversalVideoService] Video generation summary: ${videosGenerated} succeeded, ${videosFailed} failed out of ${scenesNeedingVideo.length} scenes`);
+        if (!updatedProject.progress.errors) updatedProject.progress.errors = [];
+        updatedProject.progress.errors.push(
+          `${videosFailed} of ${scenesNeedingVideo.length} video generations failed — those scenes use fallback images`
+        );
+      }
     } else {
       updatedProject.progress.steps.videos.status = 'skipped';
       updatedProject.progress.steps.videos.message = 'No scenes require video';

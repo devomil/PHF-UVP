@@ -1,3 +1,5 @@
+import { isStylizedPreset as isStylizedPresetFn } from '../../shared/config/visual-art-presets';
+
 interface OptimizePromptInput {
   visualDescription: string;
   sceneType: string;
@@ -6,6 +8,7 @@ interface OptimizePromptInput {
   visualStyle?: string;
   generationMode: string;
   provider: string;
+  artPresetId?: string;
 }
 
 interface OptimizedPrompt {
@@ -151,6 +154,7 @@ function enforcePromptLength(prompt: string, maxWords: number = 30): string {
 
 export function optimizePrompt(input: OptimizePromptInput): OptimizedPrompt {
   let prompt = input.visualDescription;
+  const isStylized = isStylizedPresetFn(input.artPresetId);
 
   const segments = splitByOrAlternatives(prompt);
   if (segments.length > 1) {
@@ -159,9 +163,12 @@ export function optimizePrompt(input: OptimizePromptInput): OptimizedPrompt {
     prompt = best;
   }
 
-  prompt = cleanPromptText(prompt);
+  if (!isStylized) {
+    prompt = cleanPromptText(prompt);
+  }
 
-  prompt = enforcePromptLength(prompt, 30);
+  const maxWords = isStylized ? 80 : 30;
+  prompt = enforcePromptLength(prompt, maxWords);
 
   if (prompt.length < 10) {
     prompt = input.visualDescription.substring(0, 100);

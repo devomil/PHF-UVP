@@ -523,6 +523,7 @@ const scriptVideoInputSchema = z.object({
   voiceId: z.string().optional(),
   voiceName: z.string().optional(),
   qualityTier: z.enum(['standard', 'premium', 'ultra']).optional().default('premium'),
+  artPresetId: z.string().optional(),
   // Phase 13: Audio and motion control generation settings
   generationSettings: generationSettingsSchema.optional(),
   // Phase 16: End card and sound design settings
