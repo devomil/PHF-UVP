@@ -11,6 +11,10 @@ export interface VisualArtPreset {
     video: string[];
   };
   generationStrategy: 'i2v' | 't2v' | 'auto';
+  globalStyleNotes?: string;
+  cameraMotionHints?: string;
+  styleMarkerPrefix?: string;
+  styleKeywords?: string[];
 }
 
 export const STYLIZED_PRESET_IDS = [
@@ -36,6 +40,10 @@ export const VISUAL_ART_PRESETS: Record<string, VisualArtPreset> = {
       video: ['kling', 'runway'],
     },
     generationStrategy: 'i2v',
+    globalStyleNotes: 'Pixar/Disney 3D CGI animation quality • Subsurface skin scattering • Soft cinematic lighting • Shallow depth of field • 4K render • No text overlays • Warm, inviting color grading • Characters have expressive, rounded features',
+    cameraMotionHints: 'slow push-in, gentle orbit, subtle zoom out',
+    styleMarkerPrefix: 'Pixar-style 3D animated',
+    styleKeywords: ['pixar', '3d animated', '3d render', '3d cgi'],
   },
 
   'cinematic-realism': {
@@ -66,6 +74,10 @@ export const VISUAL_ART_PRESETS: Record<string, VisualArtPreset> = {
       video: ['hailuo', 'kling'],
     },
     generationStrategy: 'i2v',
+    globalStyleNotes: '2D line art animation • Clean vector outlines • Flat color fills • White or minimal backgrounds • No photorealistic elements • Bold graphic shapes • Editorial illustration quality',
+    cameraMotionHints: 'gentle pan, smooth slide, subtle parallax',
+    styleMarkerPrefix: '2D line art animated',
+    styleKeywords: ['2d line art', 'line art', 'vector illustration', 'line drawing'],
   },
 
   collage: {
@@ -81,6 +93,10 @@ export const VISUAL_ART_PRESETS: Record<string, VisualArtPreset> = {
       video: ['hailuo', 'kling'],
     },
     generationStrategy: 'i2v',
+    globalStyleNotes: 'Mixed-media collage animation • Torn paper edges and layered textures • Vintage magazine cutout aesthetic • Overlapping elements with depth • Washi tape and stamp accents • Tactile handmade feel • No clean digital look',
+    cameraMotionHints: 'slow zoom with parallax layers, gentle drift, paper-shuffle reveal',
+    styleMarkerPrefix: 'Mixed-media collage style',
+    styleKeywords: ['collage', 'mixed media', 'paper cutout', 'scrapbook'],
   },
 
   claymation: {
@@ -96,6 +112,10 @@ export const VISUAL_ART_PRESETS: Record<string, VisualArtPreset> = {
       video: ['kling', 'runway'],
     },
     generationStrategy: 'i2v',
+    globalStyleNotes: 'Claymation stop-motion animation • Plasticine/clay material textures • Visible fingerprint impressions • Miniature diorama sets • Warm studio lighting • Shallow depth of field • Wallace and Gromit inspired charm • No digital smoothness',
+    cameraMotionHints: 'stop-motion frame steps, slow pan across miniature set, gentle tilt',
+    styleMarkerPrefix: 'Claymation stop-motion style',
+    styleKeywords: ['claymation', 'clay', 'stop-motion', 'plasticine'],
   },
 
   'neon-futuristic': {
@@ -111,6 +131,10 @@ export const VISUAL_ART_PRESETS: Record<string, VisualArtPreset> = {
       video: ['runway', 'kling', 'luma'],
     },
     generationStrategy: 't2v',
+    globalStyleNotes: 'Neon cyberpunk aesthetic • Holographic HUD elements • Dark backgrounds with vibrant cyan and magenta neon • Volumetric fog and light rays • Blade Runner inspired atmosphere • Glowing particle effects • No natural or organic tones',
+    cameraMotionHints: 'slow dolly through neon corridors, hologram rotation, glitch-cut transitions',
+    styleMarkerPrefix: 'Neon futuristic cyberpunk style',
+    styleKeywords: ['neon', 'cyberpunk', 'futuristic', 'holographic'],
   },
 
   watercolor: {
@@ -126,6 +150,10 @@ export const VISUAL_ART_PRESETS: Record<string, VisualArtPreset> = {
       video: ['hailuo', 'kling'],
     },
     generationStrategy: 'i2v',
+    globalStyleNotes: 'Watercolor painting animation • Visible brush strokes and paint texture • Soft color bleeds on wet paper • Pastel and muted tones • Paper grain visible • Dreamy soft-focus atmosphere • No sharp digital edges',
+    cameraMotionHints: 'gentle dissolve, slow paint-reveal wipe, soft drift',
+    styleMarkerPrefix: 'Watercolor painted animation style',
+    styleKeywords: ['watercolor', 'watercolour', 'painted', 'brush stroke'],
   },
 
   'minimalist-flat': {
@@ -141,6 +169,10 @@ export const VISUAL_ART_PRESETS: Record<string, VisualArtPreset> = {
       video: ['hailuo', 'kling'],
     },
     generationStrategy: 'i2v',
+    globalStyleNotes: 'Minimalist flat design animation • Clean geometric shapes • Solid color blocks • Ample white/negative space • Bold simple forms • Limited color palette • Bauhaus/Scandinavian aesthetic • No texture or gradients',
+    cameraMotionHints: 'smooth geometric transitions, clean slide, shape morph',
+    styleMarkerPrefix: 'Minimalist flat design animated',
+    styleKeywords: ['minimalist flat', 'flat design', 'geometric', 'minimalist'],
   },
 
   'scientific-medical': {
@@ -156,6 +188,10 @@ export const VISUAL_ART_PRESETS: Record<string, VisualArtPreset> = {
       video: ['wan-2.6', 'kling-2.6'],
     },
     generationStrategy: 'i2v',
+    globalStyleNotes: 'Scientific medical 3D visualization • Bioluminescent glow effects • Dark backgrounds with illuminated subjects • Volumetric lighting and particle effects • Cellular/molecular detail • Subsurface scattering • Professional medical-grade rendering',
+    cameraMotionHints: 'slow microscopic zoom, cellular fly-through, orbital rotation around molecule',
+    styleMarkerPrefix: 'Scientific medical 3D visualization',
+    styleKeywords: ['scientific', 'medical', 'cellular', 'molecular', 'bioluminescent'],
   },
 };
 
