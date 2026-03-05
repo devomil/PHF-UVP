@@ -2738,7 +2738,7 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
         microScenes: [],
       };
       
-      preparedProject.scenes = [introScene, ...preparedProject.scenes];
+      preparedProject.scenes = [introScene, ...preparedProject.scenes.filter((s: any) => s.id !== 'intro-scene-auto')];
       console.log('[Render] Intro scene injected (template: ' + introTemplate + ', background: ' + (introBackgroundUrl ? 'S3 image' : 'brand gradient') + ')');
       
       if (brandLogoUrl) {
