@@ -9945,7 +9945,7 @@ router.post('/generate-character-reference', isAuthenticated, async (req: Reques
         width: 1024,
         height: 1024,
         qualityTier: 'premium',
-        strength: 0.65,
+        strength: 0.35,
       });
     } else {
       generationPromise = imageGenerationService.generateImage({
@@ -10062,7 +10062,7 @@ router.post('/projects/:projectId/characters/:characterId/generate-reference', i
         width: 1024,
         height: 1024,
         qualityTier: 'premium',
-        strength: 0.65,
+        strength: 0.35,
       });
     } else {
       generationPromise = imageGenerationService.generateImage({

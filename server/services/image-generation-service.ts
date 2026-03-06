@@ -135,6 +135,8 @@ class ImageGenerationService {
           input: {
             image: request.referenceImageUrl,
             prompt: request.prompt,
+            image_strength: strength,
+            guidance_scale: guidanceScale,
           },
         }),
       });
