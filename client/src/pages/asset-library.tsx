@@ -36,6 +36,7 @@ import {
   Loader2,
   CheckCircle2,
   XCircle,
+  Users,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
@@ -156,7 +157,7 @@ export default function AssetLibrary() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   
-  const [activeTab, setActiveTab] = useState<'library' | 'uploads' | 'brand' | 's3-assets'>('brand');
+  const [activeTab, setActiveTab] = useState<'library' | 'uploads' | 'brand' | 's3-assets' | 'characters'>('brand');
   const [assetType, setAssetType] = useState<AssetType>('all');
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [searchQuery, setSearchQuery] = useState('');
@@ -255,6 +256,37 @@ export default function AssetLibrary() {
   const { data: brandMediaData, isLoading: isLoadingBrandMedia } = useQuery<{ assets: BrandMedia[]; total: number }>({
     queryKey: ['/api/brand-media-library'],
     enabled: activeTab === 'brand',
+  });
+
+  interface CharacterLibraryEntry {
+    id: number;
+    name: string;
+    role?: string;
+    physicalDescription?: string;
+    wardrobe?: string;
+    personalityNotes?: string;
+    referenceImageUrl?: string;
+    createdAt: string;
+  }
+
+  const { data: characterLibraryData, isLoading: isLoadingCharacters } = useQuery<CharacterLibraryEntry[]>({
+    queryKey: ['/api/universal-video/character-library'],
+    enabled: activeTab === 'characters',
+  });
+
+  const characters: CharacterLibraryEntry[] = characterLibraryData || [];
+
+  const deleteCharacterMutation = useMutation({
+    mutationFn: async (id: number) => {
+      await apiRequest('DELETE', `/api/universal-video/character-library/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/universal-video/character-library'] });
+      toast({ title: 'Character deleted', description: 'Character has been removed from your library.' });
+    },
+    onError: () => {
+      toast({ title: 'Error', description: 'Failed to delete character.', variant: 'destructive' });
+    },
   });
 
   const deleteBrandAssetMutation = useMutation({
@@ -616,8 +648,8 @@ export default function AssetLibrary() {
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'library' | 'uploads' | 'brand' | 's3-assets')}>
-            <TabsList className="grid w-full grid-cols-4">
+          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'library' | 'uploads' | 'brand' | 's3-assets' | 'characters')}>
+            <TabsList className="grid w-full grid-cols-5">
               <TabsTrigger value="brand" className="flex items-center gap-2" data-testid="tab-brand-media">
                 <Building2 className="h-4 w-4" />
                 Brand Media
@@ -625,6 +657,10 @@ export default function AssetLibrary() {
               <TabsTrigger value="library" className="flex items-center gap-2" data-testid="tab-asset-library">
                 <Image className="h-4 w-4" />
                 Asset Library
+              </TabsTrigger>
+              <TabsTrigger value="characters" className="flex items-center gap-2" data-testid="tab-characters">
+                <Users className="h-4 w-4" />
+                Characters
               </TabsTrigger>
               <TabsTrigger value="uploads" className="flex items-center gap-2" data-testid="tab-my-uploads">
                 <Upload className="h-4 w-4" />
@@ -1211,6 +1247,114 @@ export default function AssetLibrary() {
                             )}
                           </div>
                         )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </TabsContent>
+
+            <TabsContent value="characters" className="space-y-4">
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-gray-500">
+                  View and manage your saved character profiles. Characters can be created from the Character Profiles panel or the Create Asset dialog.
+                </p>
+              </div>
+
+              {isLoadingCharacters ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="text-center">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+                    <p className="text-gray-500">Loading characters...</p>
+                  </div>
+                </div>
+              ) : characters.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 text-center border-2 border-dashed rounded-lg">
+                  <Users className="h-16 w-16 text-gray-300 mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-1">No characters yet</h3>
+                  <p className="text-gray-500 mb-4 max-w-md">
+                    Create characters using the Character Profiles panel in a project, or use the "Create Asset" button with "Character" mode.
+                  </p>
+                  <Button
+                    onClick={() => setIsCreatorOpen(true)}
+                    className="bg-purple-600 hover:bg-purple-700 text-white"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Create Character
+                  </Button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                  {characters.map((character) => (
+                    <div
+                      key={character.id}
+                      className="relative group rounded-lg overflow-hidden border bg-gray-50 hover:border-purple-400 transition-colors"
+                      data-testid={`character-card-${character.id}`}
+                    >
+                      <div className="aspect-square bg-gray-200 relative">
+                        {character.referenceImageUrl ? (
+                          <img
+                            src={character.referenceImageUrl}
+                            alt={character.name}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="gray"><rect width="24" height="24"/></svg>';
+                            }}
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-purple-100 to-pink-100">
+                            <Users className="h-12 w-12 text-purple-300" />
+                          </div>
+                        )}
+                        <div className="absolute top-2 left-2">
+                          <Badge className="bg-purple-600 text-white text-xs">
+                            Character
+                          </Badge>
+                        </div>
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100">
+                          {character.referenceImageUrl && (
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const a = document.createElement('a');
+                                a.href = character.referenceImageUrl!;
+                                a.download = `${character.name}-reference`;
+                                a.target = '_blank';
+                                a.click();
+                              }}
+                            >
+                              <Download className="h-4 w-4" />
+                            </Button>
+                          )}
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (confirm(`Are you sure you want to delete "${character.name}"?`)) {
+                                deleteCharacterMutation.mutate(character.id);
+                              }
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                      <div className="p-3">
+                        <p className="text-sm font-medium truncate">{character.name}</p>
+                        {character.role && (
+                          <p className="text-xs text-gray-500 truncate mt-0.5">{character.role}</p>
+                        )}
+                        {character.physicalDescription && (
+                          <p className="text-xs text-gray-400 truncate mt-1">{character.physicalDescription}</p>
+                        )}
+                        <div className="flex items-center gap-1 mt-2">
+                          <Badge variant="secondary" className="text-xs">
+                            {character.referenceImageUrl ? 'Has Reference' : 'No Reference'}
+                          </Badge>
+                        </div>
                       </div>
                     </div>
                   ))}

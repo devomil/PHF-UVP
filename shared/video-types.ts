@@ -35,7 +35,7 @@ export interface VideoProject {
   history?: ProjectHistory;
   qualityTier?: 'ultra' | 'premium' | 'standard';
   mediaMode?: 'image' | 'video';
-  videoGenerationMode?: 'direct-t2v' | 'image-first-i2v' | 'auto';
+  videoGenerationMode?: 'direct-t2v' | 'image-first-i2v' | 'character-i2v' | 'auto';
   artPresetId?: string;
   characters?: CharacterProfile[];
 }

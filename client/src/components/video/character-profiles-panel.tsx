@@ -9,7 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import type { CharacterProfile } from "@shared/video-types";
 
 interface CharacterProfilesPanelProps {
-  projectId: string;
+  projectId?: string;
   characters: CharacterProfile[];
   onCharactersChange: (characters: CharacterProfile[]) => void;
   narrationTextareaRef?: React.RefObject<HTMLTextAreaElement | null>;
@@ -31,8 +31,11 @@ export function CharacterProfilesPanel({
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
+  const isStandalone = !projectId;
+
   const saveCharactersMutation = useMutation({
     mutationFn: async (chars: CharacterProfile[]) => {
+      if (isStandalone) return { success: true };
       const res = await fetch(`/api/universal-video/projects/${projectId}/characters`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -43,7 +46,9 @@ export function CharacterProfilesPanel({
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+      if (!isStandalone) {
+        queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+      }
     },
     onError: (err: Error) => {
       toast({ title: "Save Failed", description: err.message, variant: "destructive" });
@@ -52,6 +57,27 @@ export function CharacterProfilesPanel({
 
   const generateReferenceMutation = useMutation({
     mutationFn: async (characterId: string) => {
+      if (isStandalone) {
+        const char = characters.find(c => c.id === characterId);
+        if (!char) throw new Error("Character not found");
+        const res = await fetch(`/api/universal-video/generate-character-reference`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            name: char.name,
+            role: char.role,
+            physicalDescription: char.physicalDescription,
+            wardrobe: char.wardrobe,
+            personalityNotes: char.personalityNotes,
+          }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || "Failed to generate reference image");
+        }
+        return res.json();
+      }
       const res = await fetch(`/api/universal-video/projects/${projectId}/characters/${characterId}/generate-reference`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -70,7 +96,9 @@ export function CharacterProfilesPanel({
           : c
       );
       onCharactersChange(updated);
-      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+      if (!isStandalone) {
+        queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+      }
       toast({ title: "Reference Image Generated", description: "Disney/Pixar style character reference is ready." });
     },
     onError: (err: Error, characterId) => {
@@ -85,6 +113,7 @@ export function CharacterProfilesPanel({
 
   const lockCharacterMutation = useMutation({
     mutationFn: async (characterId: string) => {
+      if (isStandalone) return { success: true };
       const res = await fetch(`/api/universal-video/projects/${projectId}/characters/${characterId}/lock`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -98,7 +127,9 @@ export function CharacterProfilesPanel({
         c.id === characterId ? { ...c, locked: true } : c
       );
       onCharactersChange(updated);
-      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+      if (!isStandalone) {
+        queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+      }
       toast({ title: "Character Locked", description: "This character's reference will be used for consistent visuals across scenes." });
     },
     onError: (err: Error) => {
@@ -132,6 +163,12 @@ export function CharacterProfilesPanel({
 
   const importFromLibraryMutation = useMutation({
     mutationFn: async (libraryCharacterId: number) => {
+      if (isStandalone) {
+        const libChars = libraryQuery.data || [];
+        const libChar = libChars.find((lc: any) => lc.id === libraryCharacterId);
+        if (!libChar) throw new Error("Character not found in library");
+        return { character: libChar };
+      }
       const res = await fetch(`/api/universal-video/projects/${projectId}/characters/import`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -144,15 +181,28 @@ export function CharacterProfilesPanel({
     onSuccess: (data) => {
       if (data.character) {
         const newChar: CharacterProfile = {
-          ...data.character,
+          id: `char_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+          name: data.character.name || "",
+          role: data.character.role || "",
+          physicalDescription: data.character.physicalDescription || "",
+          wardrobe: data.character.wardrobe || "",
+          personalityNotes: data.character.personalityNotes || "",
+          referenceImageUrl: data.character.referenceImageUrl || null,
+          locked: !!data.character.referenceImageUrl,
+          generationStatus: data.character.referenceImageUrl ? 'completed' : 'idle',
           sortOrder: characters.length,
+          savedToLibrary: true,
         };
         const updated = [...characters, newChar];
         onCharactersChange(updated);
-        saveCharactersMutation.mutate(updated);
+        if (!isStandalone) {
+          saveCharactersMutation.mutate(updated);
+        }
       }
       setShowLibraryModal(false);
-      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+      if (!isStandalone) {
+        queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+      }
       toast({ title: "Character Imported", description: "Character has been added to this project." });
     },
     onError: (err: Error) => {
@@ -202,7 +252,9 @@ export function CharacterProfilesPanel({
     };
     const updated = [...characters, newChar];
     onCharactersChange(updated);
-    saveCharactersMutation.mutate(updated);
+    if (!isStandalone) {
+      saveCharactersMutation.mutate(updated);
+    }
     if (!isExpanded) setIsExpanded(true);
   };
 
@@ -211,7 +263,9 @@ export function CharacterProfilesPanel({
     if (char?.locked) return;
     const updated = characters.filter(c => c.id !== id).map((c, i) => ({ ...c, sortOrder: i }));
     onCharactersChange(updated);
-    saveCharactersMutation.mutate(updated);
+    if (!isStandalone) {
+      saveCharactersMutation.mutate(updated);
+    }
   };
 
   const updateCharacterField = (id: string, field: keyof CharacterProfile, value: any) => {
@@ -222,8 +276,10 @@ export function CharacterProfilesPanel({
   };
 
   const saveCharacterChanges = useCallback((chars?: CharacterProfile[]) => {
-    saveCharactersMutation.mutate(chars || characters);
-  }, [characters]);
+    if (!isStandalone) {
+      saveCharactersMutation.mutate(chars || characters);
+    }
+  }, [characters, isStandalone]);
 
   const handleGenerateReference = (characterId: string) => {
     const updated = characters.map(c =>
@@ -254,7 +310,9 @@ export function CharacterProfilesPanel({
     updated.splice(dropIndex, 0, removed);
     const reordered = updated.map((c, i) => ({ ...c, sortOrder: i }));
     onCharactersChange(reordered);
-    saveCharactersMutation.mutate(reordered);
+    if (!isStandalone) {
+      saveCharactersMutation.mutate(reordered);
+    }
     setDraggedIndex(null);
     setDragOverIndex(null);
   };

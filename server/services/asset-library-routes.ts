@@ -265,6 +265,36 @@ router.post('/:id/favorite', async (req: Request, res: Response) => {
   }
 });
 
+router.post('/save-character', async (req: Request, res: Response) => {
+  try {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ error: 'Not authenticated' });
+
+    const { name, referenceImageUrl, role, physicalDescription } = req.body;
+    if (!name || !referenceImageUrl) {
+      return res.status(400).json({ error: 'name and referenceImageUrl are required' });
+    }
+
+    await db.insert(assetLibrary).values({
+      assetUrl: referenceImageUrl,
+      thumbnailUrl: referenceImageUrl,
+      assetType: 'image',
+      provider: 'character-generator',
+      prompt: `Character: ${name}${role ? ` — ${role}` : ''}`,
+      contentType: 'character',
+      tags: ['character', name],
+      createdBy: userId,
+      width: 1024,
+      height: 1024,
+    });
+
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('[AssetLibrary] Save character error:', error.message);
+    res.status(500).json({ error: 'Failed to save character asset' });
+  }
+});
+
 router.post('/:id/use', async (req: Request, res: Response) => {
   try {
     const userId = getUserId(req);

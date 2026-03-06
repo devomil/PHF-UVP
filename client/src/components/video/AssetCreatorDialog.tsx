@@ -24,13 +24,16 @@ import {
   Scissors,
   User,
   Wand2,
+  Save,
+  Check,
 } from 'lucide-react';
 
 type GenerationMode =
   | 't2i' | 't2v' | 'i2v' | 'i2i' | 'v2v'
   | 'upscale-image' | 'upscale-video'
   | 'bg-remove-image' | 'bg-remove-video'
-  | 'character-performance';
+  | 'character-performance'
+  | 'character';
 
 type ModeCategory = 'generate' | 'transform' | 'toolkit';
 
@@ -136,6 +139,7 @@ const MODE_CONFIG: Record<GenerationMode, ModeConfig> = {
   'i2v': { label: 'Image to Video', shortLabel: 'I2V', icon: ImagePlus, description: 'Animate a reference image into video', category: 'generate', outputType: 'video', needsPrompt: true, needsRefImage: true, needsRefVideo: false, needsReplacementImage: false },
   'i2i': { label: 'Image to Image', shortLabel: 'I2I', icon: Layers, description: 'Transform an image with style transfer or edits', category: 'transform', outputType: 'image', needsPrompt: true, needsRefImage: true, needsRefVideo: false, needsReplacementImage: false },
   'v2v': { label: 'Video to Video', shortLabel: 'V2V', icon: Film, description: 'Transform video with Runway Aleph or Kling object replace', category: 'transform', outputType: 'video', needsPrompt: true, needsRefImage: false, needsRefVideo: true, needsReplacementImage: false },
+  'character': { label: 'Character', shortLabel: 'Character', icon: Wand2, description: 'Generate a Disney/Pixar 3D character reference image', category: 'generate', outputType: 'image', needsPrompt: false, needsRefImage: false, needsRefVideo: false, needsReplacementImage: false },
   'character-performance': { label: 'Character Performance', shortLabel: 'Act Two', icon: User, description: 'Runway Act Two — animate a character from a reference video', category: 'transform', outputType: 'video', needsPrompt: false, needsRefImage: true, needsRefVideo: true, needsReplacementImage: false },
   'upscale-image': { label: 'Upscale Image', shortLabel: 'Upscale', icon: ArrowUpCircle, description: 'Enhance image resolution with AI upscaling', category: 'toolkit', outputType: 'image', needsPrompt: false, needsRefImage: true, needsRefVideo: false, needsReplacementImage: false },
   'upscale-video': { label: 'Upscale Video', shortLabel: 'Upscale', icon: ArrowUpCircle, description: 'Enhance video resolution with AI upscaling', category: 'toolkit', outputType: 'video', needsPrompt: false, needsRefImage: false, needsRefVideo: true, needsReplacementImage: false },
@@ -144,7 +148,7 @@ const MODE_CONFIG: Record<GenerationMode, ModeConfig> = {
 };
 
 const CATEGORY_MODES: Record<ModeCategory, GenerationMode[]> = {
-  generate: ['t2i', 't2v', 'i2v'],
+  generate: ['t2i', 't2v', 'i2v', 'character'],
   transform: ['i2i', 'v2v', 'character-performance'],
   toolkit: ['upscale-image', 'upscale-video', 'bg-remove-image', 'bg-remove-video'],
 };
@@ -186,6 +190,16 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
   const [isUploadingVideo, setIsUploadingVideo] = useState(false);
   const [isUploadingReplacement, setIsUploadingReplacement] = useState(false);
 
+  const [charName, setCharName] = useState('');
+  const [charRole, setCharRole] = useState('');
+  const [charPhysicalDescription, setCharPhysicalDescription] = useState('');
+  const [charWardrobe, setCharWardrobe] = useState('');
+  const [charPersonality, setCharPersonality] = useState('');
+  const [charGeneratedImageUrl, setCharGeneratedImageUrl] = useState<string | null>(null);
+  const [isGeneratingCharacter, setIsGeneratingCharacter] = useState(false);
+  const [isSavingCharacter, setIsSavingCharacter] = useState(false);
+  const [charSavedToLibrary, setCharSavedToLibrary] = useState(false);
+
   const cfg = MODE_CONFIG[mode];
 
   const needsReplacementForV2V = mode === 'v2v' && !isRunwayV2V(provider);
@@ -220,6 +234,71 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
       toast({ title: 'Upload failed', variant: 'destructive' });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleGenerateCharacter = async () => {
+    if (!charName.trim()) {
+      toast({ title: 'Character name is required', variant: 'destructive' });
+      return;
+    }
+    if (!charPhysicalDescription.trim()) {
+      toast({ title: 'Physical description is required', variant: 'destructive' });
+      return;
+    }
+
+    setIsGeneratingCharacter(true);
+    setCharGeneratedImageUrl(null);
+    setCharSavedToLibrary(false);
+    try {
+      const res = await apiRequest('POST', '/api/universal-video/generate-character-reference', {
+        name: charName.trim(),
+        role: charRole.trim(),
+        physicalDescription: charPhysicalDescription.trim(),
+        wardrobe: charWardrobe.trim(),
+        personalityNotes: charPersonality.trim(),
+      });
+      const data = await res.json();
+      if (data.success && data.referenceImageUrl) {
+        setCharGeneratedImageUrl(data.referenceImageUrl);
+        toast({ title: 'Character generated', description: `Reference image for "${charName}" is ready.` });
+      } else {
+        throw new Error(data.error || 'Generation failed');
+      }
+    } catch (err: any) {
+      toast({ title: 'Character generation failed', description: err.message || 'Could not generate character.', variant: 'destructive' });
+    } finally {
+      setIsGeneratingCharacter(false);
+    }
+  };
+
+  const handleSaveCharacterToLibrary = async () => {
+    if (!charGeneratedImageUrl || !charName.trim()) return;
+
+    setIsSavingCharacter(true);
+    try {
+      await apiRequest('POST', '/api/universal-video/character-library', {
+        name: charName.trim(),
+        role: charRole.trim(),
+        physicalDescription: charPhysicalDescription.trim(),
+        wardrobe: charWardrobe.trim(),
+        personalityNotes: charPersonality.trim(),
+        referenceImageUrl: charGeneratedImageUrl,
+      });
+
+      await apiRequest('POST', '/api/asset-library/save-character', {
+        name: charName.trim(),
+        referenceImageUrl: charGeneratedImageUrl,
+        role: charRole.trim(),
+        physicalDescription: charPhysicalDescription.trim(),
+      });
+
+      setCharSavedToLibrary(true);
+      toast({ title: 'Saved to library', description: `"${charName}" has been saved to your character library.` });
+    } catch (err: any) {
+      toast({ title: 'Save failed', description: err.message || 'Could not save character.', variant: 'destructive' });
+    } finally {
+      setIsSavingCharacter(false);
     }
   };
 
@@ -558,6 +637,117 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
             </div>
           )}
 
+          {mode === 'character' && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 p-2 rounded-lg bg-blue-500/10 border border-blue-500/30">
+                <Wand2 className="h-4 w-4 text-blue-400" />
+                <span className="text-xs text-blue-300">Art style: Disney/Pixar 3D CGI (auto-applied)</span>
+              </div>
+
+              <div>
+                <Label className="text-sm text-gray-400 mb-1 block">Name *</Label>
+                <Input
+                  placeholder="e.g. Dr. Sarah Chen"
+                  value={charName}
+                  onChange={(e) => setCharName(e.target.value)}
+                  className="bg-gray-900 border-gray-700 text-white placeholder:text-gray-600"
+                />
+              </div>
+
+              <div>
+                <Label className="text-sm text-gray-400 mb-1 block">Role / Title</Label>
+                <Input
+                  placeholder="e.g. Lead Scientist, CEO, Farmer"
+                  value={charRole}
+                  onChange={(e) => setCharRole(e.target.value)}
+                  className="bg-gray-900 border-gray-700 text-white placeholder:text-gray-600"
+                />
+              </div>
+
+              <div>
+                <Label className="text-sm text-gray-400 mb-1 block">Physical Description *</Label>
+                <Textarea
+                  placeholder="e.g. Mid-30s woman with dark brown hair in a neat bun, warm brown eyes, fair skin, athletic build..."
+                  value={charPhysicalDescription}
+                  onChange={(e) => setCharPhysicalDescription(e.target.value)}
+                  className="bg-gray-900 border-gray-700 text-white placeholder:text-gray-600 min-h-[60px] resize-none"
+                  maxLength={500}
+                />
+              </div>
+
+              <div>
+                <Label className="text-sm text-gray-400 mb-1 block">Wardrobe</Label>
+                <Input
+                  placeholder="e.g. White lab coat over blue button-down shirt"
+                  value={charWardrobe}
+                  onChange={(e) => setCharWardrobe(e.target.value)}
+                  className="bg-gray-900 border-gray-700 text-white placeholder:text-gray-600"
+                />
+              </div>
+
+              <div>
+                <Label className="text-sm text-gray-400 mb-1 block">Personality / Expression Notes</Label>
+                <Input
+                  placeholder="e.g. Confident smile, warm and approachable demeanor"
+                  value={charPersonality}
+                  onChange={(e) => setCharPersonality(e.target.value)}
+                  className="bg-gray-900 border-gray-700 text-white placeholder:text-gray-600"
+                />
+              </div>
+
+              {charGeneratedImageUrl && (
+                <div className="space-y-2">
+                  <Label className="text-sm text-gray-400 block">Generated Reference</Label>
+                  <div className="relative rounded-lg overflow-hidden border border-gray-700 w-48 h-48 mx-auto">
+                    <img src={charGeneratedImageUrl} alt={charName} className="w-full h-full object-cover" />
+                  </div>
+                </div>
+              )}
+
+              <div className="flex gap-2">
+                <Button
+                  onClick={handleGenerateCharacter}
+                  disabled={isGeneratingCharacter || !charName.trim() || !charPhysicalDescription.trim()}
+                  className="flex-1 bg-purple-600 hover:bg-purple-700 text-white"
+                >
+                  {isGeneratingCharacter ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Generating...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="h-4 w-4 mr-2" />
+                      Generate Character
+                    </>
+                  )}
+                </Button>
+
+                {charGeneratedImageUrl && !charSavedToLibrary && (
+                  <Button
+                    onClick={handleSaveCharacterToLibrary}
+                    disabled={isSavingCharacter}
+                    className="bg-green-600 hover:bg-green-700 text-white"
+                  >
+                    {isSavingCharacter ? (
+                      <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                    ) : (
+                      <Save className="h-4 w-4 mr-1" />
+                    )}
+                    Save to Library
+                  </Button>
+                )}
+
+                {charSavedToLibrary && (
+                  <Button disabled className="bg-green-800 text-green-300 cursor-default">
+                    <Check className="h-4 w-4 mr-1" />
+                    Saved
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+
           {mode === 'character-performance' && (
             <div className="flex items-center justify-between p-3 rounded-lg border border-gray-700 bg-gray-900">
               <div>
@@ -571,7 +761,7 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
             </div>
           )}
 
-          {cfg.category !== 'toolkit' && mode !== 'character-performance' && (
+          {cfg.category !== 'toolkit' && mode !== 'character-performance' && mode !== 'character' && (
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label className="text-sm text-gray-400 mb-1.5 block">Provider</Label>
@@ -611,7 +801,7 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
             </div>
           )}
 
-          {cfg.outputType === 'video' && cfg.category !== 'toolkit' && mode !== 'character-performance' && (
+          {cfg.outputType === 'video' && cfg.category !== 'toolkit' && mode !== 'character-performance' && mode !== 'character' && (
             <div>
               <Label className="text-sm text-gray-400 mb-1.5 block">Duration</Label>
               <div className="flex gap-2">
@@ -650,23 +840,25 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
             </div>
           )}
 
-          <Button
-            onClick={handleSubmit}
-            disabled={isSubmitting || !canSubmit}
-            className="w-full bg-purple-600 hover:bg-purple-700 text-white"
-          >
-            {isSubmitting ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Starting...
-              </>
-            ) : (
-              <>
-                <Sparkles className="h-4 w-4 mr-2" />
-                {cfg.category === 'toolkit' ? `Process ${cfg.label}` : `Generate ${cfg.label}`}
-              </>
-            )}
-          </Button>
+          {mode !== 'character' && (
+            <Button
+              onClick={handleSubmit}
+              disabled={isSubmitting || !canSubmit}
+              className="w-full bg-purple-600 hover:bg-purple-700 text-white"
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Starting...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-4 w-4 mr-2" />
+                  {cfg.category === 'toolkit' ? `Process ${cfg.label}` : `Generate ${cfg.label}`}
+                </>
+              )}
+            </Button>
+          )}
         </div>
       </DialogContent>
     </Dialog>
