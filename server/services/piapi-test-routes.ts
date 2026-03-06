@@ -124,6 +124,7 @@ router.get('/api/piapi-tests/definitions', (req: Request, res: Response) => {
     'character-performance': getTestsByCategory('character-performance'),
     audio: getTestsByCategory('audio'),
     llm: getTestsByCategory('llm'),
+    'llm-service': getTestsByCategory('llm-service'),
   };
   const imageUrl = getTestImageUrl(req);
   const videoUrl = getTestVideoUrl(req);
@@ -247,15 +248,25 @@ router.delete('/api/piapi-tests/results', async (req: Request, res: Response) =>
 
 router.post('/api/piapi-tests/run/:testId', async (req: Request, res: Response) => {
   if (!requireAuth(req, res)) return;
-  const apiKey = getPiAPIKey();
-  if (!apiKey) {
-    return res.status(400).json({ error: 'PIAPI_API_KEY not configured' });
-  }
 
   const testId = req.params.testId as string;
   const test = getTestById(testId);
   if (!test) {
     return res.status(404).json({ error: `Test "${testId}" not found` });
+  }
+
+  if (test.endpoint === 'llm-service') {
+    try {
+      const result = await runLlmServiceTest(test);
+      return res.json(result);
+    } catch (error: any) {
+      return res.json({ id: test.id, name: test.name, category: test.category, status: 'fail', responseTime: 0, error: error.message } as TestResult);
+    }
+  }
+
+  const apiKey = getPiAPIKey();
+  if (!apiKey) {
+    return res.status(400).json({ error: 'PIAPI_API_KEY not configured' });
   }
 
   try {
@@ -275,10 +286,6 @@ router.post('/api/piapi-tests/run/:testId', async (req: Request, res: Response) 
 
 router.post('/api/piapi-tests/run-category/:category', async (req: Request, res: Response) => {
   if (!requireAuth(req, res)) return;
-  const apiKey = getPiAPIKey();
-  if (!apiKey) {
-    return res.status(400).json({ error: 'PIAPI_API_KEY not configured' });
-  }
 
   const category = req.params.category as string;
   const tests = getTestsByCategory(category);
@@ -286,10 +293,18 @@ router.post('/api/piapi-tests/run-category/:category', async (req: Request, res:
     return res.status(404).json({ error: `No tests found for category "${category}"` });
   }
 
+  const isLlmServiceCategory = category === 'llm-service';
+  const apiKey = isLlmServiceCategory ? null : getPiAPIKey();
+  if (!isLlmServiceCategory && !apiKey) {
+    return res.status(400).json({ error: 'PIAPI_API_KEY not configured' });
+  }
+
   const results: TestResult[] = [];
   for (const test of tests) {
     try {
-      const result = await runSingleTest(test, apiKey, req);
+      const result = test.endpoint === 'llm-service'
+        ? await runLlmServiceTest(test)
+        : await runSingleTest(test, apiKey!, req);
       results.push(result);
     } catch (error: any) {
       results.push({
@@ -308,10 +323,6 @@ router.post('/api/piapi-tests/run-category/:category', async (req: Request, res:
 
 router.post('/api/piapi-tests/submit/:testId', async (req: Request, res: Response) => {
   if (!requireAuth(req, res)) return;
-  const apiKey = getPiAPIKey();
-  if (!apiKey) {
-    return res.status(400).json({ error: 'PIAPI_API_KEY not configured' });
-  }
 
   const submitTestId = req.params.testId as string;
   const test = getTestById(submitTestId);
@@ -320,6 +331,20 @@ router.post('/api/piapi-tests/submit/:testId', async (req: Request, res: Respons
   }
   if (test.disabled) {
     return res.status(400).json({ error: test.disabledReason || 'This test is currently disabled' });
+  }
+
+  if (test.endpoint === 'llm-service') {
+    try {
+      const result = await runLlmServiceTest(test);
+      return res.json(result);
+    } catch (error: any) {
+      return res.status(500).json({ error: error.message });
+    }
+  }
+
+  const apiKey = getPiAPIKey();
+  if (!apiKey) {
+    return res.status(400).json({ error: 'PIAPI_API_KEY not configured' });
   }
 
   try {
@@ -784,11 +809,64 @@ async function runChatCompletionTest(test: any, apiKey: string): Promise<TestRes
   }
 }
 
+async function runLlmServiceTest(test: any): Promise<TestResult> {
+  const startTime = Date.now();
+  try {
+    const { llmClient } = await import('../services/piapi-llm-client');
+
+    if (!llmClient.isAvailable()) {
+      return {
+        id: test.id,
+        name: test.name,
+        category: test.category,
+        status: 'fail',
+        responseTime: 0,
+        error: 'LLM client not configured (no PiAPI or Anthropic API key)',
+      };
+    }
+
+    const result = await llmClient.createChatCompletion({
+      systemPrompt: test.input.systemPrompt,
+      messages: [{ role: 'user', content: test.input.userMessage }],
+      maxTokens: 300,
+    });
+
+    const responseTime = Date.now() - startTime;
+
+    return {
+      id: test.id,
+      name: test.name,
+      category: test.category,
+      status: 'pass',
+      responseTime,
+      outputText: result.text?.substring(0, 500) || 'No response text',
+      rawResponse: {
+        provider: result.provider,
+        model: result.model,
+        service: test.input.serviceId,
+      },
+    };
+  } catch (error: any) {
+    return {
+      id: test.id,
+      name: test.name,
+      category: test.category,
+      status: 'fail',
+      responseTime: Date.now() - startTime,
+      error: error.message,
+    };
+  }
+}
+
 async function runSingleTest(test: any, apiKey: string, req: Request): Promise<TestResult> {
   const startTime = Date.now();
 
   if (test.endpoint === 'chat-completions') {
     return runChatCompletionTest(test, apiKey);
+  }
+
+  if (test.endpoint === 'llm-service') {
+    return runLlmServiceTest(test);
   }
 
   if (test.taskType === 'runway-direct' || test.taskType === 'runway-direct-v2v' || test.taskType === 'runway-direct-cp') {
