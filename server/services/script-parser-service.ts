@@ -1,4 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { llmClient } from "./piapi-llm-client";
 import { brandContextService } from "./brand-context-service";
 import { projectInstructionsService } from "./project-instructions-service";
 import { getAnyBrandContext, getBrandNameOrDefault, type BrandContext } from "./brand-settings-service";
@@ -48,32 +48,13 @@ export interface ScriptParseOptions {
 }
 
 class ScriptParserService {
-  private anthropic: Anthropic | null = null;
-
-  constructor() {
-    if (process.env.ANTHROPIC_API_KEY) {
-      this.anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-      console.log("[ScriptParser] Anthropic client configured");
-    } else {
-      console.warn("[ScriptParser] Anthropic API key not found");
-    }
-  }
-
-  private getClient(): Anthropic {
-    if (process.env.ANTHROPIC_API_KEY) {
-      this.anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-    }
-    if (!this.anthropic) {
-      throw new Error("Anthropic API not configured - set ANTHROPIC_API_KEY");
-    }
-    return this.anthropic;
-  }
-
   async parseScript(
     script: string,
     options: ScriptParseOptions
   ): Promise<ParsedScript> {
-    const client = this.getClient();
+    if (!llmClient.isAvailable()) {
+      throw new Error("No LLM API configured - set PIAPI_API_KEY or ANTHROPIC_API_KEY");
+    }
 
     console.log("[ScriptParser] Starting brand-aware script parsing...");
 
@@ -91,24 +72,14 @@ class ScriptParserService {
     const userPrompt = await this.buildParsingPrompt(script, options, serviceMatches, artPreset);
 
     try {
-      const response = await client.messages.create({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 8000,
-        system: systemPrompt,
-        messages: [
-          {
-            role: "user",
-            content: userPrompt,
-          },
-        ],
+      const result = await llmClient.createChatCompletion({
+        systemPrompt,
+        messages: [{ role: "user", content: userPrompt }],
+        maxTokens: 8000,
       });
 
-      const content = response.content[0];
-      if (content.type !== "text") {
-        throw new Error("Unexpected response type");
-      }
-
-      return this.parseResponse(content.text, serviceMatches, artPreset);
+      console.log(`[ScriptParser] LLM response via ${result.provider} (${result.model})`);
+      return this.parseResponse(result.text, serviceMatches, artPreset);
     } catch (error: any) {
       console.error("[ScriptParser] Parsing failed:", error.message);
       throw error;

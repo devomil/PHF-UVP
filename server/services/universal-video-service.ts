@@ -1,4 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { llmClient } from "./piapi-llm-client";
 import { fal } from "@fal-ai/client";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import {
@@ -88,7 +88,6 @@ interface ServiceNotification {
 }
 
 class UniversalVideoService {
-  private anthropic: Anthropic | null = null;
   private notifications: ServiceNotification[] = [];
   private projectCallbacks: Map<string, (progress: ProductionProgress) => void> = new Map();
   private s3Client: S3Client | null = null;
@@ -97,9 +96,8 @@ class UniversalVideoService {
   constructor() {
     console.log('[UniversalVideoService] Initializing service...');
     
-    if (process.env.ANTHROPIC_API_KEY) {
-      this.anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-      console.log('[UniversalVideoService] Anthropic client configured');
+    if (llmClient.isAvailable()) {
+      console.log('[UniversalVideoService] LLM client configured (PiAPI + Anthropic fallback)');
     }
     
     const accessKeyId = process.env.REMOTION_AWS_ACCESS_KEY_ID;
@@ -519,8 +517,8 @@ class UniversalVideoService {
   }
 
   async generateProductScript(input: ProductVideoInput): Promise<Scene[]> {
-    if (!this.anthropic) {
-      throw new Error("Anthropic API not configured");
+    if (!llmClient.isAvailable()) {
+      throw new Error("No LLM API configured");
     }
 
     console.log("[UniversalVideoService] Generating health-focused script...");
@@ -623,19 +621,13 @@ Narration should be conversational, warm, and ${input.style.toLowerCase()}.
 Make sure durations add up exactly to ${input.duration} seconds.`;
 
     try {
-      const response = await this.anthropic.messages.create({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 4000,
-        system: HEALTH_SCRIPT_SYSTEM_PROMPT,
+      const result = await llmClient.createChatCompletion({
+        systemPrompt: HEALTH_SCRIPT_SYSTEM_PROMPT,
         messages: [{ role: "user", content: userPrompt }],
+        maxTokens: 4000,
       });
 
-      const content = response.content[0];
-      if (content.type !== "text") {
-        throw new Error("Unexpected response type");
-      }
-
-      const jsonMatch = content.text.match(/\{[\s\S]*\}/);
+      const jsonMatch = result.text.match(/\{[\s\S]*\}/);
       if (!jsonMatch) {
         throw new Error("No JSON found in response");
       }
@@ -3184,9 +3176,7 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
         console.warn(`[Assets] Brand context load failed: ${err.message}`);
       }
       
-      const anthropicKey = process.env.ANTHROPIC_API_KEY;
-      if (anthropicKey) {
-        const anthropic = new Anthropic({ apiKey: anthropicKey });
+      if (llmClient.isAvailable()) {
         
         for (let i = 0; i < updatedProject.scenes.length; i++) {
           const scene = updatedProject.scenes[i];
@@ -3327,14 +3317,13 @@ Narration:
 
 Split this narration into micro-scenes (2-4 segments) at natural topic shifts. Each micro-scene gets its own ${isStylizedArtPreset ? 'vivid, naturally-written' : 'simple, authentic'} visual direction. Return JSON with visualDirection and microScenes array.`;
 
-            const response = await anthropic.messages.create({
-              model: 'claude-sonnet-4-20250514',
-              max_tokens: isStylizedArtPreset ? 1200 : 600,
-              system: systemPrompt,
+            const llmResult = await llmClient.createChatCompletion({
+              systemPrompt: systemPrompt,
               messages: [{ role: 'user', content: userPrompt }],
+              maxTokens: isStylizedArtPreset ? 1200 : 600,
             });
             
-            const textContent = response.content?.[0]?.type === 'text' ? response.content[0].text : '';
+            const textContent = llmResult.text || '';
             if (textContent) {
               let visualDirection = '';
               let microScenes: any[] = [];
@@ -4818,7 +4807,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
 
       console.log(`[UniversalVideoService] Scene analysis complete`);
     } else {
-      console.log(`[UniversalVideoService] Scene analysis skipped (Anthropic not configured)`);
+      console.log(`[UniversalVideoService] Scene analysis skipped (no LLM API configured)`);
     }
     updatedProject.progress.steps.assembly.progress = 75;
     updatedProject.progress.steps.assembly.message = 'Scene analysis complete, generating composition...';

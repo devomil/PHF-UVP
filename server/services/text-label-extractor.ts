@@ -1,16 +1,12 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { llmClient } from "./piapi-llm-client";
 import type { Scene, TextLabel } from "../../shared/video-types";
-
-const anthropic = process.env.ANTHROPIC_API_KEY
-  ? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-  : null;
 
 export async function extractSceneTextLabels(
   scenes: Scene[],
   artPresetId?: string
 ): Promise<Scene[]> {
-  if (!anthropic) {
-    console.warn("[TextLabelExtractor] Anthropic not configured, skipping text label extraction");
+  if (!llmClient.isAvailable()) {
+    console.warn("[TextLabelExtractor] LLM not configured, skipping text label extraction");
     return scenes;
   }
 
@@ -63,19 +59,13 @@ Return the JSON array now:`;
 
   try {
     console.log(`[TextLabelExtractor] Extracting labels for ${scenes.length} scenes...`);
-    const response = await anthropic.messages.create({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 2000,
+    const result = await llmClient.createChatCompletion({
+      systemPrompt: "You are an expert video producer that identifies key terms for on-screen text labels.",
       messages: [{ role: "user", content: prompt }],
+      maxTokens: 2000,
     });
 
-    const content = response.content[0];
-    if (content.type !== "text") {
-      console.warn("[TextLabelExtractor] Unexpected response type");
-      return scenes;
-    }
-
-    const jsonMatch = content.text.match(/\[[\s\S]*\]/);
+    const jsonMatch = result.text.match(/\[[\s\S]*\]/);
     if (!jsonMatch) {
       console.warn("[TextLabelExtractor] No JSON array found in response");
       return scenes;

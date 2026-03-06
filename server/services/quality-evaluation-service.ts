@@ -1,4 +1,5 @@
-import Anthropic from '@anthropic-ai/sdk';
+import { llmClient } from './piapi-llm-client';
+import type { LLMMessageContent } from './piapi-llm-client';
 import { videoFrameExtractor } from './video-frame-extractor';
 import { brandContextService } from './brand-context-service';
 import { projectInstructionsService } from './project-instructions-service';
@@ -93,19 +94,10 @@ export interface ComprehensiveQualityResult {
 }
 
 class QualityEvaluationService {
-  private anthropic: Anthropic | null = null;
   private qualityThreshold = 70;
 
-  constructor() {
-    if (process.env.ANTHROPIC_API_KEY) {
-      this.anthropic = new Anthropic({
-        apiKey: process.env.ANTHROPIC_API_KEY,
-      });
-    }
-  }
-
   isAvailable(): boolean {
-    return !!this.anthropic;
+    return llmClient.isAvailable();
   }
 
   async evaluateVideo(
@@ -126,8 +118,8 @@ class QualityEvaluationService {
   ): Promise<VideoQualityReport> {
     log.debug(` Starting evaluation for project ${projectData.projectId}`);
     
-    if (!this.anthropic) {
-      log.warn(` Anthropic not configured, using default scores`);
+    if (!llmClient.isAvailable()) {
+      log.warn(` LLM not configured, using default scores`);
       return this.getDefaultReport(projectData.projectId, projectData.scenes);
     }
     
@@ -194,41 +186,23 @@ class QualityEvaluationService {
     },
     sceneIndex: number
   ): Promise<SceneQualityScore> {
-    if (!this.anthropic) {
+    if (!llmClient.isAvailable()) {
       return this.getPlaceholderScore(scene.id, sceneIndex);
     }
 
     try {
-      const response = await this.anthropic.messages.create({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 1500,
-        messages: [
-          {
-            role: 'user',
-            content: [
-              {
-                type: 'image',
-                source: {
-                  type: 'base64',
-                  media_type: 'image/jpeg',
-                  data: base64Image,
-                },
-              },
-              {
-                type: 'text',
-                text: this.buildEvaluationPrompt(scene),
-              },
-            ],
-          },
-        ],
+      const messageContent: LLMMessageContent[] = [
+        { type: 'image', mediaType: 'image/jpeg', base64Data: base64Image },
+        { type: 'text', text: this.buildEvaluationPrompt(scene) },
+      ];
+
+      const result = await llmClient.createChatCompletion({
+        systemPrompt: "",
+        messages: [{ role: 'user', content: messageContent }],
+        maxTokens: 1500,
       });
 
-      const content = response.content[0];
-      if (content.type !== 'text') {
-        throw new Error('Unexpected response type');
-      }
-
-      return this.parseEvaluationResponse(content.text, scene.id, sceneIndex);
+      return this.parseEvaluationResponse(result.text, scene.id, sceneIndex);
 
     } catch (error: any) {
       log.error(`[QualityEval] Frame evaluation failed:`, error.message);
@@ -515,29 +489,16 @@ Return ONLY the JSON object.`;
     imageBase64: string,
     expectedText: string[]
   ): Promise<{ passes: boolean; issues: string[] }> {
-    if (!this.anthropic) {
+    if (!llmClient.isAvailable()) {
       return { passes: true, issues: [] };
     }
 
     try {
-      const response = await this.anthropic.messages.create({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 500,
-        messages: [
-          {
-            role: 'user',
-            content: [
-              {
-                type: 'image',
-                source: {
-                  type: 'base64',
-                  media_type: 'image/jpeg',
-                  data: imageBase64,
-                },
-              },
-              {
-                type: 'text',
-                text: `Quick quality check. Expected text: "${expectedText.join(', ')}". 
+      const messageContent: LLMMessageContent[] = [
+        { type: 'image', mediaType: 'image/jpeg', base64Data: imageBase64 },
+        {
+          type: 'text',
+          text: `Quick quality check. Expected text: "${expectedText.join(', ')}". 
                 
 Answer in JSON: {"passes": true/false, "issues": ["issue1", "issue2"]}
 
@@ -547,18 +508,16 @@ Check for:
 3. Professional appearance (PASS/FAIL)
 
 Return ONLY the JSON.`,
-              },
-            ],
-          },
-        ],
+        },
+      ];
+
+      const result = await llmClient.createChatCompletion({
+        systemPrompt: "",
+        messages: [{ role: 'user', content: messageContent }],
+        maxTokens: 500,
       });
 
-      const content = response.content[0];
-      if (content.type !== 'text') {
-        return { passes: true, issues: [] };
-      }
-
-      const match = content.text.match(/\{[\s\S]*\}/);
+      const match = result.text.match(/\{[\s\S]*\}/);
       if (match) {
         const parsed = JSON.parse(match[0]);
         return {
@@ -596,42 +555,24 @@ Return ONLY the JSON.`,
   }> {
     log.debug(` Checking brand compliance...`);
     
-    if (!this.anthropic) {
-      log.warn(` Anthropic not configured, skipping brand compliance check`);
+    if (!llmClient.isAvailable()) {
+      log.warn(` LLM not configured, skipping brand compliance check`);
       return { score: 70, issues: [] };
     }
 
     try {
-      const response = await this.anthropic.messages.create({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 1500,
-        messages: [
-          {
-            role: 'user',
-            content: [
-              {
-                type: 'image',
-                source: {
-                  type: 'base64',
-                  media_type: 'image/jpeg',
-                  data: frameBase64,
-                },
-              },
-              {
-                type: 'text',
-                text: this.buildBrandCompliancePrompt(sceneContext),
-              },
-            ],
-          },
-        ],
+      const messageContent: LLMMessageContent[] = [
+        { type: 'image', mediaType: 'image/jpeg', base64Data: frameBase64 },
+        { type: 'text', text: this.buildBrandCompliancePrompt(sceneContext) },
+      ];
+
+      const result = await llmClient.createChatCompletion({
+        systemPrompt: "",
+        messages: [{ role: 'user', content: messageContent }],
+        maxTokens: 1500,
       });
 
-      const content = response.content[0];
-      if (content.type !== 'text') {
-        throw new Error('Unexpected response type');
-      }
-
-      return this.parseBrandComplianceResponse(content.text);
+      return this.parseBrandComplianceResponse(result.text);
 
     } catch (error: any) {
       log.error(`[QualityEval] Brand compliance check failed:`, error.message);
@@ -979,8 +920,8 @@ Return ONLY the JSON object, no other text.`;
   ): Promise<ComprehensiveQualityResult> {
     log.debug(` Starting comprehensive evaluation for scene ${sceneContext.sceneIndex + 1}...`);
 
-    if (!this.anthropic) {
-      log.warn(` Anthropic not configured, using default comprehensive result`);
+    if (!llmClient.isAvailable()) {
+      log.warn(` LLM not configured, using default comprehensive result`);
       return this.getDefaultComprehensiveResult();
     }
 
@@ -989,34 +930,18 @@ Return ONLY the JSON object, no other text.`;
       const visualGuidelines = await brandContextService.getVisualAnalysisContextFull();
       const roleContext = await projectInstructionsService.getCondensedRoleContext();
 
-      const response = await this.anthropic.messages.create({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 3000,
-        messages: [{
-          role: 'user',
-          content: [
-            { 
-              type: 'image', 
-              source: { 
-                type: 'base64', 
-                media_type: 'image/jpeg', 
-                data: frameBase64 
-              }
-            },
-            { 
-              type: 'text', 
-              text: this.buildComprehensiveEvalPrompt(sceneContext, brandEvalContext, visualGuidelines, roleContext) 
-            }
-          ]
-        }]
+      const messageContent: LLMMessageContent[] = [
+        { type: 'image', mediaType: 'image/jpeg', base64Data: frameBase64 },
+        { type: 'text', text: this.buildComprehensiveEvalPrompt(sceneContext, brandEvalContext, visualGuidelines, roleContext) },
+      ];
+
+      const result = await llmClient.createChatCompletion({
+        systemPrompt: "",
+        messages: [{ role: 'user', content: messageContent }],
+        maxTokens: 3000,
       });
 
-      const content = response.content[0];
-      if (content.type !== 'text') {
-        throw new Error('Unexpected response type');
-      }
-
-      return this.parseComprehensiveEvalResponse(content.text, sceneContext);
+      return this.parseComprehensiveEvalResponse(result.text, sceneContext);
 
     } catch (error: any) {
       log.error(`[QualityEval] Comprehensive evaluation failed:`, error.message);
