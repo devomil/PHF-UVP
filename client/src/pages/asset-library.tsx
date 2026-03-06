@@ -269,12 +269,12 @@ export default function AssetLibrary() {
     createdAt: string;
   }
 
-  const { data: characterLibraryData, isLoading: isLoadingCharacters } = useQuery<CharacterLibraryEntry[]>({
+  const { data: characterLibraryData, isLoading: isLoadingCharacters } = useQuery<{ success: boolean; characters: CharacterLibraryEntry[] }>({
     queryKey: ['/api/universal-video/character-library'],
     enabled: activeTab === 'characters',
   });
 
-  const characters: CharacterLibraryEntry[] = characterLibraryData || [];
+  const characters: CharacterLibraryEntry[] = Array.isArray(characterLibraryData) ? characterLibraryData : (characterLibraryData?.characters || []);
 
   const deleteCharacterMutation = useMutation({
     mutationFn: async (id: number) => {
