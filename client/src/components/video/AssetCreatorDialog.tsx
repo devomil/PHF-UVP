@@ -297,7 +297,27 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
       const data = await res.json();
       if (data.success && data.referenceImageUrl) {
         setCharGeneratedImageUrl(data.referenceImageUrl);
-        toast({ title: 'Character generated', description: `Reference image for "${charName}" is ready.` });
+        
+        try {
+          await apiRequest('POST', '/api/universal-video/character-library', {
+            name: charName.trim(),
+            role: charRole.trim(),
+            physicalDescription: charPhysicalDescription.trim(),
+            wardrobe: charWardrobe.trim(),
+            personalityNotes: charPersonality.trim(),
+            referenceImageUrl: data.referenceImageUrl,
+          });
+          await apiRequest('POST', '/api/asset-library/save-character', {
+            name: charName.trim(),
+            referenceImageUrl: data.referenceImageUrl,
+            role: charRole.trim(),
+            physicalDescription: charPhysicalDescription.trim(),
+          });
+          setCharSavedToLibrary(true);
+          toast({ title: 'Character generated', description: `"${charName}" is ready and saved to your character library.` });
+        } catch {
+          toast({ title: 'Character generated', description: `Reference image for "${charName}" is ready. Save to library failed — try the Save button.` });
+        }
       } else {
         throw new Error(data.error || 'Generation failed');
       }
