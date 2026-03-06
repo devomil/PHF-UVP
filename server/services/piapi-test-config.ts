@@ -1,7 +1,7 @@
 export interface PiAPITestDefinition {
   id: string;
   name: string;
-  category: 'video' | 'image' | 'audio' | 'llm' | 'i2v' | 'i2i' | 'v2v' | 'toolkit' | 'character-performance';
+  category: 'video' | 'image' | 'audio' | 'llm' | 'llm-service' | 'i2v' | 'i2i' | 'v2v' | 'toolkit' | 'character-performance';
   model: string;
   taskType: string;
   input: Record<string, any>;
@@ -1006,6 +1006,110 @@ export const PIAPI_TEST_DEFINITIONS: PiAPITestDefinition[] = [
     estimatedCost: '$0.01',
     estimatedTime: '~10s',
     notes: 'Deep research model - may take longer',
+  },
+
+  // ==================== LLM SERVICE INTEGRATION (piapi-llm-client) ====================
+  {
+    id: 'llm-script-generation',
+    name: 'Script Generation',
+    category: 'llm-service',
+    model: 'piapi-llm-client',
+    taskType: 'llm-service-test',
+    input: {
+      serviceId: 'script-generation',
+      systemPrompt: 'You are a video script writer. Generate a 2-scene marketing video script for the product described. Return JSON with scenes array, each with type, narration, and visualDirection.',
+      userMessage: 'Create a short script for a natural skincare brand launching a new moisturizer. Just 2 scenes: hook and product reveal.',
+    },
+    endpoint: 'llm-service',
+    pollForResult: false,
+    estimatedCost: '$0.003',
+    estimatedTime: '~5s',
+    notes: 'Tests piapi-llm-client (PiAPI → Anthropic failover) for script generation',
+  },
+  {
+    id: 'llm-visual-direction',
+    name: 'Visual Direction',
+    category: 'llm-service',
+    model: 'piapi-llm-client',
+    taskType: 'llm-service-test',
+    input: {
+      serviceId: 'visual-direction',
+      systemPrompt: 'You are a visual director for AI video production. Create a detailed visual direction for a video scene that can be used as an AI generation prompt.',
+      userMessage: 'Scene type: hook. Narration: "Are you tired of using harsh chemicals on your skin?" Art style: 3D Illustration / Pixar style. Write a visual direction.',
+    },
+    endpoint: 'llm-service',
+    pollForResult: false,
+    estimatedCost: '$0.003',
+    estimatedTime: '~5s',
+    notes: 'Tests piapi-llm-client for visual direction / prompt generation',
+  },
+  {
+    id: 'llm-prompt-improvement',
+    name: 'Prompt Enhancement',
+    category: 'llm-service',
+    model: 'piapi-llm-client',
+    taskType: 'llm-service-test',
+    input: {
+      serviceId: 'prompt-improvement',
+      systemPrompt: 'You are an AI video prompt optimizer. Improve the given visual direction to be more specific, cinematic, and optimized for AI video generation. Return the improved prompt only.',
+      userMessage: 'Improve this prompt: "A woman using skincare products in a bathroom"',
+    },
+    endpoint: 'llm-service',
+    pollForResult: false,
+    estimatedCost: '$0.002',
+    estimatedTime: '~4s',
+    notes: 'Tests piapi-llm-client for intelligent prompt improvement',
+  },
+  {
+    id: 'llm-provider-selection',
+    name: 'Provider Selection',
+    category: 'llm-service',
+    model: 'piapi-llm-client',
+    taskType: 'llm-service-test',
+    input: {
+      serviceId: 'provider-selection',
+      systemPrompt: 'You are an AI video provider selection expert. Given a scene description, recommend the best AI video provider. Return JSON with providerId and reasoning.',
+      userMessage: 'Scene: A close-up product reveal of a glass jar with cream, slow camera orbit, warm studio lighting, photorealistic style. Which provider should I use?',
+    },
+    endpoint: 'llm-service',
+    pollForResult: false,
+    estimatedCost: '$0.002',
+    estimatedTime: '~4s',
+    notes: 'Tests piapi-llm-client for intelligent provider selection',
+  },
+  {
+    id: 'llm-text-labels',
+    name: 'Text Label Extraction',
+    category: 'llm-service',
+    model: 'piapi-llm-client',
+    taskType: 'llm-service-test',
+    input: {
+      serviceId: 'text-labels',
+      systemPrompt: 'You are a text label extractor for video production. Extract 2-3 key terms from the narration that should appear as on-screen text labels. Return JSON with labels array.',
+      userMessage: 'Narration: "Our organic CBD moisturizer contains 500mg of full-spectrum hemp extract and organic shea butter for deep hydration."',
+    },
+    endpoint: 'llm-service',
+    pollForResult: false,
+    estimatedCost: '$0.001',
+    estimatedTime: '~3s',
+    notes: 'Tests piapi-llm-client for text label extraction from narrations',
+  },
+  {
+    id: 'llm-ask-suzzie',
+    name: 'Ask Suzzie Assistant',
+    category: 'llm-service',
+    model: 'piapi-llm-client',
+    taskType: 'llm-service-test',
+    input: {
+      serviceId: 'ask-suzzie',
+      systemPrompt: 'You are Suzzie, a friendly AI creative assistant for a video production platform. Help users with visual directions, provider recommendations, and platform features.',
+      userMessage: 'Which AI provider would be best for a 3D illustration Pixar-style scene showing a character applying skincare?',
+    },
+    endpoint: 'llm-service',
+    pollForResult: false,
+    estimatedCost: '$0.003',
+    estimatedTime: '~5s',
+    notes: 'Tests piapi-llm-client for the Ask Suzzie conversational assistant',
   },
 
   // ==================== VIDEO-TO-VIDEO (V2V) ====================

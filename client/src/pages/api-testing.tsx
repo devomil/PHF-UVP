@@ -25,6 +25,7 @@ import {
   User,
   Film,
   ChevronDown,
+  Sparkles,
 } from "lucide-react";
 
 interface TestDefinition {
@@ -65,9 +66,10 @@ const categoryConfig: Record<string, { label: string; icon: any; color: string; 
   toolkit: { label: "Toolkit (Upscale / BG Remove)", icon: Wrench, color: "teal", description: "Image & video upscaling and background removal" },
   audio: { label: "Audio Generation", icon: Music, color: "green", description: "Text-to-Audio / Music" },
   llm: { label: "LLM", icon: MessageSquare, color: "amber", description: "Large Language Models" },
+  "llm-service": { label: "LLM Service Integration", icon: Sparkles, color: "purple", description: "PiAPI LLM Client — tests piapi-llm-client with PiAPI→Anthropic failover" },
 };
 
-const categoryOrder = ["video", "i2v", "v2v", "character-performance", "image", "i2i", "toolkit", "audio", "llm"];
+const categoryOrder = ["video", "i2v", "v2v", "character-performance", "image", "i2i", "toolkit", "audio", "llm", "llm-service"];
 
 export default function ApiTesting() {
   const [definitions, setDefinitions] = useState<Record<string, TestDefinition[]>>({});
