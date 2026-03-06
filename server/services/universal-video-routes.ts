@@ -623,10 +623,61 @@ router.delete('/projects/:projectId', isAuthenticated, async (req: Request, res:
   }
 });
 
-// Ask Suzzie (Claude AI) to generate visual direction idea for a scene
+// Ask Suzzie (Claude AI) - dual mode: visual direction generation + general assistant
 router.post('/ask-suzzie', isAuthenticated, async (req: Request, res: Response) => {
   try {
-    const { narration, sceneType, projectTitle, workflowPath, matchedAssets, selectedProduct } = req.body;
+    const { mode, question, narration, sceneType, projectTitle, workflowPath, matchedAssets, selectedProduct, artPresetId, artPresetName, visualDirection, provider } = req.body;
+    
+    if (mode === 'assistant') {
+      if (!question) {
+        return res.status(400).json({ success: false, error: 'Question is required' });
+      }
+      
+      const truncatedQuestion = String(question).substring(0, 1000);
+      
+      const { llmClient } = await import('../services/piapi-llm-client');
+      const { buildSuzzieSystemPrompt } = await import('../services/suzzie-knowledge-base');
+      
+      if (!llmClient.isAvailable()) {
+        return res.status(500).json({ success: false, error: 'AI service not configured' });
+      }
+      
+      console.log(`[AskSuzzie:Assistant] Question: "${truncatedQuestion.substring(0, 80)}..." | Scene: ${sceneType || 'none'} | Art: ${artPresetName || 'none'}`);
+      
+      const systemPrompt = buildSuzzieSystemPrompt({
+        narration, sceneType, artPresetId, artPresetName, visualDirection, projectTitle, provider,
+      });
+      
+      const llmResult = await llmClient.createChatCompletion({
+        systemPrompt,
+        messages: [{ role: 'user', content: truncatedQuestion }],
+        maxTokens: 800,
+      });
+      
+      const text = llmResult.text || '';
+      
+      let suggestedPrompt: string | undefined;
+      let suggestedProvider: string | undefined;
+      
+      const jsonBlocks = text.match(/```json\s*([\s\S]*?)```/g) || [];
+      for (const block of jsonBlocks) {
+        try {
+          const jsonStr = block.replace(/```json\s*/, '').replace(/```$/, '').trim();
+          const parsed = JSON.parse(jsonStr);
+          if (parsed.suggestedPrompt && !suggestedPrompt) suggestedPrompt = parsed.suggestedPrompt;
+          if (parsed.suggestedProvider && !suggestedProvider) suggestedProvider = parsed.suggestedProvider;
+        } catch {}
+      }
+      
+      const cleanMessage = text.replace(/```json\s*[\s\S]*?```/g, '').trim();
+      
+      return res.json({
+        success: true,
+        message: cleanMessage,
+        suggestedPrompt,
+        suggestedProvider,
+      });
+    }
     
     // Debug logging for I2V context
     console.log(`[AskSuzzie] Request received - sceneType: ${sceneType}, workflowPath: ${workflowPath}`);
