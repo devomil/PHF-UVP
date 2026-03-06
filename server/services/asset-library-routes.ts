@@ -226,6 +226,40 @@ router.get('/jobs/:jobId', async (req: Request, res: Response) => {
 });
 
 
+router.patch('/:id', async (req: Request, res: Response) => {
+  try {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ error: 'Not authenticated' });
+
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ error: 'Invalid ID' });
+
+    const { prompt } = req.body;
+    if (prompt === undefined || typeof prompt !== 'string') {
+      return res.status(400).json({ error: 'prompt field is required and must be a string' });
+    }
+
+    const [entry] = await db.select().from(assetLibrary)
+      .where(and(eq(assetLibrary.id, id), eq(assetLibrary.createdBy, userId)));
+    if (!entry) return res.status(404).json({ error: 'Asset not found' });
+
+    const [updated] = await db
+      .update(assetLibrary)
+      .set({
+        prompt,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(assetLibrary.id, id), eq(assetLibrary.createdBy, userId)))
+      .returning();
+
+    console.log(`[AssetLibrary] Updated asset (id: ${id}) prompt`);
+    res.json(updated);
+  } catch (error: any) {
+    console.error('[AssetLibrary] Update error:', error.message);
+    res.status(500).json({ error: 'Failed to update asset' });
+  }
+});
+
 router.post('/:id/favorite', async (req: Request, res: Response) => {
   try {
     const userId = getUserId(req);
