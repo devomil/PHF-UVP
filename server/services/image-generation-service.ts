@@ -31,6 +31,8 @@ interface I2IRequest {
   height?: number;
   assetType?: string;
   useCase?: 'background-generation' | 'style-transfer' | 'scene-integration' | 'product-placement';
+  noFallback?: boolean;
+  useApiDefaults?: boolean;
 }
 
 interface GeneratedImage {
@@ -122,6 +124,16 @@ class ImageGenerationService {
     const guidanceScale = i2iConfig?.guidanceScale ?? 7.5;
     console.log(`[I2I] Using guidance scale: ${guidanceScale}`);
     
+    const inputPayload: Record<string, any> = {
+      image: request.referenceImageUrl,
+      prompt: request.prompt,
+    };
+    if (!request.useApiDefaults) {
+      inputPayload.image_strength = strength;
+      inputPayload.guidance_scale = guidanceScale;
+    }
+    console.log(`[I2I] Payload mode: ${request.useApiDefaults ? 'API defaults' : `explicit (strength=${strength}, guidance=${guidanceScale})`}`);
+
     try {
       const response = await fetch('https://api.piapi.ai/api/v1/task', {
         method: 'POST',
@@ -132,12 +144,7 @@ class ImageGenerationService {
         body: JSON.stringify({
           model,
           task_type: 'img2img',
-          input: {
-            image: request.referenceImageUrl,
-            prompt: request.prompt,
-            image_strength: strength,
-            guidance_scale: guidanceScale,
-          },
+          input: inputPayload,
         }),
       });
       
@@ -170,6 +177,9 @@ class ImageGenerationService {
       
     } catch (error: any) {
       console.error(`[I2I] Error:`, error.message);
+      if (request.noFallback) {
+        throw error;
+      }
       console.log(`[I2I] Falling back to standard txt2img`);
       return this.generateImage({
         prompt: request.prompt,
