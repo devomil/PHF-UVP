@@ -1,3 +1,18 @@
+export interface CharacterProfile {
+  id: string;
+  name: string;
+  role: string;
+  physicalDescription: string;
+  wardrobe: string;
+  personalityNotes: string;
+  referenceImageUrl: string | null;
+  locked: boolean;
+  generationStatus?: 'idle' | 'generating' | 'completed' | 'failed';
+  generationError?: string;
+  sortOrder: number;
+  savedToLibrary?: boolean;
+}
+
 export interface VideoProject {
   id: string;
   type: 'product' | 'script-based';
@@ -22,6 +37,7 @@ export interface VideoProject {
   mediaMode?: 'image' | 'video';
   videoGenerationMode?: 'direct-t2v' | 'image-first-i2v' | 'auto';
   artPresetId?: string;
+  characters?: CharacterProfile[];
 }
 
 export type VideoProjectStatus = 'draft' | 'queued' | 'generating' | 'ready' | 'render_queued' | 'rendering' | 'lambda_pending' | 'complete' | 'error';

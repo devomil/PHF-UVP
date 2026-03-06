@@ -477,6 +477,7 @@ export const universalVideoProjects = pgTable("universal_video_projects", {
   renderId: varchar("render_id", { length: 100 }),
   bucketName: varchar("bucket_name", { length: 255 }),
   outputUrl: text("output_url"),
+  characters: jsonb("characters").default([]),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => ({
@@ -674,3 +675,31 @@ export const insertBrandSettingsSchema = createInsertSchema(brandSettings).omit(
 
 export type BrandSettings = typeof brandSettings.$inferSelect;
 export type InsertBrandSettings = z.infer<typeof insertBrandSettingsSchema>;
+
+export const characterLibrary = pgTable("character_library", {
+  id: serial("id").primaryKey(),
+  ownerId: varchar("owner_id").notNull().references(() => users.id),
+  name: varchar("name", { length: 100 }).notNull(),
+  role: varchar("role", { length: 200 }),
+  physicalDescription: text("physical_description"),
+  wardrobe: varchar("wardrobe", { length: 500 }),
+  personalityNotes: varchar("personality_notes", { length: 500 }),
+  referenceImageUrl: text("reference_image_url"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  ownerIdx: index("idx_character_library_owner_id").on(table.ownerId),
+}));
+
+export const characterLibraryRelations = relations(characterLibrary, ({ one }) => ({
+  owner: one(users, { fields: [characterLibrary.ownerId], references: [users.id] }),
+}));
+
+export const insertCharacterLibrarySchema = createInsertSchema(characterLibrary).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type CharacterLibraryEntry = typeof characterLibrary.$inferSelect;
+export type InsertCharacterLibraryEntry = z.infer<typeof insertCharacterLibrarySchema>;
