@@ -987,7 +987,7 @@ async function runSingleTest(test: any, apiKey: string, req: Request): Promise<T
       };
     }
 
-    const maxPollTime = 180000;
+    const maxPollTime = test.timeoutMs || 180000;
     while (Date.now() - startTime < maxPollTime) {
       await new Promise(r => setTimeout(r, 3000));
 
