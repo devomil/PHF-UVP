@@ -9929,34 +9929,18 @@ router.post('/generate-character-reference', isAuthenticated, async (req: Reques
 
     const prompt = `Disney/Pixar 3D CGI character sheet, ${name}, ${role || 'character'}. ${physicalDescription}. Wearing ${wardrobe || 'casual clothing'}. Expression: ${personalityNotes || 'friendly and approachable'}. Full front-facing portrait, clean pure white background, subsurface skin scattering, soft studio lighting, expressive rounded facial features, vibrant warm color palette, 4K cinematic render. Character reference sheet — single character, solid white background, no environment.`;
 
-    console.log(`[Characters] Standalone: Generating reference image for "${name}"${referencePhotoUrl ? ' (with photo reference)' : ''}`);
+    console.log(`[Characters] Standalone: Generating reference image for "${name}"${referencePhotoUrl ? ' (reference photo uploaded for visual guidance)' : ''}`);
     console.log(`[Characters] Prompt: ${prompt.substring(0, 120)}...`);
+    console.log(`[Characters] Using T2I (text-to-image) for consistent Disney/Pixar style`);
 
     const timeoutMs = 120000;
-    let generationPromise;
-    
-    if (referencePhotoUrl) {
-      const publicPhotoUrl = await resolveLocalUploadToPublicUrl(referencePhotoUrl, userId);
-      console.log(`[Characters] Using I2I with reference photo: ${publicPhotoUrl.substring(0, 80)}...`);
-      generationPromise = imageGenerationService.generateImageToImage({
-        referenceImageUrl: publicPhotoUrl,
-        prompt,
-        provider: 'flux-1.1-pro',
-        width: 1024,
-        height: 1024,
-        qualityTier: 'premium',
-        useApiDefaults: true,
-        noFallback: true,
-      });
-    } else {
-      generationPromise = imageGenerationService.generateImage({
-        prompt,
-        provider: 'flux-1.1-pro',
-        width: 1024,
-        height: 1024,
-        qualityTier: 'premium',
-      });
-    }
+    const generationPromise = imageGenerationService.generateImage({
+      prompt,
+      provider: 'flux-1.1-pro',
+      width: 1024,
+      height: 1024,
+      qualityTier: 'premium',
+    });
 
     const timeoutPromise = new Promise<never>((_, reject) =>
       setTimeout(() => reject(new Error('Reference image generation timed out after 2 minutes')), timeoutMs)
