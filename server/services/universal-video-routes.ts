@@ -29,7 +29,7 @@ import { VIDEO_PROVIDERS } from '../../shared/provider-config';
 import { ObjectStorageService } from '../objectStorage';
 import { videoFrameExtractor } from '../services/video-frame-extractor';
 import { db } from '../db';
-import { universalVideoProjects, sceneRegenerationHistory, brandAssets, brandMediaLibrary, videoGenerationJobs, characterLibrary } from '../../shared/schema';
+import { universalVideoProjects, sceneRegenerationHistory, brandAssets, brandMediaLibrary, videoGenerationJobs, characterLibrary, assetLibrary } from '../../shared/schema';
 import { imageGenerationService } from '../services/image-generation-service';
 import { objectStorageClient } from '../objectStorage';
 import type { 
@@ -10245,6 +10245,20 @@ router.delete('/character-library/:id', isAuthenticated, async (req: Request, re
     if (!entry) return res.status(404).json({ success: false, error: 'Character not found in library' });
 
     await db.delete(characterLibrary).where(eq(characterLibrary.id, id));
+
+    try {
+      const matchingAssets = await db.select().from(assetLibrary)
+        .where(and(
+          eq(assetLibrary.assetUrl, entry.referenceImageUrl),
+          eq(assetLibrary.createdBy, userId),
+        ));
+      for (const asset of matchingAssets) {
+        await db.delete(assetLibrary).where(eq(assetLibrary.id, asset.id));
+        console.log(`[CharacterLibrary] Also removed asset library entry (id: ${asset.id})`);
+      }
+    } catch (cleanupErr: any) {
+      console.warn(`[CharacterLibrary] Asset library cleanup failed:`, cleanupErr.message);
+    }
 
     console.log(`[CharacterLibrary] Removed "${entry.name}" from library (id: ${id})`);
     res.json({ success: true });

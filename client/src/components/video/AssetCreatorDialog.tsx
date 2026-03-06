@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
-import { apiRequest } from '@/lib/queryClient';
+import { apiRequest, queryClient } from '@/lib/queryClient';
 import {
   Image,
   Video,
@@ -314,6 +314,8 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
             physicalDescription: charPhysicalDescription.trim(),
           });
           setCharSavedToLibrary(true);
+          queryClient.invalidateQueries({ queryKey: ['/api/universal-video/character-library'] });
+          queryClient.invalidateQueries({ queryKey: ['/api/asset-library'] });
           toast({ title: 'Character generated', description: `"${charName}" is ready and saved to your character library.` });
         } catch {
           toast({ title: 'Character generated', description: `Reference image for "${charName}" is ready. Save to library failed — try the Save button.` });

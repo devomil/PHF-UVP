@@ -282,6 +282,7 @@ export default function AssetLibrary() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/universal-video/character-library'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/asset-library'] });
       toast({ title: 'Character deleted', description: 'Character has been removed from your library.' });
     },
     onError: () => {
