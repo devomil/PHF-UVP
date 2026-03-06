@@ -142,6 +142,42 @@ async function cropImageToAspectRatio(
   return inputPath;
 }
 
+async function resolveLocalUploadToPublicUrl(localUrl: string, userId: string): Promise<string> {
+  if (!localUrl.startsWith('/uploads/')) return localUrl;
+  
+  const fs = await import('fs');
+  const path = await import('path');
+  const localPath = path.default.resolve(localUrl.substring(1));
+  if (!fs.default.existsSync(localPath)) {
+    console.warn(`[Characters] Local file not found: ${localPath}`);
+    return localUrl;
+  }
+  
+  const fileBuffer = fs.default.readFileSync(localPath);
+  
+  if (s3Client) {
+    const s3Key = `character-photos/${userId}_${Date.now()}.png`;
+    await s3Client.send(new PutObjectCommand({
+      Bucket: REMOTION_BUCKET_NAME,
+      Key: s3Key,
+      Body: fileBuffer,
+      ContentType: 'image/png',
+      ACL: 'public-read',
+    }));
+    const publicUrl = `https://${REMOTION_BUCKET_NAME}.s3.${REMOTION_REGION}.amazonaws.com/${s3Key}`;
+    console.log(`[Characters] Uploaded reference photo to S3: ${publicUrl}`);
+    return publicUrl;
+  }
+  
+  const piapiUrl = await uploadImageToPiAPIStorage(fileBuffer, `char_photo_${Date.now()}.png`);
+  if (piapiUrl) {
+    console.log(`[Characters] Uploaded reference photo to PiAPI: ${piapiUrl}`);
+    return piapiUrl;
+  }
+  
+  return localUrl;
+}
+
 /**
  * Upload image to PiAPI's ephemeral storage.
  * Returns a storage.theapi.app URL (same as PiAPI Workspace uses).
@@ -9900,9 +9936,10 @@ router.post('/generate-character-reference', isAuthenticated, async (req: Reques
     let generationPromise;
     
     if (referencePhotoUrl) {
-      console.log(`[Characters] Using I2I with reference photo: ${referencePhotoUrl.substring(0, 80)}...`);
+      const publicPhotoUrl = await resolveLocalUploadToPublicUrl(referencePhotoUrl, userId);
+      console.log(`[Characters] Using I2I with reference photo: ${publicPhotoUrl.substring(0, 80)}...`);
       generationPromise = imageGenerationService.generateImageToImage({
-        referenceImageUrl: referencePhotoUrl,
+        referenceImageUrl: publicPhotoUrl,
         prompt,
         provider: 'flux-1.1-pro',
         width: 1024,
@@ -10016,9 +10053,10 @@ router.post('/projects/:projectId/characters/:characterId/generate-reference', i
     let generationPromise;
     
     if (referencePhotoUrl) {
-      console.log(`[Characters] Using I2I with reference photo: ${referencePhotoUrl.substring(0, 80)}...`);
+      const publicPhotoUrl = await resolveLocalUploadToPublicUrl(referencePhotoUrl, userId);
+      console.log(`[Characters] Using I2I with reference photo: ${publicPhotoUrl.substring(0, 80)}...`);
       generationPromise = imageGenerationService.generateImageToImage({
-        referenceImageUrl: referencePhotoUrl,
+        referenceImageUrl: publicPhotoUrl,
         prompt,
         provider: 'flux-1.1-pro',
         width: 1024,
