@@ -112,33 +112,6 @@ export default function ApiTesting() {
       .catch(() => setLoading(false));
   }, []);
 
-  const resumedRef = useRef(false);
-  useEffect(() => {
-    if (resumedRef.current || loading || Object.keys(definitions).length === 0) return;
-    resumedRef.current = true;
-    try {
-      const tasks = JSON.parse(localStorage.getItem("activePollTasks") || "{}");
-      const allDefs = Object.values(definitions).flat();
-      for (const [testId, task] of Object.entries(tasks) as [string, any][]) {
-        const elapsed = Date.now() - task.startTime;
-        if (elapsed > task.timeoutMs) {
-          const result = { status: "timeout" as const, responseTime: elapsed, error: "Exceeded timeout (recovered)", taskId: task.taskId };
-          setTestStates(prev => ({ ...prev, [testId]: result }));
-          try {
-            const tasks2 = JSON.parse(localStorage.getItem("activePollTasks") || "{}");
-            delete tasks2[testId];
-            localStorage.setItem("activePollTasks", JSON.stringify(tasks2));
-          } catch {}
-          continue;
-        }
-        const def = allDefs.find(d => d.id === testId);
-        console.log(`[ApiTesting] Resuming poll for ${testId} (task: ${task.taskId}, elapsed: ${Math.round(elapsed / 1000)}s)`);
-        setTestStates(prev => ({ ...prev, [testId]: { status: "polling", taskId: task.taskId } }));
-        pollTask(testId, task.taskId, task.startTime, def?.timeoutMs || task.timeoutMs);
-      }
-    } catch {}
-  }, [loading, definitions, pollTask]);
-
   const updateTestState = useCallback((id: string, update: Partial<TestState>) => {
     setTestStates((prev) => ({
       ...prev,
@@ -314,6 +287,33 @@ export default function ApiTesting() {
     },
     [updateTestState, saveTestResult, saveActiveTask, removeActiveTask]
   );
+
+  const resumedRef = useRef(false);
+  useEffect(() => {
+    if (resumedRef.current || loading || Object.keys(definitions).length === 0) return;
+    resumedRef.current = true;
+    try {
+      const tasks = JSON.parse(localStorage.getItem("activePollTasks") || "{}");
+      const allDefs = Object.values(definitions).flat();
+      for (const [testId, task] of Object.entries(tasks) as [string, any][]) {
+        const elapsed = Date.now() - task.startTime;
+        if (elapsed > task.timeoutMs) {
+          const result = { status: "timeout" as const, responseTime: elapsed, error: "Exceeded timeout (recovered)", taskId: task.taskId };
+          setTestStates(prev => ({ ...prev, [testId]: result }));
+          try {
+            const tasks2 = JSON.parse(localStorage.getItem("activePollTasks") || "{}");
+            delete tasks2[testId];
+            localStorage.setItem("activePollTasks", JSON.stringify(tasks2));
+          } catch {}
+          continue;
+        }
+        const def = allDefs.find(d => d.id === testId);
+        console.log(`[ApiTesting] Resuming poll for ${testId} (task: ${task.taskId}, elapsed: ${Math.round(elapsed / 1000)}s)`);
+        setTestStates(prev => ({ ...prev, [testId]: { status: "polling", taskId: task.taskId } }));
+        pollTask(testId, task.taskId, task.startTime, def?.timeoutMs || task.timeoutMs);
+      }
+    } catch {}
+  }, [loading, definitions, pollTask]);
 
   const runTest = useCallback(
     async (testId: string) => {
