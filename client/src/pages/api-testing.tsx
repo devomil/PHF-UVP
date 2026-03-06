@@ -699,9 +699,9 @@ export default function ApiTesting() {
           const catFailed = catStates.filter((s) => s === "fail").length;
           const catRunning = catStates.filter((s) => s === "submitting" || s === "polling").length;
 
-          const isCollapsed = collapsedCategories[category] ?? false;
+          const isCollapsed = collapsedCategories[category] ?? true;
           const toggleCollapse = () => {
-            setCollapsedCategories((prev) => ({ ...prev, [category]: !prev[category] }));
+            setCollapsedCategories((prev) => ({ ...prev, [category]: !(prev[category] ?? true) }));
           };
 
           return (
