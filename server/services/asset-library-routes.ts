@@ -57,6 +57,27 @@ router.get('/', async (req: Request, res: Response) => {
   }
 });
 
+router.delete('/:id', async (req: Request, res: Response) => {
+  try {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ error: 'Not authenticated' });
+
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ error: 'Invalid ID' });
+
+    const [entry] = await db.select().from(assetLibrary)
+      .where(and(eq(assetLibrary.id, id), eq(assetLibrary.createdBy, userId)));
+    if (!entry) return res.status(404).json({ error: 'Asset not found' });
+
+    await db.delete(assetLibrary).where(eq(assetLibrary.id, id));
+    console.log(`[AssetLibrary] Deleted asset (id: ${id})`);
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('[AssetLibrary] Delete error:', error.message);
+    res.status(500).json({ error: 'Failed to delete asset' });
+  }
+});
+
 const ALL_MODES = [
   't2i', 't2v', 'i2v', 'i2i', 'v2v',
   'upscale-image', 'upscale-video', 'bg-remove-image', 'bg-remove-video',
@@ -204,31 +225,6 @@ router.get('/jobs/:jobId', async (req: Request, res: Response) => {
   }
 });
 
-router.delete('/:id', async (req: Request, res: Response) => {
-  try {
-    const userId = getUserId(req);
-    if (!userId) return res.status(401).json({ error: 'Not authenticated' });
-
-    const id = parseInt(req.params.id as string, 10);
-    if (isNaN(id)) {
-      return res.status(400).json({ error: 'Invalid id' });
-    }
-
-    const [deleted] = await db
-      .delete(assetLibrary)
-      .where(and(eq(assetLibrary.id, id), eq(assetLibrary.createdBy, userId)))
-      .returning();
-
-    if (!deleted) {
-      return res.status(404).json({ error: 'Asset not found' });
-    }
-
-    res.json({ success: true });
-  } catch (error: any) {
-    console.error('[AssetLibrary] Delete error:', error.message);
-    res.status(500).json({ error: 'Failed to delete asset' });
-  }
-});
 
 router.post('/:id/favorite', async (req: Request, res: Response) => {
   try {
