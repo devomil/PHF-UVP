@@ -9934,7 +9934,7 @@ router.post('/generate-character-reference', isAuthenticated, async (req: Reques
     console.log(`[Characters] Standalone: Generating reference image for "${name}"${referencePhotoUrl ? ' (with photo reference)' : ''}`);
     console.log(`[Characters] Prompt: ${prompt.substring(0, 120)}...`);
 
-    const timeoutMs = 60000;
+    const timeoutMs = 120000;
     let generationPromise;
     
     if (referencePhotoUrl) {
@@ -9960,7 +9960,7 @@ router.post('/generate-character-reference', isAuthenticated, async (req: Reques
     }
 
     const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('Reference image generation timed out after 45 seconds')), timeoutMs)
+      setTimeout(() => reject(new Error('Reference image generation timed out after 2 minutes')), timeoutMs)
     );
 
     let generated: any;
@@ -10053,7 +10053,7 @@ router.post('/projects/:projectId/characters/:characterId/generate-reference', i
     console.log(`[Characters] Generating reference image for "${character.name}" (${characterId})${referencePhotoUrl ? ' (with photo reference)' : ''}`);
     console.log(`[Characters] Prompt: ${prompt.substring(0, 120)}...`);
 
-    const timeoutMs = 60000;
+    const timeoutMs = 120000;
     let generationPromise;
     
     if (referencePhotoUrl) {
@@ -10079,7 +10079,7 @@ router.post('/projects/:projectId/characters/:characterId/generate-reference', i
     }
 
     const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('Reference image generation timed out after 45 seconds')), timeoutMs)
+      setTimeout(() => reject(new Error('Reference image generation timed out after 2 minutes')), timeoutMs)
     );
 
     let generated: any;

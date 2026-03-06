@@ -454,8 +454,67 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
   };
 
   return (
-    <>
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(v) => { if (!v) { setShowCharPreview(false); setCharGeneratedImageUrl(null); setCharSavedToLibrary(false); } onOpenChange(v); }}>
+      {showCharPreview && charGeneratedImageUrl ? (
+        <DialogContent className="sm:max-w-2xl bg-gray-950 border-gray-800 text-white p-0 overflow-hidden">
+          <div className="p-4 border-b border-gray-800">
+            <DialogTitle className="text-lg font-semibold flex items-center gap-2">
+              <User className="h-5 w-5 text-purple-400" />
+              {charName || 'Character Preview'}
+            </DialogTitle>
+            <p className="text-sm text-gray-400 mt-1">
+              Review the generated character. Save if you're happy, or regenerate for a new version.
+            </p>
+          </div>
+          <div className="px-4 pb-2">
+            <div className="relative rounded-lg overflow-hidden border border-gray-700 bg-black flex items-center justify-center" style={{ maxHeight: '60vh' }}>
+              <img
+                src={charGeneratedImageUrl}
+                alt={charName}
+                className="max-w-full max-h-[60vh] object-contain"
+              />
+            </div>
+          </div>
+          <div className="p-4 border-t border-gray-800 flex gap-3">
+            <Button
+              onClick={handleApproveCharacter}
+              disabled={isSavingCharacter}
+              className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+            >
+              {isSavingCharacter ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Check className="h-4 w-4 mr-2" />
+              )}
+              Save Character
+            </Button>
+            <Button
+              onClick={() => {
+                setShowCharPreview(false);
+                setCharGeneratedImageUrl(null);
+                handleGenerateCharacter();
+              }}
+              disabled={isGeneratingCharacter}
+              variant="outline"
+              className="flex-1 border-gray-600 text-gray-300 hover:bg-gray-800"
+            >
+              {isGeneratingCharacter ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Sparkles className="h-4 w-4 mr-2" />
+              )}
+              Regenerate
+            </Button>
+            <Button
+              onClick={() => { setShowCharPreview(false); setCharGeneratedImageUrl(null); }}
+              variant="ghost"
+              className="text-gray-400 hover:text-white"
+            >
+              Back
+            </Button>
+          </div>
+        </DialogContent>
+      ) : (
       <DialogContent className="sm:max-w-[680px] bg-gray-950 border-gray-800 text-white max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-lg">
@@ -980,69 +1039,7 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
           )}
         </div>
       </DialogContent>
+      )}
     </Dialog>
-
-    {showCharPreview && charGeneratedImageUrl && (
-      <Dialog open={showCharPreview} onOpenChange={setShowCharPreview}>
-        <DialogContent className="max-w-2xl bg-gray-950 border-gray-800 text-white p-0 overflow-hidden">
-          <div className="p-4 border-b border-gray-800">
-            <DialogTitle className="text-lg font-semibold flex items-center gap-2">
-              <User className="h-5 w-5 text-purple-400" />
-              {charName || 'Character Preview'}
-            </DialogTitle>
-            <p className="text-sm text-gray-400 mt-1">
-              Review the generated character. Save if you're happy, or regenerate for a new version.
-            </p>
-          </div>
-          <div className="px-4 pb-2">
-            <div className="relative rounded-lg overflow-hidden border border-gray-700 bg-black flex items-center justify-center" style={{ maxHeight: '60vh' }}>
-              <img
-                src={charGeneratedImageUrl}
-                alt={charName}
-                className="max-w-full max-h-[60vh] object-contain"
-              />
-            </div>
-          </div>
-          <div className="p-4 border-t border-gray-800 flex gap-3">
-            <Button
-              onClick={handleApproveCharacter}
-              disabled={isSavingCharacter}
-              className="flex-1 bg-green-600 hover:bg-green-700 text-white"
-            >
-              {isSavingCharacter ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <Check className="h-4 w-4 mr-2" />
-              )}
-              Save Character
-            </Button>
-            <Button
-              onClick={() => {
-                setShowCharPreview(false);
-                handleGenerateCharacter();
-              }}
-              disabled={isGeneratingCharacter}
-              variant="outline"
-              className="flex-1 border-gray-600 text-gray-300 hover:bg-gray-800"
-            >
-              {isGeneratingCharacter ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <Sparkles className="h-4 w-4 mr-2" />
-              )}
-              Regenerate
-            </Button>
-            <Button
-              onClick={() => setShowCharPreview(false)}
-              variant="ghost"
-              className="text-gray-400 hover:text-white"
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-    )}
-    </>
   );
 }
