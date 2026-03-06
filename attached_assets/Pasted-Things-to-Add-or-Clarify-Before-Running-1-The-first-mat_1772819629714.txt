@@ -1,0 +1,40 @@
+Things to Add or Clarify Before Running
+1. The "first matched character" rule in T004 is too blunt
+
+"If multiple characters match a scene, use the first matched character's reference"
+
+For a pharma video where all three founders appear together, this will only inject one character. Tell the agent:
+
+When multiple characters match a scene, concatenate their reference images as a multi-image I2V input if the provider supports it, OR add a "Primary Character" selector per scene card so the user can designate which character leads that scene.
+
+
+2. No mention of the Disney/Pixar prefix auto-injection
+The plan lets users type the style anchor freely. Add this to T002:
+
+When building the reference image prompt, always prepend "Disney/Pixar 3D CGI style," to the constructed prompt regardless of user input — hardcoded, not user-editable.
+
+
+3. UI/UX gaps in T003
+The card spec is functional but missing some best-in-class details. Add these to the T003 instruction:
+
+
+Character avatar placeholder — show a silhouette/placeholder card before generation so the layout doesn't jump when the image loads
+Locked state visual treatment — when locked, grey out all input fields and show a prominent lock icon + green "Locked" badge. Make it feel intentional and secure
+Drag to reorder — allow reordering the 5 characters so the user can set priority/hierarchy (ties into the multi-character scene matching above)
+Character name chip injection — when a character is locked, show their name as a clickable chip in the scene narration editor so users can easily reference them by exact name (preventing match failures)
+Tooltip on Generate button explaining: "Generates a Disney/Pixar 3D reference image that will be used to keep this character visually consistent across all scenes"
+
+
+
+4. No error/retry handling specified for T002
+fal.ai generation can fail silently. Add:
+
+On generation failure, set generationStatus: 'failed', display an inline error message on the card, and re-enable the Generate button with label "Try Again". Do not leave the card in a loading/spinner state indefinitely — timeout after 45 seconds.
+
+
+5. Missing: Character Library across projects
+This is the key feature for the pharma client's recurring use. Add a T006:
+
+T006: Account-Level Character Library
+Add a "Save to Library" button on locked characters. Saved characters appear in a "My Characters" modal accessible from any new project, allowing the pharma client's three founders to be imported into every new video project without recreation.
+
