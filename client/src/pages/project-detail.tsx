@@ -79,6 +79,10 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
   const [editingSceneId, setEditingSceneId] = useState<string | null>(null);
   const [editValues, setEditValues] = useState<Record<string, any>>({});
   const [expandedSceneId, setExpandedSceneId] = useState<string | null>(null);
+  const [projectCharacters, setProjectCharacters] = useState<any[]>(project.characters || []);
+  useEffect(() => {
+    if (project.characters) setProjectCharacters(project.characters);
+  }, [project.characters]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const refFileInputRef = useRef<HTMLInputElement>(null);
   const activeSceneRef = useRef<string | null>(null);
@@ -618,6 +622,8 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
                         onClose={() => setExpandedSceneId(null)}
                         aspectRatio={project?.outputFormat?.aspectRatio || "16:9"}
                         artPresetId={project?.progress?.artPresetId || (project as any)?.artPresetId}
+                        characters={projectCharacters}
+                        onCharactersChange={setProjectCharacters}
                       />
                     )}
                   </div>

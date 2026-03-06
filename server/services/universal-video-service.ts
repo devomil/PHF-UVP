@@ -9,6 +9,7 @@ import {
   ProductionProgress,
   ServiceFailure,
   TextOverlay,
+  CharacterProfile,
   createEmptyVideoProject,
   calculateTotalDuration,
   PINE_HILL_FARM_BRAND,
@@ -4054,6 +4055,23 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
       if (characterConsistencyEnabled) {
         console.log(`[CharRef] Character consistency ENABLED for project ${project.projectId} (stylized=${isStylizedPreset(projectArtPresetIdForVideo)}, explicit=${!!(updatedProject.progress as any)?.characterConsistency})`);
       }
+
+      const lockedCharacters: CharacterProfile[] = ((updatedProject as any).characters || [])
+        .filter((c: CharacterProfile) => c.locked && c.referenceImageUrl)
+        .sort((a: CharacterProfile, b: CharacterProfile) => a.sortOrder - b.sortOrder);
+      
+      const escapeRegex = (str: string) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const matchCharactersInText = (text: string): CharacterProfile[] => {
+        if (!text || lockedCharacters.length === 0) return [];
+        return lockedCharacters.filter(c => {
+          const regex = new RegExp('\\b' + escapeRegex(c.name) + '\\b', 'i');
+          return regex.test(text);
+        });
+      };
+      
+      if (lockedCharacters.length > 0) {
+        console.log(`[CharRef] Found ${lockedCharacters.length} locked character references: ${lockedCharacters.map(c => c.name).join(', ')}`);
+      }
       
       let videoSceneIndex = 0;
       for (const scene of scenesNeedingVideo) {
@@ -4228,10 +4246,23 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
               return Promise.resolve({ msIdx, skipped: true, success: true });
             }
             
-            const msPrompt = ms.visualDirection || visualPrompt;
+            let msPrompt = ms.visualDirection || visualPrompt;
             const userOrParentRef = ms.imageUrl || parentRefImageUrl || parentSceneImageUrl;
-            const msImageUrl = userOrParentRef || (characterConsistencyEnabled ? characterReferenceUrl : null);
-            const msMode = msImageUrl ? (userOrParentRef ? 'I2V' : 'I2V-CharRef') : 'T2V';
+            
+            const msText = `${ms.narration || ''} ${ms.visualDirection || ''} ${visualPrompt || ''}`;
+            const matchedChars = matchCharactersInText(msText);
+            let charRefImageUrl: string | null = null;
+            let charRefImageUrls: string[] = [];
+            if (matchedChars.length > 0 && !userOrParentRef) {
+              charRefImageUrl = matchedChars[0].referenceImageUrl;
+              charRefImageUrls = matchedChars.map(c => c.referenceImageUrl!).filter(Boolean);
+              const charDescriptions = matchedChars.map(c => `${c.name}: ${c.physicalDescription}, wearing ${c.wardrobe}`).join('. ');
+              msPrompt = `${msPrompt}\nMaintain exact character appearance from reference image. Same face, hair, clothing, and art style. Characters: ${charDescriptions}`;
+              console.log(`[CharRef] Micro-scene ${ms.id}: matched characters [${matchedChars.map(c => c.name).join(', ')}]`);
+            }
+            
+            const msImageUrl = userOrParentRef || charRefImageUrl || (characterConsistencyEnabled ? characterReferenceUrl : null);
+            const msMode = msImageUrl ? (userOrParentRef ? 'I2V' : (charRefImageUrl ? 'I2V-CharProfile' : 'I2V-CharRef')) : 'T2V';
             console.log(`[Assets] Launching parallel ${msMode} video generation for micro-scene ${msIdx + 1}/${microScenes.length}: ${msPrompt.substring(0, 80)}...`);
             if (msImageUrl) {
               console.log(`[Assets]   Reference image: ${msImageUrl.substring(0, 80)}...`);
@@ -4248,6 +4279,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
               qualityTier: sceneQualityTier,
               artPresetId: msArtPresetId,
               ...(msImageUrl ? { imageUrl: msImageUrl } : {}),
+              ...(charRefImageUrls.length > 1 ? { imageUrls: charRefImageUrls } : {}),
               ...(msContentTag ? { contentTag: msContentTag } : {}),
             }).then(msResult => ({ msIdx, skipped: false, ...msResult }))
               .catch(err => ({ msIdx, skipped: false, success: false, error: err.message, s3Url: undefined, provider: undefined }));
@@ -4298,10 +4330,26 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
                                    updatedProject.assets.images.find(img => img.sceneId === scene.id && img.source === 'uploaded')?.url;
           const sceneImageUrlBase = sceneRefImageUrl || 
                                 updatedProject.scenes.find(s => s.id === scene.id)?.assets?.imageUrl;
-          const sceneImageUrl = sceneImageUrlBase || (characterConsistencyEnabled ? characterReferenceUrl : null);
+          
+          const sceneText = `${scene.narration || ''} ${scene.visualDirection || ''} ${visualPrompt || ''}`;
+          const sceneMatchedChars = matchCharactersInText(sceneText);
+          let sceneCharRefUrl: string | null = null;
+          let sceneCharRefUrls: string[] = [];
+          let sceneVideoPrompt = visualPrompt;
+          if (sceneMatchedChars.length > 0 && !sceneRefImageUrl) {
+            sceneCharRefUrl = sceneMatchedChars[0].referenceImageUrl;
+            sceneCharRefUrls = sceneMatchedChars.map(c => c.referenceImageUrl!).filter(Boolean);
+            const charDescriptions = sceneMatchedChars.map(c => `${c.name}: ${c.physicalDescription}, wearing ${c.wardrobe}`).join('. ');
+            sceneVideoPrompt = `${visualPrompt}\nMaintain exact character appearance from reference image. Same face, hair, clothing, and art style. Characters: ${charDescriptions}`;
+            console.log(`[CharRef] Scene ${scene.id}: matched characters [${sceneMatchedChars.map(c => c.name).join(', ')}]`);
+          }
+          
+          const sceneImageUrl = sceneImageUrlBase || sceneCharRefUrl || (characterConsistencyEnabled ? characterReferenceUrl : null);
           
           if (sceneRefImageUrl) {
             console.log(`[Assets] Scene ${scene.id} has reference image → using I2V with: ${sceneRefImageUrl}`);
+          } else if (sceneCharRefUrl) {
+            console.log(`[Assets] Scene ${scene.id} using character profile reference → I2V-CharProfile with: ${sceneCharRefUrl.substring(0, 80)}...`);
           } else if (sceneImageUrl === characterReferenceUrl && characterReferenceUrl) {
             console.log(`[Assets] Scene ${scene.id} using character reference image → I2V-CharRef with: ${characterReferenceUrl.substring(0, 80)}...`);
           }
@@ -4309,7 +4357,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
           console.log(`[Assets] Using quality tier: ${sceneQualityTier} (scene override: ${scene.qualityTier || 'none'})`);
           
           const aiResult = await aiVideoService.generateVideo({
-            prompt: visualPrompt,
+            prompt: sceneVideoPrompt,
             duration: Math.min(scene.duration || 5, 10),
             aspectRatio: (project.outputFormat?.aspectRatio as '16:9' | '9:16' | '1:1') || '16:9',
             sceneType: scene.type,
@@ -4319,6 +4367,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
             qualityTier: sceneQualityTier,
             artPresetId: scene.artPresetId || projectArtPresetIdForVideo,
             ...(sceneImageUrl ? { imageUrl: sceneImageUrl } : {}),
+            ...(sceneCharRefUrls.length > 1 ? { imageUrls: sceneCharRefUrls } : {}),
             ...(scene.contentTag ? { contentTag: scene.contentTag } : {}),
           });
           

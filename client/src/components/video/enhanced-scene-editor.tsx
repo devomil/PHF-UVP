@@ -12,6 +12,8 @@ import { AskSuzziePanel } from "./ask-suzzie-panel";
 import { VIDEO_PROVIDERS as PROVIDER_CONFIG, getMultiImageSupport, type MultiImageSupport } from "@shared/provider-config";
 import { SCENE_CONTENT_TAGS, getSceneContentTag } from "@shared/config/scene-content-tags";
 import { getVisualArtPreset, getAllVisualArtPresets } from "@shared/config/visual-art-presets";
+import { CharacterProfilesPanel } from "./character-profiles-panel";
+import type { CharacterProfile } from "@shared/video-types";
 
 const sceneTypes = [
   "hook", "problem", "agitation", "solution", "benefit",
@@ -60,9 +62,11 @@ interface EnhancedSceneEditorProps {
   onClose: () => void;
   aspectRatio?: string;
   artPresetId?: string;
+  characters?: CharacterProfile[];
+  onCharactersChange?: (characters: CharacterProfile[]) => void;
 }
 
-export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, aspectRatio = "16:9", artPresetId }: EnhancedSceneEditorProps) {
+export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, aspectRatio = "16:9", artPresetId, characters = [], onCharactersChange }: EnhancedSceneEditorProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -120,6 +124,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
   const overlayDebounceRef = useRef<NodeJS.Timeout | null>(null);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const visualDirectionRef = useRef<HTMLTextAreaElement>(null);
+  const narrationRef = useRef<HTMLTextAreaElement>(null);
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const prevVideoUrl = useRef(videoUrl);
   const prevImageUrl = useRef(imageUrl);
@@ -1299,12 +1304,37 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
           </div>
         </div>
 
+        {/* Character Profiles - visible only for 3D Illustration art style */}
+        {(effectiveArtPresetId === '3d-illustration') && (
+          <CharacterProfilesPanel
+            projectId={projectId}
+            characters={characters}
+            onCharactersChange={onCharactersChange || (() => {})}
+            narrationTextareaRef={narrationRef}
+            onInsertCharacterName={(name) => {
+              const ta = narrationRef.current;
+              if (!ta) return;
+              const start = ta.selectionStart;
+              const end = ta.selectionEnd;
+              const val = editValues.narration;
+              const newVal = val.substring(0, start) + name + val.substring(end);
+              setEditValues({ ...editValues, narration: newVal });
+              setTimeout(() => {
+                ta.focus();
+                const newPos = start + name.length;
+                ta.setSelectionRange(newPos, newPos);
+              }, 0);
+            }}
+          />
+        )}
+
         {/* Narration */}
         <div>
           <label className="text-[11px] font-medium uppercase tracking-wider mb-1.5 block" style={{ color: "var(--text-secondary)" }}>
             Narration
           </label>
           <textarea
+            ref={narrationRef}
             value={editValues.narration}
             onChange={(e) => setEditValues({ ...editValues, narration: e.target.value })}
             disabled={!isEditing}

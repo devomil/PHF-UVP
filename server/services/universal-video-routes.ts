@@ -29,7 +29,8 @@ import { VIDEO_PROVIDERS } from '../../shared/provider-config';
 import { ObjectStorageService } from '../objectStorage';
 import { videoFrameExtractor } from '../services/video-frame-extractor';
 import { db } from '../db';
-import { universalVideoProjects, sceneRegenerationHistory, brandAssets, brandMediaLibrary, videoGenerationJobs } from '../../shared/schema';
+import { universalVideoProjects, sceneRegenerationHistory, brandAssets, brandMediaLibrary, videoGenerationJobs, characterLibrary } from '../../shared/schema';
+import { imageGenerationService } from '../services/image-generation-service';
 import { objectStorageClient } from '../objectStorage';
 import type { 
   VideoProject, 
@@ -9846,5 +9847,305 @@ export async function recoverStaleRenders() {
 }
 
 recoverStaleRenders();
+
+// =====================================================
+// Character Profile & Library Endpoints
+// =====================================================
+
+router.put('/projects/:projectId/characters', isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const { projectId } = req.params;
+    const userId = (req.user as any)?.id;
+    if (!userId) return res.status(401).json({ success: false, error: 'Unauthorized' });
+
+    const { characters } = req.body;
+    if (!Array.isArray(characters)) {
+      return res.status(400).json({ success: false, error: 'characters must be an array' });
+    }
+    if (characters.length > 5) {
+      return res.status(400).json({ success: false, error: 'Maximum 5 characters allowed' });
+    }
+
+    const [project] = await db.select().from(universalVideoProjects)
+      .where(and(eq(universalVideoProjects.projectId, projectId), eq(universalVideoProjects.ownerId, userId)));
+    if (!project) return res.status(404).json({ success: false, error: 'Project not found' });
+
+    await db.update(universalVideoProjects)
+      .set({ characters: characters, updatedAt: new Date() })
+      .where(eq(universalVideoProjects.projectId, projectId));
+
+    res.json({ success: true, characters });
+  } catch (error: any) {
+    console.error('[Characters] Save failed:', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.post('/projects/:projectId/characters/:characterId/generate-reference', isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const { projectId, characterId } = req.params;
+    const userId = (req.user as any)?.id;
+    if (!userId) return res.status(401).json({ success: false, error: 'Unauthorized' });
+
+    const [project] = await db.select().from(universalVideoProjects)
+      .where(and(eq(universalVideoProjects.projectId, projectId), eq(universalVideoProjects.ownerId, userId)));
+    if (!project) return res.status(404).json({ success: false, error: 'Project not found' });
+
+    const characters = (project.characters as any[]) || [];
+    const charIndex = characters.findIndex((c: any) => c.id === characterId);
+    if (charIndex === -1) return res.status(404).json({ success: false, error: 'Character not found' });
+
+    const character = characters[charIndex];
+    if (!character.name || !character.physicalDescription) {
+      return res.status(400).json({ success: false, error: 'Character must have a name and physical description' });
+    }
+
+    characters[charIndex] = { ...character, generationStatus: 'generating', generationError: undefined };
+    await db.update(universalVideoProjects)
+      .set({ characters, updatedAt: new Date() })
+      .where(eq(universalVideoProjects.projectId, projectId));
+
+    const prompt = `Disney/Pixar 3D CGI character sheet, ${character.name}, ${character.role || 'character'}. ${character.physicalDescription}. Wearing ${character.wardrobe || 'casual clothing'}. Expression: ${character.personalityNotes || 'friendly and approachable'}. Full front-facing portrait, white background, subsurface skin scattering, soft studio lighting, expressive rounded facial features, vibrant warm color palette, 4K cinematic render. Character reference sheet — single character, no background.`;
+
+    console.log(`[Characters] Generating reference image for "${character.name}" (${characterId})`);
+    console.log(`[Characters] Prompt: ${prompt.substring(0, 120)}...`);
+
+    const timeoutMs = 45000;
+    const generationPromise = imageGenerationService.generateImage({
+      prompt,
+      provider: 'flux-1.1-pro',
+      width: 1024,
+      height: 1024,
+      qualityTier: 'premium',
+    });
+
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('Reference image generation timed out after 45 seconds')), timeoutMs)
+    );
+
+    let generated: any;
+    try {
+      generated = await Promise.race([generationPromise, timeoutPromise]);
+    } catch (genError: any) {
+      console.error(`[Characters] Generation failed for "${character.name}":`, genError.message);
+      const updatedChars = [...characters];
+      updatedChars[charIndex] = { ...character, generationStatus: 'failed', generationError: genError.message };
+      await db.update(universalVideoProjects)
+        .set({ characters: updatedChars, updatedAt: new Date() })
+        .where(eq(universalVideoProjects.projectId, projectId));
+      return res.status(500).json({ success: false, error: genError.message });
+    }
+
+    if (!generated?.url || generated.url.startsWith('placeholder:') || generated.url.startsWith('pending:')) {
+      const errorMsg = 'Image generation did not return a valid URL';
+      const updatedChars = [...characters];
+      updatedChars[charIndex] = { ...character, generationStatus: 'failed', generationError: errorMsg };
+      await db.update(universalVideoProjects)
+        .set({ characters: updatedChars, updatedAt: new Date() })
+        .where(eq(universalVideoProjects.projectId, projectId));
+      return res.status(500).json({ success: false, error: errorMsg });
+    }
+
+    let finalUrl = generated.url;
+    try {
+      const sharp = (await import('sharp')).default;
+      const imageResponse = await fetch(generated.url);
+      if (imageResponse.ok) {
+        const imageBuffer = Buffer.from(await imageResponse.arrayBuffer());
+        const resizedBuffer = await sharp(imageBuffer)
+          .resize({ width: 1024, withoutEnlargement: true })
+          .webp({ quality: 85 })
+          .toBuffer();
+
+        console.log(`[Characters] Resized: ${imageBuffer.length} → ${resizedBuffer.length} bytes (WebP)`);
+
+        if (s3Client) {
+          const s3Key = `character-references/${projectId}/${characterId}_${Date.now()}.webp`;
+          await s3Client.send(new PutObjectCommand({
+            Bucket: REMOTION_BUCKET_NAME,
+            Key: s3Key,
+            Body: resizedBuffer,
+            ContentType: 'image/webp',
+            ACL: 'public-read',
+          }));
+          finalUrl = `https://${REMOTION_BUCKET_NAME}.s3.${REMOTION_REGION}.amazonaws.com/${s3Key}`;
+          console.log(`[Characters] Uploaded to S3: ${finalUrl}`);
+        } else {
+          const piapiUrl = await uploadImageToPiAPIStorage(resizedBuffer, `char_ref_${characterId}.webp`);
+          if (piapiUrl) {
+            finalUrl = piapiUrl;
+            console.log(`[Characters] Uploaded to PiAPI storage: ${finalUrl}`);
+          }
+        }
+      }
+    } catch (uploadErr: any) {
+      console.warn(`[Characters] Image optimization/upload failed, using original URL:`, uploadErr.message);
+    }
+
+    const updatedChars = [...characters];
+    updatedChars[charIndex] = {
+      ...character,
+      referenceImageUrl: finalUrl,
+      generationStatus: 'completed',
+      generationError: undefined,
+    };
+    await db.update(universalVideoProjects)
+      .set({ characters: updatedChars, updatedAt: new Date() })
+      .where(eq(universalVideoProjects.projectId, projectId));
+
+    console.log(`[Characters] ✓ Reference image generated for "${character.name}": ${finalUrl.substring(0, 80)}`);
+    res.json({ success: true, referenceImageUrl: finalUrl, character: updatedChars[charIndex] });
+
+  } catch (error: any) {
+    console.error('[Characters] Generate reference failed:', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.put('/projects/:projectId/characters/:characterId/lock', isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const { projectId, characterId } = req.params;
+    const userId = (req.user as any)?.id;
+    if (!userId) return res.status(401).json({ success: false, error: 'Unauthorized' });
+
+    const [project] = await db.select().from(universalVideoProjects)
+      .where(and(eq(universalVideoProjects.projectId, projectId), eq(universalVideoProjects.ownerId, userId)));
+    if (!project) return res.status(404).json({ success: false, error: 'Project not found' });
+
+    const characters = (project.characters as any[]) || [];
+    const charIndex = characters.findIndex((c: any) => c.id === characterId);
+    if (charIndex === -1) return res.status(404).json({ success: false, error: 'Character not found' });
+
+    const character = characters[charIndex];
+    if (!character.referenceImageUrl) {
+      return res.status(400).json({ success: false, error: 'Character must have a reference image before locking' });
+    }
+
+    characters[charIndex] = { ...character, locked: true };
+    await db.update(universalVideoProjects)
+      .set({ characters, updatedAt: new Date() })
+      .where(eq(universalVideoProjects.projectId, projectId));
+
+    console.log(`[Characters] Locked character "${character.name}" (${characterId})`);
+    res.json({ success: true, character: characters[charIndex] });
+  } catch (error: any) {
+    console.error('[Characters] Lock failed:', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.get('/character-library', isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const userId = (req.user as any)?.id;
+    if (!userId) return res.status(401).json({ success: false, error: 'Unauthorized' });
+
+    const entries = await db.select().from(characterLibrary)
+      .where(eq(characterLibrary.ownerId, userId))
+      .orderBy(desc(characterLibrary.createdAt));
+
+    res.json({ success: true, characters: entries });
+  } catch (error: any) {
+    console.error('[CharacterLibrary] List failed:', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.post('/character-library', isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const userId = (req.user as any)?.id;
+    if (!userId) return res.status(401).json({ success: false, error: 'Unauthorized' });
+
+    const { name, role, physicalDescription, wardrobe, personalityNotes, referenceImageUrl } = req.body;
+    if (!name) return res.status(400).json({ success: false, error: 'Character name is required' });
+    if (!referenceImageUrl) return res.status(400).json({ success: false, error: 'Reference image URL is required' });
+
+    const [entry] = await db.insert(characterLibrary).values({
+      ownerId: userId,
+      name,
+      role: role || '',
+      physicalDescription: physicalDescription || '',
+      wardrobe: wardrobe || '',
+      personalityNotes: personalityNotes || '',
+      referenceImageUrl,
+    }).returning();
+
+    console.log(`[CharacterLibrary] Saved "${name}" to library (id: ${entry.id})`);
+    res.json({ success: true, character: entry });
+  } catch (error: any) {
+    console.error('[CharacterLibrary] Save failed:', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.delete('/character-library/:id', isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const userId = (req.user as any)?.id;
+    if (!userId) return res.status(401).json({ success: false, error: 'Unauthorized' });
+
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ success: false, error: 'Invalid ID' });
+
+    const [entry] = await db.select().from(characterLibrary)
+      .where(and(eq(characterLibrary.id, id), eq(characterLibrary.ownerId, userId)));
+    if (!entry) return res.status(404).json({ success: false, error: 'Character not found in library' });
+
+    await db.delete(characterLibrary).where(eq(characterLibrary.id, id));
+
+    console.log(`[CharacterLibrary] Removed "${entry.name}" from library (id: ${id})`);
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('[CharacterLibrary] Delete failed:', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.post('/projects/:projectId/characters/import', isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const { projectId } = req.params;
+    const userId = (req.user as any)?.id;
+    if (!userId) return res.status(401).json({ success: false, error: 'Unauthorized' });
+
+    const { libraryCharacterId } = req.body;
+    if (!libraryCharacterId) return res.status(400).json({ success: false, error: 'libraryCharacterId is required' });
+
+    const [project] = await db.select().from(universalVideoProjects)
+      .where(and(eq(universalVideoProjects.projectId, projectId), eq(universalVideoProjects.ownerId, userId)));
+    if (!project) return res.status(404).json({ success: false, error: 'Project not found' });
+
+    const [libEntry] = await db.select().from(characterLibrary)
+      .where(and(eq(characterLibrary.id, parseInt(libraryCharacterId)), eq(characterLibrary.ownerId, userId)));
+    if (!libEntry) return res.status(404).json({ success: false, error: 'Character not found in library' });
+
+    const characters = (project.characters as any[]) || [];
+    if (characters.length >= 5) {
+      return res.status(400).json({ success: false, error: 'Maximum 5 characters per project' });
+    }
+
+    const newCharacter = {
+      id: `char_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+      name: libEntry.name,
+      role: libEntry.role || '',
+      physicalDescription: libEntry.physicalDescription || '',
+      wardrobe: libEntry.wardrobe || '',
+      personalityNotes: libEntry.personalityNotes || '',
+      referenceImageUrl: libEntry.referenceImageUrl,
+      locked: true,
+      generationStatus: 'completed' as const,
+      sortOrder: characters.length,
+      savedToLibrary: true,
+    };
+
+    characters.push(newCharacter);
+    await db.update(universalVideoProjects)
+      .set({ characters, updatedAt: new Date() })
+      .where(eq(universalVideoProjects.projectId, projectId));
+
+    console.log(`[Characters] Imported "${libEntry.name}" from library into project ${projectId}`);
+    res.json({ success: true, character: newCharacter, characters });
+  } catch (error: any) {
+    console.error('[Characters] Import failed:', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
 
 export default router;
