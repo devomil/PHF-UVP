@@ -196,6 +196,10 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
   const [charWardrobe, setCharWardrobe] = useState('');
   const [charPersonality, setCharPersonality] = useState('');
   const [charGeneratedImageUrl, setCharGeneratedImageUrl] = useState<string | null>(null);
+  const [charReferencePhotoUrl, setCharReferencePhotoUrl] = useState<string | null>(null);
+  const [charReferencePhotoPreview, setCharReferencePhotoPreview] = useState<string | null>(null);
+  const [isUploadingCharPhoto, setIsUploadingCharPhoto] = useState(false);
+  const charPhotoInputRef = useRef<HTMLInputElement>(null);
   const [isGeneratingCharacter, setIsGeneratingCharacter] = useState(false);
   const [isSavingCharacter, setIsSavingCharacter] = useState(false);
   const [charSavedToLibrary, setCharSavedToLibrary] = useState(false);
@@ -237,6 +241,37 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
     }
   };
 
+  const handleCharPhotoUpload = async (file: File) => {
+    setIsUploadingCharPhoto(true);
+    try {
+      const previewUrl = URL.createObjectURL(file);
+      setCharReferencePhotoPreview(previewUrl);
+      
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch('/api/videos/uploads', { method: 'POST', body: formData, credentials: 'include' });
+      const data = await res.json();
+      if (data.url) {
+        setCharReferencePhotoUrl(data.url);
+        toast({ title: 'Photo uploaded', description: 'Reference photo will guide the character generation.' });
+      } else {
+        throw new Error(data.error || 'Upload failed');
+      }
+    } catch (err: any) {
+      toast({ title: 'Photo upload failed', description: err.message, variant: 'destructive' });
+      setCharReferencePhotoPreview(null);
+      setCharReferencePhotoUrl(null);
+    } finally {
+      setIsUploadingCharPhoto(false);
+    }
+  };
+
+  const handleRemoveCharPhoto = () => {
+    setCharReferencePhotoUrl(null);
+    setCharReferencePhotoPreview(null);
+    if (charPhotoInputRef.current) charPhotoInputRef.current.value = '';
+  };
+
   const handleGenerateCharacter = async () => {
     if (!charName.trim()) {
       toast({ title: 'Character name is required', variant: 'destructive' });
@@ -257,6 +292,7 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
         physicalDescription: charPhysicalDescription.trim(),
         wardrobe: charWardrobe.trim(),
         personalityNotes: charPersonality.trim(),
+        referencePhotoUrl: charReferencePhotoUrl || undefined,
       });
       const data = await res.json();
       if (data.success && data.referenceImageUrl) {
@@ -642,6 +678,56 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
               <div className="flex items-center gap-2 p-2 rounded-lg bg-blue-500/10 border border-blue-500/30">
                 <Wand2 className="h-4 w-4 text-blue-400" />
                 <span className="text-xs text-blue-300">Art style: Disney/Pixar 3D CGI (auto-applied)</span>
+              </div>
+
+              <div>
+                <Label className="text-sm text-gray-400 mb-1 block">Reference Photo (optional)</Label>
+                <p className="text-[11px] text-gray-500 mb-2">Upload a photo of the person to guide the Disney/Pixar character likeness</p>
+                <input
+                  ref={charPhotoInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleCharPhotoUpload(file);
+                  }}
+                />
+                {charReferencePhotoPreview ? (
+                  <div className="flex items-center gap-3">
+                    <div className="relative w-16 h-16 rounded-lg overflow-hidden border border-gray-700 flex-shrink-0">
+                      <img src={charReferencePhotoPreview} alt="Reference" className="w-full h-full object-cover" />
+                      {isUploadingCharPhoto && (
+                        <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                          <Loader2 className="h-4 w-4 text-white animate-spin" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-green-400 truncate">
+                        {charReferencePhotoUrl ? 'Photo uploaded — will guide generation' : 'Uploading...'}
+                      </p>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleRemoveCharPhoto}
+                      className="h-7 w-7 p-0 text-gray-400 hover:text-red-400"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                ) : (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => charPhotoInputRef.current?.click()}
+                    className="w-full border-dashed border-gray-600 text-gray-400 hover:text-white hover:border-purple-500 h-10"
+                  >
+                    <Upload className="h-4 w-4 mr-2" />
+                    Upload Reference Photo
+                  </Button>
+                )}
               </div>
 
               <div>

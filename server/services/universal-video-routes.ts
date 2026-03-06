@@ -9886,24 +9886,39 @@ router.post('/generate-character-reference', isAuthenticated, async (req: Reques
     const userId = (req.user as any)?.id;
     if (!userId) return res.status(401).json({ success: false, error: 'Unauthorized' });
 
-    const { name, role, physicalDescription, wardrobe, personalityNotes } = req.body;
+    const { name, role, physicalDescription, wardrobe, personalityNotes, referencePhotoUrl } = req.body;
     if (!name || !physicalDescription) {
       return res.status(400).json({ success: false, error: 'Character must have a name and physical description' });
     }
 
     const prompt = `Disney/Pixar 3D CGI character sheet, ${name}, ${role || 'character'}. ${physicalDescription}. Wearing ${wardrobe || 'casual clothing'}. Expression: ${personalityNotes || 'friendly and approachable'}. Full front-facing portrait, white background, subsurface skin scattering, soft studio lighting, expressive rounded facial features, vibrant warm color palette, 4K cinematic render. Character reference sheet — single character, no background.`;
 
-    console.log(`[Characters] Standalone: Generating reference image for "${name}"`);
+    console.log(`[Characters] Standalone: Generating reference image for "${name}"${referencePhotoUrl ? ' (with photo reference)' : ''}`);
     console.log(`[Characters] Prompt: ${prompt.substring(0, 120)}...`);
 
-    const timeoutMs = 45000;
-    const generationPromise = imageGenerationService.generateImage({
-      prompt,
-      provider: 'flux-1.1-pro',
-      width: 1024,
-      height: 1024,
-      qualityTier: 'premium',
-    });
+    const timeoutMs = 60000;
+    let generationPromise;
+    
+    if (referencePhotoUrl) {
+      console.log(`[Characters] Using I2I with reference photo: ${referencePhotoUrl.substring(0, 80)}...`);
+      generationPromise = imageGenerationService.generateImageToImage({
+        referenceImageUrl: referencePhotoUrl,
+        prompt,
+        provider: 'flux-1.1-pro',
+        width: 1024,
+        height: 1024,
+        qualityTier: 'premium',
+        strength: 0.65,
+      });
+    } else {
+      generationPromise = imageGenerationService.generateImage({
+        prompt,
+        provider: 'flux-1.1-pro',
+        width: 1024,
+        height: 1024,
+        qualityTier: 'premium',
+      });
+    }
 
     const timeoutPromise = new Promise<never>((_, reject) =>
       setTimeout(() => reject(new Error('Reference image generation timed out after 45 seconds')), timeoutMs)
@@ -9985,6 +10000,8 @@ router.post('/projects/:projectId/characters/:characterId/generate-reference', i
       return res.status(400).json({ success: false, error: 'Character must have a name and physical description' });
     }
 
+    const referencePhotoUrl = (req.body || {}).referencePhotoUrl || character.referencePhotoUrl || null;
+    
     characters[charIndex] = { ...character, generationStatus: 'generating', generationError: undefined };
     await db.update(universalVideoProjects)
       .set({ characters, updatedAt: new Date() })
@@ -9992,17 +10009,32 @@ router.post('/projects/:projectId/characters/:characterId/generate-reference', i
 
     const prompt = `Disney/Pixar 3D CGI character sheet, ${character.name}, ${character.role || 'character'}. ${character.physicalDescription}. Wearing ${character.wardrobe || 'casual clothing'}. Expression: ${character.personalityNotes || 'friendly and approachable'}. Full front-facing portrait, white background, subsurface skin scattering, soft studio lighting, expressive rounded facial features, vibrant warm color palette, 4K cinematic render. Character reference sheet — single character, no background.`;
 
-    console.log(`[Characters] Generating reference image for "${character.name}" (${characterId})`);
+    console.log(`[Characters] Generating reference image for "${character.name}" (${characterId})${referencePhotoUrl ? ' (with photo reference)' : ''}`);
     console.log(`[Characters] Prompt: ${prompt.substring(0, 120)}...`);
 
-    const timeoutMs = 45000;
-    const generationPromise = imageGenerationService.generateImage({
-      prompt,
-      provider: 'flux-1.1-pro',
-      width: 1024,
-      height: 1024,
-      qualityTier: 'premium',
-    });
+    const timeoutMs = 60000;
+    let generationPromise;
+    
+    if (referencePhotoUrl) {
+      console.log(`[Characters] Using I2I with reference photo: ${referencePhotoUrl.substring(0, 80)}...`);
+      generationPromise = imageGenerationService.generateImageToImage({
+        referenceImageUrl: referencePhotoUrl,
+        prompt,
+        provider: 'flux-1.1-pro',
+        width: 1024,
+        height: 1024,
+        qualityTier: 'premium',
+        strength: 0.65,
+      });
+    } else {
+      generationPromise = imageGenerationService.generateImage({
+        prompt,
+        provider: 'flux-1.1-pro',
+        width: 1024,
+        height: 1024,
+        qualityTier: 'premium',
+      });
+    }
 
     const timeoutPromise = new Promise<never>((_, reject) =>
       setTimeout(() => reject(new Error('Reference image generation timed out after 45 seconds')), timeoutMs)
