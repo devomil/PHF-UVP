@@ -3492,6 +3492,25 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
     const primaryImage = productImages.find(img => img.isPrimary);
     const imageGenArtPresetId = (project as any).artPresetId || project.artPresetId;
     
+    const imagesPhaseLockedChars: CharacterProfile[] = ((updatedProject as any).characters || [])
+      .filter((c: CharacterProfile) => c.locked && c.referenceImageUrl)
+      .sort((a: CharacterProfile, b: CharacterProfile) => a.sortOrder - b.sortOrder);
+    const imagesPhaseEscapeRegex = (str: string) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const imagesPhaseMatchChars = (text: string): CharacterProfile[] => {
+      if (!text || imagesPhaseLockedChars.length === 0) return [];
+      return imagesPhaseLockedChars.filter(c => {
+        const regex = new RegExp('\\b' + imagesPhaseEscapeRegex(c.name) + '\\b', 'i');
+        return regex.test(text);
+      });
+    };
+    const hasLockedCharacterRefs = imagesPhaseLockedChars.length > 0;
+    const isCharacterArtStyle = imageGenArtPresetId === '3d-illustration' || 
+                                 (project as any).videoGenerationMode === 'character-i2v';
+    
+    if (hasLockedCharacterRefs && isCharacterArtStyle) {
+      console.log(`[Assets] Character reference mode active: ${imagesPhaseLockedChars.length} locked characters with art style "${imageGenArtPresetId}" — will skip T2I for scenes with character matches`);
+    }
+
     console.log(`[UniversalVideoService] Product images available: ${productImages.length}`);
     if (productImages.length > 0) {
       console.log(`[UniversalVideoService] Product image URLs: ${productImages.map(img => img.url).join(', ')}`);
@@ -3529,6 +3548,21 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
         updatedProject.progress.overallPercent = 15 + Math.round(((i + 1) / (project.scenes || []).length) * 25);
         await saveProgress();
         continue;
+      }
+
+      // ===== CHARACTER REFERENCE SKIP: Don't generate T2I when character refs should be I2V input =====
+      if (hasLockedCharacterRefs && isCharacterArtStyle && !hasUserReferenceImage && !hasExplicitBrandAsset) {
+        const microScenes = (scene as any).microScenes as any[] || [];
+        const microSceneText = microScenes.map((ms: any) => `${ms.narration || ''} ${ms.visualDirection || ''}`).join(' ');
+        const sceneText = `${scene.narration || ''} ${scene.visualDirection || ''} ${(scene as any).description || ''} ${microSceneText}`;
+        const matchedCharsInScene = imagesPhaseMatchChars(sceneText);
+        if (matchedCharsInScene.length > 0 || isCharacterArtStyle && (project as any).videoGenerationMode === 'character-i2v') {
+          console.log(`[Assets] Character reference skip: Scene ${scene.id} mentions [${matchedCharsInScene.map(c => c.name).join(', ')}] — skipping T2I, character reference images will be used as I2V input in video step`);
+          updatedProject.progress.steps.images.progress = Math.round(((i + 1) / (project.scenes || []).length) * 100);
+          updatedProject.progress.overallPercent = 15 + Math.round(((i + 1) / (project.scenes || []).length) * 25);
+          await saveProgress();
+          continue;
+        }
       }
 
       // ===== SCENE-LEVEL REFERENCE IMAGES: Assign as brandAssetUrl for I2V =====
@@ -4054,6 +4088,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
       let videosFailed = 0;
       
       const isCharacterI2VMode = videoGenMode === 'character-i2v';
+      const shouldPreferCharRefs = isCharacterI2VMode || projectArtPresetIdForVideo === '3d-illustration';
       const characterConsistencyEnabled = isCharacterI2VMode || !!(updatedProject.progress as any)?.characterConsistency || 
                                            isStylizedPreset(projectArtPresetIdForVideo);
       let characterReferenceUrl: string | null = null;
@@ -4252,19 +4287,21 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
             }
             
             let msPrompt = ms.visualDirection || visualPrompt;
-            const userOrParentRef = ms.imageUrl || parentRefImageUrl || parentSceneImageUrl;
+            const explicitRef = ms.imageUrl || parentRefImageUrl;
             
             const msText = `${ms.narration || ''} ${ms.visualDirection || ''} ${visualPrompt || ''}`;
             const matchedChars = matchCharactersInText(msText);
             let charRefImageUrl: string | null = null;
             let charRefImageUrls: string[] = [];
-            if (matchedChars.length > 0 && !userOrParentRef) {
+            const useCharOverAutoImage = shouldPreferCharRefs && matchedChars.length > 0;
+            const userOrParentRef = useCharOverAutoImage ? explicitRef : (explicitRef || parentSceneImageUrl);
+            if (matchedChars.length > 0 && !explicitRef) {
               charRefImageUrl = matchedChars[0].referenceImageUrl;
               charRefImageUrls = matchedChars.map(c => c.referenceImageUrl!).filter(Boolean);
               const charDescriptions = matchedChars.map(c => `${c.name}: ${c.physicalDescription}, wearing ${c.wardrobe}`).join('. ');
               msPrompt = `${msPrompt}\nMaintain exact character appearance from reference image. Same face, hair, clothing, and art style. Characters: ${charDescriptions}`;
               console.log(`[CharRef] Micro-scene ${ms.id}: matched characters [${matchedChars.map(c => c.name).join(', ')}]`);
-            } else if (isCharacterI2VMode && lockedCharacters.length > 0 && !userOrParentRef) {
+            } else if (isCharacterI2VMode && lockedCharacters.length > 0 && !explicitRef) {
               charRefImageUrl = lockedCharacters[0].referenceImageUrl;
               charRefImageUrls = lockedCharacters.map(c => c.referenceImageUrl!).filter(Boolean);
               const charDescriptions = lockedCharacters.map(c => `${c.name}: ${c.physicalDescription}, wearing ${c.wardrobe}`).join('. ');
@@ -4339,14 +4376,14 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
           const sceneRefImageUrl = (scene as any).brandAssetUrl || 
                                    scene.referenceConfig?.imageUrl ||
                                    updatedProject.assets.images.find(img => img.sceneId === scene.id && img.source === 'uploaded')?.url;
-          const sceneImageUrlBase = sceneRefImageUrl || 
-                                updatedProject.scenes.find(s => s.id === scene.id)?.assets?.imageUrl;
+          const autoGeneratedImageUrl = updatedProject.scenes.find(s => s.id === scene.id)?.assets?.imageUrl;
           
           const sceneText = `${scene.narration || ''} ${scene.visualDirection || ''} ${visualPrompt || ''}`;
           const sceneMatchedChars = matchCharactersInText(sceneText);
           let sceneCharRefUrl: string | null = null;
           let sceneCharRefUrls: string[] = [];
           let sceneVideoPrompt = visualPrompt;
+          const sceneUseCharOverAutoImage = shouldPreferCharRefs && (sceneMatchedChars.length > 0 || isCharacterI2VMode);
           if (sceneMatchedChars.length > 0 && !sceneRefImageUrl) {
             sceneCharRefUrl = sceneMatchedChars[0].referenceImageUrl;
             sceneCharRefUrls = sceneMatchedChars.map(c => c.referenceImageUrl!).filter(Boolean);
@@ -4361,6 +4398,9 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
             console.log(`[CharRef] Scene ${scene.id}: character-i2v mode — injecting locked character references [${lockedCharacters.map(c => c.name).join(', ')}]`);
           }
           
+          const sceneImageUrlBase = sceneUseCharOverAutoImage 
+            ? (sceneRefImageUrl || null) 
+            : (sceneRefImageUrl || autoGeneratedImageUrl);
           const sceneImageUrl = sceneImageUrlBase || sceneCharRefUrl || (characterConsistencyEnabled ? characterReferenceUrl : null);
           
           if (sceneRefImageUrl) {
