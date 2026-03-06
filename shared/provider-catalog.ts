@@ -10,6 +10,7 @@ export interface ProviderCatalogEntry {
   supportedModes: ('t2v' | 'i2v' | 'v2v' | 't2i')[];
   aspectRatios: string[];
   highlight?: string;
+  multiImageSupport?: boolean;
 }
 
 export const VIDEO_PROVIDER_CATALOG: ProviderCatalogEntry[] = [
@@ -290,7 +291,7 @@ export const VIDEO_PROVIDER_CATALOG: ProviderCatalogEntry[] = [
   {
     id: 'seedance-1.0',
     name: 'Seedance 1.0',
-    family: 'Hailuo',
+    family: 'Seedance',
     description: 'Specialized dance and rhythmic motion model. Creates fluid body movements and choreography — ideal for music videos and dance content.',
     capabilities: ['T2V', 'I2V'],
     maxDuration: 6,
@@ -299,6 +300,34 @@ export const VIDEO_PROVIDER_CATALOG: ProviderCatalogEntry[] = [
     supportedModes: ['t2v', 'i2v'],
     aspectRatios: ['16:9', '9:16', '1:1'],
     highlight: 'Dance & Motion',
+  },
+  {
+    id: 'seedance-2.0',
+    name: 'Seedance 2 Preview',
+    family: 'Seedance',
+    description: 'Next-generation Seedance model with improved quality, multi-image references via @imageN syntax, and morphing effects between images. Supports up to 10s video generation.',
+    capabilities: ['T2V', 'I2V'],
+    maxDuration: 10,
+    costTier: 'standard',
+    type: 'video',
+    supportedModes: ['t2v', 'i2v'],
+    aspectRatios: ['16:9', '9:16', '1:1'],
+    highlight: 'Multi-Image & Morphing',
+    multiImageSupport: true,
+  },
+  {
+    id: 'seedance-2.0-fast',
+    name: 'Seedance 2 Fast',
+    family: 'Seedance',
+    description: 'Fast preview variant of Seedance 2 with quicker generation times. Supports multi-image references and morphing effects.',
+    capabilities: ['T2V', 'I2V'],
+    maxDuration: 10,
+    costTier: 'budget',
+    type: 'video',
+    supportedModes: ['t2v', 'i2v'],
+    aspectRatios: ['16:9', '9:16', '1:1'],
+    highlight: 'Fast Generation',
+    multiImageSupport: true,
   },
   {
     id: 'pika',

@@ -410,6 +410,30 @@ class PiAPIVideoService {
           },
         };
       
+      case 'seedance-2.0':
+        console.log(`[PiAPI T2V] Using Seedance 2 Preview`);
+        return {
+          model: 'seedance',
+          task_type: 'seedance-2-preview',
+          input: {
+            prompt: options.prompt,
+            duration: Math.min(options.duration, 10),
+            aspect_ratio: options.aspectRatio || '16:9',
+          },
+        };
+      
+      case 'seedance-2.0-fast':
+        console.log(`[PiAPI T2V] Using Seedance 2 Fast Preview`);
+        return {
+          model: 'seedance',
+          task_type: 'seedance-2-fast-preview',
+          input: {
+            prompt: options.prompt,
+            duration: Math.min(options.duration, 10),
+            aspect_ratio: options.aspectRatio || '16:9',
+          },
+        };
+      
       // Wan Family (Alibaba - via Hailuo API)
       case 'wan-2.1':
         console.log(`[PiAPI T2V] Using Wan 2.1`);
@@ -685,6 +709,8 @@ class PiAPIVideoService {
       'hailuo': { modelId: 'hailuo', maxDuration: 6 },
       'hailuo-minimax': { modelId: 'hailuo', maxDuration: 6 },
       'seedance-1.0': { modelId: 'hailuo', maxDuration: 6 },
+      'seedance-2.0': { modelId: 'seedance', maxDuration: 10 },
+      'seedance-2.0-fast': { modelId: 'seedance', maxDuration: 10 },
       // Wan Family (Alibaba via PiAPI)
       'wan-2.1': { modelId: 'Qubico/wanx', maxDuration: 10 },
       'wan-2.6': { modelId: 'Wan', maxDuration: 5 },
@@ -1045,14 +1071,40 @@ class PiAPIVideoService {
       };
     }
     
-    // Seedance - sends prompt AS-IS
+    // Seedance 2 - uses @imageN syntax in prompts with image_urls array
+    if (options.model === 'seedance-2.0' || options.model === 'seedance-2.0-fast') {
+      const taskType = options.model === 'seedance-2.0' ? 'seedance-2-preview' : 'seedance-2-fast-preview';
+      const allImageUrls = options.imageUrls && options.imageUrls.length > 0 
+        ? options.imageUrls 
+        : [options.imageUrl];
+      
+      let promptWithRefs = sanitizedPrompt;
+      const hasImageRef = /@image\d/.test(promptWithRefs);
+      if (!hasImageRef) {
+        promptWithRefs = `The subject in @image1 ${promptWithRefs}`;
+      }
+      
+      console.log(`[PiAPI I2V] Seedance 2 (${taskType}): ${allImageUrls.length} image(s), prompt with @imageN refs`);
+      return {
+        model: 'seedance',
+        task_type: taskType,
+        input: {
+          prompt: promptWithRefs,
+          image_urls: allImageUrls,
+          duration: Math.min(options.duration, 10),
+          aspect_ratio: options.aspectRatio || '16:9',
+        },
+      };
+    }
+    
+    // Seedance 1.0 - sends prompt AS-IS
     if (options.model.includes('seedance')) {
-      console.log(`[PiAPI I2V] Seedance: Sending prompt AS-IS`);
+      console.log(`[PiAPI I2V] Seedance 1.0: Sending prompt AS-IS`);
       return {
         model: 'hailuo',
         task_type: 'video_generation',
         input: {
-          prompt: sanitizedPrompt,  // SEND AS-IS!
+          prompt: sanitizedPrompt,
           model: 'seedance-1.0-i2v',
           image_url: options.imageUrl,
         },

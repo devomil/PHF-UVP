@@ -21,6 +21,8 @@ const PROVIDER_TEST_ID_MAP: Record<string, string[]> = {
   'wan-2.6': ['wan-2.6'],
   'pika': ['pika'],
   'seedance-1.0': ['seedance-1.0', 'seedance-pro'],
+  'seedance-2.0': ['seedance-2-preview'],
+  'seedance-2.0-fast': ['seedance-2-fast'],
   'sora-2': ['sora-2'],
   'sora-2-pro': ['sora-2-pro'],
   'hunyuan': ['hunyuan'],
@@ -287,6 +289,22 @@ export const AI_VIDEO_PROVIDERS: Record<string, AIVideoProviderConfig> = {
     capabilities: { t2v: true, i2v: true, v2v: false },
     supportedAspectRatios: ['16:9', '9:16', '1:1'],
   },
+  'seedance-2.0': {
+    modelId: 'seedance',
+    apiProvider: 'piapi',
+    costPerSecond: 0.035,
+    maxDuration: 10,
+    capabilities: { t2v: true, i2v: true, v2v: false },
+    supportedAspectRatios: ['16:9', '9:16', '1:1'],
+  },
+  'seedance-2.0-fast': {
+    modelId: 'seedance',
+    apiProvider: 'piapi',
+    costPerSecond: 0.020,
+    maxDuration: 10,
+    capabilities: { t2v: true, i2v: true, v2v: false },
+    supportedAspectRatios: ['16:9', '9:16', '1:1'],
+  },
   'pika': {
     modelId: 'pika',
     apiProvider: 'piapi',
@@ -420,7 +438,7 @@ export function selectProvidersForSceneSmart(scene: any, options?: any): string[
 export function getAllConfiguredProviders(): string[] {
   const configured: string[] = [];
   if (process.env.PIAPI_API_KEY) {
-    configured.push('kling-2.6', 'kling-2.6-pro', 'veo-3.1', 'luma', 'hailuo', 'wan-2.6', 'pika', 'seedance-1.0', 'sora-2', 'sora-2-pro');
+    configured.push('kling-2.6', 'kling-2.6-pro', 'veo-3.1', 'luma', 'hailuo', 'wan-2.6', 'pika', 'seedance-1.0', 'seedance-2.0', 'seedance-2.0-fast', 'sora-2', 'sora-2-pro');
   }
   if (process.env.RUNWAY_API_KEY) {
     configured.push('runway', 'runway-4.5', 'runway-gen4', 'runway-gen4-aleph', 'runway-act-two');
