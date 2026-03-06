@@ -203,6 +203,7 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
   const [isGeneratingCharacter, setIsGeneratingCharacter] = useState(false);
   const [isSavingCharacter, setIsSavingCharacter] = useState(false);
   const [charSavedToLibrary, setCharSavedToLibrary] = useState(false);
+  const [showCharPreview, setShowCharPreview] = useState(false);
 
   const cfg = MODE_CONFIG[mode];
 
@@ -297,29 +298,8 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
       const data = await res.json();
       if (data.success && data.referenceImageUrl) {
         setCharGeneratedImageUrl(data.referenceImageUrl);
-        
-        try {
-          await apiRequest('POST', '/api/universal-video/character-library', {
-            name: charName.trim(),
-            role: charRole.trim(),
-            physicalDescription: charPhysicalDescription.trim(),
-            wardrobe: charWardrobe.trim(),
-            personalityNotes: charPersonality.trim(),
-            referenceImageUrl: data.referenceImageUrl,
-          });
-          await apiRequest('POST', '/api/asset-library/save-character', {
-            name: charName.trim(),
-            referenceImageUrl: data.referenceImageUrl,
-            role: charRole.trim(),
-            physicalDescription: charPhysicalDescription.trim(),
-          });
-          setCharSavedToLibrary(true);
-          queryClient.invalidateQueries({ queryKey: ['/api/universal-video/character-library'] });
-          queryClient.invalidateQueries({ queryKey: ['/api/asset-library'] });
-          toast({ title: 'Character generated', description: `"${charName}" is ready and saved to your character library.` });
-        } catch {
-          toast({ title: 'Character generated', description: `Reference image for "${charName}" is ready. Save to library failed — try the Save button.` });
-        }
+        setShowCharPreview(true);
+        toast({ title: 'Character generated', description: `Review "${charName}" before saving.` });
       } else {
         throw new Error(data.error || 'Generation failed');
       }
@@ -327,6 +307,36 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
       toast({ title: 'Character generation failed', description: err.message || 'Could not generate character.', variant: 'destructive' });
     } finally {
       setIsGeneratingCharacter(false);
+    }
+  };
+
+  const handleApproveCharacter = async () => {
+    if (!charGeneratedImageUrl || !charName.trim()) return;
+    setIsSavingCharacter(true);
+    try {
+      await apiRequest('POST', '/api/universal-video/character-library', {
+        name: charName.trim(),
+        role: charRole.trim(),
+        physicalDescription: charPhysicalDescription.trim(),
+        wardrobe: charWardrobe.trim(),
+        personalityNotes: charPersonality.trim(),
+        referenceImageUrl: charGeneratedImageUrl,
+      });
+      await apiRequest('POST', '/api/asset-library/save-character', {
+        name: charName.trim(),
+        referenceImageUrl: charGeneratedImageUrl,
+        role: charRole.trim(),
+        physicalDescription: charPhysicalDescription.trim(),
+      });
+      setCharSavedToLibrary(true);
+      setShowCharPreview(false);
+      queryClient.invalidateQueries({ queryKey: ['/api/universal-video/character-library'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/asset-library'] });
+      toast({ title: 'Character saved', description: `"${charName}" has been saved to your character library.` });
+    } catch {
+      toast({ title: 'Save failed', description: 'Could not save character. Try again.', variant: 'destructive' });
+    } finally {
+      setIsSavingCharacter(false);
     }
   };
 
@@ -444,6 +454,7 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
   };
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[680px] bg-gray-950 border-gray-800 text-white max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -970,5 +981,68 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
         </div>
       </DialogContent>
     </Dialog>
+
+    {showCharPreview && charGeneratedImageUrl && (
+      <Dialog open={showCharPreview} onOpenChange={setShowCharPreview}>
+        <DialogContent className="max-w-2xl bg-gray-950 border-gray-800 text-white p-0 overflow-hidden">
+          <div className="p-4 border-b border-gray-800">
+            <DialogTitle className="text-lg font-semibold flex items-center gap-2">
+              <User className="h-5 w-5 text-purple-400" />
+              {charName || 'Character Preview'}
+            </DialogTitle>
+            <p className="text-sm text-gray-400 mt-1">
+              Review the generated character. Save if you're happy, or regenerate for a new version.
+            </p>
+          </div>
+          <div className="px-4 pb-2">
+            <div className="relative rounded-lg overflow-hidden border border-gray-700 bg-black flex items-center justify-center" style={{ maxHeight: '60vh' }}>
+              <img
+                src={charGeneratedImageUrl}
+                alt={charName}
+                className="max-w-full max-h-[60vh] object-contain"
+              />
+            </div>
+          </div>
+          <div className="p-4 border-t border-gray-800 flex gap-3">
+            <Button
+              onClick={handleApproveCharacter}
+              disabled={isSavingCharacter}
+              className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+            >
+              {isSavingCharacter ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Check className="h-4 w-4 mr-2" />
+              )}
+              Save Character
+            </Button>
+            <Button
+              onClick={() => {
+                setShowCharPreview(false);
+                handleGenerateCharacter();
+              }}
+              disabled={isGeneratingCharacter}
+              variant="outline"
+              className="flex-1 border-gray-600 text-gray-300 hover:bg-gray-800"
+            >
+              {isGeneratingCharacter ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Sparkles className="h-4 w-4 mr-2" />
+              )}
+              Regenerate
+            </Button>
+            <Button
+              onClick={() => setShowCharPreview(false)}
+              variant="ghost"
+              className="text-gray-400 hover:text-white"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    )}
+    </>
   );
 }
