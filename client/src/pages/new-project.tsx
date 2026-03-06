@@ -3,8 +3,9 @@ import { useLocation, Link } from "wouter";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Sparkles, FileText, Zap, ArrowLeft, Video, Image, Info, Plus, Trash2, ChevronUp, ChevronDown, GripVertical, Palette, Users } from "lucide-react";
+import { Sparkles, FileText, Zap, ArrowLeft, Video, Image, Info, Plus, Trash2, ChevronUp, ChevronDown, GripVertical, Palette, Users, UserCheck } from "lucide-react";
 import { ProviderCatalogSelector } from "@/components/video/provider-catalog-selector";
+import { CharacterProfilesPanel } from "@/components/video/character-profiles-panel";
 import { getAvailableStyles } from "@shared/visual-style-config";
 import { getAllVisualArtPresets, isStylizedPreset, type VisualArtPreset } from "@shared/config/visual-art-presets";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -195,6 +196,16 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
   const [qualityTier, setQualityTier] = useState("premium");
   const [artPresetId, setArtPresetId] = useState("auto");
   const [characterConsistency, setCharacterConsistency] = useState(false);
+  const [characters, setCharacters] = useState<any[]>([]);
+
+  const hasLockedCharacters = characters.some((c: any) => c.locked && c.referenceImageUrl);
+  const showCharacterI2V = artPresetId === '3d-illustration' && hasLockedCharacters;
+
+  useEffect(() => {
+    if (videoGenerationMode === 'character-i2v' && !showCharacterI2V) {
+      setVideoGenerationMode('auto');
+    }
+  }, [artPresetId, characters, showCharacterI2V, videoGenerationMode]);
 
   useEffect(() => {
     setAspectRatio(platformAspectMap[platform] || "16:9");
@@ -221,6 +232,7 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
       qualityTier,
       artPresetId,
       characterConsistency,
+      characters,
     });
   };
 
@@ -243,6 +255,13 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
         </div>
 
         <ArtStyleSelector value={artPresetId} onChange={setArtPresetId} />
+
+        {artPresetId === '3d-illustration' && (
+          <CharacterProfilesPanel
+            characters={characters}
+            onCharactersChange={setCharacters}
+          />
+        )}
 
         {mediaMode === "video" && (
           <div className="flex items-start gap-3 p-3 rounded-lg" style={{ backgroundColor: "var(--surface-elevated)", border: "1px solid var(--border-subtle)" }}>
@@ -337,9 +356,16 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
             <Button type="button" variant={videoGenerationMode === "image-first-i2v" ? "default" : "outline"} className={`text-xs ${videoGenerationMode === "image-first-i2v" ? "bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500" : ""}`} style={videoGenerationMode !== "image-first-i2v" ? { borderColor: "var(--border-medium)", color: "var(--text-secondary)" } : {}} onClick={() => setVideoGenerationMode("image-first-i2v")}>
               Image then Video (more control)
             </Button>
+            {showCharacterI2V && (
+              <Button type="button" variant={videoGenerationMode === "character-i2v" ? "default" : "outline"} className={`text-xs ${videoGenerationMode === "character-i2v" ? "bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500" : ""}`} style={videoGenerationMode !== "character-i2v" ? { borderColor: "var(--border-medium)", color: "var(--text-secondary)" } : {}} onClick={() => setVideoGenerationMode("character-i2v")}>
+                <UserCheck className="w-3 h-3 mr-1" /> Character I2V
+              </Button>
+            )}
           </div>
           <p className="text-[10px] mt-1.5" style={{ color: "var(--text-muted)" }}>
-            {videoGenerationMode === "image-first-i2v" 
+            {videoGenerationMode === "character-i2v"
+              ? "Uses locked character reference images as I2V inputs for matching scenes, ensuring character consistency across the video."
+              : videoGenerationMode === "image-first-i2v" 
               ? "Generates an image first, then animates it into video. Slower but gives you a preview image to approve." 
               : "Creates video directly from your script using 13+ AI video providers. Faster and more cost-effective."}
           </p>
@@ -390,6 +416,16 @@ function CustomScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void;
   const [videoGenerationMode, setVideoGenerationMode] = useState("auto");
   const [artPresetId, setArtPresetId] = useState("auto");
   const [characterConsistency, setCharacterConsistency] = useState(false);
+  const [characters, setCharacters] = useState<any[]>([]);
+
+  const hasLockedCharactersCustom = characters.some((c: any) => c.locked && c.referenceImageUrl);
+  const showCharacterI2VCustom = artPresetId === '3d-illustration' && hasLockedCharactersCustom;
+
+  useEffect(() => {
+    if (videoGenerationMode === 'character-i2v' && !showCharacterI2VCustom) {
+      setVideoGenerationMode('auto');
+    }
+  }, [artPresetId, characters, showCharacterI2VCustom, videoGenerationMode]);
 
   useEffect(() => {
     setAspectRatio(platformAspectMap[platform] || "16:9");
@@ -452,6 +488,7 @@ function CustomScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void;
       videoGenerationMode: mediaMode === "video" ? videoGenerationMode : undefined,
       artPresetId,
       characterConsistency,
+      characters,
     });
   };
 
@@ -545,6 +582,13 @@ function CustomScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void;
         </div>
 
         <ArtStyleSelector value={artPresetId} onChange={setArtPresetId} />
+
+        {artPresetId === '3d-illustration' && (
+          <CharacterProfilesPanel
+            characters={characters}
+            onCharactersChange={setCharacters}
+          />
+        )}
 
         {mediaMode === "video" && (
           <div className="flex items-start gap-3 p-3 rounded-lg" style={{ backgroundColor: "var(--surface-elevated)", border: "1px solid var(--border-subtle)" }}>
@@ -655,9 +699,16 @@ function CustomScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void;
             <Button type="button" variant={videoGenerationMode === "image-first-i2v" ? "default" : "outline"} className={`text-xs ${videoGenerationMode === "image-first-i2v" ? "bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500" : ""}`} style={videoGenerationMode !== "image-first-i2v" ? { borderColor: "var(--border-medium)", color: "var(--text-secondary)" } : {}} onClick={() => setVideoGenerationMode("image-first-i2v")}>
               Image then Video (more control)
             </Button>
+            {showCharacterI2VCustom && (
+              <Button type="button" variant={videoGenerationMode === "character-i2v" ? "default" : "outline"} className={`text-xs ${videoGenerationMode === "character-i2v" ? "bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500" : ""}`} style={videoGenerationMode !== "character-i2v" ? { borderColor: "var(--border-medium)", color: "var(--text-secondary)" } : {}} onClick={() => setVideoGenerationMode("character-i2v")}>
+                <UserCheck className="w-3 h-3 mr-1" /> Character I2V
+              </Button>
+            )}
           </div>
           <p className="text-[10px] mt-1.5" style={{ color: "var(--text-muted)" }}>
-            {videoGenerationMode === "image-first-i2v" 
+            {videoGenerationMode === "character-i2v"
+              ? "Uses locked character reference images as I2V inputs for matching scenes, ensuring character consistency across the video."
+              : videoGenerationMode === "image-first-i2v" 
               ? "Generates an image first, then animates it into video. Slower but gives you a preview image to approve." 
               : "Creates video directly from your script using 13+ AI video providers. Faster and more cost-effective."}
           </p>

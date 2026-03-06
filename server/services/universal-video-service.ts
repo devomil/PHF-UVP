@@ -3407,11 +3407,11 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
     updatedProject.progress.currentStep = 'images';
     updatedProject.progress.overallPercent = 15;
 
-    let videoGenMode = (project as any).videoGenerationMode as 'direct-t2v' | 'image-first-i2v' | 'auto' | undefined;
+    let videoGenMode = (project as any).videoGenerationMode as 'direct-t2v' | 'image-first-i2v' | 'character-i2v' | 'auto' | undefined;
     const projectMediaMode2 = (project as any).mediaMode as 'image' | 'video' | undefined;
     
     const projectArtPresetForStrategy = project.artPresetId ? getVisualArtPreset(project.artPresetId) : null;
-    const userExplicitlyChoseMode = videoGenMode === 'direct-t2v' || videoGenMode === 'image-first-i2v';
+    const userExplicitlyChoseMode = videoGenMode === 'direct-t2v' || videoGenMode === 'image-first-i2v' || videoGenMode === 'character-i2v';
     if (projectArtPresetForStrategy && projectMediaMode2 === 'video' && !userExplicitlyChoseMode) {
       if (projectArtPresetForStrategy.generationStrategy === 'i2v') {
         videoGenMode = 'image-first-i2v';
@@ -3423,8 +3423,12 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
     } else if (projectArtPresetForStrategy && userExplicitlyChoseMode) {
       console.log(`[Assets] User explicitly selected ${videoGenMode}, art preset "${projectArtPresetForStrategy.name}" preference (${projectArtPresetForStrategy.generationStrategy}) not applied`);
     }
+
+    if (videoGenMode === 'character-i2v') {
+      console.log(`[Assets] Character I2V mode enabled — locked character references will be prioritized as I2V inputs for matching scenes`);
+    }
     
-    const useDirectT2V = projectMediaMode2 === 'video' && (videoGenMode === 'direct-t2v' || videoGenMode === 'auto' || !videoGenMode);
+    const useDirectT2V = projectMediaMode2 === 'video' && (videoGenMode === 'direct-t2v' || videoGenMode === 'auto' || !videoGenMode) && videoGenMode !== 'character-i2v';
     
     if (useDirectT2V) {
       console.log(`[Assets] Direct T2V mode enabled (videoGenerationMode=${videoGenMode || 'auto'}) - skipping intermediate image generation for video scenes`);
@@ -4049,11 +4053,12 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
       let aiVideosGenerated = 0;
       let videosFailed = 0;
       
-      const characterConsistencyEnabled = !!(updatedProject.progress as any)?.characterConsistency || 
+      const isCharacterI2VMode = videoGenMode === 'character-i2v';
+      const characterConsistencyEnabled = isCharacterI2VMode || !!(updatedProject.progress as any)?.characterConsistency || 
                                            isStylizedPreset(projectArtPresetIdForVideo);
       let characterReferenceUrl: string | null = null;
       if (characterConsistencyEnabled) {
-        console.log(`[CharRef] Character consistency ENABLED for project ${project.projectId} (stylized=${isStylizedPreset(projectArtPresetIdForVideo)}, explicit=${!!(updatedProject.progress as any)?.characterConsistency})`);
+        console.log(`[CharRef] Character consistency ENABLED for project ${project.projectId} (characterI2V=${isCharacterI2VMode}, stylized=${isStylizedPreset(projectArtPresetIdForVideo)}, explicit=${!!(updatedProject.progress as any)?.characterConsistency})`);
       }
 
       const lockedCharacters: CharacterProfile[] = ((updatedProject as any).characters || [])
@@ -4259,6 +4264,12 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
               const charDescriptions = matchedChars.map(c => `${c.name}: ${c.physicalDescription}, wearing ${c.wardrobe}`).join('. ');
               msPrompt = `${msPrompt}\nMaintain exact character appearance from reference image. Same face, hair, clothing, and art style. Characters: ${charDescriptions}`;
               console.log(`[CharRef] Micro-scene ${ms.id}: matched characters [${matchedChars.map(c => c.name).join(', ')}]`);
+            } else if (isCharacterI2VMode && lockedCharacters.length > 0 && !userOrParentRef) {
+              charRefImageUrl = lockedCharacters[0].referenceImageUrl;
+              charRefImageUrls = lockedCharacters.map(c => c.referenceImageUrl!).filter(Boolean);
+              const charDescriptions = lockedCharacters.map(c => `${c.name}: ${c.physicalDescription}, wearing ${c.wardrobe}`).join('. ');
+              msPrompt = `${msPrompt}\nMaintain exact character appearance from reference image. Same face, hair, clothing, and art style. Characters: ${charDescriptions}`;
+              console.log(`[CharRef] Micro-scene ${ms.id}: character-i2v mode — injecting locked character references [${lockedCharacters.map(c => c.name).join(', ')}]`);
             }
             
             const msImageUrl = userOrParentRef || charRefImageUrl || (characterConsistencyEnabled ? characterReferenceUrl : null);
@@ -4342,6 +4353,12 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
             const charDescriptions = sceneMatchedChars.map(c => `${c.name}: ${c.physicalDescription}, wearing ${c.wardrobe}`).join('. ');
             sceneVideoPrompt = `${visualPrompt}\nMaintain exact character appearance from reference image. Same face, hair, clothing, and art style. Characters: ${charDescriptions}`;
             console.log(`[CharRef] Scene ${scene.id}: matched characters [${sceneMatchedChars.map(c => c.name).join(', ')}]`);
+          } else if (isCharacterI2VMode && lockedCharacters.length > 0 && !sceneRefImageUrl) {
+            sceneCharRefUrl = lockedCharacters[0].referenceImageUrl;
+            sceneCharRefUrls = lockedCharacters.map(c => c.referenceImageUrl!).filter(Boolean);
+            const charDescriptions = lockedCharacters.map(c => `${c.name}: ${c.physicalDescription}, wearing ${c.wardrobe}`).join('. ');
+            sceneVideoPrompt = `${visualPrompt}\nMaintain exact character appearance from reference image. Same face, hair, clothing, and art style. Characters: ${charDescriptions}`;
+            console.log(`[CharRef] Scene ${scene.id}: character-i2v mode — injecting locked character references [${lockedCharacters.map(c => c.name).join(', ')}]`);
           }
           
           const sceneImageUrl = sceneImageUrlBase || sceneCharRefUrl || (characterConsistencyEnabled ? characterReferenceUrl : null);
@@ -4414,7 +4431,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
           const useVideo = this.shouldUseVideoBackground(scene, videoResult, project.targetAudience, sceneQualityTier, projectMediaMode);
           
           // If video mode and we need video but don't have one, check for I2V or T2V
-          const currentVideoGenMode = (project as any).videoGenerationMode as 'direct-t2v' | 'image-first-i2v' | 'auto' | undefined;
+          const currentVideoGenMode = (project as any).videoGenerationMode as 'direct-t2v' | 'image-first-i2v' | 'character-i2v' | 'auto' | undefined;
           const preferDirectT2V = currentVideoGenMode === 'direct-t2v' || currentVideoGenMode === 'auto' || !currentVideoGenMode;
           
           if (useVideo && !videoResult && projectMediaMode !== 'image') {

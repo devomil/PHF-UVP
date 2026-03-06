@@ -9881,6 +9881,91 @@ router.put('/projects/:projectId/characters', isAuthenticated, async (req: Reque
   }
 });
 
+router.post('/generate-character-reference', isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const userId = (req.user as any)?.id;
+    if (!userId) return res.status(401).json({ success: false, error: 'Unauthorized' });
+
+    const { name, role, physicalDescription, wardrobe, personalityNotes } = req.body;
+    if (!name || !physicalDescription) {
+      return res.status(400).json({ success: false, error: 'Character must have a name and physical description' });
+    }
+
+    const prompt = `Disney/Pixar 3D CGI character sheet, ${name}, ${role || 'character'}. ${physicalDescription}. Wearing ${wardrobe || 'casual clothing'}. Expression: ${personalityNotes || 'friendly and approachable'}. Full front-facing portrait, white background, subsurface skin scattering, soft studio lighting, expressive rounded facial features, vibrant warm color palette, 4K cinematic render. Character reference sheet — single character, no background.`;
+
+    console.log(`[Characters] Standalone: Generating reference image for "${name}"`);
+    console.log(`[Characters] Prompt: ${prompt.substring(0, 120)}...`);
+
+    const timeoutMs = 45000;
+    const generationPromise = imageGenerationService.generateImage({
+      prompt,
+      provider: 'flux-1.1-pro',
+      width: 1024,
+      height: 1024,
+      qualityTier: 'premium',
+    });
+
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('Reference image generation timed out after 45 seconds')), timeoutMs)
+    );
+
+    let generated: any;
+    try {
+      generated = await Promise.race([generationPromise, timeoutPromise]);
+    } catch (genError: any) {
+      console.error(`[Characters] Standalone generation failed for "${name}":`, genError.message);
+      return res.status(500).json({ success: false, error: genError.message });
+    }
+
+    if (!generated?.url || generated.url.startsWith('placeholder:') || generated.url.startsWith('pending:')) {
+      return res.status(500).json({ success: false, error: 'Image generation did not return a valid URL' });
+    }
+
+    let finalUrl = generated.url;
+    try {
+      const sharp = (await import('sharp')).default;
+      const imageResponse = await fetch(generated.url);
+      if (imageResponse.ok) {
+        const imageBuffer = Buffer.from(await imageResponse.arrayBuffer());
+        const resizedBuffer = await sharp(imageBuffer)
+          .resize({ width: 1024, withoutEnlargement: true })
+          .webp({ quality: 85 })
+          .toBuffer();
+
+        console.log(`[Characters] Standalone resized: ${imageBuffer.length} → ${resizedBuffer.length} bytes (WebP)`);
+
+        if (s3Client) {
+          const s3Key = `character-references/standalone/${userId}_${Date.now()}.webp`;
+          await s3Client.send(new PutObjectCommand({
+            Bucket: REMOTION_BUCKET_NAME,
+            Key: s3Key,
+            Body: resizedBuffer,
+            ContentType: 'image/webp',
+            ACL: 'public-read',
+          }));
+          finalUrl = `https://${REMOTION_BUCKET_NAME}.s3.${REMOTION_REGION}.amazonaws.com/${s3Key}`;
+          console.log(`[Characters] Standalone uploaded to S3: ${finalUrl}`);
+        } else {
+          const piapiUrl = await uploadImageToPiAPIStorage(resizedBuffer, `char_ref_standalone_${Date.now()}.webp`);
+          if (piapiUrl) {
+            finalUrl = piapiUrl;
+            console.log(`[Characters] Standalone uploaded to PiAPI storage: ${finalUrl}`);
+          }
+        }
+      }
+    } catch (uploadErr: any) {
+      console.warn(`[Characters] Standalone image optimization/upload failed, using original URL:`, uploadErr.message);
+    }
+
+    console.log(`[Characters] ✓ Standalone reference image generated for "${name}": ${finalUrl.substring(0, 80)}`);
+    res.json({ success: true, referenceImageUrl: finalUrl });
+
+  } catch (error: any) {
+    console.error('[Characters] Standalone generate reference failed:', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 router.post('/projects/:projectId/characters/:characterId/generate-reference', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const { projectId, characterId } = req.params;
