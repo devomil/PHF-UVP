@@ -437,6 +437,8 @@ router.post('/api/piapi-tests/submit/:testId', async (req: Request, res: Respons
             url: imageUrl,
           },
         };
+      } else if (field === 'image_urls') {
+        inputData[field] = [imageUrl];
       } else {
         inputData[field] = imageUrl;
       }
