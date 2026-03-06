@@ -8,6 +8,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { SceneOverlayEditor, type SceneOverlayItem } from "./scene-overlay-editor";
 import { ProviderCapabilitySelector, getProviderRecommendationText } from "./ProviderCapabilityCard";
+import { AskSuzziePanel } from "./ask-suzzie-panel";
 import { VIDEO_PROVIDERS as PROVIDER_CONFIG, getMultiImageSupport, type MultiImageSupport } from "@shared/provider-config";
 import { SCENE_CONTENT_TAGS, getSceneContentTag } from "@shared/config/scene-content-tags";
 import { getVisualArtPreset, getAllVisualArtPresets } from "@shared/config/visual-art-presets";
@@ -2271,6 +2272,23 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
           </div>
         </div>
       </div>
+      <AskSuzziePanel
+        sceneContext={{
+          narration: editValues.narration,
+          sceneType: editValues.type,
+          artPresetId: effectiveArtPresetId || undefined,
+          artPresetName: activePreset?.name,
+          visualDirection: editValues.visualDirection,
+          provider: provider !== "auto" ? provider : undefined,
+        }}
+        onApplyVisualDirection={(prompt) => {
+          setEditValues(prev => ({ ...prev, visualDirection: prompt }));
+          if (!isEditing) setIsEditing(true);
+        }}
+        onApplyProvider={(providerId) => {
+          setProvider(providerId);
+        }}
+      />
     </div>
   );
 }
