@@ -9927,7 +9927,9 @@ router.post('/generate-character-reference', isAuthenticated, async (req: Reques
       return res.status(400).json({ success: false, error: 'Character must have a name and physical description' });
     }
 
-    const prompt = `Disney/Pixar 3D CGI character sheet, ${name}, ${role || 'character'}. ${physicalDescription}. Wearing ${wardrobe || 'casual clothing'}. Expression: ${personalityNotes || 'friendly and approachable'}. Full front-facing portrait, white background, subsurface skin scattering, soft studio lighting, expressive rounded facial features, vibrant warm color palette, 4K cinematic render. Character reference sheet — single character, no background.`;
+    const basePrompt = `Disney/Pixar 3D CGI character sheet, ${name}, ${role || 'character'}. ${physicalDescription}. Wearing ${wardrobe || 'casual clothing'}. Expression: ${personalityNotes || 'friendly and approachable'}. Full front-facing portrait, white background, subsurface skin scattering, soft studio lighting, expressive rounded facial features, vibrant warm color palette, 4K cinematic render. Character reference sheet — single character, no background.`;
+    const i2iPrompt = `Transform into Disney/Pixar 3D CGI animated character style. Exaggerated cartoon proportions, large expressive eyes, smooth plastic-like skin, rounded features. ${basePrompt}`;
+    const prompt = referencePhotoUrl ? i2iPrompt : basePrompt;
 
     console.log(`[Characters] Standalone: Generating reference image for "${name}"${referencePhotoUrl ? ' (with photo reference)' : ''}`);
     console.log(`[Characters] Prompt: ${prompt.substring(0, 120)}...`);
@@ -9945,7 +9947,7 @@ router.post('/generate-character-reference', isAuthenticated, async (req: Reques
         width: 1024,
         height: 1024,
         qualityTier: 'premium',
-        strength: 0.35,
+        strength: 0.25,
       });
     } else {
       generationPromise = imageGenerationService.generateImage({
@@ -10044,7 +10046,9 @@ router.post('/projects/:projectId/characters/:characterId/generate-reference', i
       .set({ characters, updatedAt: new Date() })
       .where(eq(universalVideoProjects.projectId, projectId));
 
-    const prompt = `Disney/Pixar 3D CGI character sheet, ${character.name}, ${character.role || 'character'}. ${character.physicalDescription}. Wearing ${character.wardrobe || 'casual clothing'}. Expression: ${character.personalityNotes || 'friendly and approachable'}. Full front-facing portrait, white background, subsurface skin scattering, soft studio lighting, expressive rounded facial features, vibrant warm color palette, 4K cinematic render. Character reference sheet — single character, no background.`;
+    const basePrompt = `Disney/Pixar 3D CGI character sheet, ${character.name}, ${character.role || 'character'}. ${character.physicalDescription}. Wearing ${character.wardrobe || 'casual clothing'}. Expression: ${character.personalityNotes || 'friendly and approachable'}. Full front-facing portrait, white background, subsurface skin scattering, soft studio lighting, expressive rounded facial features, vibrant warm color palette, 4K cinematic render. Character reference sheet — single character, no background.`;
+    const i2iPrompt = `Transform into Disney/Pixar 3D CGI animated character style. Exaggerated cartoon proportions, large expressive eyes, smooth plastic-like skin, rounded features. ${basePrompt}`;
+    const prompt = referencePhotoUrl ? i2iPrompt : basePrompt;
 
     console.log(`[Characters] Generating reference image for "${character.name}" (${characterId})${referencePhotoUrl ? ' (with photo reference)' : ''}`);
     console.log(`[Characters] Prompt: ${prompt.substring(0, 120)}...`);
@@ -10062,7 +10066,7 @@ router.post('/projects/:projectId/characters/:characterId/generate-reference', i
         width: 1024,
         height: 1024,
         qualityTier: 'premium',
-        strength: 0.35,
+        strength: 0.25,
       });
     } else {
       generationPromise = imageGenerationService.generateImage({
