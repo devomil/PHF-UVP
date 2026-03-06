@@ -774,7 +774,7 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
 
               <div>
                 <Label className="text-sm text-gray-400 mb-1 block">Reference Photo (optional)</Label>
-                <p className="text-[11px] text-gray-500 mb-2">Upload a photo of the person to guide the Disney/Pixar character likeness</p>
+                <p className="text-[11px] text-gray-500 mb-2">Upload a photo as visual reference to help you describe the character accurately</p>
                 <input
                   ref={charPhotoInputRef}
                   type="file"
