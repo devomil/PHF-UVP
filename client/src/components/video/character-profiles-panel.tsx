@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Plus, X, Lock, Unlock, Loader2, AlertCircle, CheckCircle2,
   GripVertical, Users, Sparkles, Save, Search, Download,
-  RefreshCw, Trash2, BookOpen
+  RefreshCw, Trash2, BookOpen, Upload
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { CharacterProfile } from "@shared/video-types";
@@ -55,6 +55,35 @@ export function CharacterProfilesPanel({
     },
   });
 
+  const handleCharPhotoUpload = async (file: File, characterId: string) => {
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch('/api/videos/uploads', { method: 'POST', body: formData, credentials: 'include' });
+      const data = await res.json();
+      if (data.url) {
+        const updated = characters.map(c =>
+          c.id === characterId ? { ...c, referencePhotoUrl: data.url } : c
+        );
+        onCharactersChange(updated);
+        if (!isStandalone) saveCharactersMutation.mutate(updated);
+        toast({ title: "Photo uploaded", description: "Reference photo will guide the character generation." });
+      } else {
+        throw new Error(data.error || 'Upload failed');
+      }
+    } catch (err: any) {
+      toast({ title: "Upload failed", description: err.message, variant: "destructive" });
+    }
+  };
+
+  const handleRemoveCharPhoto = (characterId: string) => {
+    const updated = characters.map(c =>
+      c.id === characterId ? { ...c, referencePhotoUrl: null } : c
+    );
+    onCharactersChange(updated);
+    if (!isStandalone) saveCharactersMutation.mutate(updated);
+  };
+
   const generateReferenceMutation = useMutation({
     mutationFn: async (characterId: string) => {
       if (isStandalone) {
@@ -70,6 +99,7 @@ export function CharacterProfilesPanel({
             physicalDescription: char.physicalDescription,
             wardrobe: char.wardrobe,
             personalityNotes: char.personalityNotes,
+            referencePhotoUrl: char.referencePhotoUrl || undefined,
           }),
         });
         if (!res.ok) {
@@ -78,10 +108,14 @@ export function CharacterProfilesPanel({
         }
         return res.json();
       }
+      const char = characters.find(c => c.id === characterId);
       const res = await fetch(`/api/universal-video/projects/${projectId}/characters/${characterId}/generate-reference`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
+        body: JSON.stringify({
+          referencePhotoUrl: char?.referencePhotoUrl || undefined,
+        }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -537,6 +571,38 @@ export function CharacterProfilesPanel({
                     color: "var(--text-primary)",
                   }}
                 />
+
+                {!char.locked && (
+                  <div className="mt-1">
+                    {char.referencePhotoUrl ? (
+                      <div className="flex items-center gap-2 p-1.5 rounded-md border" style={{ borderColor: "rgba(139,92,246,0.3)", background: "rgba(139,92,246,0.05)" }}>
+                        <img src={char.referencePhotoUrl} alt="Ref" className="w-8 h-8 rounded object-cover flex-shrink-0" />
+                        <span className="text-[10px] flex-1 truncate" style={{ color: "rgb(167,139,250)" }}>Photo ref attached</span>
+                        <button
+                          onClick={() => handleRemoveCharPhoto(char.id)}
+                          className="text-gray-400 hover:text-red-400 p-0.5"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ) : (
+                      <label className="flex items-center gap-1.5 text-[10px] px-2 py-1 rounded-md border border-dashed cursor-pointer hover:border-purple-500 transition-colors"
+                        style={{ borderColor: "var(--border-subtle)", color: "var(--text-secondary)" }}>
+                        <Upload className="w-3 h-3" />
+                        <span>Upload reference photo (optional)</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) handleCharPhotoUpload(file, char.id);
+                          }}
+                        />
+                      </label>
+                    )}
+                  </div>
+                )}
               </div>
 
               {char.generationStatus === "failed" && char.generationError && (

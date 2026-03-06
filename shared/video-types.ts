@@ -6,6 +6,7 @@ export interface CharacterProfile {
   wardrobe: string;
   personalityNotes: string;
   referenceImageUrl: string | null;
+  referencePhotoUrl?: string | null;
   locked: boolean;
   generationStatus?: 'idle' | 'generating' | 'completed' | 'failed';
   generationError?: string;
