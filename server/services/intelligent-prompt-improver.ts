@@ -1,4 +1,4 @@
-import Anthropic from '@anthropic-ai/sdk';
+import { llmClient } from './piapi-llm-client';
 import { brandContextService } from './brand-context-service';
 import { createLogger } from '../utils/logger';
 import type { Phase8AnalysisIssue } from '../../shared/video-types';
@@ -75,26 +75,17 @@ Avoid over-specification - let the AI model have creative freedom within constra
 `;
 
 class IntelligentPromptImprover {
-  private anthropic: Anthropic | null = null;
-
-  constructor() {
-    if (process.env.ANTHROPIC_API_KEY) {
-      this.anthropic = new Anthropic({
-        apiKey: process.env.ANTHROPIC_API_KEY,
-      });
-    }
-  }
 
   isAvailable(): boolean {
-    return !!this.anthropic;
+    return llmClient.isAvailable();
   }
 
   async improvePrompt(
     scene: SceneRequirements,
     issueContext: IssueContext
   ): Promise<ImprovedPromptResult> {
-    if (!this.anthropic) {
-      log.warn('Anthropic not available, returning original prompt with basic fixes');
+    if (!llmClient.isAvailable()) {
+      log.warn('No LLM provider available, returning original prompt with basic fixes');
       return this.getBasicImprovement(scene, issueContext);
     }
 
@@ -108,21 +99,16 @@ class IntelligentPromptImprover {
       const systemPrompt = this.buildSystemPrompt(promptStrategy, formula, brandContext);
       const userPrompt = this.buildUserPrompt(scene, issueContext, promptStrategy);
 
-      const response = await this.anthropic.messages.create({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 1500,
-        system: systemPrompt,
+      const result = await llmClient.createChatCompletion({
+        systemPrompt,
         messages: [
           { role: 'user', content: userPrompt }
         ],
+        maxTokens: 1500,
       });
 
-      const content = response.content[0];
-      if (content.type !== 'text') {
-        throw new Error('Unexpected response type');
-      }
-
-      return this.parseResponse(content.text, promptStrategy);
+      log.debug(`Prompt improvement via ${result.provider} (${result.model})`);
+      return this.parseResponse(result.text, promptStrategy);
 
     } catch (error: any) {
       log.error(`Prompt improvement failed: ${error.message}`);

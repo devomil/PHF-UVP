@@ -1,4 +1,4 @@
-import Anthropic from '@anthropic-ai/sdk';
+import { llmClient } from './piapi-llm-client';
 import type { VisualFormat } from '../../shared/video-types';
 import { getVisualArtPreset, isStylizedPreset } from '../../shared/config/visual-art-presets';
 
@@ -31,19 +31,8 @@ export interface BatchProviderRecommendations {
 }
 
 class IntelligentProviderSelectorService {
-  private anthropic: Anthropic | null = null;
-
-  constructor() {
-    if (process.env.ANTHROPIC_API_KEY) {
-      this.anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-      console.log('[IntelligentProvider] Claude-based provider selection enabled');
-    } else {
-      console.warn('[IntelligentProvider] No Anthropic API key - using fallback rules');
-    }
-  }
-
   async analyzeAndRecommendProviders(scenes: SceneContent[], artPresetId?: string): Promise<BatchProviderRecommendations> {
-    if (!this.anthropic || scenes.length === 0) {
+    if (!llmClient.isAvailable() || scenes.length === 0) {
       return this.fallbackProviderSelection(scenes, artPresetId);
     }
 
@@ -52,18 +41,13 @@ class IntelligentProviderSelectorService {
     try {
       const prompt = this.buildAnalysisPrompt(scenes);
       
-      const response = await this.anthropic.messages.create({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 4000,
+      const result = await llmClient.createChatCompletion({
+        systemPrompt: 'You are an expert video production AI assistant.',
         messages: [{ role: 'user', content: prompt }],
+        maxTokens: 4000,
       });
 
-      const content = response.content[0];
-      if (content.type !== 'text') {
-        throw new Error('Unexpected response type from Claude');
-      }
-
-      let recommendations = this.parseRecommendations(content.text, scenes);
+      let recommendations = this.parseRecommendations(result.text, scenes);
       
       if (artPresetId) {
         recommendations = this.applyArtPresetPreferences(recommendations, artPresetId);

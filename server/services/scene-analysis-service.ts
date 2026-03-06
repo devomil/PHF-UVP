@@ -1,4 +1,5 @@
-import Anthropic from '@anthropic-ai/sdk';
+import { llmClient } from './piapi-llm-client';
+import type { LLMMessageContent } from './piapi-llm-client';
 import { brandContextService } from './brand-context-service';
 import { projectInstructionsService } from './project-instructions-service';
 import type { Phase8AnalysisResult, Phase8AnalysisIssue } from '../../shared/video-types';
@@ -117,37 +118,9 @@ export interface BrandAwareSceneAnalysis extends SceneAnalysis {
 }
 
 class SceneAnalysisService {
-  private anthropic: Anthropic | null = null;
-
-  constructor() {
-    this.initializeClient();
-  }
-
-  private initializeClient(): void {
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-    if (apiKey && !this.anthropic) {
-      const keyPrefix = apiKey.substring(0, 15);
-      const keyLength = apiKey.length;
-      const hasWhitespace = /\s/.test(apiKey);
-      log.debug(` Initializing Anthropic client`);
-      log.debug(` API Key prefix: ${keyPrefix}...`);
-      log.debug(` API Key length: ${keyLength} chars`);
-      log.debug(` API Key has whitespace: ${hasWhitespace}`);
-      
-      const cleanedKey = apiKey.trim();
-      this.anthropic = new Anthropic({
-        apiKey: cleanedKey,
-      });
-    }
-  }
-
   isAvailable(): boolean {
-    // Re-check at runtime in case the secret was loaded after construction
-    if (!this.anthropic && process.env.ANTHROPIC_API_KEY) {
-      this.initializeClient();
-    }
-    const available = !!this.anthropic;
-    log.debug(` isAvailable() = ${available}, ANTHROPIC_API_KEY present: ${!!process.env.ANTHROPIC_API_KEY}`);
+    const available = llmClient.isAvailable();
+    log.debug(` isAvailable() = ${available}`);
     return available;
   }
 
@@ -162,8 +135,8 @@ class SceneAnalysisService {
   ): Promise<SceneAnalysis> {
     log.debug(` Analyzing scene: ${context.sceneType}`);
     
-    if (!this.anthropic) {
-      log.warn(` Anthropic not configured, using defaults`);
+    if (!llmClient.isAvailable()) {
+      log.warn(` LLM not configured, using defaults`);
       return this.getDefaultAnalysis();
     }
 
@@ -175,36 +148,25 @@ class SceneAnalysisService {
         return this.getDefaultAnalysis();
       }
 
-      const response = await this.anthropic.messages.create({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 2000,
-        messages: [
-          {
-            role: 'user',
-            content: [
-              {
-                type: 'image',
-                source: {
-                  type: 'base64',
-                  media_type: imageData.mediaType,
-                  data: imageData.base64,
-                },
-              },
-              {
-                type: 'text',
-                text: this.buildAnalysisPrompt(context),
-              },
-            ],
-          },
-        ],
+      const userContent: LLMMessageContent[] = [
+        {
+          type: 'image',
+          mediaType: imageData.mediaType,
+          base64Data: imageData.base64,
+        },
+        {
+          type: 'text',
+          text: this.buildAnalysisPrompt(context),
+        },
+      ];
+
+      const result = await llmClient.createChatCompletion({
+        systemPrompt: 'You are a professional video composition analyst.',
+        messages: [{ role: 'user', content: userContent }],
+        maxTokens: 2000,
       });
 
-      const content = response.content[0];
-      if (content.type !== 'text') {
-        throw new Error('Unexpected response type');
-      }
-
-      const analysis = this.parseAnalysisResponse(content.text);
+      const analysis = this.parseAnalysisResponse(result.text);
       
       log.debug(` Complete:`, {
         faces: analysis.faces.count,
@@ -265,8 +227,8 @@ class SceneAnalysisService {
   ): Promise<BrandAwareSceneAnalysis> {
     log.debug(` Analyzing scene ${context.sceneIndex + 1} with brand context...`);
     
-    if (!this.anthropic) {
-      log.warn(` Anthropic not configured, using defaults`);
+    if (!llmClient.isAvailable()) {
+      log.warn(` LLM not configured, using defaults`);
       return this.getDefaultBrandAwareAnalysis();
     }
 
@@ -281,36 +243,25 @@ class SceneAnalysisService {
       const visualContext = await brandContextService.getVisualAnalysisContextFull();
       const roleContext = await projectInstructionsService.getCondensedRoleContext();
 
-      const response = await this.anthropic.messages.create({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 3000,
-        messages: [
-          {
-            role: 'user',
-            content: [
-              {
-                type: 'image',
-                source: {
-                  type: 'base64',
-                  media_type: imageData.mediaType,
-                  data: imageData.base64,
-                },
-              },
-              {
-                type: 'text',
-                text: this.buildBrandAwareAnalysisPrompt(context, visualContext, roleContext),
-              },
-            ],
-          },
-        ],
+      const userContent: LLMMessageContent[] = [
+        {
+          type: 'image',
+          mediaType: imageData.mediaType,
+          base64Data: imageData.base64,
+        },
+        {
+          type: 'text',
+          text: this.buildBrandAwareAnalysisPrompt(context, visualContext, roleContext),
+        },
+      ];
+
+      const result = await llmClient.createChatCompletion({
+        systemPrompt: 'You are a brand-aware video composition analyst.',
+        messages: [{ role: 'user', content: userContent }],
+        maxTokens: 3000,
       });
 
-      const content = response.content[0];
-      if (content.type !== 'text') {
-        throw new Error('Unexpected response type');
-      }
-
-      const analysis = this.parseBrandAwareAnalysisResponse(content.text);
+      const analysis = this.parseBrandAwareAnalysisResponse(result.text);
       
       log.debug(` Brand alignment: ${analysis.brandAlignment.totalScore}/100 - ${analysis.brandAlignment.overallAssessment}`);
       
@@ -908,18 +859,11 @@ Return ONLY the JSON object.`;
     log.debug(`[Phase10A] Visual Direction: "${context.visualDirection?.substring(0, 120)}..."`);
     log.debug(`[Phase10A] Narration: "${context.narration?.substring(0, 100)}..."`);
     log.debug(`[Phase10A] Image data size: ${imageBase64.length} chars`);
-    log.debug(`[Phase10A] Anthropic client available: ${!!this.anthropic}`);
-    log.debug(`[Phase10A] ANTHROPIC_API_KEY env: ${!!process.env.ANTHROPIC_API_KEY}`);
+    log.debug(`[Phase10A] LLM client available: ${llmClient.isAvailable()}`);
     
-    // Re-check in case the key was loaded after construction
-    if (!this.anthropic && process.env.ANTHROPIC_API_KEY) {
-      log.debug('[Phase10A] Re-initializing Anthropic client...');
-      this.initializeClient();
-    }
-    
-    if (!this.anthropic) {
+    if (!llmClient.isAvailable()) {
       log.warn('═══════════════════════════════════════════════════════════════════════════════');
-      log.warn('[Phase10A] WARNING: ANTHROPIC NOT CONFIGURED');
+      log.warn('[Phase10A] WARNING: LLM NOT CONFIGURED');
       log.warn('[Phase10A] Returning SIMULATED result with FAKE scores (75-90 range)');
       log.warn('[Phase10A] This is why quality scores appear incorrect!');
       log.warn('═══════════════════════════════════════════════════════════════════════════════');
@@ -929,41 +873,32 @@ Return ONLY the JSON object.`;
     const brandContext = await brandContextService.getVisualAnalysisContext();
     const analysisPrompt = this.buildPhase8AnalysisPrompt(context, brandContext);
     
-    // Detect the actual media type from the base64 data
     const detectedMediaType = this.detectMediaTypeFromBase64(imageBase64);
     log.debug(`[Phase10A] Detected media type: ${detectedMediaType}`);
     
     try {
-      const response = await this.anthropic.messages.create({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 2500,
-        messages: [
-          {
-            role: 'user',
-            content: [
-              {
-                type: 'image',
-                source: {
-                  type: 'base64',
-                  media_type: detectedMediaType,
-                  data: imageBase64,
-                },
-              },
-              {
-                type: 'text',
-                text: analysisPrompt,
-              },
-            ],
-          },
-        ],
+      const userContent: LLMMessageContent[] = [
+        {
+          type: 'image',
+          mediaType: detectedMediaType,
+          base64Data: imageBase64,
+        },
+        {
+          type: 'text',
+          text: analysisPrompt,
+        },
+      ];
+
+      const llmResult = await llmClient.createChatCompletion({
+        systemPrompt: 'You are a STRICT quality assurance analyst for video production.',
+        messages: [{ role: 'user', content: userContent }],
+        maxTokens: 2500,
       });
       
-      const analysisText = response.content[0].type === 'text' 
-        ? response.content[0].text 
-        : '';
+      const analysisText = llmResult.text;
       
       log.debug('[Phase10A] Claude Vision API call SUCCESSFUL');
-      log.debug('[Phase10A] Raw response length:', analysisText.length, 'chars');
+      log.debug(`[Phase10A] Raw response length: ${analysisText.length} chars`);
       
       const result = this.parsePhase8AnalysisResponse(analysisText, context);
       
@@ -998,43 +933,32 @@ Return ONLY the JSON object.`;
    * Phase 8A: Quick check for blank/gradient images
    */
   async isBlankOrGradient(imageBase64: string): Promise<boolean> {
-    if (!this.anthropic) {
+    if (!llmClient.isAvailable()) {
       return false;
     }
     
-    // Detect the actual media type from the base64 data
     const detectedMediaType = this.detectMediaTypeFromBase64(imageBase64);
     
     try {
-      const response = await this.anthropic.messages.create({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 100,
-        messages: [
-          {
-            role: 'user',
-            content: [
-              {
-                type: 'image',
-                source: {
-                  type: 'base64',
-                  media_type: detectedMediaType,
-                  data: imageBase64,
-                },
-              },
-              {
-                type: 'text',
-                text: 'Is this image blank, a solid color, or just a gradient with no meaningful content? Answer only "yes" or "no".',
-              },
-            ],
-          },
-        ],
+      const userContent: LLMMessageContent[] = [
+        {
+          type: 'image',
+          mediaType: detectedMediaType,
+          base64Data: imageBase64,
+        },
+        {
+          type: 'text',
+          text: 'Is this image blank, a solid color, or just a gradient with no meaningful content? Answer only "yes" or "no".',
+        },
+      ];
+
+      const result = await llmClient.createChatCompletion({
+        systemPrompt: 'You are an image analysis assistant. Answer concisely.',
+        messages: [{ role: 'user', content: userContent }],
+        maxTokens: 100,
       });
       
-      const answer = response.content[0].type === 'text' 
-        ? response.content[0].text.toLowerCase().trim()
-        : '';
-      
-      return answer.includes('yes');
+      return result.text.toLowerCase().trim().includes('yes');
       
     } catch {
       return false;
@@ -1526,7 +1450,7 @@ Respond ONLY with the JSON, no other text.`;
         recommendation,
         improvedPrompt: analysis.overallAssessment?.improvedPrompt,
         analysisTimestamp: new Date().toISOString(),
-        analysisModel: 'claude-sonnet-4-20250514',
+        analysisModel: 'piapi-llm-client',
       };
       
     } catch (error: any) {
@@ -1563,7 +1487,7 @@ Respond ONLY with the JSON, no other text.`;
       }],
       recommendation: 'critical_fail',
       analysisTimestamp: new Date().toISOString(),
-      analysisModel: 'claude-sonnet-4-20250514',
+      analysisModel: 'piapi-llm-client',
     };
   }
 
@@ -1584,8 +1508,8 @@ Respond ONLY with the JSON, no other text.`;
       compositionScore: 0,
       aiArtifactsDetected: false,
       aiArtifactDetails: [],
-      contentMatchDetails: '⚠️ ANALYSIS PENDING - Configure ANTHROPIC_API_KEY for real quality analysis.',
-      brandComplianceDetails: '⚠️ ANALYSIS PENDING - No Anthropic API key configured',
+      contentMatchDetails: '⚠️ ANALYSIS PENDING - Configure PIAPI_API_KEY or ANTHROPIC_API_KEY for real quality analysis.',
+      brandComplianceDetails: '⚠️ ANALYSIS PENDING - No LLM API key configured',
       frameAnalysis: {
         subjectPosition: 'none',
         faceDetected: false,
@@ -1597,8 +1521,8 @@ Respond ONLY with the JSON, no other text.`;
       issues: [{
         category: 'technical',
         severity: 'critical',
-        description: '⚠️ Quality analysis not performed - Claude Vision API required',
-        suggestion: 'Configure ANTHROPIC_API_KEY to enable real quality analysis',
+        description: '⚠️ Quality analysis not performed - LLM Vision API required',
+        suggestion: 'Configure PIAPI_API_KEY or ANTHROPIC_API_KEY to enable real quality analysis',
       }],
       recommendation: 'critical_fail',  // Phase 10C: Cannot pass without real analysis
       analysisTimestamp: new Date().toISOString(),

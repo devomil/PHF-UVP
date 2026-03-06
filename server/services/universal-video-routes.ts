@@ -637,15 +637,12 @@ router.post('/ask-suzzie', isAuthenticated, async (req: Request, res: Response) 
       return res.status(400).json({ success: false, error: 'Narration is required' });
     }
     
-    const Anthropic = (await import('@anthropic-ai/sdk')).default;
+    const { llmClient } = await import('../services/piapi-llm-client');
     const { brandContextService } = await import('../services/brand-context-service');
-    const anthropicKey = process.env.ANTHROPIC_API_KEY;
     
-    if (!anthropicKey) {
+    if (!llmClient.isAvailable()) {
       return res.status(500).json({ success: false, error: 'AI service not configured' });
     }
-    
-    const client = new Anthropic({ apiKey: anthropicKey });
     
     // Get comprehensive brand context for better initial directions
     const brandContext = await brandContextService.getVisualDirectionGenerationContext();
@@ -734,17 +731,13 @@ Narration for this scene:
 
 Create an OPTIMIZED visual direction that requires NO IMPROVEMENT. ${isProductWorkflow ? 'Focus on the ENVIRONMENT where the product will be placed, not the product itself. Include camera motion and atmospheric effects for I2V animation.' : 'Include specific camera angles, lighting, colors, subject, setting, and mood.'} Return JSON with visualDirection, searchQuery, and fallbackQuery.`;
 
-    const response = await client.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 600,
-      system: systemPrompt,
+    const llmResult = await llmClient.createChatCompletion({
+      systemPrompt,
       messages: [{ role: 'user', content: userPrompt }],
+      maxTokens: 600,
     });
 
-    // Safely extract text content from response
-    const textContent = response.content && response.content.length > 0 && response.content[0].type === 'text' 
-      ? response.content[0].text 
-      : '';
+    const textContent = llmResult.text;
     
     if (!textContent) {
       console.error('[AskSuzzie] No text content in response');
@@ -753,28 +746,27 @@ Create an OPTIMIZED visual direction that requires NO IMPROVEMENT. ${isProductWo
     
     console.log('[AskSuzzie] Generated visual direction for scene type:', sceneType);
     
-    // Try to parse JSON response, fallback to text-only for backward compatibility
-    let result: { visualDirection: string; searchQuery?: string; fallbackQuery?: string };
+    let parsed: { visualDirection: string; searchQuery?: string; fallbackQuery?: string };
     try {
       const jsonMatch = textContent.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0]);
-        result = {
-          visualDirection: parsed.visualDirection || textContent.trim(),
-          searchQuery: parsed.searchQuery || '',
-          fallbackQuery: parsed.fallbackQuery || ''
+        const jsonParsed = JSON.parse(jsonMatch[0]);
+        parsed = {
+          visualDirection: jsonParsed.visualDirection || textContent.trim(),
+          searchQuery: jsonParsed.searchQuery || '',
+          fallbackQuery: jsonParsed.fallbackQuery || ''
         };
       } else {
-        result = { visualDirection: textContent.trim() };
+        parsed = { visualDirection: textContent.trim() };
       }
     } catch (parseErr) {
       console.warn('[AskSuzzie] Could not parse JSON, using text response');
-      result = { visualDirection: textContent.trim() };
+      parsed = { visualDirection: textContent.trim() };
     }
     
     res.json({ 
       success: true, 
-      ...result
+      ...parsed
     });
   } catch (error: any) {
     console.error('[AskSuzzie] Error generating visual direction:', error);
@@ -3399,8 +3391,8 @@ router.get('/service-status', isAuthenticated, async (req: Request, res: Respons
         role: 'PRIMARY - Voiceover',
       },
       'anthropic': {
-        configured: !!process.env.ANTHROPIC_API_KEY,
-        role: 'Script Generation',
+        configured: !!(process.env.PIAPI_API_KEY || process.env.ANTHROPIC_API_KEY),
+        role: 'Script Generation (PiAPI primary, Anthropic fallback)',
       },
       'huggingface': {
         configured: !!process.env.HUGGINGFACE_API_TOKEN,
@@ -5887,12 +5879,10 @@ router.post('/ai/suggest-visual-direction', isAuthenticated, async (req: Request
       return res.status(400).json({ error: 'Narration is required' });
     }
     
-    const Anthropic = (await import('@anthropic-ai/sdk')).default;
-    const anthropic = new Anthropic();
+    const { llmClient } = await import('../services/piapi-llm-client');
     
-    const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 200,
+    const result = await llmClient.createChatCompletion({
+      systemPrompt: 'You are a visual director for video content. Generate concise, actionable visual directions.',
       messages: [
         {
           role: 'user',
@@ -5911,11 +5901,10 @@ Write 1-2 sentences describing:
 Keep it brief and actionable for AI video generation. No preamble, just the direction.`,
         },
       ],
+      maxTokens: 200,
     });
     
-    const suggestion = response.content[0].type === 'text' 
-      ? response.content[0].text 
-      : '';
+    const suggestion = result.text;
     
     console.log(`[UniversalVideo] Generated visual direction for ${sceneType} scene`);
     
