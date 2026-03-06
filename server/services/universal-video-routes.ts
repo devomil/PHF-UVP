@@ -10238,6 +10238,51 @@ router.delete('/character-library/:id', isAuthenticated, async (req: Request, re
   }
 });
 
+router.patch('/character-library/:id', isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const userId = (req.user as any)?.id;
+    if (!userId) return res.status(401).json({ success: false, error: 'Unauthorized' });
+
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ success: false, error: 'Invalid ID' });
+
+    const [existing] = await db.select().from(characterLibrary)
+      .where(and(eq(characterLibrary.id, id), eq(characterLibrary.ownerId, userId)));
+    if (!existing) return res.status(404).json({ success: false, error: 'Character not found in library' });
+
+    const { name, role, physicalDescription, wardrobe, personalityNotes } = req.body;
+
+    const updates: Record<string, any> = { updatedAt: new Date() };
+    if (name !== undefined) updates.name = name;
+    if (role !== undefined) updates.role = role;
+    if (physicalDescription !== undefined) updates.physicalDescription = physicalDescription;
+    if (wardrobe !== undefined) updates.wardrobe = wardrobe;
+    if (personalityNotes !== undefined) updates.personalityNotes = personalityNotes;
+
+    const [updated] = await db.update(characterLibrary)
+      .set(updates)
+      .where(and(eq(characterLibrary.id, id), eq(characterLibrary.ownerId, userId)))
+      .returning();
+
+    if (existing.referenceImageUrl && (name !== undefined || role !== undefined)) {
+      const newPrompt = `Character: ${updated.name}${updated.role ? ` — ${updated.role}` : ''}`;
+      await db.update(assetLibrary)
+        .set({ prompt: newPrompt, updatedAt: new Date() })
+        .where(and(
+          eq(assetLibrary.assetUrl, existing.referenceImageUrl),
+          eq(assetLibrary.createdBy, userId),
+          eq(assetLibrary.contentType, 'character')
+        ));
+    }
+
+    console.log(`[CharacterLibrary] Updated "${updated.name}" (id: ${id})`);
+    res.json({ success: true, character: updated });
+  } catch (error: any) {
+    console.error('[CharacterLibrary] Update failed:', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 router.post('/projects/:projectId/characters/import', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const { projectId } = req.params;

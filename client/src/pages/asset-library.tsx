@@ -166,6 +166,7 @@ export default function AssetLibrary() {
   const [sourceFilter, setSourceFilter] = useState('all');
   const [selectedAsset, setSelectedAsset] = useState<MediaAsset | null>(null);
   const [selectedLibraryAsset, setSelectedLibraryAsset] = useState<any | null>(null);
+  const [editingAssetPrompt, setEditingAssetPrompt] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
   const [isCreatorOpen, setIsCreatorOpen] = useState(false);
@@ -287,6 +288,35 @@ export default function AssetLibrary() {
     },
     onError: () => {
       toast({ title: 'Error', description: 'Failed to delete character.', variant: 'destructive' });
+    },
+  });
+
+  const [editingCharacter, setEditingCharacter] = useState<CharacterLibraryEntry | null>(null);
+  const [editCharForm, setEditCharForm] = useState({ name: '', role: '', physicalDescription: '', wardrobe: '', personalityNotes: '' });
+
+  const updateCharacterMutation = useMutation({
+    mutationFn: async ({ id, updates }: { id: number; updates: Record<string, string> }) => {
+      const res = await apiRequest('PATCH', `/api/universal-video/character-library/${id}`, updates);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/universal-video/character-library'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/asset-library'] });
+      toast({ title: 'Character updated', description: 'Character details have been saved.' });
+      setEditingCharacter(null);
+    },
+    onError: () => {
+      toast({ title: 'Error', description: 'Failed to update character.', variant: 'destructive' });
+    },
+  });
+
+  const updateLibraryAssetPromptMutation = useMutation({
+    mutationFn: async ({ id, prompt }: { id: number; prompt: string }) => {
+      const res = await apiRequest('PATCH', `/api/asset-library/${id}`, { prompt });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/asset-library'] });
     },
   });
 
@@ -1340,6 +1370,23 @@ export default function AssetLibrary() {
                           </Badge>
                         </div>
                         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100">
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingCharacter(character);
+                              setEditCharForm({
+                                name: character.name,
+                                role: character.role || '',
+                                physicalDescription: character.physicalDescription || '',
+                                wardrobe: character.wardrobe || '',
+                                personalityNotes: character.personalityNotes || '',
+                              });
+                            }}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
                           {character.referenceImageUrl && (
                             <Button
                               size="sm"
@@ -2295,7 +2342,7 @@ export default function AssetLibrary() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!selectedLibraryAsset} onOpenChange={() => setSelectedLibraryAsset(null)}>
+      <Dialog open={!!selectedLibraryAsset} onOpenChange={() => { setSelectedLibraryAsset(null); setEditingAssetPrompt(null); }}>
         <DialogContent className="max-w-4xl bg-gray-900 border-gray-700 text-white">
           {selectedLibraryAsset && (
             <>
@@ -2352,8 +2399,54 @@ export default function AssetLibrary() {
                 </div>
                 {selectedLibraryAsset.prompt && (
                   <div className="bg-gray-800/50 rounded-lg p-3">
-                    <Label className="text-[10px] uppercase tracking-wider text-gray-500">Prompt</Label>
-                    <p className="text-sm text-gray-300 mt-1">{selectedLibraryAsset.prompt}</p>
+                    <div className="flex items-center justify-between">
+                      <Label className="text-[10px] uppercase tracking-wider text-gray-500">Prompt</Label>
+                      {selectedLibraryAsset.contentType === 'character' && editingAssetPrompt === null && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 w-6 p-0 text-gray-500 hover:text-purple-400"
+                          onClick={() => setEditingAssetPrompt(selectedLibraryAsset.prompt)}
+                        >
+                          <Edit className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                    </div>
+                    {editingAssetPrompt !== null && selectedLibraryAsset.contentType === 'character' ? (
+                      <div className="mt-1 space-y-2">
+                        <Input
+                          value={editingAssetPrompt}
+                          onChange={(e) => setEditingAssetPrompt(e.target.value)}
+                          className="bg-gray-900 border-gray-700 text-white text-sm"
+                        />
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            className="bg-purple-600 hover:bg-purple-700 text-white h-7 text-xs"
+                            disabled={updateLibraryAssetPromptMutation.isPending}
+                            onClick={() => {
+                              updateLibraryAssetPromptMutation.mutate(
+                                { id: selectedLibraryAsset.id, prompt: editingAssetPrompt },
+                                {
+                                  onSuccess: () => {
+                                    setSelectedLibraryAsset({ ...selectedLibraryAsset, prompt: editingAssetPrompt });
+                                    setEditingAssetPrompt(null);
+                                    toast({ title: 'Updated', description: 'Asset prompt has been saved.' });
+                                  },
+                                }
+                              );
+                            }}
+                          >
+                            {updateLibraryAssetPromptMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Save'}
+                          </Button>
+                          <Button size="sm" variant="ghost" className="h-7 text-xs text-gray-400" onClick={() => setEditingAssetPrompt(null)}>
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-300 mt-1">{selectedLibraryAsset.prompt}</p>
+                    )}
                   </div>
                 )}
                 <div className="flex items-center gap-2 pt-2">
@@ -2380,6 +2473,109 @@ export default function AssetLibrary() {
                   >
                     <Trash2 className="h-4 w-4 mr-2" />
                     Delete
+                  </Button>
+                </div>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Character Dialog */}
+      <Dialog open={!!editingCharacter} onOpenChange={(open) => { if (!open) setEditingCharacter(null); }}>
+        <DialogContent className="sm:max-w-lg bg-gray-950 border-gray-800 text-white max-h-[90vh] overflow-y-auto">
+          {editingCharacter && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Edit className="h-5 w-5 text-purple-400" />
+                  Edit Character
+                </DialogTitle>
+                <DialogDescription className="text-gray-400">
+                  Update character details. Changes will be saved to your character library.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-3">
+                {editingCharacter.referenceImageUrl && (
+                  <div className="flex justify-center">
+                    <img src={editingCharacter.referenceImageUrl} alt={editCharForm.name} className="w-32 h-32 rounded-lg object-cover border border-gray-700" />
+                  </div>
+                )}
+                <div>
+                  <Label className="text-sm text-gray-400">Name *</Label>
+                  <Input
+                    value={editCharForm.name}
+                    onChange={(e) => setEditCharForm(f => ({ ...f, name: e.target.value }))}
+                    className="bg-gray-900 border-gray-700 text-white"
+                  />
+                </div>
+                <div>
+                  <Label className="text-sm text-gray-400">Role / Title</Label>
+                  <Input
+                    value={editCharForm.role}
+                    onChange={(e) => setEditCharForm(f => ({ ...f, role: e.target.value }))}
+                    className="bg-gray-900 border-gray-700 text-white"
+                  />
+                </div>
+                <div>
+                  <Label className="text-sm text-gray-400">Physical Description</Label>
+                  <Textarea
+                    value={editCharForm.physicalDescription}
+                    onChange={(e) => setEditCharForm(f => ({ ...f, physicalDescription: e.target.value }))}
+                    className="bg-gray-900 border-gray-700 text-white"
+                    rows={3}
+                  />
+                </div>
+                <div>
+                  <Label className="text-sm text-gray-400">Wardrobe</Label>
+                  <Input
+                    value={editCharForm.wardrobe}
+                    onChange={(e) => setEditCharForm(f => ({ ...f, wardrobe: e.target.value }))}
+                    className="bg-gray-900 border-gray-700 text-white"
+                  />
+                </div>
+                <div>
+                  <Label className="text-sm text-gray-400">Personality / Expression Notes</Label>
+                  <Input
+                    value={editCharForm.personalityNotes}
+                    onChange={(e) => setEditCharForm(f => ({ ...f, personalityNotes: e.target.value }))}
+                    className="bg-gray-900 border-gray-700 text-white"
+                  />
+                </div>
+                <div className="flex gap-2 pt-2">
+                  <Button
+                    onClick={() => {
+                      if (!editCharForm.name.trim()) {
+                        toast({ title: 'Name is required', variant: 'destructive' });
+                        return;
+                      }
+                      updateCharacterMutation.mutate({
+                        id: editingCharacter.id,
+                        updates: {
+                          name: editCharForm.name.trim(),
+                          role: editCharForm.role.trim(),
+                          physicalDescription: editCharForm.physicalDescription.trim(),
+                          wardrobe: editCharForm.wardrobe.trim(),
+                          personalityNotes: editCharForm.personalityNotes.trim(),
+                        },
+                      });
+                    }}
+                    disabled={updateCharacterMutation.isPending}
+                    className="flex-1 bg-purple-600 hover:bg-purple-700 text-white"
+                  >
+                    {updateCharacterMutation.isPending ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <CheckCircle2 className="h-4 w-4 mr-2" />
+                    )}
+                    Save Changes
+                  </Button>
+                  <Button
+                    onClick={() => setEditingCharacter(null)}
+                    variant="ghost"
+                    className="text-gray-400 hover:text-white"
+                  >
+                    Cancel
                   </Button>
                 </div>
               </div>
