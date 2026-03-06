@@ -430,6 +430,21 @@ export default function AssetLibrary() {
     },
   });
 
+  const deleteLibraryAssetMutation = useMutation({
+    mutationFn: async (id: number) => {
+      await apiRequest('DELETE', `/api/asset-library/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/asset-library'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/universal-video/character-library'] });
+      toast({ title: 'Asset Deleted', description: 'Asset has been removed from the library.' });
+      setSelectedLibraryAsset(null);
+    },
+    onError: () => {
+      toast({ title: 'Error', description: 'Failed to delete asset.', variant: 'destructive' });
+    },
+  });
+
   const assets: MediaAsset[] = assetsData?.assets || [];
   const uploads: UserUpload[] = uploadsData?.uploads || [];
   const brandAssets: BrandMedia[] = brandMediaData?.assets || [];
@@ -821,9 +836,21 @@ export default function AssetLibrary() {
                             {la.isFavorite && (
                               <div className="absolute top-1.5 right-1.5 text-yellow-400 text-xs">★</div>
                             )}
-                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
+                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100">
                               <Button size="sm" variant="secondary">
                                 View
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (confirm('Are you sure you want to delete this asset?')) {
+                                    deleteLibraryAssetMutation.mutate(la.id);
+                                  }
+                                }}
+                              >
+                                <Trash2 className="h-4 w-4" />
                               </Button>
                             </div>
                           </div>
@@ -2342,6 +2369,17 @@ export default function AssetLibrary() {
                   >
                     <Download className="h-4 w-4 mr-2" />
                     Download
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    onClick={() => {
+                      if (confirm('Are you sure you want to delete this asset?')) {
+                        deleteLibraryAssetMutation.mutate(selectedLibraryAsset.id);
+                      }
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete
                   </Button>
                 </div>
               </div>
