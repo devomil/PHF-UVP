@@ -164,6 +164,15 @@ class AIVideoService {
         i2vPrompt = `${contentTag.promptPrefix} ${i2vPrompt}`;
       } else if (artPreset && !isStylizedArt) {
         i2vPrompt = `${artPreset.imagePromptPrefix} ${i2vPrompt}`;
+      } else if (isStylizedArt && artPreset) {
+        const styleKw = (artPreset as any).styleKeywords || [];
+        const pLower = i2vPrompt.toLowerCase();
+        const hasMarker = styleKw.length > 0 ? styleKw.some((kw: string) => pLower.includes(kw)) : false;
+        if (!hasMarker) {
+          const prefix = (artPreset as any).styleMarkerPrefix || artPreset.name;
+          i2vPrompt = `${prefix} — ${i2vPrompt}`;
+          console.log(`[AIVideo] I2V stylized preset "${artPreset.name}" — prepended style marker: "${prefix}"`);
+        }
       }
       console.log(`[AIVideo] Adapted I2V prompt: ${i2vPrompt.substring(0, 100)}...`);
       enhancedOptions = {
@@ -179,8 +188,19 @@ class AIVideoService {
       } else if (artPreset && !isStylizedArt) {
         basePrompt = `${artPreset.imagePromptPrefix} ${basePrompt}, ${artPreset.imagePromptSuffix}`;
         console.log(`[AIVideo] Art preset applied to prompt: ${basePrompt.substring(0, 120)}...`);
-      } else if (isStylizedArt) {
-        console.log(`[AIVideo] Stylized preset "${artPreset!.name}" — skipping mechanical prefix/suffix wrapping (style already in prompt)`);
+      } else if (isStylizedArt && artPreset) {
+        const styleKeywords = (artPreset as any).styleKeywords || [];
+        const promptLower = basePrompt.toLowerCase();
+        const hasStyleMarker = styleKeywords.length > 0
+          ? styleKeywords.some((kw: string) => promptLower.includes(kw))
+          : false;
+        if (!hasStyleMarker) {
+          const prefix = (artPreset as any).styleMarkerPrefix || artPreset.name;
+          basePrompt = `${prefix} — ${basePrompt}`;
+          console.log(`[AIVideo] Stylized preset "${artPreset.name}" — prepended style marker: "${prefix}"`);
+        } else {
+          console.log(`[AIVideo] Stylized preset "${artPreset.name}" — style keywords already present in prompt`);
+        }
       }
       
       // Build enhanced prompt with style modifiers
