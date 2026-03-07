@@ -4104,8 +4104,14 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
       const matchCharactersInText = (text: string): CharacterProfile[] => {
         if (!text || lockedCharacters.length === 0) return [];
         return lockedCharacters.filter(c => {
-          const regex = new RegExp('\\b' + escapeRegex(c.name) + '\\b', 'i');
-          return regex.test(text);
+          const fullRx = new RegExp('\\b' + escapeRegex(c.name) + '\\b', 'i');
+          if (fullRx.test(text)) return true;
+          const firstName = c.name.split(/\s+/)[0];
+          if (firstName && firstName.length >= 3 && firstName !== c.name) {
+            const firstRx = new RegExp('\\b' + escapeRegex(firstName) + '\\b', 'i');
+            return firstRx.test(text);
+          }
+          return false;
         });
       };
       
