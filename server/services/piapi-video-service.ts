@@ -748,6 +748,7 @@ class PiAPIVideoService {
       motionStrength?: number;
     };
     motionControl?: MotionControlConfig;
+    isCharacterReference?: boolean;
   }): Promise<PiAPIGenerationResult> {
     if (!this.isAvailable()) {
       return { success: false, error: 'PiAPI key not configured' };
@@ -881,17 +882,16 @@ class PiAPIVideoService {
       motionStrength?: number;
     };
     motionControl?: MotionControlConfig;
+    isCharacterReference?: boolean;
   }, sanitizedPrompt: string): any {
     const animationStyle = options.i2vSettings?.animationStyle ?? 'product-hero';
     
-    // Helper: Detect if prompt requires NEW content generation vs simple animation
-    // IMPORTANT: Default to ANIMATE mode (preserve source image) for I2V.
-    // Only switch to REFERENCE mode when the prompt explicitly describes a scene 
-    // with multiple people doing activities — content that can't be achieved by 
-    // simply animating the source image.
-    // Single-word matches like "wellness" or "man" caused false positives, so we
-    // now require stronger multi-word activity patterns.
     const promptRequiresNewContent = (prompt: string): boolean => {
+      if (options.isCharacterReference) {
+        console.log(`[PiAPI I2V] CHARACTER REFERENCE MODE — forcing new content generation (not animate)`);
+        return true;
+      }
+
       const p = prompt.toLowerCase();
 
       const humanSubjects = /\b(?:people|person|woman|man|child|children|kids|family|couple|adults|customer|customers|farmer|farmers|worker|workers|athlete|athletes|patient|patients|practitioner|nurse|doctor)\b/;
