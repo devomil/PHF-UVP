@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useLocation, Link } from "wouter";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Sparkles, FileText, Zap, ArrowLeft, Video, Image, Info, Plus, Trash2, ChevronUp, ChevronDown, GripVertical, Palette, Users, UserCheck } from "lucide-react";
@@ -737,15 +737,39 @@ function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () => void; 
   const [aspectRatio, setAspectRatio] = useState("16:9");
   const [provider, setProvider] = useState("auto");
   const [saveToLibrary, setSaveToLibrary] = useState(true);
+  const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(null);
   const allPresets = getAllVisualArtPresets();
+
+  const showCharacterSelector = outputType === "video" && artPresetId === "3d-illustration";
+
+  const characterLibraryQuery = useQuery({
+    queryKey: ["character-library"],
+    queryFn: async () => {
+      const res = await fetch("/api/universal-video/character-library", { credentials: "include" });
+      if (!res.ok) return [];
+      const data = await res.json();
+      return data.characters || [];
+    },
+    enabled: showCharacterSelector,
+    staleTime: 60000,
+  });
+
+  const characters: any[] = characterLibraryQuery.data || [];
+  const selectedCharacter = characters.find((c: any) => String(c.id) === selectedCharacterId);
 
   useEffect(() => {
     setProvider("auto");
   }, [outputType]);
 
+  useEffect(() => {
+    if (!showCharacterSelector) {
+      setSelectedCharacterId(null);
+    }
+  }, [showCharacterSelector]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit({
+    const payload: any = {
       mode: "quick-create",
       outputType,
       prompt,
@@ -755,7 +779,16 @@ function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () => void; 
       aspectRatio,
       provider,
       saveToLibrary,
-    });
+    };
+    if (selectedCharacter && selectedCharacter.referenceImageUrl) {
+      payload.characterReferenceUrl = selectedCharacter.referenceImageUrl;
+      payload.characterName = selectedCharacter.name;
+      payload.characterDescription = [
+        selectedCharacter.physicalDescription,
+        selectedCharacter.wardrobe ? `wearing ${selectedCharacter.wardrobe}` : '',
+      ].filter(Boolean).join(', ');
+    }
+    onSubmit(payload);
   };
 
   return (
@@ -831,6 +864,66 @@ function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () => void; 
             <p className="text-xs mt-1 opacity-70" style={{ color: "var(--text-tertiary)" }}>{allPresets.find(p => p.id === artPresetId)?.globalStyleNotes}</p>
           )}
         </div>
+
+        {showCharacterSelector && (
+          <div>
+            <Label style={{ color: "var(--text-secondary)" }}>
+              <span className="flex items-center gap-2">
+                <Users className="w-4 h-4" />
+                Character Reference (Optional)
+              </span>
+            </Label>
+            <p className="text-xs mt-1 mb-2" style={{ color: "var(--text-tertiary)" }}>
+              Select a character from your library to maintain visual consistency
+            </p>
+            {characterLibraryQuery.isLoading ? (
+              <div className="text-xs py-3 text-center" style={{ color: "var(--text-tertiary)" }}>Loading characters...</div>
+            ) : characters.length === 0 ? (
+              <div className="text-xs py-3 text-center rounded-lg border" style={{ color: "var(--text-tertiary)", borderColor: "var(--border-subtle)", backgroundColor: "var(--surface)" }}>
+                No characters in your library. Create one in the Asset Library or Scene Editor first.
+              </div>
+            ) : (
+              <div className="flex gap-2 overflow-x-auto pb-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedCharacterId(null)}
+                  className={`flex-shrink-0 px-3 py-2 rounded-lg text-xs font-medium border transition-all ${!selectedCharacterId ? "bg-purple-600/20 border-purple-500 text-purple-300" : "border-transparent"}`}
+                  style={selectedCharacterId ? { backgroundColor: "var(--surface)", color: "var(--text-secondary)", borderColor: "var(--border-subtle)" } : {}}
+                >
+                  None
+                </button>
+                {characters.map((char: any) => (
+                  <button
+                    type="button"
+                    key={char.id}
+                    onClick={() => setSelectedCharacterId(String(char.id))}
+                    className={`flex-shrink-0 flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium border transition-all ${selectedCharacterId === String(char.id) ? "bg-purple-600/20 border-purple-500 text-purple-300" : "border-transparent"}`}
+                    style={selectedCharacterId !== String(char.id) ? { backgroundColor: "var(--surface)", color: "var(--text-secondary)", borderColor: "var(--border-subtle)" } : {}}
+                  >
+                    {char.referenceImageUrl && (
+                      <img src={char.referenceImageUrl} alt={char.name} className="w-6 h-6 rounded-full object-cover" />
+                    )}
+                    <span>{char.name}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            {selectedCharacter && (
+              <div className="mt-2 p-3 rounded-lg border flex items-start gap-3" style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)" }}>
+                {selectedCharacter.referenceImageUrl && (
+                  <img src={selectedCharacter.referenceImageUrl} alt={selectedCharacter.name} className="w-16 h-16 rounded-lg object-cover flex-shrink-0" />
+                )}
+                <div className="min-w-0">
+                  <div className="font-medium text-sm" style={{ color: "var(--text-primary)" }}>{selectedCharacter.name}</div>
+                  {selectedCharacter.role && <div className="text-xs" style={{ color: "var(--text-tertiary)" }}>{selectedCharacter.role}</div>}
+                  {selectedCharacter.physicalDescription && (
+                    <div className="text-xs mt-1 line-clamp-2" style={{ color: "var(--text-secondary)" }}>{selectedCharacter.physicalDescription}</div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         <div>
           <Label style={{ color: "var(--text-secondary)" }}>Aspect Ratio</Label>

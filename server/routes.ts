@@ -198,7 +198,7 @@ export function registerRoutes(app: Express) {
         return res.status(401).json({ error: "Not authenticated" });
       }
 
-      const { mode, title, description, targetAudience, duration, platform, aspectRatio, mediaMode, videoGenerationMode, qualityTier, script, numScenes, visualStyle, voiceStyle, outputType, prompt, imageStyle, provider, saveToLibrary, customScenes, artPresetId, characterConsistency, characters } = req.body;
+      const { mode, title, description, targetAudience, duration, platform, aspectRatio, mediaMode, videoGenerationMode, qualityTier, script, numScenes, visualStyle, voiceStyle, outputType, prompt, imageStyle, provider, saveToLibrary, customScenes, artPresetId, characterConsistency, characters, characterReferenceUrl, characterName, characterDescription } = req.body;
 
       const projectId = crypto.randomUUID();
 
@@ -300,6 +300,12 @@ export function registerRoutes(app: Express) {
           }
         }
 
+        if (characterReferenceUrl && characterDescription) {
+          const charName = characterName || "the character";
+          enhancedPrompt = `${enhancedPrompt}\nGenerate a NEW scene showing ${charName} in the described setting. Use the reference image ONLY for character appearance consistency (face, hair, clothing, art style). Do NOT animate or reproduce the reference image itself. Character: ${charName} — ${characterDescription}`;
+          console.log(`[Routes] Quick Create with character reference: ${charName}, image: ${characterReferenceUrl.substring(0, 60)}...`);
+        }
+
         const [project] = await db.insert(universalVideoProjects).values({
           projectId,
           ownerId: qcUserId,
@@ -330,7 +336,13 @@ export function registerRoutes(app: Express) {
           aspectRatio: aspectRatio || "16:9",
           style: outputType === "image" ? (imageStyle || "Photorealistic") : undefined,
           sceneType: outputType === "image" ? "image" : "video",
-          i2vSettings: { saveToLibrary: saveToLibrary !== false, outputType: outputType || "video", artPresetId: qcProgressData.artPresetId || undefined },
+          sourceImageUrl: characterReferenceUrl || undefined,
+          i2vSettings: {
+            saveToLibrary: saveToLibrary !== false,
+            outputType: outputType || "video",
+            artPresetId: qcProgressData.artPresetId || undefined,
+            ...(characterReferenceUrl ? { isCharacterReference: true } : {}),
+          },
           triggeredBy: (req.user as any).id,
         });
 

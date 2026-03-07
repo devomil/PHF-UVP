@@ -86,6 +86,7 @@ export async function processVideoJob(jobId: string) {
       })
       .where(eq(universalVideoProjects.projectId, job.projectId));
 
+    const jobI2vSettings = (job.i2vSettings as any) || {};
     const result = await aiVideoService.generateVideo({
       prompt: job.prompt || "",
       duration: job.duration || 6,
@@ -94,6 +95,8 @@ export async function processVideoJob(jobId: string) {
       preferredProvider: job.provider || "auto",
       negativePrompt: job.negativePrompt || undefined,
       imageUrl: job.sourceImageUrl || undefined,
+      ...(jobI2vSettings.isCharacterReference ? { isCharacterReference: true } : {}),
+      ...(jobI2vSettings.artPresetId ? { artPresetId: jobI2vSettings.artPresetId } : {}),
     });
 
     const [projectAfterGen] = await db
