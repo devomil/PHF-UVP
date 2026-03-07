@@ -26,6 +26,7 @@ export function dbRowToVideoProject(row: any): VideoProject {
     outputFormat: row.outputFormat,
     brand: row.brand || {},
     scenes: row.scenes || [],
+    characters: row.characters || [],
     assets: row.assets || {},
     progress: progress,
     status: row.status,
