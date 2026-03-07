@@ -386,8 +386,13 @@ class VideoGenerationWorker {
           log.info(`[VideoWorker] Original prompt: ${promptForGeneration.substring(0, 150)}...`);
         }
 
+
         let jobArtPresetId: string | undefined;
         let jobContentTag: string | undefined;
+        let charRefImageUrl: string | undefined;
+        let charRefImageUrls: string[] | undefined;
+        let isCharacterRef = false;
+        let charEnhancedPrompt = promptForGeneration;
         try {
           const { getProjectFromDb } = await import('./video-project-db');
           const projectData = await getProjectFromDb(job.projectId);
@@ -408,22 +413,75 @@ class VideoGenerationWorker {
                 }
               }
               log.debug(` Job ${job.jobId} resolved artPresetId=${jobArtPresetId || 'none'}, contentTag=${jobContentTag || 'none'}`);
+
+              const hasExplicitSourceImages = !!(job.i2vSettings as any)?.sourceImageUrls?.length;
+              if (!hasSourceImage && !hasExplicitSourceImages) {
+                const { isStylizedPreset } = await import('../../shared/config/visual-art-presets');
+                const isStylizedArt = jobArtPresetId ? isStylizedPreset(jobArtPresetId) : false;
+                const isCharI2VMode = (projectData as any).videoGenerationMode === 'character-i2v';
+                const shouldCheckChars = isCharI2VMode || isStylizedArt;
+
+                if (shouldCheckChars) {
+                  const lockedChars = ((projectData as any).characters || [])
+                    .filter((c: any) => c.locked && c.referenceImageUrl);
+                  const escapeRegexStr = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+                  const matchedProjectChars = lockedChars.filter((c: any) => {
+                    const rx = new RegExp('\\b' + escapeRegexStr(c.name) + '\\b', 'i');
+                    return rx.test(charEnhancedPrompt);
+                  });
+
+                  let finalMatchedChars = matchedProjectChars;
+
+                  if (matchedProjectChars.length === 0) {
+                    try {
+                      const { characterLibrary } = await import('../../shared/schema');
+                      const userId = job.triggeredBy;
+                      if (userId) {
+                        const libChars = await db.select().from(characterLibrary).where(eq(characterLibrary.ownerId, Number(userId)));
+                        finalMatchedChars = libChars.filter((c: any) => {
+                          const rx = new RegExp('\\b' + escapeRegexStr(c.name) + '\\b', 'i');
+                          return rx.test(charEnhancedPrompt) && c.referenceImageUrl;
+                        });
+                        if (finalMatchedChars.length > 0) {
+                          log.info(`[CharRef] Job ${job.jobId}: matched ${finalMatchedChars.length} characters from library: ${finalMatchedChars.map((c: any) => c.name).join(', ')}`);
+                        }
+                      }
+                    } catch (charErr) {
+                      log.debug(`[CharRef] Could not check character library: ${(charErr as any).message}`);
+                    }
+                  } else {
+                    log.info(`[CharRef] Job ${job.jobId}: matched ${matchedProjectChars.length} characters from project: ${matchedProjectChars.map((c: any) => c.name).join(', ')}`);
+                  }
+
+                  if (finalMatchedChars.length > 0) {
+                    charRefImageUrl = finalMatchedChars[0].referenceImageUrl;
+                    charRefImageUrls = finalMatchedChars.map((c: any) => c.referenceImageUrl).filter(Boolean);
+                    isCharacterRef = true;
+                    const charDescs = finalMatchedChars.map((c: any) => `${c.name}: ${c.physicalDescription || ''}, wearing ${c.wardrobe || ''}`).join('. ');
+                    charEnhancedPrompt = `${charEnhancedPrompt}\nGenerate a NEW scene showing ${finalMatchedChars.length > 1 ? 'these characters' : 'this character'} in the described setting. Use the reference image ONLY for character appearance consistency (face, hair, clothing, art style). Do NOT animate or reproduce the reference image itself. Characters: ${charDescs}`;
+                  }
+                }
+              }
             }
           }
         } catch (e) {
-          log.debug(` Job ${job.jobId} could not resolve art preset/content tag: ${(e).message}`);
+          log.debug(` Job ${job.jobId} could not resolve art preset/content tag: ${(e as any).message}`);
         }
 
+        const finalImageUrl = job.sourceImageUrl || charRefImageUrl || undefined;
+        const finalImageUrls = (job.i2vSettings as any)?.sourceImageUrls || (charRefImageUrls && charRefImageUrls.length > 1 ? charRefImageUrls : undefined);
+
         const result = await aiVideoService.generateVideo({
-          prompt: promptForGeneration,
+          prompt: charEnhancedPrompt,
           duration: job.duration || 6,
           aspectRatio,
           sceneType: job.sceneType || "hook",
           preferredProvider: provider,
           negativePrompt: enhancedNegativePrompt,
           visualStyle: job.style || "professional",
-          imageUrl: job.sourceImageUrl || undefined,
-          imageUrls: (job.i2vSettings as any)?.sourceImageUrls || undefined,
+          imageUrl: finalImageUrl,
+          imageUrls: finalImageUrls,
           i2vSettings: jobI2vSettings || undefined,
           motionOverride: jobMotionControl ? {
             camera_movement: jobMotionControl.camera_movement as any,
@@ -433,9 +491,10 @@ class VideoGenerationWorker {
           } : undefined,
           ...(jobArtPresetId ? { artPresetId: jobArtPresetId } : {}),
           ...(jobContentTag ? { contentTag: jobContentTag } : {}),
+          ...(isCharacterRef ? { isCharacterReference: true } : {}),
         });
 
-        // Log which provider actually fulfilled the request
+// Log which provider actually fulfilled the request
         const actualProvider = result.provider || provider || 'auto';
         log.debug(` Job ${job.jobId} fulfilled by provider: ${actualProvider}`);
 
