@@ -49,10 +49,11 @@ interface AIVideoOptions {
   imageUrl?: string;
   imageUrls?: string[];
   qualityTier?: 'ultra' | 'premium' | 'standard';
-  i2vSettings?: I2VSettingsInput; // I2V-specific settings from UI
-  motionOverride?: MotionControlConfig; // Manual motion control override from UI
+  i2vSettings?: I2VSettingsInput;
+  motionOverride?: MotionControlConfig;
   artPresetId?: string;
   contentTag?: string;
+  isCharacterReference?: boolean;
 }
 
 // Maps base provider + quality tier to the appropriate versioned provider
@@ -149,9 +150,16 @@ class AIVideoService {
     const isStylizedArt = artPreset && isStylizedPresetCheck(artPreset.id);
 
     if (generationMode === 'i2v') {
-      console.log(`[AIVideo] I2V mode - using motion-focused prompt (no style bloat)`);
-      console.log(`[AIVideo] Original I2V prompt: ${options.prompt.substring(0, 100)}...`);
-      let i2vPrompt = this.adaptPromptForI2V(options.prompt);
+      let i2vPrompt: string;
+      if (options.isCharacterReference) {
+        console.log(`[AIVideo] CHARACTER REFERENCE I2V — preserving full scene prompt (no motion simplification)`);
+        console.log(`[AIVideo] Character I2V prompt: ${options.prompt.substring(0, 150)}...`);
+        i2vPrompt = options.prompt;
+      } else {
+        console.log(`[AIVideo] I2V mode - using motion-focused prompt (no style bloat)`);
+        console.log(`[AIVideo] Original I2V prompt: ${options.prompt.substring(0, 100)}...`);
+        i2vPrompt = this.adaptPromptForI2V(options.prompt);
+      }
       if (contentTag) {
         i2vPrompt = `${contentTag.promptPrefix} ${i2vPrompt}`;
       } else if (artPreset && !isStylizedArt) {
@@ -388,6 +396,7 @@ class AIVideoService {
         negativePrompt: options.negativePrompt,
         i2vSettings: options.i2vSettings,
         motionControl,
+        isCharacterReference: options.isCharacterReference,
       });
       
       return {
