@@ -426,9 +426,19 @@ class VideoGenerationWorker {
                     .filter((c: any) => c.locked && c.referenceImageUrl);
                   const escapeRegexStr = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+                  const nameMatchesText = (name: string, text: string): boolean => {
+                    const fullRx = new RegExp('\\b' + escapeRegexStr(name) + '\\b', 'i');
+                    if (fullRx.test(text)) return true;
+                    const firstName = name.split(/\s+/)[0];
+                    if (firstName && firstName.length >= 3 && firstName !== name) {
+                      const firstRx = new RegExp('\\b' + escapeRegexStr(firstName) + '\\b', 'i');
+                      return firstRx.test(text);
+                    }
+                    return false;
+                  };
+
                   const matchedProjectChars = lockedChars.filter((c: any) => {
-                    const rx = new RegExp('\\b' + escapeRegexStr(c.name) + '\\b', 'i');
-                    return rx.test(charEnhancedPrompt);
+                    return nameMatchesText(c.name, charEnhancedPrompt);
                   });
 
                   let finalMatchedChars = matchedProjectChars;
@@ -440,8 +450,7 @@ class VideoGenerationWorker {
                       if (userId) {
                         const libChars = await db.select().from(characterLibrary).where(eq(characterLibrary.ownerId, Number(userId)));
                         finalMatchedChars = libChars.filter((c: any) => {
-                          const rx = new RegExp('\\b' + escapeRegexStr(c.name) + '\\b', 'i');
-                          return rx.test(charEnhancedPrompt) && c.referenceImageUrl;
+                          return nameMatchesText(c.name, charEnhancedPrompt) && c.referenceImageUrl;
                         });
                         if (finalMatchedChars.length > 0) {
                           log.info(`[CharRef] Job ${job.jobId}: matched ${finalMatchedChars.length} characters from library: ${finalMatchedChars.map((c: any) => c.name).join(', ')}`);
