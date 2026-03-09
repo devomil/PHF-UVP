@@ -75,6 +75,8 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
   const refVideoInputRef = useRef<HTMLInputElement>(null);
 
   const [regeneratingVisualDirection, setRegeneratingVisualDirection] = useState(false);
+  const [rawLlmResponse, setRawLlmResponse] = useState<{visualDirection: string; microScenes: any[]} | null>(null);
+  const [showRawResponse, setShowRawResponse] = useState(false);
 
   const sceneId = scene.id || `scene-${sceneIndex}`;
   const videoUrl = scene.assets?.videoUrl;
@@ -158,6 +160,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
       console.log('[RegenVD] Success:', data.success, 'visualDirection length:', data.visualDirection?.length);
       if (data.success && data.visualDirection) {
         setEditValues(prev => ({ ...prev, visualDirection: data.visualDirection }));
+        setRawLlmResponse({ visualDirection: data.visualDirection, microScenes: data.microScenes || [] });
         queryClient.invalidateQueries({ queryKey: ["project", projectId] });
         toast({ title: "Visual direction regenerated" });
       }
@@ -1409,7 +1412,25 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
               )}
               {regeneratingVisualDirection ? 'Regenerating...' : 'Regenerate'}
             </button>
+            {rawLlmResponse && (
+              <button
+                type="button"
+                onClick={() => setShowRawResponse(!showRawResponse)}
+                className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium transition-colors hover:bg-purple-600/20"
+                style={{ color: "rgb(167,139,250)" }}
+                title="View full AI response with micro-scenes"
+              >
+                <ChevronDown className={`w-3 h-3 transition-transform ${showRawResponse ? 'rotate-180' : ''}`} />
+                {showRawResponse ? 'Hide Raw' : 'View Raw'}
+              </button>
+            )}
           </div>
+          {showRawResponse && rawLlmResponse && (
+            <div className="mt-2 rounded-lg border p-3 text-xs font-mono overflow-auto max-h-[300px]"
+              style={{ borderColor: "rgba(124,58,237,0.2)", backgroundColor: "rgba(124,58,237,0.03)", color: "var(--text-secondary)" }}>
+              <pre className="whitespace-pre-wrap break-words">{JSON.stringify(rawLlmResponse, null, 2)}</pre>
+            </div>
+          )}
           <textarea
             ref={visualDirectionRef}
             value={editValues.visualDirection}
