@@ -294,6 +294,29 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
     },
   });
 
+  const regenerateAllVideosMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/universal-video/${projectId}/regenerate-all-videos`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({}),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Failed to regenerate all videos");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+      toast({ title: "Regenerating All Scenes", description: "All scene videos are being regenerated." });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
   const setMediaMutation = useMutation({
     mutationFn: async ({ sceneId, mediaUrl }: { sceneId: string; mediaUrl: string }) => {
       const res = await fetch(`/api/universal-video/${projectId}/scenes/${sceneId}/set-media`, {
@@ -500,6 +523,19 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
                 Scenes ({scenes.length})
               </h3>
               <div className="flex items-center gap-2">
+                <button
+                  onClick={() => regenerateAllVideosMutation.mutate()}
+                  disabled={regenerateAllVideosMutation.isPending || isGenerating}
+                  className="text-xs px-3 py-1.5 rounded-lg border flex items-center gap-1.5 transition-colors hover:border-indigo-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                  style={{ borderColor: "var(--border-subtle)", color: "var(--text-secondary)" }}
+                >
+                  {regenerateAllVideosMutation.isPending ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <Video className="w-3 h-3" />
+                  )}
+                  {regenerateAllVideosMutation.isPending ? "Regenerating..." : "Regenerate All Scenes"}
+                </button>
                 {scriptReady && (
                   <button
                     onClick={() => generateScriptMutation.mutate()}
