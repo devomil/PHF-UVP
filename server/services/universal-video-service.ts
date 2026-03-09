@@ -3320,7 +3320,40 @@ Return ONLY a JSON object:
               .map((s: any, idx: number) => `Previous scene ${idx + 1}: "${s.visualDirection}"`)
               .join('\n') : '';
 
-            const userPrompt = `Scene Type: ${scene.type || 'content'}
+            const characterProfilesText = lockedCharProfilesForPrompt.length > 0
+              ? 'LOCKED CHARACTER PROFILES FOR THIS PROJECT:\n' + lockedCharProfilesForPrompt.map((c: any) => `
+- Name: ${c.name}
+  Role: ${c.role || 'character'}
+  Physical Description: ${c.physicalDescription || 'no description'}
+  Wardrobe: ${c.wardrobe || 'not specified'}
+  Expression/Personality: ${c.personalityNotes || 'neutral'}
+  Reference Image: ${c.referenceImageUrl ? 'Available' : 'Not generated'}
+`).join('\n')
+              : 'No locked character profiles for this project.';
+
+            const userPrompt = isStylizedArtPreset ? `
+Generate a cinematic visual direction prompt for the following scene.
+
+PROJECT ART STYLE: ${artPreset!.name} (Disney/Pixar CGI)
+
+${characterProfilesText}
+
+SCENE ${i + 1} of ${updatedProject.scenes.length}
+Scene Type: ${scene.type || 'content'}
+${(scene as any).title ? `Scene Title: ${(scene as any).title}` : ''}
+Scene Duration: ${scene.duration || 10} seconds
+${previousDirections ? `\nPREVIOUS SCENES (maintain character consistency with these):\n${previousDirections}\n` : ''}
+SCENE NARRATION:
+"${narration}"
+
+Write a single paragraph visual direction prompt that:
+1. References any named characters using their exact profile details above
+2. Ties the environment and camera movement to the meaning of the narration
+3. Includes shot type, camera movement, lighting, background, character action, and the standard art style suffix
+4. Ends with the standard Disney/Pixar art style suffix
+
+Split this narration into micro-scenes (2-4 segments) at natural topic shifts. Each micro-scene gets its own vivid cinematic paragraph visual direction. Return JSON with visualDirection and microScenes array.
+` : `Scene Type: ${scene.type || 'content'}
 ${(scene as any).title ? `Scene Title: ${(scene as any).title}` : ''}
 Scene ${i + 1} of ${updatedProject.scenes.length}
 Scene Duration: ${scene.duration || 10} seconds
@@ -3328,7 +3361,7 @@ ${previousDirections ? `\nPREVIOUS SCENES (maintain character consistency with t
 Narration:
 "${narration}"
 
-Split this narration into micro-scenes (2-4 segments) at natural topic shifts. Each micro-scene gets its own ${isStylizedArtPreset ? 'vivid, naturally-written' : 'simple, authentic'} visual direction. Return JSON with visualDirection and microScenes array.`;
+Split this narration into micro-scenes (2-4 segments) at natural topic shifts. Each micro-scene gets its own simple, authentic visual direction. Return JSON with visualDirection and microScenes array.`;
 
             const llmResult = await llmClient.createChatCompletion({
               systemPrompt: systemPrompt,
