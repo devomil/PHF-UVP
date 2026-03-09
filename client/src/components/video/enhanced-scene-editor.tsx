@@ -133,24 +133,36 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
 
   const handleRegenerateVisualDirection = async () => {
     setRegeneratingVisualDirection(true);
+    toast({ title: "Regenerating visual direction..." });
     try {
-      const response = await fetch(`/api/universal-video/projects/${projectId}/scenes/${sceneId}/regenerate-visual-direction`, {
+      const url = `/api/universal-video/projects/${projectId}/scenes/${sceneId}/regenerate-visual-direction`;
+      console.log('[RegenVD] Calling:', url);
+      const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
       });
+      console.log('[RegenVD] Response status:', response.status);
       if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.error || 'Failed to regenerate');
+        let errMsg = `Server returned ${response.status}`;
+        try {
+          const text = await response.text();
+          console.log('[RegenVD] Error body:', text);
+          if (text) {
+            try { errMsg = JSON.parse(text).error || errMsg; } catch { errMsg = text.substring(0, 200); }
+          }
+        } catch {}
+        throw new Error(errMsg);
       }
       const data = await response.json();
+      console.log('[RegenVD] Success:', data.success, 'visualDirection length:', data.visualDirection?.length);
       if (data.success && data.visualDirection) {
         setEditValues(prev => ({ ...prev, visualDirection: data.visualDirection }));
         queryClient.invalidateQueries({ queryKey: ["project", projectId] });
         toast({ title: "Visual direction regenerated" });
       }
     } catch (error: any) {
-      console.error('Failed to regenerate visual direction:', error);
+      console.error('[RegenVD] Failed:', error);
       toast({ title: "Failed to regenerate", description: error.message, variant: "destructive" });
     } finally {
       setRegeneratingVisualDirection(false);

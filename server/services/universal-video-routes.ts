@@ -1221,6 +1221,7 @@ router.post('/projects/:projectId/scenes/:sceneId/regenerate-visual-direction', 
   try {
     const userId = (req.user as any)?.id;
     const { projectId, sceneId } = req.params;
+    console.log(`[RegenVisualDir] Request received - project: ${projectId}, scene: ${sceneId}, user: ${userId}`);
 
     const projectData = await getProjectFromDb(projectId);
     if (!projectData) {
