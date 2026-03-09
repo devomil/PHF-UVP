@@ -160,6 +160,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
       console.log('[RegenVD] Success:', data.success, 'visualDirection length:', data.visualDirection?.length);
       if (data.success && data.visualDirection) {
         setEditValues(prev => ({ ...prev, visualDirection: data.visualDirection }));
+        setInlinePrompt(data.visualDirection);
         setRawLlmResponse({ visualDirection: data.visualDirection, microScenes: data.microScenes || [] });
         queryClient.invalidateQueries({ queryKey: ["project", projectId] });
         toast({ title: "Visual direction regenerated" });
@@ -1166,211 +1167,12 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
         )}
       </div>
 
-      {/* Divider between video controls and overlays */}
-      <div className="border-t mt-4 pt-4" style={{ borderColor: "var(--border-subtle)" }} />
-
-      {/* Scene Overlays Section */}
-      <SceneOverlayEditor
-        overlays={sceneOverlays}
-        onChange={handleOverlayChange}
-        previewWidth={(() => {
-          const parts = aspectRatio.split(":");
-          return parseInt(parts[0]) || 16;
-        })()}
-        previewHeight={(() => {
-          const parts = aspectRatio.split(":");
-          return parseInt(parts[1]) || 9;
-        })()}
-        backgroundUrl={hasVideo ? videoUrl : hasImage ? imageUrl : undefined}
-        backgroundType={hasVideo ? "video" : hasImage ? "image" : undefined}
-      />
 
       {/* Divider */}
-      <div className="border-t" style={{ borderColor: "var(--border-subtle)" }} />
+      <div className="border-t mt-4 pt-4" style={{ borderColor: "var(--border-subtle)" }} />
 
       {/* Scene Metadata Section */}
       <div className="space-y-3">
-        {/* Scene Type + Duration Row */}
-        <div className="grid grid-cols-[1fr_200px] gap-3">
-          <div>
-            <label className="text-[11px] font-medium uppercase tracking-wider mb-1.5 block" style={{ color: "var(--text-secondary)" }}>
-              Scene Type
-            </label>
-            <select
-              value={editValues.type}
-              onChange={(e) => setEditValues({ ...editValues, type: e.target.value })}
-              disabled={!isEditing}
-              className="w-full text-sm rounded-lg border px-3 py-2 bg-transparent outline-none disabled:opacity-70"
-              style={{
-                borderColor: isEditing ? "rgba(124,58,237,0.3)" : "var(--border-subtle)",
-                color: "var(--text-primary)",
-                backgroundColor: isEditing ? "rgba(124,58,237,0.05)" : "transparent",
-              }}
-            >
-              {sceneTypes.map((t) => (
-                <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="text-[11px] font-medium uppercase tracking-wider mb-1.5 block" style={{ color: "var(--text-secondary)" }}>
-              Duration (seconds)
-            </label>
-            <input
-              type="number"
-              min={2}
-              max={60}
-              value={editValues.duration}
-              onChange={(e) => setEditValues({ ...editValues, duration: parseInt(e.target.value) || 5 })}
-              disabled={!isEditing}
-              className="w-full text-sm rounded-lg border px-3 py-2 bg-transparent outline-none disabled:opacity-70"
-              style={{
-                borderColor: isEditing ? "rgba(124,58,237,0.3)" : "var(--border-subtle)",
-                color: "var(--text-primary)",
-                backgroundColor: isEditing ? "rgba(124,58,237,0.05)" : "transparent",
-              }}
-            />
-          </div>
-        </div>
-
-        {/* Content Tag */}
-        <div>
-          <label className="text-[11px] font-medium uppercase tracking-wider mb-1.5 block" style={{ color: "var(--text-secondary)" }}>
-            Content Tag
-            {contentTag && <span className="ml-1 text-[10px] normal-case tracking-normal" style={{ color: activeTag?.color || 'var(--text-muted)' }}>(overrides art style)</span>}
-          </label>
-          <div className="flex flex-wrap gap-1.5">
-            <button
-              type="button"
-              onClick={() => isEditing && setContentTag(null)}
-              disabled={!isEditing}
-              className="text-[11px] px-2.5 py-1 rounded-full border transition-all disabled:opacity-70"
-              style={{
-                borderColor: contentTag === null ? 'rgba(124,58,237,0.5)' : 'var(--border-subtle)',
-                backgroundColor: contentTag === null ? 'rgba(124,58,237,0.1)' : 'transparent',
-                color: contentTag === null ? 'rgb(167,139,250)' : 'var(--text-secondary)',
-              }}
-            >
-              None
-            </button>
-            {Object.values(SCENE_CONTENT_TAGS).map((tag) => (
-              <button
-                key={tag.id}
-                type="button"
-                onClick={() => isEditing && setContentTag(contentTag === tag.id ? null : tag.id)}
-                disabled={!isEditing}
-                className="text-[11px] px-2.5 py-1 rounded-full border transition-all disabled:opacity-70"
-                style={{
-                  borderColor: contentTag === tag.id ? `${tag.color}80` : 'var(--border-subtle)',
-                  backgroundColor: contentTag === tag.id ? `${tag.color}1a` : 'transparent',
-                  color: contentTag === tag.id ? tag.color : 'var(--text-secondary)',
-                }}
-                title={tag.description}
-              >
-                {tag.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Art Style Override */}
-        <div>
-          <label className="text-[11px] font-medium uppercase tracking-wider mb-1.5 flex items-center gap-1.5" style={{ color: "var(--text-secondary)" }}>
-            <Palette className="w-3 h-3" />
-            Art Style
-            {sceneArtPreset !== 'project' && <span className="text-[10px] normal-case tracking-normal" style={{ color: 'rgb(167,139,250)' }}>(scene override)</span>}
-          </label>
-          <div className="flex gap-2 overflow-x-auto pb-1.5 -mx-1 px-1" style={{ scrollbarWidth: "thin" }}>
-            <button
-              type="button"
-              onClick={() => isEditing && setSceneArtPreset('project')}
-              disabled={!isEditing}
-              className="flex-shrink-0 w-[80px] rounded-lg border-2 p-1.5 transition-all disabled:opacity-70"
-              style={{
-                backgroundColor: sceneArtPreset === 'project' ? 'rgba(139,92,246,0.15)' : 'transparent',
-                borderColor: sceneArtPreset === 'project' ? 'rgb(139,92,246)' : 'var(--border-subtle)',
-              }}
-            >
-              <div className="w-full h-10 rounded flex items-center justify-center mb-1" style={{ background: 'linear-gradient(135deg, rgba(139,92,246,0.2), rgba(99,102,241,0.2))' }}>
-                <Sparkles className="w-3.5 h-3.5 text-purple-400" />
-              </div>
-              <span className="text-[10px] font-medium block truncate" style={{ color: 'var(--text-primary)' }}>Project</span>
-              {artPresetId && getVisualArtPreset(artPresetId) && (
-                <span className="text-[8px] block truncate" style={{ color: 'var(--text-muted)' }}>
-                  ({getVisualArtPreset(artPresetId)!.name})
-                </span>
-              )}
-            </button>
-            <button
-              type="button"
-              onClick={() => isEditing && setSceneArtPreset('auto')}
-              disabled={!isEditing}
-              className="flex-shrink-0 w-[80px] rounded-lg border-2 p-1.5 transition-all disabled:opacity-70"
-              style={{
-                backgroundColor: sceneArtPreset === 'auto' ? 'rgba(139,92,246,0.15)' : 'transparent',
-                borderColor: sceneArtPreset === 'auto' ? 'rgb(139,92,246)' : 'var(--border-subtle)',
-              }}
-            >
-              <div className="w-full h-10 rounded flex items-center justify-center mb-1" style={{ background: 'linear-gradient(135deg, rgba(99,102,241,0.2), rgba(168,85,247,0.2))' }}>
-                <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
-              </div>
-              <span className="text-[10px] font-medium block truncate" style={{ color: 'var(--text-primary)' }}>Auto</span>
-            </button>
-            {getAllVisualArtPresets().map((preset) => (
-              <button
-                key={preset.id}
-                type="button"
-                onClick={() => isEditing && setSceneArtPreset(preset.id)}
-                disabled={!isEditing}
-                className="flex-shrink-0 w-[80px] rounded-lg border-2 p-1.5 transition-all disabled:opacity-70"
-                style={{
-                  backgroundColor: sceneArtPreset === preset.id ? 'rgba(139,92,246,0.15)' : 'transparent',
-                  borderColor: sceneArtPreset === preset.id ? 'rgb(139,92,246)' : 'var(--border-subtle)',
-                }}
-                title={preset.description}
-              >
-                {ART_PRESET_IMAGES[preset.id] ? (
-                  <img
-                    src={ART_PRESET_IMAGES[preset.id]}
-                    alt={preset.name}
-                    className="w-full h-10 rounded object-cover mb-1"
-                  />
-                ) : (
-                  <div
-                    className="w-full h-10 rounded mb-1"
-                    style={{ background: `linear-gradient(135deg, ${preset.thumbnailColors[0]}, ${preset.thumbnailColors[1]}, ${preset.thumbnailColors[2]})` }}
-                  />
-                )}
-                <span className="text-[10px] font-medium block truncate" style={{ color: 'var(--text-primary)' }}>{preset.name}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Character Profiles - visible only for 3D Illustration art style */}
-        {(effectiveArtPresetId === '3d-illustration') && (
-          <CharacterProfilesPanel
-            projectId={projectId}
-            characters={characters}
-            onCharactersChange={onCharactersChange || (() => {})}
-            narrationTextareaRef={narrationRef}
-            onInsertCharacterName={(name) => {
-              const ta = narrationRef.current;
-              if (!ta) return;
-              const start = ta.selectionStart;
-              const end = ta.selectionEnd;
-              const val = editValues.narration;
-              const newVal = val.substring(0, start) + name + val.substring(end);
-              setEditValues({ ...editValues, narration: newVal });
-              setTimeout(() => {
-                ta.focus();
-                const newPos = start + name.length;
-                ta.setSelectionRange(newPos, newPos);
-              }, 0);
-            }}
-          />
-        )}
-
         {/* Narration */}
         <div>
           <label className="text-[11px] font-medium uppercase tracking-wider mb-1.5 block" style={{ color: "var(--text-secondary)" }}>
@@ -1390,6 +1192,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
             }}
           />
         </div>
+
 
         {/* Visual Direction */}
         <div>
@@ -1490,6 +1293,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
             );
           })()}
         </div>
+
 
         {/* Reference Media */}
         <div>
@@ -1723,8 +1527,9 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
           )}
         </div>
 
+
         {/* Micro-Scenes */}
-        {scene.microScenes && scene.microScenes.length > 1 && (
+        {scene.microScenes && scene.microScenes.length >= 1 && (
           <div>
             <label className="text-[11px] font-medium uppercase tracking-wider mb-3 flex items-center gap-2" style={{ color: "var(--text-secondary)" }}>
               Micro-Scenes
@@ -2330,6 +2135,212 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
             })()}
           </div>
         )}
+
+
+
+        {/* Scene Overlays Section */}
+        <SceneOverlayEditor
+          overlays={sceneOverlays}
+          onChange={handleOverlayChange}
+          previewWidth={(() => {
+            const parts = aspectRatio.split(":");
+            return parseInt(parts[0]) || 16;
+          })()}
+          previewHeight={(() => {
+            const parts = aspectRatio.split(":");
+            return parseInt(parts[1]) || 9;
+          })()}
+          backgroundUrl={hasVideo ? videoUrl : hasImage ? imageUrl : undefined}
+          backgroundType={hasVideo ? "video" : hasImage ? "image" : undefined}
+        />
+
+        {/* Divider before configuration */}
+        <div className="border-t" style={{ borderColor: "var(--border-subtle)" }} />
+
+        {/* Scene Type + Duration Row */}
+        <div className="grid grid-cols-[1fr_200px] gap-3">
+          <div>
+            <label className="text-[11px] font-medium uppercase tracking-wider mb-1.5 block" style={{ color: "var(--text-secondary)" }}>
+              Scene Type
+            </label>
+            <select
+              value={editValues.type}
+              onChange={(e) => setEditValues({ ...editValues, type: e.target.value })}
+              disabled={!isEditing}
+              className="w-full text-sm rounded-lg border px-3 py-2 bg-transparent outline-none disabled:opacity-70"
+              style={{
+                borderColor: isEditing ? "rgba(124,58,237,0.3)" : "var(--border-subtle)",
+                color: "var(--text-primary)",
+                backgroundColor: isEditing ? "rgba(124,58,237,0.05)" : "transparent",
+              }}
+            >
+              {sceneTypes.map((t) => (
+                <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="text-[11px] font-medium uppercase tracking-wider mb-1.5 block" style={{ color: "var(--text-secondary)" }}>
+              Duration (seconds)
+            </label>
+            <input
+              type="number"
+              min={2}
+              max={60}
+              value={editValues.duration}
+              onChange={(e) => setEditValues({ ...editValues, duration: parseInt(e.target.value) || 5 })}
+              disabled={!isEditing}
+              className="w-full text-sm rounded-lg border px-3 py-2 bg-transparent outline-none disabled:opacity-70"
+              style={{
+                borderColor: isEditing ? "rgba(124,58,237,0.3)" : "var(--border-subtle)",
+                color: "var(--text-primary)",
+                backgroundColor: isEditing ? "rgba(124,58,237,0.05)" : "transparent",
+              }}
+            />
+          </div>
+        </div>
+
+
+        {/* Content Tag */}
+        <div>
+          <label className="text-[11px] font-medium uppercase tracking-wider mb-1.5 block" style={{ color: "var(--text-secondary)" }}>
+            Content Tag
+            {contentTag && <span className="ml-1 text-[10px] normal-case tracking-normal" style={{ color: activeTag?.color || 'var(--text-muted)' }}>(overrides art style)</span>}
+          </label>
+          <div className="flex flex-wrap gap-1.5">
+            <button
+              type="button"
+              onClick={() => isEditing && setContentTag(null)}
+              disabled={!isEditing}
+              className="text-[11px] px-2.5 py-1 rounded-full border transition-all disabled:opacity-70"
+              style={{
+                borderColor: contentTag === null ? 'rgba(124,58,237,0.5)' : 'var(--border-subtle)',
+                backgroundColor: contentTag === null ? 'rgba(124,58,237,0.1)' : 'transparent',
+                color: contentTag === null ? 'rgb(167,139,250)' : 'var(--text-secondary)',
+              }}
+            >
+              None
+            </button>
+            {Object.values(SCENE_CONTENT_TAGS).map((tag) => (
+              <button
+                key={tag.id}
+                type="button"
+                onClick={() => isEditing && setContentTag(contentTag === tag.id ? null : tag.id)}
+                disabled={!isEditing}
+                className="text-[11px] px-2.5 py-1 rounded-full border transition-all disabled:opacity-70"
+                style={{
+                  borderColor: contentTag === tag.id ? `${tag.color}80` : 'var(--border-subtle)',
+                  backgroundColor: contentTag === tag.id ? `${tag.color}1a` : 'transparent',
+                  color: contentTag === tag.id ? tag.color : 'var(--text-secondary)',
+                }}
+                title={tag.description}
+              >
+                {tag.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+
+        {/* Art Style Override */}
+        <div>
+          <label className="text-[11px] font-medium uppercase tracking-wider mb-1.5 flex items-center gap-1.5" style={{ color: "var(--text-secondary)" }}>
+            <Palette className="w-3 h-3" />
+            Art Style
+            {sceneArtPreset !== 'project' && <span className="text-[10px] normal-case tracking-normal" style={{ color: 'rgb(167,139,250)' }}>(scene override)</span>}
+          </label>
+          <div className="flex gap-2 overflow-x-auto pb-1.5 -mx-1 px-1" style={{ scrollbarWidth: "thin" }}>
+            <button
+              type="button"
+              onClick={() => isEditing && setSceneArtPreset('project')}
+              disabled={!isEditing}
+              className="flex-shrink-0 w-[80px] rounded-lg border-2 p-1.5 transition-all disabled:opacity-70"
+              style={{
+                backgroundColor: sceneArtPreset === 'project' ? 'rgba(139,92,246,0.15)' : 'transparent',
+                borderColor: sceneArtPreset === 'project' ? 'rgb(139,92,246)' : 'var(--border-subtle)',
+              }}
+            >
+              <div className="w-full h-10 rounded flex items-center justify-center mb-1" style={{ background: 'linear-gradient(135deg, rgba(139,92,246,0.2), rgba(99,102,241,0.2))' }}>
+                <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+              </div>
+              <span className="text-[10px] font-medium block truncate" style={{ color: 'var(--text-primary)' }}>Project</span>
+              {artPresetId && getVisualArtPreset(artPresetId) && (
+                <span className="text-[8px] block truncate" style={{ color: 'var(--text-muted)' }}>
+                  ({getVisualArtPreset(artPresetId)!.name})
+                </span>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => isEditing && setSceneArtPreset('auto')}
+              disabled={!isEditing}
+              className="flex-shrink-0 w-[80px] rounded-lg border-2 p-1.5 transition-all disabled:opacity-70"
+              style={{
+                backgroundColor: sceneArtPreset === 'auto' ? 'rgba(139,92,246,0.15)' : 'transparent',
+                borderColor: sceneArtPreset === 'auto' ? 'rgb(139,92,246)' : 'var(--border-subtle)',
+              }}
+            >
+              <div className="w-full h-10 rounded flex items-center justify-center mb-1" style={{ background: 'linear-gradient(135deg, rgba(99,102,241,0.2), rgba(168,85,247,0.2))' }}>
+                <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+              </div>
+              <span className="text-[10px] font-medium block truncate" style={{ color: 'var(--text-primary)' }}>Auto</span>
+            </button>
+            {getAllVisualArtPresets().map((preset) => (
+              <button
+                key={preset.id}
+                type="button"
+                onClick={() => isEditing && setSceneArtPreset(preset.id)}
+                disabled={!isEditing}
+                className="flex-shrink-0 w-[80px] rounded-lg border-2 p-1.5 transition-all disabled:opacity-70"
+                style={{
+                  backgroundColor: sceneArtPreset === preset.id ? 'rgba(139,92,246,0.15)' : 'transparent',
+                  borderColor: sceneArtPreset === preset.id ? 'rgb(139,92,246)' : 'var(--border-subtle)',
+                }}
+                title={preset.description}
+              >
+                {ART_PRESET_IMAGES[preset.id] ? (
+                  <img
+                    src={ART_PRESET_IMAGES[preset.id]}
+                    alt={preset.name}
+                    className="w-full h-10 rounded object-cover mb-1"
+                  />
+                ) : (
+                  <div
+                    className="w-full h-10 rounded mb-1"
+                    style={{ background: `linear-gradient(135deg, ${preset.thumbnailColors[0]}, ${preset.thumbnailColors[1]}, ${preset.thumbnailColors[2]})` }}
+                  />
+                )}
+                <span className="text-[10px] font-medium block truncate" style={{ color: 'var(--text-primary)' }}>{preset.name}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+
+        {/* Character Profiles - visible only for 3D Illustration art style */}
+        {(effectiveArtPresetId === '3d-illustration') && (
+          <CharacterProfilesPanel
+            projectId={projectId}
+            characters={characters}
+            onCharactersChange={onCharactersChange || (() => {})}
+            narrationTextareaRef={narrationRef}
+            onInsertCharacterName={(name) => {
+              const ta = narrationRef.current;
+              if (!ta) return;
+              const start = ta.selectionStart;
+              const end = ta.selectionEnd;
+              const val = editValues.narration;
+              const newVal = val.substring(0, start) + name + val.substring(end);
+              setEditValues({ ...editValues, narration: newVal });
+              setTimeout(() => {
+                ta.focus();
+                const newPos = start + name.length;
+                ta.setSelectionRange(newPos, newPos);
+              }, 0);
+            }}
+          />
+        )}
+
 
         {/* Action Buttons */}
         <div className="flex items-center justify-end pt-1">
