@@ -4,6 +4,7 @@ import { exec, execFile } from "child_process";
 import { promisify } from "util";
 import * as fs from "fs";
 import * as path from "path";
+import { calculateEffectiveDuration } from "../../shared/config/duration-math";
 
 const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);
@@ -101,8 +102,8 @@ class ChunkedRenderService {
     }
   }
 
-  shouldUseChunkedRendering(scenes: any[], thresholdSeconds: number = CHUNK_THRESHOLD_SEC): boolean {
-    const totalDuration = scenes.reduce((acc: number, scene: any) => acc + (scene.duration || 0), 0);
+  shouldUseChunkedRendering(scenes: any[], thresholdSeconds: number = CHUNK_THRESHOLD_SEC, transitions?: any[]): boolean {
+    const totalDuration = calculateEffectiveDuration(scenes, transitions);
     const shouldChunk = totalDuration > thresholdSeconds;
     console.log(`[ChunkedRender] Total duration: ${totalDuration}s, threshold: ${thresholdSeconds}s, use chunked: ${shouldChunk}`);
     return shouldChunk;

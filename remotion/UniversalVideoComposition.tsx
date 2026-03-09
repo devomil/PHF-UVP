@@ -1936,12 +1936,26 @@ export const UniversalVideoComposition: React.FC<UniversalVideoProps> = ({
   const endCardDuration = Math.round((effectiveEndCardConfig.duration || 5) * fps);
   const endCardStartFrame = durationInFrames - endCardDuration;
 
-  let currentFrame = 0;
+  const sceneStartFrames: number[] = [];
+  {
+    let f = 0;
+    scenes.forEach((scene, index) => {
+      sceneStartFrames.push(f);
+      const dur = Math.ceil((scene.duration || 5) * fps);
+      const t = transitions?.[index];
+      if (index < scenes.length - 1 && t && t.duration > 0 && t.type !== 'none' && t.type !== 'cut') {
+        f += dur - Math.round((t.duration / 2) * fps);
+      } else {
+        f += dur;
+      }
+    });
+  }
+
   const sceneSequences = scenes.map((scene, index) => {
     const durationInFrames = (scene.duration || 5) * fps;
     const isFirstScene = index === 0;
     const isLastScene = index === scenes.length - 1;
-    const sceneStartFrame = currentFrame;
+    const sceneStartFrame = sceneStartFrames[index];
     
     const sceneOverlayConfig = sceneOverlayConfigs?.[scene.id];
     
@@ -2018,7 +2032,6 @@ export const UniversalVideoComposition: React.FC<UniversalVideoProps> = ({
         </AbsoluteFill>
       </Sequence>
     );
-    currentFrame += durationInFrames;
     return sequence;
   });
 
@@ -2053,12 +2066,10 @@ export const UniversalVideoComposition: React.FC<UniversalVideoProps> = ({
       {(() => {
         const hasPerSceneAudio = scenes.some(s => s.voiceoverUrl && isValidHttpUrl(s.voiceoverUrl));
         if (hasPerSceneAudio) {
-          let frameOffset = 0;
           return scenes.map((scene, index) => {
-            const sceneStartFrame = frameOffset;
+            const sceneStartFrame = sceneStartFrames[index];
             const sceneDuration = scene.duration || 5;
             const sceneDurationFrames = Math.ceil(sceneDuration * fps);
-            frameOffset += sceneDurationFrames;
             
             if (!scene.voiceoverUrl || !isValidHttpUrl(scene.voiceoverUrl)) return null;
             
@@ -2095,11 +2106,9 @@ export const UniversalVideoComposition: React.FC<UniversalVideoProps> = ({
 
       {/* Sound Effects (whooshes, ambient, emphasis) */}
       {(() => {
-        let frameOffset = 0;
         return scenes.map((scene, index) => {
-          const sceneStartFrame = frameOffset;
+          const sceneStartFrame = sceneStartFrames[index];
           const sceneDuration = scene.duration || 5;
-          frameOffset += Math.ceil(sceneDuration * fps);
           
           return (
             <SceneSoundEffects
@@ -2155,19 +2164,16 @@ export const UniversalVideoComposition: React.FC<UniversalVideoProps> = ({
             },
           }}
           transitions={(() => {
-            // Build TransitionSound array from scenes
             const transitionSounds: TransitionSound[] = [];
-            let frameOffset = 0;
             scenes.forEach((scene, index) => {
               if (index > 0) {
                 transitionSounds.push({
                   sceneIndex: index,
-                  startFrame: frameOffset - Math.round(fps * 0.3),
+                  startFrame: sceneStartFrames[index] - Math.round(fps * 0.3),
                   sound: 'whoosh-soft',
                   volume: 0.04,
                 });
               }
-              frameOffset += Math.round((scene.duration || 5) * fps);
             });
             return transitionSounds;
           })()}
@@ -2181,14 +2187,11 @@ export const UniversalVideoComposition: React.FC<UniversalVideoProps> = ({
       {!soundEffectsBaseUrl && effectiveSoundConfig.enabled && effectiveSoundConfig.transitionSounds && transitions && transitions.length > 0 && (
         <SoundDesignLayer
           transitions={transitions.map((t, i) => {
-            let frameOffset = 0;
-            for (let j = 0; j <= i; j++) {
-              frameOffset += Math.ceil((scenes[j]?.duration || 5) * fps);
-            }
+            const nextSceneStart = sceneStartFrames[i + 1] || 0;
             const transitionDurationFrames = Math.round(t.duration * fps);
             return {
               config: t,
-              startFrame: frameOffset - Math.floor(transitionDurationFrames / 2),
+              startFrame: nextSceneStart - Math.floor(transitionDurationFrames / 2),
             };
           })}
           logoRevealFrame={effectiveSoundConfig.impactSounds && hasEndCard ? endCardStartFrame + Math.round(0.3 * fps) : undefined}
@@ -2202,8 +2205,9 @@ export const UniversalVideoComposition: React.FC<UniversalVideoProps> = ({
       {/* Phase 18D: Ducked Music with VoiceoverRanges (preferred) - uses soundDesignConfig values */}
       {musicUrl && voiceoverRanges && voiceoverRanges.length > 0 && (() => {
         const nativeAudioRanges: NativeAudioRange[] = [];
-        let sceneFramePos = 0;
-        for (const scene of scenes) {
+        for (let si = 0; si < scenes.length; si++) {
+          const scene = scenes[si];
+          const sceneFramePos = sceneStartFrames[si];
           const sceneDurationSec = scene.duration || 5;
           const sceneFrames = sceneDurationSec * fps;
           const microScenes = scene.microScenes || [];
@@ -2223,7 +2227,6 @@ export const UniversalVideoComposition: React.FC<UniversalVideoProps> = ({
               msFrameOffset += msFrameCount;
             }
           }
-          sceneFramePos += sceneFrames;
         }
         return (
           <DuckedMusic
