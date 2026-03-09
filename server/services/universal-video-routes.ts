@@ -1441,15 +1441,20 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
         .replace(/```json\s*/gi, '')
         .replace(/```\s*/g, '')
         .trim();
+      console.log('[RegenVisualDir] Raw LLM text (first 200):', textContent.substring(0, 200));
       const jsonMatch = cleanedText.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[0]);
         visualDirection = parsed.visualDirection || '';
         microScenes = parsed.microScenes || [];
+        console.log('[RegenVisualDir] Parsed visualDirection (first 100):', visualDirection.substring(0, 100));
+        console.log('[RegenVisualDir] MicroScenes count:', microScenes.length);
       } else {
         visualDirection = cleanedText;
+        console.log('[RegenVisualDir] No JSON match, using raw text');
       }
-    } catch (e) {
+    } catch (e: any) {
+      console.log('[RegenVisualDir] JSON parse failed:', e.message, '- using raw text');
       visualDirection = textContent.trim();
     }
 
