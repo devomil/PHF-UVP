@@ -74,6 +74,8 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
   const refFileInputRef = useRef<HTMLInputElement>(null);
   const refVideoInputRef = useRef<HTMLInputElement>(null);
 
+  const [regeneratingVisualDirection, setRegeneratingVisualDirection] = useState(false);
+
   const sceneId = scene.id || `scene-${sceneIndex}`;
   const videoUrl = scene.assets?.videoUrl;
   const imageUrl = scene.assets?.imageUrl || scene.background?.url;
@@ -128,6 +130,32 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const prevVideoUrl = useRef(videoUrl);
   const prevImageUrl = useRef(imageUrl);
+
+  const handleRegenerateVisualDirection = async () => {
+    setRegeneratingVisualDirection(true);
+    try {
+      const response = await fetch(`/api/universal-video/projects/${projectId}/scenes/${sceneId}/regenerate-visual-direction`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+      });
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || 'Failed to regenerate');
+      }
+      const data = await response.json();
+      if (data.success && data.visualDirection) {
+        setEditValues(prev => ({ ...prev, visualDirection: data.visualDirection }));
+        queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+        toast({ title: "Visual direction regenerated" });
+      }
+    } catch (error: any) {
+      console.error('Failed to regenerate visual direction:', error);
+      toast({ title: "Failed to regenerate", description: error.message, variant: "destructive" });
+    } finally {
+      setRegeneratingVisualDirection(false);
+    }
+  };
 
   const handleOverlayChange = useCallback((newOverlays: SceneOverlayItem[]) => {
     setSceneOverlays(newOverlays);
@@ -1350,9 +1378,26 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
 
         {/* Visual Direction */}
         <div>
-          <label className="text-[11px] font-medium uppercase tracking-wider mb-1.5 block" style={{ color: "var(--text-secondary)" }}>
+          <div className="flex items-center justify-between mb-1.5">
+            <label className="text-[11px] font-medium uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
             Visual Direction (AI prompt for video generation)
           </label>
+            <button
+              type="button"
+              onClick={handleRegenerateVisualDirection}
+              disabled={regeneratingVisualDirection}
+              className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium transition-colors hover:bg-purple-600/20"
+              style={{ color: "rgb(167,139,250)" }}
+              title="Regenerate visual direction with AI"
+            >
+              {regeneratingVisualDirection ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : (
+                <RefreshCw className="w-3 h-3" />
+              )}
+              {regeneratingVisualDirection ? 'Regenerating...' : 'Regenerate'}
+            </button>
+          </div>
           <textarea
             ref={visualDirectionRef}
             value={editValues.visualDirection}

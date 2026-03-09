@@ -1454,6 +1454,7 @@ function ScenePreview({
   const [editedVisualDirection, setEditedVisualDirection] = useState<Record<string, string>>({});
   const [editedSearchQueries, setEditedSearchQueries] = useState<Record<string, { searchQuery?: string; fallbackQuery?: string }>>({});
   const [savingVisualDirection, setSavingVisualDirection] = useState<string | null>(null);
+  const [regeneratingVisualDirection, setRegeneratingVisualDirection] = useState<string | null>(null);
   const [askingSuzzie, setAskingSuzzie] = useState<string | null>(null);
   const [savingOverlay, setSavingOverlay] = useState<string | null>(null);
   const [overlaySettings, setOverlaySettings] = useState<Record<string, {
@@ -1839,6 +1840,31 @@ function ScenePreview({
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
     } finally {
       setSavingVisualDirection(null);
+    }
+  };
+
+  const regenerateVisualDirection = async (sceneId: string) => {
+    if (!projectId) return;
+    setRegeneratingVisualDirection(sceneId);
+    try {
+      const response = await fetch(`/api/universal-video/projects/${projectId}/scenes/${sceneId}/regenerate-visual-direction`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+      });
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || 'Failed to regenerate');
+      }
+      const data = await response.json();
+      if (data.success && data.project) {
+        onProjectUpdate?.(data.project);
+        onSceneUpdate?.();
+      }
+    } catch (error: any) {
+      console.error('Failed to regenerate visual direction:', error);
+    } finally {
+      setRegeneratingVisualDirection(null);
     }
   };
 
@@ -3310,7 +3336,22 @@ function ScenePreview({
                           <Pencil className="w-3 h-3 mr-1" />
                           Edit
                         </Button>
-                      </div>
+                      
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 px-2 text-xs"
+                          onClick={() => regenerateVisualDirection(scene.id)}
+                          disabled={regeneratingVisualDirection === scene.id}
+                        >
+                          {regeneratingVisualDirection === scene.id ? (
+                            <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                          ) : (
+                            <RefreshCw className="w-3 h-3 mr-1" />
+                          )}
+                          {regeneratingVisualDirection === scene.id ? 'Regenerating...' : 'Regenerate'}
+                        </Button>
+</div>
                     )}
                   </div>
                   {editingVisualDirection === scene.id ? (

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Pencil, Wand2, Check, X, Loader2 } from 'lucide-react';
+import { Pencil, Wand2, Check, X, Loader2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
@@ -11,6 +11,8 @@ interface VisualDirectionEditorProps {
   sceneType: string;
   onSave: (direction: string) => Promise<void>;
   disabled?: boolean;
+  projectId?: string;
+  onRegenerated?: (direction: string) => void;
 }
 
 export function VisualDirectionEditor({
@@ -20,11 +22,14 @@ export function VisualDirectionEditor({
   sceneType,
   onSave,
   disabled = false,
+  projectId,
+  onRegenerated,
 }: VisualDirectionEditorProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [direction, setDirection] = useState(currentDirection);
   const [isSaving, setIsSaving] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isRegenerating, setIsRegenerating] = useState(false);
 
   useEffect(() => {
     setDirection(currentDirection);
@@ -71,28 +76,75 @@ export function VisualDirectionEditor({
     }
   };
 
+  const handleRegenerate = async () => {
+    if (!projectId) return;
+    setIsRegenerating(true);
+    try {
+      const response = await fetch(`/api/universal-video/projects/${projectId}/scenes/${sceneId}/regenerate-visual-direction`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+      });
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || 'Failed to regenerate');
+      }
+      const data = await response.json();
+      if (data.success && data.visualDirection) {
+        setDirection(data.visualDirection);
+        onRegenerated?.(data.visualDirection);
+      }
+    } catch (error) {
+      console.error('Failed to regenerate visual direction:', error);
+    } finally {
+      setIsRegenerating(false);
+    }
+  };
+
   if (!isEditing) {
     return (
       <TooltipProvider>
         <div className="group relative" data-testid="visual-direction-display">
-          <p className="text-xs text-gray-500 pr-8 line-clamp-2">
-            {currentDirection || 'No visual direction set'}
+          <p className="text-xs text-gray-500 pr-16 line-clamp-2">
+            {isRegenerating ? 'Regenerating visual direction...' : (direction || 'No visual direction set')}
           </p>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="absolute top-0 right-0 h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                onClick={() => setIsEditing(true)}
-                disabled={disabled}
-                data-testid="button-edit-visual-direction"
-              >
-                <Pencil className="h-3 w-3" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Edit visual direction</TooltipContent>
-          </Tooltip>
+          <div className="absolute top-0 right-0 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+            {projectId && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 w-6 p-0"
+                    onClick={handleRegenerate}
+                    disabled={disabled || isRegenerating}
+                  >
+                    {isRegenerating ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <RefreshCw className="h-3 w-3" />
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Regenerate visual direction</TooltipContent>
+              </Tooltip>
+            )}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 w-6 p-0"
+                  onClick={() => setIsEditing(true)}
+                  disabled={disabled}
+                  data-testid="button-edit-visual-direction"
+                >
+                  <Pencil className="h-3 w-3" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Edit visual direction</TooltipContent>
+            </Tooltip>
+          </div>
         </div>
       </TooltipProvider>
     );
