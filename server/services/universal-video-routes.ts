@@ -1426,7 +1426,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
     const llmResult = await llmClient.createChatCompletion({
       systemPrompt,
       messages: [{ role: 'user', content: userPrompt }],
-      maxTokens: isStylizedArtPreset ? 1200 : 600,
+      maxTokens: isStylizedArtPreset ? 2000 : 800,
     });
 
     const textContent = llmResult.text || '';
@@ -1436,12 +1436,12 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
 
     let visualDirection = '';
     let microScenes: any[] = [];
+    const cleanedText = textContent
+      .replace(/```json\s*/gi, '')
+      .replace(/```\s*/g, '')
+      .trim();
+    console.log('[RegenVisualDir] Raw LLM text (first 200):', textContent.substring(0, 200));
     try {
-      const cleanedText = textContent
-        .replace(/```json\s*/gi, '')
-        .replace(/```\s*/g, '')
-        .trim();
-      console.log('[RegenVisualDir] Raw LLM text (first 200):', textContent.substring(0, 200));
       const jsonMatch = cleanedText.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[0]);
@@ -1449,13 +1449,35 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
         microScenes = parsed.microScenes || [];
         console.log('[RegenVisualDir] Parsed visualDirection (first 100):', visualDirection.substring(0, 100));
         console.log('[RegenVisualDir] MicroScenes count:', microScenes.length);
-      } else {
-        visualDirection = cleanedText;
-        console.log('[RegenVisualDir] No JSON match, using raw text');
       }
     } catch (e: any) {
-      console.log('[RegenVisualDir] JSON parse failed:', e.message, '- using raw text');
-      visualDirection = textContent.trim();
+      console.log('[RegenVisualDir] JSON parse failed:', e.message, '- attempting field extraction');
+    }
+
+    if (!visualDirection) {
+      const vdMatch = cleanedText.match(/"visualDirection"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+      if (vdMatch) {
+        visualDirection = vdMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"');
+        console.log('[RegenVisualDir] Extracted visualDirection via regex (first 100):', visualDirection.substring(0, 100));
+      }
+    }
+
+    if (!visualDirection && microScenes.length === 0) {
+      const msMatches = [...cleanedText.matchAll(/"narration"\s*:\s*"((?:[^"\\]|\\.)*)"[\s\S]*?"visualDirection"\s*:\s*"((?:[^"\\]|\\.)*)"[\s\S]*?"duration"\s*:\s*(\d+)/g)];
+      if (msMatches.length > 0) {
+        microScenes = msMatches.map(m => ({
+          narration: m[1].replace(/\\n/g, '\n').replace(/\\"/g, '"'),
+          visualDirection: m[2].replace(/\\n/g, '\n').replace(/\\"/g, '"'),
+          duration: parseInt(m[3]),
+        }));
+        visualDirection = microScenes.map(ms => ms.visualDirection).join(' ');
+        console.log('[RegenVisualDir] Extracted', microScenes.length, 'microScenes via regex');
+      }
+    }
+
+    if (!visualDirection) {
+      visualDirection = cleanedText.replace(/^\{[\s\S]*$/, '').trim() || cleanedText;
+      console.log('[RegenVisualDir] Fallback: using cleaned text');
     }
 
     if (!visualDirection) {
