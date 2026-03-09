@@ -1253,8 +1253,13 @@ router.post('/projects/:projectId/scenes/:sceneId/regenerate-visual-direction', 
     const isStylizedArtPreset = isStylizedPreset(artPresetId);
     const artPreset = artPresetId ? getVisualArtPreset(artPresetId) : null;
 
-    const brandContext = await brandContextService.getVisualDirectionGenerationContext();
-    const brandContextStr = brandContext || '';
+    let brandContextStr = '';
+    try {
+      const brandContext = await brandContextService.getVisualDirectionGenerationContext();
+      brandContextStr = brandContext || '';
+    } catch (brandErr) {
+      console.log('[RegenVisualDir] Brand context unavailable, proceeding without it');
+    }
 
     const projectVisualStyle = artPreset
       ? `${artPreset.name} — ${artPreset.description}`
