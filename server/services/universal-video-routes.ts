@@ -26,6 +26,7 @@ import { textPlacementService, TextOverlay as TextOverlayType, TextPlacement } f
 import { assetUrlResolver } from '../services/asset-url-resolver';
 import { s3RenderAssetService } from '../services/s3-render-asset-service';
 import { VIDEO_PROVIDERS } from '../../shared/provider-config';
+import { calculateEffectiveDuration } from '../../shared/config/duration-math';
 import { ObjectStorageService } from '../objectStorage';
 import { videoFrameExtractor } from '../services/video-frame-extractor';
 import { db } from '../db';
@@ -3209,9 +3210,10 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
       }
     });
     
-    // Calculate total duration to determine render method
-    const totalDuration = preparedProject.scenes.reduce((acc: number, s: any) => acc + (s.duration || 0), 0);
-    const useChunkedRendering = chunkedRenderService.shouldUseChunkedRendering(preparedProject.scenes, CHUNK_THRESHOLD_SEC);
+    // Calculate total duration to determine render method (accounts for transition overlaps)
+    const projectTransitions = (preparedProject as any).transitions || inputProps.transitions;
+    const totalDuration = calculateEffectiveDuration(preparedProject.scenes, projectTransitions);
+    const useChunkedRendering = chunkedRenderService.shouldUseChunkedRendering(preparedProject.scenes, CHUNK_THRESHOLD_SEC, projectTransitions);
     
     console.log(`[UniversalVideo] Total video duration: ${totalDuration}s, using ${useChunkedRendering ? 'chunked' : 'standard'} rendering`);
     

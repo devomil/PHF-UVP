@@ -675,8 +675,20 @@ export function createEmptyVideoProject(
   };
 }
 
-export function calculateTotalDuration(scenes: Scene[]): number {
-  return scenes.reduce((total, scene) => total + scene.duration, 0);
+export function calculateTotalDuration(scenes: Scene[], transitions?: TransitionConfig[]): number {
+  const rawTotal = scenes.reduce((total, scene) => total + scene.duration, 0);
+
+  if (!transitions || transitions.length === 0) return rawTotal;
+
+  let transitionOverlap = 0;
+  for (let i = 0; i < Math.min(transitions.length, scenes.length - 1); i++) {
+    const t = transitions[i];
+    if (t && t.duration > 0 && t.type !== 'none') {
+      transitionOverlap += t.duration / 2;
+    }
+  }
+
+  return Math.max(rawTotal - transitionOverlap, 0);
 }
 
 export function getCompositionId(aspectRatio: '16:9' | '9:16' | '1:1'): string {
