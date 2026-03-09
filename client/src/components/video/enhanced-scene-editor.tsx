@@ -101,8 +101,6 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
   const [showLibrary, setShowLibrary] = useState(false);
   const [showEditLibrary, setShowEditLibrary] = useState(false);
   const [showMultiImageTip, setShowMultiImageTip] = useState(false);
-  const [isEditingPrompt, setIsEditingPrompt] = useState(false);
-  const [inlinePrompt, setInlinePrompt] = useState(scene.assets?.prompt || scene.visualDirection || "");
   const [regeneratingType, setRegeneratingType] = useState<'video' | 'image' | null>(null);
   const [regenStartedAt, setRegenStartedAt] = useState<number | null>(null);
   const [regenElapsed, setRegenElapsed] = useState(0);
@@ -160,7 +158,6 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
       console.log('[RegenVD] Success:', data.success, 'visualDirection length:', data.visualDirection?.length);
       if (data.success && data.visualDirection) {
         setEditValues(prev => ({ ...prev, visualDirection: data.visualDirection }));
-        setInlinePrompt(data.visualDirection);
         setRawLlmResponse({ visualDirection: data.visualDirection, microScenes: data.microScenes || [] });
         queryClient.invalidateQueries({ queryKey: ["project", projectId] });
         toast({ title: "Visual direction regenerated" });
@@ -314,12 +311,6 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
     };
   }, []);
 
-  useEffect(() => {
-    const newPrompt = scene.assets?.prompt || scene.visualDirection || "";
-    if (!isEditingPrompt) {
-      setInlinePrompt(newPrompt);
-    }
-  }, [scene.assets?.prompt, scene.visualDirection, sceneId]);
   const [editValues, setEditValues] = useState({
     type: scene.type || "scene",
     duration: scene.duration || 5,
@@ -362,7 +353,6 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
 
   const rawProvider = scene.assets?.videoProvider || scene.assets?.imageProvider || null;
   const providerUsed = rawProvider && !['t2i', 't2v', 'i2v', 'auto'].includes(rawProvider.toLowerCase()) ? rawProvider : null;
-  const promptUsed = scene.assets?.prompt || scene.visualDirection || "";
 
   useEffect(() => {
     const vid = videoRef.current;
@@ -497,7 +487,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({
-          prompt: inlinePrompt || editValues.visualDirection,
+          prompt: editValues.visualDirection,
           generationMode: activeMode,
           sourceImageUrl: activeMode === "i2i" ? sourceImage : undefined,
         }),
@@ -529,7 +519,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({
-          query: inlinePrompt || editValues.visualDirection,
+          query: editValues.visualDirection,
           provider: provider === "auto" ? undefined : provider,
           sourceImageUrl: useSourceImage ? sourceImage : undefined,
           sourceImageUrls: useSourceImage && referenceImageUrls.length > 1 ? referenceImageUrls : undefined,
@@ -695,9 +685,6 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
   const saveChanges = () => {
     const artPresetValue = sceneArtPreset === 'project' ? null : sceneArtPreset;
     updateSceneMutation.mutate({ ...editValues, contentTag: contentTag || null, artPresetId: artPresetValue });
-    if (editValues.visualDirection) {
-      setInlinePrompt(editValues.visualDirection);
-    }
   };
 
   const [multiImageTipDismissed, setMultiImageTipDismissed] = useState(false);
@@ -853,69 +840,6 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                 </p>
               </div>
             )}
-            <div>
-              <div className="flex items-center gap-1.5">
-                <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>Prompt</p>
-                {!isEditingPrompt && (
-                  <button
-                    onClick={() => setIsEditingPrompt(true)}
-                    className="p-0.5 rounded hover:bg-purple-500/10 transition-colors"
-                    title="Edit prompt"
-                  >
-                    <Edit2 className="w-2.5 h-2.5" style={{ color: "var(--text-muted)" }} />
-                  </button>
-                )}
-              </div>
-              {isEditingPrompt ? (
-                <div className="mt-1 space-y-1.5">
-                  <textarea
-                    value={inlinePrompt}
-                    onChange={(e) => setInlinePrompt(e.target.value)}
-                    rows={3}
-                    autoFocus
-                    className="w-full text-xs rounded-lg border px-2 py-1.5 bg-transparent outline-none resize-none"
-                    style={{
-                      borderColor: "rgba(124,58,237,0.3)",
-                      color: "var(--text-primary)",
-                      backgroundColor: "rgba(124,58,237,0.05)",
-                    }}
-                  />
-                  <div className="flex gap-1.5">
-                    <button
-                      onClick={() => {
-                        setEditValues((prev) => ({ ...prev, visualDirection: inlinePrompt }));
-                        updateSceneMutation.mutate({ visualDirection: inlinePrompt });
-                        setIsEditingPrompt(false);
-                      }}
-                      disabled={updateSceneMutation.isPending}
-                      className="text-[10px] px-2 py-1 rounded bg-purple-600 text-white font-medium flex items-center gap-1 hover:bg-purple-500 disabled:opacity-50 transition-colors"
-                    >
-                      {updateSceneMutation.isPending ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : <Save className="w-2.5 h-2.5" />}
-                      Save
-                    </button>
-                    <button
-                      onClick={() => {
-                        setInlinePrompt(promptUsed);
-                        setIsEditingPrompt(false);
-                      }}
-                      className="text-[10px] px-2 py-1 rounded border transition-colors"
-                      style={{ borderColor: "var(--border-subtle)", color: "var(--text-muted)" }}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <p
-                  className="text-xs mt-0.5 line-clamp-2 cursor-pointer hover:text-purple-400 transition-colors"
-                  style={{ color: "var(--text-secondary)" }}
-                  onClick={() => setIsEditingPrompt(true)}
-                  title="Click to edit prompt"
-                >
-                  {inlinePrompt || promptUsed || "No prompt set — click to add"}
-                </p>
-              )}
-            </div>
           </div>
 
           {/* Use Own Media */}
