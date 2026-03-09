@@ -1216,6 +1216,264 @@ router.patch('/projects/:projectId/scenes/:sceneId/visual-direction', isAuthenti
   }
 });
 
+// Regenerate visual direction for a single scene using Claude
+router.post('/projects/:projectId/scenes/:sceneId/regenerate-visual-direction', isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const userId = (req.user as any)?.id;
+    const { projectId, sceneId } = req.params;
+
+    const projectData = await getProjectFromDb(projectId);
+    if (!projectData) {
+      return res.status(404).json({ success: false, error: 'Project not found' });
+    }
+    if (projectData.ownerId !== userId) {
+      return res.status(403).json({ success: false, error: 'Access denied' });
+    }
+
+    const sceneIndex = projectData.scenes.findIndex(s => s.id === sceneId);
+    if (sceneIndex === -1) {
+      return res.status(404).json({ success: false, error: 'Scene not found' });
+    }
+
+    const scene = projectData.scenes[sceneIndex];
+    const narration = scene.narration || '';
+    if (!narration.trim()) {
+      return res.status(400).json({ success: false, error: 'Scene has no narration to generate visual direction from' });
+    }
+
+    const { llmClient } = await import('../services/piapi-llm-client');
+    if (!llmClient.isAvailable()) {
+      return res.status(500).json({ success: false, error: 'AI service not configured' });
+    }
+
+    const { isStylizedPreset, getVisualArtPreset } = await import('../../shared/config/visual-art-presets');
+    const { brandContextService } = await import('../services/brand-context-service');
+
+    const artPresetId = (scene as any).artPresetId || (projectData as any).artPresetId;
+    const isStylizedArtPreset = isStylizedPreset(artPresetId);
+    const artPreset = artPresetId ? getVisualArtPreset(artPresetId) : null;
+
+    const brandContext = await brandContextService.getVisualDirectionGenerationContext();
+    const brandContextStr = brandContext || '';
+
+    const projectVisualStyle = artPreset
+      ? `${artPreset.name} — ${artPreset.description}`
+      : 'Photorealistic / stock footage style';
+
+    const lockedCharProfilesForPrompt = ((projectData as any).characters || [])
+      .filter((c: any) => c.locked && c.referenceImageUrl)
+      .sort((a: any, b: any) => (a.sortOrder || 0) - (b.sortOrder || 0));
+
+    const charProfileSection = lockedCharProfilesForPrompt.length > 0
+      ? '\nLOCKED CHARACTER PROFILES:\n' + lockedCharProfilesForPrompt.map((c: any) =>
+        `- ${c.name} (${c.role || 'character'}): ${c.physicalDescription || 'no description'}. Wardrobe: ${c.wardrobe || 'not specified'}. Expression: ${c.personalityNotes || 'neutral'}.`
+      ).join('\n')
+      : '';
+
+    const stylizedPromptRules = artPreset ? `
+## STYLE: ${artPreset.name.toUpperCase()}
+${artPreset.description}
+Avoid: ${artPreset.negativePromptAdditions.join(', ')}
+
+You are a cinematic AI video director specializing in Disney/Pixar 3D CGI educational content. Your job is to write a precise, specific, cinematically rich visual direction prompt for an AI video generation tool (Kling/fal.ai).
+
+You will receive:
+- The scene narration text
+- The project art style (always 3D Illustration for this context)
+- A list of locked character profiles with their physical descriptions, wardrobe, and expression notes
+${charProfileSection}
+
+RULES YOU MUST ALWAYS FOLLOW:
+
+1. CHARACTER SPECIFICITY
+   - If any locked character's name appears in the narration, ALWAYS reference them by exact name and include their specific physical appearance, wardrobe, and expression from their profile
+   - Never describe a character generically (e.g., "a woman" or "a person") when a named locked character exists
+   - Always append: "Maintain exact character appearance from reference image. Same face, hair, clothing, and art style."
+
+2. NARRATION-VISUAL ALIGNMENT
+   - The environment, camera movement, and character action must directly reinforce the MEANING of the narration — not just illustrate it generically
+   - Ask yourself: what does this narration mean conceptually? Then express that concept visually
+
+3. REQUIRED VISUAL ELEMENTS — always specify all six:
+   a) Shot type (medium shot, close-up, wide establishing, etc.)
+   b) Camera movement (slow push-in, subtle arc left-to-right, static hold, gentle orbit, etc.)
+   c) Lighting mood (warm golden, cool clinical white, soft ambient, split warm-cool, etc.)
+   d) Background environment (specific, thematic, never generic)
+   e) Character action and gesture (what are they doing physically that matches the narration meaning)
+   f) Art style suffix (always end with the standard suffix below)
+
+4. STANDARD ART STYLE SUFFIX — always end every prompt with:
+   "Disney/Pixar 3D CGI animation quality, subsurface skin scattering, shallow depth of field, cinematic warm color grading, 4K render. No text overlays. Smooth natural movement — gentle gestures, soft blinks, subtle breathing motion."
+
+5. NEVER USE:
+   - Generic room descriptions ("cozy office", "modern workspace")
+   - Vague character descriptions ("a woman", "a professional")
+   - Static, non-cinematic framing descriptions
+   - Environments unrelated to the narration's meaning
+
+6. EVERY micro-scene prompt MUST include the art style marker (e.g. "Pixar-style 3D animated", "claymation", etc.) — AI video providers treat each prompt independently and will default to photorealistic if the style is not explicitly stated.
+
+` : '';
+
+    const defaultPromptRules = `
+## CORE PRINCIPLE: AUTHENTICITY OVER PRODUCTION VALUE
+The #1 priority is that the visual MATCHES the emotional reality of the narration.
+
+## CRITICAL: VISUAL DIVERSITY
+Vary the VISUAL TYPE across micro-scenes:
+- Object close-up, Environment/setting, Conceptual/metaphor, Nature/organic, B-roll, Person/human
+
+RULES:
+- At MOST 1-2 micro-scenes (out of 3-4) should feature a person
+- Vary the visual type
+
+## RULES FOR VISUAL DIRECTIONS
+1. MATCH THE NARRATION'S REALITY
+2. ONE VISUAL PER MICRO-SCENE
+3. KEEP IT SIMPLE - One subject, one setting per micro-scene. 10-20 words max.
+4. BE CONCRETE, NOT ABSTRACT
+5. BE DIRECT
+6. REAL SETTINGS, NOT SETS
+7. NO CINEMATIC LANGUAGE
+8. VISUAL VARIETY`;
+
+    const systemPrompt = `You are a visual director for ${isStylizedArtPreset ? `${artPreset!.name} style AI video content` : 'social media and television content'}.
+
+${brandContextStr}
+
+${isStylizedArtPreset ? stylizedPromptRules : defaultPromptRules}
+
+## MICRO-SCENES
+Split the narration into micro-scenes. Each micro-scene covers 1-2 sentences that share a single visual idea.
+
+Guidelines for splitting:
+- Split at natural topic/image shifts in the narration
+- Each micro-scene should represent ONE clear visual moment
+- 2-4 micro-scenes per scene is ideal (minimum 1, maximum 5)
+- Short scenes (under 5 seconds or 1-2 sentences) should stay as 1 micro-scene
+- Estimate duration proportionally based on word count of each segment
+
+## VISUAL STYLE: ${projectVisualStyle}
+
+## OUTPUT FORMAT
+Return ONLY a JSON object:
+{
+  "visualDirection": "overall ${isStylizedArtPreset ? '4-6 sentence cinematic paragraph' : '1-sentence'} summary for the whole scene${isStylizedArtPreset ? ' including all six required visual elements and art style suffix' : ''}",
+  "microScenes": [
+    { "narration": "exact text from the narration for this segment", "visualDirection": "${isStylizedArtPreset ? '4-6 sentence cinematic paragraph with shot type, camera movement, lighting, environment, character action, and art style suffix. No bullet points.' : '1-2 sentences describing what we see'}", "duration": 4 },
+    { "narration": "next segment text", "visualDirection": "different visual type for this part", "duration": 3 }
+  ]
+}`;
+
+    const previousDirections = projectData.scenes
+      .slice(0, sceneIndex)
+      .filter((s: any) => s.visualDirection && s.visualDirection.trim().length >= 10)
+      .slice(-2)
+      .map((s: any, idx: number) => `Previous scene ${idx + 1}: "${s.visualDirection}"`)
+      .join('\n');
+
+    const characterProfilesText = lockedCharProfilesForPrompt.length > 0
+      ? 'LOCKED CHARACTER PROFILES FOR THIS PROJECT:\n' + lockedCharProfilesForPrompt.map((c: any) => `
+- Name: ${c.name}
+  Role: ${c.role || 'character'}
+  Physical Description: ${c.physicalDescription || 'no description'}
+  Wardrobe: ${c.wardrobe || 'not specified'}
+  Expression/Personality: ${c.personalityNotes || 'neutral'}
+  Reference Image: ${c.referenceImageUrl ? 'Available' : 'Not generated'}
+`).join('\n')
+      : 'No locked character profiles for this project.';
+
+    const userPrompt = isStylizedArtPreset ? `
+Generate a cinematic visual direction prompt for the following scene.
+
+PROJECT ART STYLE: ${artPreset!.name} (Disney/Pixar CGI)
+
+${characterProfilesText}
+
+SCENE ${sceneIndex + 1} of ${projectData.scenes.length}
+Scene Type: ${scene.type || 'content'}
+${(scene as any).title ? `Scene Title: ${(scene as any).title}` : ''}
+Scene Duration: ${scene.duration || 10} seconds
+${previousDirections ? `\nPREVIOUS SCENES (maintain character consistency with these):\n${previousDirections}\n` : ''}
+SCENE NARRATION:
+"${narration}"
+
+Write a single paragraph visual direction prompt that:
+1. References any named characters using their exact profile details above
+2. Ties the environment and camera movement to the meaning of the narration
+3. Includes shot type, camera movement, lighting, background, character action, and the standard art style suffix
+4. Ends with the standard Disney/Pixar art style suffix
+
+Split this narration into micro-scenes (2-4 segments) at natural topic shifts. Each micro-scene gets its own vivid cinematic paragraph visual direction. Return JSON with visualDirection and microScenes array.
+` : `Scene Type: ${scene.type || 'content'}
+${(scene as any).title ? `Scene Title: ${(scene as any).title}` : ''}
+Scene ${sceneIndex + 1} of ${projectData.scenes.length}
+Scene Duration: ${scene.duration || 10} seconds
+${previousDirections ? `\nPREVIOUS SCENES (maintain character consistency with these):\n${previousDirections}\n` : ''}
+Narration:
+"${narration}"
+
+Split this narration into micro-scenes (2-4 segments) at natural topic shifts. Each micro-scene gets its own simple, authentic visual direction. Return JSON with visualDirection and microScenes array.`;
+
+    console.log(`[RegenVisualDir] Regenerating visual direction for scene ${sceneId} in project ${projectId} (art: ${artPresetId || 'default'})`);
+
+    const llmResult = await llmClient.createChatCompletion({
+      systemPrompt,
+      messages: [{ role: 'user', content: userPrompt }],
+      maxTokens: isStylizedArtPreset ? 1200 : 600,
+    });
+
+    const textContent = llmResult.text || '';
+    if (!textContent) {
+      return res.status(500).json({ success: false, error: 'AI returned no content' });
+    }
+
+    let visualDirection = '';
+    let microScenes: any[] = [];
+    try {
+      const cleanedText = textContent
+        .replace(/```json\s*/gi, '')
+        .replace(/```\s*/g, '')
+        .trim();
+      const jsonMatch = cleanedText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        visualDirection = parsed.visualDirection || '';
+        microScenes = parsed.microScenes || [];
+      } else {
+        visualDirection = cleanedText;
+      }
+    } catch (e) {
+      visualDirection = textContent.trim();
+    }
+
+    if (!visualDirection) {
+      return res.status(500).json({ success: false, error: 'Failed to parse visual direction from AI response' });
+    }
+
+    projectData.scenes[sceneIndex].visualDirection = visualDirection;
+    projectData.scenes[sceneIndex].background.source = visualDirection;
+    if (microScenes.length > 0) {
+      (projectData.scenes[sceneIndex] as any).microScenes = microScenes;
+    }
+    projectData.updatedAt = new Date().toISOString();
+
+    await saveProjectToDb(projectData, projectData.ownerId);
+
+    console.log(`[RegenVisualDir] Successfully regenerated visual direction for scene ${sceneId}`);
+
+    res.json({
+      success: true,
+      project: projectData,
+      visualDirection,
+      microScenes,
+    });
+  } catch (error: any) {
+    console.error('[RegenVisualDir] Error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Phase 12 Addendum: Get reference config for a scene
 router.get('/projects/:projectId/scenes/:sceneId/reference-config', isAuthenticated, async (req: Request, res: Response) => {
   try {

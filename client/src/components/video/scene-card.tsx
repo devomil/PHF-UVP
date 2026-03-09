@@ -329,6 +329,7 @@ export function SceneCard({
                 sceneType={scene.type}
                 onSave={handleVisualDirectionSave}
                 disabled={disabled}
+                projectId={projectId}
               />
             </div>
 
