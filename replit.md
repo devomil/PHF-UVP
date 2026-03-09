@@ -38,5 +38,5 @@ The AI Video Production Studio is a full-stack platform designed to streamline v
 -   **Rendering**: Remotion (Remotion Lambda).
 -   **Image Generation**: PiAPI Flux Schnell (fallback), Nano Banana Pro (PiAPI Gemini model).
 -   **Authentication**: Passport.js.
--   **AI Tools**: ElevenLabs (for voiceover), Claude via PiAPI LLM proxy (claude-opus-4-6 primary, Anthropic direct claude-sonnet-4 fallback) for script generation, micro-scene splitting, text label extraction, prompt optimization, scene analysis, quality evaluation, and intelligent provider selection. All LLM calls go through `server/services/piapi-llm-client.ts` which handles PiAPI→Anthropic automatic failover.
+-   **AI Tools**: ElevenLabs (for voiceover), Claude via PiAPI LLM proxy (claude-sonnet-4-6 primary, Anthropic direct claude-sonnet-4 fallback) for script generation, micro-scene splitting, text label extraction, prompt optimization, scene analysis, quality evaluation, and intelligent provider selection. All LLM calls go through `server/services/piapi-llm-client.ts` which handles PiAPI→Anthropic automatic failover.
 -   **Image/Video Toolkit**: Qubic Image Toolkit (via PiAPI).

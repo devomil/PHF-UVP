@@ -982,7 +982,7 @@ export const PIAPI_TEST_DEFINITIONS: PiAPITestDefinition[] = [
     id: 'claude',
     name: 'Claude',
     category: 'llm',
-    model: 'claude-opus-4-6',
+    model: 'claude-sonnet-4-6',
     taskType: 'chat-completion',
     input: {
       messages: [
