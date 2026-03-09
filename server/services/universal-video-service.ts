@@ -3194,48 +3194,60 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
           try {
             const isStylizedArtPreset = isStylizedPreset(artPreset?.id);
             
-            const characterConsistencyNote = i > 0 ? `
-## CHARACTER CONSISTENCY
-If a scene features a recurring character, use the SAME character description as previous scenes — same hair color, clothing, body shape, and distinguishing features. The audience should recognize this is the same person across scenes.` : `
-## CHARACTER CONSISTENCY
-If scenes feature a recurring main character, define their appearance NOW (hair color, clothing, body shape, distinguishing features) and use the SAME description in every scene they appear. This character should be recognizable across the entire video.`;
+            const lockedCharProfilesForPrompt = ((updatedProject as any).characters || [])
+              .filter((c: any) => c.locked && c.referenceImageUrl)
+              .sort((a: any, b: any) => (a.sortOrder || 0) - (b.sortOrder || 0));
+
+            const charProfileSection = lockedCharProfilesForPrompt.length > 0
+              ? '\nLOCKED CHARACTER PROFILES:\n' + lockedCharProfilesForPrompt.map((c: any) =>
+                `- ${c.name} (${c.role || 'character'}): ${c.physicalDescription || 'no description'}. Wardrobe: ${c.wardrobe || 'not specified'}. Expression: ${c.personalityNotes || 'neutral'}.`
+              ).join('\n')
+              : '';
 
             const stylizedPromptRules = artPreset ? `
 ## STYLE: ${artPreset.name.toUpperCase()}
 ${artPreset.description}
 Avoid: ${artPreset.negativePromptAdditions.join(', ')}
 
-## HOW TO WRITE VISUAL DIRECTIONS
-Write like a skilled art director describing a shot to an animator. Each prompt should read naturally — like this real example:
-"A Pixar-style 3D animated character sitting at a kitchen table, looking puzzled, holding a fork over an empty plate. A thought bubble floats above their head, showing question marks and a tiny growling stomach icon. Soft, slightly blue-tinted lighting to suggest mild frustration. Cozy home setting. Cinematic animation quality, warm but slightly desaturated tones."
+You are a cinematic AI video director specializing in Disney/Pixar 3D CGI educational content. Your job is to write a precise, specific, cinematically rich visual direction prompt for an AI video generation tool (Kling/fal.ai).
 
-Each micro-scene visual direction should be 2-4 sentences (40-80 words) and describe:
-- WHAT we see: specific characters, objects, environments — concrete and tangible
-- HOW it looks: lighting, color mood, atmosphere — woven naturally into the description
-- The FEELING: emotional tone that matches the narration
+You will receive:
+- The scene narration text
+- The project art style (always 3D Illustration for this context)
+- A list of locked character profiles with their physical descriptions, wardrobe, and expression notes
+${charProfileSection}
 
-## CRITICAL RULES
-1. Be CONCRETE, not abstract. Describe physical things we can see, not concepts like "transformation" or "journey"
-2. Do NOT start every prompt with the same words. Vary your opening
-3. Do NOT use meta-descriptions like "representing" or "symbolizing" — describe what is literally visible
-4. NEVER include readable text, words, signs, labels, or logos — AI video cannot render text
-5. Each micro-scene = ONE clear visual moment. No "or" alternatives
-6. Vary visual types across micro-scenes: characters, environments, object close-ups, nature, hands doing things
-7. EVERY micro-scene prompt MUST include the art style marker (e.g. "Pixar-style 3D animated", "claymation", etc.) — AI video providers treat each prompt independently and will default to photorealistic if the style is not explicitly stated. Never rely on "the character" or "the same character" alone — always re-state the style.
-${characterConsistencyNote}
+RULES YOU MUST ALWAYS FOLLOW:
 
-## EXAMPLES
-Narration: "Hi, and welcome."
-WRONG: "3D rendered illustration, Pixar style, soft global illumination, isometric perspective, a warm welcoming exploration of the brand's healing journey"
-RIGHT: "A Pixar-style 3D animated character with warm brown hair and a cozy green sweater waves cheerfully from behind a sunny kitchen counter. Morning light streams through a large window casting soft golden shadows across potted herbs and a steaming mug of tea. Cinematic animation quality, warm inviting tones."
+1. CHARACTER SPECIFICITY
+   - If any locked character's name appears in the narration, ALWAYS reference them by exact name and include their specific physical appearance, wardrobe, and expression from their profile
+   - Never describe a character generically (e.g., "a woman" or "a person") when a named locked character exists
+   - Always append: "Maintain exact character appearance from reference image. Same face, hair, clothing, and art style."
 
-Narration: "If you've ever felt confused about why weight loss feels so hard"
-WRONG: "Close-up of the same character's hands arranging food on a cutting board" (MISSING STYLE MARKER — provider will generate photorealistic)
-RIGHT: "A Pixar-style 3D animated character sits at a cluttered kitchen table, chin resting on one hand, surrounded by conflicting diet books and an untouched salad. A thought bubble floats above showing question marks. Soft blue-tinted lighting suggests mild frustration against a cozy home backdrop, warm but slightly desaturated tones."
+2. NARRATION-VISUAL ALIGNMENT
+   - The environment, camera movement, and character action must directly reinforce the MEANING of the narration — not just illustrate it generically
+   - Ask yourself: what does this narration mean conceptually? Then express that concept visually
+   - Example: "bridging conventional and holistic medicine" → split environment with clinical elements on one side, botanical/natural elements on the other, character centered between them
 
-Narration: "This isn't about guilt or perfection"
-WRONG: "The character sits at a breakfast nook with tea, leaning forward with a smile" (MISSING STYLE — will be photorealistic)
-RIGHT: "Pixar-style 3D animated close-up of warm hands wrapped around a steaming ceramic mug on a sunlit wooden table. Soft morning light catches the steam rising in delicate wisps. A small potted succulent sits nearby. Rounded 3D shapes, warm amber tones, gentle depth of field."
+3. REQUIRED VISUAL ELEMENTS — always specify all six:
+   a) Shot type (medium shot, close-up, wide establishing, etc.)
+   b) Camera movement (slow push-in, subtle arc left-to-right, static hold, gentle orbit, etc.)
+   c) Lighting mood (warm golden, cool clinical white, soft ambient, split warm-cool, etc.)
+   d) Background environment (specific, thematic, never generic)
+   e) Character action and gesture (what are they doing physically that matches the narration meaning)
+   f) Art style suffix (always end with the standard suffix below)
+
+4. STANDARD ART STYLE SUFFIX — always end every prompt with:
+   "Disney/Pixar 3D CGI animation quality, subsurface skin scattering, shallow depth of field, cinematic warm color grading, 4K render. No text overlays. Smooth natural movement — gentle gestures, soft blinks, subtle breathing motion."
+
+5. NEVER USE:
+   - Generic room descriptions ("cozy office", "modern workspace")
+   - Vague character descriptions ("a woman", "a professional")
+   - Static, non-cinematic framing descriptions
+   - Environments unrelated to the narration's meaning
+
+6. EVERY micro-scene prompt MUST include the art style marker (e.g. "Pixar-style 3D animated", "claymation", etc.) — AI video providers treat each prompt independently and will default to photorealistic if the style is not explicitly stated.
+
 ` : '';
 
             const defaultPromptRules = `
@@ -3294,9 +3306,9 @@ Guidelines for splitting:
 ## OUTPUT FORMAT
 Return ONLY a JSON object:
 {
-  "visualDirection": "overall ${isStylizedArtPreset ? '1-2 sentence' : '1-sentence'} summary for the whole scene${isStylizedArtPreset ? ' including style markers' : ''}",
+  "visualDirection": "overall ${isStylizedArtPreset ? '4-6 sentence cinematic paragraph' : '1-sentence'} summary for the whole scene${isStylizedArtPreset ? ' including all six required visual elements and art style suffix' : ''}",
   "microScenes": [
-    { "narration": "exact text from the narration for this segment", "visualDirection": "${isStylizedArtPreset ? '2-4 detailed sentences with style-specific elements, lighting, characters, and camera' : '1-2 sentences describing what we see'}", "duration": 4 },
+    { "narration": "exact text from the narration for this segment", "visualDirection": "${isStylizedArtPreset ? '4-6 sentence cinematic paragraph with shot type, camera movement, lighting, environment, character action, and art style suffix. No bullet points.' : '1-2 sentences describing what we see'}", "duration": 4 },
     { "narration": "next segment text", "visualDirection": "different visual type for this part", "duration": 3 }
   ]
 }`;
