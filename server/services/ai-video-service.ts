@@ -174,6 +174,11 @@ class AIVideoService {
           console.log(`[AIVideo] I2V stylized preset "${artPreset.name}" — prepended style marker: "${prefix}"`);
         }
       }
+      if (isStylizedArt && artPreset) {
+        const styleLabel = (artPreset as any).styleMarkerPrefix || artPreset.name;
+        i2vPrompt = `${i2vPrompt}. All environments, backgrounds, and settings must be rendered in ${styleLabel} style — no photorealistic elements.`;
+        console.log(`[AIVideo] I2V environment style reinforcement appended for "${artPreset.name}"`);
+      }
       console.log(`[AIVideo] Adapted I2V prompt: ${i2vPrompt.substring(0, 100)}...`);
       enhancedOptions = {
         ...options,
@@ -252,9 +257,16 @@ class AIVideoService {
         negativePrompt = `${negativePrompt}, ${artPreset.negativePromptAdditions.join(', ')}`;
       }
       
+      let finalPrompt = optimized.prompt;
+      if (isStylizedArt && artPreset) {
+        const styleLabel = (artPreset as any).styleMarkerPrefix || artPreset.name;
+        finalPrompt = `${finalPrompt}. All environments, backgrounds, and settings must be rendered in ${styleLabel} style — no photorealistic elements.`;
+        console.log(`[AIVideo] T2V environment style reinforcement appended for "${artPreset.name}"`);
+      }
+
       enhancedOptions = {
         ...options,
-        prompt: optimized.prompt,
+        prompt: finalPrompt,
         negativePrompt,
         contentType,
       };
@@ -455,6 +467,7 @@ class AIVideoService {
         i2vSettings: options.i2vSettings,
         motionControl,
         isCharacterReference: options.isCharacterReference,
+        artPresetId: options.artPresetId,
       });
       
       return {
