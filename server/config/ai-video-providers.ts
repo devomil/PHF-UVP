@@ -8,6 +8,8 @@ const CACHE_TTL_MS = 5 * 60 * 1000;
 const PROVIDER_TEST_ID_MAP: Record<string, string[]> = {
   'kling-2.6': ['kling-2.6'],
   'kling-2.6-pro': ['kling-2.6'],
+  'kling-2.1-master': ['kling-2.6'],
+  'kling-2.6-motion-control-pro': ['kling-2.6'],
   'kling-2.5': ['kling-2.5'],
   'veo-3.1': ['veo-3.1'],
   'veo-3': ['veo-3'],
@@ -438,7 +440,7 @@ export function selectProvidersForSceneSmart(scene: any, options?: any): string[
 export function getAllConfiguredProviders(): string[] {
   const configured: string[] = [];
   if (process.env.PIAPI_API_KEY) {
-    configured.push('kling-2.6', 'kling-2.6-pro', 'veo-3.1', 'luma', 'hailuo', 'wan-2.6', 'pika', 'seedance-1.0', 'seedance-2.0', 'seedance-2.0-fast', 'sora-2', 'sora-2-pro');
+    configured.push('kling-2.6', 'kling-2.6-pro', 'kling-2.1-master', 'kling-2.6-motion-control-pro', 'veo-3.1', 'luma', 'hailuo', 'wan-2.6', 'pika', 'seedance-1.0', 'seedance-2.0', 'seedance-2.0-fast', 'sora-2', 'sora-2-pro');
   }
   if (process.env.RUNWAY_API_KEY) {
     configured.push('runway', 'runway-4.5', 'runway-gen4', 'runway-gen4-aleph', 'runway-act-two');

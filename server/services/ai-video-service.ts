@@ -275,12 +275,34 @@ class AIVideoService {
       providerOrder = this.selectProvidersForStyle(styleConfig.preferredVideoProviders, enhancedOptions.sceneType, contentType, configuredProviders);
     }
     
-    if (artPreset && artPreset.recommendedProviders?.video?.length > 0 && (!enhancedOptions.preferredProvider || enhancedOptions.preferredProvider === 'auto')) {
-      const presetVideoProviders = artPreset.recommendedProviders.video.filter((p: string) => configuredProviders.some(cp => cp === p || cp.startsWith(p + '-') || cp.startsWith(p)));
-      if (presetVideoProviders.length > 0) {
-        const remaining = providerOrder.filter((p: string) => !presetVideoProviders.some((ap: string) => p === ap || p.startsWith(ap + '-') || p.startsWith(ap)));
-        providerOrder = [...presetVideoProviders, ...remaining];
-        console.log(`[AIVideo] Art preset '${artPreset.name}' boosted providers: ${presetVideoProviders.join(', ')} to front of order`);
+    if (artPreset && (!enhancedOptions.preferredProvider || enhancedOptions.preferredProvider === 'auto')) {
+      let sceneTypeProviders: string[] | null = null;
+      let mappingKey: string | null = null;
+
+      if (artPreset.sceneTypeProviderMap) {
+        const motionKeywords = /\b(arc|orbit|pull[- ]?back|push[- ]?in|tracking shot|crane|dolly|motion control|sweeping pan|circular)\b/i;
+        if (motionKeywords.test(options.prompt || '')) {
+          sceneTypeProviders = artPreset.sceneTypeProviderMap['motion-control'] || null;
+          mappingKey = 'motion-control (keyword)';
+        }
+
+        if (!sceneTypeProviders && enhancedOptions.sceneType) {
+          sceneTypeProviders = artPreset.sceneTypeProviderMap[enhancedOptions.sceneType] || null;
+          mappingKey = enhancedOptions.sceneType;
+        }
+
+        if (!sceneTypeProviders && contentType) {
+          sceneTypeProviders = artPreset.sceneTypeProviderMap[contentType] || null;
+          mappingKey = `${contentType} (classification)`;
+        }
+      }
+
+      const presetProviders = sceneTypeProviders || artPreset.recommendedProviders?.video || [];
+      const filteredProviders = presetProviders.filter((p: string) => configuredProviders.some(cp => cp === p || cp.startsWith(p + '-') || cp.startsWith(p)));
+      if (filteredProviders.length > 0) {
+        const remaining = providerOrder.filter((p: string) => !filteredProviders.includes(p));
+        providerOrder = [...filteredProviders, ...remaining];
+        console.log(`[AIVideo] Art preset '${artPreset.name}' routed ${mappingKey ? `'${mappingKey}'` : 'default'} → [${filteredProviders.join(', ')}]`);
       }
     }
 

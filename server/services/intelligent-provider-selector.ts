@@ -16,7 +16,7 @@ export type ContentClassification = 'cinematic' | 'human_subjects' | 'product_re
 export interface ProviderRecommendation {
   sceneId: string;
   sceneIndex: number;
-  recommendedProvider: 'runway' | 'kling' | 'luma' | 'hailuo' | 'wan' | 'remotion';
+  recommendedProvider: string;
   confidence: number;
   reasoning: string;
   contentClassification: ContentClassification;
@@ -50,7 +50,7 @@ class IntelligentProviderSelectorService {
       let recommendations = this.parseRecommendations(result.text, scenes);
       
       if (artPresetId) {
-        recommendations = this.applyArtPresetPreferences(recommendations, artPresetId);
+        recommendations = this.applyArtPresetPreferences(recommendations, artPresetId, scenes);
       }
       
       console.log('[IntelligentProvider] Claude analysis complete:');
@@ -202,14 +202,17 @@ Respond with ONLY a JSON array (no markdown, no code blocks):
     }
   }
 
-  private applyArtPresetPreferences(recommendations: ProviderRecommendation[], artPresetId: string): ProviderRecommendation[] {
+  private applyArtPresetPreferences(recommendations: ProviderRecommendation[], artPresetId: string, scenes?: SceneContent[]): ProviderRecommendation[] {
     const preset = getVisualArtPreset(artPresetId);
     if (!preset) return recommendations;
 
     const preferredVideoProviders = preset.recommendedProviders.video || [];
     const isStylized = isStylizedPreset(artPresetId);
+    const sceneMap = preset.sceneTypeProviderMap;
 
-    console.log(`[IntelligentProvider] Applying art preset "${preset.name}" preferences: video=[${preferredVideoProviders}], stylized=${isStylized}`);
+    console.log(`[IntelligentProvider] Applying art preset "${preset.name}" preferences: video=[${preferredVideoProviders}], stylized=${isStylized}, hasSceneTypeMap=${!!sceneMap}`);
+
+    const motionKeywords = /\b(arc|orbit|pull[- ]?back|push[- ]?in|tracking shot|crane|dolly|motion control|sweeping pan|circular)\b/i;
 
     return recommendations.map(rec => {
       if (rec.visualFormat === 'remotion-motion-graphics') return rec;
@@ -219,18 +222,53 @@ Respond with ONLY a JSON array (no markdown, no code blocks):
         rec = { ...rec, visualFormat: 'ai-video' };
       }
 
-      const currentProvider = rec.recommendedProvider;
-      const isPreferred = preferredVideoProviders.includes(currentProvider);
+      let mappedProviders: string[] | null = null;
+      let mappingKey: string | null = null;
 
-      if (!isPreferred && preferredVideoProviders.length > 0) {
-        const newProvider = this.validateProvider(preferredVideoProviders[0]);
-        console.log(`[IntelligentProvider] Art preset provider override: scene ${rec.sceneIndex} ${currentProvider} → ${newProvider} (preset: ${preset.name})`);
+      if (sceneMap) {
+        const scene = scenes?.find(s => s.sceneIndex === rec.sceneIndex);
+        const promptText = scene?.visualDirection || '';
+
+        if (motionKeywords.test(promptText)) {
+          mappedProviders = sceneMap['motion-control'] || null;
+          mappingKey = 'motion-control (keyword)';
+        }
+
+        if (!mappedProviders && scene?.sceneType) {
+          mappedProviders = sceneMap[scene.sceneType] || null;
+          mappingKey = scene.sceneType;
+        }
+
+        if (!mappedProviders && rec.contentClassification) {
+          mappedProviders = sceneMap[rec.contentClassification] || null;
+          mappingKey = `${rec.contentClassification} (classification)`;
+        }
+      }
+
+      if (mappedProviders && mappedProviders.length > 0) {
+        const newProvider = mappedProviders[0];
+        const newFallback = mappedProviders[1] || rec.recommendedProvider;
+        console.log(`[IntelligentProvider] Art preset '${preset.name}' routed scene ${rec.sceneIndex} '${mappingKey}': ${rec.recommendedProvider} → ${newProvider}`);
         return {
           ...rec,
           recommendedProvider: newProvider,
-          fallbackProvider: this.validateProvider(preferredVideoProviders[1] || currentProvider),
-          reasoning: `${rec.reasoning} (adjusted for ${preset.name} art preset)`,
+          fallbackProvider: newFallback,
+          reasoning: `${rec.reasoning} (${preset.name}: ${mappingKey} routing)`,
         };
+      }
+
+      if (preferredVideoProviders.length > 0) {
+        const currentProvider = rec.recommendedProvider;
+        const newProvider = this.validateProvider(preferredVideoProviders[0]);
+        if (newProvider !== currentProvider) {
+          console.log(`[IntelligentProvider] Art preset '${preset.name}' default override: scene ${rec.sceneIndex} ${currentProvider} → ${newProvider}`);
+          return {
+            ...rec,
+            recommendedProvider: newProvider,
+            fallbackProvider: this.validateProvider(preferredVideoProviders[1] || currentProvider),
+            reasoning: `${rec.reasoning} (${preset.name}: default routing)`,
+          };
+        }
       }
 
       return rec;
@@ -259,7 +297,7 @@ Respond with ONLY a JSON array (no markdown, no code blocks):
     });
 
     if (artPresetId) {
-      recommendations = this.applyArtPresetPreferences(recommendations, artPresetId);
+      recommendations = this.applyArtPresetPreferences(recommendations, artPresetId, scenes);
     }
 
     return {
