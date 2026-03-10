@@ -10,6 +10,7 @@ export interface VisualArtPreset {
     image: string[];
     video: string[];
   };
+  sceneTypeProviderMap?: Record<string, string[]>;
   generationStrategy: 'i2v' | 't2v' | 'auto';
   globalStyleNotes?: string;
   cameraMotionHints?: string;
@@ -38,6 +39,27 @@ export const VISUAL_ART_PRESETS: Record<string, VisualArtPreset> = {
     recommendedProviders: {
       image: ['flux', 'ideogram'],
       video: ['kling', 'runway'],
+    },
+    sceneTypeProviderMap: {
+      'hook': ['kling-2.1-master', 'sora-2-pro', 'kling-2.6-pro'],
+      'hero': ['kling-2.1-master', 'sora-2-pro', 'kling-2.6-pro'],
+      'testimonial': ['kling-2.1-master', 'sora-2-pro', 'kling-2.6-pro'],
+      'human_subjects': ['kling-2.1-master', 'sora-2-pro', 'kling-2.6-pro'],
+      'intro': ['kling-2.6-pro', 'kling-2.6'],
+      'solution': ['kling-2.6-pro', 'kling-2.6'],
+      'benefit': ['kling-2.6-pro', 'kling-2.6'],
+      'explanation': ['kling-2.6-pro', 'kling-2.6'],
+      'standard': ['kling-2.6-pro', 'kling-2.6'],
+      'problem': ['kling-2.6-pro', 'kling-2.6'],
+      'cta': ['kling-2.6-pro', 'kling-2.6'],
+      'product': ['kling-2.6-pro', 'kling-2.6'],
+      'proof': ['kling-2.6-pro', 'kling-2.6'],
+      'broll': ['runway-gen4-aleph', 'kling-2.6'],
+      'b-roll': ['runway-gen4-aleph', 'kling-2.6'],
+      'atmosphere': ['runway-gen4-aleph', 'kling-2.6'],
+      'transition': ['runway-gen4-aleph', 'kling-2.6'],
+      'brand': ['runway-gen4-aleph', 'kling-2.6'],
+      'motion-control': ['kling-2.6-motion-control-pro', 'kling-2.6-pro'],
     },
     generationStrategy: 'i2v',
     globalStyleNotes: 'Pixar/Disney 3D CGI animation quality • Subsurface skin scattering • Soft cinematic lighting • Shallow depth of field • 4K render • No text overlays • Warm, inviting color grading • Characters have expressive, rounded features',
