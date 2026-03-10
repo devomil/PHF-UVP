@@ -275,6 +275,15 @@ class AIVideoService {
       providerOrder = this.selectProvidersForStyle(styleConfig.preferredVideoProviders, enhancedOptions.sceneType, contentType, configuredProviders);
     }
     
+    if (artPreset && artPreset.recommendedProviders?.video?.length > 0 && (!enhancedOptions.preferredProvider || enhancedOptions.preferredProvider === 'auto')) {
+      const presetVideoProviders = artPreset.recommendedProviders.video.filter((p: string) => configuredProviders.some(cp => cp === p || cp.startsWith(p + '-') || cp.startsWith(p)));
+      if (presetVideoProviders.length > 0) {
+        const remaining = providerOrder.filter((p: string) => !presetVideoProviders.some((ap: string) => p === ap || p.startsWith(ap + '-') || p.startsWith(ap)));
+        providerOrder = [...presetVideoProviders, ...remaining];
+        console.log(`[AIVideo] Art preset '${artPreset.name}' boosted providers: ${presetVideoProviders.join(', ')} to front of order`);
+      }
+    }
+
     if (contentTag && contentTag.recommendedProviders.video.length > 0 && (!enhancedOptions.preferredProvider || enhancedOptions.preferredProvider === 'auto')) {
       const tagProviders = contentTag.recommendedProviders.video.filter(p => configuredProviders.some(cp => cp === p || cp.startsWith(p)));
       if (tagProviders.length > 0) {
