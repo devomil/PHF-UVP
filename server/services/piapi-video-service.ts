@@ -4,6 +4,7 @@ import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { AI_VIDEO_PROVIDERS } from '../config/ai-video-providers';
 import { sanitizePromptForAI, enhancePromptForProvider } from './prompt-sanitizer';
 import { MotionControlConfig, mapToKlingMotion, buildVeoMotionPrompt } from '../../shared/config/motion-control';
+import { isStylizedPreset } from '../../shared/config/visual-art-presets';
 
 interface PiAPIGenerationResult {
   success: boolean;
@@ -749,6 +750,7 @@ class PiAPIVideoService {
     };
     motionControl?: MotionControlConfig;
     isCharacterReference?: boolean;
+    artPresetId?: string;
   }): Promise<PiAPIGenerationResult> {
     if (!this.isAvailable()) {
       return { success: false, error: 'PiAPI key not configured' };
@@ -1328,7 +1330,15 @@ class PiAPIVideoService {
       // cfg_scale 0.25+ causes Kling to reimagine the product entirely (wrong bottle/labels)
       // Motion comes from the prompt directives, NOT from cfg_scale freedom
       // Default fidelity=1.0 → cfg=0.1 (preserve product), fidelity=0.0 → cfg=0.5 (creative)
-      const cfgScale = Math.max(0.1, 0.5 - imageControlStrength * 0.4); // Range: 0.5 (creative) to 0.1 (high fidelity)
+      let cfgScale = Math.max(0.1, 0.5 - imageControlStrength * 0.4); // Range: 0.5 (creative) to 0.1 (high fidelity)
+      
+      if (options.artPresetId && isStylizedPreset(options.artPresetId) && options.isCharacterReference) {
+        const stylizedCfg = Math.max(cfgScale, 0.30);
+        if (stylizedCfg !== cfgScale) {
+          console.log(`[PiAPI I2V] Stylized preset cfg override: ${cfgScale.toFixed(2)} → ${stylizedCfg.toFixed(2)} for art style adherence`);
+          cfgScale = stylizedCfg;
+        }
+      }
       
       // Map motion strength to animation intensity
       // Kling uses a subtle approach - lower values mean less dramatic motion
