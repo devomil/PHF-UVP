@@ -245,9 +245,13 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
         const data = await res.json();
         if (data.success) {
           const activeIndices = new Set(Object.keys(data.activeJobs || {}).map(Number));
+          let anyCompleted = false;
           setRegeneratingMicroScenes(prev => {
             const next = new Set<number>();
             prev.forEach(idx => { if (activeIndices.has(idx)) next.add(idx); });
+            if (next.size < prev.size) {
+              anyCompleted = true;
+            }
             if (next.size === 0 && prev.size > 0) {
               setMsRegenStartedAt(null);
               setMsRegenElapsed(0);
@@ -255,11 +259,14 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
             }
             return next.size !== prev.size ? next : prev;
           });
+          if (anyCompleted) {
+            queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+          }
         }
       } catch {}
     };
     reconcileWithServer();
-    const staleCheck = setInterval(reconcileWithServer, 15000);
+    const staleCheck = setInterval(reconcileWithServer, 5000);
     return () => clearInterval(staleCheck);
   }, [regeneratingMicroScenes.size > 0, projectId, sceneId]);
 
