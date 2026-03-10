@@ -1400,33 +1400,40 @@ class PiAPIVideoService {
       
       const allImageUrls = (options.imageUrls && options.imageUrls.length > 0) ? options.imageUrls : [options.imageUrl];
       const hasMultipleImages = allImageUrls.length > 1;
+      const isLegacyVersion = version === '1.6' || version === '1.0';
 
       if (hasMultipleImages) {
-        console.log(`[PiAPI I2V] Kling multi-image mode: ${allImageUrls.length} images via elements[]`);
+        if (isLegacyVersion) {
+          console.log(`[PiAPI I2V] Kling multi-image mode: ${allImageUrls.length} images via elements[] (v${version})`);
+        } else {
+          console.log(`[PiAPI I2V] Kling v${version}: elements[] not supported, using first reference image only (${allImageUrls.length} provided)`);
+        }
       }
 
       if (requiresNewContent) {
+        const refInput: any = {
+          prompt: klingI2vPrompt,
+          reference_images: [options.imageUrl],
+          duration: options.duration,
+          aspect_ratio: options.aspectRatio,
+          negative_prompt: i2vNegativePrompt,
+          mode,
+          version,
+          cfg_scale: cfgScale,
+          ...motionParams,
+        };
+        if (hasMultipleImages && isLegacyVersion) {
+          refInput.elements = allImageUrls.map(url => ({ image_url: url }));
+        }
         return {
           model: 'kling',
           task_type: 'video_generation',
-          input: {
-            prompt: klingI2vPrompt,
-            reference_images: [options.imageUrl],
-            duration: options.duration,
-            aspect_ratio: options.aspectRatio,
-            negative_prompt: i2vNegativePrompt,
-            mode,
-            version,
-            cfg_scale: cfgScale,
-            ...motionParams,
-            ...(hasMultipleImages ? { elements: allImageUrls.map(url => ({ image_url: url })) } : {}),
-          },
+          input: refInput,
         };
       }
       
       // Animation mode: use image_url for first-frame animation
       // No camera_control here - motion comes from prompt directives
-      const isLegacyVersion = version === '1.6' || version === '1.0';
       const klingInput: any = {
         prompt: klingI2vPrompt,
         image_url: options.imageUrl,
@@ -1437,7 +1444,7 @@ class PiAPIVideoService {
         version,
         cfg_scale: cfgScale,
       };
-      if (hasMultipleImages) {
+      if (hasMultipleImages && isLegacyVersion) {
         klingInput.elements = allImageUrls.map(url => ({ image_url: url }));
       } else if (isLegacyVersion) {
         klingInput.elements = [{ image_url: options.imageUrl }];
