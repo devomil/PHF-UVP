@@ -275,6 +275,7 @@ class AIVideoService {
       providerOrder = this.selectProvidersForStyle(styleConfig.preferredVideoProviders, enhancedOptions.sceneType, contentType, configuredProviders);
     }
     
+    let sceneTypeMappedProviders: Set<string> = new Set();
     if (artPreset && (!enhancedOptions.preferredProvider || enhancedOptions.preferredProvider === 'auto')) {
       let sceneTypeProviders: string[] | null = null;
       let mappingKey: string | null = null;
@@ -302,6 +303,9 @@ class AIVideoService {
       if (filteredProviders.length > 0) {
         const remaining = providerOrder.filter((p: string) => !filteredProviders.includes(p));
         providerOrder = [...filteredProviders, ...remaining];
+        if (sceneTypeProviders) {
+          filteredProviders.forEach(p => sceneTypeMappedProviders.add(p));
+        }
         console.log(`[AIVideo] Art preset '${artPreset.name}' routed ${mappingKey ? `'${mappingKey}'` : 'default'} → [${filteredProviders.join(', ')}]`);
       }
     }
@@ -316,9 +320,12 @@ class AIVideoService {
     }
 
     // Map base providers to tier-appropriate versions
-    // Skip tier mapping when user explicitly selected a provider
+    // Skip tier mapping when user explicitly selected a provider or when providers came from sceneTypeProviderMap
     const isExplicitSelection = !!enhancedOptions.preferredProvider && enhancedOptions.preferredProvider !== 'auto';
     const tierAdjustedOrder = isExplicitSelection ? providerOrder : providerOrder.map(baseProvider => {
+      if (sceneTypeMappedProviders.has(baseProvider)) {
+        return baseProvider;
+      }
       const baseName = baseProvider.split('-')[0];
       const tierVersions = TIER_PROVIDER_VERSIONS[baseName];
       if (tierVersions && tierVersions[qualityTier]) {
