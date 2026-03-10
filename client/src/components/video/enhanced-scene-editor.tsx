@@ -238,7 +238,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
 
   useEffect(() => {
     if (regeneratingMicroScenes.size === 0) return;
-    const staleCheck = setInterval(async () => {
+    const reconcileWithServer = async () => {
       try {
         const res = await fetch(`/api/universal-video/${projectId}/scenes/${sceneId}/micro-scene-jobs`, { credentials: "include" });
         if (!res.ok) return;
@@ -257,7 +257,9 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
           });
         }
       } catch {}
-    }, 15000);
+    };
+    reconcileWithServer();
+    const staleCheck = setInterval(reconcileWithServer, 15000);
     return () => clearInterval(staleCheck);
   }, [regeneratingMicroScenes.size > 0, projectId, sceneId]);
 
