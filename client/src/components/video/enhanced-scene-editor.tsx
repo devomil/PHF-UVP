@@ -224,12 +224,42 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
               setMsRegenStartedAt(Date.now() - oldestJob.age);
               setMsRegenElapsed(Math.floor(oldestJob.age / 1000));
             }
+          } else {
+            setRegeneratingMicroScenes(new Set());
+            setMsRegenStartedAt(null);
+            setMsRegenElapsed(0);
+            if (msRegenTimerRef.current) clearInterval(msRegenTimerRef.current);
           }
         }
       } catch {}
     };
     checkActiveMsJobs();
   }, [projectId, sceneId]);
+
+  useEffect(() => {
+    if (regeneratingMicroScenes.size === 0) return;
+    const staleCheck = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/universal-video/${projectId}/scenes/${sceneId}/micro-scene-jobs`, { credentials: "include" });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.success) {
+          const activeIndices = new Set(Object.keys(data.activeJobs || {}).map(Number));
+          setRegeneratingMicroScenes(prev => {
+            const next = new Set<number>();
+            prev.forEach(idx => { if (activeIndices.has(idx)) next.add(idx); });
+            if (next.size === 0 && prev.size > 0) {
+              setMsRegenStartedAt(null);
+              setMsRegenElapsed(0);
+              if (msRegenTimerRef.current) clearInterval(msRegenTimerRef.current);
+            }
+            return next.size !== prev.size ? next : prev;
+          });
+        }
+      } catch {}
+    }, 15000);
+    return () => clearInterval(staleCheck);
+  }, [regeneratingMicroScenes.size > 0, projectId, sceneId]);
 
   useEffect(() => {
     if (fullscreenMicroScene !== null && scene.microScenes?.[fullscreenMicroScene]) {
