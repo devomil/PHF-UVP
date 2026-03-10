@@ -1349,6 +1349,27 @@ class PiAPIVideoService {
       const requiresNewContent = promptRequiresNewContent(sanitizedPrompt);
       console.log(`[PiAPI I2V] Kling: ${requiresNewContent ? 'REFERENCE MODE (new content)' : 'ANIMATE MODE (motion only)'}`);
       
+      // Kling has a 2500 character limit on prompts
+      // Intelligently truncate by removing redundant sections first
+      const enforceKlingPromptLimit = (prompt: string, limit: number = 2400): string => {
+        if (prompt.length <= limit) return prompt;
+        let p = prompt;
+        p = p.replace(/\. CRITICAL REQUIREMENT:.*?Pure visual imagery only\./s, '');
+        if (p.length <= limit) return p;
+        const charBlockMatch = p.match(/\nGenerate a NEW scene.*$/s);
+        if (charBlockMatch && p.length > limit) {
+          const mainPart = p.substring(0, p.indexOf('\nGenerate a NEW scene'));
+          const charBlock = charBlockMatch[0];
+          const charBlockTruncated = charBlock.substring(0, Math.max(200, limit - mainPart.length));
+          p = mainPart + charBlockTruncated;
+        }
+        if (p.length > limit) {
+          p = p.substring(0, limit - 3) + '...';
+        }
+        console.log(`[PiAPI I2V] Kling prompt truncated: ${prompt.length} → ${p.length} chars (limit: ${limit})`);
+        return p;
+      };
+
       // Build Kling-specific prompt - prioritize source image preservation for I2V
       let klingPromptBase: string;
       if (requiresNewContent) {
@@ -1364,7 +1385,7 @@ class PiAPIVideoService {
       }
       
       // Append motion directive to prompt for better control
-      const klingI2vPrompt = `${klingPromptBase} Camera: ${motionDirective}.`;
+      const klingI2vPrompt = enforceKlingPromptLimit(`${klingPromptBase} Camera: ${motionDirective}.`);
       
       console.log(`[PiAPI I2V] Kling prompt: ${klingI2vPrompt}`);
       
