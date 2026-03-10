@@ -116,6 +116,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
   const [allMsMode, setAllMsMode] = useState("auto");
   const [allMsProvider, setAllMsProvider] = useState("auto");
   const prevMicroSceneVideos = useRef<Record<number, string | undefined>>({});
+  const allJobsDonePolls = useRef(0);
   const [expandedMicroScene, setExpandedMicroScene] = useState<number | null>(null);
   const [fullscreenMicroScene, setFullscreenMicroScene] = useState<number | null>(null);
   const [msModalPrompt, setMsModalPrompt] = useState("");
@@ -237,7 +238,10 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
   }, [projectId, sceneId]);
 
   useEffect(() => {
-    if (regeneratingMicroScenes.size === 0) return;
+    if (regeneratingMicroScenes.size === 0) {
+      allJobsDonePolls.current = 0;
+      return;
+    }
     const reconcileWithServer = async () => {
       try {
         const res = await fetch(`/api/universal-video/${projectId}/scenes/${sceneId}/micro-scene-jobs`, { credentials: "include" });
@@ -253,10 +257,18 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
               anyCompleted = true;
             }
             if (next.size === 0 && prev.size > 0) {
-              setMsRegenStartedAt(null);
-              setMsRegenElapsed(0);
-              if (msRegenTimerRef.current) clearInterval(msRegenTimerRef.current);
+              allJobsDonePolls.current++;
+              if (allJobsDonePolls.current >= 3) {
+                setMsRegenStartedAt(null);
+                setMsRegenElapsed(0);
+                if (msRegenTimerRef.current) clearInterval(msRegenTimerRef.current);
+                allJobsDonePolls.current = 0;
+                return new Set<number>();
+              }
+              queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+              return prev;
             }
+            allJobsDonePolls.current = 0;
             return next.size !== prev.size ? next : prev;
           });
           if (anyCompleted) {
