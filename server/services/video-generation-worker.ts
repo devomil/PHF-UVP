@@ -568,6 +568,13 @@ class VideoGenerationWorker {
         const completionTimestamp = new Date().toISOString();
         log.info(`[JOB_COMPLETE ${completionTimestamp}] Job ${job.jobId} completed with videoUrl: ${videoUrl}`);
         
+        const sceneUpdated = await updateSceneMedia(job.projectId, job.sceneId, videoUrl);
+        if (sceneUpdated) {
+          log.info(`[JOB_COMPLETE ${completionTimestamp}] Scene ${job.sceneId} database record updated with new video from job ${job.jobId}`);
+        } else {
+          log.warn(`[JOB_COMPLETE ${completionTimestamp}] FAILED to update scene ${job.sceneId} media - video URL saved to job only`);
+        }
+
         const completedJob = await storage.updateVideoGenerationJob(job.jobId, {
           status: "succeeded",
           completedAt: new Date(),
@@ -576,13 +583,6 @@ class VideoGenerationWorker {
         });
         this.notifyJobUpdate(completedJob);
         log.info(`[JOB_COMPLETE ${completionTimestamp}] Job ${job.jobId} status updated to 'succeeded' in storage`);
-
-        const sceneUpdated = await updateSceneMedia(job.projectId, job.sceneId, videoUrl);
-        if (sceneUpdated) {
-          log.info(`[JOB_COMPLETE ${completionTimestamp}] Scene ${job.sceneId} database record updated with new video from job ${job.jobId}`);
-        } else {
-          log.warn(`[JOB_COMPLETE ${completionTimestamp}] FAILED to update scene ${job.sceneId} media - video URL saved to job only`);
-        }
 
         // Record regeneration history for successful video generation
         await intelligentRegenerationService.recordVideoAttempt({
