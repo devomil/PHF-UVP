@@ -181,6 +181,13 @@ export interface MicroScene {
   artPresetId?: string;
 }
 
+export interface AssemblyWordMarker {
+  word: string;
+  startSec: number;
+  endSec: number;
+  microSceneIndex: number;
+}
+
 export interface AssemblyClipTiming {
   microSceneIndex: number;
   microSceneId: string;
@@ -198,6 +205,7 @@ export interface AssemblyManifest {
   manifestUrl?: string;
   totalDurationSec: number;
   clips: AssemblyClipTiming[];
+  wordMarkers?: AssemblyWordMarker[];
   sceneId: string;
   createdAt: string;
   error?: string;

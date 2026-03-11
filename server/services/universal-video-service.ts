@@ -461,7 +461,8 @@ class UniversalVideoService {
             const { ffmpegAssemblyService } = await import('./ffmpeg-assembly-service');
 
             const existingManifest = project.scenes[i].assemblyManifest;
-            const isStale = !existingManifest || ffmpegAssemblyService.isAssemblyStale(existingManifest, project.scenes[i].microScenes);
+            const sceneVoiceoverWords = project.scenes[i].voiceoverWords || project.scenes[i].captions?.words;
+            const isStale = !existingManifest || ffmpegAssemblyService.isAssemblyStale(existingManifest, project.scenes[i].microScenes, sceneVoiceoverWords);
 
             if (!isStale && existingManifest?.assembledClipUrl) {
               console.log(`[CacheAssets] Scene ${i}: Assembly still valid, skipping re-assembly`);
@@ -476,7 +477,8 @@ class UniversalVideoService {
               const manifest = await ffmpegAssemblyService.assembleScene(
                 scene.id,
                 project.scenes[i].microScenes,
-                project.id
+                project.id,
+                project.scenes[i].voiceoverWords || project.scenes[i].captions?.words
               );
               project.scenes[i].assemblyManifest = manifest;
               if (!manifest.assemblyFailed) {

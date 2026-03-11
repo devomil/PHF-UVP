@@ -2111,7 +2111,15 @@ export const UniversalVideoComposition: React.FC<UniversalVideoProps> = ({
                 {scene.captions?.enabled && scene.captions.words?.length > 0 && (
                   <Sequence from={sceneStartFrame} durationInFrames={sceneDurationFrames}>
                     <SyncedCaptions
-                      words={scene.captions.words}
+                      words={
+                        scene.assemblyManifest?.wordMarkers && scene.assemblyManifest.assembledClipValid
+                          ? scene.assemblyManifest.wordMarkers.map(wm => ({
+                              word: wm.word,
+                              start: wm.startSec,
+                              end: wm.endSec,
+                            }))
+                          : scene.captions.words
+                      }
                       style={captionStyle || scene.captions.style || { preset: 'capcut' }}
                       sceneStartFrame={0}
                     />
