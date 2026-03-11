@@ -181,6 +181,26 @@ export interface MicroScene {
   artPresetId?: string;
 }
 
+export interface AssemblyClipTiming {
+  microSceneIndex: number;
+  microSceneId: string;
+  startTimeSec: number;
+  endTimeSec: number;
+  durationSec: number;
+  sourceUrl: string;
+  probedDurationSec: number;
+}
+
+export interface AssemblyManifest {
+  assemblyFailed: boolean;
+  assembledClipUrl?: string;
+  totalDurationSec: number;
+  clips: AssemblyClipTiming[];
+  sceneId: string;
+  createdAt: string;
+  error?: string;
+}
+
 export interface Scene {
   id: string;
   order: number;
@@ -189,6 +209,7 @@ export interface Scene {
   narration: string;
   visualDirection?: string;
   microScenes?: MicroScene[];
+  assemblyManifest?: AssemblyManifest;
   qualityTier?: 'standard' | 'premium' | 'ultra'; // Per-scene quality tier override
   searchQuery?: string;
   fallbackQuery?: string;

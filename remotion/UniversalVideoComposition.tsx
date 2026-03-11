@@ -20,6 +20,7 @@ import type {
   TextLabel,
   OutputFormat,
   SceneSoundDesign,
+  AssemblyManifest,
 } from "../shared/video-types";
 
 import { EnhancedTextOverlay } from "./components/TextOverlay";
@@ -1258,13 +1259,24 @@ const MicroSceneBackground: React.FC<{
   fps: number;
   fallback: React.ReactNode;
   sceneVideoUrl?: string;
-}> = ({ microScenes, sceneDuration, fps, fallback, sceneVideoUrl }) => {
+  assemblyManifest?: AssemblyManifest;
+}> = ({ microScenes, sceneDuration, fps, fallback, sceneVideoUrl, assemblyManifest }) => {
+  const hasAssembledClip = assemblyManifest && !assemblyManifest.assemblyFailed && assemblyManifest.assembledClipUrl;
+
   const totalMsDuration = microScenes.reduce((sum, ms) => sum + (ms.duration || 0), 0);
   const totalDuration = totalMsDuration > 0 ? totalMsDuration : sceneDuration;
   const totalSceneFrames = Math.round(sceneDuration * fps);
 
   React.useEffect(() => {
-    console.log(`[MicroSceneBackground] ${microScenes.length} micro-scenes, sceneDuration=${sceneDuration}s, totalMsDuration=${totalMsDuration}s, totalSceneFrames=${totalSceneFrames}`);
+    if (hasAssembledClip) {
+      console.log(`[MicroSceneBackground] Using assembled clip: ${assemblyManifest!.assembledClipUrl!.substring(0, 80)}`);
+      console.log(`  Assembled duration: ${assemblyManifest!.totalDurationSec.toFixed(2)}s, ${assemblyManifest!.clips.length} clips`);
+    } else {
+      console.log(`[MicroSceneBackground] ${microScenes.length} micro-scenes (fallback mode), sceneDuration=${sceneDuration}s, totalMsDuration=${totalMsDuration}s`);
+      if (assemblyManifest?.assemblyFailed) {
+        console.log(`  Assembly failed: ${assemblyManifest.error}`);
+      }
+    }
     let offset = 0;
     microScenes.forEach((ms, idx) => {
       const msDur = ms.duration || (sceneDuration / microScenes.length);
@@ -1274,6 +1286,19 @@ const MicroSceneBackground: React.FC<{
     });
     console.log(`  Total allocated frames: ${offset} / ${totalSceneFrames}`);
   }, []);
+
+  if (hasAssembledClip) {
+    return (
+      <AbsoluteFill>
+        <SafeVideo
+          src={assemblyManifest!.assembledClipUrl!}
+          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+          muted
+          fallback={fallback}
+        />
+      </AbsoluteFill>
+    );
+  }
 
   let frameOffset = 0;
 
@@ -1477,6 +1502,7 @@ const SceneRenderer: React.FC<{
             fps={fps}
             fallback={gradientFallback}
             sceneVideoUrl={scene.assets?.videoUrl}
+            assemblyManifest={scene.assemblyManifest}
           />
         ) : hasValidBrandAsset && brandAssetType === 'video' ? (
           <OffthreadVideo
@@ -2211,20 +2237,36 @@ export const UniversalVideoComposition: React.FC<UniversalVideoProps> = ({
           const sceneDurationSec = scene.duration || 5;
           const sceneFrames = sceneDurationSec * fps;
           const microScenes = scene.microScenes || [];
+          const manifest = scene.assemblyManifest;
+          const useManifestTiming = manifest && !manifest.assemblyFailed && manifest.clips.length > 0;
+
           if (microScenes.length > 0) {
-            const totalMsDuration = microScenes.reduce((sum: number, ms: any) => sum + (ms.duration || 0), 0) || sceneDurationSec;
-            let msFrameOffset = 0;
-            for (const ms of microScenes) {
-              const msDur = ms.duration || (sceneDurationSec / microScenes.length);
-              const msFrameCount = Math.round((msDur / totalMsDuration) * sceneFrames);
-              if ((ms.originalAudioVolume || 0) > 0 && ms.videoUrl) {
-                nativeAudioRanges.push({
-                  startFrame: sceneFramePos + msFrameOffset,
-                  endFrame: sceneFramePos + msFrameOffset + msFrameCount,
-                  volume: ms.originalAudioVolume,
-                });
+            if (useManifestTiming) {
+              for (const clip of manifest!.clips) {
+                const ms = microScenes[clip.microSceneIndex];
+                if (ms && (ms.originalAudioVolume || 0) > 0 && ms.videoUrl) {
+                  nativeAudioRanges.push({
+                    startFrame: sceneFramePos + Math.round(clip.startTimeSec * fps),
+                    endFrame: sceneFramePos + Math.round(clip.endTimeSec * fps),
+                    volume: ms.originalAudioVolume,
+                  });
+                }
               }
-              msFrameOffset += msFrameCount;
+            } else {
+              const totalMsDuration = microScenes.reduce((sum: number, ms: any) => sum + (ms.duration || 0), 0) || sceneDurationSec;
+              let msFrameOffset = 0;
+              for (const ms of microScenes) {
+                const msDur = ms.duration || (sceneDurationSec / microScenes.length);
+                const msFrameCount = Math.round((msDur / totalMsDuration) * sceneFrames);
+                if ((ms.originalAudioVolume || 0) > 0 && ms.videoUrl) {
+                  nativeAudioRanges.push({
+                    startFrame: sceneFramePos + msFrameOffset,
+                    endFrame: sceneFramePos + msFrameOffset + msFrameCount,
+                    volume: ms.originalAudioVolume,
+                  });
+                }
+                msFrameOffset += msFrameCount;
+              }
             }
           }
         }
