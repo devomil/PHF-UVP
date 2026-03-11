@@ -46,6 +46,11 @@ async function updateSceneMedia(projectId: string, sceneId: string, videoUrl: st
         scenes[sceneIndex].microScenes = microScenes;
         log.info(`[SCENE_UPDATE ${timestamp}] Updated micro-scene ${microIndex} of scene ${realSceneId} with new videoUrl`);
 
+        if (scenes[sceneIndex].assemblyManifest) {
+          scenes[sceneIndex].assemblyManifest.assembledClipValid = false;
+          log.info(`[SCENE_UPDATE ${timestamp}] Invalidated FFmpeg assembly for scene ${realSceneId} (micro-scene ${microIndex} changed)`);
+        }
+
         if (microIndex === 0) {
           scenes[sceneIndex].background = scenes[sceneIndex].background || {};
           scenes[sceneIndex].background.videoUrl = videoUrl;

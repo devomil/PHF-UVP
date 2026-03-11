@@ -225,29 +225,42 @@ class FFmpegAssemblyService {
         return this.createFailedManifest(sceneId, 'Failed to upload assembled clip to S3');
       }
 
+      const CROSSFADE_SEC = 0.4;
       let runningTime = 0;
-      const clips: AssemblyClipTiming[] = downloadedClips.map((clip) => {
+      const clips: AssemblyClipTiming[] = downloadedClips.map((clip, i) => {
         const startTime = runningTime;
-        runningTime += clip.probedDuration;
+        const effectiveDuration = i < downloadedClips.length - 1
+          ? clip.probedDuration - CROSSFADE_SEC
+          : clip.probedDuration;
+        runningTime += Math.max(effectiveDuration, 0);
         return {
           microSceneIndex: clip.microSceneIndex,
           microSceneId: clip.microSceneId,
           startTimeSec: startTime,
           endTimeSec: runningTime,
-          durationSec: clip.probedDuration,
+          durationSec: Math.max(effectiveDuration, 0),
           sourceUrl: clip.sourceUrl,
           probedDurationSec: clip.probedDuration,
         };
       });
 
+      const sourceVideoHashes = downloadedClips.map(c => c.sourceUrl);
+
       const manifest: AssemblyManifest = {
         assemblyFailed: false,
         assembledClipUrl: s3Url,
+        assembledClipValid: true,
         totalDurationSec: totalDuration,
         clips,
         sceneId,
         createdAt: new Date().toISOString(),
+        sourceVideoHashes,
       };
+
+      const manifestUrl = await this.uploadManifestToS3(manifest, projectId, sceneId);
+      if (manifestUrl) {
+        manifest.manifestUrl = manifestUrl;
+      }
 
       log(`Scene ${sceneId}: Assembly complete! ${videosWithUrls.length} clips -> ${totalDuration.toFixed(2)}s, URL: ${s3Url.substring(0, 80)}`);
       return manifest;
@@ -303,25 +316,102 @@ class FFmpegAssemblyService {
   }
 
   private async concatClips(clipPaths: string[], outputPath: string): Promise<void> {
-    const listContent = clipPaths.map(p => `file '${p}'`).join('\n');
-    const listFile = path.join(path.dirname(outputPath), 'concat_list.txt');
+    const CROSSFADE_SEC = 0.4;
 
-    try {
-      fs.writeFileSync(listFile, listContent);
+    if (clipPaths.length === 1) {
+      fs.copyFileSync(clipPaths[0], outputPath);
+      return;
+    }
 
+    if (clipPaths.length === 2) {
       const cmd = [
         'ffmpeg -y',
-        `-f concat -safe 0 -i "${listFile}"`,
-        `-c copy`,
+        `-i "${clipPaths[0]}" -i "${clipPaths[1]}"`,
+        `-filter_complex "[0:v][1:v]xfade=transition=fade:duration=${CROSSFADE_SEC}:offset=0[v]"`,
+        `-map "[v]" -c:v libx264 -preset fast -crf 18 -pix_fmt yuv420p -an`,
         `"${outputPath}"`,
       ].join(' ');
 
-      await execAsync(cmd, { timeout: CONCAT_TIMEOUT_MS });
+      const dur0 = await this.probeClipDuration(clipPaths[0]);
+      const offset = Math.max(dur0 - CROSSFADE_SEC, 0);
+      const cmdWithOffset = cmd.replace('offset=0', `offset=${offset.toFixed(3)}`);
+      await execAsync(cmdWithOffset, { timeout: CONCAT_TIMEOUT_MS });
+    } else {
+      const durations: number[] = [];
+      for (const p of clipPaths) {
+        durations.push(await this.probeClipDuration(p));
+      }
 
-      const stats = fs.statSync(outputPath);
-      log(`Concat complete: ${clipPaths.length} clips -> ${(stats.size / 1024 / 1024).toFixed(2)}MB`);
-    } finally {
-      try { fs.unlinkSync(listFile); } catch {}
+      const inputs = clipPaths.map((p, i) => `-i "${p}"`).join(' ');
+      let filterParts: string[] = [];
+      let currentLabel = '[0:v]';
+
+      for (let i = 1; i < clipPaths.length; i++) {
+        let cumulativeDur = 0;
+        for (let j = 0; j < i; j++) {
+          cumulativeDur += durations[j];
+        }
+        cumulativeDur -= CROSSFADE_SEC * (i - 1);
+        const offset = Math.max(cumulativeDur - CROSSFADE_SEC, 0);
+
+        const outLabel = i === clipPaths.length - 1 ? '[v]' : `[xf${i}]`;
+        filterParts.push(`${currentLabel}[${i}:v]xfade=transition=fade:duration=${CROSSFADE_SEC}:offset=${offset.toFixed(3)}${outLabel}`);
+        currentLabel = outLabel;
+      }
+
+      const filterComplex = filterParts.join(';');
+      const cmd = [
+        `ffmpeg -y ${inputs}`,
+        `-filter_complex "${filterComplex}"`,
+        `-map "[v]" -c:v libx264 -preset fast -crf 18 -pix_fmt yuv420p -an`,
+        `"${outputPath}"`,
+      ].join(' ');
+
+      await execAsync(cmd, { timeout: CONCAT_TIMEOUT_MS * 2 });
+    }
+
+    const stats = fs.statSync(outputPath);
+    log(`Crossfade concat complete: ${clipPaths.length} clips -> ${(stats.size / 1024 / 1024).toFixed(2)}MB`);
+  }
+
+  isAssemblyStale(manifest: AssemblyManifest, currentMicroScenes: MicroScene[]): boolean {
+    if (manifest.assemblyFailed) return true;
+    if (!manifest.sourceVideoHashes || manifest.sourceVideoHashes.length === 0) return true;
+    if (!manifest.assembledClipValid) return true;
+
+    const currentUrls = currentMicroScenes
+      .filter(ms => !!ms.videoUrl)
+      .map(ms => ms.videoUrl!);
+
+    if (currentUrls.length !== manifest.sourceVideoHashes.length) return true;
+
+    for (let i = 0; i < currentUrls.length; i++) {
+      if (currentUrls[i] !== manifest.sourceVideoHashes[i]) return true;
+    }
+
+    return false;
+  }
+
+  private async uploadManifestToS3(manifest: AssemblyManifest, projectId: string, sceneId: string): Promise<string | null> {
+    try {
+      const s3 = this.getS3Client();
+      const key = `video-assets/assembly/${projectId}/${sceneId}_manifest.json`;
+      const body = JSON.stringify(manifest, null, 2);
+
+      await s3.send(new PutObjectCommand({
+        Bucket: BUCKET_NAME,
+        Key: key,
+        Body: Buffer.from(body),
+        ContentType: 'application/json',
+        ACL: 'public-read',
+      }));
+
+      const url = `https://${BUCKET_NAME}.s3.${REGION}.amazonaws.com/${key}`;
+      log(`Manifest uploaded to S3: ${url}`);
+      return url;
+    } catch (err: any) {
+      logError(`Manifest S3 upload failed: ${err.message}`);
+      return null;
     }
   }
 
