@@ -1261,7 +1261,7 @@ const MicroSceneBackground: React.FC<{
   sceneVideoUrl?: string;
   assemblyManifest?: AssemblyManifest;
 }> = ({ microScenes, sceneDuration, fps, fallback, sceneVideoUrl, assemblyManifest }) => {
-  const hasAssembledClip = assemblyManifest && !assemblyManifest.assemblyFailed && assemblyManifest.assembledClipUrl;
+  const hasAssembledClip = assemblyManifest && !assemblyManifest.assemblyFailed && assemblyManifest.assembledClipValid !== false && assemblyManifest.assembledClipUrl;
 
   const totalMsDuration = microScenes.reduce((sum, ms) => sum + (ms.duration || 0), 0);
   const totalDuration = totalMsDuration > 0 ? totalMsDuration : sceneDuration;
@@ -2238,7 +2238,7 @@ export const UniversalVideoComposition: React.FC<UniversalVideoProps> = ({
           const sceneFrames = sceneDurationSec * fps;
           const microScenes = scene.microScenes || [];
           const manifest = scene.assemblyManifest;
-          const useManifestTiming = manifest && !manifest.assemblyFailed && manifest.clips.length > 0;
+          const useManifestTiming = manifest && !manifest.assemblyFailed && manifest.assembledClipValid !== false && manifest.clips.length > 0;
 
           if (microScenes.length > 0) {
             if (useManifestTiming) {

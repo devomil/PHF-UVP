@@ -1804,6 +1804,16 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
               </button>
             </div>
 
+            {scene.assemblyManifest?.assemblyFailed && (
+              <div className="flex items-center gap-2 mb-2 px-3 py-1.5 rounded-md text-[11px]" style={{ backgroundColor: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", color: "rgb(248,113,113)" }}>
+                <span>Pre-assembly unavailable: {scene.assemblyManifest.error || 'assembly failed'}. Render will use individual clips.</span>
+              </div>
+            )}
+            {scene.assemblyManifest && !scene.assemblyManifest.assemblyFailed && scene.assemblyManifest.assembledClipValid === false && (
+              <div className="flex items-center gap-2 mb-2 px-3 py-1.5 rounded-md text-[11px]" style={{ backgroundColor: "rgba(234,179,8,0.08)", border: "1px solid rgba(234,179,8,0.2)", color: "rgb(250,204,21)" }}>
+                <span>Assembly outdated (micro-scenes changed). Will re-assemble on next render.</span>
+              </div>
+            )}
             <div className="flex items-center gap-1 mb-3 rounded-lg p-2" style={{ backgroundColor: "rgba(124,58,237,0.06)", border: "1px solid rgba(124,58,237,0.15)" }}>
               <div className="flex w-full gap-0.5">
                 {scene.microScenes.map((ms: any, msIdx: number) => {

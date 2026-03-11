@@ -194,11 +194,14 @@ export interface AssemblyClipTiming {
 export interface AssemblyManifest {
   assemblyFailed: boolean;
   assembledClipUrl?: string;
+  assembledClipValid?: boolean;
+  manifestUrl?: string;
   totalDurationSec: number;
   clips: AssemblyClipTiming[];
   sceneId: string;
   createdAt: string;
   error?: string;
+  sourceVideoHashes?: string[];
 }
 
 export interface Scene {
