@@ -299,7 +299,7 @@ class FFmpegAssemblyService {
     const cmd = [
       'ffmpeg -y',
       `-i "${inputPath}"`,
-      `-vf "scale=${target.width}:${target.height}:force_original_aspect_ratio=decrease,pad=${target.width}:${target.height}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1"`,
+      `-vf "scale=${target.width}:${target.height}:force_original_aspect_ratio=decrease,pad=${target.width}:${target.height}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,eq=brightness=0:contrast=1:saturation=1"`,
       `-c:v libx264 -preset fast -crf 18`,
       `-r 30`,
       `-pix_fmt yuv420p`,
