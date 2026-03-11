@@ -602,6 +602,63 @@ router.get('/api-connectivity-test', isAuthenticated, requireRole(['admin', 'man
   }
 });
 
+router.post('/test-assembly/:projectId/:sceneIndex', isAuthenticated, requireRole(['admin', 'manager']), async (req: Request, res: Response) => {
+  try {
+    const { projectId, sceneIndex } = req.params;
+    const idx = parseInt(sceneIndex, 10);
+    const userId = (req.user as any)?.id;
+    if (!userId) return res.status(401).json({ success: false, error: 'Unauthorized' });
+
+    const [row] = await db.select().from(universalVideoProjects)
+      .where(eq(universalVideoProjects.id, projectId));
+    if (!row) return res.status(404).json({ success: false, error: 'Project not found' });
+
+    const project = dbRowToVideoProject(row);
+    if (!project.scenes || idx < 0 || idx >= project.scenes.length) {
+      return res.status(400).json({ success: false, error: `Invalid scene index ${idx}, project has ${project.scenes?.length || 0} scenes` });
+    }
+
+    const scene = project.scenes[idx];
+    const msWithVideo = (scene.microScenes || []).filter(ms => !!ms.videoUrl);
+    if (msWithVideo.length < 2) {
+      return res.status(400).json({ success: false, error: `Scene ${idx} has ${msWithVideo.length} micro-scenes with video (need >=2)` });
+    }
+
+    const { ffmpegAssemblyService } = await import('./ffmpeg-assembly-service');
+
+    console.log(`[TestAssembly] Manually triggering assembly for project ${projectId}, scene ${idx} (${msWithVideo.length} clips)`);
+    const manifest = await ffmpegAssemblyService.assembleScene(
+      scene.id,
+      scene.microScenes!,
+      project.id,
+      scene.voiceoverWords || scene.captions?.words
+    );
+
+    project.scenes[idx].assemblyManifest = manifest;
+
+    await db.update(universalVideoProjects)
+      .set({
+        projectData: JSON.parse(JSON.stringify(project)),
+        updatedAt: new Date(),
+      })
+      .where(eq(universalVideoProjects.id, projectId));
+
+    res.json({
+      success: !manifest.assemblyFailed,
+      manifest,
+      summary: {
+        clips: manifest.clips.length,
+        totalDurationSec: manifest.totalDurationSec,
+        wordMarkers: manifest.wordMarkers?.length || 0,
+        assembledClipUrl: manifest.assembledClipUrl,
+      }
+    });
+  } catch (error: any) {
+    console.error('[TestAssembly] Error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 router.get('/projects', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;

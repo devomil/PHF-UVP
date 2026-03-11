@@ -3,7 +3,8 @@ import { promisify } from 'util';
 import * as fs from 'fs';
 import * as path from 'path';
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
-import type { MicroScene, AssemblyManifest, AssemblyClipTiming } from '../../shared/video-types';
+import type { MicroScene, AssemblyManifest, AssemblyClipTiming, AssemblyWordMarker } from '../../shared/video-types';
+import type { CaptionWord } from '../../shared/config/caption-styles';
 
 const execAsync = promisify(exec);
 
@@ -145,7 +146,8 @@ class FFmpegAssemblyService {
   async assembleScene(
     sceneId: string,
     microScenes: MicroScene[],
-    projectId: string
+    projectId: string,
+    voiceoverWords?: CaptionWord[]
   ): Promise<AssemblyManifest> {
     const tempFiles: string[] = [];
     const timestamp = Date.now();
@@ -246,12 +248,15 @@ class FFmpegAssemblyService {
 
       const sourceVideoHashes = downloadedClips.map(c => c.sourceUrl);
 
+      const wordMarkers = this.buildWordMarkers(clips, microScenes, voiceoverWords);
+
       const manifest: AssemblyManifest = {
         assemblyFailed: false,
         assembledClipUrl: s3Url,
         assembledClipValid: true,
         totalDurationSec: totalDuration,
         clips,
+        wordMarkers: wordMarkers.length > 0 ? wordMarkers : undefined,
         sceneId,
         createdAt: new Date().toISOString(),
         sourceVideoHashes,
@@ -262,7 +267,7 @@ class FFmpegAssemblyService {
         manifest.manifestUrl = manifestUrl;
       }
 
-      log(`Scene ${sceneId}: Assembly complete! ${videosWithUrls.length} clips -> ${totalDuration.toFixed(2)}s, URL: ${s3Url.substring(0, 80)}`);
+      log(`Scene ${sceneId}: Assembly complete! ${videosWithUrls.length} clips -> ${totalDuration.toFixed(2)}s, ${wordMarkers.length} word markers, URL: ${s3Url.substring(0, 80)}`);
       return manifest;
 
     } catch (err: any) {
@@ -374,7 +379,7 @@ class FFmpegAssemblyService {
     log(`Crossfade concat complete: ${clipPaths.length} clips -> ${(stats.size / 1024 / 1024).toFixed(2)}MB`);
   }
 
-  isAssemblyStale(manifest: AssemblyManifest, currentMicroScenes: MicroScene[]): boolean {
+  isAssemblyStale(manifest: AssemblyManifest, currentMicroScenes: MicroScene[], voiceoverWords?: CaptionWord[]): boolean {
     if (manifest.assemblyFailed) return true;
     if (!manifest.sourceVideoHashes || manifest.sourceVideoHashes.length === 0) return true;
     if (!manifest.assembledClipValid) return true;
@@ -389,7 +394,62 @@ class FFmpegAssemblyService {
       if (currentUrls[i] !== manifest.sourceVideoHashes[i]) return true;
     }
 
+    const currentWordCount = voiceoverWords?.length || 0;
+    const manifestWordCount = manifest.wordMarkers?.length || 0;
+    if (currentWordCount > 0 && manifestWordCount > 0 && currentWordCount !== manifestWordCount) return true;
+    if (currentWordCount > 0 && manifestWordCount === 0) return true;
+
     return false;
+  }
+
+  private buildWordMarkers(
+    clips: AssemblyClipTiming[],
+    microScenes: MicroScene[],
+    voiceoverWords?: CaptionWord[]
+  ): AssemblyWordMarker[] {
+    if (!voiceoverWords || voiceoverWords.length === 0) return [];
+
+    const clipBoundaries: { microSceneIndex: number; narrationStart: number; narrationEnd: number }[] = [];
+    let cumulativeTime = 0;
+    for (let i = 0; i < microScenes.length; i++) {
+      const ms = microScenes[i];
+      const narrationWordCount = ms.narration ? ms.narration.split(/\s+/).filter(Boolean).length : 0;
+      const totalWordCount = voiceoverWords.length;
+      const totalDuration = voiceoverWords.length > 0
+        ? voiceoverWords[voiceoverWords.length - 1].end
+        : 0;
+      const estimatedDuration = totalWordCount > 0
+        ? (narrationWordCount / totalWordCount) * totalDuration
+        : (ms.duration || 0);
+
+      clipBoundaries.push({
+        microSceneIndex: i,
+        narrationStart: cumulativeTime,
+        narrationEnd: cumulativeTime + estimatedDuration,
+      });
+      cumulativeTime += estimatedDuration;
+    }
+
+    const markers: AssemblyWordMarker[] = voiceoverWords.map(word => {
+      let msIdx = 0;
+      for (const boundary of clipBoundaries) {
+        if (word.start >= boundary.narrationStart && word.start < boundary.narrationEnd) {
+          msIdx = boundary.microSceneIndex;
+          break;
+        }
+      }
+      if (word.start >= (clipBoundaries[clipBoundaries.length - 1]?.narrationEnd || 0)) {
+        msIdx = clipBoundaries[clipBoundaries.length - 1]?.microSceneIndex || 0;
+      }
+      return {
+        word: word.word,
+        startSec: word.start,
+        endSec: word.end,
+        microSceneIndex: msIdx,
+      };
+    });
+
+    return markers;
   }
 
   private async uploadManifestToS3(manifest: AssemblyManifest, projectId: string, sceneId: string): Promise<string | null> {
