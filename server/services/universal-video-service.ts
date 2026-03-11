@@ -454,6 +454,29 @@ class UniversalVideoService {
             }
           }
         }
+
+        const msWithVideo = project.scenes[i].microScenes.filter(ms => !!ms.videoUrl);
+        if (msWithVideo.length >= 2) {
+          try {
+            const { ffmpegAssemblyService } = await import('./ffmpeg-assembly-service');
+            console.log(`[CacheAssets] Scene ${i}: Assembling ${msWithVideo.length} micro-scene clips with FFmpeg...`);
+            const manifest = await ffmpegAssemblyService.assembleScene(
+              scene.id,
+              project.scenes[i].microScenes,
+              project.id
+            );
+            project.scenes[i].assemblyManifest = manifest;
+            if (!manifest.assemblyFailed) {
+              cachedCount++;
+              details.push(`✓ Scene ${i} FFmpeg assembly complete (${manifest.totalDurationSec.toFixed(1)}s)`);
+            } else {
+              details.push(`⚠ Scene ${i} FFmpeg assembly skipped: ${manifest.error}`);
+            }
+          } catch (assemblyErr: any) {
+            console.warn(`[CacheAssets] Scene ${i} FFmpeg assembly error: ${assemblyErr.message}`);
+            details.push(`⚠ Scene ${i} FFmpeg assembly error: ${assemblyErr.message}`);
+          }
+        }
       }
 
       // Cache background image
