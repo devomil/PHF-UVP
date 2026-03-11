@@ -165,7 +165,13 @@ class FFmpegAssemblyService {
         return this.createFailedManifest(sceneId, 'Not enough micro-scenes with video (need >=2)');
       }
 
-      log(`Scene ${sceneId}: Assembling ${videosWithUrls.length} micro-scene clips...`);
+      const totalMicroScenes = microScenes.length;
+      const isPartial = videosWithUrls.length < totalMicroScenes;
+      if (isPartial) {
+        log(`Scene ${sceneId}: Partial assembly - ${videosWithUrls.length}/${totalMicroScenes} micro-scenes have video`);
+      }
+
+      log(`Scene ${sceneId}: Assembling ${videosWithUrls.length}/${totalMicroScenes} micro-scene clips...`);
 
       const downloadedClips: Array<{
         filePath: string;
