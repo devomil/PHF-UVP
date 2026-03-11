@@ -1,0 +1,36 @@
+What do you think about this idea of doing a two-stage rendering pipeline, which is standard practice in professional broadcast and streaming production
+Stage 1 — Micro-Scene Pre-Compositor (new lightweight step)
+For each scene, take its 2-4+ micro-scene clips and assemble them into one clean scene clip using FFmpeg server-side, before Remotion ever sees them:
+Scene 1 micro-scenes:
+  clip_1a.mp4 (5s) + clip_1b.mp4 (4s) + clip_1c.mp4 (3s)
+  ↓ FFmpeg with cross-dissolve transitions
+  scene_1_assembled.mp4 (12s, clean)
+This stage handles:
+•	Cross-dissolve or match-cut transitions between micro-scenes
+•	Color grade normalization across clips from different AI providers
+•	Basic motion smoothing at cut points
+Stage 2 — Remotion/Lambda Final Render (receives 9 clean clips instead of 27-36)
+Remotion now works with 9 assembled scene clips and handles:
+•	Voiceover sync across the full video
+•	Brand overlays and logo compositing
+•	Scene-to-scene transitions (the bigger, more intentional ones)
+•	Music bed
+•	Intro/outro Remotion components
+•	Final color grade pass
+•	Stage 1 doesn't need to be Lambda. This is important — don't over-engineer it. FFmpeg running on your existing server handles micro-scene stitching perfectly well. Lambda/Remotion is the right tool for the complex final composition, not for simple clip concatenation. If you send Stage 1 to Lambda too, you're adding cost and latency unnecessarily.
+The architecture should be:
+AI Video Generation (Kling/fal.ai)
+   ↓
+               Stage 1: FFmpeg server-side pre-compositor
+    ↓
+Stage 2: Remotion Lambda final render
+    ↓
+S3 output
+
+In summary After all micro-scenes for a given scene are generated and stored in S3, run an FFmpeg server-side job that:
+1.	Downloads all micro-scene clips for that scene
+2.	Applies a 12-frame (0.4s) cross-dissolve transition between each micro-scene
+3.	Normalizes color temperature across clips using FFmpeg's colortemperature filter
+4.	Outputs a single assembled scene clip back to S3 as scene_{id}_assembled.mp4
+5.	Only after all 9 assembled scene clips exist, trigger the Remotion Lambda job with the 9 assembled clips instead of the raw micro-scene clips
+
