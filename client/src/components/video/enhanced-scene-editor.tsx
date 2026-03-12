@@ -3,7 +3,8 @@ import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import {
   Play, Pause, Volume2, VolumeX, Maximize2, MoreVertical,
   RefreshCw, Upload, Image, Video, Save, X, Loader2,
-  CheckCircle2, ImagePlus, ChevronDown, ChevronRight, Edit2, FolderOpen, Expand, Sparkles, Palette
+  CheckCircle2, ImagePlus, ChevronDown, ChevronRight, ChevronUp, Edit2, FolderOpen, Expand, Sparkles, Palette,
+  Layers, AlertTriangle
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { SceneOverlayEditor, type SceneOverlayItem } from "./scene-overlay-editor";
@@ -116,6 +117,9 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
   const [allMsMode, setAllMsMode] = useState("auto");
   const [allMsProvider, setAllMsProvider] = useState("auto");
   const prevMicroSceneVideos = useRef<Record<number, string | undefined>>({});
+  const [isAssembling, setIsAssembling] = useState(false);
+  const [showMicroScenesExpanded, setShowMicroScenesExpanded] = useState(true);
+  const assembledVideoRef = useRef<HTMLVideoElement>(null);
   const allJobsDonePolls = useRef(0);
   const [expandedMicroScene, setExpandedMicroScene] = useState<number | null>(null);
   const [fullscreenMicroScene, setFullscreenMicroScene] = useState<number | null>(null);
@@ -728,6 +732,50 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
       toast({ title: "Error", description: err.message, variant: "destructive" });
     },
   });
+
+  const assembleSceneMutation = useMutation({
+    mutationFn: async () => {
+      setIsAssembling(true);
+      const res = await fetch(`/api/universal-video/projects/${projectId}/scenes/${sceneIndex}/assemble`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Assembly failed" }));
+        throw new Error(err.error || "Assembly failed");
+      }
+      return res.json();
+    },
+    onSuccess: (data) => {
+      setIsAssembling(false);
+      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+      if (data.success) {
+        toast({ title: "Scene Assembled", description: `${data.manifest?.clips?.length || 0} clips assembled (${data.manifest?.totalDurationSec?.toFixed(1) || '?'}s)` });
+      } else {
+        toast({ title: "Assembly Failed", description: data.manifest?.error || "Assembly could not complete", variant: "destructive" });
+      }
+    },
+    onError: (err: Error) => {
+      setIsAssembling(false);
+      toast({ title: "Assembly Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const handleAssemblyVideoError = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+    toast({
+      title: "Assembled Clip Expired",
+      description: "Assembled clip expired — please reassemble before rendering.",
+      variant: "destructive",
+    });
+  }, [queryClient, projectId, toast]);
+
+  const msWithVideo = (scene.microScenes || []).filter((ms: any) => !!ms.videoUrl);
+  const canAssemble = msWithVideo.length >= 2 && !isAssembling;
+  const isAssembled = scene.assemblyManifest && !scene.assemblyManifest.assemblyFailed && scene.assemblyManifest.assembledClipValid !== false && !!scene.assemblyManifest.assembledClipUrl;
+  const assemblyFailed = scene.assemblyManifest?.assemblyFailed;
+  const assemblyStale = scene.assemblyManifest && !scene.assemblyManifest.assemblyFailed && scene.assemblyManifest.assembledClipValid === false;
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -1787,58 +1835,155 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                   </span>
                 )}
               </label>
-              <button
-                onClick={regenAllMicroSceneVideos}
-                disabled={regeneratingMicroScenes.size > 0}
-                className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium transition-colors hover:bg-purple-600/20 disabled:opacity-50"
-                style={{ color: "rgb(167,139,250)" }}
-              >
-                {regeneratingMicroScenes.size > 0 ? (
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                ) : (
-                  <RefreshCw className="w-3 h-3" />
+              <div className="flex items-center gap-1.5">
+                {canAssemble && (
+                  <button
+                    onClick={() => assembleSceneMutation.mutate()}
+                    disabled={isAssembling}
+                    className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium transition-colors hover:bg-emerald-600/20 disabled:opacity-50"
+                    style={{ color: "rgb(134,239,172)" }}
+                  >
+                    {isAssembling ? (
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                    ) : (
+                      <Layers className="w-3 h-3" />
+                    )}
+                    {isAssembling ? 'Assembling...' : isAssembled ? 'Re-assemble' : 'Assemble Scene'}
+                  </button>
                 )}
-                {regeneratingMicroScenes.size > 0
-                  ? `Generating ${regeneratingMicroScenes.size}/${scene.microScenes.length}...`
-                  : scene.microScenes.every((ms: any) => ms.videoUrl) ? 'Regenerate All' : 'Generate All'}
-              </button>
+                <button
+                  onClick={regenAllMicroSceneVideos}
+                  disabled={regeneratingMicroScenes.size > 0}
+                  className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium transition-colors hover:bg-purple-600/20 disabled:opacity-50"
+                  style={{ color: "rgb(167,139,250)" }}
+                >
+                  {regeneratingMicroScenes.size > 0 ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <RefreshCw className="w-3 h-3" />
+                  )}
+                  {regeneratingMicroScenes.size > 0
+                    ? `Generating ${regeneratingMicroScenes.size}/${scene.microScenes.length}...`
+                    : scene.microScenes.every((ms: any) => ms.videoUrl) ? 'Regenerate All' : 'Generate All'}
+                </button>
+              </div>
             </div>
 
-            {scene.assemblyManifest?.assemblyFailed && (
+            {/* Assembly Status Indicator */}
+            {isAssembling && (
+              <div className="flex items-center gap-2 mb-2 px-3 py-1.5 rounded-md text-[11px]" style={{ backgroundColor: "rgba(124,58,237,0.08)", border: "1px solid rgba(124,58,237,0.2)", color: "rgb(192,132,252)" }}>
+                <Loader2 className="w-3 h-3 animate-spin flex-shrink-0" />
+                <span>Assembling micro-scenes...</span>
+              </div>
+            )}
+            {!isAssembling && assemblyFailed && (
               <div className="flex items-center gap-2 mb-2 px-3 py-1.5 rounded-md text-[11px]" style={{ backgroundColor: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", color: "rgb(248,113,113)" }}>
-                <span>Pre-assembly unavailable: {scene.assemblyManifest.error || 'assembly failed'}. Render will use individual clips.</span>
+                <AlertTriangle className="w-3 h-3 flex-shrink-0" />
+                <span>Assembly failed — using raw clips. {scene.assemblyManifest?.error || ''}</span>
               </div>
             )}
-            {scene.assemblyManifest && !scene.assemblyManifest.assemblyFailed && scene.assemblyManifest.assembledClipValid === false && (
+            {!isAssembling && assemblyStale && (
               <div className="flex items-center gap-2 mb-2 px-3 py-1.5 rounded-md text-[11px]" style={{ backgroundColor: "rgba(234,179,8,0.08)", border: "1px solid rgba(234,179,8,0.2)", color: "rgb(250,204,21)" }}>
-                <span>Assembly outdated (micro-scenes changed). Will re-assemble on next render.</span>
+                <AlertTriangle className="w-3 h-3 flex-shrink-0" />
+                <span>Assembly outdated (micro-scenes changed). Reassemble or render will auto-assemble.</span>
               </div>
             )}
-            <div className="flex items-center gap-1 mb-3 rounded-lg p-2" style={{ backgroundColor: "rgba(124,58,237,0.06)", border: "1px solid rgba(124,58,237,0.15)" }}>
-              <div className="flex w-full gap-0.5">
-                {scene.microScenes.map((ms: any, msIdx: number) => {
-                  const totalDuration = scene.microScenes.reduce((sum: number, m: any) => sum + (m.duration || 0), 0) || 1;
-                  const widthPct = ((ms.duration || 0) / totalDuration) * 100;
-                  return (
+            {!isAssembling && isAssembled && (
+              <div className="flex items-center gap-2 mb-2 px-3 py-1.5 rounded-md text-[11px]" style={{ backgroundColor: "rgba(34,197,94,0.08)", border: "1px solid rgba(34,197,94,0.2)", color: "rgb(134,239,172)" }}>
+                <CheckCircle2 className="w-3 h-3 flex-shrink-0" />
+                <span>Assembled {scene.assemblyManifest.totalDurationSec?.toFixed(1)}s</span>
+              </div>
+            )}
+            {!isAssembling && !isAssembled && !assemblyFailed && !assemblyStale && msWithVideo.length >= 2 && (
+              <div className="flex items-center gap-2 mb-2 px-3 py-1.5 rounded-md text-[11px]" style={{ backgroundColor: "rgba(234,179,8,0.06)", border: "1px solid rgba(234,179,8,0.15)", color: "rgb(250,204,21)" }}>
+                <Layers className="w-3 h-3 flex-shrink-0" />
+                <span>{msWithVideo.length} micro-scenes — ready to assemble</span>
+              </div>
+            )}
+
+            {/* Assembled Preview Player */}
+            {isAssembled && scene.assemblyManifest.assembledClipUrl && (
+              <div className="mb-3 rounded-lg overflow-hidden border" style={{ borderColor: "rgba(34,197,94,0.3)", backgroundColor: "rgba(0,0,0,0.3)" }}>
+                <video
+                  ref={assembledVideoRef}
+                  src={scene.assemblyManifest.assembledClipUrl}
+                  className="w-full aspect-video object-contain bg-black"
+                  controls
+                  playsInline
+                  preload="metadata"
+                  onError={handleAssemblyVideoError}
+                />
+                <div className="flex items-center justify-between px-3 py-1.5" style={{ backgroundColor: "rgba(34,197,94,0.05)" }}>
+                  <div className="flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3 h-3" style={{ color: "rgb(134,239,172)" }} />
+                    <span className="text-[10px] font-medium" style={{ color: "rgb(134,239,172)" }}>
+                      Assembled Preview — {scene.assemblyManifest.totalDurationSec?.toFixed(1)}s
+                    </span>
+                  </div>
+                  <span className="text-[9px]" style={{ color: "var(--text-muted)" }}>
+                    {scene.assemblyManifest.clips?.length || 0} clips merged
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Timeline Bar — unified when assembled, segmented when not */}
+            {isAssembled ? (
+              <div className="mb-3">
+                <div className="flex items-center gap-1 rounded-lg p-2" style={{ backgroundColor: "rgba(34,197,94,0.06)", border: "1px solid rgba(34,197,94,0.15)" }}>
+                  <div className="flex w-full">
                     <div
-                      key={ms.id || msIdx}
-                      className="relative rounded-md overflow-hidden flex items-center justify-center"
+                      className="relative rounded-md overflow-hidden flex items-center justify-center w-full"
                       style={{
-                        width: `${Math.max(widthPct, 10)}%`,
                         height: "24px",
-                        backgroundColor: ms.videoUrl ? "rgba(34,197,94,0.2)" : "rgba(124,58,237,0.15)",
-                        border: ms.videoUrl ? "1px solid rgba(34,197,94,0.3)" : "1px solid rgba(124,58,237,0.25)",
+                        backgroundColor: "rgba(34,197,94,0.2)",
+                        border: "1px solid rgba(34,197,94,0.3)",
                       }}
                     >
-                      <span className="text-[9px] font-medium" style={{ color: ms.videoUrl ? "rgb(134,239,172)" : "rgb(192,132,252)" }}>
-                        {msIdx + 1} · {ms.duration != null ? `${ms.duration}s` : '?'}
+                      <span className="text-[9px] font-medium" style={{ color: "rgb(134,239,172)" }}>
+                        {scene.assemblyManifest.totalDurationSec?.toFixed(1)}s assembled
                       </span>
                     </div>
-                  );
-                })}
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowMicroScenesExpanded(!showMicroScenesExpanded)}
+                  className="flex items-center gap-1 mt-1.5 px-2 py-0.5 text-[10px] font-medium transition-colors hover:bg-white/5 rounded-md"
+                  style={{ color: "var(--text-muted)" }}
+                >
+                  {showMicroScenesExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                  {showMicroScenesExpanded ? 'Hide micro-scenes' : 'Show micro-scenes'}
+                </button>
               </div>
-            </div>
+            ) : (
+              <div className="flex items-center gap-1 mb-3 rounded-lg p-2" style={{ backgroundColor: "rgba(124,58,237,0.06)", border: "1px solid rgba(124,58,237,0.15)" }}>
+                <div className="flex w-full gap-0.5">
+                  {scene.microScenes.map((ms: any, msIdx: number) => {
+                    const totalDuration = scene.microScenes.reduce((sum: number, m: any) => sum + (m.duration || 0), 0) || 1;
+                    const widthPct = ((ms.duration || 0) / totalDuration) * 100;
+                    return (
+                      <div
+                        key={ms.id || msIdx}
+                        className="relative rounded-md overflow-hidden flex items-center justify-center"
+                        style={{
+                          width: `${Math.max(widthPct, 10)}%`,
+                          height: "24px",
+                          backgroundColor: ms.videoUrl ? "rgba(34,197,94,0.2)" : "rgba(124,58,237,0.15)",
+                          border: ms.videoUrl ? "1px solid rgba(34,197,94,0.3)" : "1px solid rgba(124,58,237,0.25)",
+                        }}
+                      >
+                        <span className="text-[9px] font-medium" style={{ color: ms.videoUrl ? "rgb(134,239,172)" : "rgb(192,132,252)" }}>
+                          {msIdx + 1} · {ms.duration != null ? `${ms.duration}s` : '?'}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
+            {(!isAssembled || showMicroScenesExpanded) && (
+              <>
             {sceneOverlays.length > 0 && (
               <div className="flex items-center gap-1.5 mb-3 px-2 py-1.5 rounded-md text-[10px]" style={{ backgroundColor: "rgba(251,191,36,0.08)", border: "1px solid rgba(251,191,36,0.2)", color: "rgb(252,211,77)" }}>
                 <Maximize2 className="w-3 h-3 flex-shrink-0" />
@@ -2005,6 +2150,8 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                 );
               })}
             </div>
+              </>
+            )}
 
             {fullscreenMicroScene !== null && scene.microScenes[fullscreenMicroScene] && (() => {
               const fsMs = scene.microScenes[fullscreenMicroScene];

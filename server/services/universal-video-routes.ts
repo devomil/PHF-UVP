@@ -602,59 +602,125 @@ router.get('/api-connectivity-test', isAuthenticated, requireRole(['admin', 'man
   }
 });
 
-router.post('/test-assembly/:projectId/:sceneIndex', isAuthenticated, requireRole(['admin', 'manager']), async (req: Request, res: Response) => {
+router.post('/projects/:projectId/scenes/:sceneIndex/assemble', isAuthenticated, async (req: Request, res: Response) => {
   try {
+    const userId = (req.user as any)?.id;
     const { projectId, sceneIndex } = req.params;
     const idx = parseInt(sceneIndex, 10);
-    const userId = (req.user as any)?.id;
-    if (!userId) return res.status(401).json({ success: false, error: 'Unauthorized' });
-
-    const [row] = await db.select().from(universalVideoProjects)
-      .where(eq(universalVideoProjects.id, projectId));
-    if (!row) return res.status(404).json({ success: false, error: 'Project not found' });
-
-    const project = dbRowToVideoProject(row);
-    if (!project.scenes || idx < 0 || idx >= project.scenes.length) {
-      return res.status(400).json({ success: false, error: `Invalid scene index ${idx}, project has ${project.scenes?.length || 0} scenes` });
+    if (Number.isNaN(idx)) {
+      return res.status(400).json({ success: false, error: 'Invalid scene index' });
     }
 
-    const scene = project.scenes[idx];
-    const msWithVideo = (scene.microScenes || []).filter(ms => !!ms.videoUrl);
+    const projectData = await getProjectFromDb(projectId);
+    if (!projectData) return res.status(404).json({ success: false, error: 'Project not found' });
+    if (projectData.ownerId !== userId) return res.status(403).json({ success: false, error: 'Access denied' });
+
+    const scenes = projectData.scenes || [];
+    if (idx < 0 || idx >= scenes.length) {
+      return res.status(400).json({ success: false, error: `Invalid scene index ${idx}, project has ${scenes.length} scenes` });
+    }
+
+    const scene = scenes[idx];
+    const msWithVideo = (scene.microScenes || []).filter((ms: any) => !!ms.videoUrl);
     if (msWithVideo.length < 2) {
       return res.status(400).json({ success: false, error: `Scene ${idx} has ${msWithVideo.length} micro-scenes with video (need >=2)` });
     }
 
     const { ffmpegAssemblyService } = await import('./ffmpeg-assembly-service');
 
-    console.log(`[TestAssembly] Manually triggering assembly for project ${projectId}, scene ${idx} (${msWithVideo.length} clips)`);
+    console.log(`[AssembleScene] Assembling project ${projectId}, scene ${idx} (${msWithVideo.length} clips)`);
     const manifest = await ffmpegAssemblyService.assembleScene(
       scene.id,
       scene.microScenes!,
-      project.id,
+      projectData.projectId,
       scene.voiceoverWords || scene.captions?.words
     );
 
-    project.scenes[idx].assemblyManifest = manifest;
-
-    await db.update(universalVideoProjects)
-      .set({
-        projectData: JSON.parse(JSON.stringify(project)),
-        updatedAt: new Date(),
-      })
-      .where(eq(universalVideoProjects.id, projectId));
+    projectData.scenes[idx].assemblyManifest = manifest;
+    await saveProjectToDb(projectData, projectData.ownerId);
 
     res.json({
       success: !manifest.assemblyFailed,
       manifest,
-      summary: {
-        clips: manifest.clips.length,
-        totalDurationSec: manifest.totalDurationSec,
-        wordMarkers: manifest.wordMarkers?.length || 0,
-        assembledClipUrl: manifest.assembledClipUrl,
-      }
+      sceneIndex: idx,
     });
   } catch (error: any) {
-    console.error('[TestAssembly] Error:', error);
+    console.error('[AssembleScene] Error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.post('/projects/:projectId/assemble-all', isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const userId = (req.user as any)?.id;
+    const { projectId } = req.params;
+
+    const projectData = await getProjectFromDb(projectId);
+    if (!projectData) return res.status(404).json({ success: false, error: 'Project not found' });
+    if (projectData.ownerId !== userId) return res.status(403).json({ success: false, error: 'Access denied' });
+
+    const scenes = projectData.scenes || [];
+    const { ffmpegAssemblyService } = await import('./ffmpeg-assembly-service');
+
+    const results: Array<{ sceneIndex: number; success: boolean; error?: string; totalDurationSec?: number }> = [];
+    let successCount = 0;
+    let failCount = 0;
+    let skippedCount = 0;
+
+    for (let i = 0; i < scenes.length; i++) {
+      const scene = scenes[i];
+      const msWithVideo = (scene.microScenes || []).filter((ms: any) => !!ms.videoUrl);
+
+      if (msWithVideo.length < 2) {
+        skippedCount++;
+        results.push({ sceneIndex: i, success: true, error: 'Skipped (fewer than 2 micro-scenes with video)' });
+        continue;
+      }
+
+      try {
+        console.log(`[AssembleAll] Scene ${i}/${scenes.length - 1}: Assembling ${msWithVideo.length} clips...`);
+        const manifest = await ffmpegAssemblyService.assembleScene(
+          scene.id,
+          scene.microScenes!,
+          projectData.projectId,
+          scene.voiceoverWords || scene.captions?.words
+        );
+
+        projectData.scenes[i].assemblyManifest = manifest;
+
+        if (manifest.assemblyFailed) {
+          failCount++;
+          results.push({ sceneIndex: i, success: false, error: manifest.error || 'Assembly failed' });
+          console.warn(`[AssembleAll] Scene ${i}: Failed - ${manifest.error}`);
+        } else {
+          successCount++;
+          results.push({ sceneIndex: i, success: true, totalDurationSec: manifest.totalDurationSec });
+        }
+      } catch (err: any) {
+        failCount++;
+        projectData.scenes[i].assemblyManifest = {
+          assemblyFailed: true,
+          totalDurationSec: 0,
+          clips: [],
+          sceneId: scene.id,
+          createdAt: new Date().toISOString(),
+          error: err.message,
+        };
+        results.push({ sceneIndex: i, success: false, error: err.message });
+        console.error(`[AssembleAll] Scene ${i}: Exception - ${err.message}`);
+      }
+    }
+
+    await saveProjectToDb(projectData, projectData.ownerId);
+
+    console.log(`[AssembleAll] Complete: ${successCount} succeeded, ${failCount} failed, ${skippedCount} skipped`);
+    res.json({
+      success: failCount === 0,
+      results,
+      summary: { total: scenes.length, assembled: successCount, failed: failCount, skipped: skippedCount },
+    });
+  } catch (error: any) {
+    console.error('[AssembleAll] Error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
