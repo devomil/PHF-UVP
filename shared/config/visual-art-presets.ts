@@ -62,7 +62,7 @@ export const VISUAL_ART_PRESETS: Record<string, VisualArtPreset> = {
       'motion-control': ['kling-2.6-motion-control-pro', 'kling-2.6-pro'],
     },
     generationStrategy: 'i2v',
-    globalStyleNotes: 'Pixar/Disney 3D CGI animation quality • Subsurface skin scattering • Soft cinematic lighting • Shallow depth of field • 4K render • No text, signs, labels, or readable words in the scene • Clean background surfaces suitable for text overlay compositing • Warm, inviting color grading • Characters have expressive, rounded features',
+    globalStyleNotes: 'Pixar/Disney 3D CGI animation quality • Subsurface skin scattering • Soft cinematic lighting • Shallow depth of field • 4K render • No text, no signs, no labels, no readable words anywhere in the scene • Clean background surfaces suitable for text overlay compositing • Warm, inviting color grading • Characters have expressive, rounded features',
     cameraMotionHints: 'slow push-in, gentle orbit, subtle zoom out',
     styleMarkerPrefix: 'Pixar-style 3D animated',
     styleKeywords: ['pixar', '3d animated', '3d render', '3d cgi'],

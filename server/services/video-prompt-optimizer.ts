@@ -37,6 +37,13 @@ function splitByOrAlternatives(prompt: string): string[] {
     }
     segments = newSegments;
   }
+
+  const MIN_WORDS_FOR_VALID_SEGMENT = 15;
+  const allLongEnough = segments.every(s => s.split(/\s+/).length >= MIN_WORDS_FOR_VALID_SEGMENT);
+  if (!allLongEnough) {
+    return [prompt];
+  }
+
   return segments;
 }
 

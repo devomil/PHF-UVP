@@ -130,7 +130,7 @@ export function sanitizePromptForAI(
     const brandRegex = new RegExp(brand, 'gi');
     if (brandRegex.test(cleanPrompt)) {
       extractedLogos.push(brand);
-      cleanPrompt = cleanPrompt.replace(brandRegex, 'wellness center');
+      cleanPrompt = cleanPrompt.replace(brandRegex, 'the farm property');
       removedElements.push(brand);
     }
   }
