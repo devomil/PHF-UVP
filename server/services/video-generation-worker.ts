@@ -469,11 +469,16 @@ class VideoGenerationWorker {
                   }
 
                   if (finalMatchedChars.length > 0) {
-                    charRefImageUrl = finalMatchedChars[0].referenceImageUrl;
-                    charRefImageUrls = finalMatchedChars.map((c: any) => c.referenceImageUrl).filter(Boolean);
-                    isCharacterRef = true;
                     const charDescs = finalMatchedChars.map((c: any) => `${c.name}: ${c.physicalDescription || ''}, wearing ${c.wardrobe || ''}`).join('. ');
-                    charEnhancedPrompt = `${charEnhancedPrompt}\nGenerate a NEW scene showing ${finalMatchedChars.length > 1 ? 'these characters' : 'this character'} in the described setting. Use the reference image ONLY for character appearance consistency (face, hair, clothing, art style). Do NOT animate or reproduce the reference image itself. Characters: ${charDescs}`;
+                    if (isStylizedArt) {
+                      log.info(`[CharRef] Job ${job.jobId}: STYLIZED PRESET — skipping reference image to preserve ${jobArtPresetId} art style. Using T2V with character descriptions instead.`);
+                      charEnhancedPrompt = `${charEnhancedPrompt}\nCharacter details for visual consistency: ${charDescs}`;
+                    } else {
+                      charRefImageUrl = finalMatchedChars[0].referenceImageUrl;
+                      charRefImageUrls = finalMatchedChars.map((c: any) => c.referenceImageUrl).filter(Boolean);
+                      isCharacterRef = true;
+                      charEnhancedPrompt = `${charEnhancedPrompt}\nGenerate a NEW scene showing ${finalMatchedChars.length > 1 ? 'these characters' : 'this character'} in the described setting. Use the reference image ONLY for character appearance consistency (face, hair, clothing, art style). Do NOT animate or reproduce the reference image itself. Characters: ${charDescs}`;
+                    }
                   }
                 }
               }
