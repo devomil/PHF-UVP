@@ -3,7 +3,7 @@
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { AI_VIDEO_PROVIDERS } from '../config/ai-video-providers';
 import { MotionControlConfig, mapToKlingMotion, buildVeoMotionPrompt } from '../../shared/config/motion-control';
-import { isStylizedPreset } from '../../shared/config/visual-art-presets';
+import { isStylizedPreset, getVisualArtPreset } from '../../shared/config/visual-art-presets';
 
 interface PiAPIGenerationResult {
   success: boolean;
@@ -872,6 +872,7 @@ class PiAPIVideoService {
     };
     motionControl?: MotionControlConfig;
     isCharacterReference?: boolean;
+    artPresetId?: string;
   }, sanitizedPrompt: string): any {
     const animationStyle = options.i2vSettings?.animationStyle ?? 'product-hero';
     
@@ -1221,7 +1222,14 @@ class PiAPIVideoService {
     // I2V-specific negative prompt - preserve source image details, only avoid quality issues
     // CRITICAL: Do NOT include "text, words, letters, logos, labels" in I2V negative prompts
     // because the source image may contain important text/labels that must be preserved
-    const i2vNegativePrompt = 'blurry, low quality, distorted, warping, morphing, deformed, glitchy artifacts';
+    let i2vNegativePrompt = 'blurry, low quality, distorted, warping, morphing, deformed, glitchy artifacts';
+    if (options.artPresetId && isStylizedPreset(options.artPresetId)) {
+      const artPreset = getVisualArtPreset(options.artPresetId);
+      if (artPreset && artPreset.negativePromptAdditions.length > 0) {
+        i2vNegativePrompt = `${i2vNegativePrompt}, ${artPreset.negativePromptAdditions.join(', ')}`;
+        console.log(`[PiAPI I2V] Added art preset negative prompts: ${artPreset.negativePromptAdditions.join(', ')}`);
+      }
+    }
     
     if (options.model.startsWith('kling')) {
       let version = '2.6';
@@ -1320,7 +1328,7 @@ class PiAPIVideoService {
       let cfgScale = Math.max(0.1, 0.5 - imageControlStrength * 0.4); // Range: 0.5 (creative) to 0.1 (high fidelity)
       
       if (options.artPresetId && isStylizedPreset(options.artPresetId) && options.isCharacterReference) {
-        const stylizedCfg = Math.max(cfgScale, 0.50);
+        const stylizedCfg = Math.max(cfgScale, 0.70);
         if (stylizedCfg !== cfgScale) {
           console.log(`[PiAPI I2V] Stylized preset cfg override: ${cfgScale.toFixed(2)} → ${stylizedCfg.toFixed(2)} for art style adherence`);
           cfgScale = stylizedCfg;
