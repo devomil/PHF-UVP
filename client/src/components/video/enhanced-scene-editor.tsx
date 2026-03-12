@@ -866,20 +866,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
   const isRegenerating = regenImageMutation.isPending || regenVideoMutation.isPending || !!regeneratingType;
 
   return (
-    <div className="border-t" style={{ borderColor: "var(--border-subtle)", maxHeight: "85vh", overflowY: "auto" }}>
-      <div className="sticky top-0 z-20 flex items-center justify-between px-4 py-2" style={{ backgroundColor: "var(--bg-primary)", borderBottom: "1px solid var(--border-subtle)" }}>
-        <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
-          Scene {sceneIndex + 1} Editor
-        </span>
-        <button
-          onClick={onClose}
-          className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md transition-colors hover:bg-white/5"
-          style={{ color: "var(--text-muted)" }}
-        >
-          <ChevronUp className="w-3.5 h-3.5" /> Collapse
-        </button>
-      </div>
-      <div className="px-4 pb-4 space-y-4">
+    <div className="px-4 pb-4 space-y-4 border-t" style={{ borderColor: "var(--border-subtle)" }}>
       <input type="file" ref={fileInputRef} className="hidden" accept="image/*,video/*" onChange={handleUpload} />
       <input type="file" ref={refFileInputRef} className="hidden" accept="image/*" onChange={handleRefUpload} />
       <input type="file" ref={refVideoInputRef} className="hidden" accept="video/*" onChange={handleRefVideoUpload} />
@@ -2176,15 +2163,12 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
               const msModeInfo = GENERATION_MODES.find(m => m.id === msActiveMode);
               return (
                 <div
-                  className="fixed inset-0 z-[9999] flex items-center justify-center overflow-y-auto py-8"
+                  className="fixed inset-0 z-[9999] flex flex-col"
                   style={{ backgroundColor: "rgba(0,0,0,0.9)", backdropFilter: "blur(12px)" }}
                   onClick={() => setFullscreenMicroScene(null)}
                 >
-                  <div
-                    className="relative w-full max-w-4xl mx-4"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <div className="flex items-center justify-between mb-4">
+                  <div className="flex-shrink-0 w-full max-w-4xl mx-auto px-4 pt-4 pb-2" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         <span className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30">
                           {fullscreenMicroScene + 1}
@@ -2219,6 +2203,14 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                         </button>
                       </div>
                     </div>
+                  </div>
+                  <div
+                    className="flex-1 min-h-0 overflow-y-auto px-4 pb-8"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                  <div
+                    className="relative w-full max-w-4xl mx-auto"
+                  >
 
                     {fsMs.videoUrl ? (
                       <video src={fsMs.videoUrl} className="w-full rounded-xl" style={{ maxHeight: '60vh' }} controls autoPlay playsInline />
@@ -2570,6 +2562,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                       </div>
                     </div>
                   </div>
+                  </div>
                 </div>
               );
             })()}
@@ -2685,7 +2678,6 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
           setProvider(providerId);
         }}
       />
-    </div>
     </div>
   );
 }
