@@ -2208,36 +2208,51 @@ function AssembleAllButton({ projectId, scenes }: { projectId: string; scenes: a
 
   if (scenesWithMicroScenes.length === 0) return null;
 
+  const eligibleSceneIndices = scenes.reduce<number[]>((acc, s, i) => {
+    const msWithVid = (s.microScenes || []).filter((ms: any) => !!ms.videoUrl);
+    if (msWithVid.length >= 2) acc.push(i);
+    return acc;
+  }, []);
+
   const handleAssembleAll = async () => {
     setIsAssembling(true);
-    setAssemblyProgress({ current: 0, total: 0 });
-    try {
-      const res = await fetch(`/api/universal-video/projects/${projectId}/assemble-all`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: "Assembly failed" }));
-        throw new Error(err.error || "Assembly failed");
+    const total = eligibleSceneIndices.length;
+    setAssemblyProgress({ current: 0, total });
+    let succeeded = 0;
+    let failed = 0;
+
+    for (let i = 0; i < eligibleSceneIndices.length; i++) {
+      const sceneIdx = eligibleSceneIndices[i];
+      setAssemblyProgress({ current: i, total });
+      try {
+        const res = await fetch(`/api/universal-video/projects/${projectId}/scenes/${sceneIdx}/assemble`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success) {
+            succeeded++;
+          } else {
+            failed++;
+          }
+        } else {
+          failed++;
+        }
+      } catch {
+        failed++;
       }
-      const data = await res.json();
       queryClient.invalidateQueries({ queryKey: ["project", projectId] });
-      const summary = data.summary || {};
-      const succeeded = summary.assembled || 0;
-      const failed = summary.failed || 0;
-      const total = summary.total || (succeeded + failed);
-      setAssemblyProgress({ current: succeeded + failed, total });
-      if (failed === 0) {
-        toast({ title: "All Scenes Assembled", description: `${succeeded} of ${total} scenes assembled successfully.` });
-      } else {
-        toast({ title: "Assembly Partial", description: `${succeeded} of ${total} scenes assembled. ${failed} failed — raw clips will be used.`, variant: "destructive" });
-      }
-    } catch (err: any) {
-      toast({ title: "Assembly Error", description: err.message, variant: "destructive" });
-    } finally {
-      setIsAssembling(false);
     }
+
+    setAssemblyProgress({ current: total, total });
+    if (failed === 0) {
+      toast({ title: "All Scenes Assembled", description: `${succeeded} of ${total} scenes assembled successfully.` });
+    } else {
+      toast({ title: "Assembly Partial", description: `${succeeded} of ${total} scenes assembled. ${failed} failed — raw clips will be used.`, variant: "destructive" });
+    }
+    setIsAssembling(false);
   };
 
   return (
@@ -2255,7 +2270,7 @@ function AssembleAllButton({ projectId, scenes }: { projectId: string; scenes: a
         {isAssembling ? (
           <>
             <Loader2 className="w-4 h-4 animate-spin" />
-            Assembling scenes{assemblyProgress.total > 0 ? ` (${assemblyProgress.current}/${assemblyProgress.total})` : '...'}
+            Assembling scene {assemblyProgress.current + 1} of {assemblyProgress.total}...
           </>
         ) : (
           <>
