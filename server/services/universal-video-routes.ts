@@ -725,6 +725,30 @@ router.post('/projects/:projectId/assemble-all', isAuthenticated, async (req: Re
   }
 });
 
+router.patch('/projects/:projectId/scenes/:sceneIndex/assembly-invalidate', isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const userId = (req.user as any)?.id;
+    const { projectId, sceneIndex } = req.params;
+    const idx = parseInt(sceneIndex, 10);
+    if (Number.isNaN(idx)) return res.status(400).json({ success: false, error: 'Invalid scene index' });
+
+    const projectData = await getProjectFromDb(projectId);
+    if (!projectData) return res.status(404).json({ success: false, error: 'Project not found' });
+    if (projectData.ownerId !== userId) return res.status(403).json({ success: false, error: 'Access denied' });
+
+    const scenes = projectData.scenes || [];
+    if (idx < 0 || idx >= scenes.length) return res.status(400).json({ success: false, error: 'Invalid scene index' });
+
+    if (scenes[idx].assemblyManifest) {
+      scenes[idx].assemblyManifest.assembledClipValid = false;
+      await saveProjectToDb(projectData, projectData.ownerId);
+    }
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 router.get('/projects', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
