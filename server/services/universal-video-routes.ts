@@ -740,7 +740,7 @@ router.patch('/projects/:projectId/scenes/:sceneIndex/assembly-invalidate', isAu
     if (idx < 0 || idx >= scenes.length) return res.status(400).json({ success: false, error: 'Invalid scene index' });
 
     if (scenes[idx].assemblyManifest) {
-      scenes[idx].assemblyManifest.assembledClipValid = false;
+      delete scenes[idx].assemblyManifest;
       await saveProjectToDb(projectData, projectData.ownerId);
     }
     res.json({ success: true });
