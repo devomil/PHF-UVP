@@ -866,7 +866,20 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
   const isRegenerating = regenImageMutation.isPending || regenVideoMutation.isPending || !!regeneratingType;
 
   return (
-    <div className="px-4 pb-4 space-y-4 border-t" style={{ borderColor: "var(--border-subtle)" }}>
+    <div className="border-t" style={{ borderColor: "var(--border-subtle)", maxHeight: "85vh", overflowY: "auto" }}>
+      <div className="sticky top-0 z-20 flex items-center justify-between px-4 py-2" style={{ backgroundColor: "var(--bg-primary)", borderBottom: "1px solid var(--border-subtle)" }}>
+        <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
+          Scene {sceneIndex + 1} Editor
+        </span>
+        <button
+          onClick={onClose}
+          className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md transition-colors hover:bg-white/5"
+          style={{ color: "var(--text-muted)" }}
+        >
+          <ChevronUp className="w-3.5 h-3.5" /> Collapse
+        </button>
+      </div>
+      <div className="px-4 pb-4 space-y-4">
       <input type="file" ref={fileInputRef} className="hidden" accept="image/*,video/*" onChange={handleUpload} />
       <input type="file" ref={refFileInputRef} className="hidden" accept="image/*" onChange={handleRefUpload} />
       <input type="file" ref={refVideoInputRef} className="hidden" accept="video/*" onChange={handleRefVideoUpload} />
@@ -2672,6 +2685,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
           setProvider(providerId);
         }}
       />
+    </div>
     </div>
   );
 }
