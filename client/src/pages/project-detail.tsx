@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
-import { ArrowLeft, Settings, Play, RefreshCw, Clock, Target, Monitor, BarChart3, Loader2, AlertCircle, Zap, Video, Image, Download, RotateCcw, Save, Trash2, ExternalLink, CheckCircle2, XCircle, X, Type, Film, ChevronDown, ChevronUp, CloudUpload, Mic, Music, Volume2, Palette, Shuffle, Sliders, Wand2, Sparkles, ImagePlus, Upload, Edit2, FileText, Plus, GripVertical, Eye, EyeOff } from "lucide-react";
+import { ArrowLeft, Settings, Play, RefreshCw, Clock, Target, Monitor, BarChart3, Loader2, AlertCircle, Zap, Video, Image, Download, RotateCcw, Save, Trash2, ExternalLink, CheckCircle2, XCircle, X, Type, Film, ChevronDown, ChevronUp, CloudUpload, Mic, Music, Volume2, Palette, Shuffle, Sliders, Wand2, Sparkles, ImagePlus, Upload, Edit2, FileText, Plus, GripVertical, Eye, EyeOff, Layers } from "lucide-react";
 import { getVisualArtPreset } from "@shared/config/visual-art-presets";
 import { SCENE_CONTENT_TAGS } from "@shared/config/scene-content-tags";
 import { Button } from "@/components/ui/button";
@@ -2184,9 +2184,89 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
             )}
           </div>
 
+          <AssembleAllButton projectId={projectId} scenes={scenesFromProps} />
           <RenderButton projectId={projectId} hasVisual={!!quickAssets.visual?.url || scenesHaveVideo} hasVoiceover={voiceoverReady || settings.voiceover.hasGenerated} hasMusic={musicReady || settings.music.hasGenerated} initialOutputUrl={projectOutputUrl} initialStatus={projectStatus} initialRenderId={projectRenderId} />
         </div>
       )}
+    </div>
+  );
+}
+
+function AssembleAllButton({ projectId, scenes }: { projectId: string; scenes: any[] }) {
+  const [isAssembling, setIsAssembling] = useState(false);
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const scenesWithMicroScenes = scenes.filter((s: any) =>
+    s.microScenes && s.microScenes.filter((ms: any) => !!ms.videoUrl).length >= 2
+  );
+
+  const alreadyAssembled = scenes.filter((s: any) =>
+    s.assemblyManifest && !s.assemblyManifest.assemblyFailed && s.assemblyManifest.assembledClipValid !== false && !!s.assemblyManifest.assembledClipUrl
+  ).length;
+
+  if (scenesWithMicroScenes.length === 0) return null;
+
+  const handleAssembleAll = async () => {
+    setIsAssembling(true);
+    try {
+      const res = await fetch(`/api/universal-video/projects/${projectId}/assemble-all`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Assembly failed" }));
+        throw new Error(err.error || "Assembly failed");
+      }
+      const data = await res.json();
+      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+      const summary = data.summary || {};
+      const succeeded = summary.assembled || 0;
+      const failed = summary.failed || 0;
+      const total = summary.total || (succeeded + failed);
+      if (failed === 0) {
+        toast({ title: "All Scenes Assembled", description: `${succeeded} of ${total} scenes assembled successfully.` });
+      } else {
+        toast({ title: "Assembly Partial", description: `${succeeded} of ${total} scenes assembled. ${failed} failed — raw clips will be used.`, variant: "destructive" });
+      }
+    } catch (err: any) {
+      toast({ title: "Assembly Error", description: err.message, variant: "destructive" });
+    } finally {
+      setIsAssembling(false);
+    }
+  };
+
+  return (
+    <div className="mb-4">
+      <button
+        onClick={handleAssembleAll}
+        disabled={isAssembling}
+        className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-medium transition-all disabled:opacity-50"
+        style={{
+          backgroundColor: "rgba(34,197,94,0.1)",
+          border: "1px solid rgba(34,197,94,0.3)",
+          color: "rgb(134,239,172)",
+        }}
+      >
+        {isAssembling ? (
+          <>
+            <Loader2 className="w-4 h-4 animate-spin" />
+            Assembling all scenes...
+          </>
+        ) : (
+          <>
+            <Layers className="w-4 h-4" />
+            Assemble All Scenes
+            <span className="text-[10px] opacity-70">
+              ({alreadyAssembled}/{scenesWithMicroScenes.length} done)
+            </span>
+          </>
+        )}
+      </button>
+      <p className="text-[10px] mt-1.5 text-center" style={{ color: "var(--text-muted)" }}>
+        Pre-assemble micro-scenes before rendering for smoother results
+      </p>
     </div>
   );
 }
