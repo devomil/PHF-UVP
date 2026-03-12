@@ -2194,6 +2194,7 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
 
 function AssembleAllButton({ projectId, scenes }: { projectId: string; scenes: any[] }) {
   const [isAssembling, setIsAssembling] = useState(false);
+  const [assemblyProgress, setAssemblyProgress] = useState({ current: 0, total: 0 });
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -2209,6 +2210,7 @@ function AssembleAllButton({ projectId, scenes }: { projectId: string; scenes: a
 
   const handleAssembleAll = async () => {
     setIsAssembling(true);
+    setAssemblyProgress({ current: 0, total: 0 });
     try {
       const res = await fetch(`/api/universal-video/projects/${projectId}/assemble-all`, {
         method: "POST",
@@ -2225,6 +2227,7 @@ function AssembleAllButton({ projectId, scenes }: { projectId: string; scenes: a
       const succeeded = summary.assembled || 0;
       const failed = summary.failed || 0;
       const total = summary.total || (succeeded + failed);
+      setAssemblyProgress({ current: succeeded + failed, total });
       if (failed === 0) {
         toast({ title: "All Scenes Assembled", description: `${succeeded} of ${total} scenes assembled successfully.` });
       } else {
@@ -2252,7 +2255,7 @@ function AssembleAllButton({ projectId, scenes }: { projectId: string; scenes: a
         {isAssembling ? (
           <>
             <Loader2 className="w-4 h-4 animate-spin" />
-            Assembling all scenes...
+            Assembling scenes{assemblyProgress.total > 0 ? ` (${assemblyProgress.current}/${assemblyProgress.total})` : '...'}
           </>
         ) : (
           <>
@@ -2264,6 +2267,17 @@ function AssembleAllButton({ projectId, scenes }: { projectId: string; scenes: a
           </>
         )}
       </button>
+      {isAssembling && assemblyProgress.total > 0 && (
+        <div className="mt-2 w-full rounded-full overflow-hidden h-1.5" style={{ backgroundColor: "rgba(34,197,94,0.15)" }}>
+          <div
+            className="h-full rounded-full transition-all duration-500"
+            style={{
+              width: `${(assemblyProgress.current / assemblyProgress.total) * 100}%`,
+              backgroundColor: "rgb(34,197,94)",
+            }}
+          />
+        </div>
+      )}
       <p className="text-[10px] mt-1.5 text-center" style={{ color: "var(--text-muted)" }}>
         Pre-assemble micro-scenes before rendering for smoother results
       </p>

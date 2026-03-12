@@ -80,10 +80,14 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
   const [showRawResponse, setShowRawResponse] = useState(false);
 
   const sceneId = scene.id || `scene-${sceneIndex}`;
-  const videoUrl = scene.assets?.videoUrl;
+  const rawVideoUrl = scene.assets?.videoUrl;
   const imageUrl = scene.assets?.imageUrl || scene.background?.url;
-  const hasVideo = !!videoUrl;
+  const hasRawVideo = !!rawVideoUrl;
   const hasImage = !!imageUrl;
+  const assembledClipUrl = scene.assemblyManifest?.assembledClipUrl;
+  const assembledClipValid = scene.assemblyManifest && !scene.assemblyManifest.assemblyFailed && scene.assemblyManifest.assembledClipValid !== false && !!assembledClipUrl;
+  const videoUrl = assembledClipValid ? assembledClipUrl : rawVideoUrl;
+  const hasVideo = !!videoUrl;
   const assetReady = hasVideo || hasImage;
 
   const [isPlaying, setIsPlaying] = useState(false);
@@ -762,14 +766,21 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
     },
   });
 
-  const handleAssemblyVideoError = useCallback(() => {
+  const handleAssemblyVideoError = useCallback(async () => {
+    try {
+      await fetch(`/api/universal-video/projects/${projectId}/scenes/${sceneIndex}/assembly-invalidate`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+      });
+    } catch {}
     queryClient.invalidateQueries({ queryKey: ["project", projectId] });
     toast({
       title: "Assembled Clip Expired",
       description: "Assembled clip expired — please reassemble before rendering.",
       variant: "destructive",
     });
-  }, [queryClient, projectId, toast]);
+  }, [queryClient, projectId, sceneIndex, toast]);
 
   const msWithVideo = (scene.microScenes || []).filter((ms: any) => !!ms.videoUrl);
   const canAssemble = msWithVideo.length >= 2 && !isAssembling;
@@ -871,6 +882,10 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
             <span className="text-[11px] px-2 py-0.5 rounded-full bg-purple-500/15 border border-purple-500/25 text-purple-400 flex items-center gap-1">
               <Loader2 className="w-3 h-3 animate-spin" /> {regeneratingType === 'video' ? 'Generating Video...' : regeneratingType === 'image' ? 'Generating Image...' : 'Submitting...'}
             </span>
+          ) : assembledClipValid ? (
+            <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center gap-1">
+              <Layers className="w-3 h-3" /> Assembled {scene.assemblyManifest?.totalDurationSec?.toFixed(1)}s
+            </span>
           ) : assetReady ? (
             <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center gap-1">
               <CheckCircle2 className="w-3 h-3" /> Ready
@@ -914,6 +929,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                 className="w-full aspect-video object-contain bg-black"
                 playsInline
                 preload="auto"
+                onError={assembledClipValid ? handleAssemblyVideoError : undefined}
               />
               {/* Video Controls Overlay */}
               <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3">
@@ -1898,32 +1914,6 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
               <div className="flex items-center gap-2 mb-2 px-3 py-1.5 rounded-md text-[11px]" style={{ backgroundColor: "rgba(234,179,8,0.06)", border: "1px solid rgba(234,179,8,0.15)", color: "rgb(250,204,21)" }}>
                 <Layers className="w-3 h-3 flex-shrink-0" />
                 <span>{msWithVideo.length} micro-scenes — ready to assemble</span>
-              </div>
-            )}
-
-            {/* Assembled Preview Player */}
-            {isAssembled && scene.assemblyManifest.assembledClipUrl && (
-              <div className="mb-3 rounded-lg overflow-hidden border" style={{ borderColor: "rgba(34,197,94,0.3)", backgroundColor: "rgba(0,0,0,0.3)" }}>
-                <video
-                  ref={assembledVideoRef}
-                  src={scene.assemblyManifest.assembledClipUrl}
-                  className="w-full aspect-video object-contain bg-black"
-                  controls
-                  playsInline
-                  preload="metadata"
-                  onError={handleAssemblyVideoError}
-                />
-                <div className="flex items-center justify-between px-3 py-1.5" style={{ backgroundColor: "rgba(34,197,94,0.05)" }}>
-                  <div className="flex items-center gap-1.5">
-                    <CheckCircle2 className="w-3 h-3" style={{ color: "rgb(134,239,172)" }} />
-                    <span className="text-[10px] font-medium" style={{ color: "rgb(134,239,172)" }}>
-                      Assembled Preview — {scene.assemblyManifest.totalDurationSec?.toFixed(1)}s
-                    </span>
-                  </div>
-                  <span className="text-[9px]" style={{ color: "var(--text-muted)" }}>
-                    {scene.assemblyManifest.clips?.length || 0} clips merged
-                  </span>
-                </div>
               </div>
             )}
 
