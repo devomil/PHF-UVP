@@ -163,18 +163,17 @@ export function optimizePrompt(input: OptimizePromptInput): OptimizedPrompt {
   let prompt = input.visualDescription;
   const isStylized = isStylizedPresetFn(input.artPresetId);
 
-  const segments = splitByOrAlternatives(prompt);
-  if (segments.length > 1) {
-    const best = pickBestSegment(segments);
-    console.log(`[PromptOptimizer] Detected ${segments.length} alternatives joined by "or" — selected most concrete: "${best.substring(0, 60)}..."`);
-    prompt = best;
-  }
-
   if (!isStylized) {
+    const segments = splitByOrAlternatives(prompt);
+    if (segments.length > 1) {
+      const best = pickBestSegment(segments);
+      console.log(`[PromptOptimizer] Detected ${segments.length} alternatives joined by "or" — selected most concrete: "${best.substring(0, 60)}..."`);
+      prompt = best;
+    }
     prompt = cleanPromptText(prompt);
   }
 
-  const maxWords = isStylized ? 80 : 30;
+  const maxWords = isStylized ? 180 : 30;
   prompt = enforcePromptLength(prompt, maxWords);
 
   if (prompt.length < 10) {
