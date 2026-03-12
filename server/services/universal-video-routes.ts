@@ -1457,15 +1457,18 @@ RULES YOU MUST ALWAYS FOLLOW:
    f) Art style suffix (always end with the standard suffix below)
 
 4. STANDARD ART STYLE SUFFIX — always end every prompt with:
-   "Disney/Pixar 3D CGI animation quality, subsurface skin scattering, shallow depth of field, cinematic warm color grading, 4K render. No text overlays. Smooth natural movement — gentle gestures, soft blinks, subtle breathing motion."
+   "Disney/Pixar 3D CGI animation quality, subsurface skin scattering, shallow depth of field, cinematic warm color grading, 4K render. No text, signs, labels, or readable words in the scene. Clean background surfaces suitable for text overlay compositing. Smooth natural movement — gentle gestures, soft blinks, subtle breathing motion."
 
-5. NEVER USE:
+5. ENVIRONMENT AND BACKGROUND
+   - When describing the scene environment, always include at least one compositionally clean surface or area that could naturally hold a text label or title — such as a wall, a chalkboard, a desk surface, an open sky area, or negative space beside the character. This prepares the scene for Remotion text overlay compositing in post-production.
+
+6. NEVER USE:
    - Generic room descriptions ("cozy office", "modern workspace")
    - Vague character descriptions ("a woman", "a professional")
    - Static, non-cinematic framing descriptions
    - Environments unrelated to the narration's meaning
 
-6. EVERY micro-scene prompt MUST include the art style marker (e.g. "Pixar-style 3D animated", "claymation", etc.) — AI video providers treat each prompt independently and will default to photorealistic if the style is not explicitly stated.
+7. EVERY micro-scene prompt MUST include the art style marker (e.g. "Pixar-style 3D animated", "claymation", etc.) — AI video providers treat each prompt independently and will default to photorealistic if the style is not explicitly stated.
 
 ` : '';
 
