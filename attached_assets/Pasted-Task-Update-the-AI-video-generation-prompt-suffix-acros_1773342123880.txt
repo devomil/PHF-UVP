@@ -1,0 +1,59 @@
+Task: Update the AI video generation prompt suffix across three locations in the codebase. This is a targeted find-and-replace update — do not modify any other logic, pipelines, or components.
+
+Step 1: Find the Current Suffix
+Search the codebase for the existing suffix string. It will appear in one or more of these forms:
+"No text overlays"
+"Disney/Pixar 3D CGI animation quality"
+"subsurface skin scattering"
+Use these as search terms to locate every place the suffix appears. Expected locations:
+
+shared/config/visual-art-presets.ts
+server/services/universal-video-service.ts
+The Claude system prompt string inside the visual direction generation function
+
+
+Step 2: Replace the Suffix
+Wherever the current suffix appears, replace it with the following updated version:
+Disney/Pixar 3D CGI animation quality, subsurface skin 
+scattering, shallow depth of field, cinematic warm color 
+grading, 4K render. No text, signs, labels, or readable 
+words in the scene. Clean background surfaces suitable 
+for text overlay compositing. Smooth natural movement — 
+gentle gestures, soft blinks, subtle breathing motion.
+
+Step 3: Update the Claude System Prompt for Visual Direction Generation
+Find the Claude system prompt used for visual direction generation. It will be inside a function that calls the Anthropic API and contains instructions about writing cinematic scene descriptions.
+Add the following instruction to that system prompt, in the section that describes environment and background requirements:
+When describing the scene environment, always include at 
+least one compositionally clean surface or area that could 
+naturally hold a text label or title — such as a wall, a 
+chalkboard, a desk surface, an open sky area, or negative 
+space beside the character. This prepares the scene for 
+Remotion text overlay compositing in post-production.
+
+Step 4: Verify
+After making the changes, confirm the following:
+
+Search the entire codebase for "No text overlays" — it should return zero results. If any remain, update them to the new suffix.
+The new suffix appears correctly in:
+
+shared/config/visual-art-presets.ts
+server/services/universal-video-service.ts
+The Claude visual direction system prompt
+
+
+No other files, pipelines, or components were modified
+The ElevenLabs voiceover pipeline was not touched
+The Remotion composition files were not touched
+The FFmpeg pre-compositor service was not touched
+
+
+What NOT to Change
+
+Do not modify any video generation logic
+Do not modify any rendering or compositing pipelines
+Do not modify ElevenLabs or voiceover services
+Do not modify Remotion composition files
+Do not modify the FFmpeg assembly service
+Do not modify any UI components
+This is a text content update only
