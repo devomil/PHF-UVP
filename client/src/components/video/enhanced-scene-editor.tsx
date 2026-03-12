@@ -783,7 +783,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
   }, [queryClient, projectId, sceneIndex, toast]);
 
   const msWithVideo = (scene.microScenes || []).filter((ms: any) => !!ms.videoUrl);
-  const canAssemble = msWithVideo.length >= 2 && !isAssembling;
+  const canAssemble = msWithVideo.length >= 2;
   const isAssembled = scene.assemblyManifest && !scene.assemblyManifest.assemblyFailed && scene.assemblyManifest.assembledClipValid !== false && !!scene.assemblyManifest.assembledClipUrl;
   const assemblyFailed = scene.assemblyManifest?.assemblyFailed;
   const assemblyStale = scene.assemblyManifest && !scene.assemblyManifest.assemblyFailed && scene.assemblyManifest.assembledClipValid === false;
