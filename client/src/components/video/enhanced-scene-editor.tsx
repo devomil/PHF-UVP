@@ -1973,7 +1973,21 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
             )}
 
             {(!isAssembled || showMicroScenesExpanded) && (
-              <>
+              <div className="relative">
+                <div className="sticky top-0 z-10 flex items-center justify-between py-1.5 mb-1" style={{ backgroundColor: "var(--bg-primary)" }}>
+                  <span className="text-[10px] font-medium" style={{ color: "var(--text-muted)" }}>
+                    {scene.microScenes.length} micro-scene{scene.microScenes.length !== 1 ? 's' : ''}
+                  </span>
+                  {isAssembled && showMicroScenesExpanded && (
+                    <button
+                      onClick={() => setShowMicroScenesExpanded(false)}
+                      className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium transition-colors hover:bg-white/5 rounded-md"
+                      style={{ color: "var(--text-muted)" }}
+                    >
+                      <ChevronUp className="w-3 h-3" /> Collapse
+                    </button>
+                  )}
+                </div>
             {sceneOverlays.length > 0 && (
               <div className="flex items-center gap-1.5 mb-3 px-2 py-1.5 rounded-md text-[10px]" style={{ backgroundColor: "rgba(251,191,36,0.08)", border: "1px solid rgba(251,191,36,0.2)", color: "rgb(252,211,77)" }}>
                 <Maximize2 className="w-3 h-3 flex-shrink-0" />
@@ -1981,7 +1995,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
               </div>
             )}
 
-            <div className="space-y-1.5">
+            <div className="space-y-1.5" style={{ maxHeight: "60vh", overflowY: "auto", paddingRight: "4px" }}>
               {scene.microScenes.map((ms: any, msIdx: number) => {
                 const isExpanded = expandedMicroScene === msIdx;
                 return (
@@ -2140,7 +2154,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                 );
               })}
             </div>
-              </>
+              </div>
             )}
 
             {fullscreenMicroScene !== null && scene.microScenes[fullscreenMicroScene] && (() => {

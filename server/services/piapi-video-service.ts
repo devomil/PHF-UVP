@@ -1320,7 +1320,7 @@ class PiAPIVideoService {
       let cfgScale = Math.max(0.1, 0.5 - imageControlStrength * 0.4); // Range: 0.5 (creative) to 0.1 (high fidelity)
       
       if (options.artPresetId && isStylizedPreset(options.artPresetId) && options.isCharacterReference) {
-        const stylizedCfg = Math.max(cfgScale, 0.30);
+        const stylizedCfg = Math.max(cfgScale, 0.50);
         if (stylizedCfg !== cfgScale) {
           console.log(`[PiAPI I2V] Stylized preset cfg override: ${cfgScale.toFixed(2)} → ${stylizedCfg.toFixed(2)} for art style adherence`);
           cfgScale = stylizedCfg;
