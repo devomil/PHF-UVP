@@ -1328,7 +1328,7 @@ class PiAPIVideoService {
       let cfgScale = Math.max(0.1, 0.5 - imageControlStrength * 0.4); // Range: 0.5 (creative) to 0.1 (high fidelity)
       
       if (options.artPresetId && isStylizedPreset(options.artPresetId) && options.isCharacterReference) {
-        const stylizedCfg = Math.max(cfgScale, 0.70);
+        const stylizedCfg = Math.max(cfgScale, 0.85);
         if (stylizedCfg !== cfgScale) {
           console.log(`[PiAPI I2V] Stylized preset cfg override: ${cfgScale.toFixed(2)} → ${stylizedCfg.toFixed(2)} for art style adherence`);
           cfgScale = stylizedCfg;
@@ -1379,6 +1379,14 @@ class PiAPIVideoService {
       let klingPromptBase: string;
       if (requiresNewContent) {
         klingPromptBase = sanitizedPrompt;
+        if (options.artPresetId && isStylizedPreset(options.artPresetId) && options.isCharacterReference) {
+          const artPreset = getVisualArtPreset(options.artPresetId);
+          if (artPreset) {
+            const stylePrefix = (artPreset as any).styleMarkerPrefix || artPreset.name;
+            klingPromptBase = `STYLE: ${stylePrefix} — NOT photorealistic, NOT live-action, NOT real-life photography. Fully stylized ${stylePrefix} rendering throughout. Use reference image ONLY for character facial features, NOT for rendering style.\n${klingPromptBase}`;
+            console.log(`[PiAPI I2V] Prepended strong style directive for "${artPreset.name}" character reference`);
+          }
+        }
       } else if (animationStyle === 'product-static') {
         klingPromptBase = `${sanitizedPrompt}. Keep product label and text perfectly sharp and unchanged. Subtle ambient motion, gentle lighting shifts only.`;
       } else if (animationStyle === 'product-hero') {
