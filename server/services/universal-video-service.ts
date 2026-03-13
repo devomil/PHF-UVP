@@ -4396,29 +4396,41 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
             let charRefImageUrl: string | null = null;
             let charRefImageUrls: string[] = [];
             let isCharRef = false;
+            const msArtPresetIdForCharGuard = ms.artPresetId || scene.artPresetId || projectArtPresetIdForVideo;
+            const isMsStylized = isStylizedPreset(msArtPresetIdForCharGuard);
             const useCharOverAutoImage = shouldPreferCharRefs && matchedChars.length > 0;
             const userOrParentRef = useCharOverAutoImage ? explicitRef : (explicitRef || parentSceneImageUrl);
             if (matchedChars.length > 0 && !explicitRef) {
-              charRefImageUrl = matchedChars[0].referenceImageUrl;
-              charRefImageUrls = matchedChars.map(c => c.referenceImageUrl!).filter(Boolean);
-              isCharRef = true;
               const charDescriptions = matchedChars.map(c => `${c.name}: ${c.physicalDescription}, wearing ${c.wardrobe}`).join('. ');
               const narrationContext = ms.narration ? `\nScene context from narration: ${ms.narration}` : '';
-              msPrompt = `${msPrompt}${narrationContext}\nGenerate a NEW scene showing this character in the described setting. Use the reference image ONLY for character appearance consistency (face, hair, clothing, art style). Do NOT animate or reproduce the reference image itself. Characters: ${charDescriptions}`;
-              console.log(`[CharRef] Micro-scene ${ms.id}: matched characters [${matchedChars.map(c => c.name).join(', ')}]`);
+              if (isMsStylized) {
+                msPrompt = `${msPrompt}${narrationContext}\nCharacter details for visual consistency: ${charDescriptions}`;
+                console.log(`[CharRef] Micro-scene ${ms.id}: STYLIZED PRESET '${msArtPresetIdForCharGuard}' — skipping I2V for characters [${matchedChars.map(c => c.name).join(', ')}]; injecting text descriptions only`);
+              } else {
+                charRefImageUrl = matchedChars[0].referenceImageUrl;
+                charRefImageUrls = matchedChars.map(c => c.referenceImageUrl!).filter(Boolean);
+                isCharRef = true;
+                msPrompt = `${msPrompt}${narrationContext}\nGenerate a NEW scene showing this character in the described setting. Use the reference image ONLY for character appearance consistency (face, hair, clothing, art style). Do NOT animate or reproduce the reference image itself. Characters: ${charDescriptions}`;
+                console.log(`[CharRef] Micro-scene ${ms.id}: preset '${msArtPresetIdForCharGuard || 'none'}' — using I2V character reference for [${matchedChars.map(c => c.name).join(', ')}]`);
+              }
             } else if (isCharacterI2VMode && lockedCharacters.length > 0 && !explicitRef) {
               const narrationChars = lockedCharacters.filter(c => {
                 const nameRegex = new RegExp(`\\b${c.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
                 return nameRegex.test(ms.narration || '') || nameRegex.test(ms.visualDirection || '');
               });
               const charsToUse = narrationChars.length > 0 ? narrationChars : [lockedCharacters[0]];
-              charRefImageUrl = charsToUse[0].referenceImageUrl;
-              charRefImageUrls = charsToUse.map(c => c.referenceImageUrl!).filter(Boolean);
-              isCharRef = true;
               const charDescriptions = charsToUse.map(c => `${c.name}: ${c.physicalDescription}, wearing ${c.wardrobe}`).join('. ');
               const narrationContext = ms.narration ? `\nScene context from narration: ${ms.narration}` : '';
-              msPrompt = `${msPrompt}${narrationContext}\nGenerate a NEW scene showing this character in the described setting. Use the reference image ONLY for character appearance consistency (face, hair, clothing, art style). Do NOT animate or reproduce the reference image itself. Characters: ${charDescriptions}`;
-              console.log(`[CharRef] Micro-scene ${ms.id}: character-i2v mode — injecting character references [${charsToUse.map(c => c.name).join(', ')}]`);
+              if (isMsStylized) {
+                msPrompt = `${msPrompt}${narrationContext}\nCharacter details for visual consistency: ${charDescriptions}`;
+                console.log(`[CharRef] Micro-scene ${ms.id}: STYLIZED PRESET '${msArtPresetIdForCharGuard}' — skipping I2V for characters [${charsToUse.map(c => c.name).join(', ')}]; injecting text descriptions only (character-i2v mode)`);
+              } else {
+                charRefImageUrl = charsToUse[0].referenceImageUrl;
+                charRefImageUrls = charsToUse.map(c => c.referenceImageUrl!).filter(Boolean);
+                isCharRef = true;
+                msPrompt = `${msPrompt}${narrationContext}\nGenerate a NEW scene showing this character in the described setting. Use the reference image ONLY for character appearance consistency (face, hair, clothing, art style). Do NOT animate or reproduce the reference image itself. Characters: ${charDescriptions}`;
+                console.log(`[CharRef] Micro-scene ${ms.id}: preset '${msArtPresetIdForCharGuard || 'none'}' — using I2V character reference for [${charsToUse.map(c => c.name).join(', ')}] (character-i2v mode)`);
+              }
             }
             
             const msImageUrl = userOrParentRef || charRefImageUrl || (characterConsistencyEnabled ? characterReferenceUrl : null);
@@ -4499,26 +4511,36 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
           let sceneIsCharRef = false;
           const sceneUseCharOverAutoImage = shouldPreferCharRefs && (sceneMatchedChars.length > 0 || isCharacterI2VMode);
           if (sceneMatchedChars.length > 0 && !sceneRefImageUrl) {
-            sceneCharRefUrl = sceneMatchedChars[0].referenceImageUrl;
-            sceneCharRefUrls = sceneMatchedChars.map(c => c.referenceImageUrl!).filter(Boolean);
-            sceneIsCharRef = true;
             const charDescriptions = sceneMatchedChars.map(c => `${c.name}: ${c.physicalDescription}, wearing ${c.wardrobe}`).join('. ');
             const narrationContext = scene.narration ? `\nScene context from narration: ${scene.narration}` : '';
-            sceneVideoPrompt = `${visualPrompt}${narrationContext}\nGenerate a NEW scene showing this character in the described setting. Use the reference image ONLY for character appearance consistency (face, hair, clothing, art style). Do NOT animate or reproduce the reference image itself. Characters: ${charDescriptions}`;
-            console.log(`[CharRef] Scene ${scene.id}: matched characters [${sceneMatchedChars.map(c => c.name).join(', ')}]`);
+            if (isStylizedScene) {
+              sceneVideoPrompt = `${visualPrompt}${narrationContext}\nCharacter details for visual consistency: ${charDescriptions}`;
+              console.log(`[CharRef] Scene ${scene.id}: STYLIZED PRESET '${sceneArtPresetId}' — skipping I2V for characters [${sceneMatchedChars.map(c => c.name).join(', ')}]; injecting text descriptions only`);
+            } else {
+              sceneCharRefUrl = sceneMatchedChars[0].referenceImageUrl;
+              sceneCharRefUrls = sceneMatchedChars.map(c => c.referenceImageUrl!).filter(Boolean);
+              sceneIsCharRef = true;
+              sceneVideoPrompt = `${visualPrompt}${narrationContext}\nGenerate a NEW scene showing this character in the described setting. Use the reference image ONLY for character appearance consistency (face, hair, clothing, art style). Do NOT animate or reproduce the reference image itself. Characters: ${charDescriptions}`;
+              console.log(`[CharRef] Scene ${scene.id}: preset '${sceneArtPresetId || 'none'}' — using I2V character reference for [${sceneMatchedChars.map(c => c.name).join(', ')}]`);
+            }
           } else if (isCharacterI2VMode && lockedCharacters.length > 0 && !sceneRefImageUrl) {
             const narrationChars = lockedCharacters.filter(c => {
               const nameRegex = new RegExp(`\\b${c.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
               return nameRegex.test(scene.narration || '') || nameRegex.test(scene.visualDirection || '') || nameRegex.test(visualPrompt || '');
             });
             const charsToUse = narrationChars.length > 0 ? narrationChars : [lockedCharacters[0]];
-            sceneCharRefUrl = charsToUse[0].referenceImageUrl;
-            sceneCharRefUrls = charsToUse.map(c => c.referenceImageUrl!).filter(Boolean);
-            sceneIsCharRef = true;
             const charDescriptions = charsToUse.map(c => `${c.name}: ${c.physicalDescription}, wearing ${c.wardrobe}`).join('. ');
             const narrationContext = scene.narration ? `\nScene context from narration: ${scene.narration}` : '';
-            sceneVideoPrompt = `${visualPrompt}${narrationContext}\nGenerate a NEW scene showing this character in the described setting. Use the reference image ONLY for character appearance consistency (face, hair, clothing, art style). Do NOT animate or reproduce the reference image itself. Characters: ${charDescriptions}`;
-            console.log(`[CharRef] Scene ${scene.id}: character-i2v mode — injecting character references [${charsToUse.map(c => c.name).join(', ')}]`);
+            if (isStylizedScene) {
+              sceneVideoPrompt = `${visualPrompt}${narrationContext}\nCharacter details for visual consistency: ${charDescriptions}`;
+              console.log(`[CharRef] Scene ${scene.id}: STYLIZED PRESET '${sceneArtPresetId}' — skipping I2V for characters [${charsToUse.map(c => c.name).join(', ')}]; injecting text descriptions only (character-i2v mode)`);
+            } else {
+              sceneCharRefUrl = charsToUse[0].referenceImageUrl;
+              sceneCharRefUrls = charsToUse.map(c => c.referenceImageUrl!).filter(Boolean);
+              sceneIsCharRef = true;
+              sceneVideoPrompt = `${visualPrompt}${narrationContext}\nGenerate a NEW scene showing this character in the described setting. Use the reference image ONLY for character appearance consistency (face, hair, clothing, art style). Do NOT animate or reproduce the reference image itself. Characters: ${charDescriptions}`;
+              console.log(`[CharRef] Scene ${scene.id}: preset '${sceneArtPresetId || 'none'}' — using I2V character reference for [${charsToUse.map(c => c.name).join(', ')}] (character-i2v mode)`);
+            }
           }
           
           const sceneImageUrlBase = sceneUseCharOverAutoImage 
