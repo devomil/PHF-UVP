@@ -165,13 +165,17 @@ function condenseCharacterDescriptions(prompt: string): string {
   
   return prompt.replace(charPattern, (_match, name: string, details: string) => {
     const parts = details.split(',').map(p => p.trim());
-    const keyTraits: string[] = [];
+    const skinTraits: string[] = [];
+    const otherTraits: string[] = [];
     for (const part of parts) {
-      if (/hair\b/i.test(part) || /eyes?\b/i.test(part) || /skin\b/i.test(part) || /build\b/i.test(part)) {
-        keyTraits.push(part);
+      if (/skin\b|complexion\b|skin\s*tone/i.test(part)) {
+        skinTraits.push(part);
+      } else if (/hair\b/i.test(part) || /eyes?\b/i.test(part)) {
+        otherTraits.push(part);
       }
-      if (keyTraits.length >= 3) break;
+      if (skinTraits.length + otherTraits.length >= 3) break;
     }
+    const keyTraits = [...skinTraits, ...otherTraits];
     return keyTraits.length > 0
       ? `${name} (${keyTraits.join(', ')})`
       : `${name}`;

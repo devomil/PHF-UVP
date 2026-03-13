@@ -316,6 +316,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
       setMsModalMode("auto");
       setMsModalRefImages([]);
       setMsModalShowLibrary(false);
+      queryClient.refetchQueries({ queryKey: ["project", projectId] });
     }
   }, [fullscreenMicroScene]);
 
@@ -338,6 +339,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
           setMsRegenStartedAt(null);
           setMsRegenElapsed(0);
           if (msRegenTimerRef.current) clearInterval(msRegenTimerRef.current);
+          setTimeout(() => queryClient.refetchQueries({ queryKey: ["project", projectId] }), 2000);
         }
         toast({
           title: completed.length === 1 ? "Micro-scene video ready" : `${completed.length} micro-scene videos ready`,
