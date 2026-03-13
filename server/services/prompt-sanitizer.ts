@@ -212,12 +212,12 @@ export function sanitizePromptForAI(
 
   const uiPatterns = [
     /(?:with\s+)?(?:ui|user interface)\s*(?:element)?s?/gi,
-    /(?:with\s+)?(?:button|buttons)/gi,
-    /(?:with\s+)?(?:icon|icons)/gi,
-    /(?:with\s+)?(?:banner|banners)/gi,
-    /(?:with\s+)?(?:overlay|overlays)/gi,
-    /(?:with\s+)?(?:graphics|graphic)/gi,
-    /(?:with\s+)?(?:branding\s+)?(?:elements?|assets?)/gi,
+    /(?:with\s+)?(?:button|buttons)\b/gi,
+    /(?:with\s+)?(?:icon|icons)\b/gi,
+    /(?:with\s+)?(?:banner|banners)\b/gi,
+    /(?:with\s+)?(?<![a-z])(?:overlay|overlays)(?=\s|[.,;!?]|$)/gi,
+    /(?:with\s+)?(?<![a-z])(?:graphics|graphic)(?=\s|[.,;!?]|$)/gi,
+    /(?:with\s+)?(?:branding\s+)?(?:elements?|assets?)\b/gi,
     /(?:and\s+)?branding\b/gi,
   ];
   
