@@ -3,7 +3,7 @@ const RUNWAY_API_BASE = 'https://api.dev.runwayml.com/v1';
 const RUNWAY_MODEL_MAP: Record<string, string> = {
   'runway': 'gen3a_turbo',
   'runway-gen4': 'gen4.5',
-  'runway-gen4-aleph': 'gen4_aleph',
+  'runway-gen4-aleph': 'gen4.5',
   'runway-4.5': 'gen4.5',
   'runway-act-two': 'act_two',
 };

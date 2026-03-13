@@ -3,7 +3,7 @@
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { AI_VIDEO_PROVIDERS } from '../config/ai-video-providers';
 import { MotionControlConfig, mapToKlingMotion, buildVeoMotionPrompt } from '../../shared/config/motion-control';
-import { isStylizedPreset, getVisualArtPreset } from '../../shared/config/visual-art-presets';
+import { isStylizedPreset, getVisualArtPreset, STYLIZED_CHARACTER_CFG, STYLIZED_ENVIRONMENT_CFG } from '../../shared/config/visual-art-presets';
 
 interface PiAPIGenerationResult {
   success: boolean;
@@ -1327,10 +1327,12 @@ class PiAPIVideoService {
       // Default fidelity=1.0 → cfg=0.1 (preserve product), fidelity=0.0 → cfg=0.5 (creative)
       let cfgScale = Math.max(0.1, 0.5 - imageControlStrength * 0.4); // Range: 0.5 (creative) to 0.1 (high fidelity)
       
-      if (options.artPresetId && isStylizedPreset(options.artPresetId) && options.isCharacterReference) {
-        const stylizedCfg = Math.max(cfgScale, 0.85);
+      if (options.artPresetId && isStylizedPreset(options.artPresetId)) {
+        const targetCfg = options.isCharacterReference ? STYLIZED_CHARACTER_CFG : STYLIZED_ENVIRONMENT_CFG;
+        const stylizedCfg = Math.max(cfgScale, targetCfg);
         if (stylizedCfg !== cfgScale) {
-          console.log(`[PiAPI I2V] Stylized preset cfg override: ${cfgScale.toFixed(2)} → ${stylizedCfg.toFixed(2)} for art style adherence`);
+          const tier = options.isCharacterReference ? 'character' : 'environment';
+          console.log(`[PiAPI I2V] Stylized preset cfg override (${tier}): ${cfgScale.toFixed(2)} → ${stylizedCfg.toFixed(2)} for art style adherence`);
           cfgScale = stylizedCfg;
         }
       }
@@ -1379,12 +1381,17 @@ class PiAPIVideoService {
       let klingPromptBase: string;
       if (requiresNewContent) {
         klingPromptBase = sanitizedPrompt;
-        if (options.artPresetId && isStylizedPreset(options.artPresetId) && options.isCharacterReference) {
+        if (options.artPresetId && isStylizedPreset(options.artPresetId)) {
           const artPreset = getVisualArtPreset(options.artPresetId);
           if (artPreset) {
             const stylePrefix = (artPreset as any).styleMarkerPrefix || artPreset.name;
-            klingPromptBase = `STYLE: ${stylePrefix} — NOT photorealistic, NOT live-action, NOT real-life photography. Fully stylized ${stylePrefix} rendering throughout. Use reference image ONLY for character facial features, NOT for rendering style.\n${klingPromptBase}`;
-            console.log(`[PiAPI I2V] Prepended strong style directive for "${artPreset.name}" character reference`);
+            if (options.isCharacterReference) {
+              klingPromptBase = `STYLE: ${stylePrefix} — NOT photorealistic, NOT live-action, NOT real-life photography. Fully stylized ${stylePrefix} rendering throughout. Use reference image ONLY for character facial features, NOT for rendering style.\n${klingPromptBase}`;
+              console.log(`[PiAPI I2V] Prepended strong style directive for "${artPreset.name}" character reference`);
+            } else {
+              klingPromptBase = `STYLE: ${stylePrefix} — NOT photorealistic, NOT live-action, NOT real-life photography. Fully stylized ${stylePrefix} rendering throughout. Maintain the exact art style from the source image.\n${klingPromptBase}`;
+              console.log(`[PiAPI I2V] Prepended strong style directive for "${artPreset.name}" environment I2V`);
+            }
           }
         }
       } else if (animationStyle === 'product-static') {

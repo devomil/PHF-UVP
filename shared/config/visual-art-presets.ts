@@ -27,6 +27,9 @@ export function isStylizedPreset(presetId: string | undefined | null): boolean {
   return !!presetId && (STYLIZED_PRESET_IDS as readonly string[]).includes(presetId);
 }
 
+export const STYLIZED_CHARACTER_CFG = 0.85;
+export const STYLIZED_ENVIRONMENT_CFG = 0.75;
+
 export const VISUAL_ART_PRESETS: Record<string, VisualArtPreset> = {
   '3d-illustration': {
     id: '3d-illustration',
@@ -54,11 +57,11 @@ export const VISUAL_ART_PRESETS: Record<string, VisualArtPreset> = {
       'cta': ['kling-2.6-pro', 'kling-2.6'],
       'product': ['kling-2.6-pro', 'kling-2.6'],
       'proof': ['kling-2.6-pro', 'kling-2.6'],
-      'broll': ['runway-gen4-aleph', 'kling-2.6'],
-      'b-roll': ['runway-gen4-aleph', 'kling-2.6'],
-      'atmosphere': ['runway-gen4-aleph', 'kling-2.6'],
-      'transition': ['runway-gen4-aleph', 'kling-2.6'],
-      'brand': ['runway-gen4-aleph', 'kling-2.6'],
+      'broll': ['kling-2.6-pro', 'kling-2.6'],
+      'b-roll': ['kling-2.6-pro', 'kling-2.6'],
+      'atmosphere': ['kling-2.6-pro', 'kling-2.6'],
+      'transition': ['kling-2.6-pro', 'kling-2.6'],
+      'brand': ['kling-2.6-pro', 'kling-2.6'],
       'motion-control': ['kling-2.6-motion-control-pro', 'kling-2.6-pro'],
     },
     generationStrategy: 'i2v',
