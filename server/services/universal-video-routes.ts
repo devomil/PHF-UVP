@@ -1480,6 +1480,16 @@ RULES YOU MUST ALWAYS FOLLOW:
     const defaultPromptRules = `
 ## CORE PRINCIPLE: AUTHENTICITY OVER PRODUCTION VALUE
 The #1 priority is that the visual MATCHES the emotional reality of the narration.
+${charProfileSection}
+
+## CHARACTER SPECIFICITY
+- If any locked character's name appears in the narration, reference them by exact name
+- EVERY time a character is mentioned in a micro-scene visualDirection, include their FULL physical description and wardrobe inline using this compact parenthetical format:
+  CharacterName (age-description, hair details, eye color, skin tone, build, clothing items)
+  Example: "Jackie Phillips (late-30s woman, shoulder-length dark brown hair, warm blue eyes, fair skin, athletic build, blue V-neck sweater, blue jeans, small hoop earrings)"
+- Pull ALL details from the LOCKED CHARACTER PROFILES above — do NOT abbreviate or omit wardrobe/outfit
+- Never describe a character generically (e.g., "a woman" or "a person") when a named locked character exists
+- Do NOT reference any "reference image" — character consistency comes from the detailed text descriptions only
 
 ## CRITICAL: VISUAL DIVERSITY
 Vary the VISUAL TYPE across micro-scenes:
