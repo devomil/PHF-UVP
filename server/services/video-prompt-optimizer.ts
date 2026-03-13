@@ -89,7 +89,8 @@ function pickBestSegment(segments: string[]): string {
 }
 
 const ART_PRESET_STYLE_TOKENS = [
-  '3d rendered illustration', '3d render', 'pixar style', 'isometric perspective',
+  'pixar-style 3d animated', '3d rendered illustration', '3d render', 'pixar style', 'isometric perspective',
+  'disney/pixar 3d cgi', 'disney/pixar',
   'claymation stop-motion', 'clay figure', 'miniature set', 'plasticine',
   'watercolor painting style', 'watercolor', 'brush strokes',
   'clean vector illustration', 'line art style', 'vector illustration',
@@ -159,6 +160,24 @@ function enforcePromptLength(prompt: string, maxWords: number = 30): string {
   return truncated + '.';
 }
 
+function condenseCharacterDescriptions(prompt: string): string {
+  const charPattern = /(\w[\w\s]*?\w)\s*\(late-\d+s\s+\w+,\s*([^)]{40,})\)/g;
+  
+  return prompt.replace(charPattern, (_match, name: string, details: string) => {
+    const parts = details.split(',').map(p => p.trim());
+    const keyTraits: string[] = [];
+    for (const part of parts) {
+      if (/hair\b/i.test(part) || /eyes?\b/i.test(part) || /skin\b/i.test(part) || /build\b/i.test(part)) {
+        keyTraits.push(part);
+      }
+      if (keyTraits.length >= 3) break;
+    }
+    return keyTraits.length > 0
+      ? `${name} (${keyTraits.join(', ')})`
+      : `${name}`;
+  });
+}
+
 export function optimizePrompt(input: OptimizePromptInput): OptimizedPrompt {
   let prompt = input.visualDescription;
   const isStylized = isStylizedPresetFn(input.artPresetId);
@@ -170,10 +189,15 @@ export function optimizePrompt(input: OptimizePromptInput): OptimizedPrompt {
       console.log(`[PromptOptimizer] Detected ${segments.length} alternatives joined by "or" — selected most concrete: "${best.substring(0, 60)}..."`);
       prompt = best;
     }
-    prompt = cleanPromptText(prompt);
   }
 
-  const maxWords = isStylized ? 180 : 30;
+  prompt = cleanPromptText(prompt);
+
+  if (isStylized) {
+    prompt = condenseCharacterDescriptions(prompt);
+  }
+
+  const maxWords = isStylized ? 70 : 30;
   prompt = enforcePromptLength(prompt, maxWords);
 
   if (prompt.length < 10) {
