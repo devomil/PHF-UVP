@@ -5109,6 +5109,11 @@ router.post('/:projectId/scenes/:sceneId/regenerate-all-micro-scene-videos', isA
       const ms = microScenes[i];
       const msPrompt = ms.visualDirection || scene.visualDirection || 'Professional video';
 
+      const jobI2vSettings: any = {};
+      if (projectArtPresetId) {
+        jobI2vSettings.snapshotArtPresetId = projectArtPresetId;
+      }
+
       const job = await videoGenerationWorker.createJob({
         projectId,
         sceneId: `${sceneId}__micro_${i}`,
@@ -5121,6 +5126,7 @@ router.post('/:projectId/scenes/:sceneId/regenerate-all-micro-scene-videos', isA
         triggeredBy: userId,
         sourceImageUrl: msSourceImages[i],
         sceneType: scene.type || 'content',
+        i2vSettings: Object.keys(jobI2vSettings).length > 0 ? jobI2vSettings : undefined,
       });
 
       const mode = msSourceImages[i] ? 'I2V' : 'T2V';

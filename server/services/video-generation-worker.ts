@@ -398,6 +398,9 @@ class VideoGenerationWorker {
         let charRefImageUrls: string[] | undefined;
         let isCharacterRef = false;
         let charEnhancedPrompt = promptForGeneration;
+
+        const snapshotArtPresetId = (job.i2vSettings as any)?.snapshotArtPresetId as string | undefined;
+
         try {
           const { getProjectFromDb } = await import('./video-project-db');
           const projectData = await getProjectFromDb(job.projectId);
@@ -407,13 +410,16 @@ class VideoGenerationWorker {
             const scene = projectData.scenes?.find((s) => s.id === baseSceneId);
             if (scene) {
               const projectArtPreset = projectData.progress?.artPresetId || projectData.artPresetId;
-              jobArtPresetId = scene.artPresetId || projectArtPreset;
+              jobArtPresetId = snapshotArtPresetId || scene.artPresetId || projectArtPreset;
+              if (snapshotArtPresetId) {
+                log.info(`[VideoWorker] Job ${job.jobId}: Using snapshot artPresetId="${snapshotArtPresetId}" (immutable from batch endpoint)`);
+              }
               jobContentTag = scene.contentTag;
               if (isMicroScene) {
                 const msIdx = parseInt(job.sceneId.split('__micro_')[1], 10);
                 const ms = scene.microScenes?.[msIdx];
                 if (ms) {
-                  jobArtPresetId = ms.artPresetId || scene.artPresetId || projectArtPreset;
+                  jobArtPresetId = snapshotArtPresetId || ms.artPresetId || scene.artPresetId || projectArtPreset;
                   jobContentTag = ms.contentTag || scene.contentTag;
                 }
               }
