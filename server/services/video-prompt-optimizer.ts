@@ -196,7 +196,16 @@ export function optimizePrompt(input: OptimizePromptInput): OptimizedPrompt {
     const TOTAL_BUDGET = isStylized ? 120 : 60;
     const MAX_CHAR_WORDS = 80;
     const effectiveCharWords = Math.min(charWords, MAX_CHAR_WORDS);
-    const sceneWordBudget = Math.max(isStylized ? 30 : 15, TOTAL_BUDGET - effectiveCharWords);
+
+    let styleTokenWords = 0;
+    for (const token of ART_PRESET_STYLE_TOKENS) {
+      if (cleaned.toLowerCase().includes(token.toLowerCase())) {
+        styleTokenWords += token.split(/\s+/).length;
+      }
+    }
+
+    const protectedWords = effectiveCharWords + styleTokenWords;
+    const sceneWordBudget = Math.max(isStylized ? 30 : 15, TOTAL_BUDGET - protectedWords);
 
     const sceneSegments = cleaned.split(/__CHAR_BLOCK_\d+__/);
     const placeholderOrder = [...cleaned.matchAll(/__CHAR_BLOCK_(\d+)__/g)].map(m => parseInt(m[1]));
@@ -221,7 +230,7 @@ export function optimizePrompt(input: OptimizePromptInput): OptimizedPrompt {
     }
     prompt = result.replace(/\s{2,}/g, ' ').trim();
 
-    console.log(`[PromptOptimizer] Character blocks: ${blocks.length} (${charWords} words protected, capped at ${MAX_CHAR_WORDS}). Scene budget: ${sceneWordBudget} words. Total: ~${prompt.split(/\s+/).length} words.`);
+    console.log(`[PromptOptimizer] Character blocks: ${blocks.length} (${effectiveCharWords} char words + ${styleTokenWords} style words = ${protectedWords} protected). Scene budget: ${sceneWordBudget} words. Total: ~${prompt.split(/\s+/).length} words.`);
   } else {
     const maxWords = isStylized ? 70 : 30;
     prompt = enforcePromptLength(prompt, maxWords);
