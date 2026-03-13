@@ -127,3 +127,64 @@ export async function getProjectFromDb(projectId: string): Promise<VideoProject 
   if (rows.length === 0) return null;
   return dbRowToVideoProject(rows[0]);
 }
+
+export async function updateMicroSceneImageUrl(
+  projectId: string,
+  sceneId: string,
+  msIdx: number,
+  imageUrl: string,
+): Promise<boolean> {
+  const rows = await db.select({ scenes: universalVideoProjects.scenes })
+    .from(universalVideoProjects)
+    .where(eq(universalVideoProjects.projectId, projectId));
+
+  if (rows.length === 0) return false;
+
+  const scenes = rows[0].scenes as any[];
+  const sceneIndex = scenes.findIndex((s: any) => s.id === sceneId);
+  if (sceneIndex === -1) return false;
+
+  const scene = scenes[sceneIndex];
+  if (!scene.microScenes || msIdx < 0 || msIdx >= scene.microScenes.length) return false;
+
+  scene.microScenes[msIdx].imageUrl = imageUrl;
+
+  await db.update(universalVideoProjects)
+    .set({ scenes, updatedAt: new Date() })
+    .where(eq(universalVideoProjects.projectId, projectId));
+
+  return true;
+}
+
+export async function batchUpdateMicroSceneImageUrls(
+  projectId: string,
+  sceneId: string,
+  updates: Array<{ msIdx: number; imageUrl: string }>,
+): Promise<boolean> {
+  if (updates.length === 0) return true;
+
+  const rows = await db.select({ scenes: universalVideoProjects.scenes })
+    .from(universalVideoProjects)
+    .where(eq(universalVideoProjects.projectId, projectId));
+
+  if (rows.length === 0) return false;
+
+  const scenes = rows[0].scenes as any[];
+  const sceneIndex = scenes.findIndex((s: any) => s.id === sceneId);
+  if (sceneIndex === -1) return false;
+
+  const scene = scenes[sceneIndex];
+  if (!scene.microScenes) return false;
+
+  for (const { msIdx, imageUrl } of updates) {
+    if (msIdx >= 0 && msIdx < scene.microScenes.length) {
+      scene.microScenes[msIdx].imageUrl = imageUrl;
+    }
+  }
+
+  await db.update(universalVideoProjects)
+    .set({ scenes, updatedAt: new Date() })
+    .where(eq(universalVideoProjects.projectId, projectId));
+
+  return true;
+}

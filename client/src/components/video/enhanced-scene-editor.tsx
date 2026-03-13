@@ -115,6 +115,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
   const [editingMicroScene, setEditingMicroScene] = useState<number | null>(null);
   const [microSceneEditValue, setMicroSceneEditValue] = useState("");
   const [regeneratingMicroScenes, setRegeneratingMicroScenes] = useState<Set<number>>(new Set());
+  const regeneratingRef = useRef<Set<number>>(new Set());
   const [msRegenStartedAt, setMsRegenStartedAt] = useState<number | null>(null);
   const [msRegenElapsed, setMsRegenElapsed] = useState(0);
   const msRegenTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -224,7 +225,9 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
         if (data.success && data.activeJobs) {
           const indices = Object.keys(data.activeJobs).map(Number);
           if (indices.length > 0) {
-            setRegeneratingMicroScenes(new Set(indices));
+            const activeSet = new Set(indices);
+            regeneratingRef.current = activeSet;
+            setRegeneratingMicroScenes(activeSet);
             const oldestJob = Object.values(data.activeJobs as Record<string, any>).reduce((oldest: any, job: any) => {
               const age = Date.now() - new Date(job.createdAt).getTime();
               return !oldest || age > oldest.age ? { age, job } : oldest;
@@ -234,6 +237,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
               setMsRegenElapsed(Math.floor(oldestJob.age / 1000));
             }
           } else {
+            regeneratingRef.current = new Set();
             setRegeneratingMicroScenes(new Set());
             setMsRegenStartedAt(null);
             setMsRegenElapsed(0);
@@ -257,30 +261,43 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
         const data = await res.json();
         if (data.success) {
           const activeIndices = new Set(Object.keys(data.activeJobs || {}).map(Number));
-          let anyCompleted = false;
-          setRegeneratingMicroScenes(prev => {
-            const next = new Set<number>();
-            prev.forEach(idx => { if (activeIndices.has(idx)) next.add(idx); });
-            if (next.size < prev.size) {
-              anyCompleted = true;
+          const prev = regeneratingRef.current;
+          const next = new Set<number>();
+          prev.forEach(idx => { if (activeIndices.has(idx)) next.add(idx); });
+
+          let shouldRefresh = false;
+          let shouldClearAll = false;
+
+          if (next.size < prev.size) {
+            shouldRefresh = true;
+          }
+
+          if (next.size === 0 && prev.size > 0) {
+            allJobsDonePolls.current++;
+            if (allJobsDonePolls.current >= 3) {
+              allJobsDonePolls.current = 0;
+              shouldClearAll = true;
+              shouldRefresh = true;
+              regeneratingRef.current = new Set<number>();
+              setRegeneratingMicroScenes(new Set<number>());
+            } else {
+              shouldRefresh = true;
             }
-            if (next.size === 0 && prev.size > 0) {
-              allJobsDonePolls.current++;
-              if (allJobsDonePolls.current >= 3) {
-                setMsRegenStartedAt(null);
-                setMsRegenElapsed(0);
-                if (msRegenTimerRef.current) clearInterval(msRegenTimerRef.current);
-                allJobsDonePolls.current = 0;
-                return new Set<number>();
-              }
-              queryClient.invalidateQueries({ queryKey: ["project", projectId] });
-              return prev;
-            }
+          } else {
             allJobsDonePolls.current = 0;
-            return next.size !== prev.size ? next : prev;
-          });
-          if (anyCompleted) {
-            queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+            if (next.size !== prev.size) {
+              regeneratingRef.current = next;
+              setRegeneratingMicroScenes(next);
+            }
+          }
+
+          if (shouldClearAll) {
+            setMsRegenStartedAt(null);
+            setMsRegenElapsed(0);
+            if (msRegenTimerRef.current) clearInterval(msRegenTimerRef.current);
+          }
+          if (shouldRefresh) {
+            await queryClient.refetchQueries({ queryKey: ["project", projectId] });
           }
         }
       } catch {}
@@ -313,16 +330,15 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
         }
       });
       if (completed.length > 0) {
-        setRegeneratingMicroScenes(prev => {
-          const next = new Set(prev);
-          completed.forEach(idx => next.delete(idx));
-          if (next.size === 0) {
-            setMsRegenStartedAt(null);
-            setMsRegenElapsed(0);
-            if (msRegenTimerRef.current) clearInterval(msRegenTimerRef.current);
-          }
-          return next;
-        });
+        const next = new Set(regeneratingRef.current);
+        completed.forEach(idx => next.delete(idx));
+        regeneratingRef.current = next;
+        setRegeneratingMicroScenes(next);
+        if (next.size === 0) {
+          setMsRegenStartedAt(null);
+          setMsRegenElapsed(0);
+          if (msRegenTimerRef.current) clearInterval(msRegenTimerRef.current);
+        }
         toast({
           title: completed.length === 1 ? "Micro-scene video ready" : `${completed.length} micro-scene videos ready`,
           description: completed.length === 1 ? "New video has been generated." : `${completed.length} videos completed.`,
@@ -643,7 +659,10 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
     if (!(msIdx in prevMicroSceneVideos.current)) {
       prevMicroSceneVideos.current[msIdx] = scene.microScenes?.[msIdx]?.videoUrl;
     }
-    setRegeneratingMicroScenes(prev => new Set(prev).add(msIdx));
+    const updated = new Set(regeneratingRef.current);
+    updated.add(msIdx);
+    regeneratingRef.current = updated;
+    setRegeneratingMicroScenes(updated);
     if (!msRegenStartedAt) {
       setMsRegenStartedAt(Date.now());
       setMsRegenElapsed(0);
@@ -670,15 +689,14 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
       toast({ title: "Micro-scene video regenerating", description: "This may take 1-3 minutes." });
     } catch (err: any) {
       toast({ title: "Error", description: err.message, variant: "destructive" });
-      setRegeneratingMicroScenes(prev => {
-        const next = new Set(prev);
-        next.delete(msIdx);
-        if (next.size === 0) {
-          setMsRegenStartedAt(null);
-          setMsRegenElapsed(0);
-        }
-        return next;
-      });
+      const errNext = new Set(regeneratingRef.current);
+      errNext.delete(msIdx);
+      regeneratingRef.current = errNext;
+      setRegeneratingMicroScenes(errNext);
+      if (errNext.size === 0) {
+        setMsRegenStartedAt(null);
+        setMsRegenElapsed(0);
+      }
     }
   };
 
@@ -687,13 +705,48 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
     const selectedProvider = allMsProvider === "auto" ? undefined : allMsProvider;
     const selectedMode = allMsMode === "auto" ? undefined : allMsMode;
     const count = scene.microScenes.length;
-    toast({ title: `Generating ${count} micro-scene videos...`, description: "All micro-scenes will generate concurrently." });
-    for (let i = 0; i < count; i++) {
-      regenMicroSceneVideo(i, {
-        provider: selectedProvider,
-        generationMode: selectedMode,
-        skipProviderFallback: true,
+    toast({ title: `Generating ${count} micro-scene videos...`, description: "All micro-scenes will generate with consistent style." });
+
+    const allIndices = Array.from({ length: count }, (_, i) => i);
+    for (const i of allIndices) {
+      if (!(i in prevMicroSceneVideos.current)) {
+        prevMicroSceneVideos.current[i] = scene.microScenes?.[i]?.videoUrl;
+      }
+      const updated = new Set(regeneratingRef.current);
+      updated.add(i);
+      regeneratingRef.current = updated;
+      setRegeneratingMicroScenes(new Set(updated));
+    }
+    if (!msRegenStartedAt) {
+      setMsRegenStartedAt(Date.now());
+      setMsRegenElapsed(0);
+    }
+
+    try {
+      const res = await fetch(`/api/universal-video/${projectId}/scenes/${sceneId}/regenerate-all-micro-scene-videos`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          provider: selectedProvider,
+          generationMode: selectedMode,
+        }),
       });
+      if (!res.ok) {
+        throw new Error("Failed to regenerate all micro-scene videos");
+      }
+      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+      toast({ title: "All micro-scene videos regenerating", description: "This may take 2-5 minutes." });
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+      for (const i of allIndices) {
+        const errNext = new Set(regeneratingRef.current);
+        errNext.delete(i);
+        regeneratingRef.current = errNext;
+        setRegeneratingMicroScenes(new Set(errNext));
+      }
+      setMsRegenStartedAt(null);
+      setMsRegenElapsed(0);
     }
   };
 

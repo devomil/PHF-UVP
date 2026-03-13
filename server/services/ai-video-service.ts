@@ -90,7 +90,7 @@ const TIER_PROVIDER_VERSIONS: Record<string, Record<string, string>> = {
   },
   runway: {
     ultra: 'runway-4.5',
-    premium: 'runway-gen4-aleph',
+    premium: 'runway-4.5',
     standard: 'runway',
   },
 };

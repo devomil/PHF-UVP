@@ -4699,6 +4699,68 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, asy
       }
     }
     
+    if (!finalSourceImageUrl && !forceT2V) {
+      const { isStylizedPreset: isStylizedCheck, getVisualArtPreset: getPreset } = await import('../../shared/config/visual-art-presets');
+      const sceneArtPresetId = (scene as any).artPresetId || (projectData as any).progress?.artPresetId || (projectData as any).artPresetId;
+      const sceneArtPreset = sceneArtPresetId ? getPreset(sceneArtPresetId) : null;
+      const isStylizedScene = sceneArtPresetId ? isStylizedCheck(sceneArtPresetId) : false;
+
+      if (isStylizedScene && sceneArtPreset && sceneArtPreset.generationStrategy === 'i2v') {
+        console.log(`[Phase9B-Async] Stylized art preset "${sceneArtPreset.name}" requires image-first I2V`);
+
+        const existingImage = scene.assets?.imageUrl;
+        if (existingImage) {
+          finalSourceImageUrl = existingImage;
+          console.log(`[Phase9B-Async] Using existing scene image for I2V: ${existingImage.substring(0, 80)}...`);
+        } else {
+          const falKey = process.env.FAL_KEY;
+          if (!falKey) {
+            console.warn(`[Phase9B-Async] FAL_KEY not configured — falling back to T2V`);
+          } else {
+            const { fal } = await import("@fal-ai/client");
+            fal.config({ credentials: falKey });
+            const { sanitizePromptForAI } = await import('../services/prompt-sanitizer');
+            const sanitized = sanitizePromptForAI(prompt, scene.type || 'content');
+            const imagePrompt = `${sceneArtPreset.imagePromptPrefix} ${sanitized.cleanPrompt}, ${sceneArtPreset.imagePromptSuffix}`;
+
+            const projectAR = (projectData as any).outputFormat?.aspectRatio || (projectData as any).settings?.aspectRatio || '16:9';
+            const falSize = projectAR === '9:16' ? 'portrait_16_9' as const
+              : projectAR === '1:1' ? 'square' as const
+              : 'landscape_16_9' as const;
+
+            for (let attempt = 0; attempt < 2; attempt++) {
+              try {
+                if (attempt > 0) {
+                  console.log(`[Phase9B-Async] Retry attempt ${attempt + 1} for stylized image...`);
+                  await new Promise(r => setTimeout(r, 2000));
+                }
+                console.log(`[Phase9B-Async] Generating stylized image (attempt ${attempt + 1}): ${imagePrompt.substring(0, 120)}...`);
+
+                const imgResult = await fal.subscribe("fal-ai/flux-pro/v1.1", {
+                  input: { prompt: imagePrompt, image_size: falSize, num_images: 1, safety_tolerance: "2", enable_safety_checker: true },
+                  logs: true,
+                });
+
+                if (imgResult.data?.images?.[0]?.url) {
+                  finalSourceImageUrl = imgResult.data.images[0].url;
+                  console.log(`[Phase9B-Async] Stylized image generated for I2V: ${finalSourceImageUrl.substring(0, 80)}...`);
+                  break;
+                } else {
+                  console.warn(`[Phase9B-Async] No image returned (attempt ${attempt + 1})`);
+                }
+              } catch (imgErr: any) {
+                console.warn(`[Phase9B-Async] Image generation failed (attempt ${attempt + 1}): ${imgErr.message}`);
+              }
+            }
+
+            if (!finalSourceImageUrl) {
+              console.warn(`[Phase9B-Async] All image attempts failed — falling back to T2V`);
+            }
+          }
+        }
+      }
+    }
+
     if (finalSourceImageUrl) {
       console.log(`[Phase9B-Async] ✓ I2V mode active - will animate source image`);
     } else {
@@ -4807,7 +4869,89 @@ router.post('/:projectId/scenes/:sceneId/micro-scene/:microSceneIndex/regenerate
       const publicUrl = await getPublicUrlForBrandAsset(sourceImageUrl, projectAspectRatio);
       if (publicUrl) {
         finalSourceImageUrl = publicUrl;
-        console.log(`[MicroScene-Regen] I2V mode with source image`);
+        console.log(`[MicroScene-Regen] I2V mode with user-provided source image`);
+      }
+    }
+
+    const { isStylizedPreset, getVisualArtPreset } = await import('../../shared/config/visual-art-presets');
+    const projectArtPresetId = (scene as any).artPresetId || (projectData as any).progress?.artPresetId || (projectData as any).artPresetId;
+    const artPreset = projectArtPresetId ? getVisualArtPreset(projectArtPresetId) : null;
+    const isStylizedArt = projectArtPresetId ? isStylizedPreset(projectArtPresetId) : false;
+    const needsImageFirst = isStylizedArt && artPreset && artPreset.generationStrategy === 'i2v'
+      && !finalSourceImageUrl && generationMode !== 't2v';
+
+    if (needsImageFirst) {
+      console.log(`[MicroScene-Regen] Stylized art preset "${artPreset!.name}" requires image-first I2V — generating intermediate image`);
+
+      let stylizedImageUrl: string | undefined = undefined;
+
+      if (ms.imageUrl) {
+        stylizedImageUrl = ms.imageUrl;
+        console.log(`[MicroScene-Regen] Using existing micro-scene image: ${stylizedImageUrl.substring(0, 80)}...`);
+      } else {
+        const falKey = process.env.FAL_KEY;
+        if (!falKey) {
+          console.warn(`[MicroScene-Regen] FAL_KEY not configured — falling back to T2V`);
+        } else {
+          const { fal } = await import("@fal-ai/client");
+          fal.config({ credentials: falKey });
+          const { sanitizePromptForAI } = await import('../services/prompt-sanitizer');
+          const sanitized = sanitizePromptForAI(prompt, scene.type || 'content');
+          const imagePrompt = `${artPreset!.imagePromptPrefix} ${sanitized.cleanPrompt}, ${artPreset!.imagePromptSuffix}`;
+
+          const projectAspectRatio = (projectData as any).outputFormat?.aspectRatio || (projectData as any).settings?.aspectRatio || '16:9';
+          const falSize = projectAspectRatio === '9:16' ? 'portrait_16_9' as const
+            : projectAspectRatio === '1:1' ? 'square' as const
+            : 'landscape_16_9' as const;
+
+          for (let attempt = 0; attempt < 2; attempt++) {
+            try {
+              if (attempt > 0) {
+                console.log(`[MicroScene-Regen] Retry attempt ${attempt + 1} for stylized image...`);
+                await new Promise(r => setTimeout(r, 2000));
+              }
+              console.log(`[MicroScene-Regen] Generating stylized image (attempt ${attempt + 1}): ${imagePrompt.substring(0, 120)}...`);
+
+              const result = await fal.subscribe("fal-ai/flux-pro/v1.1", {
+                input: {
+                  prompt: imagePrompt,
+                  image_size: falSize,
+                  num_images: 1,
+                  safety_tolerance: "2",
+                  enable_safety_checker: true,
+                },
+                logs: true,
+              });
+
+              if (result.data?.images?.[0]?.url) {
+                stylizedImageUrl = result.data.images[0].url;
+                console.log(`[MicroScene-Regen] Stylized image generated: ${stylizedImageUrl.substring(0, 80)}...`);
+
+                const { updateMicroSceneImageUrl } = await import('./video-project-db');
+                const saved = await updateMicroSceneImageUrl(projectId, sceneId, msIdx, stylizedImageUrl);
+                if (saved) {
+                  console.log(`[MicroScene-Regen] Atomically saved stylized image URL to micro-scene ${msIdx}`);
+                } else {
+                  console.warn(`[MicroScene-Regen] Failed to save stylized image URL — project/scene/ms not found`);
+                }
+                break;
+              } else {
+                console.warn(`[MicroScene-Regen] No image returned (attempt ${attempt + 1})`);
+              }
+            } catch (imgErr: any) {
+              console.warn(`[MicroScene-Regen] Image generation failed (attempt ${attempt + 1}): ${imgErr.message}`);
+            }
+          }
+
+          if (!stylizedImageUrl) {
+            console.warn(`[MicroScene-Regen] All image attempts failed — falling back to T2V`);
+          }
+        }
+      }
+
+      if (stylizedImageUrl) {
+        finalSourceImageUrl = stylizedImageUrl;
+        console.log(`[MicroScene-Regen] Using stylized image for I2V video generation`);
       }
     }
 
@@ -4827,7 +4971,7 @@ router.post('/:projectId/scenes/:sceneId/micro-scene/:microSceneIndex/regenerate
       sceneType: scene.type || 'content',
     });
 
-    console.log(`[MicroScene-Regen] Created job ${job.jobId} for micro-scene ${msIdx}`);
+    console.log(`[MicroScene-Regen] Created job ${job.jobId} for micro-scene ${msIdx}${finalSourceImageUrl ? ' (I2V with stylized image)' : ' (T2V)'}`);
 
     return res.json({
       success: true,
@@ -4838,6 +4982,161 @@ router.post('/:projectId/scenes/:sceneId/micro-scene/:microSceneIndex/regenerate
     });
   } catch (error: any) {
     console.error('[MicroScene-Regen] Error:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.post('/:projectId/scenes/:sceneId/regenerate-all-micro-scene-videos', isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const userId = (req.user as any)?.id;
+    const { projectId, sceneId } = req.params;
+    const { provider, generationMode } = req.body;
+
+    const projectData = await getProjectFromDb(projectId);
+    if (!projectData) {
+      return res.status(404).json({ success: false, error: 'Project not found' });
+    }
+    if (projectData.ownerId !== userId) {
+      return res.status(403).json({ success: false, error: 'Access denied' });
+    }
+
+    const scene = projectData.scenes.find((s: Scene) => s.id === sceneId);
+    if (!scene) {
+      return res.status(404).json({ success: false, error: 'Scene not found' });
+    }
+
+    const microScenes = (scene as any).microScenes || [];
+    if (microScenes.length === 0) {
+      return res.status(400).json({ success: false, error: 'No micro-scenes to generate' });
+    }
+
+    const { isStylizedPreset, getVisualArtPreset } = await import('../../shared/config/visual-art-presets');
+    const projectArtPresetId = (scene as any).artPresetId || (projectData as any).progress?.artPresetId || (projectData as any).artPresetId;
+    const artPreset = projectArtPresetId ? getVisualArtPreset(projectArtPresetId) : null;
+    const isStylizedArt = projectArtPresetId ? isStylizedPreset(projectArtPresetId) : false;
+    const needsImageFirst = isStylizedArt && artPreset && artPreset.generationStrategy === 'i2v'
+      && generationMode !== 't2v';
+
+    console.log(`[BatchMicroRegen] Regenerating ALL ${microScenes.length} micro-scenes for scene ${sceneId}`);
+    console.log(`[BatchMicroRegen] Art preset: ${artPreset?.name || 'none'} (stylized=${isStylizedArt}, needsImageFirst=${needsImageFirst})`);
+
+    const projectAspectRatio = (projectData as any).outputFormat?.aspectRatio || (projectData as any).settings?.aspectRatio || '16:9';
+
+    const imageUpdates: Array<{ msIdx: number; imageUrl: string }> = [];
+    const msSourceImages: (string | undefined)[] = new Array(microScenes.length).fill(undefined);
+
+    if (needsImageFirst) {
+      const falKey = process.env.FAL_KEY;
+      if (!falKey) {
+        console.warn(`[BatchMicroRegen] FAL_KEY not configured — all micro-scenes will use T2V`);
+      } else {
+        const { fal } = await import("@fal-ai/client");
+        fal.config({ credentials: falKey });
+        const { sanitizePromptForAI } = await import('../services/prompt-sanitizer');
+
+        const falSize = projectAspectRatio === '9:16' ? 'portrait_16_9' as const
+          : projectAspectRatio === '1:1' ? 'square' as const
+          : 'landscape_16_9' as const;
+
+        for (let i = 0; i < microScenes.length; i++) {
+          const ms = microScenes[i];
+
+          if (ms.imageUrl) {
+            msSourceImages[i] = ms.imageUrl;
+            console.log(`[BatchMicroRegen] MS ${i}: Using existing image: ${ms.imageUrl.substring(0, 60)}...`);
+            continue;
+          }
+
+          const msPrompt = ms.visualDirection || scene.visualDirection || 'Professional video';
+          const sanitized = sanitizePromptForAI(msPrompt, scene.type || 'content');
+          const imagePrompt = `${artPreset!.imagePromptPrefix} ${sanitized.cleanPrompt}, ${artPreset!.imagePromptSuffix}`;
+
+          let generated = false;
+          for (let attempt = 0; attempt < 2; attempt++) {
+            try {
+              if (attempt > 0) {
+                console.log(`[BatchMicroRegen] MS ${i}: Retry attempt ${attempt + 1}...`);
+                await new Promise(r => setTimeout(r, 2000));
+              }
+              console.log(`[BatchMicroRegen] MS ${i}: Generating stylized image (attempt ${attempt + 1})...`);
+
+              const result = await fal.subscribe("fal-ai/flux-pro/v1.1", {
+                input: {
+                  prompt: imagePrompt,
+                  image_size: falSize,
+                  num_images: 1,
+                  safety_tolerance: "2",
+                  enable_safety_checker: true,
+                },
+                logs: true,
+              });
+
+              if (result.data?.images?.[0]?.url) {
+                msSourceImages[i] = result.data.images[0].url;
+                imageUpdates.push({ msIdx: i, imageUrl: result.data.images[0].url });
+                console.log(`[BatchMicroRegen] MS ${i}: Stylized image generated: ${result.data.images[0].url.substring(0, 60)}...`);
+                generated = true;
+                break;
+              } else {
+                console.warn(`[BatchMicroRegen] MS ${i}: No image returned (attempt ${attempt + 1})`);
+              }
+            } catch (imgErr: any) {
+              console.warn(`[BatchMicroRegen] MS ${i}: Image generation failed (attempt ${attempt + 1}): ${imgErr.message}`);
+            }
+          }
+
+          if (!generated) {
+            console.warn(`[BatchMicroRegen] MS ${i}: All image attempts failed — will use T2V fallback`);
+          }
+        }
+      }
+
+      if (imageUpdates.length > 0) {
+        const { batchUpdateMicroSceneImageUrls } = await import('./video-project-db');
+        const saved = await batchUpdateMicroSceneImageUrls(projectId, sceneId, imageUpdates);
+        if (saved) {
+          console.log(`[BatchMicroRegen] Atomically saved ${imageUpdates.length} stylized image URLs`);
+        } else {
+          console.warn(`[BatchMicroRegen] Failed to save image URLs — project/scene not found`);
+        }
+      }
+    }
+
+    const { videoGenerationWorker } = await import('../services/video-generation-worker');
+    const jobResults: Array<{ msIdx: number; jobId: string; mode: string }> = [];
+
+    for (let i = 0; i < microScenes.length; i++) {
+      const ms = microScenes[i];
+      const msPrompt = ms.visualDirection || scene.visualDirection || 'Professional video';
+
+      const job = await videoGenerationWorker.createJob({
+        projectId,
+        sceneId: `${sceneId}__micro_${i}`,
+        provider: provider || undefined,
+        prompt: msPrompt,
+        fallbackPrompt: ms.narration || 'professional video',
+        duration: ms.duration || 5,
+        aspectRatio: projectAspectRatio,
+        style: (projectData as any).settings?.visualStyle || 'professional',
+        triggeredBy: userId,
+        sourceImageUrl: msSourceImages[i],
+        sceneType: scene.type || 'content',
+      });
+
+      const mode = msSourceImages[i] ? 'I2V' : 'T2V';
+      jobResults.push({ msIdx: i, jobId: job.jobId, mode });
+      console.log(`[BatchMicroRegen] MS ${i}: Created job ${job.jobId} (${mode})`);
+    }
+
+    console.log(`[BatchMicroRegen] All ${jobResults.length} jobs created for scene ${sceneId}`);
+
+    return res.json({
+      success: true,
+      jobs: jobResults,
+      message: `${jobResults.length} micro-scene video generation jobs created`,
+    });
+  } catch (error: any) {
+    console.error('[BatchMicroRegen] Error:', error);
     return res.status(500).json({ success: false, error: error.message });
   }
 });
