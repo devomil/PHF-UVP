@@ -260,8 +260,8 @@ class AIVideoService {
       let finalPrompt = optimized.prompt;
       if (isStylizedArt && artPreset) {
         const styleLabel = (artPreset as any).styleMarkerPrefix || artPreset.name;
-        finalPrompt = `${finalPrompt}. All environments, backgrounds, and settings must be rendered in ${styleLabel} style — no photorealistic elements.`;
-        console.log(`[AIVideo] T2V environment style reinforcement appended for "${artPreset.name}"`);
+        finalPrompt = `[STYLE: ${styleLabel} — NOT photorealistic, NOT live-action] ${finalPrompt}. All environments, characters, and settings must be rendered in ${styleLabel} style — no photorealistic or live-action elements whatsoever.`;
+        console.log(`[AIVideo] T2V style reinforcement (prefix+suffix) applied for "${artPreset.name}"`);
       }
 
       enhancedOptions = {

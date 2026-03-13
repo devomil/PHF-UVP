@@ -38,7 +38,7 @@ export const VISUAL_ART_PRESETS: Record<string, VisualArtPreset> = {
     thumbnailColors: ['#6366f1', '#a855f7', '#ec4899'],
     imagePromptPrefix: '3D rendered illustration, Pixar style, soft global illumination, isometric perspective,',
     imagePromptSuffix: 'vibrant saturated colors, smooth rounded shapes, soft shadows, stylized 3D characters, clay-like textures, ambient occlusion, octane render quality',
-    negativePromptAdditions: ['photorealistic', 'flat 2D', 'sketch', 'hand-drawn', 'photograph', 'noisy', 'grainy'],
+    negativePromptAdditions: ['photorealistic', 'live-action', 'real people', 'real humans', 'flat 2D', 'sketch', 'hand-drawn', 'photograph', 'noisy', 'grainy', 'realistic skin texture', 'DSLR', 'camera footage'],
     recommendedProviders: {
       image: ['flux', 'ideogram'],
       video: ['kling', 'runway'],
