@@ -477,8 +477,14 @@ class VideoGenerationWorker {
                   if (finalMatchedChars.length > 0) {
                     const nameHasDescription = (name: string, text: string): boolean => {
                       const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                      const descPattern = new RegExp(escapedName + '\\s*\\([^)]{20,}\\)', 'i');
-                      return descPattern.test(text);
+                      const fullDescPattern = new RegExp(escapedName + '\\s*\\([^)]{20,}\\)', 'i');
+                      if (fullDescPattern.test(text)) return true;
+                      const firstName = name.split(/\s+/)[0];
+                      if (firstName && firstName.length >= 3 && firstName !== name) {
+                        const firstNamePattern = new RegExp(firstName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*\\([^)]{20,}\\)', 'i');
+                        return firstNamePattern.test(text);
+                      }
+                      return false;
                     };
 
                     const charsNeedingInjection = finalMatchedChars.filter((c: any) => !nameHasDescription(c.name, charEnhancedPrompt));

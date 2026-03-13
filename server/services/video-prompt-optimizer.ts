@@ -190,29 +190,40 @@ export function optimizePrompt(input: OptimizePromptInput): OptimizedPrompt {
 
   prompt = cleanPromptText(prompt);
 
-  if (isStylized) {
-    const { cleaned, blocks, totalWords: charWords } = extractCharacterBlocks(prompt);
+  const { cleaned, blocks, totalWords: charWords } = extractCharacterBlocks(prompt);
 
-    const TOTAL_BUDGET = 120;
+  if (blocks.length > 0) {
+    const TOTAL_BUDGET = isStylized ? 120 : 60;
     const MAX_CHAR_WORDS = 80;
     const effectiveCharWords = Math.min(charWords, MAX_CHAR_WORDS);
-    const sceneWordBudget = Math.max(30, TOTAL_BUDGET - effectiveCharWords);
+    const sceneWordBudget = Math.max(isStylized ? 30 : 15, TOTAL_BUDGET - effectiveCharWords);
 
-    const truncatedScene = enforcePromptLength(cleaned, sceneWordBudget);
+    const sceneSegments = cleaned.split(/__CHAR_BLOCK_\d+__/);
+    const placeholderOrder = [...cleaned.matchAll(/__CHAR_BLOCK_(\d+)__/g)].map(m => parseInt(m[1]));
 
-    const placeholderPattern = /__CHAR_BLOCK_\d+__/g;
-    let result = truncatedScene.replace(placeholderPattern, '').replace(/\s{2,}/g, ' ').trim();
+    const totalSceneWords = sceneSegments.reduce((sum, seg) => sum + seg.trim().split(/\s+/).filter(Boolean).length, 0);
+    const ratio = totalSceneWords > sceneWordBudget ? sceneWordBudget / totalSceneWords : 1;
 
-    if (blocks.length > 0) {
-      const blockText = blocks.join(' ');
-      result = result + ' ' + blockText;
+    const trimmedSegments = sceneSegments.map(seg => {
+      const words = seg.trim().split(/\s+/).filter(Boolean);
+      if (ratio >= 1 || words.length === 0) return seg.trim();
+      const keep = Math.max(1, Math.round(words.length * ratio));
+      return words.slice(0, keep).join(' ');
+    });
+
+    let result = '';
+    for (let i = 0; i < trimmedSegments.length; i++) {
+      result += trimmedSegments[i];
+      if (i < placeholderOrder.length) {
+        const blockIdx = placeholderOrder[i];
+        result += ' ' + blocks[blockIdx] + ' ';
+      }
     }
-
-    prompt = result;
+    prompt = result.replace(/\s{2,}/g, ' ').trim();
 
     console.log(`[PromptOptimizer] Character blocks: ${blocks.length} (${charWords} words protected, capped at ${MAX_CHAR_WORDS}). Scene budget: ${sceneWordBudget} words. Total: ~${prompt.split(/\s+/).length} words.`);
   } else {
-    const maxWords = 30;
+    const maxWords = isStylized ? 70 : 30;
     prompt = enforcePromptLength(prompt, maxWords);
   }
 
