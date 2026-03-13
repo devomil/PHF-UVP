@@ -264,7 +264,7 @@ class AIVideoService {
         console.log(`[AIVideo] T2V style reinforcement (prefix+suffix) applied for "${artPreset.name}"`);
       }
 
-      const FINAL_MAX_WORDS = 150;
+      const FINAL_MAX_WORDS = 120;
       const finalWords = finalPrompt.split(/\s+/);
       if (finalWords.length > FINAL_MAX_WORDS) {
         const charBlockPattern = /([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\s*\((?:late-\d+s\s+\w+|[^)]*(?:hair|eyes?|skin|build|wearing)[^)]*)[^)]{15,}\)/g;
