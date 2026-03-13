@@ -475,12 +475,30 @@ class VideoGenerationWorker {
                   }
 
                   if (finalMatchedChars.length > 0) {
-                    const charDescs = finalMatchedChars.map((c: any) => `${c.name}: ${c.physicalDescription || ''}, wearing ${c.wardrobe || ''}`).join('. ');
+                    const nameHasDescription = (name: string, text: string): boolean => {
+                      const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                      const descPattern = new RegExp(escapedName + '\\s*\\([^)]{20,}\\)', 'i');
+                      return descPattern.test(text);
+                    };
+
+                    const charsNeedingInjection = finalMatchedChars.filter((c: any) => !nameHasDescription(c.name, charEnhancedPrompt));
+                    const charsAlreadyDescribed = finalMatchedChars.filter((c: any) => nameHasDescription(c.name, charEnhancedPrompt));
+
+                    if (charsAlreadyDescribed.length > 0) {
+                      log.info(`[CharRef] Job ${job.jobId}: characters already have inline descriptions, skipping injection for: ${charsAlreadyDescribed.map((c: any) => c.name).join(', ')}`);
+                    }
+
                     const detectedCharNames = finalMatchedChars.map((c: any) => c.name).join(', ');
                     if (isStylizedArt) {
-                      log.info(`[CharRef] Job ${job.jobId}: STYLIZED PRESET '${jobArtPresetId}' — skipping I2V for characters [${detectedCharNames}]; injecting text descriptions only`);
-                      charEnhancedPrompt = `${charEnhancedPrompt}\nCharacter details for visual consistency: ${charDescs}`;
+                      if (charsNeedingInjection.length > 0) {
+                        const charDescs = charsNeedingInjection.map((c: any) => `${c.name}: ${c.physicalDescription || ''}, wearing ${c.wardrobe || ''}`).join('. ');
+                        log.info(`[CharRef] Job ${job.jobId}: STYLIZED PRESET '${jobArtPresetId}' — safety-net injection for characters missing descriptions: [${charsNeedingInjection.map((c: any) => c.name).join(', ')}]`);
+                        charEnhancedPrompt = `${charEnhancedPrompt}\nCharacter details for visual consistency: ${charDescs}`;
+                      } else {
+                        log.info(`[CharRef] Job ${job.jobId}: STYLIZED PRESET '${jobArtPresetId}' — all characters [${detectedCharNames}] already have inline descriptions, no injection needed`);
+                      }
                     } else {
+                      const charDescs = finalMatchedChars.map((c: any) => `${c.name}: ${c.physicalDescription || ''}, wearing ${c.wardrobe || ''}`).join('. ');
                       charRefImageUrl = finalMatchedChars[0].referenceImageUrl;
                       charRefImageUrls = finalMatchedChars.map((c: any) => c.referenceImageUrl).filter(Boolean);
                       isCharacterRef = true;

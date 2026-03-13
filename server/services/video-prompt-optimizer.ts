@@ -160,26 +160,19 @@ function enforcePromptLength(prompt: string, maxWords: number = 30): string {
   return truncated + '.';
 }
 
-function condenseCharacterDescriptions(prompt: string): string {
-  const charPattern = /(\w[\w\s]*?\w)\s*\(late-\d+s\s+\w+,\s*([^)]{40,})\)/g;
+function extractCharacterBlocks(prompt: string): { cleaned: string; blocks: string[]; totalWords: number } {
+  const charPattern = /([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\s*\((?:late-\d+s\s+\w+|[^)]*(?:hair|eyes?|skin|build|wearing)[^)]*)[^)]{15,}\)/g;
+  const blocks: string[] = [];
+  let totalWords = 0;
   
-  return prompt.replace(charPattern, (_match, name: string, details: string) => {
-    const parts = details.split(',').map(p => p.trim());
-    const skinTraits: string[] = [];
-    const otherTraits: string[] = [];
-    for (const part of parts) {
-      if (/skin\b|complexion\b|skin\s*tone/i.test(part)) {
-        skinTraits.push(part);
-      } else if (/hair\b/i.test(part) || /eyes?\b/i.test(part)) {
-        otherTraits.push(part);
-      }
-      if (skinTraits.length + otherTraits.length >= 3) break;
-    }
-    const keyTraits = [...skinTraits, ...otherTraits];
-    return keyTraits.length > 0
-      ? `${name} (${keyTraits.join(', ')})`
-      : `${name}`;
+  const cleaned = prompt.replace(charPattern, (match) => {
+    const placeholder = `__CHAR_BLOCK_${blocks.length}__`;
+    blocks.push(match);
+    totalWords += match.split(/\s+/).length;
+    return placeholder;
   });
+  
+  return { cleaned, blocks, totalWords };
 }
 
 export function optimizePrompt(input: OptimizePromptInput): OptimizedPrompt {
@@ -198,11 +191,30 @@ export function optimizePrompt(input: OptimizePromptInput): OptimizedPrompt {
   prompt = cleanPromptText(prompt);
 
   if (isStylized) {
-    prompt = condenseCharacterDescriptions(prompt);
-  }
+    const { cleaned, blocks, totalWords: charWords } = extractCharacterBlocks(prompt);
 
-  const maxWords = isStylized ? 70 : 30;
-  prompt = enforcePromptLength(prompt, maxWords);
+    const TOTAL_BUDGET = 120;
+    const MAX_CHAR_WORDS = 80;
+    const effectiveCharWords = Math.min(charWords, MAX_CHAR_WORDS);
+    const sceneWordBudget = Math.max(30, TOTAL_BUDGET - effectiveCharWords);
+
+    const truncatedScene = enforcePromptLength(cleaned, sceneWordBudget);
+
+    const placeholderPattern = /__CHAR_BLOCK_\d+__/g;
+    let result = truncatedScene.replace(placeholderPattern, '').replace(/\s{2,}/g, ' ').trim();
+
+    if (blocks.length > 0) {
+      const blockText = blocks.join(' ');
+      result = result + ' ' + blockText;
+    }
+
+    prompt = result;
+
+    console.log(`[PromptOptimizer] Character blocks: ${blocks.length} (${charWords} words protected, capped at ${MAX_CHAR_WORDS}). Scene budget: ${sceneWordBudget} words. Total: ~${prompt.split(/\s+/).length} words.`);
+  } else {
+    const maxWords = 30;
+    prompt = enforcePromptLength(prompt, maxWords);
+  }
 
   if (prompt.length < 10) {
     prompt = input.visualDescription.substring(0, 100);
