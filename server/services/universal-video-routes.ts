@@ -1440,7 +1440,8 @@ ${charProfileSection}
 RULES YOU MUST ALWAYS FOLLOW:
 
 1. CHARACTER SPECIFICITY
-   - If any locked character's name appears in the narration, ALWAYS reference them by exact name and include their specific physical appearance, wardrobe, and expression from their profile
+   - If any locked character's name appears in the narration, reference them by exact name
+   - In micro-scene visualDirection, keep character descriptions SHORT: name + 3 key physical traits max (e.g. "Jackie Phillips (dark brown hair, blue eyes, fair skin)"). Do NOT repeat full wardrobe/outfit details in every micro-scene — the art style suffix handles consistency
    - Never describe a character generically (e.g., "a woman" or "a person") when a named locked character exists
    - Always append: "Maintain exact character appearance as described — same face, hair, clothing, and art style."
    - IMPORTANT: Do NOT reference any "reference image" — character consistency comes from the detailed text descriptions only. Never write "from reference image" or "from the reference".
