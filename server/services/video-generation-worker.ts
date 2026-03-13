@@ -476,22 +476,15 @@ class VideoGenerationWorker {
 
                   if (finalMatchedChars.length > 0) {
                     const charDescs = finalMatchedChars.map((c: any) => `${c.name}: ${c.physicalDescription || ''}, wearing ${c.wardrobe || ''}`).join('. ');
+                    const detectedCharNames = finalMatchedChars.map((c: any) => c.name).join(', ');
                     if (isStylizedArt) {
-                      const primaryChar = finalMatchedChars[0];
-                      if (primaryChar.referenceImageUrl) {
-                        charRefImageUrl = primaryChar.referenceImageUrl;
-                        charRefImageUrls = finalMatchedChars.map((c: any) => c.referenceImageUrl).filter(Boolean);
-                        isCharacterRef = true;
-                        log.info(`[CharRef] Job ${job.jobId}: STYLIZED PRESET with character reference image — using reference for I2V to anchor style + character consistency`);
-                        charEnhancedPrompt = `${charEnhancedPrompt}\nCharacter details for visual consistency: ${charDescs}. Maintain the exact art style from the reference image.`;
-                      } else {
-                        log.info(`[CharRef] Job ${job.jobId}: STYLIZED PRESET — no reference image available, using character descriptions for T2V`);
-                        charEnhancedPrompt = `${charEnhancedPrompt}\nCharacter details for visual consistency: ${charDescs}`;
-                      }
+                      log.info(`[CharRef] Job ${job.jobId}: STYLIZED PRESET '${jobArtPresetId}' — skipping I2V for characters [${detectedCharNames}]; injecting text descriptions only`);
+                      charEnhancedPrompt = `${charEnhancedPrompt}\nCharacter details for visual consistency: ${charDescs}`;
                     } else {
                       charRefImageUrl = finalMatchedChars[0].referenceImageUrl;
                       charRefImageUrls = finalMatchedChars.map((c: any) => c.referenceImageUrl).filter(Boolean);
                       isCharacterRef = true;
+                      log.info(`[CharRef] Job ${job.jobId}: preset '${jobArtPresetId || 'none'}' — using I2V character reference for [${detectedCharNames}]`);
                       charEnhancedPrompt = `${charEnhancedPrompt}\nGenerate a NEW scene showing ${finalMatchedChars.length > 1 ? 'these characters' : 'this character'} in the described setting. Use the reference image ONLY for character appearance consistency (face, hair, clothing, art style). Do NOT animate or reproduce the reference image itself. Characters: ${charDescs}`;
                     }
                   }
