@@ -229,6 +229,20 @@ export function sanitizePromptForAI(
     cleanPrompt = cleanPrompt.replace(pattern, '');
   }
 
+  // === STEP 5A: Strip "reference image" language (stylized presets use text descriptions, not image refs) ===
+  const refImagePatterns = [
+    /\.\s*Maintain\s+(?:exact\s+)?character\s+appearance\s+from\s+(?:the\s+)?reference\s+image[^.]*\./gi,
+    /\.\s*Same\s+face,?\s+hair,?\s+clothing,?\s+and\s+art\s+style\./gi,
+    /(?:from|of|in)\s+(?:the\s+)?reference\s+image/gi,
+    /Maintain\s+(?:the\s+)?exact\s+(?:character\s+)?(?:appearance|art\s+style)\s+from\s+(?:the\s+)?(?:source|reference)\s+image[^.]*/gi,
+  ];
+  for (const pattern of refImagePatterns) {
+    if (pattern.test(cleanPrompt)) {
+      removedElements.push(`ref-image-language: ${cleanPrompt.match(pattern)?.[0]}`);
+      cleanPrompt = cleanPrompt.replace(pattern, '');
+    }
+  }
+
   // === STEP 5B: Restore any whitelisted art preset keywords that were accidentally stripped ===
   for (const keyword of ART_PRESET_WHITELIST) {
     const keywordLower = keyword.toLowerCase();

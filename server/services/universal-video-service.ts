@@ -3270,7 +3270,8 @@ RULES YOU MUST ALWAYS FOLLOW:
 1. CHARACTER SPECIFICITY
    - If any locked character's name appears in the narration, ALWAYS reference them by exact name and include their specific physical appearance, wardrobe, and expression from their profile
    - Never describe a character generically (e.g., "a woman" or "a person") when a named locked character exists
-   - Always append: "Maintain exact character appearance from reference image. Same face, hair, clothing, and art style."
+   - Always append: "Maintain exact character appearance as described — same face, hair, clothing, and art style."
+   - IMPORTANT: Do NOT reference any "reference image" — character consistency comes from the detailed text descriptions only. Never write "from reference image" or "from the reference".
 
 2. NARRATION-VISUAL ALIGNMENT
    - The environment, camera movement, and character action must directly reinforce the MEANING of the narration — not just illustrate it generically
