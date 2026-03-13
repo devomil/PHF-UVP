@@ -430,7 +430,8 @@ class VideoGenerationWorker {
                 const { isStylizedPreset } = await import('../../shared/config/visual-art-presets');
                 const isStylizedArt = jobArtPresetId ? isStylizedPreset(jobArtPresetId) : false;
                 const isCharI2VMode = (projectData as any).videoGenerationMode === 'character-i2v';
-                const shouldCheckChars = isCharI2VMode || isStylizedArt;
+                const hasCharacterProfiles = ((projectData as any).characters || []).some((c: any) => c.locked && c.referenceImageUrl);
+                const shouldCheckChars = isCharI2VMode || isStylizedArt || hasCharacterProfiles;
 
                 if (shouldCheckChars) {
                   const lockedChars = ((projectData as any).characters || [])
