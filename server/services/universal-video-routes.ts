@@ -3064,7 +3064,7 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
     const voiceoverRanges: Array<{ startFrame: number; endFrame: number }> = [];
     let currentFrame = 0;
     const hasPerSceneVoiceover = preparedProject.assets?.voiceover?.perScene?.length > 0 &&
-      preparedProject.assets.voiceover.perScene.some((ps: any) => ps.url);
+      preparedProject.assets?.voiceover?.perScene?.some((ps: any) => ps.url);
     
     for (const scene of preparedProject.scenes) {
       const sceneDurationFrames = Math.round((scene.duration || 5) * fps);
@@ -3211,7 +3211,7 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
 
     if (hasPerSceneVoiceover && captionStyle) {
       for (const scene of preparedProject.scenes as any[]) {
-        const perSceneEntry = preparedProject.assets.voiceover.perScene.find(
+        const perSceneEntry = preparedProject.assets?.voiceover?.perScene?.find(
           (ps: any) => ps.sceneId === scene.id
         );
         if (perSceneEntry?.words?.length) {
@@ -3320,7 +3320,7 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
 
     const inputProps = {
       scenes: preparedProject.scenes,
-      voiceoverUrl: hasPerSceneVoiceover ? null : (preparedProject.assets.voiceover.fullTrackUrl || null),
+      voiceoverUrl: hasPerSceneVoiceover ? null : (preparedProject.assets?.voiceover?.fullTrackUrl || null),
       musicUrl: resolvedMusicUrl,
       musicVolume: preparedProject.assets.music?.volume || 0.18,
       brand: brandWithCachedLogo,
