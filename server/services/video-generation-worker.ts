@@ -504,12 +504,17 @@ class VideoGenerationWorker {
                         log.info(`[CharRef] Job ${job.jobId}: STYLIZED PRESET '${jobArtPresetId}' — all characters [${detectedCharNames}] already have inline descriptions, no injection needed`);
                       }
                     } else {
-                      const charDescs = finalMatchedChars.map((c: any) => `${c.name}: ${c.physicalDescription || ''}, wearing ${c.wardrobe || ''}`).join('. ');
                       charRefImageUrl = finalMatchedChars[0].referenceImageUrl;
                       charRefImageUrls = finalMatchedChars.map((c: any) => c.referenceImageUrl).filter(Boolean);
                       isCharacterRef = true;
                       log.info(`[CharRef] Job ${job.jobId}: preset '${jobArtPresetId || 'none'}' — using I2V character reference for [${detectedCharNames}]`);
-                      charEnhancedPrompt = `${charEnhancedPrompt}\nGenerate a NEW scene showing ${finalMatchedChars.length > 1 ? 'these characters' : 'this character'} in the described setting. Use the reference image ONLY for character appearance consistency (face, hair, clothing, art style). Do NOT animate or reproduce the reference image itself. Characters: ${charDescs}`;
+                      const charsForTextAppend = charsNeedingInjection.length > 0 ? charsNeedingInjection : finalMatchedChars;
+                      const charDescs = charsForTextAppend.map((c: any) => `${c.name}: ${c.physicalDescription || ''}, wearing ${c.wardrobe || ''}`).join('. ');
+                      if (charsNeedingInjection.length > 0) {
+                        charEnhancedPrompt = `${charEnhancedPrompt}\nGenerate a NEW scene showing ${charsForTextAppend.length > 1 ? 'these characters' : 'this character'} in the described setting. Use the reference image ONLY for character appearance consistency (face, hair, clothing, art style). Do NOT animate or reproduce the reference image itself. Characters: ${charDescs}`;
+                      } else {
+                        log.info(`[CharRef] Job ${job.jobId}: all characters [${detectedCharNames}] already have inline descriptions, skipping text injection (I2V reference still used)`);
+                      }
                     }
                   }
                 }
