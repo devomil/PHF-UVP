@@ -8,7 +8,6 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { SceneOverlayEditor, type SceneOverlayItem } from "./scene-overlay-editor";
-import { MicroSceneOverlayEditor } from "./micro-scene-overlay-editor";
 import type { MicroSceneOverlayItem } from "@shared/video-types";
 import { ProviderCapabilitySelector, getProviderRecommendationText } from "./ProviderCapabilityCard";
 import { AskSuzziePanel } from "./ask-suzzie-panel";
@@ -141,6 +140,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
   const overlayDebounceRef = useRef<NodeJS.Timeout | null>(null);
   const msOverlayDebounceRefs = useRef<Record<number, NodeJS.Timeout>>({});
   const [msOverlayState, setMsOverlayState] = useState<Record<number, MicroSceneOverlayItem[]>>({});
+  const [activeMsOverlayScope, setActiveMsOverlayScope] = useState<number | null>(null);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const visualDirectionRef = useRef<HTMLTextAreaElement>(null);
   const narrationRef = useRef<HTMLTextAreaElement>(null);
@@ -246,6 +246,11 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
 
   useEffect(() => {
     setMsOverlayState({});
+    setActiveMsOverlayScope(prev => {
+      if (prev === null) return null;
+      const msCount = (scene.microScenes || []).length;
+      return prev < msCount ? prev : null;
+    });
   }, [scene.microScenes]);
 
   useEffect(() => {
@@ -2244,12 +2249,6 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                           </button>
                         )}
 
-                        <MicroSceneOverlayEditor
-                          overlays={msOverlayState[msIdx] ?? ms.overlayItems ?? []}
-                          onChange={(newOverlays) => handleMicroSceneOverlayChange(msIdx, newOverlays)}
-                          backgroundUrl={ms.videoUrl || ms.imageUrl}
-                          backgroundType={ms.videoUrl ? "video" : ms.imageUrl ? "image" : undefined}
-                        />
                       </div>
                     )}
                   </div>
@@ -2687,6 +2686,17 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
           })()}
           backgroundUrl={hasVideo ? videoUrl : hasImage ? imageUrl : undefined}
           backgroundType={hasVideo ? "video" : hasImage ? "image" : undefined}
+          microScenes={(scene.microScenes || []).map((ms: any, i: number) => ({
+            index: i,
+            label: ms.prompt?.slice(0, 50) || ms.visualDirection?.slice(0, 50) || "",
+            imageUrl: ms.imageUrl,
+            videoUrl: ms.videoUrl,
+            overlayItems: ms.overlayItems,
+          }))}
+          activeMicroSceneIndex={activeMsOverlayScope}
+          onMicroSceneSelect={setActiveMsOverlayScope}
+          onMicroSceneOverlayChange={handleMicroSceneOverlayChange}
+          microSceneOverlays={msOverlayState}
         />
 
         {/* Character Profiles - visible only for 3D Illustration art style */}
