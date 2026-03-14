@@ -109,7 +109,7 @@ const ART_PRESET_STYLE_TOKENS = [
   'ample white space', 'sans-serif typography feel',
 ];
 
-function cleanPromptText(prompt: string): string {
+function cleanPromptText(prompt: string, isStylized: boolean = false): string {
   let cleaned = prompt;
 
   cleaned = cleaned.replace(/^["'\s]+|["'\s]+$/g, '');
@@ -125,10 +125,12 @@ function cleanPromptText(prompt: string): string {
     }
   }
 
-  cleaned = cleaned.replace(/\b(cinematic|dramatic|epic|sweeping|ethereal|moody|atmospheric)\s+(shot|angle|lighting|camera|pan|zoom|dolly|tracking)\b/gi, '');
-  cleaned = cleaned.replace(/\b(close-up shot|wide shot|medium shot|establishing shot|aerial shot|bird's eye view|low angle|high angle|dutch angle)\b/gi, '');
-  cleaned = cleaned.replace(/\b(soft morning light|golden hour|natural lighting|rim lighting|backlit|silhouetted|lens flare|bokeh|shallow depth of field)\b/gi, '');
-  cleaned = cleaned.replace(/\b(camera slowly|camera pans|camera tilts|camera tracks|camera dollies|camera zooms|camera pulls back|camera pushes in)\b/gi, '');
+  if (!isStylized) {
+    cleaned = cleaned.replace(/\b(cinematic|dramatic|epic|sweeping|ethereal|moody|atmospheric)\s+(shot|angle|lighting|camera|pan|zoom|dolly|tracking)\b/gi, '');
+    cleaned = cleaned.replace(/\b(close-up shot|wide shot|medium shot|establishing shot|aerial shot|bird's eye view|low angle|high angle|dutch angle)\b/gi, '');
+    cleaned = cleaned.replace(/\b(soft morning light|golden hour|natural lighting|rim lighting|backlit|silhouetted|lens flare|bokeh|shallow depth of field)\b/gi, '');
+    cleaned = cleaned.replace(/\b(camera slowly|camera pans|camera tilts|camera tracks|camera dollies|camera zooms|camera pulls back|camera pushes in)\b/gi, '');
+  }
 
   for (const { placeholder, original } of preservedTokens) {
     cleaned = cleaned.replace(placeholder, original);
@@ -179,6 +181,10 @@ export function optimizePrompt(input: OptimizePromptInput): OptimizedPrompt {
   let prompt = input.visualDescription;
   const isStylized = isStylizedPresetFn(input.artPresetId);
 
+  const inputWordCount = prompt.split(/\s+/).length;
+  const inputCharCount = prompt.length;
+  console.log(`[PromptOptimizer] Input: ${inputWordCount} words, ${inputCharCount} chars (stylized=${isStylized}, provider=${input.provider})`);
+
   if (!isStylized) {
     const segments = splitByOrAlternatives(prompt);
     if (segments.length > 1) {
@@ -188,12 +194,12 @@ export function optimizePrompt(input: OptimizePromptInput): OptimizedPrompt {
     }
   }
 
-  prompt = cleanPromptText(prompt);
+  prompt = cleanPromptText(prompt, isStylized);
 
   const { cleaned, blocks, totalWords: charWords } = extractCharacterBlocks(prompt);
 
   if (blocks.length > 0) {
-    const TOTAL_BUDGET = isStylized ? 120 : 60;
+    const TOTAL_BUDGET = isStylized ? 200 : 60;
     const MAX_CHAR_WORDS = 80;
     const effectiveCharWords = Math.min(charWords, MAX_CHAR_WORDS);
 
@@ -205,7 +211,7 @@ export function optimizePrompt(input: OptimizePromptInput): OptimizedPrompt {
     }
 
     const protectedWords = effectiveCharWords + styleTokenWords;
-    const sceneWordBudget = Math.max(isStylized ? 30 : 15, TOTAL_BUDGET - protectedWords);
+    const sceneWordBudget = Math.max(isStylized ? 80 : 15, TOTAL_BUDGET - protectedWords);
 
     const sceneSegments = cleaned.split(/__CHAR_BLOCK_\d+__/);
     const placeholderOrder = [...cleaned.matchAll(/__CHAR_BLOCK_(\d+)__/g)].map(m => parseInt(m[1]));
@@ -230,9 +236,11 @@ export function optimizePrompt(input: OptimizePromptInput): OptimizedPrompt {
     }
     prompt = result.replace(/\s{2,}/g, ' ').trim();
 
-    console.log(`[PromptOptimizer] Character blocks: ${blocks.length} (${effectiveCharWords} char words + ${styleTokenWords} style words = ${protectedWords} protected). Scene budget: ${sceneWordBudget} words. Total: ~${prompt.split(/\s+/).length} words.`);
+    const finalWords = prompt.split(/\s+/).length;
+    const finalChars = prompt.length;
+    console.log(`[PromptOptimizer] Character blocks: ${blocks.length} (${effectiveCharWords} char words + ${styleTokenWords} style words = ${protectedWords} protected). Scene budget: ${sceneWordBudget} words. Total: ~${finalWords} words, ${finalChars} chars.`);
   } else {
-    const maxWords = isStylized ? 70 : 30;
+    const maxWords = isStylized ? 150 : 30;
     prompt = enforcePromptLength(prompt, maxWords);
   }
 
@@ -240,6 +248,10 @@ export function optimizePrompt(input: OptimizePromptInput): OptimizedPrompt {
     prompt = input.visualDescription.substring(0, 100);
     console.log(`[PromptOptimizer] Prompt too short after cleaning, using truncated original`);
   }
+
+  const outputWords = prompt.split(/\s+/).length;
+  const outputChars = prompt.length;
+  console.log(`[PromptOptimizer] Output: ${outputWords} words, ${outputChars} chars`);
 
   return {
     prompt,
@@ -256,9 +268,10 @@ export function logPromptOptimization(originalPrompt: string, optimized: Optimiz
   }
 }
 
-export function analyzePrompt(prompt: string): PromptAnalysis {
+export function analyzePrompt(prompt: string, artPresetId?: string): PromptAnalysis {
   const issues: string[] = [];
   let score = 100;
+  const isStylized = isStylizedPresetFn(artPresetId);
 
   if (/,\s*or\s+/i.test(prompt) || /\.\s*[Oo]r\s+/.test(prompt)) {
     issues.push('Contains "or" alternatives — AI will try to render all options');
@@ -266,14 +279,16 @@ export function analyzePrompt(prompt: string): PromptAnalysis {
   }
 
   const commaCount = (prompt.match(/,/g) || []).length;
-  if (commaCount > 5) {
+  const commaThreshold = isStylized ? 15 : 5;
+  if (commaCount > commaThreshold) {
     issues.push(`Too many comma-separated elements (${commaCount}) — overly complex`);
     score -= 15;
   }
 
   const wordCount = prompt.split(/\s+/).length;
-  if (wordCount > 40) {
-    issues.push(`Prompt too long (${wordCount} words) — AI works best with 10-25 words`);
+  const wordThreshold = isStylized ? 250 : 40;
+  if (wordCount > wordThreshold) {
+    issues.push(`Prompt too long (${wordCount} words) — AI works best with ${isStylized ? '100-200' : '10-25'} words`);
     score -= 15;
   }
 
@@ -288,7 +303,7 @@ export function analyzePrompt(prompt: string): PromptAnalysis {
     score -= 15;
   }
 
-  if (/\b(cinematic|dramatic shot|camera pan|lens flare|bokeh|shallow depth)\b/i.test(prompt)) {
+  if (!isStylized && /\b(cinematic|dramatic shot|camera pan|lens flare|bokeh|shallow depth)\b/i.test(prompt)) {
     issues.push('Contains cinematic/camera language — AI video providers ignore these');
     score -= 10;
   }
