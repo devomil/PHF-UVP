@@ -177,6 +177,36 @@ function extractCharacterBlocks(prompt: string): { cleaned: string; blocks: stri
   return { cleaned, blocks, totalWords };
 }
 
+interface StyleSuffixExtraction {
+  cleaned: string;
+  suffix: string;
+  suffixWords: number;
+}
+
+function extractStyleSuffix(prompt: string, isStylized: boolean): StyleSuffixExtraction {
+  if (!isStylized) return { cleaned: prompt, suffix: '', suffixWords: 0 };
+
+  const suffixPattern = /Disney\/Pixar\s+3D\s+CGI\s+animation\s+quality[^.]*\.\s*No\s+text[^.]*\.\s*Clean\s+background[^.]*\.\s*Smooth\s+natural\s+movement[^.]*/i;
+  const match = prompt.match(suffixPattern);
+  if (match) {
+    const suffix = match[0].trim();
+    const suffixWords = suffix.split(/\s+/).length;
+    const cleaned = prompt.replace(suffixPattern, '__STYLE_SUFFIX__').replace(/\s{2,}/g, ' ').trim();
+    return { cleaned, suffix, suffixWords };
+  }
+
+  const maintainPattern = /Maintain\s+exact\s+character\s+appearance\s+as\s+described[^.]*/i;
+  const maintainMatch = prompt.match(maintainPattern);
+  if (maintainMatch) {
+    const suffix = maintainMatch[0].trim();
+    const suffixWords = suffix.split(/\s+/).length;
+    const cleaned = prompt.replace(maintainPattern, '__STYLE_SUFFIX__').replace(/\s{2,}/g, ' ').trim();
+    return { cleaned, suffix, suffixWords };
+  }
+
+  return { cleaned: prompt, suffix: '', suffixWords: 0 };
+}
+
 export function optimizePrompt(input: OptimizePromptInput): OptimizedPrompt {
   let prompt = input.visualDescription;
   const isStylized = isStylizedPresetFn(input.artPresetId);
@@ -196,6 +226,12 @@ export function optimizePrompt(input: OptimizePromptInput): OptimizedPrompt {
 
   prompt = cleanPromptText(prompt, isStylized);
 
+  const { cleaned: styleCleaned, suffix: styleSuffix, suffixWords: styleSuffixWords } = extractStyleSuffix(prompt, isStylized);
+  if (styleSuffix) {
+    prompt = styleCleaned;
+    console.log(`[PromptOptimizer] Protected style suffix (${styleSuffixWords} words): "${styleSuffix.substring(0, 60)}..."`);
+  }
+
   const { cleaned, blocks, totalWords: charWords } = extractCharacterBlocks(prompt);
 
   if (blocks.length > 0) {
@@ -203,7 +239,7 @@ export function optimizePrompt(input: OptimizePromptInput): OptimizedPrompt {
     const MAX_CHAR_WORDS = 80;
     const effectiveCharWords = Math.min(charWords, MAX_CHAR_WORDS);
 
-    let styleTokenWords = 0;
+    let styleTokenWords = styleSuffixWords;
     for (const token of ART_PRESET_STYLE_TOKENS) {
       if (cleaned.toLowerCase().includes(token.toLowerCase())) {
         styleTokenWords += token.split(/\s+/).length;
@@ -213,8 +249,16 @@ export function optimizePrompt(input: OptimizePromptInput): OptimizedPrompt {
     const protectedWords = effectiveCharWords + styleTokenWords;
     const sceneWordBudget = Math.max(isStylized ? 80 : 15, TOTAL_BUDGET - protectedWords);
 
-    const sceneSegments = cleaned.split(/__CHAR_BLOCK_\d+__/);
-    const placeholderOrder = [...cleaned.matchAll(/__CHAR_BLOCK_(\d+)__/g)].map(m => parseInt(m[1]));
+    const sceneSegments = cleaned.split(/__CHAR_BLOCK_\d+__|__STYLE_SUFFIX__/);
+    const placeholderOrder: Array<{ type: 'char' | 'style'; index: number }> = [];
+    const allPlaceholders = [...cleaned.matchAll(/__CHAR_BLOCK_(\d+)__|__STYLE_SUFFIX__/g)];
+    for (const m of allPlaceholders) {
+      if (m[0] === '__STYLE_SUFFIX__') {
+        placeholderOrder.push({ type: 'style', index: -1 });
+      } else {
+        placeholderOrder.push({ type: 'char', index: parseInt(m[1]) });
+      }
+    }
 
     const totalSceneWords = sceneSegments.reduce((sum, seg) => sum + seg.trim().split(/\s+/).filter(Boolean).length, 0);
     const ratio = totalSceneWords > sceneWordBudget ? sceneWordBudget / totalSceneWords : 1;
@@ -230,8 +274,12 @@ export function optimizePrompt(input: OptimizePromptInput): OptimizedPrompt {
     for (let i = 0; i < trimmedSegments.length; i++) {
       result += trimmedSegments[i];
       if (i < placeholderOrder.length) {
-        const blockIdx = placeholderOrder[i];
-        result += ' ' + blocks[blockIdx] + ' ';
+        const ph = placeholderOrder[i];
+        if (ph.type === 'char') {
+          result += ' ' + blocks[ph.index] + ' ';
+        } else {
+          result += ' ' + styleSuffix + ' ';
+        }
       }
     }
     prompt = result.replace(/\s{2,}/g, ' ').trim();
@@ -242,6 +290,13 @@ export function optimizePrompt(input: OptimizePromptInput): OptimizedPrompt {
   } else {
     const maxWords = isStylized ? 150 : 30;
     prompt = enforcePromptLength(prompt, maxWords);
+
+    if (styleSuffix) {
+      prompt = prompt.replace('__STYLE_SUFFIX__', styleSuffix);
+      if (!prompt.includes(styleSuffix)) {
+        prompt = prompt + ' ' + styleSuffix;
+      }
+    }
   }
 
   if (prompt.length < 10) {

@@ -165,17 +165,17 @@ class AIVideoService {
       } else if (artPreset && !isStylizedArt) {
         i2vPrompt = `${artPreset.imagePromptPrefix} ${i2vPrompt}`;
       } else if (isStylizedArt && artPreset) {
-        const styleKw = (artPreset as any).styleKeywords || [];
+        const styleKw = artPreset.styleKeywords || [];
         const pLower = i2vPrompt.toLowerCase();
         const hasMarker = styleKw.length > 0 ? styleKw.some((kw: string) => pLower.includes(kw)) : false;
         if (!hasMarker) {
-          const prefix = (artPreset as any).styleMarkerPrefix || artPreset.name;
+          const prefix = artPreset.styleMarkerPrefix || artPreset.name;
           i2vPrompt = `${prefix} — ${i2vPrompt}`;
           console.log(`[AIVideo] I2V stylized preset "${artPreset.name}" — prepended style marker: "${prefix}"`);
         }
       }
       if (isStylizedArt && artPreset) {
-        const styleLabel = (artPreset as any).styleMarkerPrefix || artPreset.name;
+        const styleLabel = artPreset.styleMarkerPrefix || artPreset.name;
         i2vPrompt = `${i2vPrompt}. All environments, backgrounds, and settings must be rendered in ${styleLabel} style — no photorealistic elements.`;
         console.log(`[AIVideo] I2V environment style reinforcement appended for "${artPreset.name}"`);
       }
@@ -194,13 +194,13 @@ class AIVideoService {
         basePrompt = `${artPreset.imagePromptPrefix} ${basePrompt}, ${artPreset.imagePromptSuffix}`;
         console.log(`[AIVideo] Art preset applied to prompt: ${basePrompt.substring(0, 120)}...`);
       } else if (isStylizedArt && artPreset) {
-        const styleKeywords = (artPreset as any).styleKeywords || [];
+        const styleKeywords = artPreset.styleKeywords || [];
         const promptLower = basePrompt.toLowerCase();
         const hasStyleMarker = styleKeywords.length > 0
           ? styleKeywords.some((kw: string) => promptLower.includes(kw))
           : false;
         if (!hasStyleMarker) {
-          const prefix = (artPreset as any).styleMarkerPrefix || artPreset.name;
+          const prefix = artPreset.styleMarkerPrefix || artPreset.name;
           basePrompt = `${prefix} — ${basePrompt}`;
           console.log(`[AIVideo] Stylized preset "${artPreset.name}" — prepended style marker: "${prefix}"`);
         } else {
@@ -259,7 +259,7 @@ class AIVideoService {
       
       let finalPrompt = optimized.prompt;
       if (isStylizedArt && artPreset) {
-        const styleLabel = (artPreset as any).styleMarkerPrefix || artPreset.name;
+        const styleLabel = artPreset.styleMarkerPrefix || artPreset.name;
         finalPrompt = `[STYLE: ${styleLabel} — NOT photorealistic, NOT live-action] ${finalPrompt}. All environments, characters, and settings must be rendered in ${styleLabel} style — no photorealistic or live-action elements whatsoever.`;
         console.log(`[AIVideo] T2V style reinforcement (prefix+suffix) applied for "${artPreset.name}"`);
       }
