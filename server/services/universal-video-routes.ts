@@ -3323,7 +3323,10 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
     let clearedTraditionalOverlays = 0;
     for (const scene of preparedProject.scenes as any[]) {
       const sceneType = (scene.type || '').toLowerCase();
+      const sceneId = (scene.id || '').toLowerCase();
       if (sceneType === 'cta' || sceneType === 'call_to_action') continue;
+      if (sceneType === 'intro' || sceneType === 'outro') continue;
+      if (sceneId === 'intro-scene-auto') continue;
       const requirement = textOverlayDetector.detectTextOverlayRequirements({
         sceneIndex: scene.sceneIndex,
         visualDirection: scene.visualDirection,
