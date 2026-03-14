@@ -396,6 +396,162 @@ async function failJob(jobId: string, errorMsg: string) {
     .where(eq(videoGenerationJobs.jobId, jobId));
 }
 
+const STALL_THRESHOLD_MS = 5 * 60 * 1000;
+const STARTUP_RECOVERY_AGE_MS = 2 * 60 * 1000;
+const STALL_CHECK_INTERVAL_MS = 60 * 1000;
+const MAX_RETRIES = 2;
+
+async function recoverStuckAssetJobs() {
+  try {
+    const cutoff = new Date(Date.now() - STARTUP_RECOVERY_AGE_MS);
+    const stuckJobs = await db
+      .select()
+      .from(videoGenerationJobs)
+      .where(
+        and(
+          eq(videoGenerationJobs.sceneId, 'asset-library'),
+          or(
+            eq(videoGenerationJobs.status, 'processing'),
+            eq(videoGenerationJobs.status, 'pending')
+          )
+        )
+      );
+
+    const jobsToRecover = stuckJobs.filter(j => {
+      const jobTime = j.startedAt || j.createdAt;
+      return jobTime && new Date(jobTime) < cutoff;
+    });
+
+    if (jobsToRecover.length === 0) {
+      console.log('[AssetLibrary] Startup recovery: no stuck jobs found');
+      return;
+    }
+
+    console.log(`[AssetLibrary] Startup recovery: found ${jobsToRecover.length} stuck job(s)`);
+
+    for (const job of jobsToRecover) {
+      const settings = (job.i2vSettings as any) || {};
+      const mode = settings.assetLibraryMode;
+      const userId = job.triggeredBy || '';
+
+      if (!mode || !userId) {
+        console.warn(`[AssetLibrary] Startup recovery: job ${job.jobId} missing mode or userId, marking failed`);
+        await failJob(job.jobId, 'Job orphaned after server restart (missing mode or userId)');
+        continue;
+      }
+
+      const retryCount = settings._retryCount || 0;
+      if (retryCount >= MAX_RETRIES) {
+        console.warn(`[AssetLibrary] Startup recovery: job ${job.jobId} exceeded max retries (${retryCount}), marking failed`);
+        await failJob(job.jobId, `Job failed after ${retryCount} retry attempts following server restart`);
+        continue;
+      }
+
+      const updated = await db
+        .update(videoGenerationJobs)
+        .set({
+          status: 'pending',
+          startedAt: null,
+          updatedAt: new Date(),
+          i2vSettings: { ...settings, _retryCount: retryCount + 1 },
+        })
+        .where(
+          and(
+            eq(videoGenerationJobs.jobId, job.jobId),
+            or(
+              eq(videoGenerationJobs.status, 'processing'),
+              eq(videoGenerationJobs.status, 'pending')
+            )
+          )
+        )
+        .returning({ jobId: videoGenerationJobs.jobId });
+
+      if (updated.length === 0) {
+        console.log(`[AssetLibrary] Startup recovery: job ${job.jobId} status changed (already completed/failed), skipping`);
+        continue;
+      }
+
+      console.log(`[AssetLibrary] Startup recovery: retrying job ${job.jobId} (mode: ${mode}, attempt: ${retryCount + 1})`);
+
+      processAssetLibraryJob(job.jobId, userId, mode).catch((err) => {
+        console.error(`[AssetLibrary] Recovery retry failed for job ${job.jobId}:`, err.message);
+      });
+    }
+  } catch (error: any) {
+    console.error('[AssetLibrary] Startup recovery error:', error.message);
+  }
+}
+
+function startStallCheck() {
+  setInterval(async () => {
+    try {
+      const cutoff = new Date(Date.now() - STALL_THRESHOLD_MS);
+      const stalledJobs = await db
+        .select()
+        .from(videoGenerationJobs)
+        .where(
+          and(
+            eq(videoGenerationJobs.sceneId, 'asset-library'),
+            eq(videoGenerationJobs.status, 'processing')
+          )
+        );
+
+      const jobsToFail = stalledJobs.filter(j => {
+        const started = j.startedAt || j.createdAt;
+        return started && new Date(started) < cutoff;
+      });
+
+      for (const job of jobsToFail) {
+        const settings = (job.i2vSettings as any) || {};
+        const retryCount = settings._retryCount || 0;
+        const mode = settings.assetLibraryMode;
+        const userId = job.triggeredBy || '';
+
+        if (retryCount < MAX_RETRIES && mode && userId) {
+          const updated = await db
+            .update(videoGenerationJobs)
+            .set({
+              status: 'pending',
+              startedAt: null,
+              updatedAt: new Date(),
+              i2vSettings: { ...settings, _retryCount: retryCount + 1 },
+            })
+            .where(
+              and(
+                eq(videoGenerationJobs.jobId, job.jobId),
+                eq(videoGenerationJobs.status, 'processing')
+              )
+            )
+            .returning({ jobId: videoGenerationJobs.jobId });
+
+          if (updated.length === 0) {
+            console.log(`[AssetLibrary] Stall check: job ${job.jobId} status changed, skipping`);
+            continue;
+          }
+
+          console.log(`[AssetLibrary] Stall check: retrying stalled job ${job.jobId} (mode: ${mode}, attempt: ${retryCount + 1})`);
+
+          processAssetLibraryJob(job.jobId, userId, mode).catch((err) => {
+            console.error(`[AssetLibrary] Stall retry failed for job ${job.jobId}:`, err.message);
+          });
+        } else {
+          const elapsed = Math.round((Date.now() - new Date(job.startedAt || job.createdAt!).getTime()) / 1000);
+          await failJob(job.jobId, `Job stalled after ${elapsed}s with no response (max retries: ${MAX_RETRIES})`);
+          console.warn(`[AssetLibrary] Stall check: marked job ${job.jobId} as failed after ${elapsed}s`);
+        }
+      }
+    } catch (error: any) {
+      console.error('[AssetLibrary] Stall check error:', error.message);
+    }
+  }, STALL_CHECK_INTERVAL_MS);
+}
+
+setTimeout(() => {
+  recoverStuckAssetJobs();
+  startStallCheck();
+  console.log('[AssetLibrary] Startup recovery and stall check initialized');
+}, 3000);
+
 async function processAssetLibraryJob(jobId: string, userId: string, mode: string) {
   console.log(`[AssetLibrary] Processing job ${jobId} (mode: ${mode})`);
 
