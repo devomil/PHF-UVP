@@ -126,6 +126,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
   const [showMicroScenesExpanded, setShowMicroScenesExpanded] = useState(true);
   const assembledVideoRef = useRef<HTMLVideoElement>(null);
   const allJobsDonePolls = useRef(0);
+  const reconcileInFlight = useRef(false);
   const [expandedMicroScene, setExpandedMicroScene] = useState<number | null>(null);
   const [fullscreenMicroScene, setFullscreenMicroScene] = useState<number | null>(null);
   const [msModalPrompt, setMsModalPrompt] = useState("");
@@ -255,6 +256,8 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
       return;
     }
     const reconcileWithServer = async () => {
+      if (reconcileInFlight.current) return;
+      reconcileInFlight.current = true;
       try {
         const res = await fetch(`/api/universal-video/${projectId}/scenes/${sceneId}/micro-scene-jobs`, { credentials: "include" });
         if (!res.ok) return;
@@ -266,7 +269,6 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
           prev.forEach(idx => { if (activeIndices.has(idx)) next.add(idx); });
 
           let shouldRefresh = false;
-          let shouldClearAll = false;
 
           if (next.size < prev.size) {
             shouldRefresh = true;
@@ -274,14 +276,24 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
 
           if (next.size === 0 && prev.size > 0) {
             allJobsDonePolls.current++;
+            shouldRefresh = true;
             if (allJobsDonePolls.current >= 3) {
+              await queryClient.refetchQueries({ queryKey: ["project", projectId] });
+              const prevIndices = Array.from(prev);
+              const freshProject = queryClient.getQueryData<any>(["project", projectId]);
+              const freshScene = freshProject?.scenes?.find((s: any) => s.id === sceneId);
+              const allHaveVideo = prevIndices.every((idx: number) => freshScene?.microScenes?.[idx]?.videoUrl);
               allJobsDonePolls.current = 0;
-              shouldClearAll = true;
-              shouldRefresh = true;
-              regeneratingRef.current = new Set<number>();
-              setRegeneratingMicroScenes(new Set<number>());
-            } else {
-              shouldRefresh = true;
+              if (allHaveVideo) {
+                regeneratingRef.current = new Set<number>();
+                setRegeneratingMicroScenes(new Set<number>());
+                setMsRegenStartedAt(null);
+                setMsRegenElapsed(0);
+                if (msRegenTimerRef.current) clearInterval(msRegenTimerRef.current);
+              } else {
+                await queryClient.refetchQueries({ queryKey: ["project", projectId] });
+              }
+              return;
             }
           } else {
             allJobsDonePolls.current = 0;
@@ -291,16 +303,13 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
             }
           }
 
-          if (shouldClearAll) {
-            setMsRegenStartedAt(null);
-            setMsRegenElapsed(0);
-            if (msRegenTimerRef.current) clearInterval(msRegenTimerRef.current);
-          }
           if (shouldRefresh) {
             await queryClient.refetchQueries({ queryKey: ["project", projectId] });
           }
         }
-      } catch {}
+      } catch {} finally {
+        reconcileInFlight.current = false;
+      }
     };
     reconcileWithServer();
     const staleCheck = setInterval(reconcileWithServer, 5000);
@@ -352,7 +361,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
         prevMicroSceneVideos.current[i] = ms.videoUrl;
       });
     }
-  }, [scene.microScenes]);
+  }, [scene.microScenes, regeneratingMicroScenes]);
 
   useEffect(() => {
     if (msRegenStartedAt) {
