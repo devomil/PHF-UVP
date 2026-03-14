@@ -22,6 +22,7 @@ import { motionGraphicsRouter } from '../services/motion-graphics-router';
 import { motionGraphicsGenerator } from '../services/motion-graphics-generator';
 import { soundDesignService } from '../services/sound-design-service';
 import { transitionService, TransitionPlan, SceneTransition } from '../services/transition-service';
+import { textOverlayDetector } from '../services/text-overlay-detector';
 import { textPlacementService, TextOverlay as TextOverlayType, TextPlacement } from '../services/text-placement-service';
 import { assetUrlResolver } from '../services/asset-url-resolver';
 import { s3RenderAssetService } from '../services/s3-render-asset-service';
@@ -3317,6 +3318,32 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
       voRecalcFrame += sceneDurationFrames;
     }
     console.log('[Render] Voiceover ranges recalculated after intro injection:', voiceoverRanges.length, 'ranges');
+
+    let clearedInstructionOverlays = 0;
+    let clearedTraditionalOverlays = 0;
+    for (const scene of preparedProject.scenes as any[]) {
+      const sceneType = (scene.type || '').toLowerCase();
+      if (sceneType === 'cta' || sceneType === 'call_to_action') continue;
+      const requirement = textOverlayDetector.detectTextOverlayRequirements({
+        sceneIndex: scene.sceneIndex,
+        visualDirection: scene.visualDirection,
+        narration: scene.narration,
+        type: scene.type,
+      });
+      if (!requirement.required) {
+        if (scene.compositionInstructions?.textOverlays?.length) {
+          clearedInstructionOverlays += scene.compositionInstructions.textOverlays.length;
+          scene.compositionInstructions.textOverlays = [];
+        }
+        if (scene.textOverlays?.length) {
+          clearedTraditionalOverlays += scene.textOverlays.length;
+          scene.textOverlays = [];
+        }
+      }
+    }
+    if (clearedInstructionOverlays > 0 || clearedTraditionalOverlays > 0) {
+      console.log(`[Render] Cleared stale text overlays: ${clearedInstructionOverlays} from compositionInstructions, ${clearedTraditionalOverlays} from scene.textOverlays`);
+    }
 
     const visualStyle = (projectData as any).visualStyle || (projectData as any).style || 'lifestyle';
     const scenesForTransitionPlanning = preparedProject.scenes.map((s: any, idx: number) => ({
