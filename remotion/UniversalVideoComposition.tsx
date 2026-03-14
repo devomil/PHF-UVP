@@ -28,6 +28,7 @@ import { LogoOverlay } from "./components/LogoOverlay";
 import { WatermarkOverlay } from "./components/WatermarkOverlay";
 import { KenBurnsImage } from "./components/KenBurnsImage";
 import { CustomImageOverlay } from "./components/CustomImageOverlay";
+import { MicroSceneOverlayCompositor } from "./components/MicroSceneOverlayCompositor";
 import { MotionGraphicsScene } from "./compositions/MotionGraphicsScene";
 import { AnimatedEndCard } from "./components/endcard/AnimatedEndCard";
 import { EndCardConfig, DEFAULT_END_CARD_CONFIG } from "../shared/config/end-card";
@@ -1287,6 +1288,8 @@ const MicroSceneBackground: React.FC<{
     console.log(`  Total allocated frames: ${offset} / ${totalSceneFrames}`);
   }, []);
 
+  const anyMsHasOverlays = microScenes.some(ms => ms.overlayItems && ms.overlayItems.length > 0);
+
   if (hasAssembledClip) {
     return (
       <AbsoluteFill>
@@ -1296,6 +1299,28 @@ const MicroSceneBackground: React.FC<{
           muted
           fallback={fallback}
         />
+        {anyMsHasOverlays && (() => {
+          let overlayOffset = 0;
+          return microScenes.map((ms, idx) => {
+            const msDuration = ms.duration || (sceneDuration / microScenes.length);
+            const isLast = idx === microScenes.length - 1;
+            const msFrames = isLast
+              ? totalSceneFrames - overlayOffset
+              : Math.round((msDuration / totalDuration) * totalSceneFrames);
+            const from = overlayOffset;
+            overlayOffset += msFrames;
+
+            if (!ms.overlayItems || ms.overlayItems.length === 0) return null;
+            return (
+              <Sequence key={`ms-overlay-${ms.id || idx}`} from={from} durationInFrames={msFrames}>
+                <MicroSceneOverlayCompositor
+                  overlayItems={ms.overlayItems}
+                  durationInFrames={msFrames}
+                />
+              </Sequence>
+            );
+          });
+        })()}
       </AbsoluteFill>
     );
   }
@@ -1320,13 +1345,16 @@ const MicroSceneBackground: React.FC<{
 
         const videoSrc = ms.videoUrl || sceneVideoUrl;
 
+        const msOverlays = ms.overlayItems && ms.overlayItems.length > 0 ? ms.overlayItems : null;
+        const seqDuration = msFrames + (isLast ? 0 : crossfadeFrames);
+
         if (videoSrc) {
           return (
-            <Sequence key={ms.id || `ms-${idx}`} from={from} durationInFrames={msFrames + (isLast ? 0 : crossfadeFrames)}>
+            <Sequence key={ms.id || `ms-${idx}`} from={from} durationInFrames={seqDuration}>
               <AbsoluteFill style={{ opacity: 1 }}>
                 <MicroSceneCrossfade
                   frameInSequence={0}
-                  durationInFrames={msFrames + (isLast ? 0 : crossfadeFrames)}
+                  durationInFrames={seqDuration}
                   crossfadeFrames={crossfadeFrames}
                   isFirst={idx === 0}
                   isLast={isLast}
@@ -1348,17 +1376,23 @@ const MicroSceneBackground: React.FC<{
                     />
                   )}
                 </MicroSceneCrossfade>
+                {msOverlays && (
+                  <MicroSceneOverlayCompositor
+                    overlayItems={msOverlays}
+                    durationInFrames={seqDuration}
+                  />
+                )}
               </AbsoluteFill>
             </Sequence>
           );
         }
         if (ms.imageUrl) {
           return (
-            <Sequence key={ms.id || `ms-${idx}`} from={from} durationInFrames={msFrames + (isLast ? 0 : crossfadeFrames)}>
+            <Sequence key={ms.id || `ms-${idx}`} from={from} durationInFrames={seqDuration}>
               <AbsoluteFill>
                 <MicroSceneCrossfade
                   frameInSequence={0}
-                  durationInFrames={msFrames + (isLast ? 0 : crossfadeFrames)}
+                  durationInFrames={seqDuration}
                   crossfadeFrames={crossfadeFrames}
                   isFirst={idx === 0}
                   isLast={isLast}
@@ -1369,6 +1403,12 @@ const MicroSceneBackground: React.FC<{
                     fallback={fallback}
                   />
                 </MicroSceneCrossfade>
+                {msOverlays && (
+                  <MicroSceneOverlayCompositor
+                    overlayItems={msOverlays}
+                    durationInFrames={seqDuration}
+                  />
+                )}
               </AbsoluteFill>
             </Sequence>
           );

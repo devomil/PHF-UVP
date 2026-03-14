@@ -166,6 +166,22 @@ export interface VideoSettings {
   playbackRate: number; // 0.5 = slow mo, 1.0 = normal, 2.0 = speed up
 }
 
+export type EntranceAnimation = 'fade' | 'rise' | 'pop' | 'drift';
+
+export interface MicroSceneOverlayItem {
+  id: string;
+  url: string;
+  name: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  opacity: number;
+  locked: boolean;
+  zIndex: number;
+  entranceAnimation: EntranceAnimation;
+}
+
 export interface MicroScene {
   id: string;
   narration: string;
@@ -179,6 +195,7 @@ export interface MicroScene {
   visualFormat?: VisualFormat;
   contentTag?: string;
   artPresetId?: string;
+  overlayItems?: MicroSceneOverlayItem[];
 }
 
 export interface AssemblyWordMarker {
