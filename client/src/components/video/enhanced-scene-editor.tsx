@@ -8,6 +8,8 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { SceneOverlayEditor, type SceneOverlayItem } from "./scene-overlay-editor";
+import { MicroSceneOverlayEditor } from "./micro-scene-overlay-editor";
+import type { MicroSceneOverlayItem } from "@shared/video-types";
 import { ProviderCapabilitySelector, getProviderRecommendationText } from "./ProviderCapabilityCard";
 import { AskSuzziePanel } from "./ask-suzzie-panel";
 import { VIDEO_PROVIDERS as PROVIDER_CONFIG, getMultiImageSupport, type MultiImageSupport } from "@shared/provider-config";
@@ -137,6 +139,8 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
   const [msModalShowLibrary, setMsModalShowLibrary] = useState(false);
   const msModalFileRef = useRef<HTMLInputElement>(null);
   const overlayDebounceRef = useRef<NodeJS.Timeout | null>(null);
+  const msOverlayDebounceRefs = useRef<Record<number, NodeJS.Timeout>>({});
+  const [msOverlayState, setMsOverlayState] = useState<Record<number, MicroSceneOverlayItem[]>>({});
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const visualDirectionRef = useRef<HTMLTextAreaElement>(null);
   const narrationRef = useRef<HTMLTextAreaElement>(null);
@@ -204,9 +208,32 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
     }, 800);
   }, [projectId, sceneId, queryClient, toast]);
 
+  const handleMicroSceneOverlayChange = useCallback((msIdx: number, newOverlays: MicroSceneOverlayItem[]) => {
+    setMsOverlayState(prev => ({ ...prev, [msIdx]: newOverlays }));
+
+    if (msOverlayDebounceRefs.current[msIdx]) clearTimeout(msOverlayDebounceRefs.current[msIdx]);
+    msOverlayDebounceRefs.current[msIdx] = setTimeout(() => {
+      fetch(`/api/universal-video/projects/${projectId}/scenes/${sceneId}/micro-scenes/${msIdx}/overlays`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ overlayItems: newOverlays }),
+      }).then((res) => {
+        if (res.ok) {
+          queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+        } else {
+          toast({ title: "Failed to save micro-scene overlays", variant: "destructive" });
+        }
+      }).catch(() => {
+        toast({ title: "Failed to save micro-scene overlays", variant: "destructive" });
+      });
+    }, 800);
+  }, [projectId, sceneId, queryClient, toast]);
+
   useEffect(() => {
     return () => {
       if (overlayDebounceRef.current) clearTimeout(overlayDebounceRef.current);
+      Object.values(msOverlayDebounceRefs.current).forEach(t => clearTimeout(t));
     };
   }, []);
 
@@ -216,6 +243,10 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
       setSceneOverlays(incoming);
     }
   }, [scene.overlayItems]);
+
+  useEffect(() => {
+    setMsOverlayState({});
+  }, [scene.microScenes]);
 
   useEffect(() => {
     const checkActiveMsJobs = async () => {
@@ -2212,6 +2243,13 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                             )}
                           </button>
                         )}
+
+                        <MicroSceneOverlayEditor
+                          overlays={msOverlayState[msIdx] ?? ms.overlayItems ?? []}
+                          onChange={(newOverlays) => handleMicroSceneOverlayChange(msIdx, newOverlays)}
+                          backgroundUrl={ms.videoUrl || ms.imageUrl}
+                          backgroundType={ms.videoUrl ? "video" : ms.imageUrl ? "image" : undefined}
+                        />
                       </div>
                     )}
                   </div>

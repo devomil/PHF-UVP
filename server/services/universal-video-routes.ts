@@ -2431,6 +2431,56 @@ router.patch('/projects/:projectId/scenes/:sceneId', isAuthenticated, async (req
   }
 });
 
+router.patch('/projects/:projectId/scenes/:sceneId/micro-scenes/:msIdx/overlays', isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const userId = (req.user as any)?.id;
+    const { projectId, sceneId, msIdx: msIdxStr } = req.params;
+    const msIdx = parseInt(msIdxStr, 10);
+    const { overlayItems } = req.body;
+
+    if (isNaN(msIdx) || msIdx < 0) {
+      return res.status(400).json({ success: false, error: 'Invalid micro-scene index' });
+    }
+    if (!Array.isArray(overlayItems)) {
+      return res.status(400).json({ success: false, error: 'overlayItems must be an array' });
+    }
+
+    const projectData = await getProjectFromDb(projectId);
+    if (!projectData) {
+      return res.status(404).json({ success: false, error: 'Project not found' });
+    }
+    if (projectData.ownerId !== userId) {
+      return res.status(403).json({ success: false, error: 'Access denied' });
+    }
+
+    const scenes = projectData.scenes || [];
+    const sceneIndex = scenes.findIndex((s: any) => s.id === sceneId);
+    if (sceneIndex === -1) {
+      return res.status(404).json({ success: false, error: 'Scene not found' });
+    }
+
+    const scene = scenes[sceneIndex] as any;
+    const microScenes = scene.microScenes || [];
+    if (msIdx >= microScenes.length) {
+      return res.status(404).json({ success: false, error: 'Micro-scene not found' });
+    }
+
+    microScenes[msIdx].overlayItems = overlayItems;
+
+    await db.update(universalVideoProjects)
+      .set({
+        scenes,
+        updatedAt: new Date(),
+      })
+      .where(eq(universalVideoProjects.projectId, projectId));
+
+    res.json({ success: true, microScene: microScenes[msIdx] });
+  } catch (error: any) {
+    console.error('[UpdateMicroSceneOverlays] Error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 router.delete('/projects/:projectId/scenes/:sceneId', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
