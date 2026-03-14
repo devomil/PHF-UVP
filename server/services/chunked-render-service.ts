@@ -171,7 +171,6 @@ class ChunkedRenderService {
   }
 
   buildChunkInputProps(chunk: ChunkConfig, inputProps: Record<string, any>): Record<string, any> {
-    // Only include scene overlay configs for scenes in this chunk to reduce payload size
     const chunkSceneIds = new Set(chunk.scenes.map((s: any) => s.id));
     let filteredOverlayConfigs: Record<string, any> | undefined;
     if (inputProps.sceneOverlayConfigs) {
@@ -183,12 +182,26 @@ class ChunkedRenderService {
       }
     }
 
+    let chunkTransitions: any[] | undefined;
+    if (inputProps.transitions && Array.isArray(inputProps.transitions)) {
+      const allScenes = inputProps.scenes || [];
+      const chunkSceneIndices = chunk.scenes.map((cs: any) => allScenes.findIndex((s: any) => s.id === cs.id));
+      chunkTransitions = [];
+      for (let i = 0; i < chunk.scenes.length - 1; i++) {
+        const globalIdx = chunkSceneIndices[i];
+        if (globalIdx >= 0 && globalIdx < inputProps.transitions.length) {
+          chunkTransitions.push(inputProps.transitions[globalIdx]);
+        }
+      }
+    }
+
     const chunkInputProps: any = {
       ...inputProps,
       scenes: chunk.scenes,
       isChunk: true,
       chunkIndex: chunk.chunkIndex,
       sceneOverlayConfigs: filteredOverlayConfigs,
+      transitions: chunkTransitions,
       voiceoverRanges: undefined,
       voiceoverUrl: null,
       musicUrl: null,
