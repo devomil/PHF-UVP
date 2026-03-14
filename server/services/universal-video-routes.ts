@@ -3330,6 +3330,7 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
       if (type === 'cut') return 'none';
       if (type === 'zoom-in' || type === 'zoom-out') return 'zoom';
       if (type === 'wipe-up' || type === 'wipe-down') return 'wipe-left';
+      if (type === 'blur') return 'dissolve';
       return type;
     };
     const renderTransitions = transitionPlan.transitions.map(t => ({
