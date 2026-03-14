@@ -3318,6 +3318,49 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
     }
     console.log('[Render] Voiceover ranges recalculated after intro injection:', voiceoverRanges.length, 'ranges');
 
+    const visualStyle = (projectData as any).visualStyle || (projectData as any).style || 'lifestyle';
+    const scenesForTransitionPlanning = preparedProject.scenes.map((s: any, idx: number) => ({
+      sceneIndex: idx,
+      sceneType: s.type || 'benefit',
+      duration: s.duration || 5,
+      analysisResult: s.analysisResult,
+    }));
+    const transitionPlan = transitionService.planTransitions(scenesForTransitionPlanning, visualStyle);
+    const normalizeTransitionType = (type: string): string => {
+      if (type === 'cut') return 'none';
+      if (type === 'zoom-in' || type === 'zoom-out') return 'zoom';
+      if (type === 'wipe-up' || type === 'wipe-down') return 'wipe-left';
+      return type;
+    };
+    const renderTransitions = transitionPlan.transitions.map(t => ({
+      type: normalizeTransitionType(t.config.type),
+      duration: t.config.duration,
+      easing: t.config.easing,
+    }));
+
+    for (let i = 0; i < transitionPlan.transitions.length; i++) {
+      const t = transitionPlan.transitions[i];
+      const fromScene = preparedProject.scenes[t.fromSceneIndex] as any;
+      const toScene = preparedProject.scenes[t.toSceneIndex] as any;
+      if (fromScene) {
+        if (!fromScene.compositionInstructions) fromScene.compositionInstructions = {};
+        fromScene.compositionInstructions.transitionOut = {
+          type: normalizeTransitionType(t.config.type),
+          duration: t.config.duration,
+          easing: t.config.easing,
+        };
+      }
+      if (toScene) {
+        if (!toScene.compositionInstructions) toScene.compositionInstructions = {};
+        toScene.compositionInstructions.transitionIn = {
+          type: normalizeTransitionType(t.config.type),
+          duration: t.config.duration,
+          easing: t.config.easing,
+        };
+      }
+    }
+    console.log(`[Render] Planned ${transitionPlan.transitions.length} mood-matched transitions:`, transitionPlan.summary);
+
     const inputProps = {
       scenes: preparedProject.scenes,
       voiceoverUrl: hasPerSceneVoiceover ? null : (preparedProject.assets?.voiceover?.fullTrackUrl || null),
@@ -3332,6 +3375,7 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
       soundEffectsBaseUrl: process.env.SOUND_EFFECTS_URL || `https://${process.env.REMOTION_S3_BUCKET || 'remotionlambda-useast2-1vc2l6a56o'}.s3.${process.env.REMOTION_AWS_REGION || 'us-east-2'}.amazonaws.com/audio/sfx`,
       filmTreatmentConfig,
       captionStyle: captionStyle || null,
+      transitions: renderTransitions,
     };
     
     // Resolve overlay item URLs to Lambda-accessible public URLs
@@ -3375,10 +3419,8 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
       }
     });
     
-    // Calculate total duration to determine render method (accounts for transition overlaps)
-    const projectTransitions = (preparedProject as any).transitions || inputProps.transitions;
-    const totalDuration = calculateEffectiveDuration(preparedProject.scenes, projectTransitions);
-    const useChunkedRendering = chunkedRenderService.shouldUseChunkedRendering(preparedProject.scenes, CHUNK_THRESHOLD_SEC, projectTransitions);
+    const totalDuration = calculateEffectiveDuration(preparedProject.scenes, renderTransitions);
+    const useChunkedRendering = chunkedRenderService.shouldUseChunkedRendering(preparedProject.scenes, CHUNK_THRESHOLD_SEC, renderTransitions);
     
     console.log(`[UniversalVideo] Total video duration: ${totalDuration}s, using ${useChunkedRendering ? 'chunked' : 'standard'} rendering`);
     
