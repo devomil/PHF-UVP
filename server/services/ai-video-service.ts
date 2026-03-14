@@ -245,7 +245,7 @@ class AIVideoService {
       
       logPromptOptimization(options.prompt, optimized);
       
-      const analysis = analyzePrompt(optimized.prompt);
+      const analysis = analyzePrompt(optimized.prompt, options.artPresetId);
       if (analysis.score < 70) {
         console.log(`[AIVideo] Prompt quality warning (score: ${analysis.score}): ${analysis.issues.join(', ')}`);
       }
@@ -264,8 +264,9 @@ class AIVideoService {
         console.log(`[AIVideo] T2V style reinforcement (prefix+suffix) applied for "${artPreset.name}"`);
       }
 
-      const FINAL_MAX_WORDS = 120;
+      const FINAL_MAX_WORDS = isStylizedArt ? 250 : 120;
       const finalWords = finalPrompt.split(/\s+/);
+      console.log(`[AIVideo] Pre-enforcement: ${finalWords.length} words, ${finalPrompt.length} chars (limit: ${FINAL_MAX_WORDS} words, stylized=${isStylizedArt})`);
       if (finalWords.length > FINAL_MAX_WORDS) {
         const charBlockPattern = /([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\s*\((?:late-\d+s\s+\w+|[^)]*(?:hair|eyes?|skin|build|wearing)[^)]*)[^)]{15,}\)/g;
         const charBlocks: string[] = [];
@@ -278,14 +279,14 @@ class AIVideoService {
         }
         const middleWords = middleContent.split(/\s+/);
         const protectedWordCount = stylePrefix.split(/\s+/).filter(Boolean).length + styleSuffix.split(/\s+/).filter(Boolean).length + charBlocks.reduce((sum, b) => sum + b.split(/\s+/).length, 0);
-        const allowedMiddleWords = Math.max(20, FINAL_MAX_WORDS - protectedWordCount);
+        const allowedMiddleWords = Math.max(isStylizedArt ? 80 : 20, FINAL_MAX_WORDS - protectedWordCount);
         if (middleWords.length > allowedMiddleWords) {
           middleContent = middleWords.slice(0, allowedMiddleWords).join(' ');
         }
         let blockIdx = 0;
         middleContent = middleContent.replace(/__CB__/g, () => charBlocks[blockIdx++] || '');
         finalPrompt = (stylePrefix + middleContent + (styleSuffix ? ' ' + styleSuffix.trim() : '')).replace(/\s{2,}/g, ' ').trim();
-        console.log(`[AIVideo] Post-assembly length enforcement: trimmed to ~${finalPrompt.split(/\s+/).length} words (limit ${FINAL_MAX_WORDS})`);
+        console.log(`[AIVideo] Post-assembly length enforcement: trimmed to ~${finalPrompt.split(/\s+/).length} words, ${finalPrompt.length} chars (limit ${FINAL_MAX_WORDS})`);
       }
 
       enhancedOptions = {

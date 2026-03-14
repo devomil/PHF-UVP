@@ -157,6 +157,76 @@ class PiAPIVideoService {
     }
   }
 
+  private getProviderCharLimit(model: string): number {
+    const modelLower = model.toLowerCase();
+    if (modelLower.startsWith('kling')) return 2500;
+    if (modelLower.startsWith('veo')) return 2000;
+    if (modelLower.startsWith('luma')) return 2000;
+    if (modelLower.startsWith('hailuo') || modelLower.startsWith('seedance')) return 2000;
+    if (modelLower.startsWith('wan')) return 2000;
+    if (modelLower.startsWith('runway')) return 2000;
+    if (modelLower.startsWith('pika')) return 1500;
+    if (modelLower.startsWith('sora')) return 2000;
+    return 1500;
+  }
+
+  private enforceProviderCharLimit(prompt: string, model: string): string {
+    const charLimit = this.getProviderCharLimit(model);
+    const promptChars = prompt.length;
+    console.log(`[PiAPI] Final prompt: ${prompt.split(/\s+/).length} words, ${promptChars} chars (provider limit: ${charLimit} chars for ${model})`);
+
+    if (promptChars <= charLimit) return prompt;
+
+    const charBlockPattern = /([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\s*\((?:late-\d+s\s+\w+|[^)]*(?:hair|eyes?|skin|build|wearing)[^)]*)[^)]{15,}\)/g;
+    const charBlocks: string[] = [];
+    let stripped = prompt.replace(charBlockPattern, (match) => {
+      charBlocks.push(match);
+      return `__PB_${charBlocks.length - 1}__`;
+    });
+
+    const stylePrefix = stripped.match(/^\[STYLE:[^\]]+\]\s*/)?.[0] || '';
+    const styleSuffix = stripped.match(/\.\s*All environments[^.]+whatsoever\.$/)?.[0] || '';
+    const protectedChars = stylePrefix.length + styleSuffix.length + charBlocks.reduce((sum, b) => sum + b.length + 6, 0);
+    const availableChars = Math.max(0, charLimit - protectedChars);
+
+    let middle = stripped.slice(stylePrefix.length, styleSuffix ? stripped.length - styleSuffix.length : undefined);
+    for (let i = 0; i < charBlocks.length; i++) {
+      middle = middle.replace(`__PB_${i}__`, '');
+    }
+    middle = middle.replace(/\s{2,}/g, ' ').trim();
+
+    if (middle.length > availableChars) {
+      middle = middle.substring(0, availableChars);
+      const lastSpace = middle.lastIndexOf(' ');
+      if (lastSpace > availableChars * 0.5) {
+        middle = middle.substring(0, lastSpace);
+      }
+    }
+
+    let result = stylePrefix + middle;
+    for (let i = 0; i < charBlocks.length; i++) {
+      if (result.length + charBlocks[i].length + styleSuffix.length < charLimit) {
+        result += ' ' + charBlocks[i];
+      }
+    }
+    result += styleSuffix ? ' ' + styleSuffix.trim() : '';
+    result = result.replace(/\s{2,}/g, ' ').trim();
+
+    if (result.length > charLimit) {
+      result = result.substring(0, charLimit);
+      const lastSpace = result.lastIndexOf(' ');
+      if (lastSpace > charLimit * 0.7) {
+        result = result.substring(0, lastSpace);
+      }
+      result = result.trim();
+      console.log(`[PiAPI] Hard truncation applied: ${result.length} chars (limit: ${charLimit})`);
+    } else {
+      console.log(`[PiAPI] Prompt trimmed to provider char limit: ${result.length} chars (limit: ${charLimit})`);
+    }
+
+    return result;
+  }
+
   private buildRequestBody(options: PiAPIGenerationOptions, modelConfig: ModelConfig): any {
     const motionParams = options.motionControl ? mapToKlingMotion(options.motionControl) : {};
     const motionPrompt = options.motionControl 
@@ -167,12 +237,17 @@ class PiAPIVideoService {
       console.log(`[PiAPI T2V] Motion control: ${options.motionControl.camera_movement} @ ${options.motionControl.intensity}`);
       console.log(`[PiAPI T2V] Motion rationale: ${options.motionControl.rationale}`);
     }
+
+    const safePrompt = this.enforceProviderCharLimit(options.prompt, options.model);
+    const safeMotionPrompt = motionPrompt !== options.prompt 
+      ? this.enforceProviderCharLimit(motionPrompt, options.model)
+      : safePrompt;
     
     const baseRequest = {
       model: modelConfig.modelId,
       task_type: 'text_to_video',
       input: {
-        prompt: options.prompt,
+        prompt: safePrompt,
         negative_prompt: options.negativePrompt || 'text, words, letters, numbers, writing, signage, logos, watermarks, labels, captions, titles, subtitles, UI elements, buttons, banners, blurry, low quality, distorted, ugly',
         duration: Math.min(options.duration, modelConfig.maxDuration),
         aspect_ratio: options.aspectRatio,
@@ -404,7 +479,7 @@ class PiAPIVideoService {
           model: 'seedance',
           task_type: 'seedance-2-preview',
           input: {
-            prompt: options.prompt,
+            prompt: safePrompt,
             duration: Math.min(options.duration, 10),
             aspect_ratio: options.aspectRatio || '16:9',
           },
@@ -416,7 +491,7 @@ class PiAPIVideoService {
           model: 'seedance',
           task_type: 'seedance-2-fast-preview',
           input: {
-            prompt: options.prompt,
+            prompt: safePrompt,
             duration: Math.min(options.duration, 10),
             aspect_ratio: options.aspectRatio || '16:9',
           },
@@ -429,7 +504,7 @@ class PiAPIVideoService {
           model: 'Qubico/wanx',
           task_type: 'txt2video-14b',
           input: {
-            prompt: options.prompt,
+            prompt: safePrompt,
           },
         };
         
@@ -439,7 +514,7 @@ class PiAPIVideoService {
           model: 'Wan',
           task_type: 'wan26-txt2video',
           input: {
-            prompt: options.prompt,
+            prompt: safePrompt,
             negative_prompt: options.negativePrompt || 'text, words, letters, numbers, writing, signage, logos, watermarks, labels, captions, blurry, low quality, distorted',
             prompt_extend: true,
             resolution: '720p',
@@ -467,7 +542,7 @@ class PiAPIVideoService {
           model: 'veo3.1',
           task_type: 'veo3.1-video',
           input: {
-            prompt: motionPrompt,
+            prompt: safeMotionPrompt,
             negative_prompt: baseRequest.input.negative_prompt,
             aspect_ratio: baseRequest.input.aspect_ratio,
             duration: `${Math.min(baseRequest.input.duration, 8)}s`,
@@ -488,7 +563,7 @@ class PiAPIVideoService {
           model: 'veo3',
           task_type: 'veo3-video',
           input: {
-            prompt: motionPrompt,
+            prompt: safeMotionPrompt,
             negative_prompt: baseRequest.input.negative_prompt,
             aspect_ratio: baseRequest.input.aspect_ratio,
             duration: `${Math.min(baseRequest.input.duration, 8)}s`,
@@ -505,7 +580,7 @@ class PiAPIVideoService {
           model: 'veo2',
           task_type: 'veo2-video',
           input: {
-            prompt: motionPrompt,
+            prompt: safeMotionPrompt,
             negative_prompt: baseRequest.input.negative_prompt,
             aspect_ratio: baseRequest.input.aspect_ratio,
             duration: `${Math.min(baseRequest.input.duration, 8)}s`,
@@ -522,7 +597,7 @@ class PiAPIVideoService {
           model: 'sora2',
           task_type: 'sora2-video',
           input: {
-            prompt: options.prompt,
+            prompt: safePrompt,
             aspect_ratio: options.aspectRatio || '16:9',
             duration: Math.min(options.duration, 10),
           },
@@ -535,7 +610,7 @@ class PiAPIVideoService {
           model: 'sora2',
           task_type: 'sora2-pro-video',
           input: {
-            prompt: options.prompt,
+            prompt: safePrompt,
             aspect_ratio: options.aspectRatio || '16:9',
             resolution: '720p',
             duration: Math.min(options.duration, 10),
