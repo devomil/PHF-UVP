@@ -396,10 +396,23 @@ async function failJob(jobId: string, errorMsg: string) {
     .where(eq(videoGenerationJobs.jobId, jobId));
 }
 
-const STALL_THRESHOLD_MS = 5 * 60 * 1000;
 const STARTUP_RECOVERY_AGE_MS = 2 * 60 * 1000;
 const STALL_CHECK_INTERVAL_MS = 60 * 1000;
 const MAX_RETRIES = 2;
+
+const STALL_THRESHOLDS_MS: Record<string, number> = {
+  't2i': 5 * 60 * 1000,
+  'i2i': 5 * 60 * 1000,
+  't2v': 10 * 60 * 1000,
+  'i2v': 10 * 60 * 1000,
+  'v2v': 15 * 60 * 1000,
+  'character-performance': 15 * 60 * 1000,
+  'upscale-image': 5 * 60 * 1000,
+  'upscale-video': 10 * 60 * 1000,
+  'bg-remove-image': 5 * 60 * 1000,
+  'bg-remove-video': 10 * 60 * 1000,
+};
+const DEFAULT_STALL_THRESHOLD_MS = 10 * 60 * 1000;
 
 async function recoverStuckAssetJobs() {
   try {
@@ -485,7 +498,6 @@ async function recoverStuckAssetJobs() {
 function startStallCheck() {
   setInterval(async () => {
     try {
-      const cutoff = new Date(Date.now() - STALL_THRESHOLD_MS);
       const stalledJobs = await db
         .select()
         .from(videoGenerationJobs)
@@ -496,15 +508,16 @@ function startStallCheck() {
           )
         );
 
-      const jobsToFail = stalledJobs.filter(j => {
-        const started = j.startedAt || j.createdAt;
-        return started && new Date(started) < cutoff;
-      });
-
-      for (const job of jobsToFail) {
+      for (const job of stalledJobs) {
         const settings = (job.i2vSettings as any) || {};
+        const mode = settings.assetLibraryMode || '';
+        const modeThreshold = STALL_THRESHOLDS_MS[mode] || DEFAULT_STALL_THRESHOLD_MS;
+        const started = job.startedAt || job.createdAt;
+        if (!started || new Date(started) >= new Date(Date.now() - modeThreshold)) {
+          continue;
+        }
+
         const retryCount = settings._retryCount || 0;
-        const mode = settings.assetLibraryMode;
         const userId = job.triggeredBy || '';
 
         if (retryCount < MAX_RETRIES && mode && userId) {
