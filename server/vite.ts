@@ -1,8 +1,11 @@
 import type { Express } from "express";
+import express from "express";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { createServer as createViteServer, type ViteDevServer } from "vite";
+
+const expressStatic = express.static;
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -45,8 +48,7 @@ export function serveStatic(app: Express) {
     throw new Error(`Build output not found at ${distPath}. Run "npm run build" first.`);
   }
 
-  const express = require("express");
-  app.use(express.static(distPath));
+  app.use(expressStatic(distPath));
 
   app.use("*", (_req, res) => {
     res.sendFile(path.resolve(distPath, "index.html"));

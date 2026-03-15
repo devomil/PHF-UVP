@@ -61,6 +61,8 @@ export async function registerRoutes(app: Express) {
   setTimeout(() => {
     recoverStuckJobs().then(() => {
       console.log("[Routes] Stuck job recovery check completed");
+    }).catch((err) => {
+      console.error("[Routes] Stuck job recovery failed:", err?.message || err);
     });
   }, 3000);
   app.get("/api/health", (_req, res) => {
@@ -152,11 +154,16 @@ export async function registerRoutes(app: Express) {
     });
   });
 
-  app.get("/api/projects", async (_req, res) => {
+  app.get("/api/projects", async (req, res) => {
+    if (!req.isAuthenticated() || !req.user) {
+      return res.status(401).json({ error: "Authentication required" });
+    }
     try {
+      const userId = (req.user as any).id;
       const projects = await db
         .select()
         .from(universalVideoProjects)
+        .where(eq(universalVideoProjects.ownerId, userId))
         .orderBy(desc(universalVideoProjects.createdAt))
         .limit(50);
       res.json(projects);
@@ -166,8 +173,12 @@ export async function registerRoutes(app: Express) {
   });
 
   app.get("/api/projects/:projectId", async (req, res) => {
+    if (!req.isAuthenticated() || !req.user) {
+      return res.status(401).json({ error: "Authentication required" });
+    }
     try {
       const { projectId } = req.params;
+      const userId = (req.user as any).id;
       const [project] = await db
         .select()
         .from(universalVideoProjects)
@@ -176,6 +187,10 @@ export async function registerRoutes(app: Express) {
 
       if (!project) {
         return res.status(404).json({ error: "Project not found" });
+      }
+
+      if (project.ownerId !== userId) {
+        return res.status(403).json({ error: "Access denied" });
       }
 
       const jobs = await db
