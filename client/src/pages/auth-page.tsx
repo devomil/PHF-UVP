@@ -2,7 +2,9 @@ import { useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useTheme } from "@/contexts/ThemeContext";
 import { Button } from "@/components/ui/button";
-import { Film, Sun, Moon } from "lucide-react";
+import { Sun, Moon } from "lucide-react";
+import neuralcutFullLogo from "@/assets/neuralcut-full-logo.png";
+import neuralcutIcon from "@/assets/neuralcut-icon.png";
 
 export default function AuthPage() {
   const { loginMutation, registerMutation } = useAuth();
@@ -42,11 +44,12 @@ export default function AuthPage() {
         <div className="absolute top-1/3 left-1/3 w-80 h-80 bg-purple-600/15 rounded-full blur-3xl" />
         <div className="absolute bottom-1/3 right-1/3 w-64 h-64 bg-indigo-600/15 rounded-full blur-3xl" />
         <div className="relative z-10 px-12 text-center">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-600 to-indigo-600 flex items-center justify-center mx-auto mb-6">
-            <Film className="h-8 w-8 text-white" />
-          </div>
-          <h2 className="text-3xl font-bold mb-4" style={{ color: "var(--text-primary)" }}>AI Video Production Studio</h2>
-          <p style={{ color: "var(--text-secondary)" }} className="max-w-sm mx-auto">
+          <img
+            src={neuralcutFullLogo}
+            alt="NeuralCut.AI"
+            className="w-72 mx-auto mb-8 object-contain"
+          />
+          <p style={{ color: "var(--text-secondary)" }} className="max-w-sm mx-auto text-lg">
             Create professional videos at scale with multi-provider AI generation and intelligent quality control.
           </p>
         </div>
@@ -55,10 +58,12 @@ export default function AuthPage() {
       <div className="flex-1 flex items-center justify-center px-6 py-12">
         <div className="w-full max-w-md">
           <div className="lg:hidden flex items-center justify-center gap-3 mb-8">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-600 to-indigo-600 flex items-center justify-center">
-              <Film className="h-5 w-5 text-white" />
-            </div>
-            <span className="font-semibold text-lg" style={{ color: "var(--text-primary)" }}>AI Video Studio</span>
+            <img
+              src={neuralcutIcon}
+              alt="NeuralCut.AI"
+              className="w-10 h-10 object-contain"
+            />
+            <span className="font-semibold text-lg" style={{ color: "var(--text-primary)" }}>NeuralCut.AI</span>
           </div>
 
           <div className="rounded-2xl p-8" style={{ backgroundColor: "var(--surface)", border: "1px solid var(--border-subtle)" }}>

@@ -19,6 +19,8 @@ import {
   Sun,
   Moon,
 } from "lucide-react";
+import neuralcutFullLogo from "@/assets/neuralcut-full-logo.png";
+import neuralcutIcon from "@/assets/neuralcut-icon.png";
 
 const navItems = [
   { label: "Home", icon: LayoutDashboard, path: "/" },
@@ -71,7 +73,23 @@ function AppLayout({ children }: { children: ReactNode }) {
         }`}
         style={{ borderColor: "var(--border-subtle)" }}
       >
-        <div className="p-3 mt-2">
+        <div className={`flex items-center justify-center py-4 ${collapsed ? "px-2" : "px-4"}`} style={{ borderBottom: "1px solid var(--border-subtle)" }}>
+          {collapsed ? (
+            <img
+              src={neuralcutIcon}
+              alt="NeuralCut.AI"
+              className="w-9 h-9 object-contain"
+            />
+          ) : (
+            <img
+              src={neuralcutFullLogo}
+              alt="NeuralCut.AI"
+              className="h-10 object-contain"
+            />
+          )}
+        </div>
+
+        <div className="p-3">
           <Link
             href="/projects/new"
             className={`flex items-center justify-center gap-2 w-full px-3 py-2.5 rounded-lg bg-gradient-to-r from-purple-600 to-violet-500 text-white font-medium text-sm hover:from-purple-500 hover:to-violet-400 transition-all duration-200 ${

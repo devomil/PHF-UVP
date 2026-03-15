@@ -2,6 +2,7 @@ import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/contexts/ThemeContext";
 import { Sparkles, Palette, Shield, Share2, Play, ArrowRight, Sun, Moon } from "lucide-react";
+import neuralcutFullLogo from "@/assets/neuralcut-full-logo.png";
 
 const features = [
   {
@@ -52,6 +53,11 @@ export default function Landing() {
         <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-indigo-600/10 rounded-full blur-3xl animate-pulse [animation-delay:2s]" />
 
         <div className="relative z-10 max-w-4xl mx-auto px-6 text-center">
+          <img
+            src={neuralcutFullLogo}
+            alt="NeuralCut.AI"
+            className="w-48 md:w-56 mx-auto mb-8 object-contain"
+          />
           <h1 className="text-5xl md:text-7xl font-bold mb-6 bg-gradient-to-br from-white via-purple-200 to-purple-400 bg-clip-text text-transparent leading-tight">
             Create. Generate. Produce.
           </h1>
@@ -117,7 +123,7 @@ export default function Landing() {
       </div>
 
       <div className="py-8 text-center" style={{ borderTop: "1px solid var(--border-subtle)" }}>
-        <p className="text-sm" style={{ color: "var(--text-muted)" }}>&copy; 2026 AI Video Production Studio. All rights reserved.</p>
+        <p className="text-sm" style={{ color: "var(--text-muted)" }}>&copy; 2026 NeuralCut.AI. All rights reserved.</p>
       </div>
     </div>
   );
