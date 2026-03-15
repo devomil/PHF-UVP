@@ -1632,10 +1632,14 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
     
     if (hasSubstantiveVisualDirection) {
       // Use visual direction as the primary prompt - respect what the user wrote
-      console.log(`[BuildContentPrompt] Using visual direction as PRIMARY prompt (${wantsPeople ? 'includes people' : isEnvironmentFocused ? 'environment-only' : 'general'})`);
+      console.log(`[BuildContentPrompt] Using visual direction as PRIMARY prompt (${wantsPeople ? 'includes people' : isEnvironmentFocused ? 'environment-only' : 'general'}, artPreset: ${artPresetForPrompt?.name || 'none'})`);
+      
+      const isStylizedArt = artPresetForPrompt ? isStylizedPreset(artPresetForPrompt.id) : false;
       
       if (isEnvironmentFocused) {
         fullPrompt = `${cleanVisualDirection}. No people, only the setting and objects described. High quality.`;
+      } else if (isStylizedArt) {
+        fullPrompt = `${cleanVisualDirection}. NO text, NO logos. High quality ${artPresetForPrompt!.name} render.`;
       } else if (wantsPeople) {
         fullPrompt = `${cleanVisualDirection}. Photorealistic, natural look. NO text, NO logos. Adults only.`;
       } else {
@@ -1685,12 +1689,22 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
       }
       
       const extractedConcepts = this.extractVisualConcepts(cleanVisualDirection, narration);
-      fullPrompt = `${baseContext} ${extractedConcepts}. High quality, 4K, photorealistic. NO text, NO logos, NO product shots, NO watermarks. IMPORTANT: Show ADULTS only.`;
+      const isStylizedFallback = artPresetForPrompt ? isStylizedPreset(artPresetForPrompt.id) : false;
+      const styleQualifier = isStylizedFallback ? `High quality, 4K, ${artPresetForPrompt!.name} style` : 'High quality, 4K, photorealistic';
+      fullPrompt = `${baseContext} ${extractedConcepts}. ${styleQualifier}. NO text, NO logos, NO product shots, NO watermarks. IMPORTANT: Show ADULTS only.`;
     }
     
     if (artPresetForPrompt) {
-      fullPrompt = `${artPresetForPrompt.imagePromptPrefix} ${fullPrompt}, ${artPresetForPrompt.imagePromptSuffix}`;
-      console.log(`[BuildContentPrompt] Art preset "${artPresetForPrompt.name}" applied to image prompt`);
+      let promptBody = fullPrompt;
+      if (isStylizedPreset(artPresetForPrompt.id)) {
+        promptBody = promptBody
+          .replace(/\bphotorealistic\b/gi, '')
+          .replace(/\bnatural look\b/gi, '')
+          .replace(/\.\s*\./g, '.')
+          .trim();
+      }
+      fullPrompt = `${artPresetForPrompt.imagePromptPrefix} ${promptBody}, ${artPresetForPrompt.imagePromptSuffix}`;
+      console.log(`[BuildContentPrompt] Art preset "${artPresetForPrompt.name}" applied to image prompt${isStylizedPreset(artPresetForPrompt.id) ? ' (photorealistic terms stripped)' : ''}`);
     }
     
     console.log(`[BuildContentPrompt] Final prompt: ${fullPrompt.substring(0, 100)}...`);
