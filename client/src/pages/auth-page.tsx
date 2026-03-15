@@ -50,7 +50,7 @@ export default function AuthPage() {
             className="w-72 mx-auto mb-8 object-contain"
           />
           <p style={{ color: "var(--text-secondary)" }} className="max-w-sm mx-auto text-lg">
-            Create professional videos at scale with multi-provider AI generation and intelligent quality control.
+            Automated video creation powered by multi-provider AI generation and intelligent quality control.
           </p>
         </div>
       </div>
