@@ -69,7 +69,7 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [selectedProvider, setSelectedProvider] = useState("auto");
-  const [showStepButtons, setShowStepButtons] = useState(false);
+  const [showStepButtons] = useState(true);
   const [uploadingSceneId, setUploadingSceneId] = useState<string | null>(null);
   const [librarySceneId, setLibrarySceneId] = useState<string | null>(null);
   const [selectedVoice, setSelectedVoice] = useState(project.voiceoverSettings?.voiceId || project.voiceId || "");
@@ -831,45 +831,42 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
 
             <div className="flex items-center gap-2">
               <div className="flex-1 h-px" style={{ backgroundColor: "var(--border-subtle)" }} />
-              <button
-                onClick={() => setShowStepButtons(!showStepButtons)}
-                className="text-xs px-3 py-1 rounded-full border transition-colors"
-                style={{ borderColor: "var(--border-subtle)", color: "var(--text-muted)" }}
-              >
-                {showStepButtons ? "Hide Steps" : "Step-by-step"}
-              </button>
+              <span className="text-xs px-3 py-1" style={{ color: "var(--text-muted)" }}>
+                or generate individually
+              </span>
               <div className="flex-1 h-px" style={{ backgroundColor: "var(--border-subtle)" }} />
             </div>
 
-            {showStepButtons && (
-              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-                {PIPELINE_STEPS.filter(s => s.key !== "assembly" && s.key !== "script").map((step) => {
-                  const status = getStepStatus(step.key);
-                  const Icon = step.icon;
-                  const isCompleted = status === "completed";
-                  return (
-                    <button
-                      key={step.key}
-                      onClick={() => generateStepMutation.mutate(step.key)}
-                      disabled={isGenerating || generateStepMutation.isPending}
-                      className="flex items-center gap-2 px-3 py-2.5 rounded-lg border text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      style={{
-                        borderColor: isCompleted ? "var(--border-subtle)" : "var(--border-medium)",
-                        color: isCompleted ? "var(--text-muted)" : "var(--text-primary)",
-                        backgroundColor: isCompleted ? "rgba(16,185,129,0.05)" : "transparent",
-                      }}
-                    >
-                      {isCompleted ? (
-                        <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                      ) : (
-                        <Icon className="w-4 h-4" style={{ color: "var(--text-muted)" }} />
-                      )}
-                      {step.label}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {PIPELINE_STEPS.filter(s => s.key !== "assembly" && s.key !== "script").map((step) => {
+                const status = getStepStatus(step.key);
+                const Icon = step.icon;
+                const isCompleted = status === "completed";
+                const isInProgress = status === "in-progress";
+                return (
+                  <button
+                    key={step.key}
+                    onClick={() => generateStepMutation.mutate(step.key)}
+                    disabled={isGenerating || generateStepMutation.isPending}
+                    className="flex items-center gap-2 px-3 py-2.5 rounded-lg border text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    style={{
+                      borderColor: isCompleted ? "rgba(16,185,129,0.3)" : isInProgress ? "rgba(96,165,250,0.3)" : "var(--border-medium)",
+                      color: isCompleted ? "var(--text-muted)" : "var(--text-primary)",
+                      backgroundColor: isCompleted ? "rgba(16,185,129,0.05)" : isInProgress ? "rgba(96,165,250,0.05)" : "transparent",
+                    }}
+                  >
+                    {isCompleted ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                    ) : isInProgress ? (
+                      <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />
+                    ) : (
+                      <Icon className="w-4 h-4" style={{ color: "var(--text-muted)" }} />
+                    )}
+                    {step.label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         )}
       </div>
@@ -1592,6 +1589,7 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
   const [expanded, setExpanded] = useState(true);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const isProjectGenerating = ["generating", "queued", "processing"].includes(projectStatus || "");
 
   const settingsQuery = useQuery({
     queryKey: ["render-settings", projectId],
@@ -1659,6 +1657,28 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
       url: rawSettings.music.url || (musicReady ? quickAssets.music?.url : undefined),
     },
   };
+
+  const generateStepMutation = useMutation({
+    mutationFn: async (step: string) => {
+      const res = await fetch(`/api/universal-video/projects/${projectId}/generate-step`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ step }),
+      });
+      if (!res.ok) throw new Error(`Failed to generate ${step}`);
+      return res.json();
+    },
+    onSuccess: (_data, step) => {
+      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+      queryClient.invalidateQueries({ queryKey: ["render-settings", projectId] });
+      queryClient.invalidateQueries({ queryKey: ["quick-create-assets-render", projectId] });
+      toast({ title: "Generation Started", description: `${step.charAt(0).toUpperCase() + step.slice(1)} generation started.` });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
 
   const saveMutation = useMutation({
     mutationFn: async (patch: any) => {
@@ -1782,7 +1802,7 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
               </div>
               {settings.voiceover.enabled && (
                 <>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center justify-between gap-2">
                     {settings.voiceover.hasGenerated ? (
                       <span className="flex items-center gap-1 text-xs text-emerald-400">
                         <CheckCircle2 className="w-3 h-3" /> Ready{settings.voiceover.duration ? ` (${Math.round(settings.voiceover.duration)}s)` : ""}
@@ -1796,12 +1816,23 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
                         <AlertCircle className="w-3 h-3" /> Not generated yet
                       </span>
                     )}
+                    {!settings.voiceover.hasGenerated && quickAssets.voiceover?.status !== "generating" && (
+                      <button
+                        onClick={() => generateStepMutation.mutate("voiceover")}
+                        disabled={generateStepMutation.isPending || isProjectGenerating}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        style={{ background: "linear-gradient(135deg, #7c3aed, #4f46e5)" }}
+                        title={isProjectGenerating ? "Generation already in progress" : "Generate voiceover for all scenes"}
+                      >
+                        {generateStepMutation.isPending ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : (
+                          <Sparkles className="w-3 h-3" />
+                        )}
+                        Generate
+                      </button>
+                    )}
                   </div>
-                  <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                    {settings.voiceover.hasGenerated
-                      ? "Voiceover audio is ready for rendering."
-                      : "Generate a voiceover in the Asset Creation panel above."}
-                  </p>
                 </>
               )}
             </div>
@@ -1837,19 +1868,37 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
                       style={{ background: `linear-gradient(to right, rgb(168 85 247) ${Math.round((settings.music.volume || 0.18) * 100)}%, var(--border-subtle) ${Math.round((settings.music.volume || 0.18) * 100)}%)` }}
                     />
                   </div>
-                  {settings.music.hasGenerated ? (
-                    <span className="flex items-center gap-1 text-xs text-emerald-400">
-                      <CheckCircle2 className="w-3 h-3" /> Music ready
-                    </span>
-                  ) : quickAssets.music?.status === "generating" ? (
-                    <span className="flex items-center gap-1 text-xs text-blue-400">
-                      <Loader2 className="w-3 h-3 animate-spin" /> Generating...
-                    </span>
-                  ) : (
-                    <span className="flex items-center gap-1 text-xs text-amber-400">
-                      <AlertCircle className="w-3 h-3" /> Not generated yet
-                    </span>
-                  )}
+                  <div className="flex items-center justify-between gap-2">
+                    {settings.music.hasGenerated ? (
+                      <span className="flex items-center gap-1 text-xs text-emerald-400">
+                        <CheckCircle2 className="w-3 h-3" /> Music ready
+                      </span>
+                    ) : quickAssets.music?.status === "generating" ? (
+                      <span className="flex items-center gap-1 text-xs text-blue-400">
+                        <Loader2 className="w-3 h-3 animate-spin" /> Generating...
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1 text-xs text-amber-400">
+                        <AlertCircle className="w-3 h-3" /> Not generated yet
+                      </span>
+                    )}
+                    {!settings.music.hasGenerated && quickAssets.music?.status !== "generating" && (
+                      <button
+                        onClick={() => generateStepMutation.mutate("music")}
+                        disabled={generateStepMutation.isPending || isProjectGenerating}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        style={{ background: "linear-gradient(135deg, #7c3aed, #4f46e5)" }}
+                        title={isProjectGenerating ? "Generation already in progress" : "Generate background music"}
+                      >
+                        {generateStepMutation.isPending ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : (
+                          <Sparkles className="w-3 h-3" />
+                        )}
+                        Generate
+                      </button>
+                    )}
+                  </div>
                 </>
               )}
             </div>
