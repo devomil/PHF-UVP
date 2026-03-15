@@ -34,6 +34,15 @@ The AI Video Production Studio is a full-stack platform designed to streamline v
 -   **Service Architecture**: Modularized backend services for specific functionalities (e.g., `ai-video-service`, `brand-service`, `remotion-lambda-service`).
 -   **Database Schema**: Drizzle ORM defines schemas for users, sessions, video projects, production phases, brand assets, media assets, and job queues.
 
+## Deployment
+-   **Target**: Autoscale (Replit Deployments)
+-   **Build**: `vite build && esbuild server/index.ts --bundle --platform=node --format=esm --packages=external --outdir=dist/server`
+-   **Run**: `NODE_ENV=production node dist/server/index.js`
+-   **Health Check**: `GET /api/health` returns `{"status":"ok","timestamp":"..."}`
+-   **Session Security**: `trust proxy` enabled in production, secure cookies enforced, `SESSION_SECRET` env var required (fails fast if missing in production)
+-   **Auth**: All project endpoints require authentication + ownership verification (IDOR protection)
+-   **Static Serving**: Production serves pre-built Vite output from `dist/public/`
+
 ## External Dependencies
 -   **AI Video Providers**: Kling, RunwayML (4.5, Gen-4, Gen-4 Aleph, Act Two), Luma, Pika, Veo, Hailuo, Wan, Sora, Seedance (1.0, 2.0 Preview, 2.0 Fast), Hunyuan (via PiAPI). Seedance 2 uses `model: "seedance"` with task types `seedance-2-preview` / `seedance-2-fast-preview`, supports `@imageN` multi-image references in prompts and morphing effects between images.
 -   **Database**: PostgreSQL (Neon).
