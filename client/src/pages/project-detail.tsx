@@ -69,7 +69,6 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [selectedProvider, setSelectedProvider] = useState("auto");
-  const [showStepButtons] = useState(true);
   const [uploadingSceneId, setUploadingSceneId] = useState<string | null>(null);
   const [librarySceneId, setLibrarySceneId] = useState<string | null>(null);
   const [selectedVoice, setSelectedVoice] = useState(project.voiceoverSettings?.voiceId || project.voiceId || "");
@@ -1807,7 +1806,7 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
                       <span className="flex items-center gap-1 text-xs text-emerald-400">
                         <CheckCircle2 className="w-3 h-3" /> Ready{settings.voiceover.duration ? ` (${Math.round(settings.voiceover.duration)}s)` : ""}
                       </span>
-                    ) : quickAssets.voiceover?.status === "generating" ? (
+                    ) : ["generating", "queued", "processing"].includes(quickAssets.voiceover?.status) ? (
                       <span className="flex items-center gap-1 text-xs text-blue-400">
                         <Loader2 className="w-3 h-3 animate-spin" /> Generating...
                       </span>
@@ -1816,7 +1815,7 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
                         <AlertCircle className="w-3 h-3" /> Not generated yet
                       </span>
                     )}
-                    {!settings.voiceover.hasGenerated && quickAssets.voiceover?.status !== "generating" && (
+                    {!settings.voiceover.hasGenerated && !["generating", "queued", "processing"].includes(quickAssets.voiceover?.status) && (
                       <button
                         onClick={() => generateStepMutation.mutate("voiceover")}
                         disabled={generateStepMutation.isPending || isProjectGenerating}
@@ -1873,7 +1872,7 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
                       <span className="flex items-center gap-1 text-xs text-emerald-400">
                         <CheckCircle2 className="w-3 h-3" /> Music ready
                       </span>
-                    ) : quickAssets.music?.status === "generating" ? (
+                    ) : ["generating", "queued", "processing"].includes(quickAssets.music?.status) ? (
                       <span className="flex items-center gap-1 text-xs text-blue-400">
                         <Loader2 className="w-3 h-3 animate-spin" /> Generating...
                       </span>
@@ -1882,7 +1881,7 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
                         <AlertCircle className="w-3 h-3" /> Not generated yet
                       </span>
                     )}
-                    {!settings.music.hasGenerated && quickAssets.music?.status !== "generating" && (
+                    {!settings.music.hasGenerated && !["generating", "queued", "processing"].includes(quickAssets.music?.status) && (
                       <button
                         onClick={() => generateStepMutation.mutate("music")}
                         disabled={generateStepMutation.isPending || isProjectGenerating}
