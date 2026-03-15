@@ -142,6 +142,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
   const [msOverlayState, setMsOverlayState] = useState<Record<number, MicroSceneOverlayItem[]>>({});
   const [activeMsOverlayScope, setActiveMsOverlayScope] = useState<number | null>(null);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const msPollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const visualDirectionRef = useRef<HTMLTextAreaElement>(null);
   const narrationRef = useRef<HTMLTextAreaElement>(null);
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -447,8 +448,25 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
   }, [regeneratingType, projectId, queryClient]);
 
   useEffect(() => {
+    if (regeneratingMicroScenes.size > 0) {
+      msPollIntervalRef.current = setInterval(() => {
+        queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+      }, 5000);
+    } else {
+      if (msPollIntervalRef.current) {
+        clearInterval(msPollIntervalRef.current);
+        msPollIntervalRef.current = null;
+      }
+    }
+    return () => {
+      if (msPollIntervalRef.current) clearInterval(msPollIntervalRef.current);
+    };
+  }, [regeneratingMicroScenes.size, projectId, queryClient]);
+
+  useEffect(() => {
     return () => {
       if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+      if (msPollIntervalRef.current) clearInterval(msPollIntervalRef.current);
       if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
     };
   }, []);
