@@ -450,7 +450,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
   useEffect(() => {
     if (regeneratingMicroScenes.size > 0) {
       msPollIntervalRef.current = setInterval(() => {
-        queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+        queryClient.refetchQueries({ queryKey: ["project", projectId] });
       }, 5000);
     } else {
       if (msPollIntervalRef.current) {

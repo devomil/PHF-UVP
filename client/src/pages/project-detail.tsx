@@ -1041,6 +1041,7 @@ export default function ProjectDetail({ params }: { params?: { id: string } }) {
       if (!data) return 5000;
       const activeStatuses = ["generating", "queued", "processing", "rendering", "render_queued", "lambda_pending"];
       if (activeStatuses.includes(data.status)) return 5000;
+      if (data.jobs?.some((j: any) => j.status === "pending" || j.status === "running")) return 5000;
       return false;
     },
   });
