@@ -19,7 +19,7 @@ import { universalVideoService } from "./services/universal-video-service";
 import { aiMusicService } from "./services/ai-music-service";
 import { getBrandContext } from "./services/brand-settings-service";
 
-export function registerRoutes(app: Express) {
+export async function registerRoutes(app: Express) {
   app.use("/api/provider-test", providerTestRouter);
   app.use(piapiTestRouter);
   app.use("/api/admin/s3-assets", s3AssetRouter);
@@ -32,14 +32,13 @@ export function registerRoutes(app: Express) {
   app.use('/test-images', express.static('public/test-images'));
   app.use('/test-videos', express.static('public/test-videos'));
 
-  import("./services/universal-video-routes")
-    .then((mod) => {
-      app.use("/api/universal-video", mod.default);
-      console.log("[Routes] Universal video routes loaded");
-    })
-    .catch((err: any) => {
-      console.warn("[Routes] Universal video routes not loaded:", err.message?.substring(0, 100));
-    });
+  try {
+    const mod = await import("./services/universal-video-routes");
+    app.use("/api/universal-video", mod.default);
+    console.log("[Routes] Universal video routes loaded");
+  } catch (err: any) {
+    console.warn("[Routes] Universal video routes not loaded:", err.message?.substring(0, 100));
+  }
 
   import("./services/video-worker-process")
     .then((mod) => {
