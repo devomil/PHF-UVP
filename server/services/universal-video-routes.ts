@@ -1053,7 +1053,7 @@ router.post('/ask-suzzie/asset-library', isAuthenticated, async (req: Request, r
     const llmResult = await llmClient.createChatCompletion({
       systemPrompt,
       messages,
-      maxTokens: 1500,
+      maxTokens: 1200,
       temperature: 0.7,
     });
 
@@ -1061,6 +1061,8 @@ router.post('/ask-suzzie/asset-library', isAuthenticated, async (req: Request, r
 
     let suggestedPrompt: string | undefined;
     let suggestedProvider: string | undefined;
+    let suggestedNegativePrompt: string | undefined;
+    let suggestedCfgScale: number | undefined;
 
     const jsonBlocks = text.match(/```json\s*([\s\S]*?)```/g) || [];
     for (const block of jsonBlocks) {
@@ -1069,6 +1071,11 @@ router.post('/ask-suzzie/asset-library', isAuthenticated, async (req: Request, r
         const parsed = JSON.parse(jsonStr);
         if (parsed.suggestedPrompt && !suggestedPrompt) suggestedPrompt = parsed.suggestedPrompt;
         if (parsed.suggestedProvider && !suggestedProvider) suggestedProvider = parsed.suggestedProvider;
+        if (parsed.suggestedNegativePrompt && !suggestedNegativePrompt) suggestedNegativePrompt = parsed.suggestedNegativePrompt;
+        if (parsed.suggestedCfgScale !== undefined && suggestedCfgScale === undefined) {
+          const val = parseFloat(parsed.suggestedCfgScale);
+          if (!isNaN(val) && val >= 0 && val <= 1) suggestedCfgScale = val;
+        }
       } catch {}
     }
 
@@ -1079,6 +1086,8 @@ router.post('/ask-suzzie/asset-library', isAuthenticated, async (req: Request, r
       message: cleanMessage,
       suggestedPrompt,
       suggestedProvider,
+      suggestedNegativePrompt,
+      suggestedCfgScale,
     });
   } catch (error: any) {
     console.error('[AskSuzzie:AssetLibrary] Error:', error.message);

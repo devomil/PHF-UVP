@@ -251,6 +251,11 @@ class AIVideoService {
       }
       
       let negativePrompt = optimized.negativePrompt || enhanced.negativePrompt;
+      if (options.negativePrompt) {
+        negativePrompt = negativePrompt
+          ? `${options.negativePrompt}, ${negativePrompt}`
+          : options.negativePrompt;
+      }
       if (contentTag && contentTag.negativePromptAdditions.length > 0) {
         negativePrompt = `${negativePrompt}, ${contentTag.negativePromptAdditions.join(', ')}`;
       } else if (artPreset && artPreset.negativePromptAdditions.length > 0) {

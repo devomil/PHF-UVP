@@ -97,6 +97,7 @@ router.post('/generate', async (req: Request, res: Response) => {
       mode, prompt, provider, aspectRatio, duration,
       referenceImageUrl, referenceVideoUrl, style,
       strength, useCase, scaleFactor, bodyControl,
+      negativePrompt, imageFidelity,
     } = req.body;
 
     if (!mode) {
@@ -140,6 +141,7 @@ router.post('/generate', async (req: Request, res: Response) => {
       provider: provider || 'auto',
       status: 'pending',
       prompt: prompt || `${mode} processing`,
+      negativePrompt: negativePrompt || undefined,
       duration: outputsImage ? undefined : (duration || 6),
       aspectRatio: aspectRatio || '16:9',
       style: (mode === 't2i') ? (style || 'Photorealistic') : undefined,
@@ -155,6 +157,7 @@ router.post('/generate', async (req: Request, res: Response) => {
         replacementImageUrl: mode === 'v2v' ? referenceImageUrl : undefined,
         scaleFactor: scaleFactor,
         bodyControl: bodyControl,
+        imageControlStrength: imageFidelity !== undefined ? imageFidelity : undefined,
       },
       triggeredBy: userId,
     });
@@ -641,6 +644,12 @@ async function processAssetLibraryJob(jobId: string, userId: string, mode: strin
 
       case 't2v':
       case 'i2v': {
+        const i2vOpts: any = {};
+        if (mode === 'i2v' && settings.imageControlStrength !== undefined) {
+          i2vOpts.i2vSettings = {
+            imageControlStrength: settings.imageControlStrength,
+          };
+        }
         const result = await aiVideoService.generateVideo({
           prompt: job.prompt || '',
           duration: job.duration || 6,
@@ -649,6 +658,7 @@ async function processAssetLibraryJob(jobId: string, userId: string, mode: strin
           preferredProvider: job.provider || 'auto',
           negativePrompt: job.negativePrompt || undefined,
           imageUrl: mode === 'i2v' ? (job.sourceImageUrl || undefined) : undefined,
+          ...i2vOpts,
         });
 
         if (!result.success || !result.videoUrl) throw new Error(result.error || 'Video generation failed');

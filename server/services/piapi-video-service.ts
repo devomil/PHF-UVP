@@ -1298,6 +1298,10 @@ class PiAPIVideoService {
     // CRITICAL: Do NOT include "text, words, letters, logos, labels" in I2V negative prompts
     // because the source image may contain important text/labels that must be preserved
     let i2vNegativePrompt = 'blurry, low quality, distorted, warping, morphing, deformed, glitchy artifacts';
+    if (options.negativePrompt) {
+      i2vNegativePrompt = `${options.negativePrompt}, ${i2vNegativePrompt}`;
+      console.log(`[PiAPI I2V] Merged user negative prompt: ${options.negativePrompt}`);
+    }
     if (options.artPresetId && isStylizedPreset(options.artPresetId)) {
       const artPreset = getVisualArtPreset(options.artPresetId);
       if (artPreset && artPreset.negativePromptAdditions.length > 0) {

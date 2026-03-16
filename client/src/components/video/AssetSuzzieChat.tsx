@@ -16,6 +16,8 @@ interface ChatMessage {
   content: string;
   suggestedPrompt?: string;
   suggestedProvider?: string;
+  suggestedNegativePrompt?: string;
+  suggestedCfgScale?: number;
 }
 
 interface AssetSuzzieChatProps {
@@ -29,6 +31,8 @@ interface AssetSuzzieChatProps {
   validProviderIds: string[];
   onApplyPrompt: (prompt: string) => void;
   onApplyProvider?: (provider: string) => void;
+  onApplyNegativePrompt?: (negativePrompt: string) => void;
+  onApplyCfgScale?: (cfgScale: number) => void;
 }
 
 export function AssetSuzzieChat({
@@ -42,6 +46,8 @@ export function AssetSuzzieChat({
   validProviderIds,
   onApplyPrompt,
   onApplyProvider,
+  onApplyNegativePrompt,
+  onApplyCfgScale,
 }: AssetSuzzieChatProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -107,6 +113,8 @@ export function AssetSuzzieChat({
           content: data.message,
           suggestedPrompt: data.suggestedPrompt,
           suggestedProvider: data.suggestedProvider,
+          suggestedNegativePrompt: data.suggestedNegativePrompt,
+          suggestedCfgScale: data.suggestedCfgScale,
         };
         setMessages(prev => [...prev, assistantMessage]);
       } else {
@@ -285,6 +293,42 @@ export function AssetSuzzieChat({
                       size="sm"
                       onClick={() => handleApplyProvider(msg.suggestedProvider!)}
                       className="h-6 px-2.5 text-[11px] bg-blue-600 hover:bg-blue-700 text-white gap-1"
+                    >
+                      <ArrowRight className="h-3 w-3" />
+                      Apply
+                    </Button>
+                  )}
+                </div>
+              )}
+
+              {msg.suggestedNegativePrompt && (
+                <div className="bg-orange-500/10 border border-orange-500/30 rounded-lg p-2.5 space-y-2">
+                  <p className="text-[10px] text-orange-400 font-medium uppercase tracking-wider">Negative Prompt</p>
+                  <p className="text-xs text-orange-100 leading-relaxed">{msg.suggestedNegativePrompt}</p>
+                  {onApplyNegativePrompt && (
+                    <Button
+                      size="sm"
+                      onClick={() => onApplyNegativePrompt(msg.suggestedNegativePrompt!)}
+                      className="h-6 px-3 text-[11px] gap-1 bg-orange-600 hover:bg-orange-700 text-white"
+                    >
+                      <ArrowRight className="h-3 w-3" />
+                      Apply Negative Prompt
+                    </Button>
+                  )}
+                </div>
+              )}
+
+              {msg.suggestedCfgScale !== undefined && (
+                <div className="bg-cyan-500/10 border border-cyan-500/30 rounded-lg p-2 flex items-center justify-between">
+                  <div>
+                    <p className="text-[10px] text-cyan-400 font-medium uppercase tracking-wider">Image Fidelity</p>
+                    <p className="text-xs text-cyan-200">{Math.round(msg.suggestedCfgScale * 100)}% — {msg.suggestedCfgScale >= 0.8 ? 'Lock source geometry' : msg.suggestedCfgScale >= 0.5 ? 'Balanced' : 'Creative freedom'}</p>
+                  </div>
+                  {onApplyCfgScale && (
+                    <Button
+                      size="sm"
+                      onClick={() => onApplyCfgScale(msg.suggestedCfgScale!)}
+                      className="h-6 px-2.5 text-[11px] bg-cyan-600 hover:bg-cyan-700 text-white gap-1"
                     >
                       <ArrowRight className="h-3 w-3" />
                       Apply

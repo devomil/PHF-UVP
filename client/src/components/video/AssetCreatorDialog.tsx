@@ -177,6 +177,8 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
   const [aspectRatio, setAspectRatio] = useState('16:9');
   const [duration, setDuration] = useState(6);
   const [style, setStyle] = useState('Photorealistic');
+  const [negativePrompt, setNegativePrompt] = useState('');
+  const [imageFidelity, setImageFidelity] = useState(0.85);
   const [strength, setStrength] = useState(0.6);
   const [useCase, setUseCase] = useState('style-transfer');
   const [scaleFactor, setScaleFactor] = useState(2);
@@ -406,6 +408,12 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
       if (cfg.needsRefImage) body.referenceImageUrl = referenceImageUrl;
       if (cfg.needsRefVideo) body.referenceVideoUrl = referenceVideoUrl;
       if (needsReplacementForV2V) body.referenceImageUrl = replacementImageUrl;
+      if ((mode === 'i2v' || mode === 't2v') && negativePrompt.trim()) {
+        body.negativePrompt = negativePrompt.trim();
+      }
+      if (mode === 'i2v') {
+        body.imageFidelity = imageFidelity;
+      }
       if (mode === 'i2i') {
         body.strength = strength;
         body.useCase = useCase;
@@ -428,6 +436,8 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
       onJobStarted?.(data.jobId);
       onOpenChange(false);
       setPrompt('');
+      setNegativePrompt('');
+      setImageFidelity(0.85);
       setReferenceImageUrl('');
       setReferenceImagePreview(null);
       setReferenceVideoUrl('');
@@ -588,6 +598,8 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
                     validProviderIds={getProviders().map(p => p.id)}
                     onApplyPrompt={setPrompt}
                     onApplyProvider={setProvider}
+                    onApplyNegativePrompt={setNegativePrompt}
+                    onApplyCfgScale={(val) => setImageFidelity(val)}
                   />
                 )}
               </div>
@@ -1029,6 +1041,49 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
                   </button>
                 ))}
               </div>
+            </div>
+          )}
+
+          {(mode === 'i2v' || mode === 't2v') && (
+            <div>
+              <Label className="text-sm text-gray-400 mb-1.5 block">
+                Negative Prompt <span className="text-gray-600 font-normal">(optional)</span>
+              </Label>
+              <Textarea
+                placeholder="e.g. text distortion, label warping, bottle deformation, blurry, shaking, fast movement, people"
+                value={negativePrompt}
+                onChange={(e) => setNegativePrompt(e.target.value)}
+                className="bg-gray-900 border-gray-700 text-white placeholder:text-gray-600 min-h-[48px] resize-none text-xs"
+                maxLength={500}
+              />
+              <p className="text-[10px] text-gray-500 mt-1">Tell the AI what to avoid. Suzzie can suggest these for you.</p>
+            </div>
+          )}
+
+          {mode === 'i2v' && (
+            <div>
+              <Label className="text-sm text-gray-400 mb-1.5 block">
+                Image Fidelity: {Math.round(imageFidelity * 100)}%
+              </Label>
+              <Slider
+                value={[imageFidelity]}
+                onValueChange={([v]) => setImageFidelity(v)}
+                min={0.1}
+                max={1.0}
+                step={0.05}
+                className="py-2"
+              />
+              <div className="flex justify-between text-[10px] text-gray-500">
+                <span>Creative freedom</span>
+                <span>Lock source geometry</span>
+              </div>
+              <p className="text-[10px] text-gray-500 mt-1">
+                {imageFidelity >= 0.8
+                  ? 'High fidelity — preserves product shape, labels, and geometry from the source image.'
+                  : imageFidelity >= 0.5
+                    ? 'Balanced — some creative freedom while maintaining general composition.'
+                    : 'Creative — allows significant reinterpretation of the source image.'}
+              </p>
             </div>
           )}
 
