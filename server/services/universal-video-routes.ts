@@ -1011,6 +1011,81 @@ Create an OPTIMIZED visual direction that requires NO IMPROVEMENT. ${isProductWo
   }
 });
 
+router.post('/ask-suzzie/asset-library', isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const { message, conversationHistory, context } = req.body;
+
+    if (!message || typeof message !== 'string') {
+      return res.status(400).json({ success: false, error: 'Message is required' });
+    }
+
+    const { llmClient } = await import('../services/piapi-llm-client');
+    const { buildAssetLibrarySuzziePrompt } = await import('../services/suzzie-knowledge-base');
+
+    if (!llmClient.isAvailable()) {
+      return res.status(500).json({ success: false, error: 'AI service not configured' });
+    }
+
+    const assetContext = {
+      mode: context?.mode || 't2i',
+      prompt: context?.prompt,
+      provider: context?.provider,
+      hasReferenceImage: context?.hasReferenceImage || false,
+      aspectRatio: context?.aspectRatio,
+      duration: context?.duration,
+      style: context?.style,
+    };
+
+    const systemPrompt = buildAssetLibrarySuzziePrompt(assetContext);
+
+    const messages: Array<{ role: 'user' | 'assistant'; content: string }> = [];
+    if (Array.isArray(conversationHistory)) {
+      for (const msg of conversationHistory.slice(-20)) {
+        if (msg.role === 'user' || msg.role === 'assistant') {
+          messages.push({ role: msg.role, content: String(msg.content).substring(0, 2000) });
+        }
+      }
+    }
+    messages.push({ role: 'user', content: String(message).substring(0, 2000) });
+
+    console.log(`[AskSuzzie:AssetLibrary] Mode: ${assetContext.mode} | History: ${messages.length - 1} msgs | Q: "${message.substring(0, 80)}..."`);
+
+    const llmResult = await llmClient.createChatCompletion({
+      systemPrompt,
+      messages,
+      maxTokens: 800,
+      temperature: 0.7,
+    });
+
+    const text = llmResult.text || '';
+
+    let suggestedPrompt: string | undefined;
+    let suggestedProvider: string | undefined;
+
+    const jsonBlocks = text.match(/```json\s*([\s\S]*?)```/g) || [];
+    for (const block of jsonBlocks) {
+      try {
+        const jsonStr = block.replace(/```json\s*/, '').replace(/```$/, '').trim();
+        const parsed = JSON.parse(jsonStr);
+        if (parsed.suggestedPrompt && !suggestedPrompt) suggestedPrompt = parsed.suggestedPrompt;
+        if (parsed.suggestedProvider && !suggestedProvider) suggestedProvider = parsed.suggestedProvider;
+      } catch {}
+    }
+
+    const cleanMessage = text.replace(/```json\s*[\s\S]*?```/g, '').trim();
+
+    return res.json({
+      success: true,
+      message: cleanMessage,
+      suggestedPrompt,
+      suggestedProvider,
+    });
+  } catch (error: any) {
+    console.error('[AskSuzzie:AssetLibrary] Error:', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 router.post('/projects/product', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;

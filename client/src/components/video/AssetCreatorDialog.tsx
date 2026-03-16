@@ -27,6 +27,7 @@ import {
   Save,
   Check,
 } from 'lucide-react';
+import { AssetSuzzieChat } from './AssetSuzzieChat';
 
 type GenerationMode =
   | 't2i' | 't2v' | 'i2v' | 'i2i' | 'v2v'
@@ -573,7 +574,23 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
 
           {cfg.needsPrompt && (
             <div>
-              <Label htmlFor="prompt" className="text-sm text-gray-400 mb-1.5 block">Prompt</Label>
+              <div className="flex items-center justify-between mb-1.5">
+                <Label htmlFor="prompt" className="text-sm text-gray-400">Prompt</Label>
+                {(mode === 't2i' || mode === 't2v' || mode === 'i2v') && (
+                  <AssetSuzzieChat
+                    mode={mode}
+                    provider={provider}
+                    prompt={prompt}
+                    hasReferenceImage={!!referenceImageUrl}
+                    aspectRatio={aspectRatio}
+                    duration={duration}
+                    style={style}
+                    validProviderIds={getProviders().map(p => p.id)}
+                    onApplyPrompt={setPrompt}
+                    onApplyProvider={setProvider}
+                  />
+                )}
+              </div>
               <Textarea
                 id="prompt"
                 placeholder={promptPlaceholders[mode] || 'Describe what you want...'}
