@@ -212,7 +212,7 @@ export async function registerRoutes(app: Express) {
         return res.status(401).json({ error: "Not authenticated" });
       }
 
-      const { mode, title, description, targetAudience, duration, platform, aspectRatio, mediaMode, videoGenerationMode, qualityTier, script, numScenes, visualStyle, voiceStyle, outputType, prompt, imageStyle, provider, saveToLibrary, customScenes, artPresetId, characterConsistency, characters, characterReferenceUrl, characterName, characterDescription } = req.body;
+      const { mode, title, description, targetAudience, duration, platform, aspectRatio, mediaMode, videoGenerationMode, qualityTier, script, numScenes, visualStyle, voiceStyle, outputType, prompt, imageStyle, provider, saveToLibrary, customScenes, artPresetId, characterConsistency, characters, characterReferenceUrl, characterName, characterDescription, generationMode, negativePrompt, sourceImageUrl, referenceVideoUrl, imageFidelity } = req.body;
 
       const projectId = crypto.randomUUID();
 
@@ -320,13 +320,16 @@ export async function registerRoutes(app: Express) {
           console.log(`[Routes] Quick Create with character reference: ${charName}, image: ${characterReferenceUrl.substring(0, 60)}...`);
         }
 
+        const qcEffectiveOutputType = outputType || (generationMode === 't2i' ? 'image' : 'video');
+        const qcModeLabel = generationMode === 't2i' ? 'Image' : generationMode === 'i2v' ? 'I2V' : generationMode === 'v2v' ? 'V2V' : 'Video';
+
         const [project] = await db.insert(universalVideoProjects).values({
           projectId,
           ownerId: qcUserId,
           type: "product",
-          title: `Quick ${outputType === "image" ? "Image" : "Video"} - ${new Date().toLocaleDateString()}`,
+          title: `Quick ${qcModeLabel} - ${new Date().toLocaleDateString()}`,
           description: prompt || "",
-          totalDuration: outputType === "video" ? (duration || 6) : 0,
+          totalDuration: qcEffectiveOutputType === "video" ? (duration || 6) : 0,
           fps: 30,
           outputFormat: { aspectRatio: aspectRatio || "16:9", resolution, platform: "quick-create" },
           brand: qcBrandData.brandName ? { name: qcBrandData.brandName, tagline: qcBrandData.tagline, website: qcBrandData.website, colors: { primary: qcBrandData.primaryColor, secondary: qcBrandData.secondaryColor, accent: qcBrandData.accentColor }, logoUrl: qcBrandData.logoUrl, guidelines: qcBrandData.guidelines } : {},
@@ -335,8 +338,18 @@ export async function registerRoutes(app: Express) {
           progress: qcProgressData,
           status: "draft",
           qualityTier: "standard",
-          mediaMode: outputType === "image" ? "image" : "video",
+          mediaMode: qcEffectiveOutputType === "image" ? "image" : "video",
         }).returning();
+
+        const qcSourceImage = sourceImageUrl || characterReferenceUrl || undefined;
+        const isI2V = generationMode === 'i2v' && qcSourceImage;
+        const isV2V = generationMode === 'v2v' && referenceVideoUrl;
+
+        let qcSceneType: string = qcEffectiveOutputType === "image" ? "image" : "video";
+        if (isI2V) qcSceneType = "i2v";
+        if (isV2V) qcSceneType = "v2v";
+
+        console.log(`[Routes] Quick Create: mode=${generationMode}, sceneType=${qcSceneType}, provider=${provider}, sourceImage=${qcSourceImage ? 'YES' : 'NO'}, refVideo=${referenceVideoUrl ? 'YES' : 'NO'}, negativePrompt=${negativePrompt ? 'YES' : 'NO'}, imageFidelity=${imageFidelity || 'default'}`);
 
         const jobId = crypto.randomUUID();
         await db.insert(videoGenerationJobs).values({
@@ -346,16 +359,19 @@ export async function registerRoutes(app: Express) {
           provider: provider || "auto",
           status: "pending",
           prompt: enhancedPrompt,
-          duration: outputType === "video" ? (duration || 6) : undefined,
+          negativePrompt: negativePrompt || undefined,
+          duration: qcEffectiveOutputType === "video" ? (duration || 6) : undefined,
           aspectRatio: aspectRatio || "16:9",
-          style: outputType === "image" ? (imageStyle || "Photorealistic") : undefined,
-          sceneType: outputType === "image" ? "image" : "video",
-          sourceImageUrl: characterReferenceUrl || undefined,
+          style: qcEffectiveOutputType === "image" ? (imageStyle || "Photorealistic") : undefined,
+          sceneType: qcSceneType,
+          sourceImageUrl: qcSourceImage,
           i2vSettings: {
             saveToLibrary: saveToLibrary !== false,
-            outputType: outputType || "video",
+            outputType: qcEffectiveOutputType || "video",
             artPresetId: qcProgressData.artPresetId || undefined,
-            ...(characterReferenceUrl ? { isCharacterReference: true } : {}),
+            ...(characterReferenceUrl && !sourceImageUrl ? { isCharacterReference: true } : {}),
+            ...(isI2V && imageFidelity !== undefined ? { imageControlStrength: imageFidelity } : {}),
+            ...(isV2V ? { referenceVideoUrl, generationMode: 'v2v' } : {}),
           },
           triggeredBy: (req.user as any).id,
         });

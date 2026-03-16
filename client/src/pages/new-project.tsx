@@ -1,11 +1,12 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useLocation, Link } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Sparkles, FileText, Zap, ArrowLeft, Video, Image, Info, Plus, Trash2, ChevronUp, ChevronDown, GripVertical, Palette, Users, UserCheck } from "lucide-react";
+import { Sparkles, FileText, Zap, ArrowLeft, Video, Image, Info, Plus, Trash2, ChevronUp, ChevronDown, GripVertical, Palette, Users, UserCheck, Upload, X, ImagePlus, Film, Loader2 } from "lucide-react";
 import { ProviderCatalogSelector } from "@/components/video/provider-catalog-selector";
 import { CharacterProfilesPanel } from "@/components/video/character-profiles-panel";
+import { AssetSuzzieChat } from "@/components/video/AssetSuzzieChat";
 import { getAvailableStyles } from "@shared/visual-style-config";
 import { getAllVisualArtPresets, isStylizedPreset, type VisualArtPreset } from "@shared/config/visual-art-presets";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -13,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 
@@ -728,19 +730,72 @@ function CustomScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void;
   );
 }
 
+type QuickCreateMode = 't2i' | 't2v' | 'i2v' | 'v2v';
+
+const QC_MODE_CONFIG: Record<QuickCreateMode, { label: string; shortLabel: string; icon: any; description: string; outputType: 'image' | 'video'; needsRefImage: boolean; needsRefVideo: boolean }> = {
+  't2i': { label: 'Text to Image', shortLabel: 'T2I', icon: Image, description: 'Generate an image from text', outputType: 'image', needsRefImage: false, needsRefVideo: false },
+  't2v': { label: 'Text to Video', shortLabel: 'T2V', icon: Video, description: 'Generate a video from text', outputType: 'video', needsRefImage: false, needsRefVideo: false },
+  'i2v': { label: 'Image to Video', shortLabel: 'I2V', icon: ImagePlus, description: 'Animate a reference image', outputType: 'video', needsRefImage: true, needsRefVideo: false },
+  'v2v': { label: 'Video to Video', shortLabel: 'V2V', icon: Film, description: 'Transform an existing video', outputType: 'video', needsRefImage: false, needsRefVideo: true },
+};
+
+const QC_VIDEO_PROVIDERS = [
+  { id: 'auto', name: 'Auto (Best Match)' },
+  { id: 'kling-2.6', name: 'Kling 2.6' },
+  { id: 'kling-2.6-pro', name: 'Kling 2.6 Pro' },
+  { id: 'veo-3.1', name: 'Veo 3.1' },
+  { id: 'luma', name: 'Luma Dream Machine' },
+  { id: 'hailuo', name: 'Hailuo MiniMax' },
+  { id: 'wan-2.6', name: 'Wan 2.6' },
+  { id: 'pika', name: 'Pika' },
+  { id: 'seedance-1.0', name: 'Seedance 1.0' },
+  { id: 'sora-2', name: 'Sora 2' },
+  { id: 'runway', name: 'Runway Gen-3' },
+  { id: 'runway-4.5', name: 'Runway 4.5' },
+  { id: 'runway-gen4', name: 'Runway Gen-4' },
+];
+
+const QC_IMAGE_PROVIDERS = [
+  { id: 'auto', name: 'Auto (Best Match)' },
+  { id: 'flux', name: 'Flux Schnell' },
+  { id: 'flux-1-dev', name: 'Flux Dev' },
+  { id: 'ideogram', name: 'Ideogram' },
+];
+
+const QC_V2V_PROVIDERS = [
+  { id: 'auto', name: 'Auto (Kling Object Replace)' },
+  { id: 'kling-2.6', name: 'Kling 2.6 (Object Replace)' },
+  { id: 'runway-gen4-aleph', name: 'Runway Gen-4 Aleph (V2V)' },
+];
+
 function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onSubmit: (data: any) => void; isLoading: boolean }) {
-  const [outputType, setOutputType] = useState<"video" | "image">("video");
+  const { toast } = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
+
+  const [genMode, setGenMode] = useState<QuickCreateMode>('t2v');
   const [prompt, setPrompt] = useState("");
+  const [negativePrompt, setNegativePrompt] = useState("");
   const [duration, setDuration] = useState("6");
   const [imageStyle, setImageStyle] = useState("Photorealistic");
+  const [imageFidelity, setImageFidelity] = useState(0.85);
   const [artPresetId, setArtPresetId] = useState<string>("");
   const [aspectRatio, setAspectRatio] = useState("16:9");
   const [provider, setProvider] = useState("auto");
   const [saveToLibrary, setSaveToLibrary] = useState(true);
   const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(null);
-  const allPresets = getAllVisualArtPresets();
 
-  const showCharacterSelector = outputType === "video" && artPresetId === "3d-illustration";
+  const [referenceImageUrl, setReferenceImageUrl] = useState("");
+  const [referenceImagePreview, setReferenceImagePreview] = useState<string | null>(null);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [referenceVideoUrl, setReferenceVideoUrl] = useState("");
+  const [isUploadingVideo, setIsUploadingVideo] = useState(false);
+
+  const allPresets = getAllVisualArtPresets();
+  const cfg = QC_MODE_CONFIG[genMode];
+  const outputType = cfg.outputType;
+
+  const showCharacterSelector = outputType === "video" && artPresetId === "3d-illustration" && genMode !== 'v2v';
 
   const characterLibraryQuery = useQuery({
     queryKey: ["character-library"],
@@ -757,9 +812,16 @@ function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () => void; 
   const characters: any[] = characterLibraryQuery.data || [];
   const selectedCharacter = characters.find((c: any) => String(c.id) === selectedCharacterId);
 
+  const getProviders = () => {
+    if (genMode === 'v2v') return QC_V2V_PROVIDERS;
+    if (genMode === 't2i') return QC_IMAGE_PROVIDERS;
+    return QC_VIDEO_PROVIDERS;
+  };
+  const validProviderIds = getProviders().map(p => p.id);
+
   useEffect(() => {
     setProvider("auto");
-  }, [outputType]);
+  }, [genMode]);
 
   useEffect(() => {
     if (!showCharacterSelector) {
@@ -767,18 +829,56 @@ function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () => void; 
     }
   }, [showCharacterSelector]);
 
+  const uploadFile = async (file: File, setUrl: (u: string) => void, setPreview: ((u: string | null) => void) | null, setLoading: (v: boolean) => void, label: string) => {
+    setLoading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch('/api/videos/uploads', { method: 'POST', body: formData, credentials: 'include' });
+      if (!res.ok) {
+        throw new Error(`Upload failed (${res.status})`);
+      }
+      const data = await res.json();
+      if (data.url) {
+        setUrl(data.url);
+        setPreview?.(data.url);
+        toast({ title: `${label} uploaded` });
+      } else {
+        throw new Error(data.error || 'No URL returned');
+      }
+    } catch (err: any) {
+      toast({ title: 'Upload failed', description: err.message || 'Please try again.', variant: 'destructive' });
+      setPreview?.(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (cfg.needsRefImage && !referenceImageUrl) {
+      toast({ title: "Reference image required", description: "Please upload a reference image for I2V mode.", variant: "destructive" });
+      return;
+    }
+    if (cfg.needsRefVideo && !referenceVideoUrl) {
+      toast({ title: "Reference video required", description: "Please upload a reference video for V2V mode.", variant: "destructive" });
+      return;
+    }
     const payload: any = {
       mode: "quick-create",
+      generationMode: genMode,
       outputType,
       prompt,
+      negativePrompt: negativePrompt.trim() || undefined,
       duration: outputType === "video" ? parseInt(duration) : undefined,
-      imageStyle: outputType === "image" ? imageStyle : undefined,
+      imageStyle: genMode === "t2i" ? imageStyle : undefined,
       artPresetId: artPresetId || undefined,
       aspectRatio,
       provider,
       saveToLibrary,
+      sourceImageUrl: cfg.needsRefImage ? referenceImageUrl : undefined,
+      referenceVideoUrl: cfg.needsRefVideo ? referenceVideoUrl : undefined,
+      imageFidelity: genMode === "i2v" ? imageFidelity : undefined,
     };
     if (selectedCharacter && selectedCharacter.referenceImageUrl) {
       payload.characterReferenceUrl = selectedCharacter.referenceImageUrl;
@@ -800,47 +900,188 @@ function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () => void; 
 
       <div className="space-y-5">
         <div>
-          <Label style={{ color: "var(--text-secondary)" }}>Output Type</Label>
-          <div className="grid grid-cols-2 gap-3 mt-1.5">
-            <Card className={`cursor-pointer transition-all duration-200 ${outputType === "video" ? "bg-purple-600/20 border-purple-500" : ""}`} style={outputType !== "video" ? { backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)" } : {}} onClick={() => setOutputType("video")}>
-              <CardContent className="flex items-center justify-center gap-2 p-4">
-                <Video className={`w-5 h-5 ${outputType === "video" ? "text-purple-400" : ""}`} style={outputType !== "video" ? { color: "var(--text-secondary)" } : {}} />
-                <span className={outputType === "video" ? "font-medium" : ""} style={{ color: outputType === "video" ? "var(--text-primary)" : "var(--text-secondary)" }}>{outputType === "video" ? "Video" : "Video"}</span>
-              </CardContent>
-            </Card>
-            <Card className={`cursor-pointer transition-all duration-200 ${outputType === "image" ? "bg-purple-600/20 border-purple-500" : ""}`} style={outputType !== "image" ? { backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)" } : {}} onClick={() => setOutputType("image")}>
-              <CardContent className="flex items-center justify-center gap-2 p-4">
-                <Image className={`w-5 h-5 ${outputType === "image" ? "text-purple-400" : ""}`} style={outputType !== "image" ? { color: "var(--text-secondary)" } : {}} />
-                <span className={outputType === "image" ? "font-medium" : ""} style={{ color: outputType === "image" ? "var(--text-primary)" : "var(--text-secondary)" }}>{outputType === "image" ? "Image" : "Image"}</span>
-              </CardContent>
-            </Card>
+          <Label style={{ color: "var(--text-secondary)" }}>Generation Mode</Label>
+          <div className="grid grid-cols-4 gap-2 mt-1.5">
+            {(Object.entries(QC_MODE_CONFIG) as [QuickCreateMode, typeof QC_MODE_CONFIG[QuickCreateMode]][]).map(([key, mc]) => {
+              const Icon = mc.icon;
+              const isActive = genMode === key;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setGenMode(key)}
+                  className={`flex flex-col items-center gap-1.5 p-3 rounded-lg border transition-all ${isActive ? "bg-purple-600/20 border-purple-500" : "hover:border-gray-600"}`}
+                  style={!isActive ? { backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)" } : {}}
+                >
+                  <Icon className={`w-5 h-5 ${isActive ? "text-purple-400" : ""}`} style={!isActive ? { color: "var(--text-secondary)" } : {}} />
+                  <span className={`text-xs font-medium ${isActive ? "text-purple-300" : ""}`} style={!isActive ? { color: "var(--text-secondary)" } : {}}>{mc.shortLabel}</span>
+                  <span className="text-[10px] text-center leading-tight" style={{ color: "var(--text-tertiary)" }}>{mc.description}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
 
+        {cfg.needsRefImage && (
+          <div>
+            <Label style={{ color: "var(--text-secondary)" }}>Reference Image *</Label>
+            <div className="mt-1.5">
+              {referenceImagePreview ? (
+                <div className="relative inline-block">
+                  <img src={referenceImagePreview} alt="Reference" className="w-32 h-32 object-cover rounded-lg border" style={{ borderColor: "var(--border-medium)" }} />
+                  <button
+                    type="button"
+                    onClick={() => { setReferenceImageUrl(""); setReferenceImagePreview(null); if (fileInputRef.current) fileInputRef.current.value = ""; }}
+                    className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-red-600 text-white flex items-center justify-center hover:bg-red-700"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isUploadingImage}
+                  className="flex items-center gap-2 px-4 py-3 rounded-lg border border-dashed transition-all hover:border-purple-500/50"
+                  style={{ borderColor: "var(--border-medium)", color: "var(--text-secondary)" }}
+                >
+                  {isUploadingImage ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                  {isUploadingImage ? "Uploading..." : "Upload Reference Image"}
+                </button>
+              )}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    const preview = URL.createObjectURL(file);
+                    setReferenceImagePreview(preview);
+                    uploadFile(file, setReferenceImageUrl, null, setIsUploadingImage, "Reference image");
+                  }
+                }}
+              />
+            </div>
+          </div>
+        )}
+
+        {cfg.needsRefVideo && (
+          <div>
+            <Label style={{ color: "var(--text-secondary)" }}>Reference Video *</Label>
+            <div className="mt-1.5 space-y-2">
+              {referenceVideoUrl ? (
+                <div className="flex items-center gap-2 p-2 rounded-lg border" style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-medium)" }}>
+                  <Film className="w-4 h-4 flex-shrink-0" style={{ color: "var(--text-secondary)" }} />
+                  <span className="text-xs truncate flex-1" style={{ color: "var(--text-primary)" }}>{referenceVideoUrl.split('/').pop()}</span>
+                  <button type="button" onClick={() => { setReferenceVideoUrl(""); if (videoInputRef.current) videoInputRef.current.value = ""; }} className="text-red-400 hover:text-red-300">
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => videoInputRef.current?.click()}
+                  disabled={isUploadingVideo}
+                  className="flex items-center gap-2 px-4 py-3 rounded-lg border border-dashed transition-all hover:border-purple-500/50"
+                  style={{ borderColor: "var(--border-medium)", color: "var(--text-secondary)" }}
+                >
+                  {isUploadingVideo ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                  {isUploadingVideo ? "Uploading..." : "Upload Reference Video"}
+                </button>
+              )}
+              <input
+                ref={videoInputRef}
+                type="file"
+                accept="video/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) uploadFile(file, setReferenceVideoUrl, null, setIsUploadingVideo, "Reference video");
+                }}
+              />
+            </div>
+          </div>
+        )}
+
         <div>
-          <Label style={{ color: "var(--text-secondary)" }}>Prompt *</Label>
+          <div className="flex items-center justify-between">
+            <Label style={{ color: "var(--text-secondary)" }}>Prompt *</Label>
+            <AssetSuzzieChat
+              mode={genMode}
+              provider={provider}
+              prompt={prompt}
+              hasReferenceImage={!!referenceImageUrl}
+              aspectRatio={aspectRatio}
+              duration={parseInt(duration)}
+              style={imageStyle}
+              validProviderIds={validProviderIds}
+              onApplyPrompt={setPrompt}
+              onApplyProvider={setProvider}
+              onApplyNegativePrompt={setNegativePrompt}
+              onApplyCfgScale={setImageFidelity}
+            />
+          </div>
           <Textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="Describe the video clip or image you want to create..." rows={4} required className="mt-1.5" style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }} />
         </div>
 
-        {outputType === "video" ? (
+        {(genMode === 't2v' || genMode === 'i2v' || genMode === 'v2v') && (
+          <div>
+            <Label style={{ color: "var(--text-secondary)" }}>Negative Prompt (Optional)</Label>
+            <Textarea
+              value={negativePrompt}
+              onChange={(e) => setNegativePrompt(e.target.value)}
+              placeholder="Describe what you DON'T want in the output (e.g. blurry, distorted, watermark)..."
+              rows={2}
+              className="mt-1.5"
+              style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }}
+            />
+          </div>
+        )}
+
+        {genMode === 'i2v' && (
+          <div>
+            <div className="flex items-center justify-between">
+              <Label style={{ color: "var(--text-secondary)" }}>Image Fidelity</Label>
+              <span className="text-xs font-medium" style={{ color: "var(--text-tertiary)" }}>{Math.round(imageFidelity * 100)}%</span>
+            </div>
+            <Slider
+              value={[imageFidelity]}
+              onValueChange={([v]) => setImageFidelity(v)}
+              min={0.1}
+              max={1.0}
+              step={0.05}
+              className="mt-2"
+            />
+            <div className="flex justify-between mt-1">
+              <span className="text-[10px]" style={{ color: "var(--text-tertiary)" }}>Creative freedom</span>
+              <span className="text-[10px]" style={{ color: "var(--text-tertiary)" }}>Lock source</span>
+            </div>
+          </div>
+        )}
+
+        {outputType === "video" && (
           <div>
             <Label style={{ color: "var(--text-secondary)" }}>Duration</Label>
             <Select value={duration} onValueChange={setDuration}>
               <SelectTrigger className="mt-1.5" style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }}><SelectValue /></SelectTrigger>
               <SelectContent style={{ backgroundColor: "var(--menu-bg)", borderColor: "var(--border-medium)" }}>
-                {["4", "6", "8", "10"].map((d) => (
+                {["4", "5", "6", "8", "10"].map((d) => (
                   <SelectItem key={d} value={d} style={{ color: "var(--text-primary)" }}>{d}s</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
-        ) : (
+        )}
+
+        {genMode === "t2i" && (
           <div>
-            <Label style={{ color: "var(--text-secondary)" }}>Style</Label>
+            <Label style={{ color: "var(--text-secondary)" }}>Image Style</Label>
             <Select value={imageStyle} onValueChange={setImageStyle}>
               <SelectTrigger className="mt-1.5" style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }}><SelectValue /></SelectTrigger>
               <SelectContent style={{ backgroundColor: "var(--menu-bg)", borderColor: "var(--border-medium)" }}>
-                {["Photorealistic", "Illustration", "3D Render", "Anime", "Abstract"].map((s) => (
+                {["Photorealistic", "Cinematic", "3D Illustration", "Watercolor", "Oil Painting", "Digital Art", "Anime", "Minimalist", "Neon/Cyberpunk", "Sketch"].map((s) => (
                   <SelectItem key={s} value={s} style={{ color: "var(--text-primary)" }}>{s}</SelectItem>
                 ))}
               </SelectContent>
@@ -937,7 +1178,17 @@ function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () => void; 
           </Select>
         </div>
 
-        <ProviderCatalogSelector outputType={outputType} provider={provider} onProviderChange={setProvider} />
+        <div>
+          <Label style={{ color: "var(--text-secondary)" }}>Provider</Label>
+          <Select value={provider} onValueChange={setProvider}>
+            <SelectTrigger className="mt-1.5" style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }}><SelectValue /></SelectTrigger>
+            <SelectContent style={{ backgroundColor: "var(--menu-bg)", borderColor: "var(--border-medium)" }}>
+              {getProviders().map((p) => (
+                <SelectItem key={p.id} value={p.id} style={{ color: "var(--text-primary)" }}>{p.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
         <div className="flex items-center gap-2">
           <input type="checkbox" id="saveToLibrary" checked={saveToLibrary} onChange={(e) => setSaveToLibrary(e.target.checked)} className="rounded" style={{ borderColor: "var(--border-medium)", backgroundColor: "var(--input-bg)" }} />
