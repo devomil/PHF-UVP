@@ -263,6 +263,7 @@ export function AssetSuzzieChat({
                   <p className="text-[10px] text-green-400 font-medium uppercase tracking-wider">Suggested Prompt</p>
                   <p className="text-xs text-green-100 leading-relaxed">{msg.suggestedPrompt}</p>
                   <Button
+                    type="button"
                     size="sm"
                     onClick={() => handleApplyPrompt(msg.suggestedPrompt!, i)}
                     disabled={appliedPromptIndex === i}
@@ -295,6 +296,7 @@ export function AssetSuzzieChat({
                   </div>
                   {onApplyProvider && isValidProvider(msg.suggestedProvider) && (
                     <Button
+                      type="button"
                       size="sm"
                       onClick={() => handleApplyProvider(msg.suggestedProvider!)}
                       className="h-6 px-2.5 text-[11px] bg-blue-600 hover:bg-blue-700 text-white gap-1"
@@ -312,6 +314,7 @@ export function AssetSuzzieChat({
                   <p className="text-xs text-orange-100 leading-relaxed">{msg.suggestedNegativePrompt}</p>
                   {onApplyNegativePrompt && (
                     <Button
+                      type="button"
                       size="sm"
                       onClick={() => onApplyNegativePrompt(msg.suggestedNegativePrompt!)}
                       className="h-6 px-3 text-[11px] gap-1 bg-orange-600 hover:bg-orange-700 text-white"
@@ -331,6 +334,7 @@ export function AssetSuzzieChat({
                   </div>
                   {onApplyCfgScale && (
                     <Button
+                      type="button"
                       size="sm"
                       onClick={() => onApplyCfgScale(msg.suggestedCfgScale!)}
                       className="h-6 px-2.5 text-[11px] bg-cyan-600 hover:bg-cyan-700 text-white gap-1"
@@ -366,6 +370,7 @@ export function AssetSuzzieChat({
           className="flex-1 h-8 text-xs bg-gray-800 border-gray-700 text-white placeholder:text-gray-500"
         />
         <Button
+          type="button"
           size="sm"
           onClick={sendMessage}
           disabled={!input.trim() || isLoading}

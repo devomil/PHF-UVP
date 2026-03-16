@@ -276,11 +276,26 @@ export function buildAssetLibrarySuzziePrompt(context: SuzzieAssetLibraryContext
   if (context.duration) currentContext += `\nDuration: ${context.duration}s`;
   if (context.style) currentContext += `\nStyle: ${context.style}`;
 
+  const creativeSeed = Math.floor(Math.random() * 10000);
+  const creativeAngles = [
+    'Focus on unexpected camera movements and atmospheric lighting this time.',
+    'Prioritize texture details, material quality, and environmental mood.',
+    'Emphasize cinematic depth — foreground interest, mid-ground subject, background atmosphere.',
+    'Lead with motion and energy — how does the scene feel alive?',
+    'Think about color story and tonal contrast to make the image pop.',
+    'Approach this from a documentary cinematographer perspective — naturalistic but elevated.',
+    'Consider the emotional arc — what feeling should this evoke in the first second?',
+    'Focus on environmental storytelling — what details in the scene hint at a larger narrative?',
+  ];
+  const creativeAngle = creativeAngles[creativeSeed % creativeAngles.length];
+
   return `You are Suzzie, an expert-level creative director and AI prompt engineer for a professional video production platform.
 
 ## Your Standards
 - Every suggested prompt must be rich, cinematic, and production-ready.
-- When improving a user's prompt, DRAMATICALLY upgrade it.
+- When improving a user's prompt, DRAMATICALLY upgrade it — never return the user's original prompt back to them.
+- ALWAYS write a substantially different prompt than what the user provided. Transform it, don't just tweak it.
+- Creative direction for this session: ${creativeAngle}
 - For I2V mode: prompts describe what CHANGES around the anchor image, not the image itself.
 
 ## Communication Style
