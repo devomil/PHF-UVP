@@ -5419,6 +5419,10 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
           isVideo 
         });
         
+        const nativeAudioSettings = (preparedProject as any).nativeVideoAudioSettings;
+        const nativeAudioEnabled = nativeAudioSettings?.enabled && isVideo;
+        const nativeAudioVolume = nativeAudioSettings?.volume ?? 0.8;
+
         const sceneId = 'qc-scene-1';
         const scene: any = {
           id: sceneId,
@@ -5441,6 +5445,19 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
           transitions: { type: 'fade', duration: 0.5 },
           overlayItems: qcAssets.overlayItems || [],
         };
+
+        if (nativeAudioEnabled && finalVideoUrl) {
+          scene.microScenes = [{
+            id: 'qc-ms-1',
+            videoUrl: finalVideoUrl,
+            duration: duration,
+            originalAudioVolume: nativeAudioVolume,
+            originalAudioFadeIn: 0.2,
+            originalAudioFadeOut: 0.5,
+            overlayItems: qcAssets.overlayItems || [],
+          }];
+          console.log('[PrepareAssets] Native video audio enabled, created micro-scene with originalAudioVolume:', nativeAudioVolume);
+        }
         
         preparedProject.scenes = [scene];
         console.log('[PrepareAssets] Created scene from Quick Create visual:', { 

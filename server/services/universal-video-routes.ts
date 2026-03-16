@@ -2059,7 +2059,7 @@ router.patch('/projects/:projectId/render-settings', isAuthenticated, async (req
   try {
     const userId = (req.user as any)?.id;
     const { projectId } = req.params;
-    const { voiceover, music, soundDesign, filmTreatment, transitions, introEnabled, introTemplate, outroEnabled, outroTemplate, introBackgroundRandom, captions } = req.body;
+    const { voiceover, music, soundDesign, filmTreatment, transitions, introEnabled, introTemplate, outroEnabled, outroTemplate, introBackgroundRandom, captions, nativeVideoAudio } = req.body;
     
     const projectData = await getProjectFromDb(projectId);
     if (!projectData) {
@@ -2167,6 +2167,13 @@ router.patch('/projects/:projectId/render-settings', isAuthenticated, async (req
         },
       };
     }
+
+    if (nativeVideoAudio !== undefined) {
+      (projectData as any).nativeVideoAudioSettings = {
+        enabled: !!nativeVideoAudio.enabled,
+        volume: Math.min(1.0, Math.max(0, nativeVideoAudio.volume ?? 0.8)),
+      };
+    }
     
     projectData.updatedAt = new Date().toISOString();
     await saveProjectToDb(projectData, projectData.ownerId);
@@ -2188,6 +2195,7 @@ router.patch('/projects/:projectId/render-settings', isAuthenticated, async (req
         outroTemplate: (projectData as any).outroTemplate || 'classic-glow',
         introBackgroundRandom: (projectData as any).introBackgroundRandom ?? false,
         captions: (projectData as any).captionSettings || { enabled: false, style: { preset: 'capcut', position: 'bottom' } },
+        nativeVideoAudio: (projectData as any).nativeVideoAudioSettings || { enabled: false, volume: 0.8 },
       }
     });
   } catch (error: any) {
@@ -2257,6 +2265,7 @@ router.get('/projects/:projectId/render-settings', isAuthenticated, async (req: 
         outroTemplate: (projectData as any).outroTemplate || 'classic-glow',
         introBackgroundRandom: (projectData as any).introBackgroundRandom ?? false,
         captions: (projectData as any).captionSettings || { enabled: false, style: { preset: 'capcut', position: 'bottom' } },
+        nativeVideoAudio: (projectData as any).nativeVideoAudioSettings || { enabled: false, volume: 0.8 },
       }
     });
   } catch (error: any) {

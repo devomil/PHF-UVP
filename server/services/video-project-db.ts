@@ -54,6 +54,7 @@ export function dbRowToVideoProject(row: any): VideoProject {
   if (progress.introBackgroundRandom !== undefined) result.introBackgroundRandom = progress.introBackgroundRandom;
   if (progress.artPresetId !== undefined) result.artPresetId = progress.artPresetId;
   if (progress.captionSettings !== undefined) result.captionSettings = progress.captionSettings;
+  if (progress.nativeVideoAudioSettings !== undefined) result.nativeVideoAudioSettings = progress.nativeVideoAudioSettings;
   return result as VideoProject;
 }
 
@@ -82,6 +83,7 @@ export async function saveProjectToDb(
   if (project.introBackgroundRandom !== undefined) progressToSave.introBackgroundRandom = project.introBackgroundRandom;
   if (project.artPresetId !== undefined) progressToSave.artPresetId = project.artPresetId;
   if (project.captionSettings !== undefined) progressToSave.captionSettings = project.captionSettings;
+  if (project.nativeVideoAudioSettings !== undefined) progressToSave.nativeVideoAudioSettings = project.nativeVideoAudioSettings;
 
   const updateData: any = {
     status: project.status,

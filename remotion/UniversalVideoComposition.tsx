@@ -1496,7 +1496,7 @@ const SceneRenderer: React.FC<{
   const isMotionGraphicScene = scene.background?.type === 'motion-graphic' as any || hasMotionGraphics;
   
   const microScenes = scene.microScenes || [];
-  const hasMicroScenes = microScenes.length > 1 && microScenes.some(ms => ms.videoUrl || ms.imageUrl);
+  const hasMicroScenes = microScenes.length > 0 && microScenes.some(ms => ms.videoUrl || ms.imageUrl);
   
   React.useEffect(() => {
     console.log(`[SceneRenderer] Scene ${scene.id} (${scene.type}):`);
@@ -1978,7 +1978,7 @@ export const UniversalVideoComposition: React.FC<UniversalVideoProps> = ({
     const videoCount = scenes.filter(s => s.assets?.videoUrl && s.background?.type === 'video').length;
     let microSceneCount = 0;
     for (const s of scenes) {
-      if (s.microScenes && s.microScenes.length > 1) {
+      if (s.microScenes && s.microScenes.length > 0) {
         for (const ms of s.microScenes) {
           if (ms.videoUrl) microSceneCount++;
         }

@@ -1631,6 +1631,7 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
   const rawSettings = settingsQuery.data?.settings || {
     voiceover: { enabled: true, voiceId: null, hasGenerated: false },
     music: { enabled: true, volume: 0.18, hasGenerated: false },
+    nativeVideoAudio: { enabled: false, volume: 0.8 },
     soundDesign: { enabled: true, transitionSounds: true, impactSounds: true, ambientLayer: true, ambientType: "nature", masterVolume: 1.0 },
     filmTreatment: { enabled: true, colorGrade: "warm-cinematic", grainIntensity: 0.03, vignetteIntensity: 0.2, letterbox: "none" },
     transitions: { style: "crossfade", duration: 0.5 },
@@ -1902,6 +1903,44 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
               )}
             </div>
           </div>
+
+          {(scenesHaveVideo || !!quickAssets.visual?.url) && (
+            <div className="border rounded-lg p-4 space-y-3" style={{ backgroundColor: "var(--app-bg)", borderColor: "var(--border-subtle)" }}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Volume2 className="w-4 h-4 text-teal-400" />
+                  <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>Native Video Audio</span>
+                </div>
+                <ToggleSwitch
+                  enabled={settings.nativeVideoAudio?.enabled ?? false}
+                  onChange={(v) => saveMutation.mutate({ nativeVideoAudio: { ...settings.nativeVideoAudio, enabled: v } })}
+                  label=""
+                />
+              </div>
+              <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                Preserve the original audio from the generated video in the final render.
+              </p>
+              {settings.nativeVideoAudio?.enabled && (
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs" style={{ color: "var(--text-secondary)" }}>Volume</span>
+                    <span className="text-xs font-mono" style={{ color: "var(--text-muted)" }}>
+                      {Math.round((settings.nativeVideoAudio?.volume ?? 0.8) * 100)}%
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={Math.round((settings.nativeVideoAudio?.volume ?? 0.8) * 100)}
+                    onChange={(e) => saveMutation.mutate({ nativeVideoAudio: { ...settings.nativeVideoAudio, volume: parseInt(e.target.value) / 100 } })}
+                    className="w-full h-1.5 rounded-full appearance-none cursor-pointer"
+                    style={{ background: `linear-gradient(to right, rgb(20 184 166) ${Math.round((settings.nativeVideoAudio?.volume ?? 0.8) * 100)}%, var(--border-subtle) ${Math.round((settings.nativeVideoAudio?.volume ?? 0.8) * 100)}%)` }}
+                  />
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="border rounded-lg p-4 space-y-3" style={{ backgroundColor: "var(--app-bg)", borderColor: "var(--border-subtle)" }}>
             <div className="flex items-center justify-between">
