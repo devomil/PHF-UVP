@@ -23,13 +23,21 @@ export interface SuzzieAssetLibraryContext {
 
 function buildProviderKnowledge(): string {
   const videoProviders = VIDEO_PROVIDER_CATALOG
-    .filter(p => !p.deprecated)
-    .map(p => `- **${p.name}** (${p.id}): ${p.strengths.join(', ')}. Best for: ${p.bestFor.join(', ')}. Cost: ${p.costTier}. Max duration: ${p.maxDuration}s.${p.multiImageSupport ? ' Supports multi-image references.' : ''}`)
+    .filter((p: any) => !p.deprecated)
+    .map((p: any) => {
+      const strengths = p.strengths?.join(', ') || p.capabilities?.join(', ') || p.description || '';
+      const bestFor = p.bestFor?.join(', ') || p.supportedModes?.join(', ') || '';
+      return `- **${p.name}** (${p.id}): ${strengths}. Best for: ${bestFor}. Cost: ${p.costTier}. Max duration: ${p.maxDuration}s.${p.multiImageSupport ? ' Supports multi-image references.' : ''}`;
+    })
     .join('\n');
 
   const imageProviders = IMAGE_PROVIDER_CATALOG
-    .filter(p => !p.deprecated)
-    .map(p => `- **${p.name}** (${p.id}): ${p.strengths.join(', ')}. Best for: ${p.bestFor.join(', ')}. Cost: ${p.costTier}.`)
+    .filter((p: any) => !p.deprecated)
+    .map((p: any) => {
+      const strengths = p.strengths?.join(', ') || p.capabilities?.join(', ') || p.description || '';
+      const bestFor = p.bestFor?.join(', ') || p.supportedModes?.join(', ') || '';
+      return `- **${p.name}** (${p.id}): ${strengths}. Best for: ${bestFor}. Cost: ${p.costTier}.`;
+    })
     .join('\n');
 
   return `## AI Video Providers
