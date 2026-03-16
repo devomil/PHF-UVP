@@ -1010,7 +1010,10 @@ function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () => void; 
                 className="hidden"
                 onChange={(e) => {
                   const file = e.target.files?.[0];
-                  if (file) uploadFile(file, setReferenceVideoUrl, null, setIsUploadingVideo, "Reference video");
+                  if (file) {
+                    setValidationError(null);
+                    uploadFile(file, setReferenceVideoUrl, null, setIsUploadingVideo, "Reference video");
+                  }
                 }}
               />
             </div>

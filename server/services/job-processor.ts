@@ -2,6 +2,7 @@ import { db } from "../db";
 import { videoGenerationJobs, universalVideoProjects } from "../../shared/schema";
 import { eq } from "drizzle-orm";
 import { aiVideoService } from "./ai-video-service";
+import { assetUrlResolver } from "./asset-url-resolver";
 
 export async function recoverStuckJobs() {
   try {
@@ -93,6 +94,17 @@ export async function processVideoJob(jobId: string) {
       i2vSettingsForProvider.imageControlStrength = jobI2vSettings.imageControlStrength;
     }
 
+    let resolvedImageUrl = job.sourceImageUrl || undefined;
+    if (resolvedImageUrl && !resolvedImageUrl.startsWith('https://')) {
+      const resolved = await assetUrlResolver.resolve(resolvedImageUrl);
+      if (resolved) {
+        console.log(`[JobProcessor] Resolved source image: ${resolvedImageUrl} → ${resolved.substring(0, 80)}...`);
+        resolvedImageUrl = resolved;
+      } else {
+        throw new Error(`Failed to resolve source image to a public URL: ${resolvedImageUrl}. Check S3 credentials.`);
+      }
+    }
+
     const result = await aiVideoService.generateVideo({
       prompt: job.prompt || "",
       duration: job.duration || 6,
@@ -100,7 +112,7 @@ export async function processVideoJob(jobId: string) {
       sceneType: job.sceneType || "general",
       preferredProvider: job.provider || "auto",
       negativePrompt: job.negativePrompt || undefined,
-      imageUrl: job.sourceImageUrl || undefined,
+      imageUrl: resolvedImageUrl,
       ...(jobI2vSettings.isCharacterReference ? { isCharacterReference: true } : {}),
       ...(jobI2vSettings.artPresetId ? { artPresetId: jobI2vSettings.artPresetId } : {}),
       ...(Object.keys(i2vSettingsForProvider).length > 0 ? { i2vSettings: i2vSettingsForProvider } : {}),
