@@ -3,7 +3,7 @@ import { useLocation, Link } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Sparkles, FileText, Zap, ArrowLeft, Video, Image, Info, Plus, Trash2, ChevronUp, ChevronDown, GripVertical, Palette, Users, UserCheck, Upload, X, ImagePlus, Film, Loader2 } from "lucide-react";
+import { Sparkles, FileText, Zap, ArrowLeft, Video, Image, Info, Plus, Trash2, ChevronUp, ChevronDown, GripVertical, Palette, Users, UserCheck, Upload, X, ImagePlus, Film, Loader2, AlertCircle } from "lucide-react";
 import { ProviderCatalogSelector } from "@/components/video/provider-catalog-selector";
 import { CharacterProfilesPanel } from "@/components/video/character-profiles-panel";
 import { AssetSuzzieChat } from "@/components/video/AssetSuzzieChat";
@@ -790,6 +790,9 @@ function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () => void; 
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [referenceVideoUrl, setReferenceVideoUrl] = useState("");
   const [isUploadingVideo, setIsUploadingVideo] = useState(false);
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const refImageSectionRef = useRef<HTMLDivElement>(null);
+  const refVideoSectionRef = useRef<HTMLDivElement>(null);
 
   const allPresets = getAllVisualArtPresets();
   const cfg = QC_MODE_CONFIG[genMode];
@@ -821,6 +824,7 @@ function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () => void; 
 
   useEffect(() => {
     setProvider("auto");
+    setValidationError(null);
   }, [genMode]);
 
   useEffect(() => {
@@ -856,12 +860,19 @@ function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () => void; 
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setValidationError(null);
     if (cfg.needsRefImage && !referenceImageUrl) {
-      toast({ title: "Reference image required", description: "Please upload a reference image for I2V mode.", variant: "destructive" });
+      const msg = "Please upload a reference image for I2V mode.";
+      setValidationError(msg);
+      toast({ title: "Reference image required", description: msg, variant: "destructive" });
+      refImageSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
     if (cfg.needsRefVideo && !referenceVideoUrl) {
-      toast({ title: "Reference video required", description: "Please upload a reference video for V2V mode.", variant: "destructive" });
+      const msg = "Please upload a reference video for V2V mode.";
+      setValidationError(msg);
+      toast({ title: "Reference video required", description: msg, variant: "destructive" });
+      refVideoSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
     const payload: any = {
@@ -923,7 +934,7 @@ function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () => void; 
         </div>
 
         {cfg.needsRefImage && (
-          <div>
+          <div ref={refImageSectionRef}>
             <Label style={{ color: "var(--text-secondary)" }}>Reference Image *</Label>
             <div className="mt-1.5">
               {referenceImagePreview ? (
@@ -959,6 +970,7 @@ function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () => void; 
                   if (file) {
                     const preview = URL.createObjectURL(file);
                     setReferenceImagePreview(preview);
+                    setValidationError(null);
                     uploadFile(file, setReferenceImageUrl, null, setIsUploadingImage, "Reference image");
                   }
                 }}
@@ -968,7 +980,7 @@ function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () => void; 
         )}
 
         {cfg.needsRefVideo && (
-          <div>
+          <div ref={refVideoSectionRef}>
             <Label style={{ color: "var(--text-secondary)" }}>Reference Video *</Label>
             <div className="mt-1.5 space-y-2">
               {referenceVideoUrl ? (
@@ -1194,6 +1206,13 @@ function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () => void; 
           <input type="checkbox" id="saveToLibrary" checked={saveToLibrary} onChange={(e) => setSaveToLibrary(e.target.checked)} className="rounded" style={{ borderColor: "var(--border-medium)", backgroundColor: "var(--input-bg)" }} />
           <Label htmlFor="saveToLibrary" className="cursor-pointer" style={{ color: "var(--text-secondary)" }}>Save to Asset Library</Label>
         </div>
+
+        {validationError && (
+          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/30">
+            <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
+            <span className="text-sm text-red-300">{validationError}</span>
+          </div>
+        )}
 
         <div className="flex gap-3 pt-4">
           <Button type="button" variant="outline" onClick={onBack} style={{ borderColor: "var(--border-medium)", color: "var(--text-secondary)" }}>
