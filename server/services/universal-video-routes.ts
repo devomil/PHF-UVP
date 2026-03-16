@@ -1054,7 +1054,7 @@ router.post('/ask-suzzie/asset-library', isAuthenticated, async (req: Request, r
       systemPrompt,
       messages,
       maxTokens: 1200,
-      temperature: 0.7,
+      temperature: 0.85,
     });
 
     const text = llmResult.text || '';

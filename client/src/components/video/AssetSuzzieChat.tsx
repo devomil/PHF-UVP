@@ -142,11 +142,16 @@ export function AssetSuzzieChat({
   const handleOpenPanel = useCallback(() => {
     setIsOpen(true);
     if (messages.length === 0 && prompt.trim()) {
-      sendChatMessage(
+      const variations = [
         `Review and improve my current prompt: "${prompt.trim()}"`,
-        [],
-        true
-      );
+        `Help me enhance this prompt for better results: "${prompt.trim()}"`,
+        `Take a fresh look at my prompt and suggest improvements: "${prompt.trim()}"`,
+        `How can I make this prompt more effective? "${prompt.trim()}"`,
+        `Give me a creative upgrade for this prompt: "${prompt.trim()}"`,
+        `Rewrite and elevate my prompt with your expertise: "${prompt.trim()}"`,
+      ];
+      const message = variations[Math.floor(Math.random() * variations.length)];
+      sendChatMessage(message, [], true);
     }
   }, [messages.length, prompt, sendChatMessage]);
 
