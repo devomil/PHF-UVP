@@ -1,10 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { apiRequest } from '@/lib/queryClient';
 import {
-  MessageCircle,
   Send,
   Loader2,
   Sparkles,
@@ -75,20 +73,21 @@ export function AssetSuzzieChat({
     }
   }, [isOpen]);
 
-  const sendMessage = useCallback(async () => {
-    const trimmed = input.trim();
-    if (!trimmed || isLoading) return;
+  const sendChatMessage = useCallback(async (messageText: string, existingHistory: ChatMessage[], showInChat: boolean = true) => {
+    if (!messageText.trim() || isLoading) return;
 
-    const userMessage: ChatMessage = { role: 'user', content: trimmed };
-    setMessages(prev => [...prev, userMessage]);
+    if (showInChat) {
+      const userMessage: ChatMessage = { role: 'user', content: messageText };
+      setMessages(prev => [...prev, userMessage]);
+    }
     setInput('');
     setIsLoading(true);
 
     try {
-      const history = messages.map(m => ({ role: m.role, content: m.content }));
+      const history = existingHistory.map(m => ({ role: m.role, content: m.content }));
 
       const res = await apiRequest('POST', '/api/universal-video/ask-suzzie/asset-library', {
-        message: trimmed,
+        message: messageText,
         conversationHistory: history,
         context: {
           mode,
@@ -124,7 +123,24 @@ export function AssetSuzzieChat({
     } finally {
       setIsLoading(false);
     }
-  }, [input, isLoading, messages, mode, provider, prompt, hasReferenceImage, aspectRatio, duration, style]);
+  }, [isLoading, mode, provider, prompt, hasReferenceImage, aspectRatio, duration, style]);
+
+  const sendMessage = useCallback(() => {
+    const trimmed = input.trim();
+    if (!trimmed) return;
+    sendChatMessage(trimmed, messages);
+  }, [input, messages, sendChatMessage]);
+
+  const handleOpenPanel = useCallback(() => {
+    setIsOpen(true);
+    if (messages.length === 0 && prompt.trim()) {
+      sendChatMessage(
+        `Review and improve my current prompt: "${prompt.trim()}"`,
+        [],
+        true
+      );
+    }
+  }, [messages.length, prompt, sendChatMessage]);
 
   const handleApplyPrompt = (suggestedPrompt: string, index: number) => {
     onApplyPrompt(suggestedPrompt);
@@ -168,7 +184,7 @@ export function AssetSuzzieChat({
         type="button"
         variant="outline"
         size="sm"
-        onClick={() => setIsOpen(true)}
+        onClick={handleOpenPanel}
         className="h-7 px-2.5 text-xs border-purple-500/50 bg-purple-500/10 text-purple-300 hover:bg-purple-500/20 hover:text-purple-200 hover:border-purple-400 gap-1.5"
       >
         <Sparkles className="h-3.5 w-3.5" />
