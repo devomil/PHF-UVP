@@ -166,12 +166,12 @@ export function AssetSuzzieChat({
     return (
       <Button
         type="button"
-        variant="ghost"
+        variant="outline"
         size="sm"
         onClick={() => setIsOpen(true)}
-        className="h-7 px-2.5 text-xs text-purple-400 hover:text-purple-300 hover:bg-purple-500/10 gap-1.5"
+        className="h-7 px-2.5 text-xs border-purple-500/50 bg-purple-500/10 text-purple-300 hover:bg-purple-500/20 hover:text-purple-200 hover:border-purple-400 gap-1.5"
       >
-        <MessageCircle className="h-3.5 w-3.5" />
+        <Sparkles className="h-3.5 w-3.5" />
         Ask Suzzie
       </Button>
     );

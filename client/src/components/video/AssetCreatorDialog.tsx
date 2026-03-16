@@ -784,9 +784,24 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
 
           {mode === 'character' && (
             <div className="space-y-3">
-              <div className="flex items-center gap-2 p-2 rounded-lg bg-blue-500/10 border border-blue-500/30">
-                <Wand2 className="h-4 w-4 text-blue-400" />
-                <span className="text-xs text-blue-300">Art style: Disney/Pixar 3D CGI (auto-applied)</span>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 p-2 rounded-lg bg-blue-500/10 border border-blue-500/30 flex-1">
+                  <Wand2 className="h-4 w-4 text-blue-400" />
+                  <span className="text-xs text-blue-300">Art style: Disney/Pixar 3D CGI (auto-applied)</span>
+                </div>
+                <div className="ml-2 flex-shrink-0">
+                  <AssetSuzzieChat
+                    mode="character"
+                    provider="auto"
+                    prompt={charPhysicalDescription}
+                    hasReferenceImage={!!charReferencePhotoUrl}
+                    aspectRatio="1:1"
+                    duration={0}
+                    style="Disney/Pixar 3D"
+                    validProviderIds={[]}
+                    onApplyPrompt={setCharPhysicalDescription}
+                  />
+                </div>
               </div>
 
               <div>
