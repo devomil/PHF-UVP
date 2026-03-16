@@ -449,13 +449,17 @@ export async function registerRoutes(app: Express) {
         .orderBy(desc(videoGenerationJobs.createdAt))
         .limit(1);
 
-      const originalProvider = previousJobs[0]?.provider || "kling";
+      const originalJob = previousJobs[0];
+      const originalProvider = originalJob?.provider || "kling";
 
       await db.update(universalVideoProjects).set({
         status: "draft",
         outputUrl: null,
         progress: { phase: "generating", percentage: 0, currentStep: "Queued for regeneration" },
       }).where(eq(universalVideoProjects.projectId, projectId));
+
+      const originalSceneType = originalJob?.sceneType || (project.mediaMode === "image" ? "image" : "video");
+      const originalI2vSettings = (originalJob?.i2vSettings as any) || {};
 
       const jobId = crypto.randomUUID();
       await db.insert(videoGenerationJobs).values({
@@ -465,10 +469,16 @@ export async function registerRoutes(app: Express) {
         provider: originalProvider || "auto",
         status: "pending",
         prompt: project.description || "",
+        negativePrompt: originalJob?.negativePrompt || undefined,
         duration: project.totalDuration || 6,
         aspectRatio: outputFormat.aspectRatio || "16:9",
-        sceneType: project.mediaMode === "image" ? "image" : "video",
-        i2vSettings: { saveToLibrary: true, outputType: project.mediaMode || "video" },
+        sceneType: originalSceneType,
+        sourceImageUrl: originalJob?.sourceImageUrl || undefined,
+        i2vSettings: {
+          saveToLibrary: true,
+          outputType: project.mediaMode || "video",
+          ...originalI2vSettings,
+        },
         triggeredBy: userId,
       });
 
@@ -664,6 +674,16 @@ export async function registerRoutes(app: Express) {
         updatedAt: new Date(),
       }).where(eq(universalVideoProjects.projectId, projectId));
 
+      const previousJobs = await db
+        .select()
+        .from(videoGenerationJobs)
+        .where(eq(videoGenerationJobs.projectId, projectId))
+        .orderBy(desc(videoGenerationJobs.createdAt))
+        .limit(1);
+      const originalJob = previousJobs[0];
+      const originalSceneType = originalJob?.sceneType || (project.mediaMode === "image" ? "image" : "video");
+      const originalI2vSettings = (originalJob?.i2vSettings as any) || {};
+
       const jobId = crypto.randomUUID();
       await db.insert(videoGenerationJobs).values({
         jobId,
@@ -672,10 +692,16 @@ export async function registerRoutes(app: Express) {
         provider: finalProvider,
         status: "pending",
         prompt: finalPrompt,
+        negativePrompt: originalJob?.negativePrompt || undefined,
         duration: project.mediaMode === "video" ? finalDuration : undefined,
         aspectRatio: finalAspectRatio,
-        sceneType: project.mediaMode === "image" ? "image" : "video",
-        i2vSettings: { saveToLibrary: true, outputType: project.mediaMode || "video" },
+        sceneType: originalSceneType,
+        sourceImageUrl: originalJob?.sourceImageUrl || undefined,
+        i2vSettings: {
+          saveToLibrary: true,
+          outputType: project.mediaMode || "video",
+          ...originalI2vSettings,
+        },
         triggeredBy: userId,
       });
 
