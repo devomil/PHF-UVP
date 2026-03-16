@@ -1,15 +1,22 @@
 import type { Express } from "express";
+import express from "express";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { createServer as createViteServer, type ViteDevServer } from "vite";
+
+const expressStatic = express.static;
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export async function setupVite(app: Express) {
   const vite = await createViteServer({
     configFile: path.resolve(__dirname, "..", "vite.config.ts"),
-    server: { middlewareMode: true, hmr: true },
+    server: {
+      middlewareMode: true,
+      hmr: false,
+      allowedHosts: true,
+    },
     appType: "spa",
   });
 
@@ -35,14 +42,13 @@ export async function setupVite(app: Express) {
 }
 
 export function serveStatic(app: Express) {
-  const distPath = path.resolve(__dirname, "..", "dist", "public");
+  const distPath = path.resolve(__dirname, "..", "public");
 
   if (!fs.existsSync(distPath)) {
     throw new Error(`Build output not found at ${distPath}. Run "npm run build" first.`);
   }
 
-  const express = require("express");
-  app.use(express.static(distPath));
+  app.use(expressStatic(distPath));
 
   app.use("*", (_req, res) => {
     res.sendFile(path.resolve(distPath, "index.html"));

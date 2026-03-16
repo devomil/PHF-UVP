@@ -47,40 +47,75 @@ export interface MotionGraphicsSceneProps {
   backgroundColor?: string;
 }
 
-const renderMotionGraphic = (config: MotionGraphicsConfig): React.ReactNode => {
+const MotionGraphicFallback: React.FC<{type: string}> = ({type}) => (
+  <AbsoluteFill style={{ backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'center', alignItems: 'center' }}>
+    <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: 14, fontFamily: 'sans-serif' }}>
+      Motion graphic: {type}
+    </div>
+  </AbsoluteFill>
+);
+
+class MotionGraphicBoundary extends React.Component<
+  {type: string; children: React.ReactNode},
+  {hasError: boolean}
+> {
+  constructor(props: any) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  render() {
+    if (this.state.hasError) {
+      return <MotionGraphicFallback type={this.props.type} />;
+    }
+    return this.props.children;
+  }
+}
+
+const renderMotionGraphicInner = (config: MotionGraphicsConfig): React.ReactNode => {
   const { type, props } = config;
-  
+  const safeProps = props || {};
+
   switch (type) {
     case 'kinetic-text':
-      return <KineticText {...(props as any)} />;
+      return <KineticText {...(safeProps as any)} />;
     case 'word-by-word':
-      return <WordByWord {...(props as any)} />;
+      return <WordByWord {...(safeProps as any)} />;
     case 'character-animation':
-      return <CharacterAnimation {...(props as any)} />;
+      return <CharacterAnimation {...(safeProps as any)} />;
     case 'stat-counter':
-      return <StatCounter {...(props as any)} />;
+      return <StatCounter {...(safeProps as any)} />;
     case 'progress-bar':
-      return <ProgressBar {...(props as any)} />;
+      return <ProgressBar {...(safeProps as any)} />;
     case 'animated-chart':
-      return <AnimatedChart {...(props as any)} />;
+      return <AnimatedChart {...(safeProps as any)} />;
     case 'process-flow':
-      return <ProcessFlow {...(props as any)} />;
+      return <ProcessFlow {...(safeProps as any)} />;
     case 'tree-growth':
-      return <TreeGrowth {...(props as any)} />;
+      return <TreeGrowth {...(safeProps as any)} />;
     case 'network-visualization':
-      return <NetworkVisualization {...(props as any)} />;
+      return <NetworkVisualization {...(safeProps as any)} />;
     case 'transformation-sequence':
-      return <TransformationSequence {...(props as any)} />;
+      return <TransformationSequence {...(safeProps as any)} />;
     case 'split-screen':
-      return <SplitScreen {...(props as any)} />;
+      return <SplitScreen {...(safeProps as any)} />;
     case 'before-after':
-      return <BeforeAfter {...(props as any)} />;
+      return <BeforeAfter {...(safeProps as any)} />;
     case 'picture-in-picture':
-      return <PictureInPicture {...(props as any)} />;
+      return <PictureInPicture {...(safeProps as any)} />;
     default:
-      console.warn(`Unknown motion graphics type: ${type}`);
-      return null;
+      return <MotionGraphicFallback type={type} />;
   }
+};
+
+const renderMotionGraphic = (config: MotionGraphicsConfig): React.ReactNode => {
+  return (
+    <MotionGraphicBoundary type={config.type}>
+      {renderMotionGraphicInner(config)}
+    </MotionGraphicBoundary>
+  );
 };
 
 export const MotionGraphicsScene: React.FC<MotionGraphicsSceneProps> = ({
@@ -89,6 +124,10 @@ export const MotionGraphicsScene: React.FC<MotionGraphicsSceneProps> = ({
 }) => {
   const frame = useCurrentFrame();
   const { fps, durationInFrames, width, height } = useVideoConfig();
+  
+  if (!configs || configs.length === 0) {
+    return <AbsoluteFill style={{ backgroundColor }} />;
+  }
   
   return (
     <AbsoluteFill style={{ backgroundColor }}>

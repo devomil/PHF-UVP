@@ -1,0 +1,20 @@
+{
+  "visualDirection": "3D rendered illustration, Pixar style, soft global illumination, isometric perspective, depicting a transformative healthcare journey from sterile medical environments to a warm, holistic healing farm setting",
+  "microScenes": [
+    {
+      "narration": "Throughout their combined decades in diverse healthcare settings, they saw the same pattern: people falling through the cracks of a system focused on symptoms rather than solutions.",
+      "visualDirection": "3D rendered illustration, Pixar style, soft global illumination, isometric perspective, a sterile hospital hallway with cool blue-gray lighting where small stylized characters appear lost or confused, walking past large gaps in the floor that represent 'falling through cracks,' overhead view showing the systematic nature of the problem, desaturated colors transitioning from cool blues to warmer tones, smooth rounded shapes, soft shadows, stylized 3D characters, clay-like textures, ambient occlusion, octane render quality",
+      "duration": 12
+    },
+    {
+      "narration": "That's why they created Pine Hill Farm—a space, both physical and virtual, where people can finally access the health and healing resources and education they deserve.",
+      "visualDirection": "3D rendered illustration, Pixar style, soft global illumination, isometric perspective, a beautiful rolling farm landscape with a cozy wooden building surrounded by lush green gardens and healing plants, warm golden sunlight casting gentle shadows, a digital screen or portal floating nearby representing the virtual aspect, people of various ages walking peacefully on winding paths toward the building, vibrant emerald greens and warm earth tones, smooth rounded shapes, soft shadows, stylized 3D characters, clay-like textures, ambient occlusion, octane render quality",
+      "duration": 15
+    },
+    {
+      "narration": "Working alongside other trusted wellness practitioners, they address the issues that matter most: hormone balance, mold and parasite concerns, gut health, weight management, detoxification, and personalized nutrition.",
+      "visualDirection": "3D rendered illustration, Pixar style, soft global illumination, isometric perspective, a circular conference table where diverse friendly practitioners sit together reviewing colorful 3D models representing different health systems - a glowing digestive tract, balanced scales, cleansing water elements, and vibrant healthy foods floating around them, warm collaborative lighting with soft golden hues, professional yet approachable atmosphere, vibrant saturated colors, smooth rounded shapes, soft shadows, stylized 3D characters, clay-like textures, ambient occlusion, octane render quality",
+      "duration": 12
+    },
+    {
+      "narration": "

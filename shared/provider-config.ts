@@ -10,10 +10,17 @@
 // When adding new providers, update BOTH this file AND server/config/video-providers.ts
 // to keep them in sync.
 
+export interface MultiImageSupport {
+  maxImages: number;
+  promptSyntax: string | null;
+  hint: string;
+}
+
 export interface VideoProvider {
   id: string;
   name: string;
   displayName: string;
+  description?: string;
   costPerSecond: number;
   maxDuration: number;
   strengths: string[];
@@ -22,6 +29,11 @@ export interface VideoProvider {
   family?: string;
   tier?: 'premium' | 'standard' | 'budget';
   specialization?: string;
+  specialties?: string[];
+  limitations?: string[];
+  visualCategory?: string[];
+  qualityNotes?: string;
+  multiImageSupport?: MultiImageSupport;
 }
 
 export const VIDEO_PROVIDERS: Record<string, VideoProvider> = {
@@ -30,32 +42,94 @@ export const VIDEO_PROVIDERS: Record<string, VideoProvider> = {
     id: 'runway',
     name: 'runway',
     displayName: 'Runway Gen-3',
+    description: 'Cinematic storytelling with dramatic lighting and smooth motion',
     costPerSecond: 0.05,
     maxDuration: 10,
     family: 'runway',
     tier: 'premium',
-    strengths: [
-      'Cinematic quality',
-      'Dramatic lighting',
-      'Smooth motion',
-      'Professional grade',
-    ],
-    weaknesses: [
-      'Higher cost',
-      'Slower generation',
-    ],
-    bestFor: [
-      'cinematic',
-      'dramatic',
-      'hero-shots',
-      'product-premium',
-      'emotional',
-      'hook',
-      'cta',
-    ],
+    strengths: ['Cinematic quality', 'Dramatic lighting', 'Smooth motion', 'Professional grade'],
+    weaknesses: ['Higher cost', 'Slower generation'],
+    bestFor: ['cinematic', 'dramatic', 'hero-shots', 'product-premium', 'emotional', 'hook', 'cta'],
+    specialties: ['Cinematic storytelling', 'Dramatic lighting', 'Professional-grade motion'],
+    limitations: ['Higher cost per second', 'Slower generation times', 'Text rendering in video'],
+    visualCategory: ['cinematic', 'dramatic', 'hero-shots'],
+    qualityNotes: 'Industry-standard cinematic quality with reliable multi-subject scene handling',
   },
-  
-  // Kling Family (6 variants)
+
+  'runway-4.5': {
+    id: 'runway-4.5',
+    name: 'runway-4.5',
+    displayName: 'Runway 4.5',
+    description: 'Top-tier photorealism, advanced camera control, best prompt adherence',
+    costPerSecond: 0.08,
+    maxDuration: 10,
+    family: 'runway',
+    tier: 'premium',
+    strengths: ['Top-tier creative control', 'Photorealistic motion', 'Advanced camera manipulation', 'Best-in-class prompt adherence'],
+    weaknesses: ['Highest cost', 'Requires direct API key'],
+    bestFor: ['cinematic', 'hero-shots', 'premium-content', 'photorealistic', 'creative-control'],
+    specialties: ['Photorealistic motion', 'Advanced camera manipulation', 'Creative direction control'],
+    limitations: ['Premium pricing', 'Direct Runway API required'],
+    visualCategory: ['cinematic', 'photorealistic', 'premium'],
+    qualityNotes: 'Top-tier creative control with photorealistic motion and advanced camera manipulation for premium productions',
+  },
+
+  'runway-gen4': {
+    id: 'runway-gen4',
+    name: 'runway-gen4',
+    displayName: 'Runway Gen-4',
+    description: 'Advanced motion manipulation and dramatic storytelling',
+    costPerSecond: 0.07,
+    maxDuration: 10,
+    family: 'runway',
+    tier: 'premium',
+    strengths: ['Advanced creative control', 'Motion manipulation', 'Dramatic storytelling', 'Scene coherence'],
+    weaknesses: ['Premium pricing', 'Requires direct API key'],
+    bestFor: ['cinematic', 'dramatic', 'storytelling', 'creative', 'hero-shots'],
+    specialties: ['Motion manipulation', 'Dramatic storytelling', 'Advanced scene composition'],
+    limitations: ['Premium pricing', 'Direct Runway API required'],
+    visualCategory: ['cinematic', 'dramatic', 'storytelling'],
+    qualityNotes: 'Advanced creative control with superior motion manipulation for dramatic storytelling scenes',
+  },
+
+  'runway-gen4-aleph': {
+    id: 'runway-gen4-aleph',
+    name: 'runway-gen4-aleph',
+    displayName: 'Runway Gen-4 Aleph',
+    description: 'Creative visual effects, artistic interpretation, superior transitions',
+    costPerSecond: 0.075,
+    maxDuration: 10,
+    family: 'runway',
+    tier: 'premium',
+    strengths: ['Enhanced Gen-4 capabilities', 'Creative visual effects', 'Superior scene transitions', 'Artistic interpretation'],
+    weaknesses: ['Premium pricing', 'Requires direct API key'],
+    bestFor: ['cinematic', 'creative', 'artistic', 'visual-effects', 'dramatic'],
+    specialties: ['Creative visual effects', 'Artistic scene interpretation', 'Superior transitions'],
+    limitations: ['Premium pricing', 'Direct Runway API required'],
+    visualCategory: ['cinematic', 'artistic', 'creative'],
+    qualityNotes: 'Enhanced Gen-4 variant with superior creative visual effects and artistic scene interpretation',
+  },
+
+  'runway-act-two': {
+    id: 'runway-act-two',
+    name: 'runway-act-two',
+    displayName: 'Runway Act Two',
+    description: 'Character performance, acting, facial expression, and emotional control',
+    costPerSecond: 0.07,
+    maxDuration: 10,
+    family: 'runway',
+    tier: 'premium',
+    specialization: 'character-performance',
+    strengths: ['Character performance', 'Acting and emotion', 'Facial expression control', 'Emotional storytelling'],
+    weaknesses: ['Specialized for character scenes', 'Requires direct API key'],
+    bestFor: ['character', 'acting', 'emotional', 'performance', 'dialogue', 'human-subject'],
+    specialties: ['Character performance', 'Acting direction', 'Emotional expression control'],
+    limitations: ['Best suited for character/people scenes', 'Direct Runway API required'],
+    visualCategory: ['human_subjects', 'emotional', 'character-performance'],
+    qualityNotes: 'Specialized for character performance and acting with superior facial expression and emotional control',
+  },
+
+  // Kling Family
   kling: {
     id: 'kling',
     name: 'kling',
@@ -64,26 +138,20 @@ export const VIDEO_PROVIDERS: Record<string, VideoProvider> = {
     maxDuration: 10,
     family: 'kling',
     tier: 'standard',
-    strengths: [
-      'Excellent human rendering',
-      'Natural expressions',
-      'Good motion physics',
-      'Cost effective',
-    ],
-    weaknesses: [
-      'Less cinematic than Runway',
-    ],
-    bestFor: [
-      'person',
-      'human-subject',
-      'face-closeup',
-      'conversation',
-      'testimonial',
-      'lifestyle',
-      'story',
-    ],
+    strengths: ['Excellent human rendering', 'Natural expressions', 'Good motion physics', 'Cost effective'],
+    weaknesses: ['Less cinematic than Runway'],
+    bestFor: ['person', 'human-subject', 'face-closeup', 'conversation', 'testimonial', 'lifestyle', 'story'],
+    specialties: ['Human subjects', 'Facial expressions', 'Natural movement'],
+    limitations: ['Less cinematic feel than premium providers'],
+    visualCategory: ['human_subjects', 'lifestyle', 'testimonial'],
+    qualityNotes: 'Excellent human rendering with natural expressions at a cost-effective price point',
+    multiImageSupport: {
+      maxImages: 4,
+      promptSyntax: '@image_N',
+      hint: 'Use @image_1, @image_2, etc. in your prompt to reference each image. Example: "use @image_1 as start frame, a woman @image_2 is introducing herself"',
+    },
   },
-  
+
   'kling-1.6': {
     id: 'kling-1.6',
     name: 'kling-1.6',
@@ -95,8 +163,17 @@ export const VIDEO_PROVIDERS: Record<string, VideoProvider> = {
     strengths: ['Good value', 'Reliable', 'Fast generation'],
     weaknesses: ['Older model', 'Less detail'],
     bestFor: ['general', 'lifestyle', 'simple-motion'],
+    specialties: ['Budget-friendly generation', 'Reliable output'],
+    limitations: ['Older model with less detail', 'Basic motion quality'],
+    visualCategory: ['broll', 'lifestyle'],
+    qualityNotes: 'Reliable budget option for simple scenes and quick iteration',
+    multiImageSupport: {
+      maxImages: 4,
+      promptSyntax: '@image_N',
+      hint: 'Use @image_1, @image_2, etc. in your prompt to reference each image. Example: "use @image_1 as start frame, a woman @image_2 is introducing herself, and use @image_1 as end frame"',
+    },
   },
-  
+
   'kling-2.0': {
     id: 'kling-2.0',
     name: 'kling-2.0',
@@ -108,8 +185,17 @@ export const VIDEO_PROVIDERS: Record<string, VideoProvider> = {
     strengths: ['Improved motion', 'Better faces', 'Natural movement'],
     weaknesses: ['Moderate cost'],
     bestFor: ['people', 'lifestyle', 'testimonials'],
+    specialties: ['Human subjects', 'Natural movement', 'Lifestyle content'],
+    limitations: ['Moderate cost for standard tier'],
+    visualCategory: ['human_subjects', 'lifestyle'],
+    qualityNotes: 'Good balance of quality and cost for people-focused content',
+    multiImageSupport: {
+        maxImages: 4,
+        promptSyntax: '@image_N',
+        hint: 'Use @image_1, @image_2, etc. in your prompt to reference each image. Example: "use @image_1 as start frame, a woman @image_2 is introducing herself"',
+      },
   },
-  
+
   'kling-2.1': {
     id: 'kling-2.1',
     name: 'kling-2.1',
@@ -121,8 +207,17 @@ export const VIDEO_PROVIDERS: Record<string, VideoProvider> = {
     strengths: ['Enhanced realism', 'Better expressions', 'Smooth motion'],
     weaknesses: ['Higher cost than 2.0'],
     bestFor: ['people', 'emotional', 'close-ups'],
+    specialties: ['Enhanced realism', 'Emotional expressions', 'Close-up shots'],
+    limitations: ['Higher cost than Kling 2.0'],
+    visualCategory: ['human_subjects', 'emotional'],
+    qualityNotes: 'Enhanced realism with better facial expressions for emotional content',
+    multiImageSupport: {
+        maxImages: 4,
+        promptSyntax: '@image_N',
+        hint: 'Use @image_1, @image_2, etc. in your prompt to reference each image. Example: "use @image_1 as start frame, a woman @image_2 is introducing herself"',
+      },
   },
-  
+
   'kling-2.5-turbo': {
     id: 'kling-2.5-turbo',
     name: 'kling-2.5-turbo',
@@ -134,8 +229,17 @@ export const VIDEO_PROVIDERS: Record<string, VideoProvider> = {
     strengths: ['Fast generation', 'High quality', 'Best-in-class motion'],
     weaknesses: ['Premium pricing'],
     bestFor: ['complex-motion', 'action', 'dynamic-scenes'],
+    specialties: ['Fast generation', 'Complex motion', 'Dynamic action scenes'],
+    limitations: ['Premium pricing tier'],
+    visualCategory: ['cinematic', 'action', 'dynamic'],
+    qualityNotes: 'Fastest Kling model with premium motion quality for dynamic content',
+    multiImageSupport: {
+        maxImages: 4,
+        promptSyntax: '@image_N',
+        hint: 'Use @image_1, @image_2, etc. in your prompt to reference each image. Example: "use @image_1 as start frame, a woman @image_2 is introducing herself"',
+      },
   },
-  
+
   'kling-avatar': {
     id: 'kling-avatar',
     name: 'kling-avatar',
@@ -148,8 +252,12 @@ export const VIDEO_PROVIDERS: Record<string, VideoProvider> = {
     strengths: ['Lip sync', 'Long duration', 'Consistent identity'],
     weaknesses: ['Specialized use', 'Less versatile'],
     bestFor: ['talking-head', 'presenter', 'avatar', 'spokesperson'],
+    specialties: ['Lip-sync talking heads', 'Consistent character identity', 'Long-form presenter content'],
+    limitations: ['Specialized for talking-head use only', 'Less versatile for general scenes'],
+    visualCategory: ['human_subjects', 'talking-head'],
+    qualityNotes: 'Best for long-form presenter and spokesperson content with native lip-sync',
   },
-  
+
   'kling-effects': {
     id: 'kling-effects',
     name: 'kling-effects',
@@ -162,8 +270,12 @@ export const VIDEO_PROVIDERS: Record<string, VideoProvider> = {
     strengths: ['VFX overlays', 'Fast rendering', 'Low cost'],
     weaknesses: ['Short duration', 'Effects only'],
     bestFor: ['effects', 'transitions', 'overlays', 'particles'],
+    specialties: ['VFX overlays', 'Particle effects', 'Visual transitions'],
+    limitations: ['Short duration only', 'Effects-only output'],
+    visualCategory: ['effects', 'transitions'],
+    qualityNotes: 'Budget-friendly VFX and particle effect generation',
   },
-  
+
   'kling-2.1-master': {
     id: 'kling-2.1-master',
     name: 'kling-2.1-master',
@@ -175,8 +287,17 @@ export const VIDEO_PROVIDERS: Record<string, VideoProvider> = {
     strengths: ['Premium quality', 'Best faces', 'Cinematic'],
     weaknesses: ['Highest cost'],
     bestFor: ['hero-shots', 'premium-content', 'cinematic'],
+    specialties: ['Premium human rendering', 'Cinematic quality faces', 'Hero-shot content'],
+    limitations: ['Highest cost in Kling family'],
+    visualCategory: ['cinematic', 'human_subjects', 'premium'],
+    qualityNotes: 'Premium tier of Kling with maximum quality rendering for hero content',
+    multiImageSupport: {
+        maxImages: 4,
+        promptSyntax: '@image_N',
+        hint: 'Use @image_1, @image_2, etc. in your prompt to reference each image. Example: "use @image_1 as start frame, a woman @image_2 is introducing herself"',
+      },
   },
-  
+
   'kling-2.5': {
     id: 'kling-2.5',
     name: 'kling-2.5',
@@ -188,12 +309,22 @@ export const VIDEO_PROVIDERS: Record<string, VideoProvider> = {
     strengths: ['Great temporal consistency', 'Smooth motion', 'Good value'],
     weaknesses: ['No native audio'],
     bestFor: ['people', 'lifestyle', 'product-demos'],
+    specialties: ['Temporal consistency', 'Smooth motion', 'Product demonstrations'],
+    limitations: ['No native audio generation'],
+    visualCategory: ['human_subjects', 'lifestyle', 'product_reveal'],
+    qualityNotes: 'Strong temporal consistency for lifestyle and product demo content',
+    multiImageSupport: {
+        maxImages: 4,
+        promptSyntax: '@image_N',
+        hint: 'Use @image_1, @image_2, etc. in your prompt to reference each image. Example: "use @image_1 as start frame, a woman @image_2 is introducing herself"',
+      },
   },
-  
+
   'kling-2.6': {
     id: 'kling-2.6',
     name: 'kling-2.6',
     displayName: 'Kling 2.6',
+    description: 'Cinematic, character-consistent, motion-controlled with native audio',
     costPerSecond: 0.039,
     maxDuration: 10,
     family: 'kling',
@@ -202,12 +333,22 @@ export const VIDEO_PROVIDERS: Record<string, VideoProvider> = {
     strengths: ['Native audio generation', 'Voice/SFX/ambient', 'Audio-visual sync', 'Lip sync'],
     weaknesses: ['Newer model'],
     bestFor: ['speaking', 'dialogue', 'sfx-scenes', 'ambient-scenes', 'audio-visual'],
+    specialties: ['Native audio generation', 'Lip-sync dialogue', 'Sound effect integration', 'Facial expressions'],
+    limitations: ['Newer model with less community testing'],
+    visualCategory: ['human_subjects', 'dialogue', 'audio-visual'],
+    qualityNotes: 'Best for human subjects with native audio, lip-sync, and sound effect generation',
+    multiImageSupport: {
+        maxImages: 4,
+        promptSyntax: '@image_N',
+        hint: 'Use @image_1, @image_2, etc. in your prompt to reference each image. Example: "use @image_1 as start frame, a woman @image_2 is introducing herself"',
+      },
   },
-  
+
   'kling-2.6-pro': {
     id: 'kling-2.6-pro',
     name: 'kling-2.6-pro',
     displayName: 'Kling 2.6 Pro',
+    description: 'Premium audio fidelity with broadcast-ready dialogue and visuals',
     costPerSecond: 0.066,
     maxDuration: 10,
     family: 'kling',
@@ -216,8 +357,17 @@ export const VIDEO_PROVIDERS: Record<string, VideoProvider> = {
     strengths: ['Premium audio quality', 'Enhanced fidelity', 'Full audio suite'],
     weaknesses: ['Higher cost'],
     bestFor: ['premium-audio', 'professional', 'high-quality-dialogue'],
+    specialties: ['Premium audio fidelity', 'Professional dialogue', 'Broadcast-ready audio-visual'],
+    limitations: ['Higher cost for premium audio tier'],
+    visualCategory: ['human_subjects', 'professional', 'dialogue'],
+    qualityNotes: 'Professional-grade Kling with enhanced audio fidelity for broadcast-ready content',
+    multiImageSupport: {
+        maxImages: 4,
+        promptSyntax: '@image_N',
+        hint: 'Use @image_1, @image_2, etc. in your prompt to reference each image. Example: "use @image_1 as start frame, a woman @image_2 is introducing herself"',
+      },
   },
-  
+
   'kling-2.6-motion-control': {
     id: 'kling-2.6-motion-control',
     name: 'kling-2.6-motion-control',
@@ -230,8 +380,12 @@ export const VIDEO_PROVIDERS: Record<string, VideoProvider> = {
     strengths: ['Motion transfer', 'Long duration (30s)', 'Dance/gestures', 'Hand actions'],
     weaknesses: ['Requires reference video', 'Specialized use'],
     bestFor: ['dance', 'motion-transfer', 'virtual-influencer', 'choreography'],
+    specialties: ['Motion transfer from reference', 'Dance choreography', 'Gesture replication'],
+    limitations: ['Requires reference video input', 'Specialized motion-transfer use'],
+    visualCategory: ['human_subjects', 'dance', 'motion-transfer'],
+    qualityNotes: 'Precise motion transfer with long duration support for dance and choreography',
   },
-  
+
   'kling-2.6-motion-control-pro': {
     id: 'kling-2.6-motion-control-pro',
     name: 'kling-2.6-motion-control-pro',
@@ -244,39 +398,31 @@ export const VIDEO_PROVIDERS: Record<string, VideoProvider> = {
     strengths: ['Premium motion transfer', 'Complex choreography', 'Best hand rendering'],
     weaknesses: ['Highest cost', 'Requires reference video'],
     bestFor: ['professional-dance', 'complex-motion', 'premium-choreography'],
+    specialties: ['Premium motion transfer', 'Complex choreography', 'Best-in-class hand rendering'],
+    limitations: ['Highest cost in motion-control family', 'Requires reference video'],
+    visualCategory: ['human_subjects', 'dance', 'premium'],
+    qualityNotes: 'Premium motion control with best hand rendering for professional choreography',
   },
-  
+
   // Luma Family
   luma: {
     id: 'luma',
     name: 'luma',
     displayName: 'Luma Dream Machine',
+    description: 'Product reveals, smooth 3D transitions, object-focused shots',
     costPerSecond: 0.04,
     maxDuration: 5,
     family: 'luma',
     tier: 'standard',
-    strengths: [
-      'Smooth reveals',
-      'Product animations',
-      'Clean transitions',
-      '3D-like quality',
-    ],
-    weaknesses: [
-      'Shorter max duration',
-      'Less natural for people',
-    ],
-    bestFor: [
-      'product-reveal',
-      'product-shot',
-      'object-focus',
-      'reveal-animation',
-      'tech-demo',
-      'product',
-      'brand',
-    ],
+    strengths: ['Smooth reveals', 'Product animations', 'Clean transitions', '3D-like quality'],
+    weaknesses: ['Shorter max duration', 'Less natural for people'],
+    bestFor: ['product-reveal', 'product-shot', 'object-focus', 'reveal-animation', 'tech-demo', 'product', 'brand'],
+    specialties: ['Product reveals', 'Smooth 3D transitions', 'Object-focused animations', 'Clean product shots'],
+    limitations: ['Short max duration (5s)', 'Less natural for human subjects'],
+    visualCategory: ['product_reveal', 'object-focus', '3d-transitions'],
+    qualityNotes: 'Best for product reveals and smooth 3D transitions with clean, professional aesthetics',
   },
 
-  // Alias for server/config compatibility
   'luma-dream-machine': {
     id: 'luma-dream-machine',
     name: 'luma-dream-machine',
@@ -288,9 +434,12 @@ export const VIDEO_PROVIDERS: Record<string, VideoProvider> = {
     strengths: ['Smooth reveals', 'Product animations', 'Clean transitions'],
     weaknesses: ['Shorter max duration', 'Less natural for people'],
     bestFor: ['product-reveal', 'product-shot', 'object-focus', 'reveal-animation'],
+    specialties: ['Product reveals', 'Smooth 3D transitions', 'Object-focused animations'],
+    limitations: ['Short max duration (5s)', 'Less natural for human subjects'],
+    visualCategory: ['product_reveal', 'object-focus'],
+    qualityNotes: 'Alias for Luma — best for product reveals and object-focused content',
   },
 
-  // Runway Gen-3 (alias for compatibility)
   'runway-gen3': {
     id: 'runway-gen3',
     name: 'runway-gen3',
@@ -302,6 +451,10 @@ export const VIDEO_PROVIDERS: Record<string, VideoProvider> = {
     strengths: ['Cinematic quality', 'Camera movement', 'Human faces'],
     weaknesses: ['Higher cost', 'Text in video'],
     bestFor: ['cinematic', 'dramatic', 'hero-shots', 'hook', 'cta'],
+    specialties: ['Cinematic storytelling', 'Camera movement control', 'Professional production'],
+    limitations: ['Higher cost', 'Poor text rendering in video'],
+    visualCategory: ['cinematic', 'dramatic'],
+    qualityNotes: 'Gen-3 Alpha with industry-standard cinematic quality and camera control',
   },
 
   // Hailuo Family
@@ -309,33 +462,20 @@ export const VIDEO_PROVIDERS: Record<string, VideoProvider> = {
     id: 'hailuo',
     name: 'hailuo',
     displayName: 'Hailuo MiniMax',
+    description: 'Cost-effective b-roll, nature scenes, fast generation',
     costPerSecond: 0.02,
     maxDuration: 6,
     family: 'hailuo',
     tier: 'budget',
-    strengths: [
-      'Cost effective',
-      'Good for B-roll',
-      'Nature scenes',
-      'Fast generation',
-    ],
-    weaknesses: [
-      'Less detailed than premium',
-      'Simpler motion',
-    ],
-    bestFor: [
-      'broll',
-      'b-roll',
-      'nature',
-      'landscape',
-      'ambient',
-      'background',
-      'establishing',
-      'explanation',
-    ],
+    strengths: ['Cost effective', 'Good for B-roll', 'Nature scenes', 'Fast generation'],
+    weaknesses: ['Less detailed than premium', 'Simpler motion'],
+    bestFor: ['broll', 'b-roll', 'nature', 'landscape', 'ambient', 'background', 'establishing', 'explanation'],
+    specialties: ['Cost-effective b-roll', 'Nature and landscape scenes', 'Fast generation times'],
+    limitations: ['Less detail than premium providers', 'Simpler motion dynamics'],
+    visualCategory: ['broll', 'nature', 'landscape', 'ambient'],
+    qualityNotes: 'Cost-effective choice for b-roll, nature scenes, and fast content generation',
   },
 
-  // Alias for server/config compatibility
   'hailuo-minimax': {
     id: 'hailuo-minimax',
     name: 'hailuo-minimax',
@@ -347,8 +487,12 @@ export const VIDEO_PROVIDERS: Record<string, VideoProvider> = {
     strengths: ['Cost effective', 'B-roll', 'Nature scenes', 'Fast generation'],
     weaknesses: ['Less detailed than premium', 'Simpler motion'],
     bestFor: ['broll', 'b-roll', 'nature', 'landscape', 'ambient', 'background'],
+    specialties: ['Budget b-roll', 'Nature scenes', 'High-volume generation'],
+    limitations: ['Less detail than premium', 'Simple motion only'],
+    visualCategory: ['broll', 'nature'],
+    qualityNotes: 'Budget-friendly alias for Hailuo — best for high-volume b-roll content',
   },
-  
+
   // Hunyuan
   hunyuan: {
     id: 'hunyuan',
@@ -358,23 +502,15 @@ export const VIDEO_PROVIDERS: Record<string, VideoProvider> = {
     maxDuration: 5,
     family: 'hunyuan',
     tier: 'budget',
-    strengths: [
-      'Good for nature',
-      'Abstract scenes',
-      'Cost effective',
-    ],
-    weaknesses: [
-      'Limited duration',
-      'Less versatile',
-    ],
-    bestFor: [
-      'broll',
-      'nature',
-      'abstract',
-      'supplementary',
-    ],
+    strengths: ['Good for nature', 'Abstract scenes', 'Cost effective'],
+    weaknesses: ['Limited duration', 'Less versatile'],
+    bestFor: ['broll', 'nature', 'abstract', 'supplementary'],
+    specialties: ['Complex nature scenes', 'Abstract visuals', 'Multi-element compositions'],
+    limitations: ['Limited duration (5s)', 'Less versatile for general use'],
+    visualCategory: ['nature', 'abstract', 'broll'],
+    qualityNotes: 'Strong at generating complex nature scenes and abstract visuals at budget pricing',
   },
-  
+
   // Veo Family (Google)
   veo: {
     id: 'veo',
@@ -384,22 +520,15 @@ export const VIDEO_PROVIDERS: Record<string, VideoProvider> = {
     maxDuration: 8,
     family: 'veo',
     tier: 'premium',
-    strengths: [
-      'High quality output',
-      'Cinematic results',
-      'Good motion',
-    ],
-    weaknesses: [
-      'Higher cost',
-    ],
-    bestFor: [
-      'cinematic',
-      'high-quality',
-      'dramatic',
-      'hook',
-    ],
+    strengths: ['High quality output', 'Cinematic results', 'Good motion'],
+    weaknesses: ['Higher cost'],
+    bestFor: ['cinematic', 'high-quality', 'dramatic', 'hook'],
+    specialties: ['Cinematic quality', 'Native audio generation', 'Advanced physics simulation'],
+    limitations: ['Premium pricing'],
+    visualCategory: ['cinematic', 'dramatic', 'premium'],
+    qualityNotes: 'Google DeepMind premium model with native audio and cinematic output',
   },
-  
+
   'veo-2': {
     id: 'veo-2',
     name: 'veo-2',
@@ -411,12 +540,17 @@ export const VIDEO_PROVIDERS: Record<string, VideoProvider> = {
     strengths: ['Cinematic quality', 'Good motion', 'Reliable'],
     weaknesses: ['Premium pricing'],
     bestFor: ['cinematic', 'dramatic', 'professional'],
+    specialties: ['Cinematic quality', 'Reliable output', 'Environmental audio'],
+    limitations: ['Premium pricing'],
+    visualCategory: ['cinematic', 'dramatic'],
+    qualityNotes: 'Reliable premium model with enhanced visual coherence and realistic physics',
   },
-  
+
   'veo-3.1': {
     id: 'veo-3.1',
     name: 'veo-3.1',
     displayName: 'Veo 3.1',
+    description: '4K cinematic quality with advanced physics and native audio/dialogue',
     costPerSecond: 0.065,
     maxDuration: 8,
     family: 'veo',
@@ -424,8 +558,12 @@ export const VIDEO_PROVIDERS: Record<string, VideoProvider> = {
     strengths: ['Latest model', 'Best quality', 'Advanced physics'],
     weaknesses: ['Highest cost'],
     bestFor: ['hero-shots', 'cinematic', 'premium-content'],
+    specialties: ['4K cinematic quality', 'Advanced physics simulation', 'Native audio and dialogue', 'Immersive soundscapes'],
+    limitations: ['Highest cost per second', 'Premium-only use cases'],
+    visualCategory: ['cinematic', 'premium', '4k'],
+    qualityNotes: 'Premium cinematic with 4K quality, advanced physics, and native audio/dialogue generation',
   },
-  
+
   // Wan Family (Alibaba)
   'wan-2.1': {
     id: 'wan-2.1',
@@ -438,12 +576,17 @@ export const VIDEO_PROVIDERS: Record<string, VideoProvider> = {
     strengths: ['Fast generation', 'Cost effective', 'Reliable'],
     weaknesses: ['Shorter duration', 'Basic motion'],
     bestFor: ['broll', 'simple-scenes', 'quick-generation'],
+    specialties: ['Text rendering in video', 'Character consistency', 'Budget-friendly generation'],
+    limitations: ['Short duration (5s)', 'Basic motion quality'],
+    visualCategory: ['broll', 'text-content', 'conceptual_explanatory'],
+    qualityNotes: 'Budget-friendly with excellent text rendering — good for branded content and conceptual scenes',
   },
-  
+
   'wan-2.6': {
     id: 'wan-2.6',
     name: 'wan-2.6',
     displayName: 'Wan 2.6',
+    description: 'Text rendering, character consistency, conceptual visuals',
     costPerSecond: 0.03,
     maxDuration: 5,
     family: 'wan',
@@ -451,8 +594,49 @@ export const VIDEO_PROVIDERS: Record<string, VideoProvider> = {
     strengths: ['Improved quality', 'Better motion', 'Good value'],
     weaknesses: ['Short duration'],
     bestFor: ['lifestyle', 'nature', 'products'],
+    specialties: ['Text rendering', 'Character consistency', 'Improved visual quality'],
+    limitations: ['Short duration (5s)'],
+    visualCategory: ['lifestyle', 'text-content', 'conceptual_explanatory'],
+    qualityNotes: 'Improved Wan model with better motion and text rendering for branded and conceptual content',
   },
-  
+
+  // Sora Family (OpenAI)
+  'sora-2': {
+    id: 'sora-2',
+    name: 'sora-2',
+    displayName: 'Sora 2',
+    description: 'Consistent visual style with strong prompt understanding',
+    costPerSecond: 0.06,
+    maxDuration: 10,
+    family: 'sora',
+    tier: 'premium',
+    strengths: ['High-quality T2V', 'Consistent style', 'Strong prompt understanding', 'Versatile'],
+    weaknesses: ['Premium pricing', 'Limited availability'],
+    bestFor: ['cinematic', 'general', 'storytelling', 'consistent-style'],
+    specialties: ['High-quality text-to-video', 'Consistent visual style', 'Strong prompt comprehension'],
+    limitations: ['Premium pricing', 'May have limited API availability'],
+    visualCategory: ['cinematic', 'general', 'storytelling'],
+    qualityNotes: 'High-quality general T2V with consistent style and strong prompt understanding',
+  },
+
+  // Pika
+  pika: {
+    id: 'pika',
+    name: 'pika',
+    displayName: 'Pika',
+    costPerSecond: 0.035,
+    maxDuration: 5,
+    family: 'pika',
+    tier: 'standard',
+    strengths: ['Artistic stylization', 'Bold visual effects', 'Creative interpretation'],
+    weaknesses: ['Short duration', 'Less photorealistic'],
+    bestFor: ['artistic', 'stylized', 'creative', 'visual-effects'],
+    specialties: ['Artistic stylization', 'Bold visual effects', 'Creative prompt interpretation'],
+    limitations: ['Short duration (5s)', 'Less photorealistic output'],
+    visualCategory: ['artistic', 'creative', 'stylized'],
+    qualityNotes: 'Known for artistic stylization and bold visual effects with creative prompt interpretation',
+  },
+
   // Seedance
   'seedance-1.0': {
     id: 'seedance-1.0',
@@ -466,8 +650,56 @@ export const VIDEO_PROVIDERS: Record<string, VideoProvider> = {
     strengths: ['Dance motion', 'Character animation', 'Expressive'],
     weaknesses: ['Specialized', 'Short duration'],
     bestFor: ['dance', 'character', 'expressive-motion'],
+    specialties: ['Dance and rhythmic motion', 'Fluid body movement', 'Choreography generation'],
+    limitations: ['Specialized for dance/rhythm only', 'Short duration (5s)'],
+    visualCategory: ['dance', 'human_subjects', 'rhythmic'],
+    qualityNotes: 'Specialized for dance and rhythmic motion with fluid body movement generation',
   },
-  
+  'seedance-2.0': {
+    id: 'seedance-2.0',
+    name: 'seedance-2.0',
+    displayName: 'Seedance 2 Preview',
+    costPerSecond: 0.035,
+    maxDuration: 10,
+    family: 'seedance',
+    tier: 'standard',
+    specialization: 'general',
+    strengths: ['Multi-image references', 'Morphing effects', 'Improved quality', 'Longer duration'],
+    weaknesses: ['Preview model'],
+    bestFor: ['general', 'character', 'morphing', 'multi-subject'],
+    specialties: ['Multi-image @imageN references', 'Image morphing transitions', 'General video generation'],
+    limitations: ['Preview quality — may improve'],
+    visualCategory: ['general', 'human_subjects', 'cinematic'],
+    qualityNotes: 'Next-gen Seedance with multi-image references and morphing support via @imageN prompt syntax',
+    multiImageSupport: {
+      maxImages: 4,
+      promptSyntax: '@imageN',
+      hint: 'Use @image1, @image2, etc. in your prompt to reference each image. Example: "@image1 transforms into @image2" for morphing effects.',
+    },
+  },
+  'seedance-2.0-fast': {
+    id: 'seedance-2.0-fast',
+    name: 'seedance-2.0-fast',
+    displayName: 'Seedance 2 Fast',
+    costPerSecond: 0.020,
+    maxDuration: 10,
+    family: 'seedance',
+    tier: 'budget',
+    specialization: 'general',
+    strengths: ['Fast generation', 'Multi-image references', 'Budget-friendly'],
+    weaknesses: ['Lower quality than preview', 'Preview model'],
+    bestFor: ['general', 'fast-iteration', 'draft'],
+    specialties: ['Quick previews', 'Multi-image @imageN references', 'Image morphing transitions'],
+    limitations: ['Fast variant — lower quality than standard preview'],
+    visualCategory: ['general', 'human_subjects'],
+    qualityNotes: 'Fast variant of Seedance 2 for quicker iteration with multi-image support',
+    multiImageSupport: {
+      maxImages: 4,
+      promptSyntax: '@imageN',
+      hint: 'Use @image1, @image2, etc. in your prompt to reference each image. Example: "@image1 transforms into @image2" for morphing effects.',
+    },
+  },
+
   // Remotion (Motion Graphics)
   'remotion-motion-graphics': {
     id: 'remotion-motion-graphics',
@@ -481,6 +713,10 @@ export const VIDEO_PROVIDERS: Record<string, VideoProvider> = {
     strengths: ['Free/cheap', 'Programmatic', 'Consistent', 'No AI artifacts'],
     weaknesses: ['Template-based', 'Less organic'],
     bestFor: ['text-animations', 'charts', 'infographics', 'lower-thirds', 'cta-overlays'],
+    specialties: ['Infographic animations', 'Data visualization', 'Text overlays', 'Chart animations', 'Programmatic motion'],
+    limitations: ['Template-based output', 'Less organic/natural feel', 'Requires pre-built components'],
+    visualCategory: ['infographic_diagram', 'motion_graphics', 'text-animation'],
+    qualityNotes: 'Programmatic motion graphics with zero AI artifacts — ideal for infographics, charts, and data visualization',
   },
 };
 
@@ -502,7 +738,7 @@ export const IMAGE_PROVIDERS: Record<string, ImageProvider> = {
     strengths: ['Product shots', 'Clean compositions', 'Commercial quality'],
     bestFor: ['product', 'food', 'object', 'still-life'],
   },
-  
+
   'flux-1-dev': {
     id: 'flux-1-dev',
     name: 'flux-1-dev',
@@ -511,7 +747,7 @@ export const IMAGE_PROVIDERS: Record<string, ImageProvider> = {
     strengths: ['Development version', 'Experimental features'],
     bestFor: ['testing', 'experimental'],
   },
-  
+
   falai: {
     id: 'falai',
     name: 'fal.ai',
@@ -520,7 +756,7 @@ export const IMAGE_PROVIDERS: Record<string, ImageProvider> = {
     strengths: ['Lifestyle images', 'Natural feel', 'People'],
     bestFor: ['lifestyle', 'person', 'scene', 'environment'],
   },
-  
+
   'stable-diffusion-3': {
     id: 'stable-diffusion-3',
     name: 'stable-diffusion-3',
@@ -529,7 +765,7 @@ export const IMAGE_PROVIDERS: Record<string, ImageProvider> = {
     strengths: ['Versatile', 'Good text rendering', 'Fast'],
     bestFor: ['general', 'text-in-image', 'artistic'],
   },
-  
+
   midjourney: {
     id: 'midjourney',
     name: 'midjourney',
@@ -558,7 +794,7 @@ export const SOUND_PROVIDERS: Record<string, SoundProvider> = {
     type: 'voiceover',
     costPerSecond: 0.015,
   },
-  
+
   udio: {
     id: 'udio',
     name: 'Udio',
@@ -566,7 +802,7 @@ export const SOUND_PROVIDERS: Record<string, SoundProvider> = {
     type: 'music',
     costPerTrack: 0.10,
   },
-  
+
   kling_sound: {
     id: 'kling_sound',
     name: 'Kling Sound',
@@ -606,4 +842,20 @@ export function getAllImageProviders(): ImageProvider[] {
 
 export function getSoundProvider(id: string): SoundProvider | undefined {
   return SOUND_PROVIDERS[id];
+}
+
+export function getMultiImageSupport(providerId: string): MultiImageSupport | null {
+  const provider = VIDEO_PROVIDERS[providerId];
+  return provider?.multiImageSupport || null;
+}
+
+export function getMultiImageHint(providerId: string, imageCount: number): string {
+  const support = getMultiImageSupport(providerId);
+  if (!support) {
+    if (imageCount > 0) {
+      return 'This provider uses image #1 as the starting frame for animation. Additional images are ignored.';
+    }
+    return '';
+  }
+  return support.hint;
 }

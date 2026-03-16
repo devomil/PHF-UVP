@@ -5,6 +5,7 @@ import { UniversalVideoComposition } from "./UniversalVideoComposition";
 import type { UniversalVideoProps } from "./UniversalVideoComposition";
 import { BroadcastVideoComposition, BroadcastInputProps } from "./BroadcastVideoComposition";
 import { PINE_HILL_FARM_BRAND, OUTPUT_FORMATS } from "../shared/video-types";
+import { calculateEffectiveDurationInFrames } from "../shared/config/duration-math";
 
 const defaultUniversalProps: UniversalVideoProps = {
   scenes: [],
@@ -28,23 +29,35 @@ const defaultBroadcastProps: BroadcastInputProps = {
 };
 
 const calculateBroadcastMetadata: CalculateMetadataFunction<BroadcastInputProps> = async ({ props }) => {
-  const sceneDuration = props.scenes.reduce(
-    (acc: number, scene) => acc + (scene.duration || 4),
-    0
+  const sceneDurationInFrames = calculateEffectiveDurationInFrames(
+    props.scenes,
+    30,
+    props.transitions,
+    4
   );
   return {
-    durationInFrames: Math.max(sceneDuration * 30, 150),
+    durationInFrames: sceneDurationInFrames,
     props,
   };
 };
 
 const calculateUniversalMetadata: CalculateMetadataFunction<UniversalVideoProps> = async ({ props }) => {
-  const totalDuration = props.scenes.reduce(
-    (acc: number, scene) => acc + (scene.duration || 4),
+  const sceneDurationInFrames = calculateEffectiveDurationInFrames(
+    props.scenes,
+    30,
+    props.transitions,
+    4,
     0
   );
+
+  const endCardDuration = ((props as any).endCardConfig?.enabled !== false)
+    ? ((props as any).endCardConfig?.duration || 5)
+    : 0;
+
+  const endCardFrames = Math.ceil(endCardDuration * 30);
+
   return {
-    durationInFrames: Math.max(totalDuration * 30, 150),
+    durationInFrames: Math.max(sceneDurationInFrames + endCardFrames, 150),
     props,
   };
 };

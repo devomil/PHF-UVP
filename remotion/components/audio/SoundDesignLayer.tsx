@@ -104,7 +104,7 @@ export const SoundDesignLayer: React.FC<SoundDesignLayerProps> = (props) => {
   // Legacy implementation
   const { transitions, logoRevealFrame, ctaStartFrame, enableAmbient, ambientType = 'warm', masterVolume = 1.0 } = props;
   
-  const applyMasterVolume = (volume: number) => volume * masterVolume;
+  const applyMasterVolume = (volume: number) => volume * masterVolume * 0.4;
   
   const ambientSoundKey = ambientType === 'nature' ? 'room-tone-nature' : 'room-tone-warm';
   const ambientSound = SOUND_EFFECTS[ambientSoundKey];

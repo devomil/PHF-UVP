@@ -49,6 +49,12 @@ passport.deserializeUser(async (id: string, done) => {
 });
 
 export function setupAuth(app: Express) {
+  const isProduction = process.env.NODE_ENV === "production";
+
+  if (isProduction) {
+    app.set("trust proxy", 1);
+  }
+
   app.use(
     session({
       store: new PgSession({
@@ -56,13 +62,13 @@ export function setupAuth(app: Express) {
         tableName: "sessions",
         createTableIfMissing: true,
       }),
-      secret: process.env.SESSION_SECRET || "hr-management-secret-key",
+      secret: process.env.SESSION_SECRET || (isProduction ? (() => { throw new Error("SESSION_SECRET environment variable is required in production"); })() : "dev-session-secret-key"),
       resave: false,
       saveUninitialized: false,
       cookie: {
         maxAge: 30 * 24 * 60 * 60 * 1000,
         httpOnly: true,
-        secure: false,
+        secure: isProduction,
         sameSite: "lax",
       },
     })

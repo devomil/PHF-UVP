@@ -1,3 +1,19 @@
+export interface CharacterProfile {
+  id: string;
+  name: string;
+  role: string;
+  physicalDescription: string;
+  wardrobe: string;
+  personalityNotes: string;
+  referenceImageUrl: string | null;
+  referencePhotoUrl?: string | null;
+  locked: boolean;
+  generationStatus?: 'idle' | 'generating' | 'completed' | 'failed';
+  generationError?: string;
+  sortOrder: number;
+  savedToLibrary?: boolean;
+}
+
 export interface VideoProject {
   id: string;
   type: 'product' | 'script-based';
@@ -20,6 +36,9 @@ export interface VideoProject {
   history?: ProjectHistory;
   qualityTier?: 'ultra' | 'premium' | 'standard';
   mediaMode?: 'image' | 'video';
+  videoGenerationMode?: 'direct-t2v' | 'image-first-i2v' | 'character-i2v' | 'auto';
+  artPresetId?: string;
+  characters?: CharacterProfile[];
 }
 
 export type VideoProjectStatus = 'draft' | 'queued' | 'generating' | 'ready' | 'render_queued' | 'rendering' | 'lambda_pending' | 'complete' | 'error';
@@ -128,6 +147,8 @@ export interface PromptComplexityAnalysis {
 }
 
 // Phase 11D: Animation settings for brand media/static images
+export type VisualFormat = 'ai-video' | 'ai-image-remotion' | 'remotion-motion-graphics';
+
 export type AnimationType = 'ken-burns' | 'zoom-in' | 'zoom-out' | 'pan-left' | 'pan-right' | 'static';
 export type AnimationIntensity = 'subtle' | 'medium' | 'dramatic';
 
@@ -145,6 +166,69 @@ export interface VideoSettings {
   playbackRate: number; // 0.5 = slow mo, 1.0 = normal, 2.0 = speed up
 }
 
+export type EntranceAnimation = 'fade' | 'rise' | 'pop' | 'drift';
+
+export interface MicroSceneOverlayItem {
+  id: string;
+  url: string;
+  name: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  opacity: number;
+  locked: boolean;
+  zIndex: number;
+  entranceAnimation: EntranceAnimation;
+}
+
+export interface MicroScene {
+  id: string;
+  narration: string;
+  visualDirection: string;
+  duration: number;
+  videoUrl?: string;
+  imageUrl?: string;
+  originalAudioVolume?: number;
+  originalAudioFadeIn?: number;
+  originalAudioFadeOut?: number;
+  visualFormat?: VisualFormat;
+  contentTag?: string;
+  artPresetId?: string;
+  overlayItems?: MicroSceneOverlayItem[];
+}
+
+export interface AssemblyWordMarker {
+  word: string;
+  startSec: number;
+  endSec: number;
+  microSceneIndex: number;
+}
+
+export interface AssemblyClipTiming {
+  microSceneIndex: number;
+  microSceneId: string;
+  startTimeSec: number;
+  endTimeSec: number;
+  durationSec: number;
+  sourceUrl: string;
+  probedDurationSec: number;
+}
+
+export interface AssemblyManifest {
+  assemblyFailed: boolean;
+  assembledClipUrl?: string;
+  assembledClipValid?: boolean;
+  manifestUrl?: string;
+  totalDurationSec: number;
+  clips: AssemblyClipTiming[];
+  wordMarkers?: AssemblyWordMarker[];
+  sceneId: string;
+  createdAt: string;
+  error?: string;
+  sourceVideoHashes?: string[];
+}
+
 export interface Scene {
   id: string;
   order: number;
@@ -152,6 +236,8 @@ export interface Scene {
   duration: number;
   narration: string;
   visualDirection?: string;
+  microScenes?: MicroScene[];
+  assemblyManifest?: AssemblyManifest;
   qualityTier?: 'standard' | 'premium' | 'ultra'; // Per-scene quality tier override
   searchQuery?: string;
   fallbackQuery?: string;
@@ -188,6 +274,18 @@ export interface Scene {
   // Phase 13: Audio and motion control settings
   audioSettings?: AudioGenerationSettings;
   motionControlSettings?: MotionControlSettings;
+  // Custom image overlays (logos, badges, watermarks) positioned by user
+  overlayItems?: Array<{
+    id: string;
+    url: string;
+    name: string;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    opacity: number;
+    locked: boolean;
+  }>;
   // Phase 13D: Reference image configuration
   referenceConfig?: ReferenceConfig;
   // Phase 14A: Brand requirement analysis results
@@ -199,10 +297,18 @@ export interface Scene {
     matchedProductCount: number;
     matchedLogoCount: number;
   };
+  textLabels?: TextLabel[];
   // Phase 15H: Workflow override - allows disabling brand asset matching per scene
   useBrandAssets?: boolean;
   // Phase 15H: Generation method tracking - what method was used to generate the media
   generationMethod?: 'T2I' | 'I2I' | 'T2V' | 'I2V' | 'V2V' | 'stock';
+  visualFormat?: VisualFormat;
+  contentTag?: string;
+  artPresetId?: string;
+  voiceoverUrl?: string;
+  voiceoverDuration?: number;
+  voiceoverWords?: import('./config/caption-styles').CaptionWord[];
+  captions?: import('./config/caption-styles').SceneCaptions;
   // Phase 16: Pipeline intermediate results for step-by-step execution
   pipelineIntermediates?: {
     environmentImage?: string;
@@ -371,6 +477,22 @@ export interface ProjectHistory {
   maxEntries: number;
 }
 
+export type TextLabelVisualTreatment = 'badge' | 'floating-tag' | 'holographic-panel' | 'handwritten' | 'neon-glow' | 'minimal' | 'pill' | 'underline';
+
+export interface TextLabel {
+  id: string;
+  text: string;
+  position: 'top-left' | 'top-center' | 'top-right' | 'center-left' | 'center' | 'center-right' | 'bottom-left' | 'bottom-center' | 'bottom-right';
+  visualTreatment: TextLabelVisualTreatment;
+  timing: {
+    startAt: number;
+    duration: number;
+  };
+  fontSize?: number;
+  color?: string;
+  backgroundColor?: string;
+}
+
 export const SCENE_OVERLAY_DEFAULTS: Record<string, boolean> = {
   hook: false,
   intro: true,
@@ -398,7 +520,7 @@ export interface GeneratedAssets {
   voiceover: {
     fullTrackUrl: string;
     duration: number;
-    perScene: { sceneId: string; url: string; duration: number }[];
+    perScene: { sceneId: string; url: string; duration: number; words?: import('./config/caption-styles').CaptionWord[] }[];
   };
   music: {
     url: string;
@@ -493,6 +615,7 @@ export interface ScriptVideoInput {
   musicEnabled?: boolean;
   musicMood?: string;
   qualityTier?: 'standard' | 'premium' | 'ultra';
+  artPresetId?: string;
 }
 
 // Pine Hill Farm Official Brand Colors
@@ -504,7 +627,7 @@ export interface ScriptVideoInput {
 // Backgrounds: Cream #f5f0e8, Off-white #f8f8f3
 export const PINE_HILL_FARM_BRAND: BrandSettings = {
   name: 'Pine Hill Farm',
-  logoUrl: '/uploads/pinehillfarm-logo.png',
+  logoUrl: '/uploads/16045ec5-d8e6-4b90-a65f-eb7e39e280ab.png',
   watermarkPosition: 'bottom-right',
   watermarkOpacity: 0.3,
   colors: {
@@ -601,8 +724,20 @@ export function createEmptyVideoProject(
   };
 }
 
-export function calculateTotalDuration(scenes: Scene[]): number {
-  return scenes.reduce((total, scene) => total + scene.duration, 0);
+export function calculateTotalDuration(scenes: Scene[], transitions?: TransitionConfig[]): number {
+  const rawTotal = scenes.reduce((total, scene) => total + scene.duration, 0);
+
+  if (!transitions || transitions.length === 0) return rawTotal;
+
+  let transitionOverlap = 0;
+  for (let i = 0; i < Math.min(transitions.length, scenes.length - 1); i++) {
+    const t = transitions[i];
+    if (t && t.duration > 0 && t.type !== 'none') {
+      transitionOverlap += t.duration / 2;
+    }
+  }
+
+  return Math.max(rawTotal - transitionOverlap, 0);
 }
 
 export function getCompositionId(aspectRatio: '16:9' | '9:16' | '1:1'): string {
