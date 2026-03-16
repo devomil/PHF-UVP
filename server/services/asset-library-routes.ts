@@ -9,6 +9,7 @@ import { imageGenerationService } from './image-generation-service';
 import { piapiVideoService } from './piapi-video-service';
 import { runwayVideoService } from './runway-video-service';
 import { qubicToolkitService } from './qubic-toolkit-service';
+import { assetUrlResolver } from './asset-url-resolver';
 
 const router = Router();
 
@@ -590,6 +591,26 @@ async function processAssetLibraryJob(jobId: string, userId: string, mode: strin
       .set({ status: 'processing', startedAt: new Date(), updatedAt: new Date() })
       .where(eq(videoGenerationJobs.jobId, jobId));
 
+    const resolveUrl = async (url: string | undefined | null, label: string): Promise<string | undefined> => {
+      if (!url) return undefined;
+      if (url.startsWith('https://')) return url;
+      const publicUrl = await assetUrlResolver.resolve(url);
+      if (publicUrl) {
+        console.log(`[AssetLibrary] Resolved ${label}: ${url} → ${publicUrl.substring(0, 60)}...`);
+        return publicUrl;
+      }
+      console.warn(`[AssetLibrary] Failed to resolve ${label}: ${url}`);
+      return url;
+    };
+
+    const resolvedSourceImageUrl = await resolveUrl(job.sourceImageUrl, 'source image');
+    if (settings.referenceVideoUrl) {
+      settings.referenceVideoUrl = await resolveUrl(settings.referenceVideoUrl, 'reference video');
+    }
+    if (settings.replacementImageUrl) {
+      settings.replacementImageUrl = await resolveUrl(settings.replacementImageUrl, 'replacement image');
+    }
+
     switch (mode) {
       case 't2i': {
         const dims = AR_DIMS[job.aspectRatio || '16:9'] || AR_DIMS['16:9'];
@@ -619,7 +640,7 @@ async function processAssetLibraryJob(jobId: string, userId: string, mode: strin
       case 'i2i': {
         const dims = AR_DIMS[job.aspectRatio || '16:9'] || AR_DIMS['16:9'];
         const i2iResult = await imageGenerationService.generateImageToImage({
-          referenceImageUrl: job.sourceImageUrl || '',
+          referenceImageUrl: resolvedSourceImageUrl || '',
           prompt: job.prompt || '',
           strength: settings.strength || 0.6,
           width: dims.w,
@@ -657,7 +678,7 @@ async function processAssetLibraryJob(jobId: string, userId: string, mode: strin
           sceneType: job.sceneType || 'general',
           preferredProvider: job.provider || 'auto',
           negativePrompt: job.negativePrompt || undefined,
-          imageUrl: mode === 'i2v' ? (job.sourceImageUrl || undefined) : undefined,
+          imageUrl: mode === 'i2v' ? (resolvedSourceImageUrl || undefined) : undefined,
           ...i2vOpts,
         });
 
@@ -706,7 +727,7 @@ async function processAssetLibraryJob(jobId: string, userId: string, mode: strin
           const refVideoUrl = settings.referenceVideoUrl;
           if (!refVideoUrl) throw new Error('No reference video URL provided for V2V');
 
-          const replacementImg = settings.replacementImageUrl || job.sourceImageUrl;
+          const replacementImg = settings.replacementImageUrl || resolvedSourceImageUrl;
           if (!replacementImg) throw new Error('No replacement image URL provided for V2V');
 
           const v2vResult = await piapiVideoService.replaceObjectInVideo({
@@ -733,7 +754,7 @@ async function processAssetLibraryJob(jobId: string, userId: string, mode: strin
       }
 
       case 'character-performance': {
-        const charImage = job.sourceImageUrl;
+        const charImage = resolvedSourceImageUrl;
         const refVideo = settings.referenceVideoUrl;
         if (!charImage) throw new Error('No character image URL provided');
         if (!refVideo) throw new Error('No reference video URL provided for character performance');
@@ -758,7 +779,7 @@ async function processAssetLibraryJob(jobId: string, userId: string, mode: strin
       }
 
       case 'upscale-image': {
-        const imgUrl = job.sourceImageUrl;
+        const imgUrl = resolvedSourceImageUrl;
         if (!imgUrl) throw new Error('No image URL provided for upscaling');
 
         const upResult = await qubicToolkitService.upscaleImage({
@@ -803,7 +824,7 @@ async function processAssetLibraryJob(jobId: string, userId: string, mode: strin
       }
 
       case 'bg-remove-image': {
-        const bgImgUrl = job.sourceImageUrl;
+        const bgImgUrl = resolvedSourceImageUrl;
         if (!bgImgUrl) throw new Error('No image URL provided for background removal');
 
         const bgResult = await qubicToolkitService.removeImageBackground({
