@@ -1053,7 +1053,7 @@ router.post('/ask-suzzie/asset-library', isAuthenticated, async (req: Request, r
     const llmResult = await llmClient.createChatCompletion({
       systemPrompt,
       messages,
-      maxTokens: 800,
+      maxTokens: 1500,
       temperature: 0.7,
     });
 

@@ -1,0 +1,54 @@
+Great product shot — clean white bottle, good label contrast, and the white background gives the I2V model a clean starting frame to build from. Here's a refined prompt:
+
+Revised I2V Prompt
+The Pine Hill Farm Black Cohosh Extract Plus supplement bottle 
+stands centered in a sun-dappled botanical meadow. The camera 
+begins in a slow, intimate push-in toward the label while the 
+environment gently materializes around it — tall Black Cohosh 
+wildflowers with their creamy white raceme blooms sway softly 
+in a warm breeze, clusters of violet Chaste Tree blossoms and 
+feathery Dong Quai umbels frame the foreground in soft bokeh. 
+Golden hour light rakes across the bottle from the right, 
+catching the gloss of the white cap and warming the navy label. 
+Drifting botanical particles — pollen, petals, seed wisps — 
+float lazily past the lens. The bottle remains perfectly sharp 
+and stable throughout. Cinematic shallow depth of field, warm 
+natural color grade, 4K.
+
+What Changed and Why
+Your VersionRevised"exploding with Black Cohosh"Slow, graceful reveal — matches the wellness/trust brand toneEnvironment mentioned but not placedCamera starts on bottle, environment builds around it — better I2V anchorNo camera movementSlow push-in keeps bottle locked while world appearsNo lighting directionGolden hour right-side rake adds depth without harsh shadowsNo motion elementsFloating botanicals + breeze give life without chaos
+
+One Additional Tip
+For Kling I2V with this shot, add a negative prompt:
+No text distortion, no label warping, no bottle deformation, 
+no blurry label, no shaking, no fast movement, no people.
+Kling tends to warp product labels under motion — the negative prompt helps lock the bottle geometry. Also set cfg_scale to 0.85 to keep the product anchor tight to the source image.
+Want me to write a second version at a different camera angle — like a slow orbit around the bottle instead of a push-in?Yes, that would be great. I will use whichever AI service provider you think would be best for this type of video.1:58 PMEvaluated AI video providers for product-focused camera movement shotsEvaluated AI video providers for product-focused camera movement shotsSlow Orbit Version
+The Pine Hill Farm Black Cohosh Extract Plus supplement bottle 
+stands rooted on a mossy stone surface in a golden botanical 
+meadow. The camera executes a slow, smooth 90-degree arc orbit 
+around the bottle — beginning at the front-left, sweeping 
+rightward to reveal the full environment behind it. As the 
+camera moves, Black Cohosh wildflowers with tall creamy white 
+raceme blooms, violet Chaste Tree clusters, and soft Dong Quai 
+umbels fill the expanding background in warm bokeh layers. 
+Late afternoon sun traces the bottle's full silhouette during 
+the arc, catching the gloss of the white cap and the navy label 
+at different angles. Floating botanical particles drift through 
+the frame as the orbit completes. The bottle remains perfectly 
+sharp, stable, and geometrically intact throughout. Cinematic 
+shallow depth of field, warm golden color grade, 4K.
+Negative prompt:
+No label warping, no bottle deformation, no text distortion, 
+no shaking, no fast movement, no people, no hands.
+
+Provider Recommendation
+For these two shots, use different providers intentionally:
+VersionProviderWhyPush-in (Version 1)Kling 2.1 MasterMaximum source frame adherence — keeps the bottle label locked while the environment builds around it. Highest cfg fidelity.Orbit (Version 2)Kling 2.6 Motion Control ProThe orbit is a precise camera path. Motion Control Pro lets you define the arc explicitly rather than hoping the model interprets "slow orbit" correctly. This is exactly what that model was built for.
+
+Settings for Both
+cfg_scale: 0.85       // Lock bottle geometry to source image
+duration: 5-6s        // Enough time for the movement to read as intentional
+aspect_ratio: 16:9    // Standard for the video project
+The white background in your product photo is actually a significant advantage here — it gives the I2V model a clean, unambiguous starting frame with no competing visual information, which should help both providers keep the bottle stable while building the botanical environment around it.
+Want me to also write a third variation — a dramatic slow zoom-out that starts tight on the label text and pulls back to reveal the full meadow scene?
