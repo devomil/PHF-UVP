@@ -1105,14 +1105,54 @@ function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () => void; 
         )}
 
         <div>
-          <Label style={{ color: "var(--text-secondary)" }}>Art Style (Optional)</Label>
-          <div className="flex gap-2 mt-1.5 overflow-x-auto pb-2">
-            <button type="button" onClick={() => setArtPresetId("")} className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${!artPresetId ? "bg-purple-600/20 border-purple-500 text-purple-300" : "border-transparent"}`} style={artPresetId ? { backgroundColor: "var(--surface)", color: "var(--text-secondary)", borderColor: "var(--border-subtle)" } : {}}>
-              None
+          <div className="flex items-center gap-2 mb-1">
+            <Palette className="w-4 h-4 text-purple-400" />
+            <Label style={{ color: "var(--text-secondary)" }}>Art Style (Optional)</Label>
+          </div>
+          <div className="flex gap-2.5 mt-1.5 overflow-x-auto pb-2 -mx-1 px-1" style={{ scrollbarWidth: "thin" }}>
+            <button
+              type="button"
+              onClick={() => setArtPresetId("")}
+              className="flex-shrink-0 w-[100px] rounded-xl border-2 p-2 transition-all duration-200 hover:-translate-y-0.5"
+              style={{
+                backgroundColor: !artPresetId ? "rgba(139, 92, 246, 0.15)" : "var(--surface)",
+                borderColor: !artPresetId ? "rgb(139, 92, 246)" : "var(--border-subtle)",
+              }}
+            >
+              <div
+                className="w-full h-14 rounded-lg mb-1.5 flex items-center justify-center"
+                style={{
+                  background: "linear-gradient(135deg, rgba(100,100,100,0.2), rgba(60,60,60,0.2))",
+                  border: "1px solid rgba(255,255,255,0.08)",
+                }}
+              >
+                <X className="w-4 h-4" style={{ color: "var(--text-muted)" }} />
+              </div>
+              <span className="font-medium text-[11px] block text-center" style={{ color: "var(--text-primary)" }}>None</span>
             </button>
             {allPresets.map((preset) => (
-              <button type="button" key={preset.id} onClick={() => setArtPresetId(preset.id)} className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${artPresetId === preset.id ? "bg-purple-600/20 border-purple-500 text-purple-300" : "border-transparent"}`} style={artPresetId !== preset.id ? { backgroundColor: "var(--surface)", color: "var(--text-secondary)", borderColor: "var(--border-subtle)" } : {}}>
-                {preset.name}
+              <button
+                type="button"
+                key={preset.id}
+                onClick={() => setArtPresetId(preset.id)}
+                className="flex-shrink-0 w-[100px] rounded-xl border-2 p-2 transition-all duration-200 hover:-translate-y-0.5"
+                style={{
+                  backgroundColor: artPresetId === preset.id ? "rgba(139, 92, 246, 0.15)" : "var(--surface)",
+                  borderColor: artPresetId === preset.id ? "rgb(139, 92, 246)" : "var(--border-subtle)",
+                }}
+              >
+                <div
+                  className="w-full h-14 rounded-lg mb-1.5 overflow-hidden"
+                  style={{ border: `1px solid ${preset.thumbnailColors[0]}33` }}
+                >
+                  <img
+                    src={ART_PRESET_IMAGES[preset.id] || ''}
+                    alt={preset.name}
+                    className="w-full h-full object-cover"
+                    loading="lazy"
+                  />
+                </div>
+                <span className="font-medium text-[11px] block text-center truncate" style={{ color: "var(--text-primary)" }}>{preset.name}</span>
               </button>
             ))}
           </div>
