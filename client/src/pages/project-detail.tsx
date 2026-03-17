@@ -2911,11 +2911,11 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
             </div>
 
             {assets.visual?.url && (
-              <div className="mb-3 rounded-lg overflow-hidden border bg-black" style={{ borderColor: "var(--border-subtle)" }}>
+              <div className="mb-3 rounded-lg overflow-hidden border bg-black flex justify-center" style={{ borderColor: "var(--border-subtle)", maxHeight: "500px" }}>
                 {project.mediaMode === "image" ? (
-                  <img src={assets.visual.url} alt="Generated visual" className="w-full object-contain" style={{ aspectRatio: (project.outputFormat?.aspectRatio || "16/9").replace(":", "/") }} />
+                  <img src={assets.visual.url} alt="Generated visual" className="object-contain" style={{ aspectRatio: (project.outputFormat?.aspectRatio || "16/9").replace(":", "/"), maxHeight: "500px", maxWidth: "100%" }} />
                 ) : (
-                  <video src={assets.visual.url} controls className="w-full object-contain" style={{ aspectRatio: (project.outputFormat?.aspectRatio || "16/9").replace(":", "/") }} />
+                  <video src={assets.visual.url} controls className="object-contain" style={{ aspectRatio: (project.outputFormat?.aspectRatio || "16/9").replace(":", "/"), maxHeight: "500px", maxWidth: "100%" }} />
                 )}
               </div>
             )}
@@ -3131,12 +3131,17 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
                   className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white gap-1.5 text-sm"
                   size="sm"
                 >
-                  {(generateVisualMutation.isPending || assets.visual?.status === "generating" || assets.visual?.status === "queued") ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
+                  {(generateVisualMutation.isPending || assets.visual?.status === "generating" || assets.visual?.status === "processing" || assets.visual?.status === "queued") ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Generating...
+                    </>
                   ) : (
-                    <Sparkles className="w-4 h-4" />
+                    <>
+                      <Sparkles className="w-4 h-4" />
+                      {assets.visual?.status === "completed" ? "Regenerate" : "Generate"}
+                    </>
                   )}
-                  {assets.visual?.status === "completed" ? "Regenerate" : "Generate"}
                 </Button>
               </div>
             </div>
