@@ -526,11 +526,15 @@ export async function registerRoutes(app: Express) {
         .orderBy(desc(videoGenerationJobs.createdAt))
         .limit(5);
 
+      const latestJob = jobs[0];
+      const latestI2vSettings = (latestJob?.i2vSettings as any) || {};
+      const progressData = (project.progress as any) || {};
+
       res.json({
         visual: {
           status: qc.visual?.status || (project.outputUrl ? "completed" : "pending"),
           url: qc.visual?.url || project.outputUrl || null,
-          provider: qc.visual?.provider || jobs[0]?.provider || null,
+          provider: qc.visual?.provider || latestJob?.provider || null,
           error: qc.visual?.error || null,
           duration: qc.visual?.duration || null,
           cost: qc.visual?.cost || null,
@@ -558,6 +562,8 @@ export async function registerRoutes(app: Express) {
           videoUrl: j.videoUrl,
           errorMessage: j.errorMessage,
           createdAt: j.createdAt,
+          sceneType: j.sceneType,
+          sourceImageUrl: j.sourceImageUrl,
         })),
         project: {
           status: project.status,
@@ -566,6 +572,14 @@ export async function registerRoutes(app: Express) {
           outputUrl: project.outputUrl,
           totalDuration: project.totalDuration,
           aspectRatio: outputFormat.aspectRatio,
+        },
+        generationInfo: {
+          sceneType: latestJob?.sceneType || null,
+          sourceImageUrl: latestJob?.sourceImageUrl || null,
+          negativePrompt: latestJob?.negativePrompt || null,
+          artPresetId: progressData.artPresetId || latestI2vSettings.artPresetId || null,
+          imageFidelity: latestI2vSettings.imageControlStrength ?? null,
+          referenceVideoUrl: latestI2vSettings.referenceVideoUrl || null,
         },
       });
     } catch (error) {

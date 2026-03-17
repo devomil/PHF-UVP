@@ -2849,16 +2849,44 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
                 <h3 className="font-medium text-sm" style={{ color: "var(--text-primary)" }}>
                   Visual Asset
                 </h3>
+                {(() => {
+                  const genInfo = assetsQuery.data?.generationInfo;
+                  if (!genInfo) return null;
+                  const modeLabels: Record<string, { label: string; color: string }> = {
+                    i2v: { label: "Image-to-Video", color: "text-cyan-400" },
+                    v2v: { label: "Video-to-Video", color: "text-green-400" },
+                    image: { label: "Text-to-Image", color: "text-amber-400" },
+                    video: { label: "Text-to-Video", color: "text-purple-400" },
+                  };
+                  const mode = modeLabels[genInfo.sceneType || ""] || null;
+                  return mode ? (
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded ${mode.color}`} style={{ backgroundColor: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)" }}>
+                      {mode.label}
+                    </span>
+                  ) : null;
+                })()}
+                {(() => {
+                  const genInfo = assetsQuery.data?.generationInfo;
+                  const presetId = genInfo?.artPresetId;
+                  if (!presetId || presetId === "auto") return null;
+                  const preset = getVisualArtPreset(presetId);
+                  if (!preset) return null;
+                  return (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded text-violet-400" style={{ backgroundColor: "rgba(139,92,246,0.1)", border: "1px solid rgba(139,92,246,0.2)" }}>
+                      <Palette className="w-3 h-3 inline mr-0.5" /> {preset.name}
+                    </span>
+                  );
+                })()}
               </div>
               {assetStatusBadge(assets.visual?.status)}
             </div>
 
             {assets.visual?.url && (
-              <div className="mb-3 rounded-lg overflow-hidden border" style={{ borderColor: "var(--border-subtle)" }}>
+              <div className="mb-3 rounded-lg overflow-hidden border bg-black" style={{ borderColor: "var(--border-subtle)" }}>
                 {project.mediaMode === "image" ? (
-                  <img src={assets.visual.url} alt="Generated visual" className="w-full max-h-64 object-contain bg-black" />
+                  <img src={assets.visual.url} alt="Generated visual" className="w-full object-contain" style={{ aspectRatio: (project.outputFormat?.aspectRatio || "16/9").replace(":", "/") }} />
                 ) : (
-                  <video src={assets.visual.url} controls className="w-full max-h-64" />
+                  <video src={assets.visual.url} controls className="w-full object-contain" style={{ aspectRatio: (project.outputFormat?.aspectRatio || "16/9").replace(":", "/") }} />
                 )}
               </div>
             )}
@@ -2880,6 +2908,51 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
                 )}
               </div>
             )}
+
+            {(() => {
+              const genInfo = assetsQuery.data?.generationInfo;
+              if (!genInfo) return null;
+              const hasRefMedia = genInfo.sourceImageUrl || genInfo.referenceVideoUrl;
+              const hasMetadata = genInfo.negativePrompt || genInfo.imageFidelity != null;
+              if (!hasRefMedia && !hasMetadata) return null;
+              return (
+                <div className="mb-3 border rounded-lg p-3 space-y-2" style={{ borderColor: "var(--border-subtle)", backgroundColor: "rgba(0,0,0,0.2)" }}>
+                  {hasRefMedia && (
+                    <>
+                      <label className="text-xs font-medium block" style={{ color: "var(--text-muted)" }}>
+                        {genInfo.sourceImageUrl ? "Reference Image" : "Reference Video"}
+                      </label>
+                      <div className="flex items-start gap-3">
+                        {genInfo.sourceImageUrl && (
+                          <img
+                            src={genInfo.sourceImageUrl}
+                            alt="Reference"
+                            className="w-24 h-24 object-cover rounded-lg border flex-shrink-0"
+                            style={{ borderColor: "var(--border-medium)" }}
+                          />
+                        )}
+                        {genInfo.referenceVideoUrl && (
+                          <div className="flex items-center gap-2 text-xs" style={{ color: "var(--text-secondary)" }}>
+                            <Film className="w-4 h-4 flex-shrink-0" />
+                            <span className="truncate">{genInfo.referenceVideoUrl.split('/').pop()}</span>
+                          </div>
+                        )}
+                        {genInfo.imageFidelity != null && (
+                          <div className="text-xs self-center" style={{ color: "var(--text-muted)" }}>
+                            Image Fidelity: <strong style={{ color: "var(--text-secondary)" }}>{Math.round(genInfo.imageFidelity * 100)}%</strong>
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
+                  {genInfo.negativePrompt && (
+                    <div className="text-xs" style={{ color: "var(--text-muted)" }}>
+                      <span className="font-medium">Negative Prompt:</span> <span style={{ color: "var(--text-secondary)" }}>{genInfo.negativePrompt}</span>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             <div className="space-y-2.5">
               <div>
