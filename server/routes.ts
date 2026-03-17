@@ -677,6 +677,18 @@ export async function registerRoutes(app: Express) {
         }).where(eq(universalVideoProjects.projectId, projectId));
       }
 
+      if (newAspectRatio && newAspectRatio !== outputFormat.aspectRatio) {
+        const resolutionMap: Record<string, { width: number; height: number }> = {
+          "16:9": { width: 1920, height: 1080 },
+          "9:16": { width: 1080, height: 1920 },
+          "1:1": { width: 1080, height: 1080 },
+        };
+        await db.update(universalVideoProjects).set({
+          outputFormat: { ...outputFormat, aspectRatio: newAspectRatio, resolution: resolutionMap[newAspectRatio] || resolutionMap["16:9"] },
+          updatedAt: new Date(),
+        }).where(eq(universalVideoProjects.projectId, projectId));
+      }
+
       const existingAssets = (project.assets as any) || {};
       await db.update(universalVideoProjects).set({
         status: "generating",

@@ -2663,6 +2663,7 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
   const [promptText, setPromptText] = useState("");
   const [selectedProvider, setSelectedProvider] = useState("auto");
   const [negativePrompt, setNegativePrompt] = useState("");
+  const [selectedAspectRatio, setSelectedAspectRatio] = useState("");
   const [editNegativePrompt, setEditNegativePrompt] = useState(false);
   const [imageFidelity, setImageFidelity] = useState<number | null>(null);
   const [artPresetId, setArtPresetId] = useState("");
@@ -2708,6 +2709,7 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
         setImageFidelity(genInfo.imageFidelity ?? (genInfo.sceneType === "i2v" ? 0.5 : null));
         if (genInfo.artPresetId) setArtPresetId(genInfo.artPresetId);
       }
+      setSelectedAspectRatio(assetsQuery.data.generationInfo?.aspectRatio || project?.outputFormat?.aspectRatio || "16:9");
       initializedRef.current = true;
     }
     if (assetsQuery.data?.overlayItems && !overlaysLoaded) {
@@ -2733,6 +2735,10 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
       }
       if (artPresetId && artPresetId !== (assetsQuery.data?.generationInfo?.artPresetId || "")) {
         body.artPresetId = artPresetId;
+      }
+      const currentAR = assetsQuery.data?.generationInfo?.aspectRatio || project?.outputFormat?.aspectRatio || "16:9";
+      if (selectedAspectRatio && selectedAspectRatio !== currentAR) {
+        body.aspectRatio = selectedAspectRatio;
       }
       const res = await fetch(`/api/projects/${projectId}/quick-create/generate-visual`, {
         method: "POST",
@@ -3056,6 +3062,35 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
                       <img src={`/art-presets/${preset.id}.png`} alt={preset.name} className="w-full h-full object-cover" loading="lazy" />
                     </div>
                     <span className="text-[10px] font-medium block truncate" style={{ color: "var(--text-primary)" }}>{preset.name}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="mb-3">
+              <div className="flex items-center gap-1.5 mb-2">
+                <Monitor className="w-3.5 h-3.5 text-purple-400" />
+                <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>Aspect Ratio</span>
+              </div>
+              <div className="flex gap-2">
+                {([
+                  { value: "16:9", label: "16:9", sublabel: "YouTube", icon: "▬" },
+                  { value: "9:16", label: "9:16", sublabel: "Reels/TikTok", icon: "▮" },
+                  { value: "1:1", label: "1:1", sublabel: "Square", icon: "■" },
+                ] as const).map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setSelectedAspectRatio(opt.value)}
+                    className="flex-1 rounded-lg border-2 py-2 px-2 transition-all text-center"
+                    style={{
+                      backgroundColor: selectedAspectRatio === opt.value ? "rgba(139, 92, 246, 0.15)" : "var(--surface)",
+                      borderColor: selectedAspectRatio === opt.value ? "rgb(139, 92, 246)" : "var(--border-subtle)",
+                    }}
+                  >
+                    <span className="text-base block mb-0.5">{opt.icon}</span>
+                    <span className="text-[11px] font-medium block" style={{ color: "var(--text-primary)" }}>{opt.label}</span>
+                    <span className="text-[9px] block" style={{ color: "var(--text-muted)" }}>{opt.sublabel}</span>
                   </button>
                 ))}
               </div>
