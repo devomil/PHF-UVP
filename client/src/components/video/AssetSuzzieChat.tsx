@@ -139,16 +139,28 @@ export function AssetSuzzieChat({
     sendChatMessage(trimmed, messages);
   }, [input, messages, sendChatMessage]);
 
+  const lastAnalyzedPromptRef = useRef<string>('');
+
   const handleOpenPanel = useCallback(() => {
     setIsOpen(true);
-    if (messages.length === 0 && prompt.trim()) {
+    const currentPrompt = prompt.trim();
+    if (!currentPrompt) return;
+
+    const promptChanged = currentPrompt !== lastAnalyzedPromptRef.current;
+
+    if (messages.length === 0 || promptChanged) {
+      if (promptChanged) {
+        setMessages([]);
+        setAppliedPromptIndex(null);
+      }
+      lastAnalyzedPromptRef.current = currentPrompt;
       const variations = [
-        `Review and improve my current prompt: "${prompt.trim()}"`,
-        `Help me enhance this prompt for better results: "${prompt.trim()}"`,
-        `Take a fresh look at my prompt and suggest improvements: "${prompt.trim()}"`,
-        `How can I make this prompt more effective? "${prompt.trim()}"`,
-        `Give me a creative upgrade for this prompt: "${prompt.trim()}"`,
-        `Rewrite and elevate my prompt with your expertise: "${prompt.trim()}"`,
+        `Review and improve my current prompt: "${currentPrompt}"`,
+        `Help me enhance this prompt for better results: "${currentPrompt}"`,
+        `Take a fresh look at my prompt and suggest improvements: "${currentPrompt}"`,
+        `How can I make this prompt more effective? "${currentPrompt}"`,
+        `Give me a creative upgrade for this prompt: "${currentPrompt}"`,
+        `Rewrite and elevate my prompt with your expertise: "${currentPrompt}"`,
       ];
       const message = variations[Math.floor(Math.random() * variations.length)];
       sendChatMessage(message, [], true);
