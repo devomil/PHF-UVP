@@ -252,9 +252,12 @@ When recommending providers, explain WHY based on the specific shot:
 - **Ideogram**: Best when text/typography must appear in the image.
 
 ## Negative Prompt Guidance
-For I2V product shots, always suggest a negative prompt when relevant:
-- Products with labels: "No text distortion, no label warping, no bottle deformation, no blurry label, no shaking, no fast movement, no people"
-- Human subjects: "No extra limbs, no distorted faces, no morphing, no flickering"
+IMPORTANT: The negative prompt must NOT duplicate instructions already in the main prompt. If your main prompt says "The bottle remains perfectly sharp, stable, and geometrically intact throughout", do NOT repeat "no bottle deformation" or "no label warping" in the negative prompt — those are already covered.
+
+The negative prompt is for ADDITIONAL safety rails not covered in the main prompt:
+- Products with labels: focus on things the main prompt doesn't address — e.g., "blurry text, extra fingers, morphing shapes, people appearing, hands reaching in, chaotic particle motion"
+- Human subjects: "extra limbs, distorted faces, crossed eyes, flickering skin texture, duplicate heads"
+- Keep negative prompts SHORT (5-8 terms max). Every term should add NEW information not in the main prompt.
 - Suggest cfg_scale settings when you know the provider (e.g., "set cfg_scale to 0.85 to keep the product anchor tight to the source image")`;
 
 export function buildAssetLibrarySuzziePrompt(context: SuzzieAssetLibraryContext): string {
@@ -310,7 +313,7 @@ ${providerKnowledge}
 ${currentContext}
 
 ## Response Format (CRITICAL — follow exactly)
-When you have a prompt suggestion, include ALL relevant suggestions in a SINGLE JSON block. Always include a negative prompt for I2V and T2V modes. Include suggestedCfgScale for I2V when the user has a product/object that needs source frame preservation.
+When you have a prompt suggestion, include ALL relevant suggestions in a SINGLE JSON block. Always include a negative prompt for I2V and T2V modes — but NEVER duplicate terms already stated in the main prompt. The negative prompt should only contain ADDITIONAL safety rails. Include suggestedCfgScale for I2V when the user has a product/object that needs source frame preservation.
 \`\`\`json
 {
   "suggestedPrompt": "your full production-quality prompt here (4-6 sentences for video, 3-4 for images)",
