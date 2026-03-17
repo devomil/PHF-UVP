@@ -823,7 +823,14 @@ function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () => void; 
   const validProviderIds = getProviders().map(p => p.id);
 
   useEffect(() => {
-    setProvider("auto");
+    const newValidIds = (() => {
+      if (genMode === 'v2v') return QC_V2V_PROVIDERS.map(p => p.id);
+      if (genMode === 't2i') return QC_IMAGE_PROVIDERS.map(p => p.id);
+      return QC_VIDEO_PROVIDERS.map(p => p.id);
+    })();
+    if (provider !== "auto" && !newValidIds.includes(provider)) {
+      setProvider("auto");
+    }
     setValidationError(null);
   }, [genMode]);
 
