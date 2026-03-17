@@ -2664,6 +2664,7 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
   const [selectedProvider, setSelectedProvider] = useState("auto");
   const [negativePrompt, setNegativePrompt] = useState("");
   const [selectedAspectRatio, setSelectedAspectRatio] = useState("");
+  const [visualGenerating, setVisualGenerating] = useState(false);
   const [editNegativePrompt, setEditNegativePrompt] = useState(false);
   const [imageFidelity, setImageFidelity] = useState<number | null>(null);
   const [artPresetId, setArtPresetId] = useState("");
@@ -2718,6 +2719,15 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
     }
   }, [assetsQuery.data]);
 
+  useEffect(() => {
+    if (visualGenerating && assetsQuery.data?.assets) {
+      const vs = assetsQuery.data.assets.visual?.status;
+      if (vs === "generating" || vs === "processing" || vs === "queued" || vs === "completed" || vs === "failed") {
+        setVisualGenerating(false);
+      }
+    }
+  }, [assetsQuery.data?.assets, visualGenerating]);
+
   const isI2V = assetsQuery.data?.generationInfo?.sceneType === "i2v";
   const allPresets = getAllVisualArtPresets();
 
@@ -2745,11 +2755,13 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
       return res.json();
     },
     onSuccess: () => {
+      setVisualGenerating(true);
       queryClient.invalidateQueries({ queryKey: ["quick-create-assets", projectId] });
       queryClient.invalidateQueries({ queryKey: ["project", projectId] });
       toast({ title: "Visual Generation Started", description: "Your visual asset is being generated." });
     },
     onError: (err: Error) => {
+      setVisualGenerating(false);
       toast({ title: "Error", description: err.message, variant: "destructive" });
     },
   });
@@ -3127,11 +3139,11 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
                 </div>
                 <Button
                   onClick={() => generateVisualMutation.mutate()}
-                  disabled={generateVisualMutation.isPending || assets.visual?.status === "generating" || assets.visual?.status === "processing" || assets.visual?.status === "queued"}
+                  disabled={generateVisualMutation.isPending || visualGenerating || assets.visual?.status === "generating" || assets.visual?.status === "processing" || assets.visual?.status === "queued"}
                   className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white gap-1.5 text-sm"
                   size="sm"
                 >
-                  {(generateVisualMutation.isPending || assets.visual?.status === "generating" || assets.visual?.status === "processing" || assets.visual?.status === "queued") ? (
+                  {(generateVisualMutation.isPending || visualGenerating || assets.visual?.status === "generating" || assets.visual?.status === "processing" || assets.visual?.status === "queued") ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
                       Generating...
@@ -3156,26 +3168,33 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
                   {overlayItems.length} overlay{overlayItems.length !== 1 ? "s" : ""}
                 </span>
               </div>
-              <SceneOverlayEditor
-                overlays={overlayItems}
-                onChange={handleOverlayChange}
-                previewWidth={(() => {
-                  const ar = (project.outputFormat?.aspectRatio || "16:9");
-                  if (ar === "9:16") return 1080;
-                  if (ar === "1:1") return 1024;
-                  if (ar === "4:3") return 1440;
-                  return 1920;
-                })()}
-                previewHeight={(() => {
-                  const ar = (project.outputFormat?.aspectRatio || "16:9");
-                  if (ar === "9:16") return 1920;
-                  if (ar === "1:1") return 1024;
-                  if (ar === "4:3") return 1080;
-                  return 1080;
-                })()}
-                backgroundUrl={assets.visual.url}
-                backgroundType={project.mediaMode === "image" ? "image" : "video"}
-              />
+              <div style={{ maxHeight: "500px", maxWidth: (() => {
+                const ar = (project.outputFormat?.aspectRatio || "16:9");
+                if (ar === "9:16") return "281px";
+                if (ar === "1:1") return "500px";
+                return "100%";
+              })(), margin: "0 auto" }}>
+                <SceneOverlayEditor
+                  overlays={overlayItems}
+                  onChange={handleOverlayChange}
+                  previewWidth={(() => {
+                    const ar = (project.outputFormat?.aspectRatio || "16:9");
+                    if (ar === "9:16") return 1080;
+                    if (ar === "1:1") return 1024;
+                    if (ar === "4:3") return 1440;
+                    return 1920;
+                  })()}
+                  previewHeight={(() => {
+                    const ar = (project.outputFormat?.aspectRatio || "16:9");
+                    if (ar === "9:16") return 1920;
+                    if (ar === "1:1") return 1024;
+                    if (ar === "4:3") return 1080;
+                    return 1080;
+                  })()}
+                  backgroundUrl={assets.visual.url}
+                  backgroundType={project.mediaMode === "image" ? "image" : "video"}
+                />
+              </div>
             </div>
           )}
 
