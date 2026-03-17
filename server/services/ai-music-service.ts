@@ -349,6 +349,7 @@ class AIMusicService {
       data.data?.output?.audio_url,
       data.data?.output?.audio,
       data.data?.output?.music_url,
+      data.data?.output?.song_path,
       data.data?.audio_url,
       data.data?.result?.audio_url,
       data.output?.audio_url,
@@ -363,7 +364,7 @@ class AIMusicService {
 
     if (Array.isArray(data.data?.output)) {
       for (const item of data.data.output) {
-        const url = item?.audio_url || item?.url || item?.song_url || item?.music_url;
+        const url = item?.audio_url || item?.url || item?.song_url || item?.song_path || item?.music_url;
         if (url && typeof url === 'string' && url.startsWith('http')) {
           return url;
         }
@@ -374,14 +375,14 @@ class AIMusicService {
     if (output && typeof output === 'object' && !Array.isArray(output)) {
       for (const key of Object.keys(output)) {
         const val = output[key];
-        if (typeof val === 'string' && val.startsWith('http') && (val.includes('.mp3') || val.includes('.wav') || val.includes('.m4a') || val.includes('audio') || val.includes('music') || val.includes('cdn'))) {
+        if (typeof val === 'string' && val.startsWith('http') && (val.includes('.mp3') || val.includes('.wav') || val.includes('.m4a') || val.includes('audio') || val.includes('music') || val.includes('cdn') || val.includes('storage.googleapis'))) {
           console.log('[AIMusic] Found audio URL in output.' + key + ': ' + val);
           return val;
         }
         if (Array.isArray(val)) {
           for (const item of val) {
             const itemUrl = typeof item === 'string' && item.startsWith('http') ? item :
-              (item?.audio_url || item?.url || item?.song_url);
+              (item?.audio_url || item?.url || item?.song_url || item?.song_path);
             if (itemUrl && typeof itemUrl === 'string' && itemUrl.startsWith('http')) {
               console.log('[AIMusic] Found audio URL in output.' + key + '[]: ' + itemUrl);
               return itemUrl;

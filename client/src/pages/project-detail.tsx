@@ -1301,7 +1301,7 @@ export default function ProjectDetail({ params }: { params?: { id: string } }) {
           </div>
         )}
 
-        {progress.currentStep && (
+        {progress.currentStep && !isQuickCreate && (
           <div className="border rounded-xl p-5 mb-8" style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)" }}>
             <div className="flex items-center gap-3">
               <Loader2 className="w-5 h-5 animate-spin text-purple-400" />

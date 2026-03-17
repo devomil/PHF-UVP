@@ -1,6 +1,6 @@
 import { db } from '../db';
 import { universalVideoProjects } from '../../shared/schema';
-import { eq, and, lt, inArray } from 'drizzle-orm';
+import { eq, and, lt, ne, inArray, sql } from 'drizzle-orm';
 import { universalVideoService } from './universal-video-service';
 import { sceneAnalysisService } from './scene-analysis-service';
 import { chunkedRenderService } from './chunked-render-service';
@@ -37,6 +37,7 @@ async function recoverStalledProjects() {
       projectId: universalVideoProjects.projectId,
       status: universalVideoProjects.status,
       updatedAt: universalVideoProjects.updatedAt,
+      outputFormat: universalVideoProjects.outputFormat,
     })
     .from(universalVideoProjects)
     .where(
@@ -46,9 +47,18 @@ async function recoverStalledProjects() {
       )
     );
 
-    if (stalledProjects.length > 0) {
-      log(`Found ${stalledProjects.length} stalled generating project(s), requeuing...`);
-      for (const project of stalledProjects) {
+    const nonQuickCreateStalled = stalledProjects.filter(p => {
+      const platform = (p.outputFormat as any)?.platform;
+      if (platform === 'quick-create') {
+        log(`Skipping stall recovery for Quick Create project: ${p.projectId} (managed by JobProcessor)`);
+        return false;
+      }
+      return true;
+    });
+
+    if (nonQuickCreateStalled.length > 0) {
+      log(`Found ${nonQuickCreateStalled.length} stalled generating project(s), requeuing...`);
+      for (const project of nonQuickCreateStalled) {
         await db.update(universalVideoProjects)
           .set({
             status: 'queued',
@@ -735,7 +745,12 @@ async function pollForJobs() {
 
     const generateJobs = await db.select()
       .from(universalVideoProjects)
-      .where(eq(universalVideoProjects.status, 'queued'))
+      .where(
+        and(
+          eq(universalVideoProjects.status, 'queued'),
+          sql`(${universalVideoProjects.outputFormat}->>'platform') IS DISTINCT FROM 'quick-create'`
+        )
+      )
       .orderBy(universalVideoProjects.createdAt)
       .limit(1);
 
