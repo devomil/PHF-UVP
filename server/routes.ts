@@ -530,10 +530,19 @@ export async function registerRoutes(app: Express) {
       const latestI2vSettings = (latestJob?.i2vSettings as any) || {};
       const progressData = (project.progress as any) || {};
 
+      const visualUrl = qc.visual?.url || project.outputUrl || null;
+      let visualStatus = qc.visual?.status || (project.outputUrl ? "completed" : "pending");
+      if (visualStatus === "generating" && visualUrl) {
+        visualStatus = "completed";
+      }
+      if (visualStatus === "generating" && latestJob?.status === "completed") {
+        visualStatus = "completed";
+      }
+
       res.json({
         visual: {
-          status: qc.visual?.status || (project.outputUrl ? "completed" : "pending"),
-          url: qc.visual?.url || project.outputUrl || null,
+          status: visualStatus,
+          url: visualUrl,
           provider: qc.visual?.provider || latestJob?.provider || null,
           error: qc.visual?.error || null,
           duration: qc.visual?.duration || null,

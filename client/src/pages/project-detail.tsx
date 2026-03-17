@@ -2688,12 +2688,14 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
     },
   });
 
+  const providerInitialized = useRef(false);
   useEffect(() => {
     if (assetsQuery.data?.project?.prompt && !promptText) {
       setPromptText(assetsQuery.data.project.prompt);
     }
-    if (assetsQuery.data?.visual?.provider) {
+    if (assetsQuery.data?.visual?.provider && !providerInitialized.current) {
       setSelectedProvider(assetsQuery.data.visual.provider);
+      providerInitialized.current = true;
     }
     if (assetsQuery.data?.overlayItems && !overlaysLoaded) {
       setOverlayItems(assetsQuery.data.overlayItems);
