@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
 import { ArrowLeft, Settings, Play, RefreshCw, Clock, Target, Monitor, BarChart3, Loader2, AlertCircle, Zap, Video, Image, Download, RotateCcw, Save, Trash2, ExternalLink, CheckCircle2, XCircle, X, Type, Film, ChevronDown, ChevronUp, CloudUpload, Mic, Music, Volume2, Palette, Shuffle, Sliders, Wand2, Sparkles, ImagePlus, Upload, Edit2, FileText, Plus, GripVertical, Eye, EyeOff, Layers } from "lucide-react";
-import { getVisualArtPreset } from "@shared/config/visual-art-presets";
+import { getVisualArtPreset, getAllVisualArtPresets } from "@shared/config/visual-art-presets";
 import { SCENE_CONTENT_TAGS } from "@shared/config/scene-content-tags";
 import { Button } from "@/components/ui/button";
 import { ProviderCatalogSelector } from "@/components/video/provider-catalog-selector";
@@ -2662,6 +2662,11 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
   const [editPrompt, setEditPrompt] = useState(false);
   const [promptText, setPromptText] = useState("");
   const [selectedProvider, setSelectedProvider] = useState("auto");
+  const [negativePrompt, setNegativePrompt] = useState("");
+  const [editNegativePrompt, setEditNegativePrompt] = useState(false);
+  const [imageFidelity, setImageFidelity] = useState<number | null>(null);
+  const [artPresetId, setArtPresetId] = useState("");
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [selectedVoiceId, setSelectedVoiceId] = useState("21m00Tcm4TlvDq8ikWAM");
   const [voiceFilter, setVoiceFilter] = useState<"all" | "male" | "female">("all");
   const [musicMood, setMusicMood] = useState("auto");
@@ -2688,14 +2693,22 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
     },
   });
 
-  const providerInitialized = useRef(false);
+  const initializedRef = useRef(false);
   useEffect(() => {
     if (assetsQuery.data?.project?.prompt && !promptText) {
       setPromptText(assetsQuery.data.project.prompt);
     }
-    if (assetsQuery.data?.visual?.provider && !providerInitialized.current) {
-      setSelectedProvider(assetsQuery.data.visual.provider);
-      providerInitialized.current = true;
+    if (!initializedRef.current && assetsQuery.data) {
+      if (assetsQuery.data.visual?.provider) {
+        setSelectedProvider(assetsQuery.data.visual.provider);
+      }
+      const genInfo = assetsQuery.data.generationInfo;
+      if (genInfo) {
+        if (genInfo.negativePrompt) setNegativePrompt(genInfo.negativePrompt);
+        setImageFidelity(genInfo.imageFidelity ?? (genInfo.sceneType === "i2v" ? 0.5 : null));
+        if (genInfo.artPresetId) setArtPresetId(genInfo.artPresetId);
+      }
+      initializedRef.current = true;
     }
     if (assetsQuery.data?.overlayItems && !overlaysLoaded) {
       setOverlayItems(assetsQuery.data.overlayItems);
@@ -2703,16 +2716,29 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
     }
   }, [assetsQuery.data]);
 
+  const isI2V = assetsQuery.data?.generationInfo?.sceneType === "i2v";
+  const allPresets = getAllVisualArtPresets();
+
   const generateVisualMutation = useMutation({
     mutationFn: async () => {
+      const body: any = {
+        prompt: promptText || undefined,
+        provider: selectedProvider,
+      };
+      if (negativePrompt !== (assetsQuery.data?.generationInfo?.negativePrompt || "")) {
+        body.negativePrompt = negativePrompt;
+      }
+      if (imageFidelity !== null && imageFidelity !== assetsQuery.data?.generationInfo?.imageFidelity) {
+        body.imageFidelity = imageFidelity;
+      }
+      if (artPresetId && artPresetId !== (assetsQuery.data?.generationInfo?.artPresetId || "")) {
+        body.artPresetId = artPresetId;
+      }
       const res = await fetch(`/api/projects/${projectId}/quick-create/generate-visual`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({
-          prompt: promptText || undefined,
-          provider: selectedProvider,
-        }),
+        body: JSON.stringify(body),
       });
       if (!res.ok) throw new Error("Failed to start visual generation");
       return res.json();
@@ -2915,10 +2941,8 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
               const genInfo = assetsQuery.data?.generationInfo;
               if (!genInfo) return null;
               const hasRefMedia = genInfo.sourceImageUrl || genInfo.referenceVideoUrl;
-              const hasMetadata = genInfo.negativePrompt || genInfo.imageFidelity != null;
-              if (!hasRefMedia && !hasMetadata) return null;
               return (
-                <div className="mb-3 border rounded-lg p-3 space-y-2" style={{ borderColor: "var(--border-subtle)", backgroundColor: "rgba(0,0,0,0.2)" }}>
+                <div className="mb-3 border rounded-lg p-3 space-y-3" style={{ borderColor: "var(--border-subtle)", backgroundColor: "rgba(0,0,0,0.2)" }}>
                   {hasRefMedia && (
                     <>
                       <label className="text-xs font-medium block" style={{ color: "var(--text-muted)" }}>
@@ -2929,7 +2953,7 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
                           <img
                             src={genInfo.sourceImageUrl}
                             alt="Reference"
-                            className="w-24 h-24 object-cover rounded-lg border flex-shrink-0"
+                            className="w-16 h-16 object-cover rounded-lg border flex-shrink-0"
                             style={{ borderColor: "var(--border-medium)" }}
                           />
                         )}
@@ -2939,22 +2963,103 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
                             <span className="truncate">{genInfo.referenceVideoUrl.split('/').pop()}</span>
                           </div>
                         )}
-                        {genInfo.imageFidelity != null && (
-                          <div className="text-xs self-center" style={{ color: "var(--text-muted)" }}>
-                            Image Fidelity: <strong style={{ color: "var(--text-secondary)" }}>{Math.round(genInfo.imageFidelity * 100)}%</strong>
-                          </div>
-                        )}
                       </div>
                     </>
                   )}
-                  {genInfo.negativePrompt && (
-                    <div className="text-xs" style={{ color: "var(--text-muted)" }}>
-                      <span className="font-medium">Negative Prompt:</span> <span style={{ color: "var(--text-secondary)" }}>{genInfo.negativePrompt}</span>
+                  {imageFidelity != null && (
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>Image Fidelity</span>
+                        <span className="text-xs font-bold" style={{ color: "var(--text-secondary)" }}>{Math.round(imageFidelity * 100)}%</span>
+                      </div>
+                      <input
+                        type="range"
+                        min={0}
+                        max={100}
+                        value={Math.round(imageFidelity * 100)}
+                        onChange={(e) => setImageFidelity(parseInt(e.target.value) / 100)}
+                        className="w-full h-1.5 rounded-full appearance-none cursor-pointer"
+                        style={{ background: `linear-gradient(to right, rgb(168 85 247) ${Math.round(imageFidelity * 100)}%, var(--border-subtle) ${Math.round(imageFidelity * 100)}%)` }}
+                      />
+                      <div className="flex justify-between mt-0.5">
+                        <span className="text-[9px]" style={{ color: "var(--text-muted)" }}>Creative</span>
+                        <span className="text-[9px]" style={{ color: "var(--text-muted)" }}>Faithful</span>
+                      </div>
                     </div>
                   )}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>Negative Prompt</span>
+                      {!editNegativePrompt && (
+                        <button className="text-[10px] text-purple-400 hover:text-purple-300" onClick={() => setEditNegativePrompt(true)}>Edit</button>
+                      )}
+                    </div>
+                    {editNegativePrompt ? (
+                      <div className="space-y-1.5">
+                        <textarea
+                          value={negativePrompt}
+                          onChange={(e) => setNegativePrompt(e.target.value)}
+                          rows={2}
+                          placeholder="Things to avoid in generation..."
+                          className="w-full rounded-lg border p-2 text-xs resize-none"
+                          style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }}
+                        />
+                        <button className="text-[10px] text-purple-400 hover:text-purple-300" onClick={() => setEditNegativePrompt(false)}>Done</button>
+                      </div>
+                    ) : (
+                      <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{negativePrompt || "None"}</p>
+                    )}
+                  </div>
                 </div>
               );
             })()}
+
+            <div className="mb-3">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-1.5">
+                  <Palette className="w-3.5 h-3.5 text-purple-400" />
+                  <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>Art Style</span>
+                </div>
+                {artPresetId && artPresetId !== "auto" && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/10 border border-purple-500/20 text-purple-400">
+                    {allPresets.find(p => p.id === artPresetId)?.name || artPresetId}
+                  </span>
+                )}
+              </div>
+              <div className="flex gap-2 overflow-x-auto pb-1.5 -mx-1 px-1" style={{ scrollbarWidth: "thin" }}>
+                <button
+                  type="button"
+                  onClick={() => setArtPresetId("auto")}
+                  className="flex-shrink-0 w-[72px] rounded-lg border-2 p-1.5 transition-all"
+                  style={{
+                    backgroundColor: (!artPresetId || artPresetId === "auto") ? "rgba(139, 92, 246, 0.15)" : "var(--surface)",
+                    borderColor: (!artPresetId || artPresetId === "auto") ? "rgb(139, 92, 246)" : "var(--border-subtle)",
+                  }}
+                >
+                  <div className="w-full h-10 rounded mb-1 flex items-center justify-center" style={{ background: "linear-gradient(135deg, rgba(139,92,246,0.3), rgba(99,102,241,0.3))" }}>
+                    <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                  </div>
+                  <span className="text-[10px] font-medium block" style={{ color: "var(--text-primary)" }}>Auto</span>
+                </button>
+                {allPresets.map((preset) => (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    onClick={() => setArtPresetId(preset.id)}
+                    className="flex-shrink-0 w-[72px] rounded-lg border-2 p-1.5 transition-all"
+                    style={{
+                      backgroundColor: artPresetId === preset.id ? "rgba(139, 92, 246, 0.15)" : "var(--surface)",
+                      borderColor: artPresetId === preset.id ? "rgb(139, 92, 246)" : "var(--border-subtle)",
+                    }}
+                  >
+                    <div className="w-full h-10 rounded mb-1 overflow-hidden" style={{ border: `1px solid ${preset.thumbnailColors[0]}33` }}>
+                      <img src={`/art-presets/${preset.id}.png`} alt={preset.name} className="w-full h-full object-cover" loading="lazy" />
+                    </div>
+                    <span className="text-[10px] font-medium block truncate" style={{ color: "var(--text-primary)" }}>{preset.name}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
 
             <div className="space-y-2.5">
               <div>

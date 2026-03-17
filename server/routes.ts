@@ -648,7 +648,7 @@ export async function registerRoutes(app: Express) {
       }
       const { projectId } = req.params;
       const userId = (req.user as any).id;
-      const { prompt: newPrompt, provider: newProvider, duration: newDuration, aspectRatio: newAspectRatio } = req.body || {};
+      const { prompt: newPrompt, provider: newProvider, duration: newDuration, aspectRatio: newAspectRatio, negativePrompt: newNegativePrompt, imageFidelity: newImageFidelity, artPresetId: newArtPresetId } = req.body || {};
 
       const [project] = await db
         .select()
@@ -707,6 +707,36 @@ export async function registerRoutes(app: Express) {
       const originalSceneType = originalJob?.sceneType || (project.mediaMode === "image" ? "image" : "video");
       const originalI2vSettings = (originalJob?.i2vSettings as any) || {};
 
+      const finalNegativePrompt = newNegativePrompt !== undefined ? (newNegativePrompt || undefined) : (originalJob?.negativePrompt || undefined);
+      const finalImageFidelity = newImageFidelity !== undefined ? newImageFidelity : originalI2vSettings.imageControlStrength;
+      const finalArtPresetId = newArtPresetId !== undefined ? (newArtPresetId || undefined) : originalI2vSettings.artPresetId;
+
+      let finalPromptWithStyle = finalPrompt;
+      if (finalArtPresetId && finalArtPresetId !== "auto") {
+        const { getVisualArtPreset, isStylizedPreset } = await import("../shared/config/visual-art-presets");
+        const preset = getVisualArtPreset(finalArtPresetId);
+        if (preset && isStylizedPreset(preset.id)) {
+          const keywords = preset.styleKeywords || [];
+          const promptLower = finalPromptWithStyle.toLowerCase();
+          const hasStyle = keywords.length > 0 ? keywords.some((kw: string) => promptLower.includes(kw)) : false;
+          if (!hasStyle) {
+            const prefix = preset.styleMarkerPrefix || preset.name;
+            finalPromptWithStyle = `${prefix} — ${finalPromptWithStyle}`;
+          }
+          if (preset.globalStyleNotes) {
+            finalPromptWithStyle = `${finalPromptWithStyle}. Style: ${preset.globalStyleNotes}`;
+          }
+        }
+      }
+
+      if (finalArtPresetId) {
+        const progressData = (project.progress as any) || {};
+        await db.update(universalVideoProjects).set({
+          progress: { ...progressData, artPresetId: finalArtPresetId },
+          updatedAt: new Date(),
+        }).where(eq(universalVideoProjects.projectId, projectId));
+      }
+
       const jobId = crypto.randomUUID();
       await db.insert(videoGenerationJobs).values({
         jobId,
@@ -714,8 +744,8 @@ export async function registerRoutes(app: Express) {
         sceneId: "quick-create",
         provider: finalProvider,
         status: "pending",
-        prompt: finalPrompt,
-        negativePrompt: originalJob?.negativePrompt || undefined,
+        prompt: finalPromptWithStyle,
+        negativePrompt: finalNegativePrompt,
         duration: project.mediaMode === "video" ? finalDuration : undefined,
         aspectRatio: finalAspectRatio,
         sceneType: originalSceneType,
@@ -724,6 +754,8 @@ export async function registerRoutes(app: Express) {
           saveToLibrary: true,
           outputType: project.mediaMode || "video",
           ...originalI2vSettings,
+          ...(finalImageFidelity !== undefined ? { imageControlStrength: finalImageFidelity } : {}),
+          ...(finalArtPresetId ? { artPresetId: finalArtPresetId } : {}),
         },
         triggeredBy: userId,
       });
