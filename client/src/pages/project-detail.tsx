@@ -2726,19 +2726,14 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
       const body: any = {
         prompt: promptText || undefined,
         provider: selectedProvider,
+        negativePrompt: negativePrompt || undefined,
+        aspectRatio: selectedAspectRatio || undefined,
       };
-      if (negativePrompt !== (assetsQuery.data?.generationInfo?.negativePrompt || "")) {
-        body.negativePrompt = negativePrompt;
-      }
-      if (imageFidelity !== null && imageFidelity !== assetsQuery.data?.generationInfo?.imageFidelity) {
+      if (imageFidelity !== null) {
         body.imageFidelity = imageFidelity;
       }
-      if (artPresetId && artPresetId !== (assetsQuery.data?.generationInfo?.artPresetId || "")) {
+      if (artPresetId) {
         body.artPresetId = artPresetId;
-      }
-      const currentAR = assetsQuery.data?.generationInfo?.aspectRatio || project?.outputFormat?.aspectRatio || "16:9";
-      if (selectedAspectRatio && selectedAspectRatio !== currentAR) {
-        body.aspectRatio = selectedAspectRatio;
       }
       const res = await fetch(`/api/projects/${projectId}/quick-create/generate-visual`, {
         method: "POST",
