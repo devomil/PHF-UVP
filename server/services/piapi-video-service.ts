@@ -243,6 +243,9 @@ class PiAPIVideoService {
       ? this.enforceProviderCharLimit(motionPrompt, options.model)
       : safePrompt;
     
+    // NOTE: cfg_scale is intentionally omitted from T2V requests.
+    // PiAPI Kling video_generation (T2V) does not support cfg_scale —
+    // it is an I2V-only parameter that balances source image vs prompt.
     const baseRequest = {
       model: modelConfig.modelId,
       task_type: 'text_to_video',
