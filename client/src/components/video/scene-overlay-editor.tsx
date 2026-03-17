@@ -20,6 +20,8 @@ export interface SceneOverlayItem {
   locked: boolean;
 }
 
+type AnyOverlayItem = SceneOverlayItem | MicroSceneOverlayItem;
+
 const ENTRANCE_ANIMATIONS: { id: EntranceAnimation; label: string }[] = [
   { id: "fade", label: "Fade" },
   { id: "rise", label: "Rise" },
@@ -90,7 +92,7 @@ export function SceneOverlayEditor({
   const isMicroSceneMode = activeMicroSceneIndex !== null && activeMicroSceneIndex !== undefined && activeMicroSceneIndex >= 0 && microScenes !== undefined && activeMicroSceneIndex < microScenes.length;
   const activeMs = isMicroSceneMode && microScenes ? microScenes[activeMicroSceneIndex!] : null;
 
-  const currentOverlays: any[] = isMicroSceneMode
+  const currentOverlays: AnyOverlayItem[] = isMicroSceneMode
     ? (microSceneOverlays?.[activeMicroSceneIndex!] ?? activeMs?.overlayItems ?? [])
     : overlays;
 
@@ -101,11 +103,11 @@ export function SceneOverlayEditor({
     ? (activeMs.videoUrl ? "video" : activeMs.imageUrl ? "image" : undefined)
     : backgroundType;
 
-  const handleCurrentChange = useCallback((newOverlays: any[]) => {
+  const handleCurrentChange = useCallback((newOverlays: AnyOverlayItem[]) => {
     if (isMicroSceneMode && onMicroSceneOverlayChange) {
-      onMicroSceneOverlayChange(activeMicroSceneIndex!, newOverlays);
+      onMicroSceneOverlayChange(activeMicroSceneIndex!, newOverlays as MicroSceneOverlayItem[]);
     } else {
-      onChange(newOverlays);
+      onChange(newOverlays as SceneOverlayItem[]);
     }
   }, [isMicroSceneMode, activeMicroSceneIndex, onMicroSceneOverlayChange, onChange]);
 
@@ -122,7 +124,7 @@ export function SceneOverlayEditor({
 
   const nextZIndex = useCallback(() => {
     if (currentOverlays.length === 0) return 1;
-    return Math.max(...currentOverlays.map((o: any) => o.zIndex ?? 0)) + 1;
+    return Math.max(...currentOverlays.map((o) => ('zIndex' in o ? o.zIndex : 0))) + 1;
   }, [currentOverlays]);
 
   const addOverlay = useCallback((url: string, name: string) => {
@@ -160,50 +162,52 @@ export function SceneOverlayEditor({
     setShowLibrary(false);
   }, [currentOverlays, handleCurrentChange, isMicroSceneMode, nextZIndex]);
 
-  const updateOverlay = useCallback((id: string, updates: Partial<any>) => {
-    handleCurrentChange(currentOverlays.map((o: any) => (o.id === id ? { ...o, ...updates } : o)));
+  const updateOverlay = useCallback((id: string, updates: Partial<AnyOverlayItem>) => {
+    handleCurrentChange(currentOverlays.map((o) => (o.id === id ? { ...o, ...updates } : o)));
   }, [currentOverlays, handleCurrentChange]);
 
   const removeOverlay = useCallback((id: string) => {
-    handleCurrentChange(currentOverlays.filter((o: any) => o.id !== id));
+    handleCurrentChange(currentOverlays.filter((o) => o.id !== id));
     if (selectedId === id) setSelectedId(null);
   }, [currentOverlays, handleCurrentChange, selectedId]);
 
+  const getZIndex = (o: AnyOverlayItem): number => ('zIndex' in o ? o.zIndex : 0);
+
   const moveLayerForward = useCallback((id: string) => {
-    const sorted = [...currentOverlays].sort((a: any, b: any) => (a.zIndex ?? 0) - (b.zIndex ?? 0));
-    const idx = sorted.findIndex((o: any) => o.id === id);
+    const sorted = [...currentOverlays].sort((a, b) => getZIndex(a) - getZIndex(b));
+    const idx = sorted.findIndex((o) => o.id === id);
     if (idx < sorted.length - 1) {
       const swapA = sorted[idx];
       const swapB = sorted[idx + 1];
-      handleCurrentChange(currentOverlays.map((o: any) => {
-        if (o.id === swapA.id) return { ...o, zIndex: swapB.zIndex ?? 0 };
-        if (o.id === swapB.id) return { ...o, zIndex: swapA.zIndex ?? 0 };
+      handleCurrentChange(currentOverlays.map((o) => {
+        if (o.id === swapA.id) return { ...o, zIndex: getZIndex(swapB) };
+        if (o.id === swapB.id) return { ...o, zIndex: getZIndex(swapA) };
         return o;
       }));
     }
   }, [currentOverlays, handleCurrentChange]);
 
   const moveLayerBackward = useCallback((id: string) => {
-    const sorted = [...currentOverlays].sort((a: any, b: any) => (a.zIndex ?? 0) - (b.zIndex ?? 0));
-    const idx = sorted.findIndex((o: any) => o.id === id);
+    const sorted = [...currentOverlays].sort((a, b) => getZIndex(a) - getZIndex(b));
+    const idx = sorted.findIndex((o) => o.id === id);
     if (idx > 0) {
       const swapA = sorted[idx];
       const swapB = sorted[idx - 1];
-      handleCurrentChange(currentOverlays.map((o: any) => {
-        if (o.id === swapA.id) return { ...o, zIndex: swapB.zIndex ?? 0 };
-        if (o.id === swapB.id) return { ...o, zIndex: swapA.zIndex ?? 0 };
+      handleCurrentChange(currentOverlays.map((o) => {
+        if (o.id === swapA.id) return { ...o, zIndex: getZIndex(swapB) };
+        if (o.id === swapB.id) return { ...o, zIndex: getZIndex(swapA) };
         return o;
       }));
     }
   }, [currentOverlays, handleCurrentChange]);
 
   const moveToFront = useCallback((id: string) => {
-    const maxZ = Math.max(...currentOverlays.map((o: any) => o.zIndex ?? 0));
+    const maxZ = Math.max(...currentOverlays.map(getZIndex));
     updateOverlay(id, { zIndex: maxZ + 1 });
   }, [currentOverlays, updateOverlay]);
 
   const moveToBack = useCallback((id: string) => {
-    const minZ = Math.min(...currentOverlays.map((o: any) => o.zIndex ?? 0));
+    const minZ = Math.min(...currentOverlays.map(getZIndex));
     updateOverlay(id, { zIndex: minZ - 1 });
   }, [currentOverlays, updateOverlay]);
 
@@ -239,8 +243,8 @@ export function SceneOverlayEditor({
       } else {
         toast({ title: "Upload failed", description: "No URL returned", variant: "destructive" });
       }
-    } catch (err: any) {
-      toast({ title: "Upload failed", description: err.message || "Unknown error", variant: "destructive" });
+    } catch (err: unknown) {
+      toast({ title: "Upload failed", description: (err as Error).message || "Unknown error", variant: "destructive" });
     }
 
     if (fileInputRef.current) fileInputRef.current.value = "";
@@ -249,7 +253,7 @@ export function SceneOverlayEditor({
   const handleMouseDown = useCallback((e: React.MouseEvent, id: string, type: "move" | "resize") => {
     e.preventDefault();
     e.stopPropagation();
-    const overlay = currentOverlays.find((o: any) => o.id === id);
+    const overlay = currentOverlays.find((o) => o.id === id);
     if (!overlay || overlay.locked) return;
 
     setSelectedId(id);
@@ -283,7 +287,7 @@ export function SceneOverlayEditor({
       if (dragging) {
         const dx = ((e.clientX - dragging.startX) / rect.width) * 100;
         const dy = ((e.clientY - dragging.startY) / rect.height) * 100;
-        const overlay = currentOverlays.find((o: any) => o.id === dragging.id);
+        const overlay = currentOverlays.find((o) => o.id === dragging.id);
         if (!overlay) return;
         const newX = Math.max(0, Math.min(100 - overlay.width, dragging.origX + dx));
         const newY = Math.max(0, Math.min(100 - overlay.height, dragging.origY + dy));
@@ -319,7 +323,7 @@ export function SceneOverlayEditor({
     setSelectedId(null);
   }, [activeMicroSceneIndex]);
 
-  const selectedOverlay = currentOverlays.find((o: any) => o.id === selectedId);
+  const selectedOverlay = currentOverlays.find((o) => o.id === selectedId);
   const hasMicroScenes = microScenes && microScenes.length > 0;
 
   return (
@@ -411,7 +415,7 @@ export function SceneOverlayEditor({
             <p className="text-xs text-center py-4" style={{ color: "var(--text-muted)" }}>No images in library. Upload one above.</p>
           ) : (
             <div className="grid grid-cols-6 gap-1.5">
-              {libraryQuery.data.slice(0, 24).map((asset: any) => (
+              {libraryQuery.data.slice(0, 24).map((asset: { id: string; url?: string; thumbnailUrl?: string; name?: string }) => (
                 <button
                   key={asset.id}
                   onClick={() => {
@@ -457,7 +461,7 @@ export function SceneOverlayEditor({
           </div>
         )}
 
-        {currentOverlays.map((overlay: any) => (
+        {currentOverlays.map((overlay) => (
           <div
             key={overlay.id}
             className={`absolute group ${overlay.locked ? "pointer-events-none" : "cursor-move"}`}
@@ -467,7 +471,7 @@ export function SceneOverlayEditor({
               width: `${overlay.width}%`,
               height: `${overlay.height}%`,
               opacity: overlay.opacity / 100,
-              zIndex: selectedId === overlay.id ? 20 : (overlay.zIndex ?? 10),
+              zIndex: selectedId === overlay.id ? 20 : (getZIndex(overlay) || 10),
             }}
             onClick={(e) => {
               e.stopPropagation();
@@ -507,7 +511,7 @@ export function SceneOverlayEditor({
 
         {currentOverlays.length > 0 && (
           <div className="absolute bottom-1 left-1 right-1 flex gap-1 flex-wrap z-30 pointer-events-none">
-            {currentOverlays.map((overlay: any) => (
+            {currentOverlays.map((overlay) => (
               <span
                 key={overlay.id}
                 className={`text-[9px] px-1.5 py-0.5 rounded-full pointer-events-auto cursor-pointer transition-all ${
@@ -614,7 +618,7 @@ export function SceneOverlayEditor({
             />
           </div>
 
-          {isMicroSceneMode && (
+          {isMicroSceneMode && 'entranceAnimation' in selectedOverlay && (
             <>
               <div>
                 <label className="text-[10px] block mb-1" style={{ color: "var(--text-muted)" }}>Entrance Animation</label>
@@ -625,9 +629,9 @@ export function SceneOverlayEditor({
                       onClick={() => updateOverlay(selectedOverlay.id, { entranceAnimation: anim.id })}
                       className="text-[10px] px-2 py-1 rounded-md border transition-colors"
                       style={{
-                        borderColor: selectedOverlay.entranceAnimation === anim.id ? "rgba(124,58,237,0.5)" : "var(--border-subtle)",
-                        color: selectedOverlay.entranceAnimation === anim.id ? "rgb(124,58,237)" : "var(--text-secondary)",
-                        backgroundColor: selectedOverlay.entranceAnimation === anim.id ? "rgba(124,58,237,0.1)" : "transparent",
+                        borderColor: (selectedOverlay as MicroSceneOverlayItem).entranceAnimation === anim.id ? "rgba(124,58,237,0.5)" : "var(--border-subtle)",
+                        color: (selectedOverlay as MicroSceneOverlayItem).entranceAnimation === anim.id ? "rgb(124,58,237)" : "var(--text-secondary)",
+                        backgroundColor: (selectedOverlay as MicroSceneOverlayItem).entranceAnimation === anim.id ? "rgba(124,58,237,0.1)" : "transparent",
                       }}
                     >
                       {anim.label}
