@@ -2743,10 +2743,12 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
     }
   }, [assetsQuery.data]);
 
+  const visualGenStartTimeRef = useRef<number>(0);
   useEffect(() => {
     if (visualGenerating && assetsQuery.data) {
       const vs = assetsQuery.data.visual?.status;
-      if (vs === "completed" || vs === "failed") {
+      const elapsed = Date.now() - visualGenStartTimeRef.current;
+      if (elapsed > 5000 && (vs === "completed" || vs === "failed")) {
         setVisualGenerating(false);
       }
     }
@@ -2784,6 +2786,7 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
       return res.json();
     },
     onSuccess: () => {
+      visualGenStartTimeRef.current = Date.now();
       setVisualGenerating(true);
       setOverrideSourceImage(undefined);
       queryClient.invalidateQueries({ queryKey: ["quick-create-assets", projectId] });
@@ -3022,7 +3025,7 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
                 {project.mediaMode === "image" ? (
                   <img src={assets.visual.url} alt="Generated visual" className="w-full h-full object-contain" />
                 ) : (
-                  <video src={assets.visual.url} controls className="w-full h-full object-contain" />
+                  <video key={assets.visual.url} src={assets.visual.url} controls className="w-full h-full object-contain" />
                 )}
                 <span
                   className="absolute top-2 left-2 text-[10px] font-medium px-2 py-0.5 rounded-full backdrop-blur-sm"
