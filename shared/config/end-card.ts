@@ -21,6 +21,7 @@ export interface EndCardConfig {
     text: string;
     delay: number;
     animation: 'typewriter' | 'fade' | 'slide-up';
+    positionY?: number;
     style: {
       fontSize: number;
       fontFamily: string;
@@ -33,6 +34,7 @@ export interface EndCardConfig {
     email?: string;
     delay: number;
     animation: 'stagger' | 'fade' | 'slide-up';
+    positionY?: number;
     style: {
       fontSize: number;
       color: string;

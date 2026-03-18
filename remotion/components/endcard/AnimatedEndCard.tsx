@@ -43,21 +43,18 @@ export const AnimatedEndCard: React.FC<AnimatedEndCardProps> = ({ config }) => {
         />
       )}
       
-      <div
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: 0,
-        }}
-      >
-        {isValidImageUrl(config.logo.url) && (
+      {isValidImageUrl(config.logo.url) && (
+        <div
+          style={{
+            position: 'absolute',
+            top: `${config.logo.position?.y ?? 32}%`,
+            left: 0,
+            right: 0,
+            display: 'flex',
+            justifyContent: 'center',
+            transform: 'translateY(-50%)',
+          }}
+        >
           <LogoReveal
             logoUrl={config.logo.url}
             size={config.logo.size}
@@ -67,9 +64,21 @@ export const AnimatedEndCard: React.FC<AnimatedEndCardProps> = ({ config }) => {
             width={width}
             invertLogo={isDarkBackground(config.background)}
           />
-        )}
-        
-        {config.tagline && (
+        </div>
+      )}
+      
+      {config.tagline && (
+        <div
+          style={{
+            position: 'absolute',
+            top: `${config.tagline.positionY ?? 55}%`,
+            left: 0,
+            right: 0,
+            display: 'flex',
+            justifyContent: 'center',
+            transform: 'translateY(-50%)',
+          }}
+        >
           <TaglineReveal
             text={config.tagline.text}
             style={config.tagline.style}
@@ -77,8 +86,8 @@ export const AnimatedEndCard: React.FC<AnimatedEndCardProps> = ({ config }) => {
             startFrame={Math.round(config.tagline.delay * fps)}
             fps={fps}
           />
-        )}
-      </div>
+        </div>
+      )}
       
       <ContactReveal
         website={config.contact.website}
@@ -88,6 +97,7 @@ export const AnimatedEndCard: React.FC<AnimatedEndCardProps> = ({ config }) => {
         animation={config.contact.animation}
         startFrame={Math.round(config.contact.delay * fps)}
         fps={fps}
+        positionY={config.contact.positionY}
       />
       
       {config.social && config.social.icons.length > 0 && (
@@ -421,7 +431,8 @@ const ContactReveal: React.FC<{
   animation: string;
   startFrame: number;
   fps: number;
-}> = ({ website, phone, email, style, animation, startFrame, fps }) => {
+  positionY?: number;
+}> = ({ website, phone, email, style, animation, startFrame, fps, positionY }) => {
   const frame = useCurrentFrame();
   const localFrame = frame - startFrame;
   
@@ -435,9 +446,10 @@ const ContactReveal: React.FC<{
     <div
       style={{
         position: 'absolute',
-        bottom: '18%',
+        top: positionY ? `${positionY}%` : undefined,
+        bottom: positionY ? undefined : '18%',
         left: '50%',
-        transform: 'translateX(-50%)',
+        transform: positionY ? 'translate(-50%, -50%)' : 'translateX(-50%)',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',

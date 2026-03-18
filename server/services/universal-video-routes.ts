@@ -2186,7 +2186,15 @@ router.patch('/projects/:projectId/render-settings', isAuthenticated, async (req
         contactPhone: endCard.contactPhone ?? existing.contactPhone ?? '',
         contactEmail: endCard.contactEmail ?? existing.contactEmail ?? '',
         ambientEffect: validAmbientEffects.includes(endCard.ambientEffect) ? endCard.ambientEffect : (existing.ambientEffect || 'bokeh'),
+        backgroundUrl: endCard.backgroundUrl !== undefined ? (endCard.backgroundUrl || null) : (existing.backgroundUrl || null),
+        logoPositionY: endCard.logoPositionY != null ? Math.min(90, Math.max(10, endCard.logoPositionY)) : (existing.logoPositionY || 32),
+        taglinePositionY: endCard.taglinePositionY != null ? Math.min(95, Math.max(15, endCard.taglinePositionY)) : (existing.taglinePositionY || 55),
+        websitePositionY: endCard.websitePositionY != null ? Math.min(95, Math.max(20, endCard.websitePositionY)) : (existing.websitePositionY || 75),
       };
+    }
+
+    if (req.body.introBackgroundUrl !== undefined) {
+      (projectData as any).introBackgroundUrl = req.body.introBackgroundUrl || null;
     }
 
     if (nativeVideoAudio !== undefined) {
@@ -2215,9 +2223,10 @@ router.patch('/projects/:projectId/render-settings', isAuthenticated, async (req
         outroEnabled: (projectData as any).outroEnabled ?? true,
         outroTemplate: (projectData as any).outroTemplate || 'classic-glow',
         introBackgroundRandom: (projectData as any).introBackgroundRandom ?? false,
+        introBackgroundUrl: (projectData as any).introBackgroundUrl || null,
         captions: (projectData as any).captionSettings || { enabled: false, style: { preset: 'capcut', position: 'bottom' } },
         nativeVideoAudio: (projectData as any).nativeVideoAudioSettings || { enabled: false, volume: 0.8 },
-        endCard: (projectData as any).endCardSettings || { enabled: true, duration: 5, taglineText: '', logoSize: 25, logoAnimation: 'scale-bounce', taglineAnimation: 'typewriter', contactWebsite: '', contactPhone: '', contactEmail: '', ambientEffect: 'bokeh' },
+        endCard: (projectData as any).endCardSettings || { enabled: true, duration: 5, taglineText: '', logoSize: 25, logoAnimation: 'scale-bounce', taglineAnimation: 'typewriter', contactWebsite: '', contactPhone: '', contactEmail: '', ambientEffect: 'bokeh', backgroundUrl: null, logoPositionY: 32, taglinePositionY: 55, websitePositionY: 75 },
       }
     });
   } catch (error: any) {
@@ -2286,9 +2295,10 @@ router.get('/projects/:projectId/render-settings', isAuthenticated, async (req: 
         outroEnabled: (projectData as any).outroEnabled ?? true,
         outroTemplate: (projectData as any).outroTemplate || 'classic-glow',
         introBackgroundRandom: (projectData as any).introBackgroundRandom ?? false,
+        introBackgroundUrl: (projectData as any).introBackgroundUrl || null,
         captions: (projectData as any).captionSettings || { enabled: false, style: { preset: 'capcut', position: 'bottom' } },
         nativeVideoAudio: (projectData as any).nativeVideoAudioSettings || { enabled: false, volume: 0.8 },
-        endCard: (projectData as any).endCardSettings || { enabled: true, duration: 5, taglineText: '', logoSize: 25, logoAnimation: 'scale-bounce', taglineAnimation: 'typewriter', contactWebsite: '', contactPhone: '', contactEmail: '', ambientEffect: 'bokeh' },
+        endCard: (projectData as any).endCardSettings || { enabled: true, duration: 5, taglineText: '', logoSize: 25, logoAnimation: 'scale-bounce', taglineAnimation: 'typewriter', contactWebsite: '', contactPhone: '', contactEmail: '', ambientEffect: 'bokeh', backgroundUrl: null, logoPositionY: 32, taglinePositionY: 55, websitePositionY: 75 },
       }
     });
   } catch (error: any) {
@@ -3045,16 +3055,20 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
       if (!cachedLogoUrl) {
         console.error('[UniversalVideo] End card logo URL could not be resolved - logo will not appear');
       }
-      // Default to enabled if not explicitly disabled
-      // Check S3 Render Assets (brand/end-cards/) for end card background image
-      const s3EndCard = await s3RenderAssetService.getRandomEndCard();
-      const endCardBgUrl = s3EndCard ? s3EndCard.url : null;
-      if (s3EndCard) {
-        console.log('[UniversalVideo] End card background from S3 Render Assets (brand/end-cards/):', s3EndCard.name);
+      const userSelectedEndCardBg = endCardSettings?.backgroundUrl || null;
+      let endCardBgUrl = userSelectedEndCardBg;
+      if (!endCardBgUrl) {
+        const s3EndCard = await s3RenderAssetService.getRandomEndCard();
+        endCardBgUrl = s3EndCard ? s3EndCard.url : null;
+        if (s3EndCard) {
+          console.log('[UniversalVideo] End card background from S3 (random):', s3EndCard.name);
+        }
+      } else {
+        console.log('[UniversalVideo] End card background from user selection:', userSelectedEndCardBg);
       }
       
       endCardConfig = {
-        enabled: true,  // Phase 18E: Explicit enabled flag
+        enabled: true,
         duration: endCardSettings?.duration || 5,
         background: endCardBgUrl ? {
           type: 'image' as const,
@@ -3073,13 +3087,14 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
         logo: {
           url: cachedLogoUrl,
           size: endCardSettings?.logoSize || 28,
-          position: { x: 50, y: 32 },
+          position: { x: 50, y: endCardSettings?.logoPositionY || 32 },
           animation: (endCardSettings?.logoAnimation || 'scale-bounce') as 'scale-bounce' | 'fade' | 'slide-up' | 'none',
         },
         tagline: {
           text: endCardSettings?.taglineText || effectiveBrand?.tagline || '',
           delay: 0.8,
           animation: (endCardSettings?.taglineAnimation || 'typewriter') as 'typewriter' | 'fade' | 'slide-up',
+          positionY: endCardSettings?.taglinePositionY || 55,
           style: {
             fontSize: 28,
             fontFamily: "'Great Vibes', cursive",
@@ -3092,6 +3107,7 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
           email: endCardSettings?.contactEmail || '',
           delay: 1.8,
           animation: 'stagger' as const,
+          positionY: endCardSettings?.websitePositionY || 75,
           style: {
             fontSize: 22,
             color: '#FFFFFF',
@@ -3437,19 +3453,23 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
     const introEnabled = (projectData as any).introEnabled !== false;
     const introTemplate = (projectData as any).introTemplate || 'classic-glow';
     const introBackgroundRandom = (projectData as any).introBackgroundRandom || false;
+    const userSelectedIntroBackground = (projectData as any).introBackgroundUrl || null;
     
     if (introEnabled) {
-      let introBackgroundUrl: string | null = null;
-      if (introBackgroundRandom) {
+      let introBackgroundUrl: string | null = userSelectedIntroBackground;
+      if (!introBackgroundUrl && introBackgroundRandom) {
         try {
           const introBg = await s3RenderAssetService.getRandomIntroBackground();
           if (introBg) {
             introBackgroundUrl = introBg.url;
-            console.log('[Render] Intro background from S3:', introBg.name);
+            console.log('[Render] Intro background from S3 (random):', introBg.name);
           }
         } catch (e: any) {
           console.warn('[Render] Failed to get intro background:', e.message);
         }
+      }
+      if (userSelectedIntroBackground) {
+        console.log('[Render] Intro background from user selection:', userSelectedIntroBackground);
       }
       
       const brandName = brandWithCachedLogo.name || effectiveBrand?.name || '';

@@ -9,6 +9,8 @@ import { ProviderCatalogSelector } from "@/components/video/provider-catalog-sel
 import { useToast } from "@/hooks/use-toast";
 import { EnhancedSceneEditor } from "@/components/video/enhanced-scene-editor";
 import { SceneOverlayEditor, SceneOverlayItem } from "@/components/video/scene-overlay-editor";
+import { S3BackgroundPicker } from "@/components/video/S3BackgroundPicker";
+import { EndCardPreview } from "@/components/video/EndCardPreview";
 
 const statusDot: Record<string, string> = {
   pending: "bg-gray-500",
@@ -1641,7 +1643,8 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
     outroEnabled: true,
     outroTemplate: "classic-glow",
     introBackgroundRandom: false,
-    endCard: { enabled: true, duration: 5, taglineText: '', logoSize: 25, logoAnimation: 'scale-bounce', taglineAnimation: 'typewriter', contactWebsite: '', contactPhone: '', contactEmail: '', ambientEffect: 'bokeh' },
+    introBackgroundUrl: null as string | null,
+    endCard: { enabled: true, duration: 5, taglineText: '', logoSize: 25, logoAnimation: 'scale-bounce', taglineAnimation: 'typewriter', contactWebsite: '', contactPhone: '', contactEmail: '', ambientEffect: 'bokeh', backgroundUrl: null as string | null, logoPositionY: 32, taglinePositionY: 55, websitePositionY: 75 },
   };
 
   const settings = {
@@ -2147,11 +2150,33 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
                     ))}
                   </div>
                   {settings.introTemplate === 'cinematic' && (
-                    <ToggleSwitch
-                      enabled={settings.introBackgroundRandom ?? false}
-                      onChange={(v) => saveMutation.mutate({ introBackgroundRandom: v })}
-                      label="Random background"
-                    />
+                    <div className="space-y-2">
+                      <ToggleSwitch
+                        enabled={settings.introBackgroundRandom ?? false}
+                        onChange={(v) => {
+                          if (v && settings.introBackgroundUrl) {
+                            saveMutation.mutate({ introBackgroundRandom: v, introBackgroundUrl: null });
+                          } else {
+                            saveMutation.mutate({ introBackgroundRandom: v });
+                          }
+                        }}
+                        label="Random background"
+                      />
+                      {!settings.introBackgroundRandom && (
+                        <S3BackgroundPicker
+                          category="intro-backgrounds"
+                          selectedUrl={settings.introBackgroundUrl}
+                          onSelect={(url) => saveMutation.mutate({ introBackgroundUrl: url })}
+                          accentColor="rgb(168 85 247)"
+                          label="Choose Background"
+                        />
+                      )}
+                      {settings.introBackgroundUrl && !settings.introBackgroundRandom && (
+                        <div className="rounded-lg overflow-hidden border" style={{ borderColor: 'var(--border-subtle)', aspectRatio: '16/9', maxHeight: 100 }}>
+                          <img src={settings.introBackgroundUrl} alt="Intro background" className="w-full h-full object-cover" />
+                        </div>
+                      )}
+                    </div>
                   )}
                 </>
               )}
@@ -2277,6 +2302,77 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
                           <option value="fade">Fade In</option>
                           <option value="slide-up">Slide Up</option>
                         </select>
+                      </div>
+                    </div>
+
+                    <div className="border-t pt-3 space-y-2.5" style={{ borderColor: "var(--border-subtle)" }}>
+                      <span className="text-xs font-medium block" style={{ color: "var(--text-secondary)" }}>Background &amp; Layout</span>
+
+                      <S3BackgroundPicker
+                        category="end-cards"
+                        selectedUrl={settings.endCard?.backgroundUrl}
+                        onSelect={(url) => saveMutation.mutate({ endCard: { ...settings.endCard, backgroundUrl: url } })}
+                        accentColor="rgb(99 102 241)"
+                        label="End Card Background"
+                      />
+
+                      <EndCardPreview
+                        backgroundUrl={settings.endCard?.backgroundUrl}
+                        logoUrl={null}
+                        logoSize={settings.endCard?.logoSize || 25}
+                        logoPositionY={settings.endCard?.logoPositionY || 32}
+                        taglineText={settings.endCard?.taglineText || ''}
+                        taglinePositionY={settings.endCard?.taglinePositionY || 55}
+                        websiteText={settings.endCard?.contactWebsite || ''}
+                        websitePositionY={settings.endCard?.websitePositionY || 75}
+                      />
+
+                      <div className="space-y-1.5">
+                        <div>
+                          <label className="text-[10px] block mb-0.5" style={{ color: "var(--text-muted)" }}>Logo Position (Y)</label>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="range"
+                              min="10"
+                              max="90"
+                              value={settings.endCard?.logoPositionY || 32}
+                              onChange={(e) => saveMutation.mutate({ endCard: { ...settings.endCard, logoPositionY: parseInt(e.target.value) } })}
+                              className="flex-1 h-1.5 rounded-full appearance-none cursor-pointer"
+                              style={{ background: `linear-gradient(to right, rgb(99 102 241) ${((settings.endCard?.logoPositionY || 32) - 10) / 0.8}%, var(--border-subtle) ${((settings.endCard?.logoPositionY || 32) - 10) / 0.8}%)` }}
+                            />
+                            <span className="text-[10px] w-6 text-right" style={{ color: "var(--text-muted)" }}>{settings.endCard?.logoPositionY || 32}%</span>
+                          </div>
+                        </div>
+                        <div>
+                          <label className="text-[10px] block mb-0.5" style={{ color: "var(--text-muted)" }}>Tagline Position (Y)</label>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="range"
+                              min="15"
+                              max="95"
+                              value={settings.endCard?.taglinePositionY || 55}
+                              onChange={(e) => saveMutation.mutate({ endCard: { ...settings.endCard, taglinePositionY: parseInt(e.target.value) } })}
+                              className="flex-1 h-1.5 rounded-full appearance-none cursor-pointer"
+                              style={{ background: `linear-gradient(to right, rgb(99 102 241) ${((settings.endCard?.taglinePositionY || 55) - 15) / 0.8}%, var(--border-subtle) ${((settings.endCard?.taglinePositionY || 55) - 15) / 0.8}%)` }}
+                            />
+                            <span className="text-[10px] w-6 text-right" style={{ color: "var(--text-muted)" }}>{settings.endCard?.taglinePositionY || 55}%</span>
+                          </div>
+                        </div>
+                        <div>
+                          <label className="text-[10px] block mb-0.5" style={{ color: "var(--text-muted)" }}>Website Position (Y)</label>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="range"
+                              min="20"
+                              max="95"
+                              value={settings.endCard?.websitePositionY || 75}
+                              onChange={(e) => saveMutation.mutate({ endCard: { ...settings.endCard, websitePositionY: parseInt(e.target.value) } })}
+                              className="flex-1 h-1.5 rounded-full appearance-none cursor-pointer"
+                              style={{ background: `linear-gradient(to right, rgb(99 102 241) ${((settings.endCard?.websitePositionY || 75) - 20) / 0.75}%, var(--border-subtle) ${((settings.endCard?.websitePositionY || 75) - 20) / 0.75}%)` }}
+                            />
+                            <span className="text-[10px] w-6 text-right" style={{ color: "var(--text-muted)" }}>{settings.endCard?.websitePositionY || 75}%</span>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
