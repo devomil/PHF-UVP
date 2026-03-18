@@ -2732,10 +2732,10 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
 
   const generateVisualMutation = useMutation({
     mutationFn: async () => {
-      const body: any = {
+      const body: Record<string, unknown> = {
         prompt: promptText || undefined,
         provider: selectedProvider,
-        negativePrompt: negativePrompt || undefined,
+        negativePrompt: negativePrompt,
         aspectRatio: selectedAspectRatio || undefined,
       };
       if (imageFidelity !== null) {

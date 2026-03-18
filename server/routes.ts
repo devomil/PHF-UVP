@@ -719,7 +719,7 @@ export async function registerRoutes(app: Express) {
       const originalSceneType = originalJob?.sceneType || (project.mediaMode === "image" ? "image" : "video");
       const originalI2vSettings = (originalJob?.i2vSettings as any) || {};
 
-      const finalNegativePrompt = newNegativePrompt !== undefined ? (newNegativePrompt || undefined) : (originalJob?.negativePrompt || undefined);
+      const finalNegativePrompt = newNegativePrompt !== undefined ? (newNegativePrompt || null) : (originalJob?.negativePrompt || undefined);
       const finalImageFidelity = newImageFidelity !== undefined ? newImageFidelity : originalI2vSettings.imageControlStrength;
       const finalArtPresetId = newArtPresetId !== undefined ? (newArtPresetId || undefined) : originalI2vSettings.artPresetId;
 
