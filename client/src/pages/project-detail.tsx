@@ -2845,6 +2845,54 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
 
   const outputType: "video" | "image" = project?.mediaMode === "image" ? "image" : "video";
 
+  const previewSizing = (() => {
+    const ar = selectedAspectRatio || "16:9";
+    const aspectRatio = ar.replace(":", "/");
+    const [w, h] = ar.split(":").map(Number);
+    const pw = ar === "9:16" ? 1080 : ar === "1:1" ? 1024 : ar === "4:3" ? 1440 : 1920;
+    const ph = ar === "9:16" ? 1920 : ar === "1:1" ? 1024 : ar === "4:3" ? 1080 : 1080;
+    const label = ar === "9:16" ? "9:16 · Reels/TikTok" : ar === "1:1" ? "1:1 · Square" : ar === "4:3" ? "4:3 · Standard" : "16:9 · YouTube";
+    const isVertical = ar === "9:16";
+    const isSquare = ar === "1:1";
+    const containerStyle: Record<string, string> = {
+      aspectRatio,
+      ...(isVertical
+        ? { maxHeight: "70vh", width: `min(100%, calc(70vh * ${w} / ${h}))`, margin: "0 auto" }
+        : isSquare
+        ? { maxWidth: "60%", margin: "0 auto" }
+        : { width: "100%" }),
+    };
+    return { aspectRatio, pw, ph, label, isVertical, isSquare, containerStyle };
+  })();
+
+  const overlaySection = assets.visual?.status === "completed" && assets.visual?.url ? (
+    <div className="border rounded-xl p-4" style={{ borderColor: "var(--border-subtle)", backgroundColor: "rgba(0,0,0,0.15)" }}>
+      <div className="flex items-center gap-2 mb-3">
+        <ImagePlus className="w-5 h-5 text-cyan-400" />
+        <h3 className="font-medium text-sm" style={{ color: "var(--text-primary)" }}>Scene Overlays</h3>
+        <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
+          {overlayItems.length} overlay{overlayItems.length !== 1 ? "s" : ""}
+        </span>
+      </div>
+      <div style={{
+        ...(previewSizing.isVertical
+          ? { width: `min(100%, calc(60vh * 9 / 16))`, margin: "0 auto" }
+          : previewSizing.isSquare
+          ? { maxWidth: "60%", margin: "0 auto" }
+          : { width: "100%" }),
+      }}>
+        <SceneOverlayEditor
+          overlays={overlayItems}
+          onChange={handleOverlayChange}
+          previewWidth={previewSizing.pw}
+          previewHeight={previewSizing.ph}
+          backgroundUrl={assets.visual!.url}
+          backgroundType={project.mediaMode === "image" ? "image" : "video"}
+        />
+      </div>
+    </div>
+  ) : null;
+
   const moodOptions = [
     { value: "auto", label: "Auto" },
     { value: "uplifting", label: "Uplifting" },
@@ -2922,13 +2970,27 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
               {assetStatusBadge(assets.visual?.status)}
             </div>
 
+            <div className={selectedAspectRatio === "9:16" ? "flex gap-4 items-start" : ""}>
+            <div className={selectedAspectRatio === "9:16" ? "w-[35%] flex-shrink-0" : ""}>
             {assets.visual?.url && (
-              <div className="mb-3 rounded-lg overflow-hidden border bg-black flex justify-center" style={{ borderColor: "var(--border-subtle)", maxHeight: "500px" }}>
+              <div
+                className="mb-3 rounded-lg overflow-hidden border bg-black flex justify-center relative"
+                style={{
+                  borderColor: "var(--border-subtle)",
+                  ...previewSizing.containerStyle,
+                }}
+              >
                 {project.mediaMode === "image" ? (
-                  <img src={assets.visual.url} alt="Generated visual" className="object-contain" style={{ aspectRatio: (project.outputFormat?.aspectRatio || "16/9").replace(":", "/"), maxHeight: "500px", maxWidth: "100%" }} />
+                  <img src={assets.visual.url} alt="Generated visual" className="w-full h-full object-contain" />
                 ) : (
-                  <video src={assets.visual.url} controls className="object-contain" style={{ aspectRatio: (project.outputFormat?.aspectRatio || "16/9").replace(":", "/"), maxHeight: "500px", maxWidth: "100%" }} />
+                  <video src={assets.visual.url} controls className="w-full h-full object-contain" />
                 )}
+                <span
+                  className="absolute top-2 left-2 text-[10px] font-medium px-2 py-0.5 rounded-full backdrop-blur-sm"
+                  style={{ backgroundColor: "rgba(0,0,0,0.6)", color: "rgba(255,255,255,0.8)", border: "1px solid rgba(255,255,255,0.15)" }}
+                >
+                  {previewSizing.label}
+                </span>
               </div>
             )}
 
@@ -2939,7 +3001,7 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
             )}
 
             {assets.visual?.provider && assets.visual.status === "completed" && (
-              <div className="flex gap-3 mb-3 text-xs" style={{ color: "var(--text-muted)" }}>
+              <div className="flex flex-wrap gap-3 mb-3 text-xs" style={{ color: "var(--text-muted)" }}>
                 <span>Provider: <strong style={{ color: "var(--text-secondary)" }}>{assets.visual.provider}</strong></span>
                 {assets.visual.generationTimeMs && (
                   <span>Time: <strong style={{ color: "var(--text-secondary)" }}>{(assets.visual.generationTimeMs / 1000).toFixed(1)}s</strong></span>
@@ -2949,7 +3011,9 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
                 )}
               </div>
             )}
+            </div>
 
+            <div className={selectedAspectRatio === "9:16" ? "flex-1 min-w-0 space-y-3" : ""}>
             {(() => {
               const genInfo = assetsQuery.data?.generationInfo;
               if (!genInfo) return null;
@@ -3157,46 +3221,11 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
                 </Button>
               </div>
             </div>
+            </div>
+            </div>
           </div>
 
-          {assets.visual?.status === "completed" && assets.visual?.url && (
-            <div className="border rounded-xl p-4" style={{ borderColor: "var(--border-subtle)", backgroundColor: "rgba(0,0,0,0.15)" }}>
-              <div className="flex items-center gap-2 mb-3">
-                <ImagePlus className="w-5 h-5 text-cyan-400" />
-                <h3 className="font-medium text-sm" style={{ color: "var(--text-primary)" }}>Scene Overlays</h3>
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
-                  {overlayItems.length} overlay{overlayItems.length !== 1 ? "s" : ""}
-                </span>
-              </div>
-              <div style={{ maxHeight: "500px", maxWidth: (() => {
-                const ar = (project.outputFormat?.aspectRatio || "16:9");
-                if (ar === "9:16") return "281px";
-                if (ar === "1:1") return "500px";
-                return "100%";
-              })(), margin: "0 auto" }}>
-                <SceneOverlayEditor
-                  overlays={overlayItems}
-                  onChange={handleOverlayChange}
-                  previewWidth={(() => {
-                    const ar = (project.outputFormat?.aspectRatio || "16:9");
-                    if (ar === "9:16") return 1080;
-                    if (ar === "1:1") return 1024;
-                    if (ar === "4:3") return 1440;
-                    return 1920;
-                  })()}
-                  previewHeight={(() => {
-                    const ar = (project.outputFormat?.aspectRatio || "16:9");
-                    if (ar === "9:16") return 1920;
-                    if (ar === "1:1") return 1024;
-                    if (ar === "4:3") return 1080;
-                    return 1080;
-                  })()}
-                  backgroundUrl={assets.visual.url}
-                  backgroundType={project.mediaMode === "image" ? "image" : "video"}
-                />
-              </div>
-            </div>
-          )}
+          {overlaySection}
 
           {isVideoMode && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
