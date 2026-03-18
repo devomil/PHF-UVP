@@ -648,7 +648,7 @@ export async function registerRoutes(app: Express) {
       }
       const { projectId } = req.params;
       const userId = (req.user as any).id;
-      const { prompt: newPrompt, provider: newProvider, duration: newDuration, aspectRatio: newAspectRatio, negativePrompt: newNegativePrompt, imageFidelity: newImageFidelity, artPresetId: newArtPresetId } = req.body || {};
+      const { prompt: newPrompt, provider: newProvider, duration: newDuration, aspectRatio: newAspectRatio, negativePrompt: newNegativePrompt, imageFidelity: newImageFidelity, artPresetId: newArtPresetId, sourceImageUrl: newSourceImageUrl, removeSourceImage } = req.body || {};
 
       const [project] = await db
         .select()
@@ -716,8 +716,14 @@ export async function registerRoutes(app: Express) {
         .orderBy(desc(videoGenerationJobs.createdAt))
         .limit(1);
       const originalJob = previousJobs[0];
-      const originalSceneType = originalJob?.sceneType || (project.mediaMode === "image" ? "image" : "video");
+      let finalSceneType = originalJob?.sceneType || (project.mediaMode === "image" ? "image" : "video");
       const originalI2vSettings = (originalJob?.i2vSettings as any) || {};
+      const finalSourceImage = removeSourceImage ? undefined : (newSourceImageUrl || originalJob?.sourceImageUrl || undefined);
+      if (removeSourceImage && finalSceneType === "i2v") {
+        finalSceneType = project.mediaMode === "image" ? "image" : "video";
+      } else if (newSourceImageUrl && !originalJob?.sourceImageUrl) {
+        finalSceneType = "i2v";
+      }
 
       const finalNegativePrompt = newNegativePrompt !== undefined ? (newNegativePrompt || null) : (originalJob?.negativePrompt || undefined);
       const finalImageFidelity = newImageFidelity !== undefined ? newImageFidelity : originalI2vSettings.imageControlStrength;
@@ -760,8 +766,8 @@ export async function registerRoutes(app: Express) {
         negativePrompt: finalNegativePrompt,
         duration: project.mediaMode === "video" ? finalDuration : undefined,
         aspectRatio: finalAspectRatio,
-        sceneType: originalSceneType,
-        sourceImageUrl: originalJob?.sourceImageUrl || undefined,
+        sceneType: finalSceneType,
+        sourceImageUrl: finalSourceImage,
         i2vSettings: {
           saveToLibrary: true,
           outputType: project.mediaMode || "video",

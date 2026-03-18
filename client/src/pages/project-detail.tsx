@@ -2667,6 +2667,8 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
   const [editNegativePrompt, setEditNegativePrompt] = useState(false);
   const [imageFidelity, setImageFidelity] = useState<number | null>(null);
   const [artPresetId, setArtPresetId] = useState("");
+  const [overrideSourceImage, setOverrideSourceImage] = useState<string | null | undefined>(undefined);
+  const [uploadingSourceImage, setUploadingSourceImage] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [selectedVoiceId, setSelectedVoiceId] = useState("21m00Tcm4TlvDq8ikWAM");
   const [voiceFilter, setVoiceFilter] = useState<"all" | "male" | "female">("all");
@@ -2745,6 +2747,11 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
       if (artPresetId) {
         body.artPresetId = artPresetId;
       }
+      if (overrideSourceImage === null) {
+        body.removeSourceImage = true;
+      } else if (overrideSourceImage) {
+        body.sourceImageUrl = overrideSourceImage;
+      }
       const res = await fetch(`/api/projects/${projectId}/quick-create/generate-visual`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -2756,6 +2763,7 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
     },
     onSuccess: () => {
       setVisualGenerating(true);
+      setOverrideSourceImage(undefined);
       queryClient.invalidateQueries({ queryKey: ["quick-create-assets", projectId] });
       queryClient.invalidateQueries({ queryKey: ["project", projectId] });
       toast({ title: "Visual Generation Started", description: "Your visual asset is being generated." });
@@ -3017,31 +3025,83 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
             {(() => {
               const genInfo = assetsQuery.data?.generationInfo;
               if (!genInfo) return null;
-              const hasRefMedia = genInfo.sourceImageUrl || genInfo.referenceVideoUrl;
+              const effectiveSourceImage = overrideSourceImage === null ? null : (overrideSourceImage || genInfo.sourceImageUrl || null);
+              const isRemoved = overrideSourceImage === null;
+              const hasRefMedia = effectiveSourceImage || genInfo.referenceVideoUrl;
+              const handleSourceImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                setUploadingSourceImage(true);
+                try {
+                  const formData = new FormData();
+                  formData.append("file", file);
+                  const uploadRes = await fetch("/api/uploads", { method: "POST", credentials: "include", body: formData });
+                  if (!uploadRes.ok) throw new Error("Upload failed");
+                  const uploadData = await uploadRes.json();
+                  setOverrideSourceImage(uploadData.url);
+                  toast({ title: "Reference Image Updated", description: "New reference image set. Click Regenerate to use it." });
+                } catch (err: unknown) {
+                  const msg = err instanceof Error ? err.message : "Upload failed";
+                  toast({ title: "Upload Error", description: msg, variant: "destructive" });
+                }
+                setUploadingSourceImage(false);
+                e.target.value = "";
+              };
               return (
                 <div className="mb-3 border rounded-lg p-3 space-y-3" style={{ borderColor: "var(--border-subtle)", backgroundColor: "rgba(0,0,0,0.2)" }}>
-                  {hasRefMedia && (
-                    <>
-                      <label className="text-xs font-medium block" style={{ color: "var(--text-muted)" }}>
-                        {genInfo.sourceImageUrl ? "Reference Image" : "Reference Video"}
-                      </label>
-                      <div className="flex items-start gap-3">
-                        {genInfo.sourceImageUrl && (
-                          <img
-                            src={genInfo.sourceImageUrl}
-                            alt="Reference"
-                            className="w-16 h-16 object-cover rounded-lg border flex-shrink-0"
-                            style={{ borderColor: "var(--border-medium)" }}
-                          />
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-medium block" style={{ color: "var(--text-muted)" }}>
+                      Reference Image
+                    </label>
+                    <div className="flex items-center gap-1.5">
+                      <label className="text-[10px] text-purple-400 hover:text-purple-300 cursor-pointer flex items-center gap-1">
+                        {uploadingSourceImage ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : (
+                          <Upload className="w-3 h-3" />
                         )}
-                        {genInfo.referenceVideoUrl && (
-                          <div className="flex items-center gap-2 text-xs" style={{ color: "var(--text-secondary)" }}>
-                            <Film className="w-4 h-4 flex-shrink-0" />
-                            <span className="truncate">{genInfo.referenceVideoUrl.split('/').pop()}</span>
-                          </div>
+                        {effectiveSourceImage ? "Replace" : "Add"}
+                        <input type="file" accept="image/*" className="hidden" onChange={handleSourceImageUpload} disabled={uploadingSourceImage} />
+                      </label>
+                      {effectiveSourceImage && (
+                        <button
+                          className="text-[10px] text-red-400 hover:text-red-300 flex items-center gap-0.5"
+                          onClick={() => setOverrideSourceImage(null)}
+                        >
+                          <X className="w-3 h-3" />
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  {effectiveSourceImage && (
+                    <div className="flex items-start gap-3">
+                      <div className="relative group">
+                        <img
+                          src={effectiveSourceImage}
+                          alt="Reference"
+                          className="w-16 h-16 object-cover rounded-lg border flex-shrink-0"
+                          style={{ borderColor: overrideSourceImage ? "rgb(139, 92, 246)" : "var(--border-medium)" }}
+                        />
+                        {overrideSourceImage && overrideSourceImage !== null && (
+                          <span className="absolute -top-1 -right-1 bg-purple-600 text-white text-[8px] px-1 rounded">New</span>
                         )}
                       </div>
-                    </>
+                      {isRemoved && (
+                        <p className="text-xs italic" style={{ color: "var(--text-muted)" }}>Image removed — will generate text-to-video</p>
+                      )}
+                    </div>
+                  )}
+                  {!effectiveSourceImage && (
+                    <p className="text-xs italic" style={{ color: "var(--text-muted)" }}>
+                      {isRemoved ? "Image removed — will generate text-to-video on next run" : "No reference image set"}
+                    </p>
+                  )}
+                  {genInfo.referenceVideoUrl && (
+                    <div className="flex items-center gap-2 text-xs" style={{ color: "var(--text-secondary)" }}>
+                      <Film className="w-4 h-4 flex-shrink-0" />
+                      <span className="truncate">{genInfo.referenceVideoUrl.split('/').pop()}</span>
+                    </div>
                   )}
                   {imageFidelity != null && (
                     <div>
