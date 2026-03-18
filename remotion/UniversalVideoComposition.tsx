@@ -2169,12 +2169,24 @@ export const UniversalVideoComposition: React.FC<UniversalVideoProps> = ({
             );
           });
         }
+        const fullTrackCaptionScene = scenes.find(s => s.captions?.enabled && s.captions?.words?.length > 0);
         return (
-          <SafeAudio 
-            src={voiceoverUrl} 
-            volume={1.0} 
-            label="Voiceover"
-          />
+          <>
+            <SafeAudio 
+              src={voiceoverUrl} 
+              volume={1.0} 
+              label="Voiceover"
+            />
+            {fullTrackCaptionScene?.captions && (
+              <Sequence from={sceneStartFrames[scenes.indexOf(fullTrackCaptionScene)]} durationInFrames={Math.ceil((fullTrackCaptionScene.duration || 5) * fps)}>
+                <SyncedCaptions
+                  words={fullTrackCaptionScene.captions.words}
+                  style={captionStyle || fullTrackCaptionScene.captions.style || { preset: 'capcut' }}
+                  sceneStartFrame={0}
+                />
+              </Sequence>
+            )}
+          </>
         );
       })()}
 

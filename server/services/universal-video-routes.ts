@@ -3369,6 +3369,35 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
       console.log(`[UniversalVideo] Captions enabled with style: ${captionStyle.preset}`);
     }
 
+    const isQuickCreateProject = (projectData as any).outputFormat?.platform === 'quick-create';
+    if (isQuickCreateProject && !hasPerSceneVoiceover && captionStyle) {
+      const qcVoiceover = (projectData as any).assets?.quickCreate?.voiceover;
+      const narrationScript = qcVoiceover?.narrationText || '';
+      const voiceoverDuration = qcVoiceover?.duration || 0;
+
+      if (narrationScript.trim() && voiceoverDuration > 0) {
+        const words = narrationScript.trim().split(/\s+/);
+        const wordDuration = voiceoverDuration / words.length;
+        const wordTimings = words.map((word: string, idx: number) => ({
+          word: word,
+          start: +(idx * wordDuration).toFixed(3),
+          end: +((idx + 1) * wordDuration).toFixed(3),
+        }));
+
+        for (const scene of preparedProject.scenes as any[]) {
+          if (scene.id === 'intro-scene-auto') continue;
+          scene.captions = {
+            words: wordTimings,
+            style: captionStyle,
+            enabled: true,
+          };
+        }
+        console.log(`[UniversalVideo] Quick Create captions enabled: ${words.length} words over ${voiceoverDuration}s (style: ${captionStyle.preset})`);
+      } else {
+        console.log('[UniversalVideo] Quick Create captions skipped: no narration text or voiceover duration');
+      }
+    }
+
     // Inject intro scene if enabled
     const introEnabled = (projectData as any).introEnabled !== false;
     const introTemplate = (projectData as any).introTemplate || 'classic-glow';
