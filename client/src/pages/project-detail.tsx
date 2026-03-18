@@ -2719,13 +2719,13 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
   }, [assetsQuery.data]);
 
   useEffect(() => {
-    if (visualGenerating && assetsQuery.data?.assets) {
-      const vs = assetsQuery.data.assets.visual?.status;
-      if (vs === "generating" || vs === "processing" || vs === "queued" || vs === "completed" || vs === "failed") {
+    if (visualGenerating && assetsQuery.data) {
+      const vs = assetsQuery.data.visual?.status;
+      if (vs === "completed" || vs === "failed") {
         setVisualGenerating(false);
       }
     }
-  }, [assetsQuery.data?.assets, visualGenerating]);
+  }, [assetsQuery.data, visualGenerating]);
 
   const isI2V = assetsQuery.data?.generationInfo?.sceneType === "i2v";
   const allPresets = getAllVisualArtPresets();
