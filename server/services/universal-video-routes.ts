@@ -3659,6 +3659,15 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
       }
     });
     
+    let freshServeUrl: string | undefined;
+    try {
+      console.log('[UniversalVideo] Auto-redeploying Remotion site to ensure Lambda bundle is up to date...');
+      freshServeUrl = await remotionLambdaService.redeploySite();
+      console.log(`[UniversalVideo] Site redeployed successfully: ${freshServeUrl}`);
+    } catch (redeployError: any) {
+      console.warn(`[UniversalVideo] Site redeploy failed (using existing bundle): ${redeployError.message}`);
+    }
+
     const totalDuration = calculateEffectiveDuration(preparedProject.scenes, renderTransitions);
     const useChunkedRendering = chunkedRenderService.shouldUseChunkedRendering(preparedProject.scenes, CHUNK_THRESHOLD_SEC, renderTransitions);
     
@@ -3720,6 +3729,7 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
         const renderResult = await remotionLambdaService.startRender({
           compositionId,
           inputProps,
+          serveUrlOverride: freshServeUrl,
         });
         
         renderBuckets.set(renderResult.renderId, renderResult.bucketName);

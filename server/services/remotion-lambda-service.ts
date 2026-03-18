@@ -386,12 +386,14 @@ class RemotionLambdaService {
     inputProps: Record<string, any>;
     codec?: "h264" | "h265" | "vp8" | "vp9";
     imageFormat?: "jpeg" | "png";
+    serveUrlOverride?: string;
   }): Promise<RenderResult> {
     this.getAwsCredentials();
 
+    const effectiveServeUrl = params.serveUrlOverride || this.serveUrl;
     console.log(`[Remotion Lambda] Starting render for ${params.compositionId}...`);
     console.log(`[Remotion Lambda] Function: ${this.functionName}`);
-    console.log(`[Remotion Lambda] ServeUrl: ${this.serveUrl}`);
+    console.log(`[Remotion Lambda] ServeUrl: ${effectiveServeUrl}`);
     console.log(`[Remotion Lambda] Input props:`, JSON.stringify(params.inputProps).substring(0, 500));
     
     console.log('[DEBUG] Scenes being rendered:', JSON.stringify(params.inputProps.scenes?.map((s: any) => ({
@@ -419,7 +421,7 @@ class RemotionLambdaService {
         const result = await rl.renderMediaOnLambda({
           region: this.region,
           functionName: this.functionName,
-          serveUrl: this.serveUrl,
+          serveUrl: effectiveServeUrl,
           composition: params.compositionId,
           inputProps: params.inputProps,
           codec: params.codec || "h264",

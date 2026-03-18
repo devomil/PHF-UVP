@@ -236,7 +236,8 @@ class ChunkedRenderService {
   async startChunkRender(
     chunk: ChunkConfig,
     inputProps: Record<string, any>,
-    compositionId: string
+    compositionId: string,
+    serveUrlOverride?: string
   ): Promise<{ renderId: string; bucketName: string }> {
     console.log(`[ChunkedRender] Starting Lambda render for chunk ${chunk.chunkIndex} with ${chunk.scenes.length} scenes...`);
 
@@ -245,6 +246,7 @@ class ChunkedRenderService {
     const result = await remotionLambdaService.startRender({
       compositionId,
       inputProps: chunkInputProps,
+      serveUrlOverride,
     });
 
     console.log(`[ChunkedRender] Chunk ${chunk.chunkIndex} render started: renderId=${result.renderId}`);

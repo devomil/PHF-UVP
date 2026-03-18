@@ -2178,7 +2178,7 @@ export const UniversalVideoComposition: React.FC<UniversalVideoProps> = ({
               label="Voiceover"
             />
             {fullTrackCaptionScene?.captions && (
-              <Sequence from={sceneStartFrames[scenes.indexOf(fullTrackCaptionScene)]} durationInFrames={Math.ceil((fullTrackCaptionScene.duration || 5) * fps)}>
+              <Sequence from={0} durationInFrames={durationInFrames}>
                 <SyncedCaptions
                   words={fullTrackCaptionScene.captions.words}
                   style={captionStyle || fullTrackCaptionScene.captions.style || { preset: 'capcut' }}
