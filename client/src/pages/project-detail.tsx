@@ -2690,7 +2690,8 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
       const anyGenerating = [data.visual?.status, data.voiceover?.status, data.music?.status].some(
         (s) => s === "generating" || s === "queued" || s === "processing"
       );
-      return anyGenerating ? 3000 : false;
+      if (anyGenerating || visualGenerating) return 3000;
+      return false;
     },
   });
 
