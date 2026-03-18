@@ -2669,7 +2669,14 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
   const [artPresetId, setArtPresetId] = useState("");
   const [overrideSourceImage, setOverrideSourceImage] = useState<string | null | undefined>(undefined);
   const [uploadingSourceImage, setUploadingSourceImage] = useState(false);
-  const sourceImageInputRef = useRef<HTMLInputElement>(null);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [selectedVoiceId, setSelectedVoiceId] = useState("21m00Tcm4TlvDq8ikWAM");
+  const [voiceFilter, setVoiceFilter] = useState<"all" | "male" | "female">("all");
+  const [musicMood, setMusicMood] = useState("auto");
+  const [musicGenerator, setMusicGenerator] = useState("auto");
+  const [overlayItems, setOverlayItems] = useState<SceneOverlayItem[]>([]);
+  const [overlaysLoaded, setOverlaysLoaded] = useState(false);
+  const { toast } = useToast();
   const triggerSourceImageUpload = useCallback(() => {
     const input = document.createElement("input");
     input.type = "file";
@@ -2694,14 +2701,6 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
     };
     input.click();
   }, [toast]);
-  const [showAdvanced, setShowAdvanced] = useState(false);
-  const [selectedVoiceId, setSelectedVoiceId] = useState("21m00Tcm4TlvDq8ikWAM");
-  const [voiceFilter, setVoiceFilter] = useState<"all" | "male" | "female">("all");
-  const [musicMood, setMusicMood] = useState("auto");
-  const [musicGenerator, setMusicGenerator] = useState("auto");
-  const [overlayItems, setOverlayItems] = useState<SceneOverlayItem[]>([]);
-  const [overlaysLoaded, setOverlaysLoaded] = useState(false);
-  const { toast } = useToast();
   const queryClient = useQueryClient();
 
   const assetsQuery = useQuery({
