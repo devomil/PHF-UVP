@@ -2670,25 +2670,30 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
   const [overrideSourceImage, setOverrideSourceImage] = useState<string | null | undefined>(undefined);
   const [uploadingSourceImage, setUploadingSourceImage] = useState(false);
   const sourceImageInputRef = useRef<HTMLInputElement>(null);
-  const handleSourceImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setUploadingSourceImage(true);
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      const uploadRes = await fetch("/api/uploads", { method: "POST", credentials: "include", body: formData });
-      if (!uploadRes.ok) throw new Error("Upload failed");
-      const uploadData = await uploadRes.json();
-      setOverrideSourceImage(uploadData.url);
-      toast({ title: "Reference Image Updated", description: "New reference image set. Click Regenerate to use it." });
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Upload failed";
-      toast({ title: "Upload Error", description: msg, variant: "destructive" });
-    }
-    setUploadingSourceImage(false);
-    if (e.target) e.target.value = "";
-  };
+  const triggerSourceImageUpload = useCallback(() => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/jpeg,image/png,image/webp";
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      setUploadingSourceImage(true);
+      try {
+        const formData = new FormData();
+        formData.append("file", file);
+        const uploadRes = await fetch("/api/uploads", { method: "POST", credentials: "include", body: formData });
+        if (!uploadRes.ok) throw new Error("Upload failed");
+        const uploadData = await uploadRes.json();
+        setOverrideSourceImage(uploadData.url);
+        toast({ title: "Reference Image Updated", description: "New reference image set. Click Regenerate to use it." });
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : "Upload failed";
+        toast({ title: "Upload Error", description: msg, variant: "destructive" });
+      }
+      setUploadingSourceImage(false);
+    };
+    input.click();
+  }, [toast]);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [selectedVoiceId, setSelectedVoiceId] = useState("21m00Tcm4TlvDq8ikWAM");
   const [voiceFilter, setVoiceFilter] = useState<"all" | "male" | "female">("all");
@@ -2952,7 +2957,6 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
         </div>
         {expanded ? <ChevronUp className="w-4 h-4" style={{ color: "var(--text-muted)" }} /> : <ChevronDown className="w-4 h-4" style={{ color: "var(--text-muted)" }} />}
       </button>
-      <input ref={sourceImageInputRef} type="file" accept="image/jpeg,image/png,image/webp" style={{ position: "absolute", width: 0, height: 0, overflow: "hidden", opacity: 0 }} onChange={handleSourceImageUpload} />
 
       {expanded && (
         <div className="px-5 pb-5 space-y-4">
@@ -3058,7 +3062,7 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
                     <div className="flex items-center gap-1.5">
                       <button
                         className="text-[10px] text-purple-400 hover:text-purple-300 cursor-pointer flex items-center gap-1"
-                        onClick={() => sourceImageInputRef.current?.click()}
+                        onClick={triggerSourceImageUpload}
                         disabled={uploadingSourceImage}
                       >
                         {uploadingSourceImage ? (
