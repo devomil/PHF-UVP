@@ -1,0 +1,16 @@
+Problem: The video preview container in Asset Creation is a fixed landscape/widescreen container regardless of the selected aspect ratio. When a 9:16 or 1:1 asset is generated, the video appears tiny inside a black letterbox, making overlay placement inaccurate and difficult.
+Fix: Make the video preview container dynamically resize to match the selected aspect ratio. Specific requirements:
+
+Dynamic container sizing — The video preview container should use a CSS aspect-ratio property that updates when the user selects 16:9, 9:16, or 1:1. The container should always fill the available width and let height be derived from the ratio — never the reverse.
+Maximum height constraint for 9:16 — For vertical video, cap the container height at 70vh so it doesn't push everything off screen. Let the width shrink proportionally. Center it horizontally within the panel.
+Overlay editor canvas must match the container — The overlay positioning canvas should be the exact same dimensions as the displayed video container, so a logo dragged to position (x:10%, y:85%) maps accurately to the actual video frame regardless of ratio.
+Two-column layout for 9:16 — When the aspect ratio is 9:16, switch the Asset Creation panel to a two-column layout: video preview on the left (narrow), controls and overlay editor on the right. This prevents the vertical video from dominating the entire viewport.
+Aspect ratio label on the container — Show a small pill label on the video container (e.g. "9:16 · Reels/TikTok") so users always know what format they're previewing.
+
+
+
+Suggested Layout Per Ratio
+RatioLayout Behavior16:9Full-width container, height derived. Controls below. Current behavior is fine.9:16Two-column: narrow video left (~35% width), controls/overlays right (~65%). Max height 70vh.1:1Centered square container (~60% of panel width). Controls below or in side panel.
+
+Overlay Editor Specifically
+The overlay drop zone needs to be a percentage-based coordinate system tied to the video container dimensions, not fixed pixels. This way a logo placed at {x: 5%, y: 90%} (bottom-left corner) renders correctly whether the final video is 1920x1080 or 1080x1920. This should already be true if the existing overlay system uses percentage coordinates — but the visual editor canvas needs to actually reflect the correct shape for the drag-and-drop to feel right.
