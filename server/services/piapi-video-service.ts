@@ -5,6 +5,40 @@ import { AI_VIDEO_PROVIDERS } from '../config/ai-video-providers';
 import { MotionControlConfig, mapToKlingMotion, buildVeoMotionPrompt } from '../../shared/config/motion-control';
 import { isStylizedPreset, getVisualArtPreset, STYLIZED_CHARACTER_CFG, STYLIZED_ENVIRONMENT_CFG } from '../../shared/config/visual-art-presets';
 
+function hasActionPrompt(prompt: string): boolean {
+  const actionPatterns = [
+    /\bexplod(e|es|ed|ing|ion|ions)?\b/,
+    /\bburst(s|ed|ing)?\b/,
+    /\bshoot(s|ing)?\b/,
+    /\blaunch(es|ed|ing)?\b/,
+    /\bthrow(s|n|ing)?\b/,
+    /\bcrash(es|ed|ing)?\b/,
+    /\bsmash(es|ed|ing)?\b/,
+    /\bshatter(s|ed|ing)?\b/,
+    /\bblast(s|ed|ing)?\b/,
+    /\berupt(s|ed|ing|ion|ions)?\b/,
+    /\bfl(y|ies|ying|ew)\b/,
+    /\bsplash(es|ed|ing)?\b/,
+    /\bpour(s|ed|ing)?\b/,
+    /\bscatter(s|ed|ing)?\b/,
+    /\bspin(s|ning)?\b/,
+    /\bwhip(s|ped|ping)?\b/,
+    /\bsurg(e|es|ed|ing)?\b/,
+    /\brush(es|ed|ing)?\b/,
+    /\bstrik(e|es|ing)\b/,
+    /\bslam(s|med|ming)?\b/,
+    /\btransform(s|ed|ing|ation)?\b/,
+    /\bmorph(s|ed|ing)?\b/,
+    /\bdissolv(e|es|ed|ing)?\b/,
+    /\bmelt(s|ed|ing)?\b/,
+    /\bcollaps(e|es|ed|ing)?\b/,
+    /\bexpand(s|ed|ing)?\b/,
+    /\bgrow(s|ing|n)?\b/,
+  ];
+  const lower = prompt.toLowerCase();
+  return actionPatterns.some(rx => rx.test(lower));
+}
+
 interface PiAPIGenerationResult {
   success: boolean;
   videoUrl?: string;
@@ -952,7 +986,12 @@ class PiAPIVideoService {
     isCharacterReference?: boolean;
     artPresetId?: string;
   }, sanitizedPrompt: string): any {
-    const animationStyle = options.i2vSettings?.animationStyle ?? 'product-hero';
+    let animationStyle = options.i2vSettings?.animationStyle ?? 'product-hero';
+    if (animationStyle === 'product-hero' && !options.i2vSettings?.animationStyle) {
+      if (hasActionPrompt(sanitizedPrompt)) {
+        animationStyle = 'dynamic';
+      }
+    }
     
     const promptRequiresNewContent = (prompt: string): boolean => {
       if (options.isCharacterReference) {
@@ -1399,7 +1438,13 @@ class PiAPIVideoService {
       // - static_mask: controls what parts of image to animate (we want full frame)
       const imageControlStrength = options.i2vSettings?.imageControlStrength ?? 1.0;
       const motionStrength = options.i2vSettings?.motionStrength ?? 0.3;
-      const animationStyle = options.i2vSettings?.animationStyle ?? 'product-hero';
+      let animationStyle = options.i2vSettings?.animationStyle ?? 'product-hero';
+      if (animationStyle === 'product-hero' && !options.i2vSettings?.animationStyle) {
+          if (hasActionPrompt(sanitizedPrompt)) {
+          animationStyle = 'dynamic';
+          console.log(`[PiAPI I2V] Action prompt detected — switching from product-hero to dynamic animation style`);
+        }
+      }
       
       // Map user's Image Fidelity slider (0-1 where 1 = max fidelity) to cfg_scale
       // cfg_scale: 0.0 = preserve source exactly, 1.0 = follow prompt completely

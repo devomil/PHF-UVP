@@ -543,10 +543,40 @@ class AIVideoService {
       return prompt;
     }
 
-    const isSceneDescription = /^(a |an |the |warm|inviting|cozy|bright|dark|elegant|modern|rustic|professional|beautiful|stunning)/i.test(prompt.trim());
+    const actionPatterns = [
+      /\bexplod(e|es|ed|ing|ion|ions)?\b/,
+      /\bburst(s|ed|ing)?\b/,
+      /\bshoot(s|ing)?\b/,
+      /\blaunch(es|ed|ing)?\b/,
+      /\bthrow(s|n|ing)?\b/,
+      /\bcrash(es|ed|ing)?\b/,
+      /\bsmash(es|ed|ing)?\b/,
+      /\bshatter(s|ed|ing)?\b/,
+      /\bblast(s|ed|ing)?\b/,
+      /\berupt(s|ed|ing|ion|ions)?\b/,
+      /\bfl(y|ies|ying|ew)\b/,
+      /\bsplash(es|ed|ing)?\b/,
+      /\bpour(s|ed|ing)?\b/,
+      /\bscatter(s|ed|ing)?\b/,
+      /\bspin(s|ning)?\b/,
+      /\bwhip(s|ped|ping)?\b/,
+      /\bsurg(e|es|ed|ing)?\b/,
+      /\brush(es|ed|ing)?\b/,
+      /\bstrik(e|es|ing)\b/,
+      /\bslam(s|med|ming)?\b/,
+      /\btransform(s|ed|ing|ation)?\b/,
+      /\bmorph(s|ed|ing)?\b/,
+      /\bdissolv(e|es|ed|ing)?\b/,
+      /\bmelt(s|ed|ing)?\b/,
+      /\bcollaps(e|es|ed|ing)?\b/,
+      /\bexpand(s|ed|ing)?\b/,
+      /\bgrow(s|ing|n)?\b/,
+    ];
+    const promptLower = prompt.toLowerCase();
+    const hasAction = actionPatterns.some(rx => rx.test(promptLower));
 
-    if (isSceneDescription) {
-      return `Gentle, subtle camera movement. Slow dolly forward with natural ambient motion — lights gently flickering, slight parallax depth. ${prompt.substring(0, 60).trim()}.`;
+    if (hasAction) {
+      return `Dynamic camera following the action. ${prompt}`;
     }
 
     return `Subtle, natural motion and gentle camera movement. ${prompt}`;
