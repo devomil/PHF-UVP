@@ -2677,11 +2677,9 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
   const [overlayItems, setOverlayItems] = useState<SceneOverlayItem[]>([]);
   const [overlaysLoaded, setOverlaysLoaded] = useState(false);
   const { toast } = useToast();
-  const sourceImageInputRef = useRef<HTMLInputElement | null>(null);
   const handleSourceImageChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    console.log("[SourceImage] File selected:", file.name, file.type, file.size);
     setUploadingSourceImage(true);
     try {
       const formData = new FormData();
@@ -2690,14 +2688,12 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
       if (!uploadRes.ok) throw new Error("Upload failed: " + uploadRes.status);
       const data = await uploadRes.json();
       const url = data.url || data.fileUrl;
-      console.log("[SourceImage] Upload success:", url);
       if (url) {
         setOverrideSourceImage(url);
         toast({ title: "Reference Image Updated", description: "New reference image set. Click Regenerate to use it." });
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Upload failed";
-      console.error("[SourceImage] Upload error:", msg);
       toast({ title: "Upload Error", description: msg, variant: "destructive" });
     }
     setUploadingSourceImage(false);
