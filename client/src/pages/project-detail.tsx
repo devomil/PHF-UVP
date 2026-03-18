@@ -2672,6 +2672,7 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [selectedVoiceId, setSelectedVoiceId] = useState("21m00Tcm4TlvDq8ikWAM");
   const [voiceFilter, setVoiceFilter] = useState<"all" | "male" | "female">("all");
+  const [narrationText, setNarrationText] = useState("");
   const [musicMood, setMusicMood] = useState("auto");
   const [musicGenerator, setMusicGenerator] = useState("auto");
   const [overlayItems, setOverlayItems] = useState<SceneOverlayItem[]>([]);
@@ -2735,6 +2736,9 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
         if (genInfo.artPresetId) setArtPresetId(genInfo.artPresetId);
       }
       setSelectedAspectRatio(assetsQuery.data.generationInfo?.aspectRatio || project?.outputFormat?.aspectRatio || "16:9");
+      if (assetsQuery.data.voiceover?.narrationText) {
+        setNarrationText(assetsQuery.data.voiceover.narrationText);
+      }
       initializedRef.current = true;
     }
     if (assetsQuery.data?.overlayItems && !overlaysLoaded) {
@@ -2805,7 +2809,7 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ narrationText: promptText, voiceId: selectedVoiceId }),
+        body: JSON.stringify({ narrationText: narrationText.trim() || promptText, voiceId: selectedVoiceId }),
       });
       if (!res.ok) throw new Error("Failed to start voiceover generation");
       return res.json();
@@ -3321,6 +3325,21 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
                     {assets.voiceover.error}
                   </div>
                 )}
+
+                <div className="mb-3">
+                  <label className="text-xs font-medium block mb-1.5" style={{ color: "var(--text-secondary)" }}>Narration Script</label>
+                  <textarea
+                    value={narrationText}
+                    onChange={(e) => setNarrationText(e.target.value)}
+                    placeholder="Type what the narrator should say... (e.g. &quot;Welcome to Pine Hill&quot;)"
+                    rows={2}
+                    className="w-full rounded-lg border px-3 py-2 text-sm resize-none"
+                    style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-medium)", color: "var(--text-primary)" }}
+                  />
+                  <p className="text-[10px] mt-1" style={{ color: "var(--text-muted)" }}>
+                    {narrationText.trim() ? `${narrationText.trim().split(/\s+/).length} words` : "Leave empty to use the visual prompt as narration"}
+                  </p>
+                </div>
 
                 <div className="mb-3">
                   <div className="flex items-center gap-2 mb-1.5">

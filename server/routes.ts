@@ -553,6 +553,7 @@ export async function registerRoutes(app: Express) {
           status: qc.voiceover?.status || "pending",
           url: qc.voiceover?.url || null,
           duration: qc.voiceover?.duration || null,
+          narrationText: qc.voiceover?.narrationText || null,
           error: qc.voiceover?.error || null,
         },
         music: {
@@ -813,7 +814,7 @@ export async function registerRoutes(app: Express) {
         return res.status(400).json({ error: "Not a Quick Create project" });
       }
 
-      const text = narrationText || project.description || "";
+      const text = (narrationText || "").trim() || project.description || "";
       if (!text.trim()) {
         return res.status(400).json({ error: "No narration text provided" });
       }
@@ -829,6 +830,7 @@ export async function registerRoutes(app: Express) {
               status: "generating",
               url: null,
               error: null,
+              narrationText: text,
               updatedAt: new Date().toISOString(),
             },
           },
@@ -858,6 +860,7 @@ export async function registerRoutes(app: Express) {
                   status: "completed",
                   url: result.url,
                   duration: result.duration,
+                  narrationText: text,
                   error: null,
                   updatedAt: new Date().toISOString(),
                 },
@@ -875,6 +878,7 @@ export async function registerRoutes(app: Express) {
                 voiceover: {
                   status: "failed",
                   url: null,
+                  narrationText: text,
                   error: result.error || "Voiceover generation failed",
                   updatedAt: new Date().toISOString(),
                 },
@@ -892,7 +896,7 @@ export async function registerRoutes(app: Express) {
             ...ea,
             quickCreate: {
               ...(ea.quickCreate || {}),
-              voiceover: { status: "failed", url: null, error: err.message, updatedAt: new Date().toISOString() },
+              voiceover: { status: "failed", url: null, narrationText: text, error: err.message, updatedAt: new Date().toISOString() },
             },
           },
           updatedAt: new Date(),
