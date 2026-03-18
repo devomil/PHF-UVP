@@ -2154,7 +2154,7 @@ router.patch('/projects/:projectId/render-settings', isAuthenticated, async (req
     }
 
     if (captions !== undefined) {
-      const validPresets = ['karaoke', 'capcut', 'hormozi', 'broadcast', 'minimal'];
+      const validPresets = ['karaoke', 'capcut', 'hormozi', 'broadcast', 'minimal', 'glossy', 'neon', 'typewriter', 'glitch'];
       const validPositions = ['bottom', 'center', 'top'];
       (projectData as any).captionSettings = {
         enabled: captions.enabled ?? false,
@@ -3408,12 +3408,16 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
 
       if (narrationScript.trim() && voiceoverDuration > 0) {
         const words = narrationScript.trim().split(/\s+/);
-        const wordDuration = voiceoverDuration / words.length;
-        const wordTimings = words.map((word: string, idx: number) => ({
-          word: word,
-          start: +(idx * wordDuration).toFixed(3),
-          end: +((idx + 1) * wordDuration).toFixed(3),
-        }));
+        const charWeights = words.map((w: string) => Math.max(w.length, 2) + 1);
+        const totalWeight = charWeights.reduce((a: number, b: number) => a + b, 0);
+        let cursor = 0;
+        const wordTimings = words.map((word: string, idx: number) => {
+          const duration = (charWeights[idx] / totalWeight) * voiceoverDuration;
+          const start = +cursor.toFixed(3);
+          cursor += duration;
+          const end = +cursor.toFixed(3);
+          return { word, start, end };
+        });
 
         for (const scene of preparedProject.scenes as any[]) {
           if (scene.id === 'intro-scene-auto') continue;

@@ -9,6 +9,8 @@ import {
 import type { CaptionWord, CaptionStyle, CaptionPresetConfig } from '../../../shared/config/caption-styles';
 import { getPresetConfig } from '../../../shared/config/caption-styles';
 
+const ANTICIPATION_SEC = 0.08;
+
 export interface SyncedCaptionsProps {
   words: CaptionWord[];
   style: CaptionStyle;
@@ -373,6 +375,376 @@ const MinimalStyle: React.FC<{
   );
 };
 
+const GlossyStyle: React.FC<{
+  group: WordGroup;
+  config: CaptionPresetConfig;
+  currentTime: number;
+  fps: number;
+  frame: number;
+}> = ({ group, config, currentTime, fps, frame }) => {
+  const groupVisible =
+    currentTime >= group.startTime - 0.05 && currentTime <= group.endTime + 0.15;
+  if (!groupVisible) return null;
+
+  const fadeIn = interpolate(
+    currentTime,
+    [group.startTime - 0.05, group.startTime + 0.12],
+    [0, 1],
+    { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' },
+  );
+  const fadeOut = interpolate(
+    currentTime,
+    [group.endTime, group.endTime + 0.15],
+    [1, 0],
+    { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' },
+  );
+  const opacity = Math.min(fadeIn, fadeOut);
+
+  const slideY = interpolate(
+    currentTime,
+    [group.startTime - 0.05, group.startTime + 0.15],
+    [12, 0],
+    { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' },
+  );
+
+  return (
+    <div
+      style={{
+        ...getPositionStyle(config.position, config.bottomMargin),
+        opacity,
+        transform: `translateY(${slideY}px)`,
+      }}
+    >
+      <div
+        style={{
+          background: 'rgba(255,255,255,0.06)',
+          backdropFilter: 'blur(16px)',
+          WebkitBackdropFilter: 'blur(16px)',
+          border: '1px solid rgba(255,255,255,0.12)',
+          padding: '14px 28px',
+          borderRadius: 16,
+          display: 'flex',
+          gap: '0.35em',
+          flexWrap: 'wrap',
+          justifyContent: 'center',
+        }}
+      >
+        {group.words.map((w, i) => {
+          const isActive = currentTime >= w.start && currentTime <= w.end;
+          const wordStartFrame = Math.round(w.start * fps);
+          const localFrame = frame - wordStartFrame;
+
+          let scale = 1;
+          if (isActive && localFrame >= 0) {
+            const s = spring({
+              frame: localFrame,
+              fps,
+              config: { damping: 12, stiffness: 200 },
+            });
+            scale = 1 + (s > 1 ? 2 - s : s) * 0.08;
+          }
+
+          return (
+            <span
+              key={i}
+              style={{
+                fontFamily: config.fontFamily,
+                fontSize: config.fontSize,
+                fontWeight: config.fontWeight,
+                color: isActive ? config.activeColor : config.primaryColor,
+                textShadow: isActive
+                  ? `0 0 20px ${config.activeColor}80, ${config.textShadow}`
+                  : config.textShadow,
+                textTransform: config.textTransform as any,
+                letterSpacing: config.letterSpacing,
+                display: 'inline-block',
+                transform: `scale(${scale})`,
+                transition: 'color 0.12s ease',
+              }}
+            >
+              {w.word}
+            </span>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+const NeonStyle: React.FC<{
+  group: WordGroup;
+  config: CaptionPresetConfig;
+  currentTime: number;
+  fps: number;
+  frame: number;
+}> = ({ group, config, currentTime, fps, frame }) => {
+  const groupVisible =
+    currentTime >= group.startTime - 0.05 && currentTime <= group.endTime + 0.2;
+  if (!groupVisible) return null;
+
+  const fadeIn = interpolate(
+    currentTime,
+    [group.startTime - 0.05, group.startTime + 0.06],
+    [0, 1],
+    { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' },
+  );
+  const fadeOut = interpolate(
+    currentTime,
+    [group.endTime, group.endTime + 0.2],
+    [1, 0],
+    { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' },
+  );
+  const opacity = Math.min(fadeIn, fadeOut);
+
+  const flickerPhase = Math.sin(frame * 0.8) * 0.03 + 1;
+
+  return (
+    <div
+      style={{
+        ...getPositionStyle(config.position, config.bottomMargin),
+        opacity: opacity * flickerPhase,
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          gap: '0.35em',
+          flexWrap: 'wrap',
+          justifyContent: 'center',
+          padding: '8px 16px',
+        }}
+      >
+        {group.words.map((w, i) => {
+          const isActive = currentTime >= w.start && currentTime <= w.end;
+          const wordStartFrame = Math.round(w.start * fps);
+          const localFrame = frame - wordStartFrame;
+
+          let scale = 1;
+          if (isActive && localFrame >= 0) {
+            const s = spring({
+              frame: localFrame,
+              fps,
+              config: { damping: 6, stiffness: 400 },
+            });
+            scale = 1 + (s > 1 ? 2 - s : s) * 0.12;
+          }
+
+          const glowIntensity = isActive ? 1.4 : 0.7;
+
+          return (
+            <span
+              key={i}
+              style={{
+                fontFamily: config.fontFamily,
+                fontSize: config.fontSize,
+                fontWeight: config.fontWeight,
+                color: isActive ? config.activeColor : config.primaryColor,
+                textShadow: isActive
+                  ? `0 0 7px ${config.activeColor}, 0 0 21px ${config.activeColor}, 0 0 42px ${config.activeColor}88, 0 0 82px ${config.activeColor}44`
+                  : config.textShadow,
+                textTransform: config.textTransform as any,
+                letterSpacing: config.letterSpacing,
+                display: 'inline-block',
+                transform: `scale(${scale})`,
+                filter: `brightness(${glowIntensity})`,
+              }}
+            >
+              {w.word}
+            </span>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+const TypewriterStyle: React.FC<{
+  group: WordGroup;
+  config: CaptionPresetConfig;
+  currentTime: number;
+  fps: number;
+  frame: number;
+}> = ({ group, config, currentTime, fps, frame }) => {
+  const groupVisible =
+    currentTime >= group.startTime - 0.03 && currentTime <= group.endTime + 0.2;
+  if (!groupVisible) return null;
+
+  const fadeIn = interpolate(
+    currentTime,
+    [group.startTime - 0.03, group.startTime + 0.05],
+    [0, 1],
+    { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' },
+  );
+  const fadeOut = interpolate(
+    currentTime,
+    [group.endTime + 0.05, group.endTime + 0.2],
+    [1, 0],
+    { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' },
+  );
+  const opacity = Math.min(fadeIn, fadeOut);
+
+  const cursorBlink = Math.floor(frame / 8) % 2 === 0;
+
+  return (
+    <div
+      style={{
+        ...getPositionStyle(config.position, config.bottomMargin),
+        opacity,
+      }}
+    >
+      <div
+        style={{
+          background: config.backgroundColor,
+          padding: '12px 24px',
+          borderRadius: 6,
+          display: 'flex',
+          gap: '0.3em',
+          flexWrap: 'wrap',
+          justifyContent: 'center',
+          alignItems: 'center',
+          border: '1px solid rgba(255,255,255,0.1)',
+        }}
+      >
+        {group.words.map((w, i) => {
+          const wordRevealed = currentTime >= w.start;
+          const isActive = currentTime >= w.start && currentTime <= w.end;
+          const isLastRevealed = i === group.words.length - 1 ||
+            (wordRevealed && currentTime < (group.words[i + 1]?.start ?? Infinity));
+
+          if (!wordRevealed) return null;
+
+          return (
+            <React.Fragment key={i}>
+              <span
+                style={{
+                  fontFamily: config.fontFamily,
+                  fontSize: config.fontSize,
+                  fontWeight: config.fontWeight,
+                  color: isActive ? config.activeColor : config.primaryColor,
+                  textShadow: config.textShadow,
+                  textTransform: config.textTransform as any,
+                  letterSpacing: config.letterSpacing,
+                }}
+              >
+                {w.word}
+              </span>
+              {isLastRevealed && (
+                <span
+                  style={{
+                    display: 'inline-block',
+                    width: 3,
+                    height: config.fontSize * 0.9,
+                    background: config.activeColor,
+                    opacity: cursorBlink ? 1 : 0,
+                    marginLeft: 2,
+                    verticalAlign: 'middle',
+                  }}
+                />
+              )}
+            </React.Fragment>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+const GlitchStyle: React.FC<{
+  group: WordGroup;
+  config: CaptionPresetConfig;
+  currentTime: number;
+  fps: number;
+  frame: number;
+}> = ({ group, config, currentTime, fps, frame }) => {
+  const groupVisible =
+    currentTime >= group.startTime - 0.05 && currentTime <= group.endTime + 0.15;
+  if (!groupVisible) return null;
+
+  const fadeIn = interpolate(
+    currentTime,
+    [group.startTime - 0.05, group.startTime + 0.04],
+    [0, 1],
+    { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' },
+  );
+  const fadeOut = interpolate(
+    currentTime,
+    [group.endTime, group.endTime + 0.15],
+    [1, 0],
+    { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' },
+  );
+  const opacity = Math.min(fadeIn, fadeOut);
+
+  return (
+    <div
+      style={{
+        ...getPositionStyle(config.position, config.bottomMargin),
+        opacity,
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          gap: '0.3em',
+          flexWrap: 'wrap',
+          justifyContent: 'center',
+          padding: '8px 16px',
+          position: 'relative',
+        }}
+      >
+        {group.words.map((w, i) => {
+          const isActive = currentTime >= w.start && currentTime <= w.end;
+          const wordStartFrame = Math.round(w.start * fps);
+          const localFrame = frame - wordStartFrame;
+
+          let scale = 1;
+          let glitchX = 0;
+          let glitchY = 0;
+          if (isActive && localFrame >= 0) {
+            const s = spring({
+              frame: localFrame,
+              fps,
+              config: { damping: 5, stiffness: 500 },
+            });
+            scale = 1 + (s > 1 ? 2 - s : s) * 0.1;
+
+            if (localFrame < 4) {
+              const seed = (w.word.charCodeAt(0) + localFrame) * 7;
+              glitchX = ((seed % 7) - 3) * (1 - localFrame / 4);
+              glitchY = ((seed % 5) - 2) * (1 - localFrame / 4);
+            }
+          }
+
+          const rgbSplit = isActive && localFrame < 3;
+
+          return (
+            <span
+              key={i}
+              style={{
+                fontFamily: config.fontFamily,
+                fontSize: config.fontSize,
+                fontWeight: config.fontWeight,
+                color: isActive ? config.activeColor : config.primaryColor,
+                textShadow: rgbSplit
+                  ? `3px 0 #3b82f6, -3px 0 #f43f5e, 0 0 12px rgba(0,0,0,0.9)`
+                  : isActive
+                    ? `2px 0 ${config.activeColor}60, -2px 0 #3b82f680, 0 0 8px rgba(0,0,0,0.8)`
+                    : config.textShadow,
+                textTransform: config.textTransform as any,
+                letterSpacing: config.letterSpacing,
+                display: 'inline-block',
+                transform: `scale(${scale}) translate(${glitchX}px, ${glitchY}px)`,
+                transition: 'color 0.05s',
+              }}
+            >
+              {w.word}
+            </span>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
 export const SyncedCaptions: React.FC<SyncedCaptionsProps> = ({
   words,
   style,
@@ -385,7 +757,7 @@ export const SyncedCaptions: React.FC<SyncedCaptionsProps> = ({
   if (!words || words.length === 0) return null;
 
   const config = getPresetConfig(style);
-  const currentTime = frame / fps + sceneOffsetSec;
+  const currentTime = frame / fps + sceneOffsetSec + ANTICIPATION_SEC;
 
   if (style.preset === 'hormozi') {
     return (
@@ -414,6 +786,10 @@ export const SyncedCaptions: React.FC<SyncedCaptionsProps> = ({
     capcut: CapcutStyle,
     broadcast: BroadcastStyle,
     minimal: MinimalStyle,
+    glossy: GlossyStyle,
+    neon: NeonStyle,
+    typewriter: TypewriterStyle,
+    glitch: GlitchStyle,
   }[style.preset] || MinimalStyle;
 
   return (

@@ -4,7 +4,7 @@ export interface CaptionWord {
   end: number;
 }
 
-export type CaptionPreset = 'karaoke' | 'capcut' | 'hormozi' | 'broadcast' | 'minimal';
+export type CaptionPreset = 'karaoke' | 'capcut' | 'hormozi' | 'broadcast' | 'minimal' | 'glossy' | 'neon' | 'typewriter' | 'glitch';
 
 export interface CaptionStyle {
   preset: CaptionPreset;
@@ -128,6 +128,74 @@ export const CAPTION_PRESETS: Record<CaptionPreset, CaptionPresetConfig> = {
     textTransform: 'none',
     textShadow: '0 1px 3px rgba(0,0,0,0.8), 0 0 8px rgba(0,0,0,0.4)',
     letterSpacing: 0,
+  },
+  glossy: {
+    label: 'Glossy / Premium',
+    description: 'Gradient text with glass background',
+    fontSize: 48,
+    fontFamily: 'Inter, sans-serif',
+    fontWeight: 800,
+    primaryColor: '#ffffff',
+    activeColor: '#a78bfa',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    position: 'bottom',
+    wordsPerLine: 4,
+    bottomMargin: 90,
+    animation: 'pop',
+    textTransform: 'none',
+    textShadow: '0 2px 16px rgba(167,139,250,0.5), 0 1px 3px rgba(0,0,0,0.4)',
+    letterSpacing: 1,
+  },
+  neon: {
+    label: 'Neon Glow',
+    description: 'Electric neon glow effect',
+    fontSize: 56,
+    fontFamily: 'Inter, sans-serif',
+    fontWeight: 900,
+    primaryColor: '#ffffff',
+    activeColor: '#22d3ee',
+    backgroundColor: 'transparent',
+    position: 'center',
+    wordsPerLine: 3,
+    bottomMargin: 100,
+    animation: 'pop',
+    textTransform: 'uppercase',
+    textShadow: '0 0 7px #22d3ee, 0 0 21px #22d3ee, 0 0 42px rgba(34,211,238,0.5), 0 0 82px rgba(34,211,238,0.3)',
+    letterSpacing: 3,
+  },
+  typewriter: {
+    label: 'Typewriter',
+    description: 'Words appear one by one with cursor',
+    fontSize: 38,
+    fontFamily: '"Courier New", Courier, monospace',
+    fontWeight: 700,
+    primaryColor: '#f0f0f0',
+    activeColor: '#fbbf24',
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    position: 'bottom',
+    wordsPerLine: 5,
+    bottomMargin: 70,
+    animation: 'fade',
+    textTransform: 'none',
+    textShadow: 'none',
+    letterSpacing: 1.5,
+  },
+  glitch: {
+    label: 'Glitch / Cyber',
+    description: 'Digital glitch distortion effect',
+    fontSize: 58,
+    fontFamily: 'Inter, sans-serif',
+    fontWeight: 900,
+    primaryColor: '#ffffff',
+    activeColor: '#f43f5e',
+    backgroundColor: 'transparent',
+    position: 'center',
+    wordsPerLine: 3,
+    bottomMargin: 100,
+    animation: 'pop',
+    textTransform: 'uppercase',
+    textShadow: '2px 0 #f43f5e, -2px 0 #3b82f6, 0 0 8px rgba(0,0,0,0.8)',
+    letterSpacing: 2,
   },
 };
 

@@ -2303,9 +2303,13 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
                   <span className="text-xs block mb-1.5" style={{ color: "var(--text-secondary)" }}>Style Preset</span>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                     {[
-                      { value: 'karaoke', label: 'Karaoke', desc: 'Words highlight as spoken' },
                       { value: 'capcut', label: 'CapCut', desc: 'Bold pop animation' },
                       { value: 'hormozi', label: 'Hormozi', desc: 'Large bold, one word' },
+                      { value: 'glossy', label: 'Glossy', desc: 'Glass background + glow' },
+                      { value: 'neon', label: 'Neon', desc: 'Electric neon glow' },
+                      { value: 'glitch', label: 'Glitch', desc: 'Cyber distortion effect' },
+                      { value: 'typewriter', label: 'Typewriter', desc: 'Words appear with cursor' },
+                      { value: 'karaoke', label: 'Karaoke', desc: 'Words highlight as spoken' },
                       { value: 'broadcast', label: 'Broadcast', desc: 'Lower-third bar' },
                       { value: 'minimal', label: 'Minimal', desc: 'Simple subtitles' },
                     ].map((preset) => (
