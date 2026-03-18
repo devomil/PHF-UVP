@@ -2669,6 +2669,7 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
   const [artPresetId, setArtPresetId] = useState("");
   const [overrideSourceImage, setOverrideSourceImage] = useState<string | null | undefined>(undefined);
   const [uploadingSourceImage, setUploadingSourceImage] = useState(false);
+  const sourceImageInputRef = useRef<HTMLInputElement>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [selectedVoiceId, setSelectedVoiceId] = useState("21m00Tcm4TlvDq8ikWAM");
   const [voiceFilter, setVoiceFilter] = useState<"all" | "male" | "female">("all");
@@ -3054,15 +3055,19 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
                       Reference Image
                     </label>
                     <div className="flex items-center gap-1.5">
-                      <label className="text-[10px] text-purple-400 hover:text-purple-300 cursor-pointer flex items-center gap-1">
+                      <input ref={sourceImageInputRef} type="file" accept="image/*" className="hidden" onChange={handleSourceImageUpload} disabled={uploadingSourceImage} />
+                      <button
+                        className="text-[10px] text-purple-400 hover:text-purple-300 cursor-pointer flex items-center gap-1"
+                        onClick={() => sourceImageInputRef.current?.click()}
+                        disabled={uploadingSourceImage}
+                      >
                         {uploadingSourceImage ? (
                           <Loader2 className="w-3 h-3 animate-spin" />
                         ) : (
                           <Upload className="w-3 h-3" />
                         )}
                         {effectiveSourceImage ? "Replace" : "Add"}
-                        <input type="file" accept="image/*" className="hidden" onChange={handleSourceImageUpload} disabled={uploadingSourceImage} />
-                      </label>
+                      </button>
                       {effectiveSourceImage && (
                         <button
                           className="text-[10px] text-red-400 hover:text-red-300 flex items-center gap-0.5"
