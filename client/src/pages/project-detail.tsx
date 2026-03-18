@@ -1641,6 +1641,7 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
     outroEnabled: true,
     outroTemplate: "classic-glow",
     introBackgroundRandom: false,
+    endCard: { enabled: true, duration: 5, taglineText: '', logoSize: 25, logoAnimation: 'scale-bounce', taglineAnimation: 'typewriter', contactWebsite: '', contactPhone: '', contactEmail: '', ambientEffect: 'bokeh' },
   };
 
   const settings = {
@@ -2169,27 +2170,116 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
                 />
               </div>
               {settings.outroEnabled !== false && (
-                <div className="grid grid-cols-2 gap-2">
-                  {[
-                    { value: 'classic-glow', label: 'Classic Glow', desc: 'Radiant glow behind logo' },
-                    { value: 'minimal', label: 'Minimal', desc: 'Clean fade-in' },
-                    { value: 'cinematic', label: 'Cinematic', desc: 'Full-screen background' },
-                    { value: 'elegant-fade', label: 'Elegant Fade', desc: 'Gradient sweep' },
-                  ].map((t) => (
-                    <button
-                      key={t.value}
-                      onClick={() => saveMutation.mutate({ outroTemplate: t.value })}
-                      className={`p-2 rounded-lg border text-left transition-all ${
-                        settings.outroTemplate === t.value
-                          ? 'border-indigo-500 bg-indigo-500/10 ring-1 ring-indigo-500'
-                          : 'hover:border-indigo-500/40'
-                      }`}
-                      style={{ borderColor: settings.outroTemplate === t.value ? undefined : "var(--border-subtle)" }}
-                    >
-                      <p className="text-xs font-medium" style={{ color: "var(--text-primary)" }}>{t.label}</p>
-                      <p className="text-[10px] mt-0.5" style={{ color: "var(--text-muted)" }}>{t.desc}</p>
-                    </button>
-                  ))}
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { value: 'classic-glow', label: 'Classic Glow', desc: 'Radiant glow behind logo' },
+                      { value: 'minimal', label: 'Minimal', desc: 'Clean fade-in' },
+                      { value: 'cinematic', label: 'Cinematic', desc: 'Full-screen background' },
+                      { value: 'elegant-fade', label: 'Elegant Fade', desc: 'Gradient sweep' },
+                    ].map((t) => (
+                      <button
+                        key={t.value}
+                        onClick={() => saveMutation.mutate({ outroTemplate: t.value })}
+                        className={`p-2 rounded-lg border text-left transition-all ${
+                          settings.outroTemplate === t.value
+                            ? 'border-indigo-500 bg-indigo-500/10 ring-1 ring-indigo-500'
+                            : 'hover:border-indigo-500/40'
+                        }`}
+                        style={{ borderColor: settings.outroTemplate === t.value ? undefined : "var(--border-subtle)" }}
+                      >
+                        <p className="text-xs font-medium" style={{ color: "var(--text-primary)" }}>{t.label}</p>
+                        <p className="text-[10px] mt-0.5" style={{ color: "var(--text-muted)" }}>{t.desc}</p>
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="border-t pt-3 space-y-2.5" style={{ borderColor: "var(--border-subtle)" }}>
+                    <span className="text-xs font-medium block" style={{ color: "var(--text-secondary)" }}>End Card Content</span>
+                    <div>
+                      <label className="text-xs block mb-1" style={{ color: "var(--text-muted)" }}>Tagline</label>
+                      <input
+                        type="text"
+                        value={settings.endCard?.taglineText || ''}
+                        onChange={(e) => saveMutation.mutate({ endCard: { ...settings.endCard, taglineText: e.target.value } })}
+                        placeholder="e.g. Rooted in Nature, Grown with Care"
+                        className="w-full px-2.5 py-1.5 rounded-md border text-xs"
+                        style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)", color: "var(--text-primary)" }}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs block mb-1" style={{ color: "var(--text-muted)" }}>Website</label>
+                      <input
+                        type="text"
+                        value={settings.endCard?.contactWebsite || ''}
+                        onChange={(e) => saveMutation.mutate({ endCard: { ...settings.endCard, contactWebsite: e.target.value } })}
+                        placeholder="e.g. PineHillFarm.com"
+                        className="w-full px-2.5 py-1.5 rounded-md border text-xs"
+                        style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)", color: "var(--text-primary)" }}
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-xs block mb-1" style={{ color: "var(--text-muted)" }}>Logo Size</label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="range"
+                            min="10"
+                            max="60"
+                            value={settings.endCard?.logoSize || 25}
+                            onChange={(e) => saveMutation.mutate({ endCard: { ...settings.endCard, logoSize: parseInt(e.target.value) } })}
+                            className="flex-1 h-1.5 rounded-full appearance-none cursor-pointer"
+                            style={{ background: `linear-gradient(to right, rgb(99 102 241) ${((settings.endCard?.logoSize || 25) - 10) * 2}%, var(--border-subtle) ${((settings.endCard?.logoSize || 25) - 10) * 2}%)` }}
+                          />
+                          <span className="text-[10px] w-6 text-right" style={{ color: "var(--text-muted)" }}>{settings.endCard?.logoSize || 25}%</span>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-xs block mb-1" style={{ color: "var(--text-muted)" }}>Duration</label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="range"
+                            min="3"
+                            max="10"
+                            value={settings.endCard?.duration || 5}
+                            onChange={(e) => saveMutation.mutate({ endCard: { ...settings.endCard, duration: parseInt(e.target.value) } })}
+                            className="flex-1 h-1.5 rounded-full appearance-none cursor-pointer"
+                            style={{ background: `linear-gradient(to right, rgb(99 102 241) ${((settings.endCard?.duration || 5) - 3) * 14.3}%, var(--border-subtle) ${((settings.endCard?.duration || 5) - 3) * 14.3}%)` }}
+                          />
+                          <span className="text-[10px] w-6 text-right" style={{ color: "var(--text-muted)" }}>{settings.endCard?.duration || 5}s</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-xs block mb-1" style={{ color: "var(--text-muted)" }}>Logo Animation</label>
+                        <select
+                          value={settings.endCard?.logoAnimation || 'scale-bounce'}
+                          onChange={(e) => saveMutation.mutate({ endCard: { ...settings.endCard, logoAnimation: e.target.value } })}
+                          className="w-full px-2 py-1.5 rounded-md border text-xs"
+                          style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)", color: "var(--text-primary)" }}
+                        >
+                          <option value="scale-bounce">Scale Bounce</option>
+                          <option value="fade">Fade In</option>
+                          <option value="slide-up">Slide Up</option>
+                          <option value="none">None</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-xs block mb-1" style={{ color: "var(--text-muted)" }}>Tagline Animation</label>
+                        <select
+                          value={settings.endCard?.taglineAnimation || 'typewriter'}
+                          onChange={(e) => saveMutation.mutate({ endCard: { ...settings.endCard, taglineAnimation: e.target.value } })}
+                          className="w-full px-2 py-1.5 rounded-md border text-xs"
+                          style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)", color: "var(--text-primary)" }}
+                        >
+                          <option value="typewriter">Typewriter</option>
+                          <option value="fade">Fade In</option>
+                          <option value="slide-up">Slide Up</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>

@@ -2168,6 +2168,27 @@ router.patch('/projects/:projectId/render-settings', isAuthenticated, async (req
       };
     }
 
+    const endCard = req.body.endCard;
+    if (endCard !== undefined) {
+      const existing = (projectData as any).endCardSettings || {};
+      const validLogoAnimations = ['scale-bounce', 'fade', 'slide-up', 'none'];
+      const validTaglineAnimations = ['typewriter', 'fade', 'slide-up'];
+      const validAmbientEffects = ['particles', 'bokeh', 'none'];
+      (projectData as any).endCardSettings = {
+        ...existing,
+        enabled: endCard.enabled ?? existing.enabled ?? true,
+        duration: endCard.duration != null ? Math.min(10, Math.max(3, endCard.duration)) : (existing.duration || 5),
+        taglineText: endCard.taglineText ?? existing.taglineText ?? '',
+        taglineAnimation: validTaglineAnimations.includes(endCard.taglineAnimation) ? endCard.taglineAnimation : (existing.taglineAnimation || 'typewriter'),
+        logoAnimation: validLogoAnimations.includes(endCard.logoAnimation) ? endCard.logoAnimation : (existing.logoAnimation || 'scale-bounce'),
+        logoSize: endCard.logoSize != null ? Math.min(60, Math.max(10, endCard.logoSize)) : (existing.logoSize || 25),
+        contactWebsite: endCard.contactWebsite ?? existing.contactWebsite ?? '',
+        contactPhone: endCard.contactPhone ?? existing.contactPhone ?? '',
+        contactEmail: endCard.contactEmail ?? existing.contactEmail ?? '',
+        ambientEffect: validAmbientEffects.includes(endCard.ambientEffect) ? endCard.ambientEffect : (existing.ambientEffect || 'bokeh'),
+      };
+    }
+
     if (nativeVideoAudio !== undefined) {
       (projectData as any).nativeVideoAudioSettings = {
         enabled: !!nativeVideoAudio.enabled,
@@ -2196,6 +2217,7 @@ router.patch('/projects/:projectId/render-settings', isAuthenticated, async (req
         introBackgroundRandom: (projectData as any).introBackgroundRandom ?? false,
         captions: (projectData as any).captionSettings || { enabled: false, style: { preset: 'capcut', position: 'bottom' } },
         nativeVideoAudio: (projectData as any).nativeVideoAudioSettings || { enabled: false, volume: 0.8 },
+        endCard: (projectData as any).endCardSettings || { enabled: true, duration: 5, taglineText: '', logoSize: 25, logoAnimation: 'scale-bounce', taglineAnimation: 'typewriter', contactWebsite: '', contactPhone: '', contactEmail: '', ambientEffect: 'bokeh' },
       }
     });
   } catch (error: any) {
@@ -2266,6 +2288,7 @@ router.get('/projects/:projectId/render-settings', isAuthenticated, async (req: 
         introBackgroundRandom: (projectData as any).introBackgroundRandom ?? false,
         captions: (projectData as any).captionSettings || { enabled: false, style: { preset: 'capcut', position: 'bottom' } },
         nativeVideoAudio: (projectData as any).nativeVideoAudioSettings || { enabled: false, volume: 0.8 },
+        endCard: (projectData as any).endCardSettings || { enabled: true, duration: 5, taglineText: '', logoSize: 25, logoAnimation: 'scale-bounce', taglineAnimation: 'typewriter', contactWebsite: '', contactPhone: '', contactEmail: '', ambientEffect: 'bokeh' },
       }
     });
   } catch (error: any) {
@@ -3002,10 +3025,15 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
 
     // Phase 16: Build end card config from settings
     const endCardSettings = (preparedProject as any).endCardSettings;
+    const outroEnabledFlag = (projectData as any).outroEnabled;
     let endCardConfig: any = undefined;
     console.log('[UniversalVideo] Phase 16 End Card - endCardSettings:', JSON.stringify(endCardSettings || 'undefined'));
+    console.log('[UniversalVideo] Phase 16 End Card - outroEnabled:', outroEnabledFlag);
     console.log('[UniversalVideo] Phase 16 End Card - brand.logoUrl:', preparedProject.brand?.logoUrl || 'EMPTY');
-    if (endCardSettings?.enabled !== false) {
+    if (outroEnabledFlag === false) {
+      endCardConfig = { enabled: false, duration: 0, background: { type: 'solid' as const, color: '#000' }, logo: { url: '', size: 0, position: { x: 0, y: 0 }, animation: 'none' as const }, contact: { delay: 0, animation: 'fade' as const, style: { fontSize: 0, color: '#000' } } };
+      console.log('[Render] Outro/end card disabled by outroEnabled flag');
+    } else if (endCardSettings?.enabled !== false) {
       let cachedLogoUrl = '';
       
       const sourceLogoUrl = preparedProject.brand?.logoUrl || effectiveBrand?.logoUrl || '';
@@ -3044,7 +3072,7 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
         },
         logo: {
           url: cachedLogoUrl,
-          size: 28,
+          size: endCardSettings?.logoSize || 28,
           position: { x: 50, y: 32 },
           animation: (endCardSettings?.logoAnimation || 'scale-bounce') as 'scale-bounce' | 'fade' | 'slide-up' | 'none',
         },
@@ -3090,6 +3118,9 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
       console.log('[UniversalVideo] Phase 18E: End card config built with logo:', endCardConfig.logo.url?.substring(0, 50));
       
       const selectedOutroTemplate = (preparedProject as any).outroTemplate || 'animated';
+      const hasUserLogoSize = endCardSettings?.logoSize != null;
+      const hasUserLogoAnim = endCardSettings?.logoAnimation != null;
+      const hasUserTaglineAnim = endCardSettings?.taglineAnimation != null;
       console.log(`[Render] Outro template: ${selectedOutroTemplate}`);
       if (selectedOutroTemplate === 'cinematic') {
         if (!endCardBgUrl) {
@@ -3099,22 +3130,22 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
           };
         }
         if (endCardConfig.logo) {
-          endCardConfig.logo.animation = 'fade';
-          endCardConfig.logo.size = 32;
+          if (!hasUserLogoAnim) endCardConfig.logo.animation = 'fade';
+          if (!hasUserLogoSize) endCardConfig.logo.size = 32;
         }
         if (endCardConfig.tagline) {
-          endCardConfig.tagline.animation = 'fade';
+          if (!hasUserTaglineAnim) endCardConfig.tagline.animation = 'fade';
           endCardConfig.tagline.style = { ...endCardConfig.tagline.style, fontSize: 32, letterSpacing: 3 };
         }
         endCardConfig.ambientEffect = { type: 'bokeh' as const, color: 'rgba(200, 180, 255, 0.2)', intensity: 25 };
       } else if (selectedOutroTemplate === 'minimal') {
         endCardConfig.background = { type: 'solid' as const, color: '#111111' };
         if (endCardConfig.logo) {
-          endCardConfig.logo.animation = 'fade';
-          endCardConfig.logo.size = 24;
+          if (!hasUserLogoAnim) endCardConfig.logo.animation = 'fade';
+          if (!hasUserLogoSize) endCardConfig.logo.size = 24;
         }
         if (endCardConfig.tagline) {
-          endCardConfig.tagline.animation = 'fade';
+          if (!hasUserTaglineAnim) endCardConfig.tagline.animation = 'fade';
           endCardConfig.tagline.style = { ...endCardConfig.tagline.style, fontSize: 24 };
         }
         endCardConfig.ambientEffect = { type: 'none' as const, color: 'transparent', intensity: 0 };
@@ -3611,7 +3642,13 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
       hasMusic: !!inputProps.musicUrl,
       voiceoverUrl: inputProps.voiceoverUrl?.substring(0, 80),
       musicUrl: inputProps.musicUrl?.substring(0, 80),
+      captionStyle: inputProps.captionStyle,
     });
+    for (const scene of inputProps.scenes as any[]) {
+      if (scene.captions) {
+        console.log(`[UniversalVideo] Scene ${scene.id} captions: enabled=${scene.captions.enabled}, words=${scene.captions.words?.length}, style=${JSON.stringify(scene.captions.style)}`);
+      }
+    }
     
     // Debug: log each scene's video status
     inputProps.scenes.forEach((scene: any, idx: number) => {
