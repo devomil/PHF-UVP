@@ -2681,8 +2681,13 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
     const input = document.createElement("input");
     input.type = "file";
     input.accept = "image/jpeg,image/png,image/webp";
-    input.onchange = async () => {
+    input.style.position = "fixed";
+    input.style.top = "-9999px";
+    input.style.left = "-9999px";
+    document.body.appendChild(input);
+    input.addEventListener("change", async () => {
       const file = input.files?.[0];
+      document.body.removeChild(input);
       if (!file) return;
       setUploadingSourceImage(true);
       try {
@@ -2698,7 +2703,7 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
         toast({ title: "Upload Error", description: msg, variant: "destructive" });
       }
       setUploadingSourceImage(false);
-    };
+    });
     input.click();
   }, [toast]);
   const queryClient = useQueryClient();
