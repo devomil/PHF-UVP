@@ -2677,34 +2677,25 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
   const [overlayItems, setOverlayItems] = useState<SceneOverlayItem[]>([]);
   const [overlaysLoaded, setOverlaysLoaded] = useState(false);
   const { toast } = useToast();
-  const triggerSourceImageUpload = useCallback(() => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = "image/jpeg,image/png,image/webp";
-    input.style.position = "fixed";
-    input.style.top = "-9999px";
-    input.style.left = "-9999px";
-    document.body.appendChild(input);
-    input.addEventListener("change", async () => {
-      const file = input.files?.[0];
-      document.body.removeChild(input);
-      if (!file) return;
-      setUploadingSourceImage(true);
-      try {
-        const formData = new FormData();
-        formData.append("file", file);
-        const uploadRes = await fetch("/api/uploads", { method: "POST", credentials: "include", body: formData });
-        if (!uploadRes.ok) throw new Error("Upload failed");
-        const uploadData = await uploadRes.json();
-        setOverrideSourceImage(uploadData.url);
-        toast({ title: "Reference Image Updated", description: "New reference image set. Click Regenerate to use it." });
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : "Upload failed";
-        toast({ title: "Upload Error", description: msg, variant: "destructive" });
-      }
-      setUploadingSourceImage(false);
-    });
-    input.click();
+  const sourceImageInputRef = useRef<HTMLInputElement | null>(null);
+  const handleSourceImageChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingSourceImage(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const uploadRes = await fetch("/api/uploads", { method: "POST", credentials: "include", body: formData });
+      if (!uploadRes.ok) throw new Error("Upload failed");
+      const uploadData = await uploadRes.json();
+      setOverrideSourceImage(uploadData.url);
+      toast({ title: "Reference Image Updated", description: "New reference image set. Click Regenerate to use it." });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Upload failed";
+      toast({ title: "Upload Error", description: msg, variant: "destructive" });
+    }
+    setUploadingSourceImage(false);
+    e.target.value = "";
   }, [toast]);
   const queryClient = useQueryClient();
 
@@ -3059,15 +3050,22 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
               const hasRefMedia = effectiveSourceImage || genInfo.referenceVideoUrl;
               return (
                 <div className="mb-3 border rounded-lg p-3 space-y-3" style={{ borderColor: "var(--border-subtle)", backgroundColor: "rgba(0,0,0,0.2)" }}>
+                  <input
+                    id="qc-source-image-upload"
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    onChange={handleSourceImageChange}
+                    disabled={uploadingSourceImage}
+                    style={{ position: "absolute", width: "1px", height: "1px", padding: 0, margin: "-1px", overflow: "hidden", clip: "rect(0,0,0,0)", whiteSpace: "nowrap", border: 0 }}
+                  />
                   <div className="flex items-center justify-between">
                     <label className="text-xs font-medium block" style={{ color: "var(--text-muted)" }}>
                       Reference Image
                     </label>
                     <div className="flex items-center gap-1.5">
-                      <button
+                      <label
+                        htmlFor="qc-source-image-upload"
                         className="text-[10px] text-purple-400 hover:text-purple-300 cursor-pointer flex items-center gap-1"
-                        onClick={triggerSourceImageUpload}
-                        disabled={uploadingSourceImage}
                       >
                         {uploadingSourceImage ? (
                           <Loader2 className="w-3 h-3 animate-spin" />
@@ -3075,7 +3073,7 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
                           <Upload className="w-3 h-3" />
                         )}
                         {effectiveSourceImage ? "Replace" : "Add"}
-                      </button>
+                      </label>
                       {effectiveSourceImage && (
                         <button
                           className="text-[10px] text-red-400 hover:text-red-300 flex items-center gap-0.5"
