@@ -2938,6 +2938,15 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
   ];
 
   return (
+    <>
+    <input
+      id="qc-source-image-upload"
+      type="file"
+      accept="image/jpeg,image/png,image/webp,image/gif"
+      onChange={handleSourceImageChange}
+      disabled={uploadingSourceImage}
+      style={{ position: "fixed", top: "-100px", left: "-100px", width: "1px", height: "1px", opacity: 0 }}
+    />
     <div className="border rounded-xl mt-8 overflow-hidden" style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)" }}>
       <button
         onClick={() => setExpanded(!expanded)}
@@ -3050,14 +3059,6 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
               const hasRefMedia = effectiveSourceImage || genInfo.referenceVideoUrl;
               return (
                 <div className="mb-3 border rounded-lg p-3 space-y-3" style={{ borderColor: "var(--border-subtle)", backgroundColor: "rgba(0,0,0,0.2)" }}>
-                  <input
-                    id="qc-source-image-upload"
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp,image/gif"
-                    onChange={handleSourceImageChange}
-                    disabled={uploadingSourceImage}
-                    style={{ position: "absolute", width: "1px", height: "1px", padding: 0, margin: "-1px", overflow: "hidden", clip: "rect(0,0,0,0)", whiteSpace: "nowrap", border: 0 }}
-                  />
                   <div className="flex items-center justify-between">
                     <label className="text-xs font-medium block" style={{ color: "var(--text-muted)" }}>
                       Reference Image
@@ -3455,5 +3456,6 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
         </div>
       )}
     </div>
+    </>
   );
 }
