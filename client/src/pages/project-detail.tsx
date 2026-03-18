@@ -1403,6 +1403,54 @@ export default function ProjectDetail({ params }: { params?: { id: string } }) {
   );
 }
 
+function DebouncedTextInput({ label, value, placeholder, onSave }: { label: string; value: string; placeholder: string; onSave: (val: string) => void }) {
+  const [local, setLocal] = useState(value);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mountedValue = useRef(value);
+
+  useEffect(() => {
+    if (mountedValue.current !== value && !timerRef.current) {
+      setLocal(value);
+    }
+    mountedValue.current = value;
+  }, [value]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newVal = e.target.value;
+    setLocal(newVal);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => {
+      timerRef.current = null;
+      onSave(newVal);
+    }, 600);
+  };
+
+  const handleBlur = () => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    if (local !== value) {
+      onSave(local);
+    }
+  };
+
+  return (
+    <div>
+      <label className="text-xs block mb-1" style={{ color: "var(--text-muted)" }}>{label}</label>
+      <input
+        type="text"
+        value={local}
+        onChange={handleChange}
+        onBlur={handleBlur}
+        placeholder={placeholder}
+        className="w-full px-2.5 py-1.5 rounded-md border text-xs"
+        style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)", color: "var(--text-primary)" }}
+      />
+    </div>
+  );
+}
+
 function ToggleSwitch({ enabled, onChange, label }: { enabled: boolean; onChange: (v: boolean) => void; label: string }) {
   return (
     <button
@@ -2221,28 +2269,18 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
 
                   <div className="border-t pt-3 space-y-2.5" style={{ borderColor: "var(--border-subtle)" }}>
                     <span className="text-xs font-medium block" style={{ color: "var(--text-secondary)" }}>End Card Content</span>
-                    <div>
-                      <label className="text-xs block mb-1" style={{ color: "var(--text-muted)" }}>Tagline</label>
-                      <input
-                        type="text"
-                        value={settings.endCard?.taglineText || ''}
-                        onChange={(e) => saveMutation.mutate({ endCard: { ...settings.endCard, taglineText: e.target.value } })}
-                        placeholder="e.g. Rooted in Nature, Grown with Care"
-                        className="w-full px-2.5 py-1.5 rounded-md border text-xs"
-                        style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)", color: "var(--text-primary)" }}
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs block mb-1" style={{ color: "var(--text-muted)" }}>Website</label>
-                      <input
-                        type="text"
-                        value={settings.endCard?.contactWebsite || ''}
-                        onChange={(e) => saveMutation.mutate({ endCard: { ...settings.endCard, contactWebsite: e.target.value } })}
-                        placeholder="e.g. PineHillFarm.com"
-                        className="w-full px-2.5 py-1.5 rounded-md border text-xs"
-                        style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)", color: "var(--text-primary)" }}
-                      />
-                    </div>
+                    <DebouncedTextInput
+                      label="Tagline"
+                      value={settings.endCard?.taglineText || ''}
+                      placeholder="e.g. Rooted in Nature, Grown with Care"
+                      onSave={(val) => saveMutation.mutate({ endCard: { ...settings.endCard, taglineText: val } })}
+                    />
+                    <DebouncedTextInput
+                      label="Website"
+                      value={settings.endCard?.contactWebsite || ''}
+                      placeholder="e.g. PineHillFarm.com"
+                      onSave={(val) => saveMutation.mutate({ endCard: { ...settings.endCard, contactWebsite: val } })}
+                    />
                     <div className="grid grid-cols-2 gap-2">
                       <div>
                         <label className="text-xs block mb-1" style={{ color: "var(--text-muted)" }}>Logo Size</label>

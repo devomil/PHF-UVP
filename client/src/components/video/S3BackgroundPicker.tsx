@@ -34,7 +34,7 @@ export const S3BackgroundPicker: React.FC<S3BackgroundPickerProps> = ({
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/s3-assets/list?category=${category}`, {
+      const res = await fetch(`/api/admin/s3-assets/list?category=${category}`, {
         credentials: 'include',
       });
       if (!res.ok) throw new Error('Failed to load assets');
