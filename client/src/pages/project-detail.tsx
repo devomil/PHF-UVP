@@ -2659,7 +2659,6 @@ const ELEVENLABS_VOICES = [
 
 function QuickCreateAssetPanel({ projectId, project }: { projectId: string; project: any }) {
   const [expanded, setExpanded] = useState(true);
-  const [editPrompt, setEditPrompt] = useState(false);
   const [promptText, setPromptText] = useState("");
   const [selectedProvider, setSelectedProvider] = useState("auto");
   const [negativePrompt, setNegativePrompt] = useState("");
@@ -3169,26 +3168,18 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
 
             <div className="space-y-2.5">
               <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs" style={{ color: "var(--text-muted)" }}>Prompt</label>
-                  {!editPrompt && (
-                    <button className="text-xs text-purple-400 hover:text-purple-300" onClick={() => setEditPrompt(true)}>Edit</button>
-                  )}
+                <div className="flex items-center gap-2 mb-1.5">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-purple-400"><path d="M12 20h9"/><path d="M16.376 3.622a1 1 0 0 1 3.002 3.002L7.368 18.635a2 2 0 0 1-.855.506l-2.872.838a.5.5 0 0 1-.62-.62l.838-2.872a2 2 0 0 1 .506-.854z"/></svg>
+                  <label className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>Visual Prompt</label>
                 </div>
-                {editPrompt ? (
-                  <div className="space-y-2">
-                    <textarea
-                      value={promptText}
-                      onChange={(e) => setPromptText(e.target.value)}
-                      rows={3}
-                      className="w-full rounded-lg border p-2.5 text-sm resize-none"
-                      style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }}
-                    />
-                    <button className="text-xs text-purple-400 hover:text-purple-300" onClick={() => setEditPrompt(false)}>Done editing</button>
-                  </div>
-                ) : (
-                  <p className="text-sm" style={{ color: "var(--text-secondary)" }}>{promptText || project.description || "No prompt"}</p>
-                )}
+                <textarea
+                  value={promptText}
+                  onChange={(e) => setPromptText(e.target.value)}
+                  placeholder="Describe the visual direction for your video..."
+                  rows={3}
+                  className="w-full rounded-lg border p-3 text-sm resize-none transition-colors focus:outline-none focus:ring-2 focus:ring-purple-500/30 focus:border-purple-500/50"
+                  style={{ backgroundColor: "rgba(0,0,0,0.2)", borderColor: "var(--border-subtle)", color: "var(--text-primary)" }}
+                />
               </div>
 
               <div className="flex gap-3 items-end">
