@@ -2174,6 +2174,7 @@ router.patch('/projects/:projectId/render-settings', isAuthenticated, async (req
       const validLogoAnimations = ['scale-bounce', 'fade', 'slide-up', 'none'];
       const validTaglineAnimations = ['typewriter', 'fade', 'slide-up'];
       const validAmbientEffects = ['particles', 'bokeh', 'none'];
+      const validFonts = ['Great Vibes', 'Inter', 'Playfair Display', 'Montserrat', 'Raleway', 'Oswald', 'Lora', 'Poppins'];
       (projectData as any).endCardSettings = {
         ...existing,
         enabled: endCard.enabled ?? existing.enabled ?? true,
@@ -2190,6 +2191,13 @@ router.patch('/projects/:projectId/render-settings', isAuthenticated, async (req
         logoPositionY: endCard.logoPositionY != null ? Math.min(90, Math.max(10, endCard.logoPositionY)) : (existing.logoPositionY || 32),
         taglinePositionY: endCard.taglinePositionY != null ? Math.min(95, Math.max(15, endCard.taglinePositionY)) : (existing.taglinePositionY || 55),
         websitePositionY: endCard.websitePositionY != null ? Math.min(95, Math.max(20, endCard.websitePositionY)) : (existing.websitePositionY || 75),
+        taglineFontSize: endCard.taglineFontSize != null ? Math.min(72, Math.max(14, endCard.taglineFontSize)) : (existing.taglineFontSize || 28),
+        taglineColor: endCard.taglineColor ?? existing.taglineColor ?? '#E8D5B7',
+        taglineFontFamily: validFonts.includes(endCard.taglineFontFamily) ? endCard.taglineFontFamily : (existing.taglineFontFamily || 'Great Vibes'),
+        taglineBold: endCard.taglineBold ?? existing.taglineBold ?? false,
+        websiteFontSize: endCard.websiteFontSize != null ? Math.min(48, Math.max(12, endCard.websiteFontSize)) : (existing.websiteFontSize || 22),
+        websiteColor: endCard.websiteColor ?? existing.websiteColor ?? '#FFFFFF',
+        websiteBold: endCard.websiteBold ?? existing.websiteBold ?? false,
       };
     }
 
@@ -3096,9 +3104,10 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
           animation: (endCardSettings?.taglineAnimation || 'typewriter') as 'typewriter' | 'fade' | 'slide-up',
           positionY: endCardSettings?.taglinePositionY || 55,
           style: {
-            fontSize: 28,
-            fontFamily: "'Great Vibes', cursive",
-            color: '#E8D5B7',
+            fontSize: endCardSettings?.taglineFontSize || 28,
+            fontFamily: `'${endCardSettings?.taglineFontFamily || 'Great Vibes'}', cursive`,
+            color: endCardSettings?.taglineColor || '#E8D5B7',
+            fontWeight: endCardSettings?.taglineBold ? 700 : 400,
           },
         },
         contact: {
@@ -3109,8 +3118,9 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
           animation: 'stagger' as const,
           positionY: endCardSettings?.websitePositionY || 75,
           style: {
-            fontSize: 22,
-            color: '#FFFFFF',
+            fontSize: endCardSettings?.websiteFontSize || 22,
+            color: endCardSettings?.websiteColor || '#FFFFFF',
+            fontWeight: endCardSettings?.websiteBold ? 700 : 400,
           },
         },
         // Phase 18E: Social icons

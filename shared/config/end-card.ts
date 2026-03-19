@@ -26,6 +26,7 @@ export interface EndCardConfig {
       fontSize: number;
       fontFamily: string;
       color: string;
+      fontWeight?: number;
     };
   };
   contact: {
@@ -38,6 +39,7 @@ export interface EndCardConfig {
     style: {
       fontSize: number;
       color: string;
+      fontWeight?: number;
     };
   };
   social?: {

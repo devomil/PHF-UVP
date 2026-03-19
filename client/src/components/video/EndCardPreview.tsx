@@ -7,8 +7,15 @@ interface EndCardPreviewProps {
   logoPositionY?: number;
   taglineText?: string;
   taglinePositionY?: number;
+  taglineFontSize?: number;
+  taglineColor?: string;
+  taglineFontFamily?: string;
+  taglineBold?: boolean;
   websiteText?: string;
   websitePositionY?: number;
+  websiteFontSize?: number;
+  websiteColor?: string;
+  websiteBold?: boolean;
   aspectRatio?: string;
 }
 
@@ -19,13 +26,23 @@ export const EndCardPreview: React.FC<EndCardPreviewProps> = ({
   logoPositionY = 32,
   taglineText = '',
   taglinePositionY = 55,
+  taglineFontSize = 28,
+  taglineColor = '#E8D5B7',
+  taglineFontFamily = 'Great Vibes',
+  taglineBold = false,
   websiteText = '',
   websitePositionY = 75,
+  websiteFontSize = 22,
+  websiteColor = '#FFFFFF',
+  websiteBold = false,
   aspectRatio = '16/9',
 }) => {
   const bgStyle: React.CSSProperties = backgroundUrl
     ? { backgroundImage: `url(${backgroundUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' }
     : { background: 'linear-gradient(145deg, #1a1a2e, #16213e, #0d1b2a)' };
+
+  const previewTaglineSize = Math.max(7, Math.round(taglineFontSize * 0.35));
+  const previewWebsiteSize = Math.max(6, Math.round(websiteFontSize * 0.35));
 
   return (
     <div
@@ -87,9 +104,11 @@ export const EndCardPreview: React.FC<EndCardPreviewProps> = ({
             style={{ top: `${taglinePositionY}%`, transform: 'translateY(-50%)' }}
           >
             <span
-              className="text-[8px] font-medium italic"
               style={{
-                color: '#E8D5B7',
+                fontSize: previewTaglineSize,
+                fontFamily: `'${taglineFontFamily}', cursive, serif`,
+                color: taglineColor,
+                fontWeight: taglineBold ? 700 : 400,
                 textShadow: '0 1px 4px rgba(0,0,0,0.6)',
               }}
             >
@@ -104,9 +123,11 @@ export const EndCardPreview: React.FC<EndCardPreviewProps> = ({
             style={{ top: `${websitePositionY}%`, transform: 'translateY(-50%)' }}
           >
             <span
-              className="text-[7px]"
               style={{
-                color: 'rgba(255,255,255,0.8)',
+                fontSize: previewWebsiteSize,
+                fontFamily: 'Inter, sans-serif',
+                color: websiteColor,
+                fontWeight: websiteBold ? 700 : 400,
                 textShadow: '0 1px 3px rgba(0,0,0,0.5)',
               }}
             >

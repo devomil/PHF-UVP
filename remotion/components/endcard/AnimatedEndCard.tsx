@@ -380,7 +380,7 @@ const LogoReveal: React.FC<{
 
 const TaglineReveal: React.FC<{
   text: string;
-  style: { fontSize: number; fontFamily: string; color: string };
+  style: { fontSize: number; fontFamily: string; color: string; fontWeight?: number };
   animation: string;
   startFrame: number;
   fps: number;
@@ -409,6 +409,7 @@ const TaglineReveal: React.FC<{
         fontSize: style.fontSize,
         fontFamily: style.fontFamily,
         color: style.color,
+        fontWeight: style.fontWeight || 400,
         opacity,
         whiteSpace: 'nowrap',
         textShadow: '0 2px 8px rgba(0,0,0,0.4)',
@@ -427,7 +428,7 @@ const ContactReveal: React.FC<{
   website?: string;
   phone?: string;
   email?: string;
-  style: { fontSize: number; color: string };
+  style: { fontSize: number; color: string; fontWeight?: number };
   animation: string;
   startFrame: number;
   fps: number;
@@ -479,7 +480,7 @@ const ContactReveal: React.FC<{
               fontSize: style.fontSize,
               color: style.color,
               fontFamily: 'Inter, sans-serif',
-              fontWeight: 500,
+              fontWeight: style.fontWeight || 500,
               opacity,
               transform: `translateY(${translateY}px)`,
               textShadow: '0 1px 4px rgba(0,0,0,0.3)',

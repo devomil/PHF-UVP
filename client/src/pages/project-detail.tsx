@@ -1692,7 +1692,7 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
     outroTemplate: "classic-glow",
     introBackgroundRandom: false,
     introBackgroundUrl: null as string | null,
-    endCard: { enabled: true, duration: 5, taglineText: '', logoSize: 25, logoAnimation: 'scale-bounce', taglineAnimation: 'typewriter', contactWebsite: '', contactPhone: '', contactEmail: '', ambientEffect: 'bokeh', backgroundUrl: null as string | null, logoPositionY: 32, taglinePositionY: 55, websitePositionY: 75 },
+    endCard: { enabled: true, duration: 5, taglineText: '', logoSize: 25, logoAnimation: 'scale-bounce', taglineAnimation: 'typewriter', contactWebsite: '', contactPhone: '', contactEmail: '', ambientEffect: 'bokeh', backgroundUrl: null as string | null, logoPositionY: 32, taglinePositionY: 55, websitePositionY: 75, taglineFontSize: 28, taglineColor: '#E8D5B7', taglineFontFamily: 'Great Vibes', taglineBold: false, websiteFontSize: 22, websiteColor: '#FFFFFF', websiteBold: false },
   };
 
   const settings = {
@@ -2280,12 +2280,111 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
                       placeholder="e.g. Rooted in Nature, Grown with Care"
                       onSave={(val) => saveMutation.mutate({ endCard: { ...settings.endCard, taglineText: val } })}
                     />
+                    <div className="grid grid-cols-4 gap-1.5">
+                      <div>
+                        <label className="text-[10px] block mb-0.5" style={{ color: "var(--text-muted)" }}>Font</label>
+                        <select
+                          value={settings.endCard?.taglineFontFamily || 'Great Vibes'}
+                          onChange={(e) => saveMutation.mutate({ endCard: { ...settings.endCard, taglineFontFamily: e.target.value } })}
+                          className="w-full px-1.5 py-1 rounded-md border text-[10px]"
+                          style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)", color: "var(--text-primary)" }}
+                        >
+                          <option value="Great Vibes">Great Vibes</option>
+                          <option value="Playfair Display">Playfair Display</option>
+                          <option value="Montserrat">Montserrat</option>
+                          <option value="Raleway">Raleway</option>
+                          <option value="Oswald">Oswald</option>
+                          <option value="Lora">Lora</option>
+                          <option value="Poppins">Poppins</option>
+                          <option value="Inter">Inter</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-[10px] block mb-0.5" style={{ color: "var(--text-muted)" }}>Size</label>
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="range"
+                            min="14"
+                            max="72"
+                            value={settings.endCard?.taglineFontSize || 28}
+                            onChange={(e) => saveMutation.mutate({ endCard: { ...settings.endCard, taglineFontSize: parseInt(e.target.value) } })}
+                            className="flex-1 h-1 rounded-full appearance-none cursor-pointer"
+                            style={{ background: `linear-gradient(to right, rgb(99 102 241) ${((settings.endCard?.taglineFontSize || 28) - 14) / 0.58}%, var(--border-subtle) ${((settings.endCard?.taglineFontSize || 28) - 14) / 0.58}%)` }}
+                          />
+                          <span className="text-[9px] w-5 text-right" style={{ color: "var(--text-muted)" }}>{settings.endCard?.taglineFontSize || 28}</span>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-[10px] block mb-0.5" style={{ color: "var(--text-muted)" }}>Color</label>
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="color"
+                            value={settings.endCard?.taglineColor || '#E8D5B7'}
+                            onChange={(e) => saveMutation.mutate({ endCard: { ...settings.endCard, taglineColor: e.target.value } })}
+                            className="w-6 h-6 rounded border-0 cursor-pointer p-0"
+                            style={{ backgroundColor: 'transparent' }}
+                          />
+                          <span className="text-[9px]" style={{ color: "var(--text-muted)" }}>{settings.endCard?.taglineColor || '#E8D5B7'}</span>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-[10px] block mb-0.5" style={{ color: "var(--text-muted)" }}>Bold</label>
+                        <button
+                          onClick={() => saveMutation.mutate({ endCard: { ...settings.endCard, taglineBold: !settings.endCard?.taglineBold } })}
+                          className={`px-2 py-1 rounded-md border text-[10px] font-bold transition-colors ${settings.endCard?.taglineBold ? 'bg-indigo-500/20 border-indigo-500' : ''}`}
+                          style={{ borderColor: settings.endCard?.taglineBold ? undefined : "var(--border-subtle)", color: "var(--text-primary)" }}
+                        >
+                          B
+                        </button>
+                      </div>
+                    </div>
+
                     <DebouncedTextInput
                       label="Website"
                       value={settings.endCard?.contactWebsite || ''}
                       placeholder="e.g. PineHillFarm.com"
                       onSave={(val) => saveMutation.mutate({ endCard: { ...settings.endCard, contactWebsite: val } })}
                     />
+                    <div className="grid grid-cols-3 gap-1.5">
+                      <div>
+                        <label className="text-[10px] block mb-0.5" style={{ color: "var(--text-muted)" }}>Size</label>
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="range"
+                            min="12"
+                            max="48"
+                            value={settings.endCard?.websiteFontSize || 22}
+                            onChange={(e) => saveMutation.mutate({ endCard: { ...settings.endCard, websiteFontSize: parseInt(e.target.value) } })}
+                            className="flex-1 h-1 rounded-full appearance-none cursor-pointer"
+                            style={{ background: `linear-gradient(to right, rgb(99 102 241) ${((settings.endCard?.websiteFontSize || 22) - 12) / 0.36}%, var(--border-subtle) ${((settings.endCard?.websiteFontSize || 22) - 12) / 0.36}%)` }}
+                          />
+                          <span className="text-[9px] w-5 text-right" style={{ color: "var(--text-muted)" }}>{settings.endCard?.websiteFontSize || 22}</span>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-[10px] block mb-0.5" style={{ color: "var(--text-muted)" }}>Color</label>
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="color"
+                            value={settings.endCard?.websiteColor || '#FFFFFF'}
+                            onChange={(e) => saveMutation.mutate({ endCard: { ...settings.endCard, websiteColor: e.target.value } })}
+                            className="w-6 h-6 rounded border-0 cursor-pointer p-0"
+                            style={{ backgroundColor: 'transparent' }}
+                          />
+                          <span className="text-[9px]" style={{ color: "var(--text-muted)" }}>{settings.endCard?.websiteColor || '#FFFFFF'}</span>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-[10px] block mb-0.5" style={{ color: "var(--text-muted)" }}>Bold</label>
+                        <button
+                          onClick={() => saveMutation.mutate({ endCard: { ...settings.endCard, websiteBold: !settings.endCard?.websiteBold } })}
+                          className={`px-2 py-1 rounded-md border text-[10px] font-bold transition-colors ${settings.endCard?.websiteBold ? 'bg-indigo-500/20 border-indigo-500' : ''}`}
+                          style={{ borderColor: settings.endCard?.websiteBold ? undefined : "var(--border-subtle)", color: "var(--text-primary)" }}
+                        >
+                          B
+                        </button>
+                      </div>
+                    </div>
                     <div className="grid grid-cols-2 gap-2">
                       <div>
                         <label className="text-xs block mb-1" style={{ color: "var(--text-muted)" }}>Logo Size</label>
@@ -2366,8 +2465,15 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
                         logoPositionY={settings.endCard?.logoPositionY || 32}
                         taglineText={settings.endCard?.taglineText || ''}
                         taglinePositionY={settings.endCard?.taglinePositionY || 55}
+                        taglineFontSize={settings.endCard?.taglineFontSize || 28}
+                        taglineColor={settings.endCard?.taglineColor || '#E8D5B7'}
+                        taglineFontFamily={settings.endCard?.taglineFontFamily || 'Great Vibes'}
+                        taglineBold={settings.endCard?.taglineBold || false}
                         websiteText={settings.endCard?.contactWebsite || ''}
                         websitePositionY={settings.endCard?.websitePositionY || 75}
+                        websiteFontSize={settings.endCard?.websiteFontSize || 22}
+                        websiteColor={settings.endCard?.websiteColor || '#FFFFFF'}
+                        websiteBold={settings.endCard?.websiteBold || false}
                       />
 
                       <div className="space-y-1.5">
