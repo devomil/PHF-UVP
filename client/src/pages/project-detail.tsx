@@ -1819,17 +1819,21 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
       });
       return { previousData };
     },
-    onSuccess: (data: any) => {
+    onSuccess: (data: any, patch: any) => {
       if (data?.settings) {
         queryClient.setQueryData(["render-settings", projectId], (old: any) => {
           if (!old) return old;
           const oldSettings = old.settings || {};
-          const merged = { ...oldSettings, ...data.settings };
-          if (data.settings.endCard && oldSettings.endCard) {
-            merged.endCard = { ...oldSettings.endCard, ...data.settings.endCard };
-          }
-          if (data.settings.introCard && oldSettings.introCard) {
-            merged.introCard = { ...oldSettings.introCard, ...data.settings.introCard };
+          const merged = { ...oldSettings };
+          const patchKeys = Object.keys(patch || {});
+          for (const key of patchKeys) {
+            if (data.settings[key] !== undefined) {
+              if (typeof data.settings[key] === 'object' && data.settings[key] !== null && typeof merged[key] === 'object' && merged[key] !== null) {
+                merged[key] = { ...merged[key], ...data.settings[key] };
+              } else {
+                merged[key] = data.settings[key];
+              }
+            }
           }
           return { ...old, settings: merged };
         });
