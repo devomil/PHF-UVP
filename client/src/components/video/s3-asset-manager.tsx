@@ -44,12 +44,13 @@ interface AssetCategory {
   accept: string;
 }
 
-type CategoryKey = 'sfx' | 'end-cards' | 'intro-backgrounds' | 'fonts';
+type CategoryKey = 'sfx' | 'end-cards' | 'intro-backgrounds' | 'logos' | 'fonts';
 
 const CATEGORY_ICONS: Record<CategoryKey, typeof Volume2> = {
   'sfx': Volume2,
   'end-cards': Film,
   'intro-backgrounds': Film,
+  'logos': Film,
   'fonts': Type,
 };
 
@@ -85,6 +86,14 @@ const EXPECTED_FILES: Record<CategoryKey, { name: string; description: string; r
     { name: 'gradient-warm.jpg', description: 'Warm gradient background', required: false },
     { name: 'gradient-cool.jpg', description: 'Cool gradient background', required: false },
   ],
+  'logos': [
+    { name: 'logo-primary.png', description: 'Primary brand logo (transparent PNG)', required: true },
+    { name: 'logo-white.png', description: 'White/light version for dark backgrounds', required: false },
+    { name: 'logo-dark.png', description: 'Dark version for light backgrounds', required: false },
+    { name: 'logo-icon.png', description: 'Icon-only version of the logo', required: false },
+    { name: 'logo-horizontal.png', description: 'Horizontal/landscape layout logo', required: false },
+    { name: 'logo-stacked.png', description: 'Stacked/vertical layout logo', required: false },
+  ],
   'fonts': [
     { name: 'heading.ttf', description: 'Primary heading/title font', required: true },
     { name: 'body.ttf', description: 'Body text font', required: true },
@@ -98,6 +107,7 @@ const CATEGORY_FILE_HINTS: Record<CategoryKey, { examples: string[]; hint: strin
   'sfx': { examples: [], hint: 'Select a required filename from the list above, or type a custom name', formatTip: 'MP3 is recommended for smaller file sizes. WAV for highest quality.' },
   'end-cards': { examples: ['background-default.png', 'background-seasonal.jpg', 'cta-subscribe.png'], hint: 'Select a target filename below, then pick your image file', formatTip: 'PNG or JPG at 1920x1080 recommended. Use PNG for elements with transparency.' },
   'intro-backgrounds': { examples: ['nature-landscape.jpg', 'cinematic-blur.jpg', 'farm-scenery.jpg'], hint: 'Select a target filename below, then pick your image file', formatTip: 'JPG or PNG at 1920x1080 recommended. Multiple backgrounds enable random selection for video variety.' },
+  'logos': { examples: ['logo-primary.png', 'logo-white.png', 'logo-icon.svg'], hint: 'Select a target filename below, then pick your logo file', formatTip: 'PNG with transparent background recommended. SVG also supported. Min 500px wide for best quality.' },
   'fonts': { examples: ['heading.ttf', 'body.otf', 'accent.woff2'], hint: 'Select a target filename below, then pick your font file', formatTip: 'TTF or OTF formats work best for video rendering. WOFF/WOFF2 are web-only and may not render in videos.' },
 };
 
