@@ -1397,7 +1397,7 @@ export default function ProjectDetail({ params }: { params?: { id: string } }) {
           </div>
         )}
 
-        <RenderConfigPanel projectId={projectId} projectOutputUrl={project.outputUrl} projectStatus={project.status} projectScenes={project.scenes} projectRenderId={project.renderId} />
+        <RenderConfigPanel projectId={projectId} projectOutputUrl={project.outputUrl} projectStatus={project.status} projectScenes={project.scenes} projectRenderId={project.renderId} projectAspectRatio={project?.outputFormat?.aspectRatio || '16:9'} />
       </div>
     </div>
   );
@@ -1691,7 +1691,7 @@ function RenderButton({ projectId, hasVisual, hasVoiceover, hasMusic, initialOut
   );
 }
 
-function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, projectScenes, projectRenderId }: { projectId: string; projectOutputUrl?: string | null; projectStatus?: string; projectScenes?: any[]; projectRenderId?: string | null }) {
+function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, projectScenes, projectRenderId, projectAspectRatio = '16:9' }: { projectId: string; projectOutputUrl?: string | null; projectStatus?: string; projectScenes?: any[]; projectRenderId?: string | null; projectAspectRatio?: string }) {
   const [expanded, setExpanded] = useState(true);
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -2284,7 +2284,7 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
                       {settings.introBackgroundUrl && !settings.introBackgroundRandom && (
                         <IntroPreviewCard
                           backgroundUrl={settings.introBackgroundUrl}
-                          aspectRatio={(project?.outputFormat?.aspectRatio || '16:9').replace(':', '/')}
+                          aspectRatio={projectAspectRatio.replace(':', '/')}
                         />
                       )}
                     </div>
@@ -2622,7 +2622,7 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
                         websiteFontFamily={settings.endCard?.websiteFontFamily || 'Inter'}
                         phoneText={settings.endCard?.contactPhone || ''}
                         emailText={settings.endCard?.contactEmail || ''}
-                        aspectRatio={(project?.outputFormat?.aspectRatio || '16:9').replace(':', '/')}
+                        aspectRatio={projectAspectRatio.replace(':', '/')}
                       />
 
                       <div className="space-y-1.5">
