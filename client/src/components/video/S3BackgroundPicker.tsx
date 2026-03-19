@@ -11,7 +11,7 @@ interface S3Asset {
 }
 
 interface S3BackgroundPickerProps {
-  category: 'intro-backgrounds' | 'end-cards';
+  category: 'intro-backgrounds' | 'end-cards' | 'logos';
   selectedUrl?: string | null;
   onSelect: (url: string | null) => void;
   accentColor?: string;

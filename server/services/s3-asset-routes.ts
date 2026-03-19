@@ -19,8 +19,9 @@ const s3 = new S3Client({
 
 const ASSET_CATEGORIES = {
   'sfx': { prefix: 'audio/sfx/', label: 'Sound Effects', accept: '.mp3,.wav,.ogg' },
-  'end-cards': { prefix: 'brand/end-cards/', label: 'End Card Assets', accept: '.png,.jpg,.jpeg,.webp' },
+  'end-cards': { prefix: 'brand/end-cards/', label: 'End Card Assets', accept: '.png,.jpg,.jpeg,.webp,.svg' },
   'intro-backgrounds': { prefix: 'brand/intro-backgrounds/', label: 'Intro Backgrounds', accept: '.png,.jpg,.jpeg,.webp' },
+  'logos': { prefix: 'brand/logos/', label: 'Logos', accept: '.png,.jpg,.jpeg,.webp,.svg' },
   'fonts': { prefix: 'brand/fonts/', label: 'Custom Fonts', accept: '.ttf,.otf,.woff,.woff2' },
 } as const;
 

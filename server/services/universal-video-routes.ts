@@ -2190,6 +2190,7 @@ router.patch('/projects/:projectId/render-settings', isAuthenticated, async (req
         contactAnimation: validContactAnimations.includes(endCard.contactAnimation) ? endCard.contactAnimation : (existing.contactAnimation || 'stagger'),
         ambientEffect: validAmbientEffects.includes(endCard.ambientEffect) ? endCard.ambientEffect : (existing.ambientEffect || 'bokeh'),
         backgroundUrl: endCard.backgroundUrl !== undefined ? (endCard.backgroundUrl || null) : (existing.backgroundUrl || null),
+        logoUrl: endCard.logoUrl !== undefined ? (endCard.logoUrl || null) : (existing.logoUrl || null),
         logoPositionY: endCard.logoPositionY != null ? Math.min(90, Math.max(10, endCard.logoPositionY)) : (existing.logoPositionY || 32),
         taglinePositionY: endCard.taglinePositionY != null ? Math.min(95, Math.max(15, endCard.taglinePositionY)) : (existing.taglinePositionY || 55),
         websitePositionY: endCard.websitePositionY != null ? Math.min(95, Math.max(20, endCard.websitePositionY)) : (existing.websitePositionY || 75),
@@ -2232,6 +2233,7 @@ router.patch('/projects/:projectId/render-settings', isAuthenticated, async (req
         contactAnimation: validContactAnimations.includes(introCard.contactAnimation) ? introCard.contactAnimation : (existing.contactAnimation || 'stagger'),
         ambientEffect: validAmbientEffects.includes(introCard.ambientEffect) ? introCard.ambientEffect : (existing.ambientEffect || 'bokeh'),
         backgroundUrl: introCard.backgroundUrl !== undefined ? (introCard.backgroundUrl || null) : (existing.backgroundUrl || null),
+        logoUrl: introCard.logoUrl !== undefined ? (introCard.logoUrl || null) : (existing.logoUrl || null),
         logoPositionY: introCard.logoPositionY != null ? Math.min(90, Math.max(10, introCard.logoPositionY)) : (existing.logoPositionY || 32),
         taglinePositionY: introCard.taglinePositionY != null ? Math.min(95, Math.max(15, introCard.taglinePositionY)) : (existing.taglinePositionY || 50),
         websitePositionY: introCard.websitePositionY != null ? Math.min(95, Math.max(20, introCard.websitePositionY)) : (existing.websitePositionY || 75),
@@ -3107,7 +3109,7 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
     } else if (endCardSettings?.enabled !== false) {
       let cachedLogoUrl = '';
       
-      const sourceLogoUrl = preparedProject.brand?.logoUrl || effectiveBrand?.logoUrl || '';
+      const sourceLogoUrl = endCardSettings?.logoUrl || preparedProject.brand?.logoUrl || effectiveBrand?.logoUrl || '';
       cachedLogoUrl = await assetUrlResolver.resolve(sourceLogoUrl) || '';
       if (cachedLogoUrl) {
         console.log('[UniversalVideo] End card logo from asset resolver:', sourceLogoUrl, '->', cachedLogoUrl);
@@ -3539,7 +3541,8 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
       const introCardSettings = (projectData as any).introCardSettings || {};
       const brandName = brandWithCachedLogo.name || effectiveBrand?.name || '';
       const brandTagline = introCardSettings.taglineText || brandWithCachedLogo.tagline || effectiveBrand?.tagline || '';
-      const brandLogoUrl = brandWithCachedLogo.logoUrl || '';
+      const introLogoSource = introCardSettings.logoUrl || brandWithCachedLogo.logoUrl || '';
+      const brandLogoUrl = introLogoSource ? (await assetUrlResolver.resolve(introLogoSource) || introLogoSource) : '';
       const brandColors = brandWithCachedLogo.colors || {};
       const introDuration = introCardSettings.duration || 4;
       

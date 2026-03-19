@@ -1749,8 +1749,8 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
     outroTemplate: "classic-glow",
     introBackgroundRandom: false,
     introBackgroundUrl: null as string | null,
-    endCard: { enabled: true, duration: 5, taglineText: '', logoSize: 25, logoAnimation: 'scale-bounce', taglineAnimation: 'typewriter', contactAnimation: 'stagger', contactWebsite: '', contactPhone: '', contactEmail: '', ambientEffect: 'bokeh', backgroundUrl: null as string | null, logoPositionY: 32, taglinePositionY: 55, websitePositionY: 75, taglineFontSize: 28, taglineColor: '#E8D5B7', taglineFontFamily: 'Great Vibes', taglineBold: false, taglineFontWeight: 400, websiteFontSize: 22, websiteColor: '#FFFFFF', websiteBold: false, websiteFontWeight: 500, websiteFontFamily: 'Inter' },
-    introCard: { enabled: true, duration: 4, taglineText: '', logoSize: 30, logoAnimation: 'scale-bounce', taglineAnimation: 'fade', contactAnimation: 'stagger', contactWebsite: '', contactPhone: '', contactEmail: '', ambientEffect: 'bokeh', backgroundUrl: null as string | null, logoPositionY: 32, taglinePositionY: 50, websitePositionY: 75, taglineFontSize: 28, taglineColor: '#E8D5B7', taglineFontFamily: 'Great Vibes', taglineBold: false, taglineFontWeight: 400, websiteFontSize: 22, websiteColor: '#FFFFFF', websiteBold: false, websiteFontWeight: 500, websiteFontFamily: 'Inter' },
+    endCard: { enabled: true, duration: 5, taglineText: '', logoUrl: null as string | null, logoSize: 25, logoAnimation: 'scale-bounce', taglineAnimation: 'typewriter', contactAnimation: 'stagger', contactWebsite: '', contactPhone: '', contactEmail: '', ambientEffect: 'bokeh', backgroundUrl: null as string | null, logoPositionY: 32, taglinePositionY: 55, websitePositionY: 75, taglineFontSize: 28, taglineColor: '#E8D5B7', taglineFontFamily: 'Great Vibes', taglineBold: false, taglineFontWeight: 400, websiteFontSize: 22, websiteColor: '#FFFFFF', websiteBold: false, websiteFontWeight: 500, websiteFontFamily: 'Inter' },
+    introCard: { enabled: true, duration: 4, taglineText: '', logoUrl: null as string | null, logoSize: 30, logoAnimation: 'scale-bounce', taglineAnimation: 'fade', contactAnimation: 'stagger', contactWebsite: '', contactPhone: '', contactEmail: '', ambientEffect: 'bokeh', backgroundUrl: null as string | null, logoPositionY: 32, taglinePositionY: 50, websitePositionY: 75, taglineFontSize: 28, taglineColor: '#E8D5B7', taglineFontFamily: 'Great Vibes', taglineBold: false, taglineFontWeight: 400, websiteFontSize: 22, websiteColor: '#FFFFFF', websiteBold: false, websiteFontWeight: 500, websiteFontFamily: 'Inter' },
   };
 
   const settings = {
@@ -2471,6 +2471,14 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
                       />
                     </div>
 
+                    <S3BackgroundPicker
+                      category="logos"
+                      selectedUrl={settings.introCard?.logoUrl}
+                      onSelect={(url) => saveMutation.mutate({ introCard: { ...settings.introCard, logoUrl: url } })}
+                      accentColor="rgb(168 85 247)"
+                      label="Logo"
+                    />
+
                     <div className="grid grid-cols-2 gap-2">
                       <div>
                         <label className="text-xs block mb-1" style={{ color: "var(--text-muted)" }}>Logo Size</label>
@@ -2588,7 +2596,7 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
 
                       <EndCardPreview
                         backgroundUrl={settings.introCard?.backgroundUrl || settings.introBackgroundUrl}
-                        logoUrl={null}
+                        logoUrl={settings.introCard?.logoUrl || null}
                         logoSize={settings.introCard?.logoSize || 30}
                         logoPositionY={settings.introCard?.logoPositionY || 32}
                         taglineText={settings.introCard?.taglineText || ''}
@@ -2896,6 +2904,14 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
                       />
                     </div>
 
+                    <S3BackgroundPicker
+                      category="logos"
+                      selectedUrl={settings.endCard?.logoUrl}
+                      onSelect={(url) => saveMutation.mutate({ endCard: { ...settings.endCard, logoUrl: url } })}
+                      accentColor="rgb(99 102 241)"
+                      label="Logo"
+                    />
+
                     <div className="grid grid-cols-2 gap-2">
                       <div>
                         <label className="text-xs block mb-1" style={{ color: "var(--text-muted)" }}>Logo Size</label>
@@ -2997,7 +3013,7 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
 
                       <EndCardPreview
                         backgroundUrl={settings.endCard?.backgroundUrl}
-                        logoUrl={null}
+                        logoUrl={settings.endCard?.logoUrl || null}
                         logoSize={settings.endCard?.logoSize || 25}
                         logoPositionY={settings.endCard?.logoPositionY || 32}
                         taglineText={settings.endCard?.taglineText || ''}

@@ -26,6 +26,7 @@ export const ASSET_PREFIXES = {
   sfx: 'audio/sfx/',
   'end-cards': 'brand/end-cards/',
   'intro-backgrounds': 'brand/intro-backgrounds/',
+  logos: 'brand/logos/',
   fonts: 'brand/fonts/',
 } as const;
 
