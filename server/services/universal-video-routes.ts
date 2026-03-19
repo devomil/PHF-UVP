@@ -2210,6 +2210,48 @@ router.patch('/projects/:projectId/render-settings', isAuthenticated, async (req
       };
     }
 
+    const introCard = req.body.introCard;
+    if (introCard !== undefined) {
+      const existing = (projectData as any).introCardSettings || {};
+      const validLogoAnimations = ['scale-bounce', 'fade', 'slide-up', 'zoom-blur', 'spin-in', 'elastic-pop', 'none'];
+      const validTaglineAnimations = ['typewriter', 'fade', 'slide-up', 'letter-cascade', 'word-reveal', 'glow-pulse', 'cinematic-rise', 'none'];
+      const validContactAnimations = ['stagger', 'fade', 'slide-up', 'slide-left', 'stagger-slide', 'stagger-scale', 'cascade-blur', 'none'];
+      const validAmbientEffects = ['particles', 'bokeh', 'none'];
+      const validFonts = ['Great Vibes', 'Inter', 'Playfair Display', 'Montserrat', 'Raleway', 'Oswald', 'Lora', 'Poppins', 'Dancing Script', 'Sacramento', 'Pacifico', 'Caveat', 'Satisfy', 'Kaushan Script', 'Allura', 'Cormorant Garamond', 'Libre Baskerville', 'EB Garamond', 'Quicksand', 'Nunito', 'Open Sans'];
+      (projectData as any).introCardSettings = {
+        ...existing,
+        enabled: introCard.enabled ?? existing.enabled ?? true,
+        duration: introCard.duration != null ? Math.min(10, Math.max(3, introCard.duration)) : (existing.duration || 4),
+        taglineText: introCard.taglineText ?? existing.taglineText ?? '',
+        taglineAnimation: validTaglineAnimations.includes(introCard.taglineAnimation) ? introCard.taglineAnimation : (existing.taglineAnimation || 'fade'),
+        logoAnimation: validLogoAnimations.includes(introCard.logoAnimation) ? introCard.logoAnimation : (existing.logoAnimation || 'scale-bounce'),
+        logoSize: introCard.logoSize != null ? Math.min(60, Math.max(10, introCard.logoSize)) : (existing.logoSize || 30),
+        contactWebsite: introCard.contactWebsite ?? existing.contactWebsite ?? '',
+        contactPhone: introCard.contactPhone ?? existing.contactPhone ?? '',
+        contactEmail: introCard.contactEmail ?? existing.contactEmail ?? '',
+        contactAnimation: validContactAnimations.includes(introCard.contactAnimation) ? introCard.contactAnimation : (existing.contactAnimation || 'stagger'),
+        ambientEffect: validAmbientEffects.includes(introCard.ambientEffect) ? introCard.ambientEffect : (existing.ambientEffect || 'bokeh'),
+        backgroundUrl: introCard.backgroundUrl !== undefined ? (introCard.backgroundUrl || null) : (existing.backgroundUrl || null),
+        logoPositionY: introCard.logoPositionY != null ? Math.min(90, Math.max(10, introCard.logoPositionY)) : (existing.logoPositionY || 32),
+        taglinePositionY: introCard.taglinePositionY != null ? Math.min(95, Math.max(15, introCard.taglinePositionY)) : (existing.taglinePositionY || 50),
+        websitePositionY: introCard.websitePositionY != null ? Math.min(95, Math.max(20, introCard.websitePositionY)) : (existing.websitePositionY || 75),
+        taglineFontSize: introCard.taglineFontSize != null ? Math.min(72, Math.max(14, introCard.taglineFontSize)) : (existing.taglineFontSize || 28),
+        taglineColor: introCard.taglineColor ?? existing.taglineColor ?? '#E8D5B7',
+        taglineFontFamily: validFonts.includes(introCard.taglineFontFamily) ? introCard.taglineFontFamily : (existing.taglineFontFamily || 'Great Vibes'),
+        taglineBold: introCard.taglineBold ?? existing.taglineBold ?? false,
+        taglineFontWeight: introCard.taglineFontWeight != null
+          ? Math.min(900, Math.max(100, introCard.taglineFontWeight))
+          : (existing.taglineFontWeight ?? ((introCard.taglineBold ?? existing.taglineBold) ? 700 : undefined)),
+        websiteFontSize: introCard.websiteFontSize != null ? Math.min(48, Math.max(12, introCard.websiteFontSize)) : (existing.websiteFontSize || 22),
+        websiteColor: introCard.websiteColor ?? existing.websiteColor ?? '#FFFFFF',
+        websiteBold: introCard.websiteBold ?? existing.websiteBold ?? false,
+        websiteFontWeight: introCard.websiteFontWeight != null
+          ? Math.min(900, Math.max(100, introCard.websiteFontWeight))
+          : (existing.websiteFontWeight ?? ((introCard.websiteBold ?? existing.websiteBold) ? 700 : undefined)),
+        websiteFontFamily: validFonts.includes(introCard.websiteFontFamily) ? introCard.websiteFontFamily : (existing.websiteFontFamily || 'Inter'),
+      };
+    }
+
     if (req.body.introBackgroundUrl !== undefined) {
       (projectData as any).introBackgroundUrl = req.body.introBackgroundUrl || null;
     }
@@ -2243,7 +2285,8 @@ router.patch('/projects/:projectId/render-settings', isAuthenticated, async (req
         introBackgroundUrl: (projectData as any).introBackgroundUrl || null,
         captions: (projectData as any).captionSettings || { enabled: false, style: { preset: 'capcut', position: 'bottom' } },
         nativeVideoAudio: (projectData as any).nativeVideoAudioSettings || { enabled: false, volume: 0.8 },
-        endCard: (projectData as any).endCardSettings || { enabled: true, duration: 5, taglineText: '', logoSize: 25, logoAnimation: 'scale-bounce', taglineAnimation: 'typewriter', contactWebsite: '', contactPhone: '', contactEmail: '', ambientEffect: 'bokeh', backgroundUrl: null, logoPositionY: 32, taglinePositionY: 55, websitePositionY: 75 },
+        endCard: (projectData as any).endCardSettings || { enabled: true, duration: 5, taglineText: '', logoSize: 25, logoAnimation: 'scale-bounce', taglineAnimation: 'typewriter', contactAnimation: 'stagger', contactWebsite: '', contactPhone: '', contactEmail: '', ambientEffect: 'bokeh', backgroundUrl: null, logoPositionY: 32, taglinePositionY: 55, websitePositionY: 75 },
+        introCard: (projectData as any).introCardSettings || { enabled: true, duration: 4, taglineText: '', logoSize: 30, logoAnimation: 'scale-bounce', taglineAnimation: 'fade', contactAnimation: 'stagger', contactWebsite: '', contactPhone: '', contactEmail: '', ambientEffect: 'bokeh', backgroundUrl: null, logoPositionY: 32, taglinePositionY: 50, websitePositionY: 75 },
       }
     });
   } catch (error: any) {
@@ -2315,7 +2358,8 @@ router.get('/projects/:projectId/render-settings', isAuthenticated, async (req: 
         introBackgroundUrl: (projectData as any).introBackgroundUrl || null,
         captions: (projectData as any).captionSettings || { enabled: false, style: { preset: 'capcut', position: 'bottom' } },
         nativeVideoAudio: (projectData as any).nativeVideoAudioSettings || { enabled: false, volume: 0.8 },
-        endCard: (projectData as any).endCardSettings || { enabled: true, duration: 5, taglineText: '', logoSize: 25, logoAnimation: 'scale-bounce', taglineAnimation: 'typewriter', contactWebsite: '', contactPhone: '', contactEmail: '', ambientEffect: 'bokeh', backgroundUrl: null, logoPositionY: 32, taglinePositionY: 55, websitePositionY: 75 },
+        endCard: (projectData as any).endCardSettings || { enabled: true, duration: 5, taglineText: '', logoSize: 25, logoAnimation: 'scale-bounce', taglineAnimation: 'typewriter', contactAnimation: 'stagger', contactWebsite: '', contactPhone: '', contactEmail: '', ambientEffect: 'bokeh', backgroundUrl: null, logoPositionY: 32, taglinePositionY: 55, websitePositionY: 75 },
+        introCard: (projectData as any).introCardSettings || { enabled: true, duration: 4, taglineText: '', logoSize: 30, logoAnimation: 'scale-bounce', taglineAnimation: 'fade', contactAnimation: 'stagger', contactWebsite: '', contactPhone: '', contactEmail: '', ambientEffect: 'bokeh', backgroundUrl: null, logoPositionY: 32, taglinePositionY: 50, websitePositionY: 75 },
       }
     });
   } catch (error: any) {
@@ -3492,19 +3536,23 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
         console.log('[Render] Intro background from user selection:', userSelectedIntroBackground);
       }
       
+      const introCardSettings = (projectData as any).introCardSettings || {};
       const brandName = brandWithCachedLogo.name || effectiveBrand?.name || '';
-      const brandTagline = brandWithCachedLogo.tagline || effectiveBrand?.tagline || '';
+      const brandTagline = introCardSettings.taglineText || brandWithCachedLogo.tagline || effectiveBrand?.tagline || '';
       const brandLogoUrl = brandWithCachedLogo.logoUrl || '';
       const brandColors = brandWithCachedLogo.colors || {};
+      const introDuration = introCardSettings.duration || 4;
       
+      const effectiveIntroBg = introBackgroundUrl || introCardSettings.backgroundUrl || null;
+
       const introScene: any = {
         id: 'intro-scene-auto',
         type: 'intro',
         title: brandName || 'Introduction',
-        duration: 4,
+        duration: introDuration,
         narration: '',
-        background: introBackgroundUrl
-          ? { type: 'image', imageUrl: introBackgroundUrl }
+        background: effectiveIntroBg
+          ? { type: 'image', imageUrl: effectiveIntroBg }
           : {
               type: 'gradient',
               gradient: {
@@ -3513,19 +3561,41 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
               },
             },
         assets: {
-          imageUrl: introBackgroundUrl || '',
-          backgroundUrl: introBackgroundUrl || '',
+          imageUrl: effectiveIntroBg || '',
+          backgroundUrl: effectiveIntroBg || '',
         },
         textOverlays: brandName ? [
           { id: 'intro-title', text: brandName, position: 'center', style: { fontSize: 56, fontWeight: 700 } },
-          ...(brandTagline ? [{ id: 'intro-tagline', text: brandTagline, position: 'center-bottom', style: { fontSize: 24, fontWeight: 400 } }] : []),
+          ...(brandTagline ? [{ id: 'intro-tagline', text: brandTagline, position: 'center-bottom', style: {
+            fontSize: introCardSettings.taglineFontSize || 24,
+            fontWeight: introCardSettings.taglineFontWeight ?? 400,
+            fontFamily: introCardSettings.taglineFontFamily ? `'${introCardSettings.taglineFontFamily}', cursive` : undefined,
+            color: introCardSettings.taglineColor || undefined,
+          } }] : []),
         ] : [],
         transitions: { type: 'fade', duration: 0.8 },
         microScenes: [],
+        introCardConfig: {
+          taglineAnimation: introCardSettings.taglineAnimation || 'fade',
+          logoAnimation: introCardSettings.logoAnimation || 'scale-bounce',
+          contactAnimation: introCardSettings.contactAnimation || 'stagger',
+          contactWebsite: introCardSettings.contactWebsite || '',
+          contactPhone: introCardSettings.contactPhone || '',
+          contactEmail: introCardSettings.contactEmail || '',
+          ambientEffect: introCardSettings.ambientEffect || 'bokeh',
+          logoSize: introCardSettings.logoSize || 30,
+          logoPositionY: introCardSettings.logoPositionY || 32,
+          taglinePositionY: introCardSettings.taglinePositionY || 50,
+          websitePositionY: introCardSettings.websitePositionY || 75,
+          websiteFontSize: introCardSettings.websiteFontSize || 22,
+          websiteColor: introCardSettings.websiteColor || '#FFFFFF',
+          websiteFontFamily: introCardSettings.websiteFontFamily || 'Inter',
+          websiteFontWeight: introCardSettings.websiteFontWeight ?? 500,
+        },
       };
       
       preparedProject.scenes = [introScene, ...preparedProject.scenes.filter((s: any) => s.id !== 'intro-scene-auto')];
-      console.log('[Render] Intro scene injected (template: ' + introTemplate + ', background: ' + (introBackgroundUrl ? 'S3 image' : 'brand gradient') + ')');
+      console.log('[Render] Intro scene injected (template: ' + introTemplate + ', background: ' + (effectiveIntroBg ? 'S3 image' : 'brand gradient') + ', duration: ' + introDuration + 's)');
       
       if (brandLogoUrl) {
         sceneOverlayConfigs['intro-scene-auto'] = {
@@ -3533,10 +3603,10 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
             enabled: true,
             url: brandLogoUrl,
             position: 'center',
-            size: 30,
+            size: introCardSettings.logoSize || 30,
             opacity: 1,
-            animation: 'scale-bounce',
-            timing: { startTime: 0.3, duration: 3.2 },
+            animation: introCardSettings.logoAnimation || 'scale-bounce',
+            timing: { startTime: 0.3, duration: introDuration - 0.8 },
           },
         };
         console.log('[Render] Intro scene logo overlay configured');

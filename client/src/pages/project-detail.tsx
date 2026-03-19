@@ -1750,6 +1750,7 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
     introBackgroundRandom: false,
     introBackgroundUrl: null as string | null,
     endCard: { enabled: true, duration: 5, taglineText: '', logoSize: 25, logoAnimation: 'scale-bounce', taglineAnimation: 'typewriter', contactAnimation: 'stagger', contactWebsite: '', contactPhone: '', contactEmail: '', ambientEffect: 'bokeh', backgroundUrl: null as string | null, logoPositionY: 32, taglinePositionY: 55, websitePositionY: 75, taglineFontSize: 28, taglineColor: '#E8D5B7', taglineFontFamily: 'Great Vibes', taglineBold: false, taglineFontWeight: 400, websiteFontSize: 22, websiteColor: '#FFFFFF', websiteBold: false, websiteFontWeight: 500, websiteFontFamily: 'Inter' },
+    introCard: { enabled: true, duration: 4, taglineText: '', logoSize: 30, logoAnimation: 'scale-bounce', taglineAnimation: 'fade', contactAnimation: 'stagger', contactWebsite: '', contactPhone: '', contactEmail: '', ambientEffect: 'bokeh', backgroundUrl: null as string | null, logoPositionY: 32, taglinePositionY: 50, websitePositionY: 75, taglineFontSize: 28, taglineColor: '#E8D5B7', taglineFontFamily: 'Great Vibes', taglineBold: false, taglineFontWeight: 400, websiteFontSize: 22, websiteColor: '#FFFFFF', websiteBold: false, websiteFontWeight: 500, websiteFontFamily: 'Inter' },
   };
 
   const settings = {
@@ -1822,7 +1823,15 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
       if (data?.settings) {
         queryClient.setQueryData(["render-settings", projectId], (old: any) => {
           if (!old) return old;
-          return { ...old, settings: { ...(old.settings || {}), ...data.settings } };
+          const oldSettings = old.settings || {};
+          const merged = { ...oldSettings, ...data.settings };
+          if (data.settings.endCard && oldSettings.endCard) {
+            merged.endCard = { ...oldSettings.endCard, ...data.settings.endCard };
+          }
+          if (data.settings.introCard && oldSettings.introCard) {
+            merged.introCard = { ...oldSettings.introCard, ...data.settings.introCard };
+          }
+          return { ...old, settings: merged };
         });
       }
     },
@@ -2236,7 +2245,7 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
                 />
               </div>
               {settings.introEnabled !== false && (
-                <>
+                <div className="space-y-3">
                   <div className="grid grid-cols-2 gap-2">
                     {[
                       { value: 'classic-glow', label: 'Classic Glow', desc: 'Radiant glow behind logo' },
@@ -2259,37 +2268,344 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
                       </button>
                     ))}
                   </div>
-                  {settings.introTemplate === 'cinematic' && (
-                    <div className="space-y-2">
-                      <ToggleSwitch
-                        enabled={settings.introBackgroundRandom ?? false}
-                        onChange={(v) => {
-                          if (v && settings.introBackgroundUrl) {
-                            saveMutation.mutate({ introBackgroundRandom: v, introBackgroundUrl: null });
-                          } else {
-                            saveMutation.mutate({ introBackgroundRandom: v });
-                          }
-                        }}
-                        label="Random background"
-                      />
-                      {!settings.introBackgroundRandom && (
-                        <S3BackgroundPicker
-                          category="intro-backgrounds"
-                          selectedUrl={settings.introBackgroundUrl}
-                          onSelect={(url) => saveMutation.mutate({ introBackgroundUrl: url })}
-                          accentColor="rgb(168 85 247)"
-                          label="Choose Background"
-                        />
-                      )}
-                      {settings.introBackgroundUrl && !settings.introBackgroundRandom && (
-                        <IntroPreviewCard
-                          backgroundUrl={settings.introBackgroundUrl}
-                          aspectRatio={projectAspectRatio.replace(':', '/')}
-                        />
-                      )}
+
+                  <div className="border-t pt-3 space-y-2.5" style={{ borderColor: "var(--border-subtle)" }}>
+                    <span className="text-xs font-medium block" style={{ color: "var(--text-secondary)" }}>Intro Card Content</span>
+                    <DebouncedTextInput
+                      label="Tagline"
+                      value={settings.introCard?.taglineText || ''}
+                      placeholder="e.g. Welcome to Our World"
+                      onSave={(val) => saveMutation.mutate({ introCard: { ...settings.introCard, taglineText: val } })}
+                    />
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <div>
+                        <label className="text-[10px] block mb-0.5" style={{ color: "var(--text-muted)" }}>Font</label>
+                        <select
+                          value={settings.introCard?.taglineFontFamily || 'Great Vibes'}
+                          onChange={(e) => saveMutation.mutate({ introCard: { ...settings.introCard, taglineFontFamily: e.target.value } })}
+                          className="w-full px-1.5 py-1 rounded-md border text-[10px]"
+                          style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)", color: "var(--text-primary)" }}
+                        >
+                          <optgroup label="Script / Handwritten">
+                            <option value="Great Vibes">Great Vibes</option>
+                            <option value="Dancing Script">Dancing Script</option>
+                            <option value="Sacramento">Sacramento</option>
+                            <option value="Pacifico">Pacifico</option>
+                            <option value="Caveat">Caveat</option>
+                            <option value="Satisfy">Satisfy</option>
+                            <option value="Kaushan Script">Kaushan Script</option>
+                            <option value="Allura">Allura</option>
+                          </optgroup>
+                          <optgroup label="Elegant / Serif">
+                            <option value="Playfair Display">Playfair Display</option>
+                            <option value="Lora">Lora</option>
+                            <option value="Cormorant Garamond">Cormorant Garamond</option>
+                            <option value="Libre Baskerville">Libre Baskerville</option>
+                            <option value="EB Garamond">EB Garamond</option>
+                          </optgroup>
+                          <optgroup label="Modern / Sans-Serif">
+                            <option value="Poppins">Poppins</option>
+                            <option value="Montserrat">Montserrat</option>
+                            <option value="Raleway">Raleway</option>
+                            <option value="Inter">Inter</option>
+                            <option value="Oswald">Oswald</option>
+                            <option value="Quicksand">Quicksand</option>
+                            <option value="Nunito">Nunito</option>
+                            <option value="Open Sans">Open Sans</option>
+                          </optgroup>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-[10px] block mb-0.5" style={{ color: "var(--text-muted)" }}>Weight</label>
+                        <select
+                          value={(settings.introCard?.taglineFontWeight ?? (settings.introCard?.taglineBold ? 700 : 400)).toString()}
+                          onChange={(e) => {
+                            const w = parseInt(e.target.value);
+                            saveMutation.mutate({ introCard: { ...settings.introCard, taglineFontWeight: w, taglineBold: w >= 600 } });
+                          }}
+                          className="w-full px-1.5 py-1 rounded-md border text-[10px]"
+                          style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)", color: "var(--text-primary)" }}
+                        >
+                          <option value="300">Light</option>
+                          <option value="400">Regular</option>
+                          <option value="500">Medium</option>
+                          <option value="600">Semi-Bold</option>
+                          <option value="700">Bold</option>
+                        </select>
+                      </div>
                     </div>
-                  )}
-                </>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <div>
+                        <label className="text-[10px] block mb-0.5" style={{ color: "var(--text-muted)" }}>Size</label>
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="range"
+                            min="14"
+                            max="72"
+                            value={settings.introCard?.taglineFontSize || 28}
+                            onChange={(e) => saveMutation.mutate({ introCard: { ...settings.introCard, taglineFontSize: parseInt(e.target.value) } })}
+                            className="flex-1 h-1 rounded-full appearance-none cursor-pointer"
+                            style={{ background: `linear-gradient(to right, rgb(168 85 247) ${((settings.introCard?.taglineFontSize || 28) - 14) / 0.58}%, var(--border-subtle) ${((settings.introCard?.taglineFontSize || 28) - 14) / 0.58}%)` }}
+                          />
+                          <span className="text-[9px] w-5 text-right" style={{ color: "var(--text-muted)" }}>{settings.introCard?.taglineFontSize || 28}</span>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-[10px] block mb-0.5" style={{ color: "var(--text-muted)" }}>Color</label>
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="color"
+                            value={settings.introCard?.taglineColor || '#E8D5B7'}
+                            onChange={(e) => saveMutation.mutate({ introCard: { ...settings.introCard, taglineColor: e.target.value } })}
+                            className="w-6 h-6 rounded border-0 cursor-pointer p-0"
+                            style={{ backgroundColor: 'transparent' }}
+                          />
+                          <span className="text-[9px]" style={{ color: "var(--text-muted)" }}>{settings.introCard?.taglineColor || '#E8D5B7'}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <DebouncedTextInput
+                      label="Website"
+                      value={settings.introCard?.contactWebsite || ''}
+                      placeholder="e.g. PineHillFarm.com"
+                      onSave={(val) => saveMutation.mutate({ introCard: { ...settings.introCard, contactWebsite: val } })}
+                    />
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <div>
+                        <label className="text-[10px] block mb-0.5" style={{ color: "var(--text-muted)" }}>Font</label>
+                        <select
+                          value={settings.introCard?.websiteFontFamily || 'Inter'}
+                          onChange={(e) => saveMutation.mutate({ introCard: { ...settings.introCard, websiteFontFamily: e.target.value } })}
+                          className="w-full px-1.5 py-1 rounded-md border text-[10px]"
+                          style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)", color: "var(--text-primary)" }}
+                        >
+                          <optgroup label="Modern / Sans-Serif">
+                            <option value="Inter">Inter</option>
+                            <option value="Poppins">Poppins</option>
+                            <option value="Montserrat">Montserrat</option>
+                            <option value="Raleway">Raleway</option>
+                            <option value="Oswald">Oswald</option>
+                            <option value="Quicksand">Quicksand</option>
+                            <option value="Nunito">Nunito</option>
+                            <option value="Open Sans">Open Sans</option>
+                          </optgroup>
+                          <optgroup label="Elegant / Serif">
+                            <option value="Playfair Display">Playfair Display</option>
+                            <option value="Lora">Lora</option>
+                            <option value="Cormorant Garamond">Cormorant Garamond</option>
+                            <option value="Libre Baskerville">Libre Baskerville</option>
+                          </optgroup>
+                          <optgroup label="Script / Handwritten">
+                            <option value="Great Vibes">Great Vibes</option>
+                            <option value="Dancing Script">Dancing Script</option>
+                            <option value="Sacramento">Sacramento</option>
+                          </optgroup>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-[10px] block mb-0.5" style={{ color: "var(--text-muted)" }}>Weight</label>
+                        <select
+                          value={(settings.introCard?.websiteFontWeight ?? (settings.introCard?.websiteBold ? 700 : 500)).toString()}
+                          onChange={(e) => {
+                            const w = parseInt(e.target.value);
+                            saveMutation.mutate({ introCard: { ...settings.introCard, websiteFontWeight: w, websiteBold: w >= 600 } });
+                          }}
+                          className="w-full px-1.5 py-1 rounded-md border text-[10px]"
+                          style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)", color: "var(--text-primary)" }}
+                        >
+                          <option value="300">Light</option>
+                          <option value="400">Regular</option>
+                          <option value="500">Medium</option>
+                          <option value="600">Semi-Bold</option>
+                          <option value="700">Bold</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <div>
+                        <label className="text-[10px] block mb-0.5" style={{ color: "var(--text-muted)" }}>Size</label>
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="range"
+                            min="12"
+                            max="48"
+                            value={settings.introCard?.websiteFontSize || 22}
+                            onChange={(e) => saveMutation.mutate({ introCard: { ...settings.introCard, websiteFontSize: parseInt(e.target.value) } })}
+                            className="flex-1 h-1 rounded-full appearance-none cursor-pointer"
+                            style={{ background: `linear-gradient(to right, rgb(168 85 247) ${((settings.introCard?.websiteFontSize || 22) - 12) / 0.36}%, var(--border-subtle) ${((settings.introCard?.websiteFontSize || 22) - 12) / 0.36}%)` }}
+                          />
+                          <span className="text-[9px] w-5 text-right" style={{ color: "var(--text-muted)" }}>{settings.introCard?.websiteFontSize || 22}</span>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-[10px] block mb-0.5" style={{ color: "var(--text-muted)" }}>Color</label>
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="color"
+                            value={settings.introCard?.websiteColor || '#FFFFFF'}
+                            onChange={(e) => saveMutation.mutate({ introCard: { ...settings.introCard, websiteColor: e.target.value } })}
+                            className="w-6 h-6 rounded border-0 cursor-pointer p-0"
+                            style={{ backgroundColor: 'transparent' }}
+                          />
+                          <span className="text-[9px]" style={{ color: "var(--text-muted)" }}>{settings.introCard?.websiteColor || '#FFFFFF'}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <DebouncedTextInput
+                        label="Phone"
+                        value={settings.introCard?.contactPhone || ''}
+                        placeholder="e.g. (555) 123-4567"
+                        onSave={(val) => saveMutation.mutate({ introCard: { ...settings.introCard, contactPhone: val } })}
+                      />
+                      <DebouncedTextInput
+                        label="Email"
+                        value={settings.introCard?.contactEmail || ''}
+                        placeholder="e.g. hello@brand.com"
+                        onSave={(val) => saveMutation.mutate({ introCard: { ...settings.introCard, contactEmail: val } })}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-xs block mb-1" style={{ color: "var(--text-muted)" }}>Logo Size</label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="range"
+                            min="10"
+                            max="60"
+                            value={settings.introCard?.logoSize || 30}
+                            onChange={(e) => saveMutation.mutate({ introCard: { ...settings.introCard, logoSize: parseInt(e.target.value) } })}
+                            className="flex-1 h-1.5 rounded-full appearance-none cursor-pointer"
+                            style={{ background: `linear-gradient(to right, rgb(168 85 247) ${((settings.introCard?.logoSize || 30) - 10) * 2}%, var(--border-subtle) ${((settings.introCard?.logoSize || 30) - 10) * 2}%)` }}
+                          />
+                          <span className="text-[10px] w-6 text-right" style={{ color: "var(--text-muted)" }}>{settings.introCard?.logoSize || 30}%</span>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-xs block mb-1" style={{ color: "var(--text-muted)" }}>Duration</label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="range"
+                            min="3"
+                            max="10"
+                            value={settings.introCard?.duration || 4}
+                            onChange={(e) => saveMutation.mutate({ introCard: { ...settings.introCard, duration: parseInt(e.target.value) } })}
+                            className="flex-1 h-1.5 rounded-full appearance-none cursor-pointer"
+                            style={{ background: `linear-gradient(to right, rgb(168 85 247) ${((settings.introCard?.duration || 4) - 3) * 14.3}%, var(--border-subtle) ${((settings.introCard?.duration || 4) - 3) * 14.3}%)` }}
+                          />
+                          <span className="text-[10px] w-6 text-right" style={{ color: "var(--text-muted)" }}>{settings.introCard?.duration || 4}s</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <label className="text-xs block mb-1" style={{ color: "var(--text-muted)" }}>Logo Animation</label>
+                        <select
+                          value={settings.introCard?.logoAnimation || 'scale-bounce'}
+                          onChange={(e) => saveMutation.mutate({ introCard: { ...settings.introCard, logoAnimation: e.target.value } })}
+                          className="w-full px-2 py-1.5 rounded-md border text-xs"
+                          style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)", color: "var(--text-primary)" }}
+                        >
+                          <option value="scale-bounce">Scale Bounce</option>
+                          <option value="fade">Fade In</option>
+                          <option value="slide-up">Slide Up</option>
+                          <option value="zoom-blur">Zoom Blur</option>
+                          <option value="spin-in">Spin In</option>
+                          <option value="elastic-pop">Elastic Pop</option>
+                          <option value="none">None</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-xs block mb-1" style={{ color: "var(--text-muted)" }}>Tagline Animation</label>
+                        <select
+                          value={settings.introCard?.taglineAnimation || 'fade'}
+                          onChange={(e) => saveMutation.mutate({ introCard: { ...settings.introCard, taglineAnimation: e.target.value } })}
+                          className="w-full px-2 py-1.5 rounded-md border text-xs"
+                          style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)", color: "var(--text-primary)" }}
+                        >
+                          <option value="typewriter">Typewriter</option>
+                          <option value="fade">Fade In</option>
+                          <option value="slide-up">Slide Up</option>
+                          <option value="letter-cascade">Letter Cascade</option>
+                          <option value="word-reveal">Word Reveal</option>
+                          <option value="glow-pulse">Glow Pulse</option>
+                          <option value="cinematic-rise">Cinematic Rise</option>
+                          <option value="none">None</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-xs block mb-1" style={{ color: "var(--text-muted)" }}>Contact Animation</label>
+                        <select
+                          value={settings.introCard?.contactAnimation || 'stagger'}
+                          onChange={(e) => saveMutation.mutate({ introCard: { ...settings.introCard, contactAnimation: e.target.value } })}
+                          className="w-full px-2 py-1.5 rounded-md border text-xs"
+                          style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)", color: "var(--text-primary)" }}
+                        >
+                          <option value="stagger">Stagger</option>
+                          <option value="fade">Fade In</option>
+                          <option value="slide-up">Slide Up</option>
+                          <option value="slide-left">Slide Left</option>
+                          <option value="stagger-slide">Stagger + Slide</option>
+                          <option value="stagger-scale">Stagger + Scale</option>
+                          <option value="cascade-blur">Cascade Blur</option>
+                          <option value="none">None</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="border-t pt-3 space-y-2.5" style={{ borderColor: "var(--border-subtle)" }}>
+                      <span className="text-xs font-medium block" style={{ color: "var(--text-secondary)" }}>Background &amp; Layout</span>
+
+                      {settings.introTemplate === 'cinematic' && (
+                        <div className="space-y-2">
+                          <ToggleSwitch
+                            enabled={settings.introBackgroundRandom ?? false}
+                            onChange={(v) => {
+                              if (v && settings.introBackgroundUrl) {
+                                saveMutation.mutate({ introBackgroundRandom: v, introBackgroundUrl: null });
+                              } else {
+                                saveMutation.mutate({ introBackgroundRandom: v });
+                              }
+                            }}
+                            label="Random background"
+                          />
+                        </div>
+                      )}
+
+                      <S3BackgroundPicker
+                        category="intro-backgrounds"
+                        selectedUrl={settings.introCard?.backgroundUrl || settings.introBackgroundUrl}
+                        onSelect={(url) => saveMutation.mutate({ introCard: { ...settings.introCard, backgroundUrl: url }, introBackgroundUrl: url })}
+                        accentColor="rgb(168 85 247)"
+                        label="Intro Background"
+                      />
+
+                      <EndCardPreview
+                        backgroundUrl={settings.introCard?.backgroundUrl || settings.introBackgroundUrl}
+                        logoUrl={null}
+                        logoSize={settings.introCard?.logoSize || 30}
+                        logoPositionY={settings.introCard?.logoPositionY || 32}
+                        taglineText={settings.introCard?.taglineText || ''}
+                        taglinePositionY={settings.introCard?.taglinePositionY || 50}
+                        taglineFontSize={settings.introCard?.taglineFontSize || 28}
+                        taglineColor={settings.introCard?.taglineColor || '#E8D5B7'}
+                        taglineFontFamily={settings.introCard?.taglineFontFamily || 'Great Vibes'}
+                        taglineFontWeight={settings.introCard?.taglineFontWeight ?? 400}
+                        contactWebsite={settings.introCard?.contactWebsite || ''}
+                        contactPhone={settings.introCard?.contactPhone || ''}
+                        contactEmail={settings.introCard?.contactEmail || ''}
+                        websitePositionY={settings.introCard?.websitePositionY || 75}
+                        websiteFontSize={settings.introCard?.websiteFontSize || 22}
+                        websiteColor={settings.introCard?.websiteColor || '#FFFFFF'}
+                        websiteFontFamily={settings.introCard?.websiteFontFamily || 'Inter'}
+                        websiteFontWeight={settings.introCard?.websiteFontWeight ?? 500}
+                        aspectRatio={projectAspectRatio.replace(':', '/')}
+                      />
+                    </div>
+                  </div>
+                </div>
               )}
             </div>
 
