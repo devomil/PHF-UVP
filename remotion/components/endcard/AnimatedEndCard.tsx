@@ -329,17 +329,38 @@ const LogoReveal: React.FC<{
   
   const logoWidth = Math.max((size / 100) * width, width * 0.2);
   
-  const scale = animation === 'scale-bounce' 
-    ? spring({
-        frame: localFrame,
-        fps,
-        config: { stiffness: 200, damping: 15, mass: 1 },
-        from: 0,
-        to: 1,
-      })
-    : interpolate(localFrame, [0, fps * 0.5], [0.8, 1], { extrapolateRight: 'clamp' });
-  
-  const opacity = interpolate(localFrame, [0, fps * 0.3], [0, 1], { extrapolateRight: 'clamp' });
+  let scale = 1;
+  let opacity = 1;
+  let translateY = 0;
+  let rotate = 0;
+  let blur = 0;
+
+  if (animation === 'scale-bounce') {
+    scale = spring({ frame: localFrame, fps, config: { stiffness: 200, damping: 15, mass: 1 }, from: 0, to: 1 });
+    opacity = interpolate(localFrame, [0, fps * 0.3], [0, 1], { extrapolateRight: 'clamp' });
+  } else if (animation === 'slide-up') {
+    scale = interpolate(localFrame, [0, fps * 0.5], [0.8, 1], { extrapolateRight: 'clamp' });
+    opacity = interpolate(localFrame, [0, fps * 0.3], [0, 1], { extrapolateRight: 'clamp' });
+    translateY = interpolate(localFrame, [0, fps * 0.5], [50, 0], { extrapolateRight: 'clamp' });
+  } else if (animation === 'fade') {
+    opacity = interpolate(localFrame, [0, fps * 0.6], [0, 1], { extrapolateRight: 'clamp' });
+    scale = interpolate(localFrame, [0, fps * 0.5], [0.8, 1], { extrapolateRight: 'clamp' });
+  } else if (animation === 'zoom-blur') {
+    scale = spring({ frame: localFrame, fps, config: { stiffness: 120, damping: 12, mass: 0.8 }, from: 2.5, to: 1 });
+    opacity = interpolate(localFrame, [0, fps * 0.25], [0, 1], { extrapolateRight: 'clamp' });
+    blur = interpolate(localFrame, [0, fps * 0.4], [12, 0], { extrapolateRight: 'clamp' });
+  } else if (animation === 'spin-in') {
+    scale = spring({ frame: localFrame, fps, config: { stiffness: 150, damping: 14, mass: 1 }, from: 0, to: 1 });
+    opacity = interpolate(localFrame, [0, fps * 0.3], [0, 1], { extrapolateRight: 'clamp' });
+    rotate = interpolate(localFrame, [0, fps * 0.6], [-180, 0], { extrapolateRight: 'clamp' });
+  } else if (animation === 'elastic-pop') {
+    scale = spring({ frame: localFrame, fps, config: { stiffness: 300, damping: 10, mass: 0.6 }, from: 0, to: 1 });
+    opacity = interpolate(localFrame, [0, fps * 0.15], [0, 1], { extrapolateRight: 'clamp' });
+  } else if (animation === 'none') {
+    opacity = 1;
+  } else {
+    opacity = interpolate(localFrame, [0, fps * 0.3], [0, 1], { extrapolateRight: 'clamp' });
+  }
   
   const shinePosition = interpolate(
     localFrame, 
@@ -348,18 +369,15 @@ const LogoReveal: React.FC<{
     { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }
   );
   
-  const translateY = animation === 'slide-up'
-    ? interpolate(localFrame, [0, fps * 0.5], [50, 0], { extrapolateRight: 'clamp' })
-    : 0;
-  
   return (
     <div
       style={{
         display: 'flex',
         justifyContent: 'center',
         alignItems: 'center',
-        transform: `scale(${scale}) translateY(${translateY}px)`,
+        transform: `scale(${scale}) translateY(${translateY}px) rotate(${rotate}deg)`,
         opacity,
+        filter: blur > 0 ? `blur(${blur}px)` : undefined,
         marginBottom: 20,
       }}
     >
@@ -410,18 +428,93 @@ const TaglineReveal: React.FC<{
   const localFrame = frame - startFrame;
   
   if (localFrame < 0) return null;
-  
-  const charsToShow = animation === 'typewriter'
-    ? Math.floor(interpolate(localFrame, [0, fps * 1.5], [0, text.length], { extrapolateRight: 'clamp' }))
-    : text.length;
-  
-  const opacity = animation !== 'typewriter'
-    ? interpolate(localFrame, [0, fps * 0.5], [0, 1], { extrapolateRight: 'clamp' })
-    : 1;
-  
-  const displayText = text.substring(0, charsToShow);
-  const showCursor = animation === 'typewriter' && charsToShow < text.length;
-  
+
+  if (animation === 'typewriter') {
+    const charsToShow = Math.floor(interpolate(localFrame, [0, fps * 1.5], [0, text.length], { extrapolateRight: 'clamp' }));
+    const displayText = text.substring(0, charsToShow);
+    const showCursor = charsToShow < text.length;
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', fontSize: style.fontSize, fontFamily: style.fontFamily, color: style.color, fontWeight: style.fontWeight || 400, whiteSpace: 'nowrap', textShadow: '0 2px 8px rgba(0,0,0,0.4)', marginTop: 8 }}>
+        {displayText}
+        {showCursor && <span style={{ opacity: Math.sin(frame * 0.3) > 0 ? 1 : 0 }}>|</span>}
+      </div>
+    );
+  }
+
+  if (animation === 'letter-cascade') {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', marginTop: 8, whiteSpace: 'nowrap' }}>
+        {text.split('').map((char, i) => {
+          const charDelay = i * 1.5;
+          const charFrame = localFrame - charDelay;
+          const charOpacity = interpolate(charFrame, [0, fps * 0.3], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+          const charY = interpolate(charFrame, [0, fps * 0.3], [-20, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+          return (
+            <span key={i} style={{ fontSize: style.fontSize, fontFamily: style.fontFamily, color: style.color, fontWeight: style.fontWeight || 400, opacity: charOpacity, transform: `translateY(${charY}px)`, display: 'inline-block', textShadow: '0 2px 8px rgba(0,0,0,0.4)' }}>
+              {char === ' ' ? '\u00A0' : char}
+            </span>
+          );
+        })}
+      </div>
+    );
+  }
+
+  if (animation === 'word-reveal') {
+    const words = text.split(' ');
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', gap: style.fontSize * 0.3, marginTop: 8, flexWrap: 'wrap' }}>
+        {words.map((word, i) => {
+          const wordDelay = i * fps * 0.15;
+          const wordFrame = localFrame - wordDelay;
+          const wordOpacity = interpolate(wordFrame, [0, fps * 0.3], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+          const wordScale = spring({ frame: Math.max(0, wordFrame), fps, config: { stiffness: 200, damping: 12, mass: 0.8 }, from: 0.5, to: 1 });
+          const wordBlur = interpolate(wordFrame, [0, fps * 0.2], [8, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+          return (
+            <span key={i} style={{ fontSize: style.fontSize, fontFamily: style.fontFamily, color: style.color, fontWeight: style.fontWeight || 400, opacity: wordOpacity, transform: `scale(${wordFrame < 0 ? 0.5 : wordScale})`, filter: `blur(${wordBlur}px)`, display: 'inline-block', textShadow: '0 2px 8px rgba(0,0,0,0.4)' }}>
+              {word}
+            </span>
+          );
+        })}
+      </div>
+    );
+  }
+
+  if (animation === 'glow-pulse') {
+    const opacity = interpolate(localFrame, [0, fps * 0.5], [0, 1], { extrapolateRight: 'clamp' });
+    const glowIntensity = interpolate(localFrame, [fps * 0.5, fps * 1.0, fps * 1.5], [0, 15, 8], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+    const scale = interpolate(localFrame, [0, fps * 0.5], [0.9, 1], { extrapolateRight: 'clamp' });
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', fontSize: style.fontSize, fontFamily: style.fontFamily, color: style.color, fontWeight: style.fontWeight || 400, opacity, transform: `scale(${scale})`, textShadow: `0 0 ${glowIntensity}px ${style.color}, 0 2px 8px rgba(0,0,0,0.4)`, whiteSpace: 'nowrap', marginTop: 8 }}>
+        {text}
+      </div>
+    );
+  }
+
+  if (animation === 'cinematic-rise') {
+    const opacity = interpolate(localFrame, [0, fps * 0.8], [0, 1], { extrapolateRight: 'clamp' });
+    const translateY = interpolate(localFrame, [0, fps * 0.8], [60, 0], { extrapolateRight: 'clamp' });
+    const letterSpacing = interpolate(localFrame, [0, fps * 0.8], [20, 2], { extrapolateRight: 'clamp' });
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', fontSize: style.fontSize, fontFamily: style.fontFamily, color: style.color, fontWeight: style.fontWeight || 400, opacity, transform: `translateY(${translateY}px)`, letterSpacing, whiteSpace: 'nowrap', textShadow: '0 2px 8px rgba(0,0,0,0.4)', marginTop: 8 }}>
+        {text}
+      </div>
+    );
+  }
+
+  let opacity = 1;
+  let translateY = 0;
+
+  if (animation === 'fade') {
+    opacity = interpolate(localFrame, [0, fps * 0.5], [0, 1], { extrapolateRight: 'clamp' });
+  } else if (animation === 'slide-up') {
+    opacity = interpolate(localFrame, [0, fps * 0.4], [0, 1], { extrapolateRight: 'clamp' });
+    translateY = interpolate(localFrame, [0, fps * 0.4], [30, 0], { extrapolateRight: 'clamp' });
+  } else if (animation === 'none') {
+    opacity = 1;
+  } else {
+    opacity = interpolate(localFrame, [0, fps * 0.5], [0, 1], { extrapolateRight: 'clamp' });
+  }
+
   return (
     <div
       style={{
@@ -432,15 +525,13 @@ const TaglineReveal: React.FC<{
         color: style.color,
         fontWeight: style.fontWeight || 400,
         opacity,
+        transform: `translateY(${translateY}px)`,
         whiteSpace: 'nowrap',
         textShadow: '0 2px 8px rgba(0,0,0,0.4)',
         marginTop: 8,
       }}
     >
-      {displayText}
-      {showCursor && (
-        <span style={{ opacity: Math.sin(frame * 0.3) > 0 ? 1 : 0 }}>|</span>
-      )}
+      {text}
     </div>
   );
 };
@@ -479,20 +570,29 @@ const ContactReveal: React.FC<{
       }}
     >
       {items.map((item, index) => {
-        const itemDelay = animation === 'stagger' ? index * fps * 0.12 : 0;
+        const itemDelay = (animation === 'stagger' || animation === 'stagger-slide' || animation === 'stagger-scale')
+          ? index * fps * 0.12
+          : animation === 'cascade-blur' ? index * fps * 0.18 : 0;
         const itemFrame = localFrame - itemDelay;
-        
-        const opacity = interpolate(itemFrame, [0, fps * 0.4], [0, 1], { 
-          extrapolateLeft: 'clamp', 
-          extrapolateRight: 'clamp' 
-        });
-        
-        const translateY = animation === 'slide-up'
-          ? interpolate(itemFrame, [0, fps * 0.4], [30, 0], { 
-              extrapolateLeft: 'clamp', 
-              extrapolateRight: 'clamp' 
-            })
-          : 0;
+
+        let opacity = interpolate(itemFrame, [0, fps * 0.4], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+        let translateY = 0;
+        let translateX = 0;
+        let scale = 1;
+        let blur = 0;
+
+        if (animation === 'slide-up' || animation === 'stagger-slide') {
+          translateY = interpolate(itemFrame, [0, fps * 0.4], [30, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+        } else if (animation === 'slide-left') {
+          translateX = interpolate(itemFrame, [0, fps * 0.4], [60, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+        } else if (animation === 'stagger-scale') {
+          scale = spring({ frame: Math.max(0, itemFrame), fps, config: { stiffness: 200, damping: 12, mass: 0.7 }, from: 0, to: 1 });
+        } else if (animation === 'cascade-blur') {
+          blur = interpolate(itemFrame, [0, fps * 0.3], [10, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+          translateY = interpolate(itemFrame, [0, fps * 0.3], [15, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+        } else if (animation === 'none') {
+          opacity = 1;
+        }
         
         return (
           <div
@@ -503,7 +603,8 @@ const ContactReveal: React.FC<{
               fontFamily: style.fontFamily || 'Inter, sans-serif',
               fontWeight: style.fontWeight || 500,
               opacity,
-              transform: `translateY(${translateY}px)`,
+              transform: `translateY(${translateY}px) translateX(${translateX}px) scale(${scale})`,
+              filter: blur > 0 ? `blur(${blur}px)` : undefined,
               textShadow: '0 1px 4px rgba(0,0,0,0.3)',
             }}
           >

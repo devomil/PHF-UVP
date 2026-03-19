@@ -2171,8 +2171,9 @@ router.patch('/projects/:projectId/render-settings', isAuthenticated, async (req
     const endCard = req.body.endCard;
     if (endCard !== undefined) {
       const existing = (projectData as any).endCardSettings || {};
-      const validLogoAnimations = ['scale-bounce', 'fade', 'slide-up', 'none'];
-      const validTaglineAnimations = ['typewriter', 'fade', 'slide-up'];
+      const validLogoAnimations = ['scale-bounce', 'fade', 'slide-up', 'zoom-blur', 'spin-in', 'elastic-pop', 'none'];
+      const validTaglineAnimations = ['typewriter', 'fade', 'slide-up', 'letter-cascade', 'word-reveal', 'glow-pulse', 'cinematic-rise', 'none'];
+      const validContactAnimations = ['stagger', 'fade', 'slide-up', 'slide-left', 'stagger-slide', 'stagger-scale', 'cascade-blur', 'none'];
       const validAmbientEffects = ['particles', 'bokeh', 'none'];
       const validFonts = ['Great Vibes', 'Inter', 'Playfair Display', 'Montserrat', 'Raleway', 'Oswald', 'Lora', 'Poppins', 'Dancing Script', 'Sacramento', 'Pacifico', 'Caveat', 'Satisfy', 'Kaushan Script', 'Allura', 'Cormorant Garamond', 'Libre Baskerville', 'EB Garamond', 'Quicksand', 'Nunito', 'Open Sans'];
       (projectData as any).endCardSettings = {
@@ -2186,6 +2187,7 @@ router.patch('/projects/:projectId/render-settings', isAuthenticated, async (req
         contactWebsite: endCard.contactWebsite ?? existing.contactWebsite ?? '',
         contactPhone: endCard.contactPhone ?? existing.contactPhone ?? '',
         contactEmail: endCard.contactEmail ?? existing.contactEmail ?? '',
+        contactAnimation: validContactAnimations.includes(endCard.contactAnimation) ? endCard.contactAnimation : (existing.contactAnimation || 'stagger'),
         ambientEffect: validAmbientEffects.includes(endCard.ambientEffect) ? endCard.ambientEffect : (existing.ambientEffect || 'bokeh'),
         backgroundUrl: endCard.backgroundUrl !== undefined ? (endCard.backgroundUrl || null) : (existing.backgroundUrl || null),
         logoPositionY: endCard.logoPositionY != null ? Math.min(90, Math.max(10, endCard.logoPositionY)) : (existing.logoPositionY || 32),
@@ -3103,12 +3105,12 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
           url: cachedLogoUrl,
           size: endCardSettings?.logoSize || 28,
           position: { x: 50, y: endCardSettings?.logoPositionY || 32 },
-          animation: (endCardSettings?.logoAnimation || 'scale-bounce') as 'scale-bounce' | 'fade' | 'slide-up' | 'none',
+          animation: (endCardSettings?.logoAnimation || 'scale-bounce') as any,
         },
         tagline: {
           text: endCardSettings?.taglineText || effectiveBrand?.tagline || '',
           delay: 0.8,
-          animation: (endCardSettings?.taglineAnimation || 'typewriter') as 'typewriter' | 'fade' | 'slide-up',
+          animation: (endCardSettings?.taglineAnimation || 'typewriter') as any,
           positionY: endCardSettings?.taglinePositionY || 55,
           style: {
             fontSize: endCardSettings?.taglineFontSize || 28,
@@ -3122,7 +3124,7 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
           phone: endCardSettings?.contactPhone || '',
           email: endCardSettings?.contactEmail || '',
           delay: 1.8,
-          animation: 'stagger' as const,
+          animation: (endCardSettings?.contactAnimation || 'stagger') as any,
           positionY: endCardSettings?.websitePositionY || 75,
           style: {
             fontSize: endCardSettings?.websiteFontSize || 22,

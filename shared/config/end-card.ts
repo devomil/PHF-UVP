@@ -1,6 +1,11 @@
+export type LogoAnimation = 'scale-bounce' | 'fade' | 'slide-up' | 'zoom-blur' | 'spin-in' | 'elastic-pop' | 'none';
+export type TaglineAnimation = 'typewriter' | 'fade' | 'slide-up' | 'letter-cascade' | 'word-reveal' | 'glow-pulse' | 'cinematic-rise' | 'none';
+export type ContactAnimation = 'stagger' | 'fade' | 'slide-up' | 'slide-left' | 'stagger-slide' | 'stagger-scale' | 'cascade-blur' | 'none';
+export type SocialAnimation = 'pop' | 'fade' | 'stagger';
+
 export interface EndCardConfig {
   template?: 'animated' | 'minimal' | 'cinematic';
-  enabled?: boolean;  // Phase 18E: Optional enabled flag (defaults to true)
+  enabled?: boolean;
   duration: number;
   background: {
     type: 'solid' | 'gradient' | 'animated-gradient' | 'image';
@@ -15,12 +20,12 @@ export interface EndCardConfig {
     url: string;
     size: number;
     position: { x: number; y: number };
-    animation: 'scale-bounce' | 'fade' | 'slide-up' | 'none';
+    animation: LogoAnimation;
   };
   tagline?: {
     text: string;
     delay: number;
-    animation: 'typewriter' | 'fade' | 'slide-up';
+    animation: TaglineAnimation;
     positionY?: number;
     style: {
       fontSize: number;
@@ -34,7 +39,7 @@ export interface EndCardConfig {
     phone?: string;
     email?: string;
     delay: number;
-    animation: 'stagger' | 'fade' | 'slide-up';
+    animation: ContactAnimation;
     positionY?: number;
     style: {
       fontSize: number;
@@ -47,7 +52,7 @@ export interface EndCardConfig {
     icons: Array<{ platform: string; url: string }>;
     size: number;
     delay: number;
-    animation: 'pop' | 'fade' | 'stagger';
+    animation: SocialAnimation;
   };
   ambientEffect?: {
     type: 'particles' | 'bokeh' | 'none';
@@ -146,7 +151,7 @@ export function mergeEndCardConfig(
   return {
     ...base,
     ...overrides,
-    enabled: overrides.enabled ?? base.enabled ?? true,  // Phase 18E: Include enabled
+    enabled: overrides.enabled ?? base.enabled ?? true,
     background: {
       ...base.background,
       ...overrides.background,

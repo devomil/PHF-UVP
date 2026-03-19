@@ -1749,7 +1749,7 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
     outroTemplate: "classic-glow",
     introBackgroundRandom: false,
     introBackgroundUrl: null as string | null,
-    endCard: { enabled: true, duration: 5, taglineText: '', logoSize: 25, logoAnimation: 'scale-bounce', taglineAnimation: 'typewriter', contactWebsite: '', contactPhone: '', contactEmail: '', ambientEffect: 'bokeh', backgroundUrl: null as string | null, logoPositionY: 32, taglinePositionY: 55, websitePositionY: 75, taglineFontSize: 28, taglineColor: '#E8D5B7', taglineFontFamily: 'Great Vibes', taglineBold: false, taglineFontWeight: 400, websiteFontSize: 22, websiteColor: '#FFFFFF', websiteBold: false, websiteFontWeight: 500, websiteFontFamily: 'Inter' },
+    endCard: { enabled: true, duration: 5, taglineText: '', logoSize: 25, logoAnimation: 'scale-bounce', taglineAnimation: 'typewriter', contactAnimation: 'stagger', contactWebsite: '', contactPhone: '', contactEmail: '', ambientEffect: 'bokeh', backgroundUrl: null as string | null, logoPositionY: 32, taglinePositionY: 55, websitePositionY: 75, taglineFontSize: 28, taglineColor: '#E8D5B7', taglineFontFamily: 'Great Vibes', taglineBold: false, taglineFontWeight: 400, websiteFontSize: 22, websiteColor: '#FFFFFF', websiteBold: false, websiteFontWeight: 500, websiteFontFamily: 'Inter' },
   };
 
   const settings = {
@@ -2560,7 +2560,7 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
                         </div>
                       </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-3 gap-2">
                       <div>
                         <label className="text-xs block mb-1" style={{ color: "var(--text-muted)" }}>Logo Animation</label>
                         <select
@@ -2572,6 +2572,9 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
                           <option value="scale-bounce">Scale Bounce</option>
                           <option value="fade">Fade In</option>
                           <option value="slide-up">Slide Up</option>
+                          <option value="zoom-blur">Zoom Blur</option>
+                          <option value="spin-in">Spin In</option>
+                          <option value="elastic-pop">Elastic Pop</option>
                           <option value="none">None</option>
                         </select>
                       </div>
@@ -2586,6 +2589,29 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
                           <option value="typewriter">Typewriter</option>
                           <option value="fade">Fade In</option>
                           <option value="slide-up">Slide Up</option>
+                          <option value="letter-cascade">Letter Cascade</option>
+                          <option value="word-reveal">Word Reveal</option>
+                          <option value="glow-pulse">Glow Pulse</option>
+                          <option value="cinematic-rise">Cinematic Rise</option>
+                          <option value="none">None</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-xs block mb-1" style={{ color: "var(--text-muted)" }}>Contact Animation</label>
+                        <select
+                          value={settings.endCard?.contactAnimation || 'stagger'}
+                          onChange={(e) => saveMutation.mutate({ endCard: { ...settings.endCard, contactAnimation: e.target.value } })}
+                          className="w-full px-2 py-1.5 rounded-md border text-xs"
+                          style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)", color: "var(--text-primary)" }}
+                        >
+                          <option value="stagger">Stagger</option>
+                          <option value="fade">Fade In</option>
+                          <option value="slide-up">Slide Up</option>
+                          <option value="slide-left">Slide Left</option>
+                          <option value="stagger-slide">Stagger + Slide</option>
+                          <option value="stagger-scale">Stagger + Scale</option>
+                          <option value="cascade-blur">Cascade Blur</option>
+                          <option value="none">None</option>
                         </select>
                       </div>
                     </div>
