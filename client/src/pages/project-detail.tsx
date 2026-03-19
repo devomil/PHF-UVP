@@ -2455,6 +2455,21 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
                         </div>
                       </div>
                     </div>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <DebouncedTextInput
+                        label="Phone"
+                        value={settings.endCard?.contactPhone || ''}
+                        placeholder="e.g. (555) 123-4567"
+                        onSave={(val) => saveMutation.mutate({ endCard: { ...settings.endCard, contactPhone: val } })}
+                      />
+                      <DebouncedTextInput
+                        label="Email"
+                        value={settings.endCard?.contactEmail || ''}
+                        placeholder="e.g. hello@brand.com"
+                        onSave={(val) => saveMutation.mutate({ endCard: { ...settings.endCard, contactEmail: val } })}
+                      />
+                    </div>
+
                     <div className="grid grid-cols-2 gap-2">
                       <div>
                         <label className="text-xs block mb-1" style={{ color: "var(--text-muted)" }}>Logo Size</label>
@@ -2547,6 +2562,8 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
                         websiteBold={settings.endCard?.websiteBold || false}
                         websiteFontWeight={settings.endCard?.websiteFontWeight}
                         websiteFontFamily={settings.endCard?.websiteFontFamily || 'Inter'}
+                        phoneText={settings.endCard?.contactPhone || ''}
+                        emailText={settings.endCard?.contactEmail || ''}
                       />
 
                       <div className="space-y-1.5">

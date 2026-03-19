@@ -37,6 +37,8 @@ interface EndCardPreviewProps {
   websiteFontFamily?: string;
   websiteFontWeight?: number;
   taglineFontWeight?: number;
+  phoneText?: string;
+  emailText?: string;
   aspectRatio?: string;
 }
 
@@ -59,6 +61,8 @@ export const EndCardPreview: React.FC<EndCardPreviewProps> = ({
   websiteFontFamily = 'Inter',
   websiteFontWeight,
   taglineFontWeight,
+  phoneText = '',
+  emailText = '',
   aspectRatio = '16/9',
 }) => {
   useGoogleFonts([taglineFontFamily, websiteFontFamily]);
@@ -143,22 +147,25 @@ export const EndCardPreview: React.FC<EndCardPreviewProps> = ({
           </div>
         )}
 
-        {websiteText && (
+        {(websiteText || phoneText || emailText) && (
           <div
-            className="absolute left-0 right-0 text-center px-3"
-            style={{ top: `${websitePositionY}%`, transform: 'translateY(-50%)' }}
+            className="absolute left-0 right-0 text-center px-3 flex flex-col items-center"
+            style={{ top: `${websitePositionY}%`, transform: 'translateY(-50%)', gap: 2 }}
           >
-            <span
-              style={{
-                fontSize: previewWebsiteSize,
-                fontFamily: `'${websiteFontFamily}', sans-serif`,
-                color: websiteColor,
-                fontWeight: websiteFontWeight ?? (websiteBold ? 700 : 500),
-                textShadow: '0 1px 3px rgba(0,0,0,0.5)',
-              }}
-            >
-              {websiteText}
-            </span>
+            {[websiteText, phoneText, emailText].filter(Boolean).map((item, i) => (
+              <span
+                key={i}
+                style={{
+                  fontSize: previewWebsiteSize,
+                  fontFamily: `'${websiteFontFamily}', sans-serif`,
+                  color: websiteColor,
+                  fontWeight: websiteFontWeight ?? (websiteBold ? 700 : 500),
+                  textShadow: '0 1px 3px rgba(0,0,0,0.5)',
+                }}
+              >
+                {item}
+              </span>
+            ))}
           </div>
         )}
       </div>
