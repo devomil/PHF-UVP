@@ -1761,14 +1761,19 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
       });
       return { previousData };
     },
+    onSuccess: (data: any) => {
+      if (data?.settings) {
+        queryClient.setQueryData(["render-settings", projectId], (old: any) => {
+          if (!old) return old;
+          return { ...old, settings: { ...(old.settings || {}), ...data.settings } };
+        });
+      }
+    },
     onError: (err: Error, _patch, context) => {
       if (context?.previousData) {
         queryClient.setQueryData(["render-settings", projectId], context.previousData);
       }
       toast({ title: "Error", description: err.message, variant: "destructive" });
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ["render-settings", projectId] });
     },
   });
 
