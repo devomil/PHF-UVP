@@ -3523,6 +3523,13 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
     
     if (introEnabled) {
       const introCardSettings = (projectData as any).introCardSettings || {};
+      console.log('[Render] introCardSettings from DB:', JSON.stringify({
+        backgroundUrl: introCardSettings.backgroundUrl || 'EMPTY',
+        taglineText: introCardSettings.taglineText || 'EMPTY',
+        logoUrl: introCardSettings.logoUrl || 'EMPTY',
+        contactWebsite: introCardSettings.contactWebsite || 'EMPTY',
+        duration: introCardSettings.duration,
+      }));
       const cardBackgroundUrl = introCardSettings.backgroundUrl || null;
       
       let introBackgroundUrl: string | null = cardBackgroundUrl || legacyIntroBackground;
@@ -3739,6 +3746,7 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
     // Resolve overlay item URLs to Lambda-accessible public URLs
     for (const scene of inputProps.scenes as any[]) {
       if (scene.overlayItems && Array.isArray(scene.overlayItems)) {
+        console.log(`[UniversalVideo] Scene ${scene.id} has ${scene.overlayItems.length} overlay items from DB:`, scene.overlayItems.map((o: any) => `${o.name} @ (${o.x}%,${o.y}%) ${o.width}x${o.height}`).join(', '));
         const resolvedOverlays = [];
         for (const item of scene.overlayItems) {
           if (!item.url) continue;
@@ -3755,6 +3763,8 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
         }
         scene.overlayItems = resolvedOverlays;
         console.log(`[UniversalVideo] Resolved ${resolvedOverlays.length} overlay items for scene ${scene.id}`);
+      } else {
+        console.log(`[UniversalVideo] Scene ${scene.id} has NO overlay items`);
       }
     }
     // Log video B-roll details for each scene
