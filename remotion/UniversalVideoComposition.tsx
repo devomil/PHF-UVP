@@ -1638,8 +1638,7 @@ const SceneRenderer: React.FC<{
 
       {/* Text Overlays - Use ONLY ONE source to prevent duplicates */}
       {(() => {
-        // Phase 16 Fix: Skip text overlays for CTA/outro scenes - they have dedicated overlay components
-        if (scene.type === 'cta' || scene.type === 'outro') {
+        if (scene.type === 'cta' || scene.type === 'outro' || scene.type === 'intro' || scene.id === 'intro-scene-auto') {
           return null;
         }
         
@@ -1715,7 +1714,7 @@ const SceneRenderer: React.FC<{
 
 
       {/* Text Labels - auto-extracted key terms rendered as crisp overlays */}
-      {scene.textLabels && scene.textLabels.length > 0 && (
+      {scene.textLabels && scene.textLabels.length > 0 && scene.type !== 'intro' && scene.id !== 'intro-scene-auto' && (
         <TextLabelOverlay labels={scene.textLabels} brand={brand} />
       )}
 
@@ -2130,9 +2129,18 @@ export const UniversalVideoComposition: React.FC<UniversalVideoProps> = ({
 
       {/* Voiceover - per-scene or full track */}
       {(() => {
+        const introSceneIndex = scenes.findIndex(s => s.id === 'intro-scene-auto' || s.type === 'intro');
+        const introEndFrame = introSceneIndex >= 0
+          ? sceneStartFrames[introSceneIndex] + Math.ceil((scenes[introSceneIndex].duration || 5) * fps)
+          : 0;
+        const contentStartFrame = introEndFrame;
+        const contentEndFrame = hasEndCard ? endCardStartFrame : durationInFrames;
+        const contentDurationFrames = Math.max(1, contentEndFrame - contentStartFrame);
+
         const hasPerSceneAudio = scenes.some(s => s.voiceoverUrl && isValidHttpUrl(s.voiceoverUrl));
         if (hasPerSceneAudio) {
           return scenes.map((scene, index) => {
+            if (scene.id === 'intro-scene-auto' || scene.type === 'intro') return null;
             const sceneStartFrame = sceneStartFrames[index];
             const sceneDuration = scene.duration || 5;
             const sceneDurationFrames = Math.ceil(sceneDuration * fps);
@@ -2172,13 +2180,15 @@ export const UniversalVideoComposition: React.FC<UniversalVideoProps> = ({
         const fullTrackCaptionScene = scenes.find(s => s.captions?.enabled && s.captions?.words?.length > 0);
         return (
           <>
-            <SafeAudio 
-              src={voiceoverUrl} 
-              volume={1.0} 
-              label="Voiceover"
-            />
+            <Sequence from={contentStartFrame} durationInFrames={contentDurationFrames}>
+              <SafeAudio 
+                src={voiceoverUrl} 
+                volume={1.0} 
+                label="Voiceover"
+              />
+            </Sequence>
             {fullTrackCaptionScene?.captions && (
-              <Sequence from={0} durationInFrames={durationInFrames}>
+              <Sequence from={contentStartFrame} durationInFrames={contentDurationFrames}>
                 <SyncedCaptions
                   words={fullTrackCaptionScene.captions.words}
                   style={captionStyle || fullTrackCaptionScene.captions.style || { preset: 'capcut' }}

@@ -1704,6 +1704,8 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
       if (!res.ok) throw new Error("Failed to fetch render settings");
       return res.json();
     },
+    refetchOnWindowFocus: false,
+    staleTime: 30000,
   });
 
   const assetsQuery = useQuery({

@@ -3519,10 +3519,13 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
     const introEnabled = (projectData as any).introEnabled !== false;
     const introTemplate = (projectData as any).introTemplate || 'classic-glow';
     const introBackgroundRandom = (projectData as any).introBackgroundRandom || false;
-    const userSelectedIntroBackground = (projectData as any).introBackgroundUrl || null;
+    const legacyIntroBackground = (projectData as any).introBackgroundUrl || null;
     
     if (introEnabled) {
-      let introBackgroundUrl: string | null = userSelectedIntroBackground;
+      const introCardSettings = (projectData as any).introCardSettings || {};
+      const cardBackgroundUrl = introCardSettings.backgroundUrl || null;
+      
+      let introBackgroundUrl: string | null = cardBackgroundUrl || legacyIntroBackground;
       if (!introBackgroundUrl && introBackgroundRandom) {
         try {
           const introBg = await s3RenderAssetService.getRandomIntroBackground();
@@ -3534,11 +3537,10 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
           console.warn('[Render] Failed to get intro background:', e.message);
         }
       }
-      if (userSelectedIntroBackground) {
-        console.log('[Render] Intro background from user selection:', userSelectedIntroBackground);
+      if (introBackgroundUrl) {
+        console.log('[Render] Intro background from user selection:', introBackgroundUrl);
       }
       
-      const introCardSettings = (projectData as any).introCardSettings || {};
       const brandName = brandWithCachedLogo.name || effectiveBrand?.name || '';
       const brandTagline = introCardSettings.taglineText || brandWithCachedLogo.tagline || effectiveBrand?.tagline || '';
       const introLogoSource = introCardSettings.logoUrl || brandWithCachedLogo.logoUrl || '';
@@ -3546,7 +3548,7 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
       const brandColors = brandWithCachedLogo.colors || {};
       const introDuration = introCardSettings.duration || 4;
       
-      const effectiveIntroBg = introBackgroundUrl || introCardSettings.backgroundUrl || null;
+      const effectiveIntroBg = introBackgroundUrl || null;
 
       const introScene: any = {
         id: 'intro-scene-auto',
