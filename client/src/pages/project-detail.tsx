@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
-import { ArrowLeft, Settings, Play, RefreshCw, Clock, Target, Monitor, BarChart3, Loader2, AlertCircle, Zap, Video, Image, Download, RotateCcw, Save, Trash2, ExternalLink, CheckCircle2, XCircle, X, Type, Film, ChevronDown, ChevronUp, CloudUpload, Mic, Music, Volume2, Palette, Shuffle, Sliders, Wand2, Sparkles, ImagePlus, Upload, Edit2, FileText, Plus, GripVertical, Eye, EyeOff, Layers } from "lucide-react";
+import { ArrowLeft, Settings, Play, RefreshCw, Clock, Target, Monitor, BarChart3, Loader2, AlertCircle, Zap, Video, Image, Download, RotateCcw, Save, Trash2, ExternalLink, CheckCircle2, XCircle, X, Type, Film, ChevronDown, ChevronUp, CloudUpload, Mic, Music, Volume2, Palette, Shuffle, Sliders, Wand2, Sparkles, ImagePlus, Upload, Edit2, FileText, Plus, GripVertical, Eye, EyeOff, Layers, Maximize2 } from "lucide-react";
 import { getVisualArtPreset, getAllVisualArtPresets } from "@shared/config/visual-art-presets";
 import { SCENE_CONTENT_TAGS } from "@shared/config/scene-content-tags";
 import { Button } from "@/components/ui/button";
@@ -1465,6 +1465,63 @@ function ToggleSwitch({ enabled, onChange, label }: { enabled: boolean; onChange
   );
 }
 
+function IntroPreviewCard({ backgroundUrl, aspectRatio = '16/9' }: { backgroundUrl: string; aspectRatio?: string }) {
+  const [zoomed, setZoomed] = useState(false);
+  return (
+    <>
+      <div className="relative group rounded-lg overflow-hidden border" style={{ borderColor: 'var(--border-subtle)' }}>
+        <div style={{ aspectRatio, width: '100%' }}>
+          <img src={backgroundUrl} alt="Intro background" className="w-full h-full object-cover" />
+        </div>
+        <div
+          className="absolute top-1 left-1 px-1 py-0.5 rounded text-[7px] font-medium"
+          style={{ backgroundColor: 'rgba(0,0,0,0.5)', color: 'rgba(255,255,255,0.7)' }}
+        >
+          Preview
+        </div>
+        <button
+          onClick={() => setZoomed(true)}
+          className="absolute top-1 right-1 p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+          style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}
+          title="Zoom preview"
+        >
+          <Maximize2 className="w-3 h-3 text-white/80" />
+        </button>
+      </div>
+      {zoomed && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-6"
+          style={{ backgroundColor: 'rgba(0,0,0,0.85)' }}
+          onClick={() => setZoomed(false)}
+        >
+          <div
+            className="relative"
+            style={{ maxWidth: 720, maxHeight: '85vh', width: '100%' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="rounded-lg overflow-hidden border" style={{ borderColor: 'var(--border-subtle)', aspectRatio, width: '100%' }}>
+              <img src={backgroundUrl} alt="Intro background" className="w-full h-full object-cover" />
+            </div>
+            <button
+              onClick={() => setZoomed(false)}
+              className="absolute -top-3 -right-3 p-1.5 rounded-full"
+              style={{ backgroundColor: 'rgba(0,0,0,0.8)', border: '1px solid rgba(255,255,255,0.2)' }}
+            >
+              <X className="w-4 h-4 text-white" />
+            </button>
+            <div
+              className="absolute bottom-2 left-1/2 -translate-x-1/2 px-2 py-1 rounded text-[10px]"
+              style={{ backgroundColor: 'rgba(0,0,0,0.6)', color: 'rgba(255,255,255,0.6)' }}
+            >
+              {aspectRatio.replace('/', ':')} · Click outside to close
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 function RenderButton({ projectId, hasVisual, hasVoiceover, hasMusic, initialOutputUrl, initialStatus, initialRenderId }: { projectId: string; hasVisual: boolean; hasVoiceover: boolean; hasMusic: boolean; initialOutputUrl?: string | null; initialStatus?: string; initialRenderId?: string | null }) {
   const { toast } = useToast();
   const isAlreadyCompleted = (initialStatus === 'completed' || initialStatus === 'complete') && !!initialOutputUrl;
@@ -2225,9 +2282,10 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
                         />
                       )}
                       {settings.introBackgroundUrl && !settings.introBackgroundRandom && (
-                        <div className="rounded-lg overflow-hidden border" style={{ borderColor: 'var(--border-subtle)', aspectRatio: '16/9', maxHeight: 100 }}>
-                          <img src={settings.introBackgroundUrl} alt="Intro background" className="w-full h-full object-cover" />
-                        </div>
+                        <IntroPreviewCard
+                          backgroundUrl={settings.introBackgroundUrl}
+                          aspectRatio={(project?.outputFormat?.aspectRatio || '16:9').replace(':', '/')}
+                        />
                       )}
                     </div>
                   )}
@@ -2564,6 +2622,7 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
                         websiteFontFamily={settings.endCard?.websiteFontFamily || 'Inter'}
                         phoneText={settings.endCard?.contactPhone || ''}
                         emailText={settings.endCard?.contactEmail || ''}
+                        aspectRatio={(project?.outputFormat?.aspectRatio || '16:9').replace(':', '/')}
                       />
 
                       <div className="space-y-1.5">

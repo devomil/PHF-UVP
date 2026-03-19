@@ -1,4 +1,5 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
+import { Maximize2, X } from 'lucide-react';
 
 const useGoogleFonts = (families: string[]) => {
   useEffect(() => {
@@ -42,7 +43,7 @@ interface EndCardPreviewProps {
   aspectRatio?: string;
 }
 
-export const EndCardPreview: React.FC<EndCardPreviewProps> = ({
+const PreviewContent: React.FC<EndCardPreviewProps & { scale?: number }> = ({
   backgroundUrl,
   logoUrl,
   logoSize = 25,
@@ -64,24 +65,22 @@ export const EndCardPreview: React.FC<EndCardPreviewProps> = ({
   phoneText = '',
   emailText = '',
   aspectRatio = '16/9',
+  scale = 0.35,
 }) => {
-  useGoogleFonts([taglineFontFamily, websiteFontFamily]);
-
   const bgStyle: React.CSSProperties = backgroundUrl
     ? { backgroundImage: `url(${backgroundUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' }
     : { background: 'linear-gradient(145deg, #1a1a2e, #16213e, #0d1b2a)' };
 
-  const previewTaglineSize = Math.max(7, Math.round(taglineFontSize * 0.35));
-  const previewWebsiteSize = Math.max(6, Math.round(websiteFontSize * 0.35));
+  const previewTaglineSize = Math.max(7, Math.round(taglineFontSize * scale));
+  const previewWebsiteSize = Math.max(6, Math.round(websiteFontSize * scale));
 
   return (
     <div
-      className="relative rounded-lg overflow-hidden border"
+      className="relative rounded-lg overflow-hidden border w-full"
       style={{
         ...bgStyle,
         borderColor: 'var(--border-subtle)',
         aspectRatio,
-        minHeight: 120,
       }}
     >
       <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
@@ -171,13 +170,64 @@ export const EndCardPreview: React.FC<EndCardPreviewProps> = ({
       </div>
 
       <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/30 to-transparent h-4" />
-      <div
-        className="absolute top-1 left-1 px-1 py-0.5 rounded text-[7px] font-medium"
-        style={{ backgroundColor: 'rgba(0,0,0,0.5)', color: 'rgba(255,255,255,0.7)' }}
-      >
-        Preview
-      </div>
     </div>
+  );
+};
+
+export const EndCardPreview: React.FC<EndCardPreviewProps> = (props) => {
+  const [zoomed, setZoomed] = useState(false);
+  const { taglineFontFamily = 'Great Vibes', websiteFontFamily = 'Inter' } = props;
+  useGoogleFonts([taglineFontFamily, websiteFontFamily]);
+
+  return (
+    <>
+      <div className="relative group">
+        <PreviewContent {...props} scale={0.35} />
+        <div
+          className="absolute top-1 left-1 px-1 py-0.5 rounded text-[7px] font-medium"
+          style={{ backgroundColor: 'rgba(0,0,0,0.5)', color: 'rgba(255,255,255,0.7)' }}
+        >
+          Preview
+        </div>
+        <button
+          onClick={() => setZoomed(true)}
+          className="absolute top-1 right-1 p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+          style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}
+          title="Zoom preview"
+        >
+          <Maximize2 className="w-3 h-3 text-white/80" />
+        </button>
+      </div>
+
+      {zoomed && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-6"
+          style={{ backgroundColor: 'rgba(0,0,0,0.85)' }}
+          onClick={() => setZoomed(false)}
+        >
+          <div
+            className="relative w-full"
+            style={{ maxWidth: 720, maxHeight: '85vh' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <PreviewContent {...props} scale={0.7} />
+            <button
+              onClick={() => setZoomed(false)}
+              className="absolute -top-3 -right-3 p-1.5 rounded-full"
+              style={{ backgroundColor: 'rgba(0,0,0,0.8)', border: '1px solid rgba(255,255,255,0.2)' }}
+            >
+              <X className="w-4 h-4 text-white" />
+            </button>
+            <div
+              className="absolute bottom-2 left-1/2 -translate-x-1/2 px-2 py-1 rounded text-[10px]"
+              style={{ backgroundColor: 'rgba(0,0,0,0.6)', color: 'rgba(255,255,255,0.6)' }}
+            >
+              {props.aspectRatio?.replace('/', ':') || '16:9'} · Click outside to close
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 };
 
