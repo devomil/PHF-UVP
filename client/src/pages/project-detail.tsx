@@ -2607,6 +2607,54 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
                         websiteFontWeight={settings.introCard?.websiteFontWeight ?? 500}
                         aspectRatio={projectAspectRatio.replace(':', '/')}
                       />
+
+                      <div className="space-y-1.5">
+                        <div>
+                          <label className="text-[10px] block mb-0.5" style={{ color: "var(--text-muted)" }}>Logo Position (Y)</label>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="range"
+                              min="10"
+                              max="90"
+                              value={settings.introCard?.logoPositionY || 32}
+                              onChange={(e) => saveMutation.mutate({ introCard: { ...settings.introCard, logoPositionY: parseInt(e.target.value) } })}
+                              className="flex-1 h-1.5 rounded-full appearance-none cursor-pointer"
+                              style={{ background: `linear-gradient(to right, rgb(168 85 247) ${((settings.introCard?.logoPositionY || 32) - 10) / 0.8}%, var(--border-subtle) ${((settings.introCard?.logoPositionY || 32) - 10) / 0.8}%)` }}
+                            />
+                            <span className="text-[10px] w-6 text-right" style={{ color: "var(--text-muted)" }}>{settings.introCard?.logoPositionY || 32}%</span>
+                          </div>
+                        </div>
+                        <div>
+                          <label className="text-[10px] block mb-0.5" style={{ color: "var(--text-muted)" }}>Tagline Position (Y)</label>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="range"
+                              min="15"
+                              max="95"
+                              value={settings.introCard?.taglinePositionY || 50}
+                              onChange={(e) => saveMutation.mutate({ introCard: { ...settings.introCard, taglinePositionY: parseInt(e.target.value) } })}
+                              className="flex-1 h-1.5 rounded-full appearance-none cursor-pointer"
+                              style={{ background: `linear-gradient(to right, rgb(168 85 247) ${((settings.introCard?.taglinePositionY || 50) - 15) / 0.8}%, var(--border-subtle) ${((settings.introCard?.taglinePositionY || 50) - 15) / 0.8}%)` }}
+                            />
+                            <span className="text-[10px] w-6 text-right" style={{ color: "var(--text-muted)" }}>{settings.introCard?.taglinePositionY || 50}%</span>
+                          </div>
+                        </div>
+                        <div>
+                          <label className="text-[10px] block mb-0.5" style={{ color: "var(--text-muted)" }}>Website Position (Y)</label>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="range"
+                              min="20"
+                              max="95"
+                              value={settings.introCard?.websitePositionY || 75}
+                              onChange={(e) => saveMutation.mutate({ introCard: { ...settings.introCard, websitePositionY: parseInt(e.target.value) } })}
+                              className="flex-1 h-1.5 rounded-full appearance-none cursor-pointer"
+                              style={{ background: `linear-gradient(to right, rgb(168 85 247) ${((settings.introCard?.websitePositionY || 75) - 20) / 0.75}%, var(--border-subtle) ${((settings.introCard?.websitePositionY || 75) - 20) / 0.75}%)` }}
+                            />
+                            <span className="text-[10px] w-6 text-right" style={{ color: "var(--text-muted)" }}>{settings.introCard?.websitePositionY || 75}%</span>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
