@@ -2024,6 +2024,65 @@ export const UniversalVideoComposition: React.FC<UniversalVideoProps> = ({
     
     const sceneOverlayConfig = sceneOverlayConfigs?.[scene.id];
     
+    const isIntroScene = scene.id === 'intro-scene-auto' || scene.type === 'intro';
+    
+    if (isIntroScene) {
+      const introConfig = (scene as any).introCardConfig || {};
+      const introBg = scene.assets?.backgroundUrl || scene.assets?.imageUrl || scene.background?.imageUrl;
+      const introLogoUrl = sceneOverlayConfig?.logo?.url || '';
+      const introEndCardConfig: any = {
+        enabled: true,
+        duration: scene.duration || 4,
+        background: introBg ? { type: 'image', imageUrl: introBg } : (scene.background?.gradient ? { type: 'animated-gradient', gradient: scene.background.gradient } : { type: 'animated-gradient', gradient: { colors: ['#1a1a2e', '#16213e', '#0d1b2a'], angle: 180 } }),
+        logo: {
+          url: introLogoUrl,
+          size: introConfig.logoSize || 30,
+          position: { x: 50, y: introConfig.logoPositionY || 32 },
+          animation: introConfig.logoAnimation || 'scale-bounce',
+        },
+        tagline: {
+          text: introConfig.taglineText || '',
+          delay: 0.8,
+          animation: introConfig.taglineAnimation || 'fade',
+          positionY: introConfig.taglinePositionY || 50,
+          style: {
+            fontSize: introConfig.taglineFontSize || 28,
+            fontFamily: `'${introConfig.taglineFontFamily || 'Great Vibes'}', cursive`,
+            color: introConfig.taglineColor || '#E8D5B7',
+            fontWeight: introConfig.taglineFontWeight ?? 400,
+          },
+        },
+        contact: {
+          website: introConfig.contactWebsite || '',
+          phone: introConfig.contactPhone || '',
+          email: introConfig.contactEmail || '',
+          delay: 1.8,
+          animation: introConfig.contactAnimation || 'stagger',
+          positionY: introConfig.websitePositionY || 75,
+          style: {
+            fontSize: introConfig.websiteFontSize || 22,
+            fontFamily: `'${introConfig.websiteFontFamily || 'Inter'}', sans-serif`,
+            color: introConfig.websiteColor || '#FFFFFF',
+            fontWeight: introConfig.websiteFontWeight ?? 500,
+          },
+        },
+        ambientEffect: {
+          type: introConfig.ambientEffect || 'bokeh',
+          color: 'rgba(232, 213, 183, 0.3)',
+          intensity: 40,
+        },
+      };
+      return (
+        <Sequence
+          key={scene.id || `scene-${index}`}
+          from={sceneStartFrame}
+          durationInFrames={durationInFrames}
+        >
+          <AnimatedEndCard config={introEndCardConfig} />
+        </Sequence>
+      );
+    }
+    
     const sequence = (
       <Sequence
         key={scene.id || `scene-${index}`}
