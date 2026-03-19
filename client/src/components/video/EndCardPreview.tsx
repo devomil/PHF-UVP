@@ -1,4 +1,22 @@
-import React from 'react';
+import React, { useEffect } from 'react';
+
+const useGoogleFonts = (families: string[]) => {
+  useEffect(() => {
+    const unique = [...new Set(families.filter(f => f && f !== 'Inter'))];
+    if (unique.length === 0) return;
+    const id = 'endcard-google-fonts';
+    const existing = document.getElementById(id);
+    const params = unique.map(f => `family=${f.replace(/ /g, '+')}:wght@300;400;500;600;700`).join('&');
+    const href = `https://fonts.googleapis.com/css2?${params}&display=swap`;
+    if (existing?.getAttribute('href') === href) return;
+    if (existing) existing.remove();
+    const link = document.createElement('link');
+    link.id = id;
+    link.rel = 'stylesheet';
+    link.href = href;
+    document.head.appendChild(link);
+  }, [families]);
+};
 
 interface EndCardPreviewProps {
   backgroundUrl?: string | null;
@@ -16,6 +34,9 @@ interface EndCardPreviewProps {
   websiteFontSize?: number;
   websiteColor?: string;
   websiteBold?: boolean;
+  websiteFontFamily?: string;
+  websiteFontWeight?: number;
+  taglineFontWeight?: number;
   aspectRatio?: string;
 }
 
@@ -35,8 +56,13 @@ export const EndCardPreview: React.FC<EndCardPreviewProps> = ({
   websiteFontSize = 22,
   websiteColor = '#FFFFFF',
   websiteBold = false,
+  websiteFontFamily = 'Inter',
+  websiteFontWeight,
+  taglineFontWeight,
   aspectRatio = '16/9',
 }) => {
+  useGoogleFonts([taglineFontFamily, websiteFontFamily]);
+
   const bgStyle: React.CSSProperties = backgroundUrl
     ? { backgroundImage: `url(${backgroundUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' }
     : { background: 'linear-gradient(145deg, #1a1a2e, #16213e, #0d1b2a)' };
@@ -108,7 +134,7 @@ export const EndCardPreview: React.FC<EndCardPreviewProps> = ({
                 fontSize: previewTaglineSize,
                 fontFamily: `'${taglineFontFamily}', cursive, serif`,
                 color: taglineColor,
-                fontWeight: taglineBold ? 700 : 400,
+                fontWeight: taglineFontWeight ?? (taglineBold ? 700 : 400),
                 textShadow: '0 1px 4px rgba(0,0,0,0.6)',
               }}
             >
@@ -125,9 +151,9 @@ export const EndCardPreview: React.FC<EndCardPreviewProps> = ({
             <span
               style={{
                 fontSize: previewWebsiteSize,
-                fontFamily: 'Inter, sans-serif',
+                fontFamily: `'${websiteFontFamily}', sans-serif`,
                 color: websiteColor,
-                fontWeight: websiteBold ? 700 : 400,
+                fontWeight: websiteFontWeight ?? (websiteBold ? 700 : 500),
                 textShadow: '0 1px 3px rgba(0,0,0,0.5)',
               }}
             >

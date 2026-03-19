@@ -1692,7 +1692,7 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
     outroTemplate: "classic-glow",
     introBackgroundRandom: false,
     introBackgroundUrl: null as string | null,
-    endCard: { enabled: true, duration: 5, taglineText: '', logoSize: 25, logoAnimation: 'scale-bounce', taglineAnimation: 'typewriter', contactWebsite: '', contactPhone: '', contactEmail: '', ambientEffect: 'bokeh', backgroundUrl: null as string | null, logoPositionY: 32, taglinePositionY: 55, websitePositionY: 75, taglineFontSize: 28, taglineColor: '#E8D5B7', taglineFontFamily: 'Great Vibes', taglineBold: false, websiteFontSize: 22, websiteColor: '#FFFFFF', websiteBold: false },
+    endCard: { enabled: true, duration: 5, taglineText: '', logoSize: 25, logoAnimation: 'scale-bounce', taglineAnimation: 'typewriter', contactWebsite: '', contactPhone: '', contactEmail: '', ambientEffect: 'bokeh', backgroundUrl: null as string | null, logoPositionY: 32, taglinePositionY: 55, websitePositionY: 75, taglineFontSize: 28, taglineColor: '#E8D5B7', taglineFontFamily: 'Great Vibes', taglineBold: false, taglineFontWeight: 400, websiteFontSize: 22, websiteColor: '#FFFFFF', websiteBold: false, websiteFontWeight: 500, websiteFontFamily: 'Inter' },
   };
 
   const settings = {
@@ -2280,7 +2280,7 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
                       placeholder="e.g. Rooted in Nature, Grown with Care"
                       onSave={(val) => saveMutation.mutate({ endCard: { ...settings.endCard, taglineText: val } })}
                     />
-                    <div className="grid grid-cols-4 gap-1.5">
+                    <div className="grid grid-cols-2 gap-1.5">
                       <div>
                         <label className="text-[10px] block mb-0.5" style={{ color: "var(--text-muted)" }}>Font</label>
                         <select
@@ -2289,16 +2289,55 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
                           className="w-full px-1.5 py-1 rounded-md border text-[10px]"
                           style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)", color: "var(--text-primary)" }}
                         >
-                          <option value="Great Vibes">Great Vibes</option>
-                          <option value="Playfair Display">Playfair Display</option>
-                          <option value="Montserrat">Montserrat</option>
-                          <option value="Raleway">Raleway</option>
-                          <option value="Oswald">Oswald</option>
-                          <option value="Lora">Lora</option>
-                          <option value="Poppins">Poppins</option>
-                          <option value="Inter">Inter</option>
+                          <optgroup label="Script / Handwritten">
+                            <option value="Great Vibes">Great Vibes</option>
+                            <option value="Dancing Script">Dancing Script</option>
+                            <option value="Sacramento">Sacramento</option>
+                            <option value="Pacifico">Pacifico</option>
+                            <option value="Caveat">Caveat</option>
+                            <option value="Satisfy">Satisfy</option>
+                            <option value="Kaushan Script">Kaushan Script</option>
+                            <option value="Allura">Allura</option>
+                          </optgroup>
+                          <optgroup label="Elegant / Serif">
+                            <option value="Playfair Display">Playfair Display</option>
+                            <option value="Lora">Lora</option>
+                            <option value="Cormorant Garamond">Cormorant Garamond</option>
+                            <option value="Libre Baskerville">Libre Baskerville</option>
+                            <option value="EB Garamond">EB Garamond</option>
+                          </optgroup>
+                          <optgroup label="Modern / Sans-Serif">
+                            <option value="Poppins">Poppins</option>
+                            <option value="Montserrat">Montserrat</option>
+                            <option value="Raleway">Raleway</option>
+                            <option value="Inter">Inter</option>
+                            <option value="Oswald">Oswald</option>
+                            <option value="Quicksand">Quicksand</option>
+                            <option value="Nunito">Nunito</option>
+                            <option value="Open Sans">Open Sans</option>
+                          </optgroup>
                         </select>
                       </div>
+                      <div>
+                        <label className="text-[10px] block mb-0.5" style={{ color: "var(--text-muted)" }}>Weight</label>
+                        <select
+                          value={(settings.endCard?.taglineFontWeight ?? (settings.endCard?.taglineBold ? 700 : 400)).toString()}
+                          onChange={(e) => {
+                            const w = parseInt(e.target.value);
+                            saveMutation.mutate({ endCard: { ...settings.endCard, taglineFontWeight: w, taglineBold: w >= 600 } });
+                          }}
+                          className="w-full px-1.5 py-1 rounded-md border text-[10px]"
+                          style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)", color: "var(--text-primary)" }}
+                        >
+                          <option value="300">Light</option>
+                          <option value="400">Regular</option>
+                          <option value="500">Medium</option>
+                          <option value="600">Semi-Bold</option>
+                          <option value="700">Bold</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-1.5">
                       <div>
                         <label className="text-[10px] block mb-0.5" style={{ color: "var(--text-muted)" }}>Size</label>
                         <div className="flex items-center gap-1">
@@ -2327,16 +2366,6 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
                           <span className="text-[9px]" style={{ color: "var(--text-muted)" }}>{settings.endCard?.taglineColor || '#E8D5B7'}</span>
                         </div>
                       </div>
-                      <div>
-                        <label className="text-[10px] block mb-0.5" style={{ color: "var(--text-muted)" }}>Bold</label>
-                        <button
-                          onClick={() => saveMutation.mutate({ endCard: { ...settings.endCard, taglineBold: !settings.endCard?.taglineBold } })}
-                          className={`px-2 py-1 rounded-md border text-[10px] font-bold transition-colors ${settings.endCard?.taglineBold ? 'bg-indigo-500/20 border-indigo-500' : ''}`}
-                          style={{ borderColor: settings.endCard?.taglineBold ? undefined : "var(--border-subtle)", color: "var(--text-primary)" }}
-                        >
-                          B
-                        </button>
-                      </div>
                     </div>
 
                     <DebouncedTextInput
@@ -2345,7 +2374,58 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
                       placeholder="e.g. PineHillFarm.com"
                       onSave={(val) => saveMutation.mutate({ endCard: { ...settings.endCard, contactWebsite: val } })}
                     />
-                    <div className="grid grid-cols-3 gap-1.5">
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <div>
+                        <label className="text-[10px] block mb-0.5" style={{ color: "var(--text-muted)" }}>Font</label>
+                        <select
+                          value={settings.endCard?.websiteFontFamily || 'Inter'}
+                          onChange={(e) => saveMutation.mutate({ endCard: { ...settings.endCard, websiteFontFamily: e.target.value } })}
+                          className="w-full px-1.5 py-1 rounded-md border text-[10px]"
+                          style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)", color: "var(--text-primary)" }}
+                        >
+                          <optgroup label="Modern / Sans-Serif">
+                            <option value="Inter">Inter</option>
+                            <option value="Poppins">Poppins</option>
+                            <option value="Montserrat">Montserrat</option>
+                            <option value="Raleway">Raleway</option>
+                            <option value="Oswald">Oswald</option>
+                            <option value="Quicksand">Quicksand</option>
+                            <option value="Nunito">Nunito</option>
+                            <option value="Open Sans">Open Sans</option>
+                          </optgroup>
+                          <optgroup label="Elegant / Serif">
+                            <option value="Playfair Display">Playfair Display</option>
+                            <option value="Lora">Lora</option>
+                            <option value="Cormorant Garamond">Cormorant Garamond</option>
+                            <option value="Libre Baskerville">Libre Baskerville</option>
+                          </optgroup>
+                          <optgroup label="Script / Handwritten">
+                            <option value="Great Vibes">Great Vibes</option>
+                            <option value="Dancing Script">Dancing Script</option>
+                            <option value="Sacramento">Sacramento</option>
+                          </optgroup>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-[10px] block mb-0.5" style={{ color: "var(--text-muted)" }}>Weight</label>
+                        <select
+                          value={(settings.endCard?.websiteFontWeight ?? (settings.endCard?.websiteBold ? 700 : 500)).toString()}
+                          onChange={(e) => {
+                            const w = parseInt(e.target.value);
+                            saveMutation.mutate({ endCard: { ...settings.endCard, websiteFontWeight: w, websiteBold: w >= 600 } });
+                          }}
+                          className="w-full px-1.5 py-1 rounded-md border text-[10px]"
+                          style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)", color: "var(--text-primary)" }}
+                        >
+                          <option value="300">Light</option>
+                          <option value="400">Regular</option>
+                          <option value="500">Medium</option>
+                          <option value="600">Semi-Bold</option>
+                          <option value="700">Bold</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-1.5">
                       <div>
                         <label className="text-[10px] block mb-0.5" style={{ color: "var(--text-muted)" }}>Size</label>
                         <div className="flex items-center gap-1">
@@ -2373,16 +2453,6 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
                           />
                           <span className="text-[9px]" style={{ color: "var(--text-muted)" }}>{settings.endCard?.websiteColor || '#FFFFFF'}</span>
                         </div>
-                      </div>
-                      <div>
-                        <label className="text-[10px] block mb-0.5" style={{ color: "var(--text-muted)" }}>Bold</label>
-                        <button
-                          onClick={() => saveMutation.mutate({ endCard: { ...settings.endCard, websiteBold: !settings.endCard?.websiteBold } })}
-                          className={`px-2 py-1 rounded-md border text-[10px] font-bold transition-colors ${settings.endCard?.websiteBold ? 'bg-indigo-500/20 border-indigo-500' : ''}`}
-                          style={{ borderColor: settings.endCard?.websiteBold ? undefined : "var(--border-subtle)", color: "var(--text-primary)" }}
-                        >
-                          B
-                        </button>
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-2">
@@ -2469,11 +2539,14 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
                         taglineColor={settings.endCard?.taglineColor || '#E8D5B7'}
                         taglineFontFamily={settings.endCard?.taglineFontFamily || 'Great Vibes'}
                         taglineBold={settings.endCard?.taglineBold || false}
+                        taglineFontWeight={settings.endCard?.taglineFontWeight}
                         websiteText={settings.endCard?.contactWebsite || ''}
                         websitePositionY={settings.endCard?.websitePositionY || 75}
                         websiteFontSize={settings.endCard?.websiteFontSize || 22}
                         websiteColor={settings.endCard?.websiteColor || '#FFFFFF'}
                         websiteBold={settings.endCard?.websiteBold || false}
+                        websiteFontWeight={settings.endCard?.websiteFontWeight}
+                        websiteFontFamily={settings.endCard?.websiteFontFamily || 'Inter'}
                       />
 
                       <div className="space-y-1.5">

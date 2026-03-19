@@ -40,6 +40,7 @@ export interface EndCardConfig {
       fontSize: number;
       color: string;
       fontWeight?: number;
+      fontFamily?: string;
     };
   };
   social?: {

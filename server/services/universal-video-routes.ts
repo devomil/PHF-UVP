@@ -2174,7 +2174,7 @@ router.patch('/projects/:projectId/render-settings', isAuthenticated, async (req
       const validLogoAnimations = ['scale-bounce', 'fade', 'slide-up', 'none'];
       const validTaglineAnimations = ['typewriter', 'fade', 'slide-up'];
       const validAmbientEffects = ['particles', 'bokeh', 'none'];
-      const validFonts = ['Great Vibes', 'Inter', 'Playfair Display', 'Montserrat', 'Raleway', 'Oswald', 'Lora', 'Poppins'];
+      const validFonts = ['Great Vibes', 'Inter', 'Playfair Display', 'Montserrat', 'Raleway', 'Oswald', 'Lora', 'Poppins', 'Dancing Script', 'Sacramento', 'Pacifico', 'Caveat', 'Satisfy', 'Kaushan Script', 'Allura', 'Cormorant Garamond', 'Libre Baskerville', 'EB Garamond', 'Quicksand', 'Nunito', 'Open Sans'];
       (projectData as any).endCardSettings = {
         ...existing,
         enabled: endCard.enabled ?? existing.enabled ?? true,
@@ -2195,9 +2195,16 @@ router.patch('/projects/:projectId/render-settings', isAuthenticated, async (req
         taglineColor: endCard.taglineColor ?? existing.taglineColor ?? '#E8D5B7',
         taglineFontFamily: validFonts.includes(endCard.taglineFontFamily) ? endCard.taglineFontFamily : (existing.taglineFontFamily || 'Great Vibes'),
         taglineBold: endCard.taglineBold ?? existing.taglineBold ?? false,
+        taglineFontWeight: endCard.taglineFontWeight != null
+          ? Math.min(900, Math.max(100, endCard.taglineFontWeight))
+          : (existing.taglineFontWeight ?? ((endCard.taglineBold ?? existing.taglineBold) ? 700 : undefined)),
         websiteFontSize: endCard.websiteFontSize != null ? Math.min(48, Math.max(12, endCard.websiteFontSize)) : (existing.websiteFontSize || 22),
         websiteColor: endCard.websiteColor ?? existing.websiteColor ?? '#FFFFFF',
         websiteBold: endCard.websiteBold ?? existing.websiteBold ?? false,
+        websiteFontWeight: endCard.websiteFontWeight != null
+          ? Math.min(900, Math.max(100, endCard.websiteFontWeight))
+          : (existing.websiteFontWeight ?? ((endCard.websiteBold ?? existing.websiteBold) ? 700 : undefined)),
+        websiteFontFamily: validFonts.includes(endCard.websiteFontFamily) ? endCard.websiteFontFamily : (existing.websiteFontFamily || 'Inter'),
       };
     }
 
@@ -3107,7 +3114,7 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
             fontSize: endCardSettings?.taglineFontSize || 28,
             fontFamily: `'${endCardSettings?.taglineFontFamily || 'Great Vibes'}', cursive`,
             color: endCardSettings?.taglineColor || '#E8D5B7',
-            fontWeight: endCardSettings?.taglineBold ? 700 : 400,
+            fontWeight: endCardSettings?.taglineFontWeight ?? (endCardSettings?.taglineBold ? 700 : 400),
           },
         },
         contact: {
@@ -3119,8 +3126,9 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
           positionY: endCardSettings?.websitePositionY || 75,
           style: {
             fontSize: endCardSettings?.websiteFontSize || 22,
+            fontFamily: `'${endCardSettings?.websiteFontFamily || 'Inter'}', sans-serif`,
             color: endCardSettings?.websiteColor || '#FFFFFF',
-            fontWeight: endCardSettings?.websiteBold ? 700 : 400,
+            fontWeight: endCardSettings?.websiteFontWeight ?? (endCardSettings?.websiteBold ? 700 : 500),
           },
         },
         // Phase 18E: Social icons

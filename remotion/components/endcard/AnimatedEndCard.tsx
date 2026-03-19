@@ -1,6 +1,17 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate, Img, spring } from 'remotion';
 import { EndCardConfig } from '../../../shared/config/end-card';
+
+const GoogleFontLoader: React.FC<{ families: string[] }> = ({ families }) => {
+  const href = useMemo(() => {
+    const unique = [...new Set(families.filter(f => f && f !== 'Inter'))];
+    if (unique.length === 0) return null;
+    const params = unique.map(f => `family=${f.replace(/ /g, '+')}:wght@300;400;500;600;700`).join('&');
+    return `https://fonts.googleapis.com/css2?${params}&display=swap`;
+  }, [families]);
+  if (!href) return null;
+  return <link rel="stylesheet" href={href} />;
+};
 
 function isValidImageUrl(url: string | undefined): boolean {
   if (!url) return false;
@@ -26,8 +37,18 @@ export const AnimatedEndCard: React.FC<AnimatedEndCardProps> = ({ config }) => {
   const frame = useCurrentFrame();
   const { fps, width, height } = useVideoConfig();
   
+  const fontFamilies = useMemo(() => {
+    const families: string[] = [];
+    const taglineFont = config.tagline?.style?.fontFamily?.replace(/['"]/g, '').split(',')[0]?.trim();
+    const contactFont = config.contact?.style?.fontFamily?.replace(/['"]/g, '').split(',')[0]?.trim();
+    if (taglineFont) families.push(taglineFont);
+    if (contactFont) families.push(contactFont);
+    return families;
+  }, [config.tagline?.style?.fontFamily, config.contact?.style?.fontFamily]);
+
   return (
     <AbsoluteFill>
+      <GoogleFontLoader families={fontFamilies} />
       <EndCardBackground 
         background={config.background} 
         frame={frame} 
@@ -428,7 +449,7 @@ const ContactReveal: React.FC<{
   website?: string;
   phone?: string;
   email?: string;
-  style: { fontSize: number; color: string; fontWeight?: number };
+  style: { fontSize: number; color: string; fontWeight?: number; fontFamily?: string };
   animation: string;
   startFrame: number;
   fps: number;
@@ -479,7 +500,7 @@ const ContactReveal: React.FC<{
             style={{
               fontSize: style.fontSize,
               color: style.color,
-              fontFamily: 'Inter, sans-serif',
+              fontFamily: style.fontFamily || 'Inter, sans-serif',
               fontWeight: style.fontWeight || 500,
               opacity,
               transform: `translateY(${translateY}px)`,
