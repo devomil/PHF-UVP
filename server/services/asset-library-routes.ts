@@ -99,6 +99,7 @@ router.post('/generate', async (req: Request, res: Response) => {
       referenceImageUrl, referenceVideoUrl, style,
       strength, useCase, scaleFactor, bodyControl,
       negativePrompt, imageFidelity,
+      numImages, outputFormat, i2iAspectRatio, resolution, safetyLevel,
     } = req.body;
 
     if (!mode) {
@@ -159,6 +160,11 @@ router.post('/generate', async (req: Request, res: Response) => {
         scaleFactor: scaleFactor,
         bodyControl: bodyControl,
         imageControlStrength: imageFidelity !== undefined ? imageFidelity : undefined,
+        numImages: numImages,
+        outputFormat: outputFormat,
+        i2iAspectRatio: i2iAspectRatio,
+        resolution: resolution,
+        safetyLevel: safetyLevel,
       },
       triggeredBy: userId,
     });
@@ -647,6 +653,11 @@ async function processAssetLibraryJob(jobId: string, userId: string, mode: strin
           height: dims.h,
           useCase: settings.useCase || 'style-transfer',
           provider: job.provider !== 'auto' ? job.provider : undefined,
+          numImages: settings.numImages,
+          outputFormat: settings.outputFormat,
+          aspectRatio: settings.i2iAspectRatio,
+          resolution: settings.resolution,
+          safetyLevel: settings.safetyLevel,
         });
 
         if (!i2iResult.url) throw new Error('Image-to-image generation returned no URL');

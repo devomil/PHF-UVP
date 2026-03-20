@@ -26,6 +26,7 @@ import {
   Wand2,
   Save,
   Check,
+  ChevronDown,
 } from 'lucide-react';
 import { AssetSuzzieChat } from './AssetSuzzieChat';
 
@@ -181,6 +182,12 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
   const [imageFidelity, setImageFidelity] = useState(0.85);
   const [strength, setStrength] = useState(0.35);
   const [useCase, setUseCase] = useState('style-transfer');
+  const [numImages, setNumImages] = useState(1);
+  const [outputFormat, setOutputFormat] = useState<'jpg' | 'png'>('png');
+  const [i2iAspectRatio, setI2iAspectRatio] = useState('1:1');
+  const [resolution, setResolution] = useState<'2k' | '4k'>('2k');
+  const [safetyLevel, setSafetyLevel] = useState<'low' | 'medium' | 'high'>('high');
+  const [showAdvancedI2I, setShowAdvancedI2I] = useState(false);
   const [scaleFactor, setScaleFactor] = useState(2);
   const [bodyControl, setBodyControl] = useState(false);
   const [referenceImageUrl, setReferenceImageUrl] = useState('');
@@ -417,6 +424,11 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
       if (mode === 'i2i') {
         body.strength = strength;
         body.useCase = useCase;
+        body.numImages = numImages;
+        body.outputFormat = outputFormat;
+        body.i2iAspectRatio = i2iAspectRatio;
+        body.resolution = resolution;
+        body.safetyLevel = safetyLevel;
       }
       if (mode === 'upscale-image' || mode === 'upscale-video') {
         body.scaleFactor = scaleFactor;
@@ -753,23 +765,117 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
                   ))}
                 </div>
               </div>
+
               <div>
-                <Label className="text-sm text-gray-400 mb-1.5 block">
-                  Transformation Strength: {Math.round(strength * 100)}%
-                </Label>
-                <Slider
-                  value={[strength]}
-                  onValueChange={([v]) => setStrength(v)}
-                  min={0.1}
-                  max={1.0}
-                  step={0.05}
-                  className="py-2"
-                />
-                <div className="flex justify-between text-[10px] text-gray-500">
-                  <span>Subtle (preserve original)</span>
-                  <span>Strong (more creative)</span>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowAdvancedI2I(!showAdvancedI2I)}
+                  className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-gray-300 transition-colors"
+                >
+                  <ChevronDown className={`h-4 w-4 transition-transform ${showAdvancedI2I ? 'rotate-180' : ''}`} />
+                  Advanced Settings
+                </button>
               </div>
+
+              {showAdvancedI2I && (
+                <div className="space-y-3 p-3 rounded-lg border border-gray-700/50 bg-gray-900/50">
+                  <div>
+                    <Label className="text-xs text-gray-400 mb-1.5 block">Number of Variations</Label>
+                    <div className="flex gap-2">
+                      {[1, 2, 3, 4].map((n) => (
+                        <button
+                          key={n}
+                          onClick={() => setNumImages(n)}
+                          className={`flex-1 py-1.5 rounded text-xs font-medium border transition-all ${
+                            numImages === n
+                              ? 'border-purple-500 bg-purple-500/10 text-purple-300'
+                              : 'border-gray-700 bg-gray-900 text-gray-500 hover:border-gray-600'
+                          }`}
+                        >
+                          {n}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-[10px] text-gray-500 mt-1">Best result is automatically selected</p>
+                  </div>
+
+                  <div>
+                    <Label className="text-xs text-gray-400 mb-1.5 block">Output Format</Label>
+                    <div className="flex gap-2">
+                      {(['jpg', 'png'] as const).map((fmt) => (
+                        <button
+                          key={fmt}
+                          onClick={() => setOutputFormat(fmt)}
+                          className={`flex-1 py-1.5 rounded text-xs font-medium border transition-all uppercase ${
+                            outputFormat === fmt
+                              ? 'border-purple-500 bg-purple-500/10 text-purple-300'
+                              : 'border-gray-700 bg-gray-900 text-gray-500 hover:border-gray-600'
+                          }`}
+                        >
+                          {fmt}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <Label className="text-xs text-gray-400 mb-1.5 block">Aspect Ratio</Label>
+                    <div className="flex gap-2">
+                      {['1:1', '16:9', '9:16', '4:3', '3:4'].map((ar) => (
+                        <button
+                          key={ar}
+                          onClick={() => setI2iAspectRatio(ar)}
+                          className={`flex-1 py-1.5 rounded text-xs font-medium border transition-all ${
+                            i2iAspectRatio === ar
+                              ? 'border-purple-500 bg-purple-500/10 text-purple-300'
+                              : 'border-gray-700 bg-gray-900 text-gray-500 hover:border-gray-600'
+                          }`}
+                        >
+                          {ar}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <Label className="text-xs text-gray-400 mb-1.5 block">Resolution</Label>
+                    <div className="flex gap-2">
+                      {(['2k', '4k'] as const).map((res) => (
+                        <button
+                          key={res}
+                          onClick={() => setResolution(res)}
+                          className={`flex-1 py-1.5 rounded text-xs font-medium border transition-all uppercase ${
+                            resolution === res
+                              ? 'border-purple-500 bg-purple-500/10 text-purple-300'
+                              : 'border-gray-700 bg-gray-900 text-gray-500 hover:border-gray-600'
+                          }`}
+                        >
+                          {res}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <Label className="text-xs text-gray-400 mb-1.5 block">Safety Level</Label>
+                    <div className="flex gap-2">
+                      {(['low', 'medium', 'high'] as const).map((sl) => (
+                        <button
+                          key={sl}
+                          onClick={() => setSafetyLevel(sl)}
+                          className={`flex-1 py-1.5 rounded text-xs font-medium border transition-all capitalize ${
+                            safetyLevel === sl
+                              ? 'border-purple-500 bg-purple-500/10 text-purple-300'
+                              : 'border-gray-700 bg-gray-900 text-gray-500 hover:border-gray-600'
+                          }`}
+                        >
+                          {sl}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
             </>
           )}
 

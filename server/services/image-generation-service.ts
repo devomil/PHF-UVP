@@ -119,6 +119,11 @@ interface I2IRequest {
   useCase?: 'background-generation' | 'style-transfer' | 'scene-integration' | 'product-placement';
   noFallback?: boolean;
   useApiDefaults?: boolean;
+  numImages?: number;
+  outputFormat?: 'jpg' | 'png';
+  aspectRatio?: string;
+  resolution?: '2k' | '4k';
+  safetyLevel?: 'low' | 'medium' | 'high';
 }
 
 interface GeneratedImage {
@@ -162,27 +167,9 @@ class ImageGenerationService {
   async generateImageToImage(request: I2IRequest): Promise<GeneratedImage> {
     const qualityTier = request.qualityTier || 'premium';
     
-    let i2iConfig: I2IConfig | null = null;
-    let strength = request.strength ?? 0.35;
-    
-    if (request.assetType) {
-      const placementRules = resolvePlacementRules(request.assetType, {
-        frameWidth: request.width || 1920,
-        frameHeight: request.height || 1080,
-        useCase: request.useCase || 'scene-integration',
-      });
-      i2iConfig = placementRules.i2i;
-      strength = request.strength ?? i2iConfig.strength;
-      
-      console.log(`[I2I] Asset-type-aware generation for: ${request.assetType}`);
-      console.log(`[I2I] Using resolved I2I config: strength=${strength}, guidanceScale=${i2iConfig.guidanceScale}`);
-      console.log(`[I2I] Config description: ${i2iConfig.description}`);
-    }
-    
     const resizedRefUrl = await ensureI2IImageSize(request.referenceImageUrl);
     
     console.log(`[I2I] Reference: ${resizedRefUrl.substring(0, 50)}...`);
-    console.log(`[I2I] Strength: ${strength}`);
     console.log(`[I2I] Quality tier: ${qualityTier}`);
     
     const piApiKey = process.env.PIAPI_API_KEY;
@@ -190,13 +177,36 @@ class ImageGenerationService {
       throw new Error('PIAPI_API_KEY not configured');
     }
     
-    const useKontext = !request.provider || request.provider === 'flux-kontext' || request.provider === 'auto';
-    const kontextPrompt = `${request.prompt}. Preserve all original text, labels, branding, and fine details from the source image.`;
+    const isNanoBanana = !request.provider || request.provider === 'nano-banana-pro' || request.provider === 'auto';
+    const isKontext = !request.provider || request.provider === 'flux-kontext' || request.provider === 'auto' || request.provider === 'nano-banana-pro';
     
-    if (useKontext) {
-      console.log(`[I2I] Using Kontext mode (img2img-kontext) for better source preservation`);
+    if (isNanoBanana) {
+      console.log(`[I2I] Using Nano Banana Pro (primary I2I provider)`);
       try {
-        const kontextResult = await this.generateWithKontext(resizedRefUrl, kontextPrompt, piApiKey);
+        const nbResult = await this.generateWithNanoBanana(resizedRefUrl, request.prompt, piApiKey, {
+          numImages: request.numImages,
+          outputFormat: request.outputFormat,
+          aspectRatio: request.aspectRatio,
+          resolution: request.resolution,
+          safetyLevel: request.safetyLevel,
+        });
+        console.log(`[I2I] Nano Banana generation complete: ${nbResult.url.substring(0, 50)}...`);
+        return {
+          ...nbResult,
+          provider: 'nano-banana-pro',
+          prompt: request.prompt,
+          generationType: 'img2img',
+          sourceAsset: request.referenceImageUrl,
+        };
+      } catch (nbError: any) {
+        console.warn(`[I2I] Nano Banana failed: ${nbError.message}, falling back to Kontext`);
+      }
+    }
+    
+    if (isKontext) {
+      console.log(`[I2I] Using Kontext mode (img2img-kontext) as fallback`);
+      try {
+        const kontextResult = await this.generateWithKontext(resizedRefUrl, request.prompt, piApiKey);
         console.log(`[I2I] Kontext generation complete: ${kontextResult.url.substring(0, 50)}...`);
         return {
           ...kontextResult,
@@ -210,7 +220,20 @@ class ImageGenerationService {
       }
     }
     
-    const providerId = request.provider && request.provider !== 'auto' && request.provider !== 'flux-kontext' 
+    let strength = request.strength ?? 0.35;
+    let i2iConfig: I2IConfig | null = null;
+    
+    if (request.assetType) {
+      const placementRules = resolvePlacementRules(request.assetType, {
+        frameWidth: request.width || 1920,
+        frameHeight: request.height || 1080,
+        useCase: request.useCase || 'scene-integration',
+      });
+      i2iConfig = placementRules.i2i;
+      strength = request.strength ?? i2iConfig.strength;
+    }
+    
+    const providerId = request.provider && request.provider !== 'auto' && request.provider !== 'flux-kontext' && request.provider !== 'nano-banana-pro'
       ? request.provider : 'flux-1.1-pro';
     console.log(`[I2I] Using standard img2img with provider: ${providerId}`);
     
@@ -222,19 +245,17 @@ class ImageGenerationService {
     };
     
     const model = piapiModelMap[providerId] || 'Qubico/flux1-dev';
-    
     const guidanceScale = i2iConfig?.guidanceScale ?? 3.5;
-    console.log(`[I2I] Using guidance scale: ${guidanceScale}`);
     
     const inputPayload: Record<string, any> = {
       image: resizedRefUrl,
-      prompt: kontextPrompt,
+      prompt: request.prompt,
     };
     if (!request.useApiDefaults) {
       inputPayload.image_strength = strength;
       inputPayload.guidance_scale = guidanceScale;
     }
-    console.log(`[I2I] Payload mode: ${request.useApiDefaults ? 'API defaults' : `explicit (strength=${strength}, guidance=${guidanceScale})`}`);
+    console.log(`[I2I] Standard img2img: strength=${strength}, guidance=${guidanceScale}`);
 
     try {
       const response = await fetch('https://api.piapi.ai/api/v1/task', {
@@ -292,6 +313,118 @@ class ImageGenerationService {
     }
   }
   
+  private async generateWithNanoBanana(
+    imageUrl: string,
+    prompt: string,
+    apiKey: string,
+    options: {
+      numImages?: number;
+      outputFormat?: 'jpg' | 'png';
+      aspectRatio?: string;
+      resolution?: '2k' | '4k';
+      safetyLevel?: 'low' | 'medium' | 'high';
+    } = {}
+  ): Promise<{ url: string; width: number; height: number }> {
+    const inputPayload: Record<string, any> = {
+      prompt,
+      image_url: imageUrl,
+    };
+
+    if (options.numImages && options.numImages >= 1 && options.numImages <= 4) {
+      inputPayload.num_images = options.numImages;
+    }
+    if (options.outputFormat) {
+      inputPayload.output_format = options.outputFormat;
+    }
+    if (options.aspectRatio) {
+      inputPayload.aspect_ratio = options.aspectRatio;
+    }
+    if (options.resolution) {
+      inputPayload.resolution = options.resolution;
+    }
+    if (options.safetyLevel) {
+      inputPayload.safety_level = options.safetyLevel;
+    }
+
+    console.log(`[I2I-NanoBanana] Sending request with options:`, JSON.stringify({
+      numImages: options.numImages,
+      outputFormat: options.outputFormat,
+      aspectRatio: options.aspectRatio,
+      resolution: options.resolution,
+      safetyLevel: options.safetyLevel,
+    }));
+
+    const response = await fetch('https://api.piapi.ai/api/v1/task', {
+      method: 'POST',
+      headers: {
+        'X-API-Key': apiKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'nano-banana-pro',
+        task_type: 'generate',
+        input: inputPayload,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`[I2I-NanoBanana] API error: ${response.status} - ${errorText}`);
+      throw new Error(`Nano Banana generation failed: ${errorText}`);
+    }
+
+    const data = await response.json();
+    const taskId = data.data?.task_id || data.task_id;
+
+    if (!taskId) {
+      throw new Error('No task ID returned from Nano Banana API');
+    }
+
+    console.log(`[I2I-NanoBanana] Task created: ${taskId}`);
+    return this.pollForNanoBananaCompletion(taskId, apiKey);
+  }
+
+  private async pollForNanoBananaCompletion(taskId: string, apiKey: string): Promise<{ url: string; width: number; height: number }> {
+    const maxAttempts = 60;
+    const pollInterval = 3000;
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      await new Promise(resolve => setTimeout(resolve, pollInterval));
+
+      const response = await fetch(`https://api.piapi.ai/api/v1/task/${taskId}`, {
+        headers: { 'X-API-Key': apiKey },
+      });
+
+      if (!response.ok) continue;
+
+      const data = await response.json();
+      const status = data.data?.status || data.status;
+
+      if (status === 'completed' || status === 'success') {
+        const output = data.data?.output || data.output;
+        const imageUrls = output?.image_urls || [];
+        const imageUrl = imageUrls[0] || output?.image_url;
+
+        if (imageUrl && typeof imageUrl === 'string') {
+          console.log(`[I2I-NanoBanana] Generation complete, got ${imageUrls.length} image(s)`);
+          return { url: imageUrl, width: 1280, height: 720 };
+        }
+        throw new Error('Nano Banana completed but no image URL in output');
+      }
+
+      if (status === 'failed' || status === 'error') {
+        const errorMsg = data.data?.error?.message || data.data?.logs?.join(', ') || 'Unknown error';
+        throw new Error(`Nano Banana generation failed: ${errorMsg}`);
+      }
+
+      if (attempt % 5 === 0) {
+        console.log(`[I2I-NanoBanana] Polling attempt ${attempt + 1}/${maxAttempts}, status: ${status}`);
+      }
+    }
+
+    throw new Error('Nano Banana generation timed out after 3 minutes');
+  }
+
   private async generateWithKontext(
     imageUrl: string, 
     prompt: string, 
