@@ -2554,6 +2554,8 @@ router.patch('/projects/:projectId/scenes/:sceneId', isAuthenticated, async (req
     const userId = (req.user as any)?.id;
     const { projectId, sceneId } = req.params;
     const updates = req.body;
+    const updateKeys = Object.keys(updates);
+    console.log(`[UpdateScene] PATCH scene ${sceneId} in project ${projectId} - fields: ${updateKeys.join(', ')}`);
 
     const projectData = await getProjectFromDb(projectId);
     if (!projectData) {
@@ -2576,7 +2578,7 @@ router.patch('/projects/:projectId/scenes/:sceneId', isAuthenticated, async (req
       }
     }
     if (updates.overlayItems !== undefined) {
-      console.log(`[UpdateScene] Saving overlayItems for scene ${sceneId}:`, JSON.stringify(updates.overlayItems.map((o: any) => ({ name: o.name, url: o.url?.substring(0, 60) }))));
+      console.log(`[UpdateScene] Saving overlayItems for scene ${sceneId}: ${updates.overlayItems.length} items`, JSON.stringify(updates.overlayItems.map((o: any) => ({ name: o.name, url: o.url?.substring(0, 60) }))));
     }
 
     if (updates.referenceImages !== undefined) {

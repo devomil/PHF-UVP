@@ -188,26 +188,40 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
     }
   };
 
+  const pendingOverlaySaveRef = useRef<SceneOverlayItem[] | null>(null);
+
+  const flushOverlaySave = useCallback(() => {
+    const pending = pendingOverlaySaveRef.current;
+    if (pending === null) return;
+    pendingOverlaySaveRef.current = null;
+    if (overlayDebounceRef.current) {
+      clearTimeout(overlayDebounceRef.current);
+      overlayDebounceRef.current = null;
+    }
+    fetch(`/api/universal-video/projects/${projectId}/scenes/${sceneId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ overlayItems: pending }),
+    }).then((res) => {
+      if (res.ok) {
+        queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+      } else {
+        toast({ title: "Failed to save overlays", variant: "destructive" });
+      }
+    }).catch(() => {
+      toast({ title: "Failed to save overlays", variant: "destructive" });
+    });
+  }, [projectId, sceneId, queryClient, toast]);
+
   const handleOverlayChange = useCallback((newOverlays: SceneOverlayItem[]) => {
     setSceneOverlays(newOverlays);
+    pendingOverlaySaveRef.current = newOverlays;
     if (overlayDebounceRef.current) clearTimeout(overlayDebounceRef.current);
     overlayDebounceRef.current = setTimeout(() => {
-      fetch(`/api/universal-video/projects/${projectId}/scenes/${sceneId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ overlayItems: newOverlays }),
-      }).then((res) => {
-        if (res.ok) {
-          queryClient.invalidateQueries({ queryKey: ["project", projectId] });
-        } else {
-          toast({ title: "Failed to save overlays", variant: "destructive" });
-        }
-      }).catch(() => {
-        toast({ title: "Failed to save overlays", variant: "destructive" });
-      });
+      flushOverlaySave();
     }, 800);
-  }, [projectId, sceneId, queryClient, toast]);
+  }, [flushOverlaySave]);
 
   const handleMicroSceneOverlayChange = useCallback((msIdx: number, newOverlays: MicroSceneOverlayItem[]) => {
     setMsOverlayState(prev => ({ ...prev, [msIdx]: newOverlays }));
@@ -233,12 +247,13 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
 
   useEffect(() => {
     return () => {
-      if (overlayDebounceRef.current) clearTimeout(overlayDebounceRef.current);
+      flushOverlaySave();
       Object.values(msOverlayDebounceRefs.current).forEach(t => clearTimeout(t));
     };
-  }, []);
+  }, [flushOverlaySave]);
 
   useEffect(() => {
+    if (pendingOverlaySaveRef.current !== null) return;
     const incoming = scene.overlayItems || [];
     if (JSON.stringify(incoming) !== JSON.stringify(sceneOverlays)) {
       setSceneOverlays(incoming);

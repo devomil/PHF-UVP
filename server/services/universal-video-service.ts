@@ -5477,6 +5477,17 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
         }
       }
       
+      if (preparedProject.scenes && preparedProject.scenes.length > 0 && qcAssets.overlayItems) {
+        const qcOverlays = Array.isArray(qcAssets.overlayItems) ? qcAssets.overlayItems : [];
+        for (const scene of preparedProject.scenes as any[]) {
+          if (scene.id?.startsWith('qc-scene') || scene.id?.startsWith('intro-scene')) {
+            if (scene.id?.startsWith('intro-scene')) continue;
+            scene.overlayItems = qcOverlays;
+            console.log(`[PrepareAssets] Synced ${qcOverlays.length} Quick Create overlays into scene ${scene.id}`);
+          }
+        }
+      }
+
       console.log('[PrepareAssets] Quick Create mapping complete');
     }
 
