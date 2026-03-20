@@ -187,7 +187,7 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
   const [i2iAspectRatio, setI2iAspectRatio] = useState('1:1');
   const [resolution, setResolution] = useState<'2k' | '4k'>('2k');
   const [safetyLevel, setSafetyLevel] = useState<'low' | 'medium' | 'high'>('high');
-  const [showAdvancedI2I, setShowAdvancedI2I] = useState(false);
+  const [showAdvancedI2I, setShowAdvancedI2I] = useState(true);
   const [scaleFactor, setScaleFactor] = useState(2);
   const [bodyControl, setBodyControl] = useState(false);
   const [referenceImageUrl, setReferenceImageUrl] = useState('');
