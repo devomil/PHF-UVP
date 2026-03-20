@@ -1621,22 +1621,37 @@ function RenderButton({ projectId, hasVisual, hasVoiceover, hasMusic, initialOut
             Render again
           </button>
         </div>
-      ) : renderStatus === "rendering" ? (
+      ) : renderStatus === "rendering" || startRenderMutation.isPending ? (
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Loader2 className="w-4 h-4 animate-spin text-purple-400" />
-              <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>Rendering...</span>
+              <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                {startRenderMutation.isPending && renderStatus !== "rendering" ? "Preparing render..." : "Rendering..."}
+              </span>
             </div>
-            <span className="text-xs font-mono" style={{ color: "var(--text-muted)" }}>{Math.round(renderProgress)}%</span>
+            <span className="text-xs font-mono" style={{ color: "var(--text-muted)" }}>
+              {startRenderMutation.isPending && renderStatus !== "rendering" ? "—" : `${Math.round(renderProgress)}%`}
+            </span>
           </div>
           <div className="w-full h-2 rounded-full overflow-hidden" style={{ backgroundColor: "var(--progress-track)" }}>
-            <div
-              className="h-full rounded-full bg-gradient-to-r from-purple-600 to-indigo-500 transition-all duration-500"
-              style={{ width: `${renderProgress}%` }}
-            />
+            {startRenderMutation.isPending && renderStatus !== "rendering" ? (
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-purple-600 to-indigo-500 animate-pulse"
+                style={{ width: "100%" }}
+              />
+            ) : (
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-purple-600 to-indigo-500 transition-all duration-500"
+                style={{ width: `${renderProgress}%` }}
+              />
+            )}
           </div>
-          {renderMessage && <p className="text-xs" style={{ color: "var(--text-muted)" }}>{renderMessage}</p>}
+          <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+            {startRenderMutation.isPending && renderStatus !== "rendering"
+              ? "Caching assets and assembling micro-scenes for Lambda... This may take 1-3 minutes."
+              : renderMessage || "Starting render..."}
+          </p>
         </div>
       ) : renderStatus === "failed" ? (
         <div className="space-y-3">
