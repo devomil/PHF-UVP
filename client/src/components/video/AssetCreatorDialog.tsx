@@ -917,6 +917,26 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
                       ))}
                     </div>
                   </div>
+
+                  <div>
+                    <Label className="text-xs text-gray-400 mb-1.5 block">Safety Level</Label>
+                    <div className="flex gap-2">
+                      {(['low', 'medium', 'high'] as const).map((sl) => (
+                        <button
+                          key={sl}
+                          onClick={() => setSafetyLevel(sl)}
+                          className={`flex-1 py-1.5 rounded text-xs font-medium border transition-all capitalize ${
+                            safetyLevel === sl
+                              ? 'border-purple-500 bg-purple-500/10 text-purple-300'
+                              : 'border-gray-700 bg-gray-900 text-gray-500 hover:border-gray-600'
+                          }`}
+                        >
+                          {sl}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-[10px] text-gray-500 mt-1">High = most permissive, Low = strictest</p>
+                  </div>
                 </div>
               )}
             </>

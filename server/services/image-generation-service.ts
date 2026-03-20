@@ -188,6 +188,7 @@ class ImageGenerationService {
           additionalImageUrls: request.additionalImageUrls,
           aspectRatio: request.aspectRatio,
           resolution: request.resolution,
+          safetyLevel: request.safetyLevel,
         });
         console.log(`[I2I] Nano Banana generation complete: ${nbResult.url.substring(0, 50)}...`);
         return {
@@ -321,7 +322,7 @@ class ImageGenerationService {
       additionalImageUrls?: string[];
       aspectRatio?: string;
       resolution?: string;
-      numImages?: number;
+      safetyLevel?: string;
     } = {}
   ): Promise<{ url: string; width: number; height: number }> {
     const allImageUrls = [imageUrl];
@@ -331,8 +332,7 @@ class ImageGenerationService {
 
     const inputPayload: Record<string, any> = {
       prompt,
-      image_url: allImageUrls,
-      num_images: options.numImages || 1,
+      image_urls: allImageUrls,
     };
 
     if (options.outputFormat) {
@@ -343,6 +343,9 @@ class ImageGenerationService {
     }
     if (options.resolution) {
       inputPayload.resolution = options.resolution;
+    }
+    if (options.safetyLevel) {
+      inputPayload.safety_level = options.safetyLevel;
     }
 
     console.log(`[I2I-NanoBanana] Sending request with ${allImageUrls.length} source image(s), options:`, JSON.stringify({
