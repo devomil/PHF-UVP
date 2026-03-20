@@ -185,9 +185,6 @@ class ImageGenerationService {
       try {
         const nbResult = await this.generateWithNanoBanana(resizedRefUrl, request.prompt, piApiKey, {
           outputFormat: request.outputFormat,
-          aspectRatio: request.aspectRatio,
-          resolution: request.resolution,
-          safetyLevel: request.safetyLevel,
           additionalImageUrls: request.additionalImageUrls,
         });
         console.log(`[I2I] Nano Banana generation complete: ${nbResult.url.substring(0, 50)}...`);
@@ -319,9 +316,6 @@ class ImageGenerationService {
     apiKey: string,
     options: {
       outputFormat?: 'jpg' | 'png';
-      aspectRatio?: string;
-      resolution?: '2k' | '4k';
-      safetyLevel?: 'low' | 'medium' | 'high';
       additionalImageUrls?: string[];
     } = {}
   ): Promise<{ url: string; width: number; height: number }> {
@@ -332,28 +326,16 @@ class ImageGenerationService {
 
     const inputPayload: Record<string, any> = {
       prompt,
-      image_url: allImageUrls.length === 1 ? allImageUrls[0] : allImageUrls,
-      num_images: allImageUrls.length,
+      images: allImageUrls,
     };
 
     if (options.outputFormat) {
       inputPayload.output_format = options.outputFormat;
     }
-    if (options.aspectRatio) {
-      inputPayload.aspect_ratio = options.aspectRatio;
-    }
-    if (options.resolution) {
-      inputPayload.resolution = options.resolution;
-    }
-    if (options.safetyLevel) {
-      inputPayload.safety_level = options.safetyLevel;
-    }
 
     console.log(`[I2I-NanoBanana] Sending request with ${allImageUrls.length} image(s), options:`, JSON.stringify({
       outputFormat: options.outputFormat,
-      aspectRatio: options.aspectRatio,
-      resolution: options.resolution,
-      safetyLevel: options.safetyLevel,
+      imageCount: allImageUrls.length,
     }));
 
     const response = await fetch('https://api.piapi.ai/api/v1/task', {
@@ -363,8 +345,8 @@ class ImageGenerationService {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'nano-banana-pro',
-        task_type: 'generate',
+        model: 'gemini',
+        task_type: 'gemini-2.5-flash-image',
         input: inputPayload,
       }),
     });
@@ -439,7 +421,7 @@ class ImageGenerationService {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'Qubico/flux1-dev',
+        model: 'Qubico/flux1-kontext-dev',
         task_type: 'img2img-kontext',
         input: {
           prompt,
