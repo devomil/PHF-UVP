@@ -3764,11 +3764,22 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
         for (const item of allOverlays) {
           if (!item.url) continue;
           let resolvedUrl = item.url;
-          const needsResolution = !item.url.startsWith("http") || item.url.includes(".replit.dev");
+          const isS3UploadsPath = item.url.includes('.amazonaws.com/uploads/');
+          const needsResolution = !item.url.startsWith("http") || item.url.includes(".replit.dev") || isS3UploadsPath;
           if (needsResolution) {
-            const publicUrl = await getPublicAssetUrl(item.url);
-            if (publicUrl) {
-              resolvedUrl = publicUrl;
+            if (isS3UploadsPath) {
+              const filename = item.url.split('/uploads/').pop();
+              const localPath = `/uploads/${filename}`;
+              console.log(`[UniversalVideo] S3 uploads/ path detected for overlay "${item.name}", resolving via local file: ${localPath}`);
+              const publicUrl = await getPublicAssetUrl(localPath);
+              if (publicUrl) {
+                resolvedUrl = publicUrl;
+              }
+            } else {
+              const publicUrl = await getPublicAssetUrl(item.url);
+              if (publicUrl) {
+                resolvedUrl = publicUrl;
+              }
             }
           }
           resolvedOverlays.push({ ...item, url: resolvedUrl });

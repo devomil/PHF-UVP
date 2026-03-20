@@ -49,6 +49,12 @@ class AssetUrlResolver {
       publicUrl = await this.resolveReplitDevUrl(url);
     } else if (url.startsWith('/uploads/')) {
       publicUrl = await this.resolveStaticPath(url);
+    } else if (url.includes('.s3.') && url.includes('.amazonaws.com') && url.includes('/uploads/')) {
+      const filename = url.split('/uploads/').pop();
+      if (filename) {
+        console.log(`[AssetURL] S3 uploads/ path needs re-caching: ${filename}`);
+        publicUrl = await this.resolveStaticPath(`/uploads/${filename}`);
+      }
     }
     
     if (publicUrl) {
@@ -77,6 +83,9 @@ class AssetUrlResolver {
   }
   
   private isPublicUrl(url: string): boolean {
+    if (url.includes('.s3.') && url.includes('.amazonaws.com') && url.includes('/uploads/')) {
+      return false;
+    }
     return (
       url.startsWith('https://storage.googleapis.com/') ||
       url.startsWith('https://storage.theapi.app/') ||
