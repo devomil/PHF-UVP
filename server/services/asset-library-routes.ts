@@ -99,7 +99,8 @@ router.post('/generate', async (req: Request, res: Response) => {
       referenceImageUrl, referenceVideoUrl, style,
       strength, useCase, scaleFactor, bodyControl,
       negativePrompt, imageFidelity,
-      numImages, outputFormat, i2iAspectRatio, resolution, safetyLevel,
+      outputFormat, i2iAspectRatio, resolution, safetyLevel,
+      additionalImageUrls,
     } = req.body;
 
     if (!mode) {
@@ -160,11 +161,11 @@ router.post('/generate', async (req: Request, res: Response) => {
         scaleFactor: scaleFactor,
         bodyControl: bodyControl,
         imageControlStrength: imageFidelity !== undefined ? imageFidelity : undefined,
-        numImages: numImages,
         outputFormat: outputFormat,
         i2iAspectRatio: i2iAspectRatio,
         resolution: resolution,
         safetyLevel: safetyLevel,
+        additionalImageUrls: additionalImageUrls,
       },
       triggeredBy: userId,
     });
@@ -610,6 +611,12 @@ async function processAssetLibraryJob(jobId: string, userId: string, mode: strin
     };
 
     const resolvedSourceImageUrl = await resolveUrl(job.sourceImageUrl, 'source image');
+    if (settings.additionalImageUrls?.length) {
+      const resolved = await Promise.all(
+        settings.additionalImageUrls.map((url: string, i: number) => resolveUrl(url, `additional image ${i + 1}`))
+      );
+      settings.additionalImageUrls = resolved.filter((u: string | undefined): u is string => !!u);
+    }
     if (settings.referenceVideoUrl) {
       settings.referenceVideoUrl = await resolveUrl(settings.referenceVideoUrl, 'reference video');
     }
@@ -653,11 +660,11 @@ async function processAssetLibraryJob(jobId: string, userId: string, mode: strin
           height: dims.h,
           useCase: settings.useCase || 'style-transfer',
           provider: job.provider !== 'auto' ? job.provider : undefined,
-          numImages: settings.numImages,
           outputFormat: settings.outputFormat,
           aspectRatio: settings.i2iAspectRatio,
           resolution: settings.resolution,
           safetyLevel: settings.safetyLevel,
+          additionalImageUrls: settings.additionalImageUrls,
         });
 
         if (!i2iResult.url) throw new Error('Image-to-image generation returned no URL');

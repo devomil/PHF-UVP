@@ -119,11 +119,11 @@ interface I2IRequest {
   useCase?: 'background-generation' | 'style-transfer' | 'scene-integration' | 'product-placement';
   noFallback?: boolean;
   useApiDefaults?: boolean;
-  numImages?: number;
   outputFormat?: 'jpg' | 'png';
   aspectRatio?: string;
   resolution?: '2k' | '4k';
   safetyLevel?: 'low' | 'medium' | 'high';
+  additionalImageUrls?: string[];
 }
 
 interface GeneratedImage {
@@ -184,11 +184,11 @@ class ImageGenerationService {
       console.log(`[I2I] Using Nano Banana Pro (primary I2I provider)`);
       try {
         const nbResult = await this.generateWithNanoBanana(resizedRefUrl, request.prompt, piApiKey, {
-          numImages: request.numImages,
           outputFormat: request.outputFormat,
           aspectRatio: request.aspectRatio,
           resolution: request.resolution,
           safetyLevel: request.safetyLevel,
+          additionalImageUrls: request.additionalImageUrls,
         });
         console.log(`[I2I] Nano Banana generation complete: ${nbResult.url.substring(0, 50)}...`);
         return {
@@ -318,21 +318,24 @@ class ImageGenerationService {
     prompt: string,
     apiKey: string,
     options: {
-      numImages?: number;
       outputFormat?: 'jpg' | 'png';
       aspectRatio?: string;
       resolution?: '2k' | '4k';
       safetyLevel?: 'low' | 'medium' | 'high';
+      additionalImageUrls?: string[];
     } = {}
   ): Promise<{ url: string; width: number; height: number }> {
+    const allImageUrls = [imageUrl];
+    if (options.additionalImageUrls?.length) {
+      allImageUrls.push(...options.additionalImageUrls.slice(0, 3));
+    }
+
     const inputPayload: Record<string, any> = {
       prompt,
-      image_url: imageUrl,
+      image_url: allImageUrls.length === 1 ? allImageUrls[0] : allImageUrls,
+      num_images: allImageUrls.length,
     };
 
-    if (options.numImages && options.numImages >= 1 && options.numImages <= 4) {
-      inputPayload.num_images = options.numImages;
-    }
     if (options.outputFormat) {
       inputPayload.output_format = options.outputFormat;
     }
@@ -346,8 +349,7 @@ class ImageGenerationService {
       inputPayload.safety_level = options.safetyLevel;
     }
 
-    console.log(`[I2I-NanoBanana] Sending request with options:`, JSON.stringify({
-      numImages: options.numImages,
+    console.log(`[I2I-NanoBanana] Sending request with ${allImageUrls.length} image(s), options:`, JSON.stringify({
       outputFormat: options.outputFormat,
       aspectRatio: options.aspectRatio,
       resolution: options.resolution,

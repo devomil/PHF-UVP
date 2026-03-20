@@ -182,12 +182,14 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
   const [imageFidelity, setImageFidelity] = useState(0.85);
   const [strength, setStrength] = useState(0.35);
   const [useCase, setUseCase] = useState('style-transfer');
-  const [numImages, setNumImages] = useState(1);
   const [outputFormat, setOutputFormat] = useState<'jpg' | 'png'>('png');
   const [i2iAspectRatio, setI2iAspectRatio] = useState('1:1');
   const [resolution, setResolution] = useState<'2k' | '4k'>('2k');
   const [safetyLevel, setSafetyLevel] = useState<'low' | 'medium' | 'high'>('high');
   const [showAdvancedI2I, setShowAdvancedI2I] = useState(true);
+  const [additionalImages, setAdditionalImages] = useState<Array<{ url: string; preview: string }>>([]);
+  const [isUploadingAdditional, setIsUploadingAdditional] = useState(false);
+  const additionalImageInputRef = useRef<HTMLInputElement>(null);
   const [scaleFactor, setScaleFactor] = useState(2);
   const [bodyControl, setBodyControl] = useState(false);
   const [referenceImageUrl, setReferenceImageUrl] = useState('');
@@ -424,11 +426,13 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
       if (mode === 'i2i') {
         body.strength = strength;
         body.useCase = useCase;
-        body.numImages = numImages;
         body.outputFormat = outputFormat;
         body.i2iAspectRatio = i2iAspectRatio;
         body.resolution = resolution;
         body.safetyLevel = safetyLevel;
+        if (additionalImages.length > 0) {
+          body.additionalImageUrls = additionalImages.map(img => img.url);
+        }
       }
       if (mode === 'upscale-image' || mode === 'upscale-video') {
         body.scaleFactor = scaleFactor;
@@ -455,6 +459,7 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
       setReferenceVideoUrl('');
       setReplacementImageUrl('');
       setReplacementImagePreview(null);
+      setAdditionalImages([]);
     } catch (err: any) {
       toast({ title: 'Generation failed', description: err.message || 'Could not start.', variant: 'destructive' });
     } finally {
@@ -477,7 +482,7 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
   };
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) { setShowCharPreview(false); setCharGeneratedImageUrl(null); setCharSavedToLibrary(false); } onOpenChange(v); }}>
+    <Dialog open={open} onOpenChange={(v) => { if (!v) { setShowCharPreview(false); setCharGeneratedImageUrl(null); setCharSavedToLibrary(false); additionalImages.forEach(img => URL.revokeObjectURL(img.preview)); setAdditionalImages([]); } onOpenChange(v); }}>
       {showCharPreview && charGeneratedImageUrl ? (
         <DialogContent className="sm:max-w-2xl bg-gray-950 border-gray-800 text-white p-0 overflow-hidden">
           <div className="p-4 border-b border-gray-800">
@@ -780,23 +785,80 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
               {showAdvancedI2I && (
                 <div className="space-y-3 p-3 rounded-lg border border-gray-700/50 bg-gray-900/50">
                   <div>
-                    <Label className="text-xs text-gray-400 mb-1.5 block">Number of Variations</Label>
-                    <div className="flex gap-2">
-                      {[1, 2, 3, 4].map((n) => (
-                        <button
-                          key={n}
-                          onClick={() => setNumImages(n)}
-                          className={`flex-1 py-1.5 rounded text-xs font-medium border transition-all ${
-                            numImages === n
-                              ? 'border-purple-500 bg-purple-500/10 text-purple-300'
-                              : 'border-gray-700 bg-gray-900 text-gray-500 hover:border-gray-600'
-                          }`}
+                    <Label className="text-xs text-gray-400 mb-1.5 block">
+                      Additional Source Images ({additionalImages.length}/3)
+                    </Label>
+                    <p className="text-[10px] text-gray-500 mb-2">Upload up to 3 more images to combine with your source image (up to 4 total)</p>
+                    {additionalImages.length > 0 && (
+                      <div className="flex gap-2 mb-2 flex-wrap">
+                        {additionalImages.map((img, idx) => (
+                          <div key={idx} className="relative rounded-lg overflow-hidden border border-gray-700 w-16 h-16">
+                            <img src={img.preview} alt={`Additional ${idx + 1}`} className="w-full h-full object-cover" />
+                            <button
+                              onClick={() => {
+                                URL.revokeObjectURL(img.preview);
+                                setAdditionalImages(prev => prev.filter((_, i) => i !== idx));
+                              }}
+                              className="absolute top-0.5 right-0.5 p-0.5 rounded-full bg-black/70 text-white hover:bg-red-600"
+                            >
+                              <X className="h-2.5 w-2.5" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {additionalImages.length < 3 && (
+                      <>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => additionalImageInputRef.current?.click()}
+                          disabled={isUploadingAdditional}
+                          className="w-full border-dashed border-gray-600 text-gray-400 hover:text-white hover:border-purple-500 h-8 text-xs"
                         >
-                          {n}
-                        </button>
-                      ))}
-                    </div>
-                    <p className="text-[10px] text-gray-500 mt-1">Best result is automatically selected</p>
+                          {isUploadingAdditional ? (
+                            <Loader2 className="h-3 w-3 animate-spin mr-1.5" />
+                          ) : (
+                            <ImagePlus className="h-3 w-3 mr-1.5" />
+                          )}
+                          Add Image
+                        </Button>
+                        <input
+                          ref={additionalImageInputRef}
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            if (f) {
+                              setIsUploadingAdditional(true);
+                              const preview = URL.createObjectURL(f);
+                              const formData = new FormData();
+                              formData.append('file', f);
+                              fetch('/api/videos/uploads', { method: 'POST', body: formData, credentials: 'include' })
+                                .then(res => {
+                                  if (!res.ok) throw new Error('Upload failed');
+                                  return res.json();
+                                })
+                                .then(data => {
+                                  if (data.url) {
+                                    setAdditionalImages(prev => [...prev, { url: data.url, preview }]);
+                                  } else {
+                                    URL.revokeObjectURL(preview);
+                                    toast({ title: 'Upload failed', description: 'No URL returned', variant: 'destructive' });
+                                  }
+                                })
+                                .catch(() => {
+                                  URL.revokeObjectURL(preview);
+                                  toast({ title: 'Upload failed', description: 'Could not upload image', variant: 'destructive' });
+                                })
+                                .finally(() => setIsUploadingAdditional(false));
+                            }
+                            if (additionalImageInputRef.current) additionalImageInputRef.current.value = '';
+                          }}
+                        />
+                      </>
+                    )}
                   </div>
 
                   <div>
