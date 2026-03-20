@@ -1303,26 +1303,33 @@ export default function ProjectDetail({ params }: { params?: { id: string } }) {
           </div>
         )}
 
-        {progress.currentStep && !isQuickCreate && (
-          <div className="border rounded-xl p-5 mb-8" style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)" }}>
-            <div className="flex items-center gap-3">
-              <Loader2 className="w-5 h-5 animate-spin text-purple-400" />
-              <div>
-                <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-                  {progress.currentStep === 'assembly' ? 'Finalizing Assets' : progress.currentStep}
-                </p>
-                {progress.percentage > 0 && (
-                  <div className="mt-2 w-full bg-gray-700 rounded-full h-2">
-                    <div
-                      className="bg-gradient-to-r from-purple-600 to-indigo-600 h-2 rounded-full transition-all duration-500"
-                      style={{ width: `${progress.percentage}%` }}
-                    />
-                  </div>
-                )}
+        {progress.currentStep && !isQuickCreate && (() => {
+          const stepStatus = progress.steps?.[progress.currentStep]?.status;
+          const isStepActuallyRunning = stepStatus === 'in-progress' || stepStatus === 'pending';
+          const isStepComplete = stepStatus === 'completed' || stepStatus === 'complete' ||
+            (Array.isArray(progress.completedSteps) && progress.completedSteps.includes(progress.currentStep));
+          if (isStepComplete || (!isStepActuallyRunning && !isGenerating)) return null;
+          return (
+            <div className="border rounded-xl p-5 mb-8" style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)" }}>
+              <div className="flex items-center gap-3">
+                <Loader2 className="w-5 h-5 animate-spin text-purple-400" />
+                <div>
+                  <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                    {progress.currentStep === 'assembly' ? 'Finalizing Assets' : progress.currentStep}
+                  </p>
+                  {progress.percentage > 0 && (
+                    <div className="mt-2 w-full bg-gray-700 rounded-full h-2">
+                      <div
+                        className="bg-gradient-to-r from-purple-600 to-indigo-600 h-2 rounded-full transition-all duration-500"
+                        style={{ width: `${progress.percentage}%` }}
+                      />
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {jobs.length > 0 && (
           <GenerationJobsPanel jobs={jobs} projectId={projectId} />
