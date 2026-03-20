@@ -2266,6 +2266,7 @@ router.patch('/projects/:projectId/render-settings', isAuthenticated, async (req
     }
     
     projectData.updatedAt = new Date().toISOString();
+    delete (projectData as any).scenes;
     await saveProjectToDb(projectData, projectData.ownerId);
     
     console.log(`[RenderSettings] Updated render settings for project ${projectId}`);
