@@ -179,7 +179,7 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
   const [style, setStyle] = useState('Photorealistic');
   const [negativePrompt, setNegativePrompt] = useState('');
   const [imageFidelity, setImageFidelity] = useState(0.85);
-  const [strength, setStrength] = useState(0.6);
+  const [strength, setStrength] = useState(0.35);
   const [useCase, setUseCase] = useState('style-transfer');
   const [scaleFactor, setScaleFactor] = useState(2);
   const [bodyControl, setBodyControl] = useState(false);

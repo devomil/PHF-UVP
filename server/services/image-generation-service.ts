@@ -163,7 +163,7 @@ class ImageGenerationService {
     const qualityTier = request.qualityTier || 'premium';
     
     let i2iConfig: I2IConfig | null = null;
-    let strength = request.strength ?? 0.6;
+    let strength = request.strength ?? 0.35;
     
     if (request.assetType) {
       const placementRules = resolvePlacementRules(request.assetType, {
@@ -185,22 +185,36 @@ class ImageGenerationService {
     console.log(`[I2I] Strength: ${strength}`);
     console.log(`[I2I] Quality tier: ${qualityTier}`);
     
-    const i2iProviders: Record<QualityTier, string> = {
-      ultra: 'flux-kontext',
-      premium: 'flux-1.1-pro',
-      standard: 'flux',
-    };
-    const providerId = request.provider || i2iProviders[qualityTier];
-    
-    console.log(`[I2I] Using provider: ${providerId}`);
-    
     const piApiKey = process.env.PIAPI_API_KEY;
     if (!piApiKey) {
       throw new Error('PIAPI_API_KEY not configured');
     }
     
+    const useKontext = !request.provider || request.provider === 'flux-kontext' || request.provider === 'auto';
+    const kontextPrompt = `${request.prompt}. Preserve all original text, labels, branding, and fine details from the source image.`;
+    
+    if (useKontext) {
+      console.log(`[I2I] Using Kontext mode (img2img-kontext) for better source preservation`);
+      try {
+        const kontextResult = await this.generateWithKontext(resizedRefUrl, kontextPrompt, piApiKey);
+        console.log(`[I2I] Kontext generation complete: ${kontextResult.url.substring(0, 50)}...`);
+        return {
+          ...kontextResult,
+          provider: 'flux-kontext',
+          prompt: request.prompt,
+          generationType: 'img2img',
+          sourceAsset: request.referenceImageUrl,
+        };
+      } catch (kontextError: any) {
+        console.warn(`[I2I] Kontext failed: ${kontextError.message}, falling back to standard img2img`);
+      }
+    }
+    
+    const providerId = request.provider && request.provider !== 'auto' && request.provider !== 'flux-kontext' 
+      ? request.provider : 'flux-1.1-pro';
+    console.log(`[I2I] Using standard img2img with provider: ${providerId}`);
+    
     const piapiModelMap: Record<string, string> = {
-      'flux-kontext': 'Qubico/flux1-dev',
       'flux-1.1-pro': 'Qubico/flux1-dev',
       'flux': 'Qubico/flux1-schnell',
       'stable-diffusion-3': 'sd3',
@@ -209,12 +223,12 @@ class ImageGenerationService {
     
     const model = piapiModelMap[providerId] || 'Qubico/flux1-dev';
     
-    const guidanceScale = i2iConfig?.guidanceScale ?? 7.5;
+    const guidanceScale = i2iConfig?.guidanceScale ?? 3.5;
     console.log(`[I2I] Using guidance scale: ${guidanceScale}`);
     
     const inputPayload: Record<string, any> = {
       image: resizedRefUrl,
-      prompt: request.prompt,
+      prompt: kontextPrompt,
     };
     if (!request.useApiDefaults) {
       inputPayload.image_strength = strength;
@@ -278,6 +292,44 @@ class ImageGenerationService {
     }
   }
   
+  private async generateWithKontext(
+    imageUrl: string, 
+    prompt: string, 
+    apiKey: string
+  ): Promise<{ url: string; width: number; height: number }> {
+    const response = await fetch('https://api.piapi.ai/api/v1/task', {
+      method: 'POST',
+      headers: {
+        'X-API-Key': apiKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'Qubico/flux1-dev',
+        task_type: 'img2img-kontext',
+        input: {
+          prompt,
+          image: imageUrl,
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`[I2I-Kontext] API error: ${response.status} - ${errorText}`);
+      throw new Error(`Kontext generation failed: ${errorText}`);
+    }
+
+    const data = await response.json();
+    const taskId = data.data?.task_id || data.task_id;
+
+    if (!taskId) {
+      throw new Error('No task ID returned from Kontext API');
+    }
+
+    console.log(`[I2I-Kontext] Task created: ${taskId}`);
+    return this.pollForI2ICompletion(taskId, apiKey);
+  }
+
   private async pollForI2ICompletion(taskId: string, apiKey: string): Promise<{ url: string; width: number; height: number }> {
     const maxAttempts = 60;
     const pollInterval = 3000;

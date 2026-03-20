@@ -19,8 +19,8 @@ interface PlacementContext {
 export function resolvePlacementRules(assetType: string, context: PlacementContext): PlacementRulesResult {
   return {
     i2i: {
-      strength: 0.6,
-      guidanceScale: 7.5,
+      strength: 0.35,
+      guidanceScale: 3.5,
       description: `Default I2I config for ${assetType} (${context.useCase})`,
     },
   };

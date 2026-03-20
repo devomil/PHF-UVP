@@ -642,7 +642,7 @@ async function processAssetLibraryJob(jobId: string, userId: string, mode: strin
         const i2iResult = await imageGenerationService.generateImageToImage({
           referenceImageUrl: resolvedSourceImageUrl || '',
           prompt: job.prompt || '',
-          strength: settings.strength || 0.6,
+          strength: settings.strength || 0.35,
           width: dims.w,
           height: dims.h,
           useCase: settings.useCase || 'style-transfer',
