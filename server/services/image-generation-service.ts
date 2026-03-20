@@ -9,6 +9,92 @@ import {
 } from '../config/image-providers';
 import { QualityTier } from '../config/quality-tiers';
 import { resolvePlacementRules, I2IConfig } from './placement-resolver-service';
+import sharp from 'sharp';
+
+const I2I_MAX_WIDTH = 1024;
+const I2I_MAX_HEIGHT = 2048;
+
+function isAllowedImageUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return false;
+    const host = parsed.hostname.toLowerCase();
+    if (host === 'localhost' || host === '127.0.0.1' || host === '::1') return false;
+    if (host.startsWith('10.') || host.startsWith('192.168.') || host === '169.254.169.254') return false;
+    if (host.match(/^172\.(1[6-9]|2\d|3[01])\./)) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function ensureI2IImageSize(imageUrl: string): Promise<string> {
+  if (!isAllowedImageUrl(imageUrl)) {
+    throw new Error(`[I2I-Resize] Blocked disallowed image URL: ${imageUrl.substring(0, 60)}`);
+  }
+
+  const response = await fetch(imageUrl);
+  if (!response.ok) {
+    throw new Error(`[I2I-Resize] Failed to fetch image: HTTP ${response.status}`);
+  }
+
+  const contentLength = parseInt(response.headers.get('content-length') || '0', 10);
+  if (contentLength > 50 * 1024 * 1024) {
+    throw new Error(`[I2I-Resize] Image too large to process: ${contentLength} bytes`);
+  }
+
+  const buffer = Buffer.from(await response.arrayBuffer());
+  const metadata = await sharp(buffer).metadata();
+  const width = metadata.width || 0;
+  const height = metadata.height || 0;
+
+  if (width <= I2I_MAX_WIDTH && height <= I2I_MAX_HEIGHT) {
+    console.log(`[I2I-Resize] Image ${width}x${height} is within limits, no resize needed`);
+    return imageUrl;
+  }
+
+  console.log(`[I2I-Resize] Image ${width}x${height} exceeds ${I2I_MAX_WIDTH}x${I2I_MAX_HEIGHT}, resizing...`);
+
+  const scaleW = I2I_MAX_WIDTH / width;
+  const scaleH = I2I_MAX_HEIGHT / height;
+  const scale = Math.min(scaleW, scaleH);
+  const newWidth = Math.round(width * scale);
+  const newHeight = Math.round(height * scale);
+
+  const resizedBuffer = await sharp(buffer)
+    .resize(newWidth, newHeight, { fit: 'inside', withoutEnlargement: true })
+    .png()
+    .toBuffer();
+
+  console.log(`[I2I-Resize] Resized to ${newWidth}x${newHeight} (${resizedBuffer.length} bytes)`);
+
+  const accessKeyId = process.env.REMOTION_AWS_ACCESS_KEY_ID;
+  const secretAccessKey = process.env.REMOTION_AWS_SECRET_ACCESS_KEY;
+  if (!accessKeyId || !secretAccessKey) {
+    throw new Error('[I2I-Resize] AWS credentials not configured (REMOTION_AWS_ACCESS_KEY_ID/REMOTION_AWS_SECRET_ACCESS_KEY)');
+  }
+
+  const region = process.env.REMOTION_AWS_REGION || 'us-east-2';
+  const { S3Client, PutObjectCommand } = await import('@aws-sdk/client-s3');
+  const s3 = new S3Client({
+    region,
+    credentials: { accessKeyId, secretAccessKey },
+  });
+  const bucket = process.env.REMOTION_S3_BUCKET || 'remotionlambda-useast2-1vc2l6a56o';
+  const key = `video-assets/i2i-resized/${Date.now()}_${newWidth}x${newHeight}.png`;
+
+  await s3.send(new PutObjectCommand({
+    Bucket: bucket,
+    Key: key,
+    Body: resizedBuffer,
+    ContentType: 'image/png',
+    ACL: 'public-read',
+  }));
+
+  const resizedUrl = `https://${bucket}.s3.${region}.amazonaws.com/${key}`;
+  console.log(`[I2I-Resize] Uploaded resized image: ${resizedUrl.substring(0, 80)}`);
+  return resizedUrl;
+}
 
 interface ImageGenerationOptions {
   prompt: string;
@@ -93,7 +179,9 @@ class ImageGenerationService {
       console.log(`[I2I] Config description: ${i2iConfig.description}`);
     }
     
-    console.log(`[I2I] Reference: ${request.referenceImageUrl.substring(0, 50)}...`);
+    const resizedRefUrl = await ensureI2IImageSize(request.referenceImageUrl);
+    
+    console.log(`[I2I] Reference: ${resizedRefUrl.substring(0, 50)}...`);
     console.log(`[I2I] Strength: ${strength}`);
     console.log(`[I2I] Quality tier: ${qualityTier}`);
     
@@ -125,7 +213,7 @@ class ImageGenerationService {
     console.log(`[I2I] Using guidance scale: ${guidanceScale}`);
     
     const inputPayload: Record<string, any> = {
-      image: request.referenceImageUrl,
+      image: resizedRefUrl,
       prompt: request.prompt,
     };
     if (!request.useApiDefaults) {
