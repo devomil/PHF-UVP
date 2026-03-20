@@ -3630,7 +3630,8 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
         console.log('[Render] Intro scene logo overlay configured');
       }
     } else {
-      console.log('[Render] Intro scene disabled, skipping');
+      preparedProject.scenes = preparedProject.scenes.filter((s: any) => s.id !== 'intro-scene-auto');
+      console.log('[Render] Intro scene disabled, removed any existing intro-scene-auto from scenes');
     }
 
     // Recalculate voiceover ranges after intro scene injection (frame offsets may have shifted)
@@ -3746,10 +3747,35 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
     
     // Resolve overlay item URLs to Lambda-accessible public URLs
     for (const scene of inputProps.scenes as any[]) {
-      if (scene.overlayItems && Array.isArray(scene.overlayItems)) {
-        console.log(`[UniversalVideo] Scene ${scene.id} has ${scene.overlayItems.length} overlay items from DB:`, scene.overlayItems.map((o: any) => `${o.name} @ (${o.x}%,${o.y}%) ${o.width}x${o.height}`).join(', '));
+      let hasMicroSceneOverlays = false;
+      let microSceneOverlayItems: any[] = [];
+      if (scene.microScenes && Array.isArray(scene.microScenes)) {
+        for (const ms of scene.microScenes) {
+          if (ms.overlayItems && Array.isArray(ms.overlayItems) && ms.overlayItems.length > 0) {
+            hasMicroSceneOverlays = true;
+            console.log(`[UniversalVideo] Scene ${scene.id} micro-scene has ${ms.overlayItems.length} overlay items, merging to scene level`);
+            for (const msOverlay of ms.overlayItems) {
+              const isDuplicate = microSceneOverlayItems.some((o: any) => o.url === msOverlay.url && o.x === msOverlay.x && o.y === msOverlay.y);
+              if (!isDuplicate) {
+                microSceneOverlayItems.push(msOverlay);
+              }
+            }
+          }
+        }
+      }
+      let allOverlays: any[];
+      if (hasMicroSceneOverlays) {
+        allOverlays = microSceneOverlayItems;
+        if (scene.overlayItems && Array.isArray(scene.overlayItems) && scene.overlayItems.length > 0) {
+          console.log(`[UniversalVideo] Scene ${scene.id}: micro-scene overlays take priority over ${scene.overlayItems.length} scene-level overlays`);
+        }
+      } else {
+        allOverlays = (scene.overlayItems && Array.isArray(scene.overlayItems)) ? [...scene.overlayItems] : [];
+      }
+      if (allOverlays.length > 0) {
+        console.log(`[UniversalVideo] Scene ${scene.id} has ${allOverlays.length} overlay items (scene + micro-scene):`, allOverlays.map((o: any) => `${o.name} @ (${o.x}%,${o.y}%) ${o.width}x${o.height}`).join(', '));
         const resolvedOverlays = [];
-        for (const item of scene.overlayItems) {
+        for (const item of allOverlays) {
           if (!item.url) continue;
           let resolvedUrl = item.url;
           const needsResolution = !item.url.startsWith("http") || item.url.includes(".replit.dev");
