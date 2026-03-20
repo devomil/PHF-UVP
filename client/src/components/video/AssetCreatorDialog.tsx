@@ -1152,7 +1152,7 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
           )}
 
           {cfg.category !== 'toolkit' && mode !== 'character-performance' && mode !== 'character' && (
-            <div className="grid grid-cols-2 gap-4">
+            <div className={mode === 'i2i' ? '' : 'grid grid-cols-2 gap-4'}>
               <div>
                 <Label className="text-sm text-gray-400 mb-1.5 block">Provider</Label>
                 <Select value={provider} onValueChange={setProvider}>
@@ -1169,6 +1169,7 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
                 </Select>
               </div>
 
+              {mode !== 'i2i' && (
               <div>
                 <Label className="text-sm text-gray-400 mb-1.5 block">Aspect Ratio</Label>
                 <div className="flex gap-1.5">
@@ -1188,6 +1189,7 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
                   ))}
                 </div>
               </div>
+              )}
             </div>
           )}
 
