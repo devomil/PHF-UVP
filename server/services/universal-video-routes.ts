@@ -3198,6 +3198,7 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
         },
       };
       console.log('[UniversalVideo] Phase 18E: End card config built with logo:', endCardConfig.logo.url?.substring(0, 50));
+      console.log('[UniversalVideo] End card contact:', JSON.stringify({ website: endCardConfig.contact.website, animation: endCardConfig.contact.animation, positionY: endCardConfig.contact.positionY }));
       
       const selectedOutroTemplate = (preparedProject as any).outroTemplate || 'animated';
       const hasUserLogoSize = endCardSettings?.logoSize != null;
@@ -3549,7 +3550,6 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
       }
       
       const brandName = brandWithCachedLogo.name || effectiveBrand?.name || '';
-      const brandTagline = introCardSettings.taglineText || brandWithCachedLogo.tagline || effectiveBrand?.tagline || '';
       const introLogoSource = introCardSettings.logoUrl || brandWithCachedLogo.logoUrl || '';
       const brandLogoUrl = introLogoSource ? (await assetUrlResolver.resolve(introLogoSource) || introLogoSource) : '';
       const brandColors = brandWithCachedLogo.colors || {};
@@ -3576,19 +3576,11 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
           imageUrl: effectiveIntroBg || '',
           backgroundUrl: effectiveIntroBg || '',
         },
-        textOverlays: brandName ? [
-          { id: 'intro-title', text: brandName, position: 'center', style: { fontSize: 56, fontWeight: 700 } },
-          ...(brandTagline ? [{ id: 'intro-tagline', text: brandTagline, position: 'center-bottom', style: {
-            fontSize: introCardSettings.taglineFontSize || 24,
-            fontWeight: introCardSettings.taglineFontWeight ?? 400,
-            fontFamily: introCardSettings.taglineFontFamily ? `'${introCardSettings.taglineFontFamily}', cursive` : undefined,
-            color: introCardSettings.taglineColor || undefined,
-          } }] : []),
-        ] : [],
+        textOverlays: [],
         transitions: { type: 'fade', duration: 0.8 },
         microScenes: [],
         introCardConfig: {
-          taglineText: introCardSettings.taglineText || brandTagline || '',
+          taglineText: introCardSettings.taglineText || '',
           taglineAnimation: introCardSettings.taglineAnimation || 'fade',
           taglineFontSize: introCardSettings.taglineFontSize || 28,
           taglineFontFamily: introCardSettings.taglineFontFamily || 'Great Vibes',

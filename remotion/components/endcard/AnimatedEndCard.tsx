@@ -581,7 +581,9 @@ const ContactReveal: React.FC<{
         let scale = 1;
         let blur = 0;
 
-        if (animation === 'slide-up' || animation === 'stagger-slide') {
+        if (animation === 'stagger') {
+          translateY = interpolate(itemFrame, [0, fps * 0.4], [20, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+        } else if (animation === 'slide-up' || animation === 'stagger-slide') {
           translateY = interpolate(itemFrame, [0, fps * 0.4], [30, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
         } else if (animation === 'slide-left') {
           translateX = interpolate(itemFrame, [0, fps * 0.4], [60, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
