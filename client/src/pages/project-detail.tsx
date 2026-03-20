@@ -1304,11 +1304,12 @@ export default function ProjectDetail({ params }: { params?: { id: string } }) {
         )}
 
         {progress.currentStep && !isQuickCreate && (() => {
-          const stepStatus = progress.steps?.[progress.currentStep]?.status;
-          const isStepActuallyRunning = stepStatus === 'in-progress' || stepStatus === 'pending';
-          const isStepComplete = stepStatus === 'completed' || stepStatus === 'complete' ||
+          const stepSt = progress.steps?.[progress.currentStep]?.status;
+          const running = stepSt === 'in-progress' || stepSt === 'pending';
+          const done = stepSt === 'completed' || stepSt === 'complete' ||
             (Array.isArray(progress.completedSteps) && progress.completedSteps.includes(progress.currentStep));
-          if (isStepComplete || (!isStepActuallyRunning && !isGenerating)) return null;
+          const projectIsGenerating = ["generating", "queued", "processing"].includes(project.status);
+          if (done || (!running && !projectIsGenerating)) return null;
           return (
             <div className="border rounded-xl p-5 mb-8" style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)" }}>
               <div className="flex items-center gap-3">
