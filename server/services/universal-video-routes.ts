@@ -3747,33 +3747,17 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
     
     // Resolve overlay item URLs to Lambda-accessible public URLs
     for (const scene of inputProps.scenes as any[]) {
-      let hasMicroSceneOverlays = false;
-      let microSceneOverlayItems: any[] = [];
-      if (scene.microScenes && Array.isArray(scene.microScenes)) {
+      let allOverlays: any[] = (scene.overlayItems && Array.isArray(scene.overlayItems)) ? [...scene.overlayItems] : [];
+      if (allOverlays.length === 0 && scene.microScenes && Array.isArray(scene.microScenes)) {
         for (const ms of scene.microScenes) {
           if (ms.overlayItems && Array.isArray(ms.overlayItems) && ms.overlayItems.length > 0) {
-            hasMicroSceneOverlays = true;
-            console.log(`[UniversalVideo] Scene ${scene.id} micro-scene has ${ms.overlayItems.length} overlay items, merging to scene level`);
-            for (const msOverlay of ms.overlayItems) {
-              const isDuplicate = microSceneOverlayItems.some((o: any) => o.url === msOverlay.url && o.x === msOverlay.x && o.y === msOverlay.y);
-              if (!isDuplicate) {
-                microSceneOverlayItems.push(msOverlay);
-              }
-            }
+            console.log(`[UniversalVideo] Scene ${scene.id}: no scene-level overlays, falling back to ${ms.overlayItems.length} micro-scene overlays`);
+            allOverlays.push(...ms.overlayItems);
           }
         }
       }
-      let allOverlays: any[];
-      if (hasMicroSceneOverlays) {
-        allOverlays = microSceneOverlayItems;
-        if (scene.overlayItems && Array.isArray(scene.overlayItems) && scene.overlayItems.length > 0) {
-          console.log(`[UniversalVideo] Scene ${scene.id}: micro-scene overlays take priority over ${scene.overlayItems.length} scene-level overlays`);
-        }
-      } else {
-        allOverlays = (scene.overlayItems && Array.isArray(scene.overlayItems)) ? [...scene.overlayItems] : [];
-      }
       if (allOverlays.length > 0) {
-        console.log(`[UniversalVideo] Scene ${scene.id} has ${allOverlays.length} overlay items (scene + micro-scene):`, allOverlays.map((o: any) => `${o.name} @ (${o.x}%,${o.y}%) ${o.width}x${o.height}`).join(', '));
+        console.log(`[UniversalVideo] Scene ${scene.id} has ${allOverlays.length} overlay items:`, allOverlays.map((o: any) => `${o.name} @ (${o.x}%,${o.y}%) ${o.width}x${o.height}`).join(', '));
         const resolvedOverlays = [];
         for (const item of allOverlays) {
           if (!item.url) continue;

@@ -140,10 +140,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
   const overlayDebounceRef = useRef<NodeJS.Timeout | null>(null);
   const msOverlayDebounceRefs = useRef<Record<number, NodeJS.Timeout>>({});
   const [msOverlayState, setMsOverlayState] = useState<Record<number, MicroSceneOverlayItem[]>>({});
-  const [activeMsOverlayScope, setActiveMsOverlayScope] = useState<number | null>(() => {
-    const msCount = (scene.microScenes || []).length;
-    return msCount > 0 ? 0 : null;
-  });
+  const [activeMsOverlayScope, setActiveMsOverlayScope] = useState<number | null>(null);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const msPollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const visualDirectionRef = useRef<HTMLTextAreaElement>(null);
@@ -254,7 +251,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
       const msCount = (scene.microScenes || []).length;
       if (msCount === 0) return null;
       if (prev !== null && prev < msCount) return prev;
-      return 0;
+      return null;
     });
   }, [scene.microScenes]);
 
