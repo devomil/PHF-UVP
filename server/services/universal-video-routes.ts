@@ -576,6 +576,7 @@ import {
   dbRowToVideoProject,
   saveProjectToDb,
   getProjectFromDb,
+  mergeRenderSettingsToDb,
   type VideoProjectWithMeta,
 } from '../services/video-project-db';
 
@@ -2070,31 +2071,33 @@ router.patch('/projects/:projectId/render-settings', isAuthenticated, async (req
       return res.status(403).json({ success: false, error: 'Access denied' });
     }
     
+    const progressPatch: Record<string, any> = {};
+    const assetsPatch: Record<string, any> = {};
+
     if (voiceover !== undefined) {
-      if (!projectData.assets) {
-        projectData.assets = { voiceover: { fullTrackUrl: '', duration: 0, perScene: [] }, music: { url: '', volume: 0.18, duration: 0 }, images: [], videos: [] } as any;
-      }
       if (voiceover.enabled === false) {
-        projectData.assets.voiceover.fullTrackUrl = '';
+        const existingAssets = projectData.assets || {} as any;
+        const existingVoiceover = existingAssets.voiceover || {};
+        assetsPatch.voiceover = { ...existingVoiceover, fullTrackUrl: '' };
       }
-      (projectData as any).voiceoverSettings = {
+      progressPatch.voiceoverSettings = {
         enabled: voiceover.enabled ?? true,
         voiceId: voiceover.voiceId || null,
       };
     }
     
     if (music !== undefined) {
-      if (projectData.assets?.music) {
-        projectData.assets.music.volume = music.volume ?? projectData.assets.music.volume ?? 0.18;
-      }
-      (projectData as any).musicSettings = {
+      const existingAssets = projectData.assets || {} as any;
+      const existingMusic = existingAssets.music || {};
+      assetsPatch.music = { ...existingMusic, volume: music.volume ?? existingMusic.volume ?? 0.18 };
+      progressPatch.musicSettings = {
         enabled: music.enabled ?? true,
         volume: music.volume ?? 0.18,
       };
     }
     
     if (soundDesign !== undefined) {
-      (projectData as any).soundDesignSettings = {
+      progressPatch.soundDesignSettings = {
         enabled: soundDesign.enabled ?? true,
         transitionSounds: soundDesign.transitionSounds ?? true,
         impactSounds: soundDesign.impactSounds ?? true,
@@ -2113,7 +2116,7 @@ router.patch('/projects/:projectId/render-settings', isAuthenticated, async (req
     if (filmTreatment !== undefined) {
       const validColorGrades = ['warm-cinematic', 'cool-corporate', 'natural-organic', 'vibrant-lifestyle', 'luxury-elegant', 'moody-dramatic'];
       const validLetterbox = ['none', '2.39:1', '1.85:1'];
-      (projectData as any).filmTreatmentSettings = {
+      progressPatch.filmTreatmentSettings = {
         enabled: filmTreatment.enabled ?? true,
         colorGrade: validColorGrades.includes(filmTreatment.colorGrade) ? filmTreatment.colorGrade : 'warm-cinematic',
         colorIntensity: Math.min(1.0, Math.max(0, filmTreatment.colorIntensity ?? 1.0)),
@@ -2125,38 +2128,38 @@ router.patch('/projects/:projectId/render-settings', isAuthenticated, async (req
     
     if (transitions !== undefined) {
       const validStyles = ['fade', 'crossfade', 'dissolve', 'wipe-left', 'wipe-right', 'zoom', 'slide-left', 'slide-right', 'none'];
-      (projectData as any).transitionSettings = {
+      progressPatch.transitionSettings = {
         style: validStyles.includes(transitions.style) ? transitions.style : 'crossfade',
         duration: Math.min(2.0, Math.max(0.1, transitions.duration ?? 0.5)),
       };
     }
 
     if (introEnabled !== undefined) {
-      (projectData as any).introEnabled = !!introEnabled;
+      progressPatch.introEnabled = !!introEnabled;
     }
 
     if (introTemplate !== undefined) {
       const validTemplates = ['classic-glow', 'minimal', 'cinematic', 'elegant-fade'];
-      (projectData as any).introTemplate = validTemplates.includes(introTemplate) ? introTemplate : 'classic-glow';
+      progressPatch.introTemplate = validTemplates.includes(introTemplate) ? introTemplate : 'classic-glow';
     }
 
     if (outroEnabled !== undefined) {
-      (projectData as any).outroEnabled = !!outroEnabled;
+      progressPatch.outroEnabled = !!outroEnabled;
     }
 
     if (outroTemplate !== undefined) {
       const validTemplates = ['classic-glow', 'minimal', 'cinematic', 'elegant-fade'];
-      (projectData as any).outroTemplate = validTemplates.includes(outroTemplate) ? outroTemplate : 'classic-glow';
+      progressPatch.outroTemplate = validTemplates.includes(outroTemplate) ? outroTemplate : 'classic-glow';
     }
 
     if (introBackgroundRandom !== undefined) {
-      (projectData as any).introBackgroundRandom = !!introBackgroundRandom;
+      progressPatch.introBackgroundRandom = !!introBackgroundRandom;
     }
 
     if (captions !== undefined) {
       const validPresets = ['karaoke', 'capcut', 'hormozi', 'broadcast', 'minimal', 'glossy', 'neon', 'typewriter', 'glitch'];
       const validPositions = ['bottom', 'center', 'top'];
-      (projectData as any).captionSettings = {
+      progressPatch.captionSettings = {
         enabled: captions.enabled ?? false,
         style: {
           preset: validPresets.includes(captions.style?.preset) ? captions.style.preset : 'capcut',
@@ -2176,7 +2179,7 @@ router.patch('/projects/:projectId/render-settings', isAuthenticated, async (req
       const validContactAnimations = ['stagger', 'fade', 'slide-up', 'slide-left', 'stagger-slide', 'stagger-scale', 'cascade-blur', 'none'];
       const validAmbientEffects = ['particles', 'bokeh', 'none'];
       const validFonts = ['Great Vibes', 'Inter', 'Playfair Display', 'Montserrat', 'Raleway', 'Oswald', 'Lora', 'Poppins', 'Dancing Script', 'Sacramento', 'Pacifico', 'Caveat', 'Satisfy', 'Kaushan Script', 'Allura', 'Cormorant Garamond', 'Libre Baskerville', 'EB Garamond', 'Quicksand', 'Nunito', 'Open Sans'];
-      (projectData as any).endCardSettings = {
+      progressPatch.endCardSettings = {
         ...existing,
         enabled: endCard.enabled ?? existing.enabled ?? true,
         duration: endCard.duration != null ? Math.min(10, Math.max(3, endCard.duration)) : (existing.duration || 5),
@@ -2219,7 +2222,7 @@ router.patch('/projects/:projectId/render-settings', isAuthenticated, async (req
       const validContactAnimations = ['stagger', 'fade', 'slide-up', 'slide-left', 'stagger-slide', 'stagger-scale', 'cascade-blur', 'none'];
       const validAmbientEffects = ['particles', 'bokeh', 'none'];
       const validFonts = ['Great Vibes', 'Inter', 'Playfair Display', 'Montserrat', 'Raleway', 'Oswald', 'Lora', 'Poppins', 'Dancing Script', 'Sacramento', 'Pacifico', 'Caveat', 'Satisfy', 'Kaushan Script', 'Allura', 'Cormorant Garamond', 'Libre Baskerville', 'EB Garamond', 'Quicksand', 'Nunito', 'Open Sans'];
-      (projectData as any).introCardSettings = {
+      progressPatch.introCardSettings = {
         ...existing,
         enabled: introCard.enabled ?? existing.enabled ?? true,
         duration: introCard.duration != null ? Math.min(10, Math.max(3, introCard.duration)) : (existing.duration || 4),
@@ -2255,19 +2258,21 @@ router.patch('/projects/:projectId/render-settings', isAuthenticated, async (req
     }
 
     if (req.body.introBackgroundUrl !== undefined) {
-      (projectData as any).introBackgroundUrl = req.body.introBackgroundUrl || null;
+      progressPatch.introBackgroundUrl = req.body.introBackgroundUrl || null;
     }
 
     if (nativeVideoAudio !== undefined) {
-      (projectData as any).nativeVideoAudioSettings = {
+      progressPatch.nativeVideoAudioSettings = {
         enabled: !!nativeVideoAudio.enabled,
         volume: Math.min(1.0, Math.max(0, nativeVideoAudio.volume ?? 0.8)),
       };
     }
     
-    projectData.updatedAt = new Date().toISOString();
-    delete (projectData as any).scenes;
-    await saveProjectToDb(projectData, projectData.ownerId);
+    await mergeRenderSettingsToDb(
+      projectId,
+      progressPatch,
+      Object.keys(assetsPatch).length > 0 ? assetsPatch : undefined,
+    );
     
     console.log(`[RenderSettings] Updated render settings for project ${projectId}`);
     
@@ -2275,21 +2280,21 @@ router.patch('/projects/:projectId/render-settings', isAuthenticated, async (req
       success: true, 
       message: 'Render settings updated',
       settings: {
-        voiceover: (projectData as any).voiceoverSettings,
-        music: (projectData as any).musicSettings,
-        soundDesign: (projectData as any).soundDesignSettings,
-        filmTreatment: (projectData as any).filmTreatmentSettings,
-        transitions: (projectData as any).transitionSettings,
-        introEnabled: (projectData as any).introEnabled ?? true,
-        introTemplate: (projectData as any).introTemplate || 'classic-glow',
-        outroEnabled: (projectData as any).outroEnabled ?? true,
-        outroTemplate: (projectData as any).outroTemplate || 'classic-glow',
-        introBackgroundRandom: (projectData as any).introBackgroundRandom ?? false,
-        introBackgroundUrl: (projectData as any).introBackgroundUrl || null,
-        captions: (projectData as any).captionSettings || { enabled: false, style: { preset: 'capcut', position: 'bottom' } },
-        nativeVideoAudio: (projectData as any).nativeVideoAudioSettings || { enabled: false, volume: 0.8 },
-        endCard: (projectData as any).endCardSettings || { enabled: true, duration: 5, taglineText: '', logoSize: 25, logoAnimation: 'scale-bounce', taglineAnimation: 'typewriter', contactAnimation: 'stagger', contactWebsite: '', contactPhone: '', contactEmail: '', ambientEffect: 'bokeh', backgroundUrl: null, logoPositionY: 32, taglinePositionY: 55, websitePositionY: 75 },
-        introCard: (projectData as any).introCardSettings || { enabled: true, duration: 4, taglineText: '', logoSize: 30, logoAnimation: 'scale-bounce', taglineAnimation: 'fade', contactAnimation: 'stagger', contactWebsite: '', contactPhone: '', contactEmail: '', ambientEffect: 'bokeh', backgroundUrl: null, logoPositionY: 32, taglinePositionY: 50, websitePositionY: 75 },
+        voiceover: progressPatch.voiceoverSettings ?? (projectData as any).voiceoverSettings,
+        music: progressPatch.musicSettings ?? (projectData as any).musicSettings,
+        soundDesign: progressPatch.soundDesignSettings ?? (projectData as any).soundDesignSettings,
+        filmTreatment: progressPatch.filmTreatmentSettings ?? (projectData as any).filmTreatmentSettings,
+        transitions: progressPatch.transitionSettings ?? (projectData as any).transitionSettings,
+        introEnabled: progressPatch.introEnabled ?? (projectData as any).introEnabled ?? true,
+        introTemplate: progressPatch.introTemplate ?? (projectData as any).introTemplate ?? 'classic-glow',
+        outroEnabled: progressPatch.outroEnabled ?? (projectData as any).outroEnabled ?? true,
+        outroTemplate: progressPatch.outroTemplate ?? (projectData as any).outroTemplate ?? 'classic-glow',
+        introBackgroundRandom: progressPatch.introBackgroundRandom ?? (projectData as any).introBackgroundRandom ?? false,
+        introBackgroundUrl: progressPatch.introBackgroundUrl ?? (projectData as any).introBackgroundUrl ?? null,
+        captions: progressPatch.captionSettings ?? (projectData as any).captionSettings ?? { enabled: false, style: { preset: 'capcut', position: 'bottom' } },
+        nativeVideoAudio: progressPatch.nativeVideoAudioSettings ?? (projectData as any).nativeVideoAudioSettings ?? { enabled: false, volume: 0.8 },
+        endCard: progressPatch.endCardSettings ?? (projectData as any).endCardSettings ?? { enabled: true, duration: 5, taglineText: '', logoSize: 25, logoAnimation: 'scale-bounce', taglineAnimation: 'typewriter', contactAnimation: 'stagger', contactWebsite: '', contactPhone: '', contactEmail: '', ambientEffect: 'bokeh', backgroundUrl: null, logoPositionY: 32, taglinePositionY: 55, websitePositionY: 75 },
+        introCard: progressPatch.introCardSettings ?? (projectData as any).introCardSettings ?? { enabled: true, duration: 4, taglineText: '', logoSize: 30, logoAnimation: 'scale-bounce', taglineAnimation: 'fade', contactAnimation: 'stagger', contactWebsite: '', contactPhone: '', contactEmail: '', ambientEffect: 'bokeh', backgroundUrl: null, logoPositionY: 32, taglinePositionY: 50, websitePositionY: 75 },
       }
     });
   } catch (error: any) {
@@ -2569,6 +2574,9 @@ router.patch('/projects/:projectId/scenes/:sceneId', isAuthenticated, async (req
       if (updates[field] !== undefined) {
         (scenes[sceneIndex] as any)[field] = updates[field];
       }
+    }
+    if (updates.overlayItems !== undefined) {
+      console.log(`[UpdateScene] Saving overlayItems for scene ${sceneId}:`, JSON.stringify(updates.overlayItems.map((o: any) => ({ name: o.name, url: o.url?.substring(0, 60) }))));
     }
 
     if (updates.referenceImages !== undefined) {

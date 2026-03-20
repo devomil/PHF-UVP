@@ -2,7 +2,7 @@
 import type { VideoProject } from '../../shared/video-types';
 import { db } from '../db';
 import { universalVideoProjects } from '../../shared/schema';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 
 export type VideoProjectWithMeta = VideoProject & {
   renderId?: string;
@@ -192,6 +192,30 @@ export async function batchUpdateMicroSceneImageUrls(
 
   await db.update(universalVideoProjects)
     .set({ scenes, updatedAt: new Date() })
+    .where(eq(universalVideoProjects.projectId, projectId));
+
+  return true;
+}
+
+export async function mergeRenderSettingsToDb(
+  projectId: string,
+  progressPatch: Record<string, any>,
+  assetsPatch?: Record<string, any>,
+): Promise<boolean> {
+  const updateData: any = {
+    updatedAt: new Date(),
+  };
+
+  if (Object.keys(progressPatch).length > 0) {
+    updateData.progress = sql`COALESCE(${universalVideoProjects.progress}, '{}'::jsonb) || ${JSON.stringify(progressPatch)}::jsonb`;
+  }
+
+  if (assetsPatch && Object.keys(assetsPatch).length > 0) {
+    updateData.assets = sql`COALESCE(${universalVideoProjects.assets}, '{}'::jsonb) || ${JSON.stringify(assetsPatch)}::jsonb`;
+  }
+
+  await db.update(universalVideoProjects)
+    .set(updateData)
     .where(eq(universalVideoProjects.projectId, projectId));
 
   return true;
