@@ -3747,47 +3747,60 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
       transitions: renderTransitions,
     };
     
+    // Helper: resolve a single overlay item URL to Lambda-accessible public URL
+    const resolveOverlayUrl = async (item: any): Promise<any> => {
+      if (!item.url) return item;
+      let resolvedUrl = item.url;
+      const isS3UploadsPath = item.url.includes('.amazonaws.com/uploads/');
+      const isLocalUploadsPath = item.url.startsWith('/uploads/');
+      const needsResolution = !item.url.startsWith("http") || item.url.includes(".replit.dev") || isS3UploadsPath;
+      if (needsResolution || isLocalUploadsPath) {
+        if (isS3UploadsPath) {
+          const filename = item.url.split('/uploads/').pop();
+          const localPath = `/uploads/${filename}`;
+          console.log(`[UniversalVideo] S3 uploads/ path detected for overlay "${item.name}", resolving via local file: ${localPath}`);
+          const publicUrl = await getPublicAssetUrl(localPath);
+          if (publicUrl) resolvedUrl = publicUrl;
+        } else {
+          const publicUrl = await getPublicAssetUrl(item.url);
+          if (publicUrl) resolvedUrl = publicUrl;
+        }
+      }
+      console.log(`[UniversalVideo] Overlay item "${item.name}": ${item.url.substring(0, 60)} -> ${resolvedUrl.substring(0, 80)}`);
+      return { ...item, url: resolvedUrl };
+    };
+
     // Resolve overlay item URLs to Lambda-accessible public URLs
     for (const scene of inputProps.scenes as any[]) {
-      let allOverlays: any[] = (scene.overlayItems && Array.isArray(scene.overlayItems)) ? [...scene.overlayItems] : [];
-      if (allOverlays.length === 0 && scene.microScenes && Array.isArray(scene.microScenes)) {
+      // 1. Resolve scene-level overlayItems
+      if (scene.overlayItems && Array.isArray(scene.overlayItems) && scene.overlayItems.length > 0) {
+        console.log(`[UniversalVideo] Scene ${scene.id} has ${scene.overlayItems.length} overlay items:`, scene.overlayItems.map((o: any) => `${o.name} @ (${o.x}%,${o.y}%) ${o.width}x${o.height}`).join(', '));
+        scene.overlayItems = await Promise.all(scene.overlayItems.map(resolveOverlayUrl));
+        console.log(`[UniversalVideo] Resolved ${scene.overlayItems.length} overlay items for scene ${scene.id}`);
+      }
+
+      // 2. Resolve micro-scene level overlayItems (Lambda reads these directly)
+      if (scene.microScenes && Array.isArray(scene.microScenes)) {
         for (const ms of scene.microScenes) {
           if (ms.overlayItems && Array.isArray(ms.overlayItems) && ms.overlayItems.length > 0) {
-            console.log(`[UniversalVideo] Scene ${scene.id}: no scene-level overlays, falling back to ${ms.overlayItems.length} micro-scene overlays`);
-            allOverlays.push(...ms.overlayItems);
+            console.log(`[UniversalVideo] Scene ${scene.id} micro-scene has ${ms.overlayItems.length} overlay items to resolve`);
+            ms.overlayItems = await Promise.all(ms.overlayItems.map(resolveOverlayUrl));
           }
         }
       }
-      if (allOverlays.length > 0) {
-        console.log(`[UniversalVideo] Scene ${scene.id} has ${allOverlays.length} overlay items:`, allOverlays.map((o: any) => `${o.name} @ (${o.x}%,${o.y}%) ${o.width}x${o.height}`).join(', '));
-        const resolvedOverlays = [];
-        for (const item of allOverlays) {
-          if (!item.url) continue;
-          let resolvedUrl = item.url;
-          const isS3UploadsPath = item.url.includes('.amazonaws.com/uploads/');
-          const needsResolution = !item.url.startsWith("http") || item.url.includes(".replit.dev") || isS3UploadsPath;
-          if (needsResolution) {
-            if (isS3UploadsPath) {
-              const filename = item.url.split('/uploads/').pop();
-              const localPath = `/uploads/${filename}`;
-              console.log(`[UniversalVideo] S3 uploads/ path detected for overlay "${item.name}", resolving via local file: ${localPath}`);
-              const publicUrl = await getPublicAssetUrl(localPath);
-              if (publicUrl) {
-                resolvedUrl = publicUrl;
-              }
-            } else {
-              const publicUrl = await getPublicAssetUrl(item.url);
-              if (publicUrl) {
-                resolvedUrl = publicUrl;
-              }
-            }
+
+      // 3. If scene has no scene-level overlays, promote first micro-scene's overlays to scene level
+      if ((!scene.overlayItems || scene.overlayItems.length === 0) && scene.microScenes && Array.isArray(scene.microScenes)) {
+        for (const ms of scene.microScenes) {
+          if (ms.overlayItems && Array.isArray(ms.overlayItems) && ms.overlayItems.length > 0) {
+            console.log(`[UniversalVideo] Scene ${scene.id}: promoting ${ms.overlayItems.length} micro-scene overlays to scene level`);
+            scene.overlayItems = ms.overlayItems;
+            break;
           }
-          resolvedOverlays.push({ ...item, url: resolvedUrl });
-          console.log(`[UniversalVideo] Overlay item "${item.name}": ${item.url.substring(0, 60)} -> ${resolvedUrl.substring(0, 80)}`);
         }
-        scene.overlayItems = resolvedOverlays;
-        console.log(`[UniversalVideo] Resolved ${resolvedOverlays.length} overlay items for scene ${scene.id}`);
-      } else {
+      }
+
+      if (!scene.overlayItems || scene.overlayItems.length === 0) {
         console.log(`[UniversalVideo] Scene ${scene.id} has NO overlay items`);
       }
     }
