@@ -24,27 +24,29 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
             const isActive = location === item.path || (item.path !== "/admin" && location.startsWith(item.path));
             const Icon = item.icon;
             return (
-              <Link key={item.path} href={item.path}>
-                <a
-                  className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors"
-                  style={{
-                    background: isActive ? "rgba(124,58,237,0.12)" : "transparent",
-                    color: isActive ? "rgb(167,139,250)" : "var(--text-secondary)",
-                  }}
-                >
-                  <Icon className="w-4 h-4" />
-                  {item.label}
-                </a>
+              <Link
+                key={item.path}
+                href={item.path}
+                className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors"
+                style={{
+                  background: isActive ? "rgba(124,58,237,0.12)" : "transparent",
+                  color: isActive ? "rgb(167,139,250)" : "var(--text-secondary)",
+                }}
+              >
+                <Icon className="w-4 h-4" />
+                {item.label}
               </Link>
             );
           })}
         </nav>
         <div className="px-2 py-3 border-t" style={{ borderColor: "var(--border-subtle)" }}>
-          <Link href="/dashboard">
-            <a className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors" style={{ color: "var(--text-muted)" }}>
-              <ArrowLeft className="w-4 h-4" />
-              Back to App
-            </a>
+          <Link
+            href="/dashboard"
+            className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors"
+            style={{ color: "var(--text-muted)" }}
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back to App
           </Link>
         </div>
       </aside>

@@ -1,12 +1,13 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { AdminLayout } from "./admin-layout";
 import { useState } from "react";
-import { Search, Shield, ShieldCheck, User, MoreVertical, CheckCircle, XCircle } from "lucide-react";
+import { Search, Shield, ShieldCheck, User, MoreVertical, CheckCircle, XCircle, ChevronDown, ChevronRight, DollarSign } from "lucide-react";
 
 export default function AdminUsers() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [editingUser, setEditingUser] = useState<string | null>(null);
+  const [expandedUser, setExpandedUser] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ["admin-users"],
@@ -39,7 +40,7 @@ export default function AdminUsers() {
 
   const users = data?.users || [];
   const filtered = users.filter((u: any) =>
-    !search || u.email?.toLowerCase().includes(search.toLowerCase()) || u.firstName?.toLowerCase().includes(search.toLowerCase()) || u.lastName?.toLowerCase().includes(search.toLowerCase())
+    !search || u.email?.toLowerCase().includes(search.toLowerCase()) || u.firstName?.toLowerCase().includes(search.toLowerCase()) || u.lastName?.toLowerCase().includes(search.toLowerCase()) || u.company?.toLowerCase().includes(search.toLowerCase())
   );
 
   const roleIcon = (role: string) => {
@@ -64,6 +65,16 @@ export default function AdminUsers() {
         {roleIcon(role)}
         {role}
       </span>
+    );
+  };
+
+  const DetailRow = ({ label, value }: { label: string; value: string | null | undefined }) => {
+    if (!value) return null;
+    return (
+      <div className="flex gap-2">
+        <span className="text-xs font-medium w-28 shrink-0" style={{ color: "var(--text-muted)" }}>{label}</span>
+        <span className="text-xs" style={{ color: "var(--text-secondary)" }}>{value}</span>
+      </div>
     );
   };
 
@@ -94,11 +105,13 @@ export default function AdminUsers() {
           <table className="w-full text-sm">
             <thead>
               <tr style={{ borderBottom: "1px solid var(--border-subtle)" }}>
+                <th className="w-6"></th>
                 <th className="text-left py-3 px-4 text-xs font-medium" style={{ color: "var(--text-muted)" }}>User</th>
                 <th className="text-left py-3 px-4 text-xs font-medium" style={{ color: "var(--text-muted)" }}>Role</th>
                 <th className="text-center py-3 px-4 text-xs font-medium" style={{ color: "var(--text-muted)" }}>Status</th>
                 <th className="text-right py-3 px-4 text-xs font-medium" style={{ color: "var(--text-muted)" }}>Projects</th>
                 <th className="text-right py-3 px-4 text-xs font-medium" style={{ color: "var(--text-muted)" }}>Generations</th>
+                <th className="text-right py-3 px-4 text-xs font-medium" style={{ color: "var(--text-muted)" }}>API Cost</th>
                 <th className="text-right py-3 px-4 text-xs font-medium" style={{ color: "var(--text-muted)" }}>Last Login</th>
                 <th className="text-right py-3 px-4 text-xs font-medium" style={{ color: "var(--text-muted)" }}>Joined</th>
                 <th className="text-right py-3 px-4 text-xs font-medium" style={{ color: "var(--text-muted)" }}>Actions</th>
@@ -106,73 +119,134 @@ export default function AdminUsers() {
             </thead>
             <tbody>
               {filtered.map((u: any) => (
-                <tr key={u.id} style={{ borderBottom: "1px solid var(--border-subtle)" }}>
-                  <td className="py-3 px-4">
-                    <div>
-                      <div className="font-medium" style={{ color: "var(--text-primary)" }}>
-                        {u.firstName || u.lastName ? `${u.firstName || ""} ${u.lastName || ""}`.trim() : "—"}
-                      </div>
-                      <div className="text-xs" style={{ color: "var(--text-muted)" }}>{u.email}</div>
-                    </div>
-                  </td>
-                  <td className="py-3 px-4">{roleBadge(u.role)}</td>
-                  <td className="py-3 px-4 text-center">
-                    {u.isActive ? (
-                      <span className="inline-flex items-center gap-1 text-xs text-green-400"><CheckCircle className="w-3.5 h-3.5" /> Active</span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 text-xs text-red-400"><XCircle className="w-3.5 h-3.5" /> Inactive</span>
-                    )}
-                  </td>
-                  <td className="text-right py-3 px-4" style={{ color: "var(--text-secondary)" }}>{u.projectCount}</td>
-                  <td className="text-right py-3 px-4" style={{ color: "var(--text-secondary)" }}>{u.generationCount}</td>
-                  <td className="text-right py-3 px-4 text-xs" style={{ color: "var(--text-muted)" }}>
-                    {u.lastLogin ? new Date(u.lastLogin).toLocaleDateString() : "Never"}
-                  </td>
-                  <td className="text-right py-3 px-4 text-xs" style={{ color: "var(--text-muted)" }}>
-                    {u.createdAt ? new Date(u.createdAt).toLocaleDateString() : "—"}
-                  </td>
-                  <td className="text-right py-3 px-4">
-                    <div className="relative inline-block">
-                      <button
-                        onClick={() => setEditingUser(editingUser === u.id ? null : u.id)}
-                        className="p-1.5 rounded-lg hover:bg-white/10 transition-colors"
-                      >
-                        <MoreVertical className="w-4 h-4" style={{ color: "var(--text-muted)" }} />
-                      </button>
-                      {editingUser === u.id && (
-                        <div
-                          className="absolute right-0 top-full mt-1 w-44 rounded-lg border shadow-xl py-1 z-50"
-                          style={{ background: "var(--bg-primary)", borderColor: "var(--border-subtle)" }}
-                        >
-                          <div className="px-3 py-1.5 text-xs font-medium" style={{ color: "var(--text-muted)" }}>Change Role</div>
-                          {["user", "employee", "admin"].map(role => (
-                            <button
-                              key={role}
-                              onClick={() => updateUser.mutate({ userId: u.id, updates: { role } })}
-                              disabled={u.role === role}
-                              className="w-full text-left px-3 py-1.5 text-xs hover:bg-white/5 disabled:opacity-30 flex items-center gap-2 transition-colors"
-                              style={{ color: "var(--text-secondary)" }}
-                            >
-                              {roleIcon(role)} Set as {role}
-                            </button>
-                          ))}
-                          <div className="border-t my-1" style={{ borderColor: "var(--border-subtle)" }} />
-                          <button
-                            onClick={() => updateUser.mutate({ userId: u.id, updates: { isActive: !u.isActive } })}
-                            className="w-full text-left px-3 py-1.5 text-xs hover:bg-white/5 transition-colors"
-                            style={{ color: u.isActive ? "#ef4444" : "#10b981" }}
-                          >
-                            {u.isActive ? "Deactivate Account" : "Activate Account"}
-                          </button>
-                        </div>
+                <>
+                  <tr key={u.id} style={{ borderBottom: expandedUser === u.id ? "none" : "1px solid var(--border-subtle)" }} className="cursor-pointer hover:bg-white/[0.02]" onClick={() => setExpandedUser(expandedUser === u.id ? null : u.id)}>
+                    <td className="pl-3 py-3">
+                      {expandedUser === u.id ? (
+                        <ChevronDown className="w-3.5 h-3.5" style={{ color: "var(--text-muted)" }} />
+                      ) : (
+                        <ChevronRight className="w-3.5 h-3.5" style={{ color: "var(--text-muted)" }} />
                       )}
-                    </div>
-                  </td>
-                </tr>
+                    </td>
+                    <td className="py-3 px-4">
+                      <div>
+                        <div className="font-medium" style={{ color: "var(--text-primary)" }}>
+                          {u.firstName || u.lastName ? `${u.firstName || ""} ${u.lastName || ""}`.trim() : "—"}
+                        </div>
+                        <div className="text-xs" style={{ color: "var(--text-muted)" }}>{u.email}</div>
+                        {u.company && <div className="text-xs" style={{ color: "var(--text-muted)" }}>{u.company}</div>}
+                      </div>
+                    </td>
+                    <td className="py-3 px-4">{roleBadge(u.role)}</td>
+                    <td className="py-3 px-4 text-center">
+                      {u.isActive ? (
+                        <span className="inline-flex items-center gap-1 text-xs text-green-400"><CheckCircle className="w-3.5 h-3.5" /> Active</span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-xs text-red-400"><XCircle className="w-3.5 h-3.5" /> Inactive</span>
+                      )}
+                    </td>
+                    <td className="text-right py-3 px-4" style={{ color: "var(--text-secondary)" }}>{u.projectCount}</td>
+                    <td className="text-right py-3 px-4" style={{ color: "var(--text-secondary)" }}>{u.generationCount}</td>
+                    <td className="text-right py-3 px-4">
+                      <div className="flex items-center justify-end gap-1">
+                        <DollarSign className="w-3 h-3 text-yellow-500" />
+                        <span style={{ color: u.totalApiCost > 0 ? "#fbbf24" : "var(--text-muted)" }} className="font-medium">
+                          {u.totalApiCost > 0 ? `$${u.totalApiCost.toFixed(2)}` : "$0.00"}
+                        </span>
+                      </div>
+                      {u.apiCallCount > 0 && (
+                        <div className="text-xs text-right" style={{ color: "var(--text-muted)" }}>{u.apiCallCount} calls</div>
+                      )}
+                    </td>
+                    <td className="text-right py-3 px-4 text-xs" style={{ color: "var(--text-muted)" }}>
+                      {u.lastLogin ? new Date(u.lastLogin).toLocaleDateString() : "Never"}
+                    </td>
+                    <td className="text-right py-3 px-4 text-xs" style={{ color: "var(--text-muted)" }}>
+                      {u.createdAt ? new Date(u.createdAt).toLocaleDateString() : "—"}
+                    </td>
+                    <td className="text-right py-3 px-4" onClick={e => e.stopPropagation()}>
+                      <div className="relative inline-block">
+                        <button
+                          onClick={() => setEditingUser(editingUser === u.id ? null : u.id)}
+                          className="p-1.5 rounded-lg hover:bg-white/10 transition-colors"
+                        >
+                          <MoreVertical className="w-4 h-4" style={{ color: "var(--text-muted)" }} />
+                        </button>
+                        {editingUser === u.id && (
+                          <div
+                            className="absolute right-0 top-full mt-1 w-44 rounded-lg border shadow-xl py-1 z-50"
+                            style={{ background: "var(--bg-primary)", borderColor: "var(--border-subtle)" }}
+                          >
+                            <div className="px-3 py-1.5 text-xs font-medium" style={{ color: "var(--text-muted)" }}>Change Role</div>
+                            {["user", "employee", "admin"].map(role => (
+                              <button
+                                key={role}
+                                onClick={() => updateUser.mutate({ userId: u.id, updates: { role } })}
+                                disabled={u.role === role}
+                                className="w-full text-left px-3 py-1.5 text-xs hover:bg-white/5 disabled:opacity-30 flex items-center gap-2 transition-colors"
+                                style={{ color: "var(--text-secondary)" }}
+                              >
+                                {roleIcon(role)} Set as {role}
+                              </button>
+                            ))}
+                            <div className="border-t my-1" style={{ borderColor: "var(--border-subtle)" }} />
+                            <button
+                              onClick={() => updateUser.mutate({ userId: u.id, updates: { isActive: !u.isActive } })}
+                              className="w-full text-left px-3 py-1.5 text-xs hover:bg-white/5 transition-colors"
+                              style={{ color: u.isActive ? "#ef4444" : "#10b981" }}
+                            >
+                              {u.isActive ? "Deactivate Account" : "Activate Account"}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                  {expandedUser === u.id && (
+                    <tr key={`${u.id}-details`} style={{ borderBottom: "1px solid var(--border-subtle)" }}>
+                      <td colSpan={10} className="px-4 pb-4 pt-1">
+                        <div className="grid grid-cols-2 gap-6 p-4 rounded-lg" style={{ background: "var(--bg-primary)", border: "1px solid var(--border-subtle)" }}>
+                          <div>
+                            <h4 className="text-xs font-semibold mb-2" style={{ color: "var(--text-primary)" }}>Contact Information</h4>
+                            <div className="space-y-1.5">
+                              <DetailRow label="Email" value={u.email} />
+                              <DetailRow label="Phone" value={u.phone} />
+                              <DetailRow label="Company" value={u.company} />
+                              <DetailRow label="Job Title" value={u.jobTitle} />
+                              <DetailRow label="Address" value={u.address} />
+                              <DetailRow label="City" value={u.city} />
+                              <DetailRow label="State" value={u.state} />
+                              <DetailRow label="Zip Code" value={u.zipCode} />
+                              <DetailRow label="Country" value={u.country} />
+                              {!u.phone && !u.company && !u.address && (
+                                <p className="text-xs italic" style={{ color: "var(--text-muted)" }}>No contact details on file</p>
+                              )}
+                            </div>
+                          </div>
+                          <div>
+                            <h4 className="text-xs font-semibold mb-2" style={{ color: "var(--text-primary)" }}>Billing Information</h4>
+                            <div className="space-y-1.5">
+                              <DetailRow label="Billing Name" value={u.billingName} />
+                              <DetailRow label="Billing Email" value={u.billingEmail} />
+                              <DetailRow label="Address" value={u.billingAddress} />
+                              <DetailRow label="City" value={u.billingCity} />
+                              <DetailRow label="State" value={u.billingState} />
+                              <DetailRow label="Zip Code" value={u.billingZipCode} />
+                              <DetailRow label="Country" value={u.billingCountry} />
+                              {!u.billingName && !u.billingEmail && !u.billingAddress && (
+                                <p className="text-xs italic" style={{ color: "var(--text-muted)" }}>No billing details on file</p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </>
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="text-center py-8 text-sm" style={{ color: "var(--text-muted)" }}>
+                  <td colSpan={10} className="text-center py-8 text-sm" style={{ color: "var(--text-muted)" }}>
                     {search ? "No users match your search" : "No users found"}
                   </td>
                 </tr>

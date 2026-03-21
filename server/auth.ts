@@ -8,6 +8,7 @@ import { db, pool } from "./db";
 import { users, sessions } from "../shared/schema";
 import { eq } from "drizzle-orm";
 import crypto from "crypto";
+import { sendNewUserSignupNotification } from "./services/notification-service";
 
 const PgSession = connectPgSimple(session);
 
@@ -107,6 +108,13 @@ export function setupAuth(app: Express) {
       req.login(newUser, (err) => {
         if (err) return res.status(500).json({ message: "Login failed after registration" });
         const { password: _, ...safeUser } = newUser;
+
+        sendNewUserSignupNotification({
+          email: newUser.email,
+          firstName: newUser.firstName,
+          lastName: newUser.lastName,
+        }).catch(err => console.error("[Auth] Notification error:", err));
+
         return res.status(201).json(safeUser);
       });
     } catch (error: any) {

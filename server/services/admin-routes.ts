@@ -1,6 +1,6 @@
 import { Router, Request, Response } from "express";
 import { db } from "../db";
-import { users, universalVideoProjects, videoGenerationJobs, productionLogs } from "../../shared/schema";
+import { users, universalVideoProjects, videoGenerationJobs, productionLogs, videoProductions } from "../../shared/schema";
 import { eq, desc, sql, count, and, gte, lte, ne } from "drizzle-orm";
 import { requireRole, isAuthenticated } from "../auth";
 
@@ -114,6 +114,21 @@ router.get("/users", async (_req: Request, res: Response) => {
         lastName: users.lastName,
         role: users.role,
         isActive: users.isActive,
+        phone: users.phone,
+        company: users.company,
+        jobTitle: users.jobTitle,
+        address: users.address,
+        city: users.city,
+        state: users.state,
+        zipCode: users.zipCode,
+        country: users.country,
+        billingEmail: users.billingEmail,
+        billingName: users.billingName,
+        billingAddress: users.billingAddress,
+        billingCity: users.billingCity,
+        billingState: users.billingState,
+        billingZipCode: users.billingZipCode,
+        billingCountry: users.billingCountry,
         lastLogin: users.lastLogin,
         createdAt: users.createdAt,
       })
@@ -138,14 +153,28 @@ router.get("/users", async (_req: Request, res: Response) => {
       .where(sql`${videoGenerationJobs.triggeredBy} IS NOT NULL`)
       .groupBy(videoGenerationJobs.triggeredBy);
 
+    const userCosts = await db
+      .select({
+        createdBy: videoProductions.createdBy,
+        totalCost: sql<string>`COALESCE(SUM(CAST(${productionLogs.apiCost} AS DECIMAL)), 0)`,
+        apiCallCount: count(),
+      })
+      .from(productionLogs)
+      .innerJoin(videoProductions, eq(productionLogs.productionId, videoProductions.id))
+      .where(sql`${productionLogs.apiCost} IS NOT NULL AND CAST(${productionLogs.apiCost} AS DECIMAL) > 0`)
+      .groupBy(videoProductions.createdBy);
+
     const projectMap = new Map(userProjectCounts.map(r => [r.ownerId, r]));
     const jobMap = new Map(userJobCounts.map(r => [r.triggeredBy, r]));
+    const costMap = new Map(userCosts.map(r => [r.createdBy, r]));
 
     const enrichedUsers = allUsers.map(u => ({
       ...u,
       projectCount: Number(projectMap.get(u.id)?.projectCount || 0),
       completedProjects: Number(projectMap.get(u.id)?.completedCount || 0),
       generationCount: Number(jobMap.get(u.id)?.jobCount || 0),
+      totalApiCost: parseFloat(costMap.get(u.id)?.totalCost || "0"),
+      apiCallCount: Number(costMap.get(u.id)?.apiCallCount || 0),
     }));
 
     res.json({ success: true, users: enrichedUsers });
