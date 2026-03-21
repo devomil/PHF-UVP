@@ -145,8 +145,8 @@ export function AskSuzziePanel({ sceneContext, onApplyVisualDirection, onApplyPr
       onClick={stopProp}
       onMouseDown={stopProp}
       style={{
-        width: "380px",
-        height: "480px",
+        width: "460px",
+        height: "600px",
         background: "rgba(15,10,30,0.92)",
         backdropFilter: "blur(20px)",
         border: "1px solid rgba(124,58,237,0.25)",
@@ -224,7 +224,7 @@ export function AskSuzziePanel({ sceneContext, onApplyVisualDirection, onApplyPr
                     }
               }
             >
-              <div className="whitespace-pre-wrap">{msg.content}</div>
+              <div className="whitespace-pre-wrap text-[13px]">{msg.content}</div>
 
               {msg.suggestedPrompt && (
                 <div
@@ -239,7 +239,7 @@ export function AskSuzziePanel({ sceneContext, onApplyVisualDirection, onApplyPr
                     <span className="text-[10px] font-semibold" style={{ color: "rgba(167,139,250,0.9)" }}>Suggested Prompt</span>
                   </div>
                   <div
-                    className="px-2.5 py-2 text-[10px] leading-relaxed max-h-[120px] overflow-y-auto"
+                    className="px-2.5 py-2 text-[11px] leading-relaxed max-h-[160px] overflow-y-auto"
                     style={{ color: "rgba(255,255,255,0.75)", scrollbarWidth: "thin", scrollbarColor: "rgba(124,58,237,0.3) transparent" }}
                   >
                     {msg.suggestedPrompt}
@@ -303,26 +303,27 @@ export function AskSuzziePanel({ sceneContext, onApplyVisualDirection, onApplyPr
         style={{ borderTop: "1px solid rgba(124,58,237,0.15)", background: "rgba(10,5,25,0.5)" }}
       >
         <div
-          className="flex items-center gap-2 rounded-xl px-3 py-2"
+          className="flex items-end gap-2 rounded-xl px-3 py-2"
           style={{
             background: "rgba(255,255,255,0.05)",
             border: "1px solid rgba(124,58,237,0.2)",
           }}
         >
-          <input
-            ref={inputRef}
-            type="text"
+          <textarea
+            ref={inputRef as any}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Ask Suzzie anything..."
             disabled={isLoading}
-            className="flex-1 bg-transparent text-xs text-white placeholder-white/30 outline-none disabled:opacity-50"
+            rows={2}
+            className="flex-1 bg-transparent text-xs text-white placeholder-white/30 outline-none disabled:opacity-50 resize-none"
+            style={{ maxHeight: "80px", scrollbarWidth: "thin", scrollbarColor: "rgba(124,58,237,0.3) transparent" }}
           />
           <button
             onClick={() => sendMessage(input)}
             disabled={!input.trim() || isLoading}
-            className="p-1.5 rounded-lg transition-all disabled:opacity-30 hover:bg-purple-600/30"
+            className="p-1.5 rounded-lg transition-all disabled:opacity-30 hover:bg-purple-600/30 shrink-0 mb-0.5"
           >
             <Send className="w-3.5 h-3.5" style={{ color: "rgba(167,139,250,0.8)" }} />
           </button>
