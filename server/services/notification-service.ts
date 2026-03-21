@@ -50,6 +50,120 @@ async function initTwilio() {
   }
 }
 
+export async function sendWelcomeEmail(newUser: {
+  email: string;
+  firstName?: string | null;
+  lastName?: string | null;
+}) {
+  if (!initSendGrid()) return;
+
+  const firstName = escapeHtml(newUser.firstName || "there");
+  const appUrl = process.env.REPLIT_DEV_DOMAIN
+    ? `https://${process.env.REPLIT_DEV_DOMAIN}`
+    : "https://neuralcut.ai";
+
+  try {
+    await sgMail.send({
+      to: newUser.email,
+      from: { email: FROM_EMAIL, name: "NeuralCut.AI" },
+      subject: `Welcome to NeuralCut.AI — Let's Create Something Amazing`,
+      html: `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="margin: 0; padding: 0; background-color: #09090f; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+  <div style="max-width: 600px; margin: 0 auto; padding: 0;">
+
+    <!-- Header with gradient -->
+    <div style="background: linear-gradient(135deg, #1a0533 0%, #0f0f1a 50%, #0a1628 100%); padding: 48px 32px 40px; text-align: center; border-radius: 0 0 0 0;">
+      <div style="margin-bottom: 24px;">
+        <span style="font-size: 36px; font-weight: 800; background: linear-gradient(135deg, #a78bfa, #7c3aed, #6366f1); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; letter-spacing: -0.5px;">NeuralCut.AI</span>
+      </div>
+      <h1 style="color: #f1f5f9; font-size: 28px; font-weight: 700; margin: 0 0 12px; line-height: 1.3;">Welcome aboard, ${firstName}!</h1>
+      <p style="color: #94a3b8; font-size: 16px; margin: 0; line-height: 1.6;">Your AI-powered video production studio is ready.</p>
+    </div>
+
+    <!-- Main content -->
+    <div style="background-color: #0f0f1a; padding: 40px 32px;">
+
+      <p style="color: #cbd5e1; font-size: 15px; line-height: 1.7; margin: 0 0 28px;">
+        You've just unlocked access to a platform that turns your ideas into professional-quality videos using cutting-edge AI. Here's how to get started:
+      </p>
+
+      <!-- Step 1 -->
+      <div style="background: linear-gradient(135deg, #1e1b4b 0%, #1a1a2e 100%); border: 1px solid #2d2d54; border-radius: 12px; padding: 24px; margin-bottom: 16px;">
+        <div style="display: flex; align-items: flex-start;">
+          <div style="background: linear-gradient(135deg, #7c3aed, #6366f1); color: white; width: 32px; height: 32px; border-radius: 50%; display: inline-block; text-align: center; line-height: 32px; font-weight: 700; font-size: 14px; margin-right: 16px; flex-shrink: 0;">1</div>
+          <div>
+            <h3 style="color: #e2e8f0; font-size: 16px; font-weight: 600; margin: 0 0 6px;">Create Your First Project</h3>
+            <p style="color: #94a3b8; font-size: 14px; margin: 0; line-height: 1.6;">Click "Create new" in the sidebar and describe your video concept. Our AI will generate a complete scene-by-scene script for you.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 2 -->
+      <div style="background: linear-gradient(135deg, #1e1b4b 0%, #1a1a2e 100%); border: 1px solid #2d2d54; border-radius: 12px; padding: 24px; margin-bottom: 16px;">
+        <div style="display: flex; align-items: flex-start;">
+          <div style="background: linear-gradient(135deg, #7c3aed, #6366f1); color: white; width: 32px; height: 32px; border-radius: 50%; display: inline-block; text-align: center; line-height: 32px; font-weight: 700; font-size: 14px; margin-right: 16px; flex-shrink: 0;">2</div>
+          <div>
+            <h3 style="color: #e2e8f0; font-size: 16px; font-weight: 600; margin: 0 0 6px;">Choose Your Visual Style</h3>
+            <p style="color: #94a3b8; font-size: 14px; margin: 0; line-height: 1.6;">Pick from 9 art presets — 3D Illustration, Cinematic Realism, Watercolor, and more. Each one transforms how your entire video looks and feels.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 3 -->
+      <div style="background: linear-gradient(135deg, #1e1b4b 0%, #1a1a2e 100%); border: 1px solid #2d2d54; border-radius: 12px; padding: 24px; margin-bottom: 16px;">
+        <div style="display: flex; align-items: flex-start;">
+          <div style="background: linear-gradient(135deg, #7c3aed, #6366f1); color: white; width: 32px; height: 32px; border-radius: 50%; display: inline-block; text-align: center; line-height: 32px; font-weight: 700; font-size: 14px; margin-right: 16px; flex-shrink: 0;">3</div>
+          <div>
+            <h3 style="color: #e2e8f0; font-size: 16px; font-weight: 600; margin: 0 0 6px;">Generate & Render</h3>
+            <p style="color: #94a3b8; font-size: 14px; margin: 0; line-height: 1.6;">Generate AI video clips for each scene, add voiceover and music, then render your finished video — all within the platform.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Pro tip -->
+      <div style="background: linear-gradient(135deg, #0c1a0c 0%, #0f1a0f 100%); border: 1px solid #1a3a1a; border-radius: 12px; padding: 20px 24px; margin: 28px 0;">
+        <p style="color: #4ade80; font-size: 13px; font-weight: 600; margin: 0 0 6px; text-transform: uppercase; letter-spacing: 0.5px;">Pro Tip</p>
+        <p style="color: #86efac; font-size: 14px; margin: 0; line-height: 1.6;">Try Ask Suzzie — your AI creative assistant. She can help write visual directions, recommend the best AI providers for your scene, and guide you through every step.</p>
+      </div>
+
+      <!-- CTA Button -->
+      <div style="text-align: center; margin: 36px 0 20px;">
+        <a href="${appUrl}/projects/new" style="display: inline-block; background: linear-gradient(135deg, #7c3aed, #6366f1); color: white; font-size: 16px; font-weight: 600; text-decoration: none; padding: 14px 40px; border-radius: 10px; letter-spacing: 0.3px;">Start Creating</a>
+      </div>
+
+      <p style="color: #64748b; font-size: 13px; text-align: center; margin: 0; line-height: 1.6;">
+        Just reply to this email if you have any questions.<br>We're here to help you make incredible videos.
+      </p>
+    </div>
+
+    <!-- Footer -->
+    <div style="background-color: #080810; padding: 28px 32px; text-align: center; border-top: 1px solid #1e1e2e;">
+      <p style="color: #475569; font-size: 12px; margin: 0 0 8px;">
+        <span style="font-weight: 600; color: #64748b;">NeuralCut.AI</span> &mdash; AI-Powered Video Creation
+      </p>
+      <p style="color: #334155; font-size: 11px; margin: 0;">
+        You're receiving this because you created an account on NeuralCut.AI.
+      </p>
+    </div>
+
+  </div>
+</body>
+</html>
+      `,
+      text: `Welcome to NeuralCut.AI, ${newUser.firstName || "there"}!\n\nYour AI-powered video production studio is ready.\n\n1. Create Your First Project — Click "Create new" and describe your video concept.\n2. Choose Your Visual Style — Pick from 9 art presets like 3D Illustration or Cinematic Realism.\n3. Generate & Render — Generate AI video clips, add voiceover and music, then render.\n\nPro Tip: Try Ask Suzzie, your AI creative assistant, for help with visual directions and provider recommendations.\n\nStart creating: ${appUrl}/projects/new\n\nReply to this email if you have any questions.\n\n— NeuralCut.AI`,
+    });
+    console.log(`[Notifications] Welcome email sent to ${newUser.email}`);
+  } catch (err: any) {
+    console.error("[Notifications] Welcome email failed:", err.message);
+    if (err.response?.body?.errors) {
+      console.error("[Notifications] SendGrid errors:", JSON.stringify(err.response.body.errors));
+    }
+  }
+}
+
 export async function sendNewUserSignupNotification(newUser: {
   email: string;
   firstName?: string | null;

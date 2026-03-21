@@ -8,7 +8,7 @@ import { db, pool } from "./db";
 import { users, sessions } from "../shared/schema";
 import { eq } from "drizzle-orm";
 import crypto from "crypto";
-import { sendNewUserSignupNotification } from "./services/notification-service";
+import { sendNewUserSignupNotification, sendWelcomeEmail } from "./services/notification-service";
 
 const PgSession = connectPgSimple(session);
 
@@ -114,6 +114,12 @@ export function setupAuth(app: Express) {
           firstName: newUser.firstName,
           lastName: newUser.lastName,
         }).catch(err => console.error("[Auth] Notification error:", err));
+
+        sendWelcomeEmail({
+          email: newUser.email,
+          firstName: newUser.firstName,
+          lastName: newUser.lastName,
+        }).catch(err => console.error("[Auth] Welcome email error:", err));
 
         return res.status(201).json(safeUser);
       });
