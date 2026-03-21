@@ -50,7 +50,7 @@ ${imageProviders}`;
 function buildArtStyleKnowledge(): string {
   const presets = getAllVisualArtPresets();
   return presets.map(p =>
-    `- **${p.name}** (${p.id}): ${p.description}. Strategy: ${p.generationStrategy}. Good for: ${p.globalStyleNotes.substring(0, 100)}...`
+    `- **${p.name}** (${p.id}): ${p.description || 'No description'}. Strategy: ${p.generationStrategy || 'default'}. Good for: ${(p.globalStyleNotes || '').substring(0, 100)}...`
   ).join('\n');
 }
 
