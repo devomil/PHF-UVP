@@ -813,7 +813,7 @@ router.delete('/projects/:projectId', isAuthenticated, async (req: Request, res:
 // Ask Suzzie (Claude AI) - dual mode: visual direction generation + general assistant
 router.post('/ask-suzzie', isAuthenticated, async (req: Request, res: Response) => {
   try {
-    const { mode, question, narration, sceneType, projectTitle, workflowPath, matchedAssets, selectedProduct, artPresetId, artPresetName, visualDirection, provider } = req.body;
+    const { mode, question, conversationHistory, narration, sceneType, projectTitle, workflowPath, matchedAssets, selectedProduct, artPresetId, artPresetName, visualDirection, provider } = req.body;
     
     if (mode === 'assistant') {
       if (!question) {
@@ -829,16 +829,27 @@ router.post('/ask-suzzie', isAuthenticated, async (req: Request, res: Response) 
         return res.status(500).json({ success: false, error: 'AI service not configured' });
       }
       
-      console.log(`[AskSuzzie:Assistant] Question: "${truncatedQuestion.substring(0, 80)}..." | Scene: ${sceneType || 'none'} | Art: ${artPresetName || 'none'}`);
+      console.log(`[AskSuzzie:Assistant] Question: "${truncatedQuestion.substring(0, 80)}..." | Scene: ${sceneType || 'none'} | Art: ${artPresetName || 'none'} | History: ${Array.isArray(conversationHistory) ? conversationHistory.length : 0} msgs`);
       
       const systemPrompt = buildSuzzieSystemPrompt({
         narration, sceneType, artPresetId, artPresetName, visualDirection, projectTitle, provider,
       });
       
+      let llmMessages: Array<{ role: 'user' | 'assistant'; content: string }>;
+      if (Array.isArray(conversationHistory) && conversationHistory.length > 1) {
+        const maxHistory = conversationHistory.slice(-10);
+        llmMessages = maxHistory.map((m: any) => ({
+          role: m.role === 'assistant' ? 'assistant' as const : 'user' as const,
+          content: String(m.content).substring(0, 2000),
+        }));
+      } else {
+        llmMessages = [{ role: 'user', content: truncatedQuestion }];
+      }
+      
       const llmResult = await llmClient.createChatCompletion({
         systemPrompt,
-        messages: [{ role: 'user', content: truncatedQuestion }],
-        maxTokens: 800,
+        messages: llmMessages,
+        maxTokens: 1200,
       });
       
       const text = llmResult.text || '';

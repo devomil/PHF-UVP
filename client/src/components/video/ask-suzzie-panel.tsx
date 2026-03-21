@@ -54,9 +54,23 @@ export function AskSuzziePanel({ sceneContext, onApplyVisualDirection, onApplyPr
     if (!text.trim() || isLoading) return;
 
     const userMessage: ChatMessage = { role: "user", content: text.trim() };
-    setMessages(prev => [...prev, userMessage]);
     setInput("");
     setIsLoading(true);
+
+    let updatedMessages: ChatMessage[] = [];
+    setMessages(prev => {
+      updatedMessages = [...prev, userMessage];
+      return updatedMessages;
+    });
+
+    await new Promise(r => setTimeout(r, 0));
+
+    const conversationHistory = updatedMessages.map(m => ({
+      role: m.role,
+      content: m.suggestedPrompt
+        ? `${m.content}\n\n[Suggested Prompt: ${m.suggestedPrompt}]`
+        : m.content,
+    }));
 
     try {
       const response = await fetch("/api/universal-video/ask-suzzie", {
@@ -66,6 +80,7 @@ export function AskSuzziePanel({ sceneContext, onApplyVisualDirection, onApplyPr
         body: JSON.stringify({
           mode: "assistant",
           question: text.trim(),
+          conversationHistory,
           narration: sceneContext.narration,
           sceneType: sceneContext.sceneType,
           artPresetId: sceneContext.artPresetId,
@@ -211,19 +226,41 @@ export function AskSuzziePanel({ sceneContext, onApplyVisualDirection, onApplyPr
             >
               <div className="whitespace-pre-wrap">{msg.content}</div>
 
-              {msg.suggestedPrompt && onApplyVisualDirection && (
-                <button
-                  onClick={() => onApplyVisualDirection(msg.suggestedPrompt!)}
-                  className="mt-2.5 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-semibold transition-all hover:scale-[1.02]"
+              {msg.suggestedPrompt && (
+                <div
+                  className="mt-2.5 rounded-lg overflow-hidden"
                   style={{
-                    background: "linear-gradient(135deg, rgba(124,58,237,0.4), rgba(168,85,247,0.3))",
-                    color: "white",
-                    border: "1px solid rgba(167,139,250,0.3)",
+                    background: "rgba(124,58,237,0.08)",
+                    border: "1px solid rgba(124,58,237,0.2)",
                   }}
                 >
-                  <Wand2 className="w-3 h-3" />
-                  Apply to Visual Direction
-                </button>
+                  <div className="px-2.5 py-1.5 flex items-center gap-1.5" style={{ borderBottom: "1px solid rgba(124,58,237,0.15)" }}>
+                    <Wand2 className="w-3 h-3" style={{ color: "rgba(167,139,250,0.8)" }} />
+                    <span className="text-[10px] font-semibold" style={{ color: "rgba(167,139,250,0.9)" }}>Suggested Prompt</span>
+                  </div>
+                  <div
+                    className="px-2.5 py-2 text-[10px] leading-relaxed max-h-[120px] overflow-y-auto"
+                    style={{ color: "rgba(255,255,255,0.75)", scrollbarWidth: "thin", scrollbarColor: "rgba(124,58,237,0.3) transparent" }}
+                  >
+                    {msg.suggestedPrompt}
+                  </div>
+                  {onApplyVisualDirection && (
+                    <div className="px-2.5 py-1.5" style={{ borderTop: "1px solid rgba(124,58,237,0.15)" }}>
+                      <button
+                        onClick={() => onApplyVisualDirection(msg.suggestedPrompt!)}
+                        className="w-full flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-semibold transition-all hover:scale-[1.01]"
+                        style={{
+                          background: "linear-gradient(135deg, rgba(124,58,237,0.4), rgba(168,85,247,0.3))",
+                          color: "white",
+                          border: "1px solid rgba(167,139,250,0.3)",
+                        }}
+                      >
+                        <Wand2 className="w-3 h-3" />
+                        Apply to Visual Direction
+                      </button>
+                    </div>
+                  )}
+                </div>
               )}
 
               {msg.suggestedProvider && onApplyProvider && (
