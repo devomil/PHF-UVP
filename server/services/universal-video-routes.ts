@@ -3657,6 +3657,21 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
     }
     console.log('[Render] Voiceover ranges recalculated after intro injection:', voiceoverRanges.length, 'ranges');
 
+    // Adjust scene durations to match assembled clip durations
+    // If an assembled clip is shorter than the scene duration, the video will freeze on the last frame
+    for (const scene of preparedProject.scenes as any[]) {
+      if (scene.id === 'intro-scene-auto') continue;
+      const manifest = scene.assemblyManifest;
+      if (manifest && manifest.assembledClipValid && manifest.totalDurationSec > 0) {
+        const assemblyDur = manifest.totalDurationSec;
+        const sceneDur = scene.duration || 5;
+        if (assemblyDur < sceneDur - 0.5) {
+          console.log(`[Render] Scene ${scene.id}: adjusting duration ${sceneDur}s → ${assemblyDur.toFixed(1)}s to match assembled clip`);
+          scene.duration = Math.round(assemblyDur * 10) / 10;
+        }
+      }
+    }
+
     let clearedInstructionOverlays = 0;
     let clearedTraditionalOverlays = 0;
     for (const scene of preparedProject.scenes as any[]) {
@@ -3789,19 +3804,17 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
         }
       }
 
-      // 3. If scene has no scene-level overlays, promote first micro-scene's overlays to scene level
-      if ((!scene.overlayItems || scene.overlayItems.length === 0) && scene.microScenes && Array.isArray(scene.microScenes)) {
-        for (const ms of scene.microScenes) {
-          if (ms.overlayItems && Array.isArray(ms.overlayItems) && ms.overlayItems.length > 0) {
-            console.log(`[UniversalVideo] Scene ${scene.id}: promoting ${ms.overlayItems.length} micro-scene overlays to scene level`);
-            scene.overlayItems = ms.overlayItems;
-            break;
-          }
-        }
-      }
+      // 3. Do NOT promote micro-scene overlays to scene level — they render for the
+      //    entire scene duration at scene level, causing carryover between micro-scenes.
+      //    Micro-scene overlays are rendered by MicroSceneOverlayCompositor within their
+      //    time range inside the Remotion MicroSceneBackground component.
 
-      if (!scene.overlayItems || scene.overlayItems.length === 0) {
+      const sceneOverlayCount = scene.overlayItems?.length || 0;
+      const msOverlayCount = scene.microScenes?.reduce((sum: number, ms: any) => sum + (ms.overlayItems?.length || 0), 0) || 0;
+      if (sceneOverlayCount === 0 && msOverlayCount === 0) {
         console.log(`[UniversalVideo] Scene ${scene.id} has NO overlay items`);
+      } else {
+        console.log(`[UniversalVideo] Scene ${scene.id}: ${sceneOverlayCount} scene-level + ${msOverlayCount} micro-scene overlays`);
       }
     }
     // Log video B-roll details for each scene

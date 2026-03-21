@@ -2199,7 +2199,7 @@ export const UniversalVideoComposition: React.FC<UniversalVideoProps> = ({
         const hasPerSceneAudio = scenes.some(s => s.voiceoverUrl && isValidHttpUrl(s.voiceoverUrl));
         if (hasPerSceneAudio) {
           return scenes.map((scene, index) => {
-            if (scene.id === 'intro-scene-auto' || scene.type === 'intro') return null;
+            if (scene.id === 'intro-scene-auto') return null;
             const sceneStartFrame = sceneStartFrames[index];
             const sceneDuration = scene.duration || 5;
             const sceneDurationFrames = Math.ceil(sceneDuration * fps);
