@@ -1627,7 +1627,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
           <div className="flex flex-wrap gap-1.5">
             <button
               type="button"
-              onClick={() => isEditing && setContentTag(null)}
+              onClick={() => { if (isEditing) { setContentTag(null); updateSceneMutation.mutate({ contentTag: null }); } }}
               disabled={!isEditing}
               className="text-[11px] px-2.5 py-1 rounded-full border transition-all disabled:opacity-70"
               style={{
@@ -1642,7 +1642,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
               <button
                 key={tag.id}
                 type="button"
-                onClick={() => isEditing && setContentTag(contentTag === tag.id ? null : tag.id)}
+                onClick={() => { if (isEditing) { const newTag = contentTag === tag.id ? null : tag.id; setContentTag(newTag); updateSceneMutation.mutate({ contentTag: newTag }); } }}
                 disabled={!isEditing}
                 className="text-[11px] px-2.5 py-1 rounded-full border transition-all disabled:opacity-70"
                 style={{
@@ -2439,7 +2439,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                             <div className="flex flex-wrap gap-1 justify-end">
                               <button
                                 type="button"
-                                onClick={() => setContentTag(null)}
+                                onClick={() => { setContentTag(null); updateSceneMutation.mutate({ contentTag: null }); }}
                                 className="text-[10px] px-2 py-0.5 rounded-full border transition-all"
                                 style={{
                                   borderColor: contentTag === null ? 'rgba(124,58,237,0.5)' : 'rgba(255,255,255,0.12)',
