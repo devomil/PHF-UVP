@@ -2024,7 +2024,7 @@ export const UniversalVideoComposition: React.FC<UniversalVideoProps> = ({
     
     const sceneOverlayConfig = sceneOverlayConfigs?.[scene.id];
     
-    const isIntroScene = scene.id === 'intro-scene-auto' || scene.type === 'intro';
+    const isIntroScene = scene.id === 'intro-scene-auto';
     
     if (isIntroScene) {
       const introConfig = (scene as any).introCardConfig || {};
