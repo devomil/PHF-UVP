@@ -18,6 +18,7 @@ import {
   User,
   Sun,
   Moon,
+  ShieldCheck,
 } from "lucide-react";
 import neuralcutIcon from "@/assets/neuralcut-icon.png";
 
@@ -117,6 +118,29 @@ function AppLayout({ children }: { children: ReactNode }) {
               </Link>
             );
           })}
+          {user?.role === "admin" && (
+            <>
+              <div className="my-2 mx-3" style={{ borderTop: "1px solid var(--border-subtle)" }} />
+              <Link
+                href="/admin"
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 group relative ${
+                  location.startsWith("/admin")
+                    ? "theme-nav-active text-purple-600"
+                    : "theme-text-secondary theme-nav-hover"
+                } ${collapsed ? "justify-center" : ""}`}
+                style={location.startsWith("/admin") ? { color: "rgb(124, 58, 237)" } : {}}
+              >
+                {location.startsWith("/admin") && (
+                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-purple-500 rounded-r-full" />
+                )}
+                <ShieldCheck
+                  className="w-5 h-5 shrink-0"
+                  style={{ color: location.startsWith("/admin") ? "rgb(124, 58, 237)" : "var(--icon-default)" }}
+                />
+                {!collapsed && <span>Admin</span>}
+              </Link>
+            </>
+          )}
         </nav>
 
         <div className="p-2" style={{ borderTop: "1px solid var(--border-subtle)" }}>

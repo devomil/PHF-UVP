@@ -34,6 +34,7 @@ The AI Video Production Studio is a full-stack platform designed to streamline v
 -   **API Testing System**: Dedicated page for testing AI video, image, audio, and LLM providers with real-time polling and persistent results.
 -   **Service Architecture**: Modularized backend services for specific functionalities (e.g., `ai-video-service`, `brand-service`, `remotion-lambda-service`).
 -   **Database Schema**: Drizzle ORM defines schemas for users, sessions, video projects, production phases, brand assets, media assets, and job queues.
+-   **Admin Portal**: Full admin dashboard at `/admin` with sidebar navigation, protected by `requireRole(['admin'])`. Includes: Dashboard (summary stats, project status breakdown, generation stats, provider usage), Users (list, search, role/status management via PATCH), Projects (all projects with status filters, owner info, generation counts), Costs & Usage (API cost by service, provider usage breakdown), Activity Feed (real-time merged timeline of signups, project updates, video generations). Backend routes in `server/services/admin-routes.ts`, frontend pages in `client/src/pages/admin/`. Admin link visible in main sidebar only for admin-role users.
 
 ## Deployment
 -   **Target**: Autoscale (Replit Deployments)
