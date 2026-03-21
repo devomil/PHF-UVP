@@ -51,6 +51,8 @@ function getPositionStyle(
     justifyContent: 'center',
     alignItems: 'center',
     pointerEvents: 'none',
+    padding: '0 5%',
+    boxSizing: 'border-box' as const,
   };
 
   switch (position) {
@@ -62,6 +64,10 @@ function getPositionStyle(
     default:
       return { ...base, bottom: bottomMargin };
   }
+}
+
+function padWord(word: string): string {
+  return word + '\u00A0';
 }
 
 const KaraokeStyle: React.FC<{
@@ -125,7 +131,7 @@ const KaraokeStyle: React.FC<{
                 transition: 'color 0.1s, opacity 0.1s',
               }}
             >
-              {w.word}
+              {padWord(w.word)}
             </span>
           );
         })}
@@ -205,7 +211,7 @@ const CapcutStyle: React.FC<{
                 transform: `scale(${scale})`,
               }}
             >
-              {w.word}
+              {padWord(w.word)}
             </span>
           );
         })}
@@ -462,7 +468,7 @@ const GlossyStyle: React.FC<{
                 transition: 'color 0.12s ease',
               }}
             >
-              {w.word}
+              {padWord(w.word)}
             </span>
           );
         })}
@@ -549,7 +555,7 @@ const NeonStyle: React.FC<{
                 filter: `brightness(${glowIntensity})`,
               }}
             >
-              {w.word}
+              {padWord(w.word)}
             </span>
           );
         })}
@@ -626,7 +632,7 @@ const TypewriterStyle: React.FC<{
                   letterSpacing: config.letterSpacing,
                 }}
               >
-                {w.word}
+                {padWord(w.word)}
               </span>
               {isLastRevealed && (
                 <span
@@ -736,7 +742,7 @@ const GlitchStyle: React.FC<{
                 transition: 'color 0.05s',
               }}
             >
-              {w.word}
+              {padWord(w.word)}
             </span>
           );
         })}
