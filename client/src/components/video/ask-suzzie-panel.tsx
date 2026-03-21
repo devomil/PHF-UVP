@@ -102,10 +102,13 @@ export function AskSuzziePanel({ sceneContext, onApplyVisualDirection, onApplyPr
     }
   };
 
+  const stopProp = (e: React.MouseEvent) => e.stopPropagation();
+
   if (!isOpen) {
     return (
       <button
-        onClick={() => setIsOpen(true)}
+        type="button"
+        onClick={(e) => { e.stopPropagation(); setIsOpen(true); }}
         className="fixed bottom-6 right-6 z-50 flex items-center gap-2 px-4 py-2.5 rounded-full shadow-lg transition-all duration-200 hover:scale-105 hover:shadow-xl"
         style={{
           background: "linear-gradient(135deg, rgba(124,58,237,0.9), rgba(168,85,247,0.9))",
@@ -124,6 +127,8 @@ export function AskSuzziePanel({ sceneContext, onApplyVisualDirection, onApplyPr
   return (
     <div
       className="fixed bottom-6 right-6 z-50 flex flex-col rounded-2xl shadow-2xl overflow-hidden"
+      onClick={stopProp}
+      onMouseDown={stopProp}
       style={{
         width: "380px",
         height: "480px",
