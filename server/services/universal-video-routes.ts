@@ -813,7 +813,7 @@ router.delete('/projects/:projectId', isAuthenticated, async (req: Request, res:
 // Ask Suzzie (Claude AI) - dual mode: visual direction generation + general assistant
 router.post('/ask-suzzie', isAuthenticated, async (req: Request, res: Response) => {
   try {
-    const { mode, question, conversationHistory, narration, sceneType, projectTitle, workflowPath, matchedAssets, selectedProduct, artPresetId, artPresetName, visualDirection, provider } = req.body;
+    const { mode, question, conversationHistory, narration, sceneType, projectTitle, workflowPath, matchedAssets, selectedProduct, artPresetId, artPresetName, visualDirection, provider, imageAttachment } = req.body;
     
     if (mode === 'assistant') {
       if (!question) {
@@ -821,6 +821,22 @@ router.post('/ask-suzzie', isAuthenticated, async (req: Request, res: Response) 
       }
       
       const truncatedQuestion = String(question).substring(0, 1000);
+      let hasImage = false;
+      if (imageAttachment && imageAttachment.base64 && imageAttachment.mediaType) {
+        const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+        if (!allowedTypes.includes(imageAttachment.mediaType)) {
+          return res.status(400).json({ success: false, error: 'Unsupported image format. Use JPEG, PNG, or WebP.' });
+        }
+        const base64Len = typeof imageAttachment.base64 === 'string' ? imageAttachment.base64.length : 0;
+        const estimatedBytes = Math.ceil(base64Len * 0.75);
+        if (estimatedBytes > 10 * 1024 * 1024) {
+          return res.status(413).json({ success: false, error: 'Image too large. Maximum size is 10MB.' });
+        }
+        if (base64Len < 100 || !/^[A-Za-z0-9+/=]+$/.test(imageAttachment.base64.substring(0, 200))) {
+          return res.status(400).json({ success: false, error: 'Invalid image data.' });
+        }
+        hasImage = true;
+      }
       
       const { llmClient } = await import('../services/piapi-llm-client');
       const { buildSuzzieSystemPrompt } = await import('../services/suzzie-knowledge-base');
@@ -829,27 +845,37 @@ router.post('/ask-suzzie', isAuthenticated, async (req: Request, res: Response) 
         return res.status(500).json({ success: false, error: 'AI service not configured' });
       }
       
-      console.log(`[AskSuzzie:Assistant] Question: "${truncatedQuestion.substring(0, 80)}..." | Scene: ${sceneType || 'none'} | Art: ${artPresetName || 'none'} | History: ${Array.isArray(conversationHistory) ? conversationHistory.length : 0} msgs`);
+      console.log(`[AskSuzzie:Assistant] Question: "${truncatedQuestion.substring(0, 80)}..." | Scene: ${sceneType || 'none'} | Art: ${artPresetName || 'none'} | History: ${Array.isArray(conversationHistory) ? conversationHistory.length : 0} msgs | Image: ${hasImage ? 'yes' : 'no'}`);
       
       const systemPrompt = buildSuzzieSystemPrompt({
         narration, sceneType, artPresetId, artPresetName, visualDirection, projectTitle, provider,
       });
       
-      let llmMessages: Array<{ role: 'user' | 'assistant'; content: string }>;
+      let llmMessages: any[];
       if (Array.isArray(conversationHistory) && conversationHistory.length > 1) {
         const maxHistory = conversationHistory.slice(-10);
-        llmMessages = maxHistory.map((m: any) => ({
+        llmMessages = maxHistory.map((m: any, idx: number) => ({
           role: m.role === 'assistant' ? 'assistant' as const : 'user' as const,
           content: String(m.content).substring(0, 2000),
         }));
       } else {
-        llmMessages = [{ role: 'user', content: truncatedQuestion }];
+        llmMessages = [{ role: 'user' as const, content: truncatedQuestion }];
+      }
+      
+      if (hasImage) {
+        const lastMsg = llmMessages[llmMessages.length - 1];
+        if (lastMsg && lastMsg.role === 'user') {
+          lastMsg.content = [
+            { type: 'image' as const, mediaType: imageAttachment.mediaType, base64Data: imageAttachment.base64 },
+            { type: 'text' as const, text: typeof lastMsg.content === 'string' ? lastMsg.content : truncatedQuestion },
+          ];
+        }
       }
       
       const llmResult = await llmClient.createChatCompletion({
         systemPrompt,
         messages: llmMessages,
-        maxTokens: 1200,
+        maxTokens: 1500,
       });
       
       const text = llmResult.text || '';

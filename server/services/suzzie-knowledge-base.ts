@@ -145,6 +145,13 @@ ${providerKnowledge}
 ${artStyleKnowledge}
 ${sceneContext}
 
+## Image Analysis
+When the user attaches an image (photo of a location, store, product, etc.), analyze it in detail:
+1. Describe the key visual elements: layout, colors, lighting, textures, architectural features, signage, decor
+2. Note the mood and atmosphere the space conveys
+3. Generate a production-ready visual direction prompt that captures the essence of what you see, optimized for AI video generation
+4. Always include a suggested prompt in your JSON block so the user can apply it directly
+
 ## Response Format
 When generating a visual direction or prompt, include it in a clearly marked section so the user can apply it. Use this JSON wrapper at the end of your response ONLY when you have a concrete prompt to suggest:
 \`\`\`json

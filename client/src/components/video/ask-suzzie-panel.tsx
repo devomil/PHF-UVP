@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Sparkles, X, Send, Loader2, Wand2, Zap, HelpCircle, ChevronRight } from "lucide-react";
+import { Sparkles, X, Send, Loader2, Wand2, Zap, HelpCircle, ChevronRight, Paperclip, ImageIcon } from "lucide-react";
 
 interface SuzzieSceneContext {
   narration?: string;
@@ -11,11 +11,19 @@ interface SuzzieSceneContext {
   projectTitle?: string;
 }
 
+interface ImageAttachment {
+  base64: string;
+  mediaType: string;
+  previewUrl: string;
+  fileName: string;
+}
+
 interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   suggestedPrompt?: string;
   suggestedProvider?: string;
+  imagePreviewUrl?: string;
 }
 
 interface AskSuzziePanelProps {
@@ -37,8 +45,10 @@ export function AskSuzziePanel({ sceneContext, onApplyVisualDirection, onApplyPr
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [attachment, setAttachment] = useState<ImageAttachment | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -50,11 +60,44 @@ export function AskSuzziePanel({ sceneContext, onApplyVisualDirection, onApplyPr
     }
   }, [isOpen]);
 
-  const sendMessage = useCallback(async (text: string) => {
-    if (!text.trim() || isLoading) return;
+  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.match(/^image\/(jpeg|png|webp)$/)) {
+      setMessages(prev => [...prev, { role: "assistant", content: "Please attach a JPEG, PNG, or WebP image." }]);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setMessages(prev => [...prev, { role: "assistant", content: "That image is too large. Please use an image under 10MB." }]);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
 
-    const userMessage: ChatMessage = { role: "user", content: text.trim() };
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      const base64 = dataUrl.split(",")[1];
+      const mediaType = file.type;
+      setAttachment({ base64, mediaType, previewUrl: dataUrl, fileName: file.name });
+    };
+    reader.readAsDataURL(file);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }, []);
+
+  const removeAttachment = useCallback(() => setAttachment(null), []);
+
+  const sendMessage = useCallback(async (text: string) => {
+    if ((!text.trim() && !attachment) || isLoading) return;
+
+    const currentAttachment = attachment;
+    const userMessage: ChatMessage = {
+      role: "user",
+      content: text.trim() || (currentAttachment ? "What do you see in this image? Describe the environment and suggest a visual direction prompt." : ""),
+      imagePreviewUrl: currentAttachment?.previewUrl,
+    };
     setInput("");
+    setAttachment(null);
     setIsLoading(true);
 
     let updatedMessages: ChatMessage[] = [];
@@ -79,7 +122,7 @@ export function AskSuzziePanel({ sceneContext, onApplyVisualDirection, onApplyPr
         credentials: "include",
         body: JSON.stringify({
           mode: "assistant",
-          question: text.trim(),
+          question: userMessage.content,
           conversationHistory,
           narration: sceneContext.narration,
           sceneType: sceneContext.sceneType,
@@ -88,6 +131,12 @@ export function AskSuzziePanel({ sceneContext, onApplyVisualDirection, onApplyPr
           visualDirection: sceneContext.visualDirection,
           provider: sceneContext.provider,
           projectTitle: sceneContext.projectTitle,
+          ...(currentAttachment ? {
+            imageAttachment: {
+              base64: currentAttachment.base64,
+              mediaType: currentAttachment.mediaType,
+            },
+          } : {}),
         }),
       });
 
@@ -108,7 +157,7 @@ export function AskSuzziePanel({ sceneContext, onApplyVisualDirection, onApplyPr
     } finally {
       setIsLoading(false);
     }
-  }, [isLoading, sceneContext]);
+  }, [isLoading, sceneContext, attachment]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -224,6 +273,11 @@ export function AskSuzziePanel({ sceneContext, onApplyVisualDirection, onApplyPr
                     }
               }
             >
+              {msg.imagePreviewUrl && (
+                <div className="mb-2 rounded-lg overflow-hidden" style={{ border: "1px solid rgba(255,255,255,0.1)" }}>
+                  <img src={msg.imagePreviewUrl} alt="Attached" className="w-full max-h-[140px] object-cover" />
+                </div>
+              )}
               <div className="whitespace-pre-wrap text-[13px]">{msg.content}</div>
 
               {msg.suggestedPrompt && (
@@ -302,19 +356,50 @@ export function AskSuzziePanel({ sceneContext, onApplyVisualDirection, onApplyPr
         className="px-3 py-3 shrink-0"
         style={{ borderTop: "1px solid rgba(124,58,237,0.15)", background: "rgba(10,5,25,0.5)" }}
       >
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          className="hidden"
+          onChange={handleFileSelect}
+        />
+        {attachment && (
+          <div className="mb-2 flex items-center gap-2 px-2 py-1.5 rounded-lg" style={{ background: "rgba(124,58,237,0.1)", border: "1px solid rgba(124,58,237,0.2)" }}>
+            <img src={attachment.previewUrl} alt="Attachment" className="w-10 h-10 rounded object-cover" />
+            <div className="flex-1 min-w-0">
+              <div className="text-[10px] text-white/70 truncate">{attachment.fileName}</div>
+              <div className="text-[9px] text-white/40 flex items-center gap-1">
+                <ImageIcon className="w-2.5 h-2.5" />
+                Image attached
+              </div>
+            </div>
+            <button onClick={removeAttachment} className="p-1 rounded hover:bg-white/10 transition-colors">
+              <X className="w-3 h-3 text-white/50" />
+            </button>
+          </div>
+        )}
         <div
-          className="flex items-end gap-2 rounded-xl px-3 py-2"
+          className="flex items-end gap-1.5 rounded-xl px-3 py-2"
           style={{
             background: "rgba(255,255,255,0.05)",
             border: "1px solid rgba(124,58,237,0.2)",
           }}
         >
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isLoading}
+            className="p-1.5 rounded-lg transition-all disabled:opacity-30 hover:bg-purple-600/30 shrink-0 mb-0.5"
+            title="Attach an image"
+          >
+            <Paperclip className="w-3.5 h-3.5" style={{ color: attachment ? "rgb(167,139,250)" : "rgba(167,139,250,0.5)" }} />
+          </button>
           <textarea
             ref={inputRef as any}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Ask Suzzie anything..."
+            placeholder={attachment ? "Describe what you'd like Suzzie to do with this image..." : "Ask Suzzie anything..."}
             disabled={isLoading}
             rows={2}
             className="flex-1 bg-transparent text-xs text-white placeholder-white/30 outline-none disabled:opacity-50 resize-none"
@@ -322,7 +407,7 @@ export function AskSuzziePanel({ sceneContext, onApplyVisualDirection, onApplyPr
           />
           <button
             onClick={() => sendMessage(input)}
-            disabled={!input.trim() || isLoading}
+            disabled={(!input.trim() && !attachment) || isLoading}
             className="p-1.5 rounded-lg transition-all disabled:opacity-30 hover:bg-purple-600/30 shrink-0 mb-0.5"
           >
             <Send className="w-3.5 h-3.5" style={{ color: "rgba(167,139,250,0.8)" }} />
