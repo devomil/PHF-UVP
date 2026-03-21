@@ -1291,12 +1291,16 @@ const MicroSceneBackground: React.FC<{
   const anyMsHasOverlays = microScenes.some(ms => ms.overlayItems && ms.overlayItems.length > 0);
 
   if (hasAssembledClip) {
+    const assemblyDurationSec = assemblyManifest!.totalDurationSec || totalDuration;
+    const assemblyFrames = Math.round(assemblyDurationSec * fps);
+    const needsLoop = assemblyFrames < totalSceneFrames - 2;
     return (
       <AbsoluteFill>
         <SafeVideo
           src={assemblyManifest!.assembledClipUrl!}
           style={{ width: '100%', height: '100%', objectFit: 'cover' }}
           muted
+          loopDurationInFrames={needsLoop ? assemblyFrames : undefined}
           fallback={fallback}
         />
         {anyMsHasOverlays && (() => {
@@ -2141,18 +2145,26 @@ export const UniversalVideoComposition: React.FC<UniversalVideoProps> = ({
           )}
           
           {/* Custom user-positioned image overlays (drag-and-drop via SceneOverlayEditor) */}
-          {scene.overlayItems?.map((overlay, overlayIdx) => (
-            <CustomImageOverlay
-              key={`custom-overlay-${scene.id}-${overlayIdx}`}
-              url={overlay.url}
-              x={overlay.x}
-              y={overlay.y}
-              width={overlay.width}
-              height={overlay.height}
-              opacity={overlay.opacity}
-              durationInFrames={durationInFrames}
-            />
-          ))}
+          {/* Skip scene-level overlays when micro-scenes handle their own overlays
+              to prevent carryover (scene-level renders for full duration, micro-scene
+              overlays are scoped to their time window by MicroSceneOverlayCompositor) */}
+          {(() => {
+            const hasMicroScenes = scene.microScenes && scene.microScenes.length > 0;
+            const msHaveOverlays = hasMicroScenes && scene.microScenes!.some((ms: any) => ms.overlayItems && ms.overlayItems.length > 0);
+            if (msHaveOverlays) return null;
+            return scene.overlayItems?.map((overlay, overlayIdx) => (
+              <CustomImageOverlay
+                key={`custom-overlay-${scene.id}-${overlayIdx}`}
+                url={overlay.url}
+                x={overlay.x}
+                y={overlay.y}
+                width={overlay.width}
+                height={overlay.height}
+                opacity={overlay.opacity}
+                durationInFrames={durationInFrames}
+              />
+            ));
+          })()}
         </AbsoluteFill>
       </Sequence>
     );

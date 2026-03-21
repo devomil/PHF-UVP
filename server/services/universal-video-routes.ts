@@ -3657,21 +3657,6 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
     }
     console.log('[Render] Voiceover ranges recalculated after intro injection:', voiceoverRanges.length, 'ranges');
 
-    // Adjust scene durations to match assembled clip durations
-    // If an assembled clip is shorter than the scene duration, the video will freeze on the last frame
-    for (const scene of preparedProject.scenes as any[]) {
-      if (scene.id === 'intro-scene-auto') continue;
-      const manifest = scene.assemblyManifest;
-      if (manifest && manifest.assembledClipValid && manifest.totalDurationSec > 0) {
-        const assemblyDur = manifest.totalDurationSec;
-        const sceneDur = scene.duration || 5;
-        if (assemblyDur < sceneDur - 0.5) {
-          console.log(`[Render] Scene ${scene.id}: adjusting duration ${sceneDur}s → ${assemblyDur.toFixed(1)}s to match assembled clip`);
-          scene.duration = Math.round(assemblyDur * 10) / 10;
-        }
-      }
-    }
-
     let clearedInstructionOverlays = 0;
     let clearedTraditionalOverlays = 0;
     for (const scene of preparedProject.scenes as any[]) {
