@@ -22,6 +22,7 @@ interface AskSuzziePanelProps {
   sceneContext: SuzzieSceneContext;
   onApplyVisualDirection?: (prompt: string) => void;
   onApplyProvider?: (providerId: string) => void;
+  zIndex?: number;
 }
 
 const QUICK_ACTIONS = [
@@ -30,7 +31,8 @@ const QUICK_ACTIONS = [
   { label: "How to add a logo?", icon: HelpCircle, prompt: "How do I add a logo or watermark to this scene?" },
 ];
 
-export function AskSuzziePanel({ sceneContext, onApplyVisualDirection, onApplyProvider }: AskSuzziePanelProps) {
+export function AskSuzziePanel({ sceneContext, onApplyVisualDirection, onApplyProvider, zIndex }: AskSuzziePanelProps) {
+  const zStyle = zIndex ? { zIndex } : {};
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -110,6 +112,7 @@ export function AskSuzziePanel({ sceneContext, onApplyVisualDirection, onApplyPr
           color: "white",
           backdropFilter: "blur(12px)",
           border: "1px solid rgba(167,139,250,0.3)",
+          ...zStyle,
         }}
       >
         <Sparkles className="w-4 h-4" />
@@ -127,6 +130,7 @@ export function AskSuzziePanel({ sceneContext, onApplyVisualDirection, onApplyPr
         background: "rgba(15,10,30,0.92)",
         backdropFilter: "blur(20px)",
         border: "1px solid rgba(124,58,237,0.25)",
+        ...zStyle,
       }}
     >
       <div
