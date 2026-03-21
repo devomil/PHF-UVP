@@ -2702,23 +2702,25 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                     </div>
                   </div>
                   </div>
-                  <AskSuzziePanel
-                    sceneContext={{
-                      narration: fsMs.narration,
-                      sceneType: scene.type,
-                      artPresetId: effectiveArtPresetId || undefined,
-                      artPresetName: activePreset?.name,
-                      visualDirection: msModalPrompt,
-                      provider: msModalProvider !== "auto" ? msModalProvider : undefined,
-                    }}
-                    onApplyVisualDirection={(prompt) => {
-                      setMsModalPrompt(prompt);
-                      setMsModalEditingPrompt(true);
-                    }}
-                    onApplyProvider={(providerId) => {
-                      setMsModalProvider(providerId);
-                    }}
-                  />
+                  <div style={{ position: 'relative', zIndex: 10000 }}>
+                    <AskSuzziePanel
+                      sceneContext={{
+                        narration: fsMs.narration,
+                        sceneType: scene.type,
+                        artPresetId: effectiveArtPresetId || undefined,
+                        artPresetName: activePreset?.name,
+                        visualDirection: msModalPrompt,
+                        provider: msModalProvider !== "auto" ? msModalProvider : undefined,
+                      }}
+                      onApplyVisualDirection={(prompt) => {
+                        setMsModalPrompt(prompt);
+                        setMsModalEditingPrompt(true);
+                      }}
+                      onApplyProvider={(providerId) => {
+                        setMsModalProvider(providerId);
+                      }}
+                    />
+                  </div>
                 </div>
               );
             })()}
