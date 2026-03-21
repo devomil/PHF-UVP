@@ -3158,8 +3158,9 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
         scene.voiceoverDuration = result.duration;
         scene.voiceoverWords = result.words || [];
 
-        const sceneDuration = Math.max(3, Math.round(result.duration + SCENE_PADDING));
+        const sceneDuration = Math.max(3, Math.ceil((result.duration + SCENE_PADDING) * 10) / 10);
         scene.duration = sceneDuration;
+        scene.minDurationForVoiceover = sceneDuration;
         totalCalculatedDuration += sceneDuration;
         console.log(`  Scene ${i} (${scene.type}): duration set to ${sceneDuration}s (audio: ${result.duration.toFixed(1)}s + ${SCENE_PADDING}s padding)`);
       }

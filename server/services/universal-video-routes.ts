@@ -3657,19 +3657,23 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
     }
     console.log('[Render] Voiceover ranges recalculated after intro injection:', voiceoverRanges.length, 'ranges');
 
-    // Extend scene durations to fit voiceover audio — prevents narration from being cut off.
-    // The assembled video clip will loop via SafeVideo to fill any extra time.
+    // Ensure scene durations are never shorter than their voiceover audio.
+    // This is a safety net — voiceover generation already sets durations correctly,
+    // but other processes (assembly, user edits) could shorten them.
+    // The assembled video clip will loop via SafeVideo to fill any extra visual time.
     if (hasPerSceneVoiceover) {
       for (const scene of preparedProject.scenes as any[]) {
         if (scene.id === 'intro-scene-auto') continue;
         const voDur = scene.voiceoverDuration || scene.voiceoverDurationSec || scene.audioDuration;
+        const minDur = scene.minDurationForVoiceover;
         if (voDur && typeof voDur === 'number' && voDur > 0) {
           const sceneDur = scene.duration || 5;
           const bufferSec = 0.5;
-          if (voDur + bufferSec > sceneDur) {
-            const newDur = Math.round((voDur + bufferSec) * 10) / 10;
-            console.log(`[Render] Scene ${scene.id}: extending duration ${sceneDur}s → ${newDur}s to fit voiceover (${voDur.toFixed(1)}s)`);
-            scene.duration = newDur;
+          const requiredDur = Math.ceil((voDur + bufferSec) * 10) / 10;
+          const floor = Math.max(requiredDur, minDur || 0);
+          if (floor > sceneDur) {
+            console.log(`[Render] Scene ${scene.id}: extending duration ${sceneDur}s → ${floor}s to fit voiceover (${voDur.toFixed(1)}s)`);
+            scene.duration = floor;
           }
         }
       }
