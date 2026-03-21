@@ -2129,7 +2129,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
               </div>
             )}
 
-            <div className="space-y-1.5" style={{ maxHeight: "60vh", overflowY: "auto", paddingRight: "4px" }}>
+            <div className="space-y-3" style={{ maxHeight: "60vh", overflowY: "auto", paddingRight: "4px" }}>
               {scene.microScenes.map((ms: any, msIdx: number) => {
                 const isExpanded = expandedMicroScene === msIdx;
                 return (
@@ -2376,10 +2376,10 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                               <textarea
                                 value={msModalPrompt}
                                 onChange={(e) => setMsModalPrompt(e.target.value)}
-                                rows={3}
+                                rows={8}
                                 autoFocus
-                                className="w-full text-xs rounded-lg border px-2.5 py-2 outline-none resize-none"
-                                style={{ borderColor: "rgba(124,58,237,0.3)", color: "white", backgroundColor: "rgba(124,58,237,0.08)" }}
+                                className="w-full text-xs rounded-lg border px-2.5 py-2 outline-none resize-y"
+                                style={{ borderColor: "rgba(124,58,237,0.3)", color: "white", backgroundColor: "rgba(124,58,237,0.08)", minHeight: "120px", maxHeight: "300px" }}
                               />
                               <div className="flex gap-1.5">
                                 <button
@@ -2397,9 +2397,13 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                               </div>
                             </div>
                           ) : (
-                            <p className="text-xs leading-relaxed text-white/60 cursor-pointer hover:text-purple-300 transition-colors" onClick={() => setMsModalEditingPrompt(true)}>
+                            <div
+                              className="text-xs leading-relaxed text-white/60 cursor-pointer hover:text-purple-300 transition-colors overflow-y-auto"
+                              style={{ maxHeight: "120px" }}
+                              onClick={() => setMsModalEditingPrompt(true)}
+                            >
                               {msModalPrompt || "No prompt — click to add"}
-                            </p>
+                            </div>
                           )}
                         </div>
 
@@ -2698,6 +2702,23 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                     </div>
                   </div>
                   </div>
+                  <AskSuzziePanel
+                    sceneContext={{
+                      narration: fsMs.narration,
+                      sceneType: scene.type,
+                      artPresetId: effectiveArtPresetId || undefined,
+                      artPresetName: activePreset?.name,
+                      visualDirection: msModalPrompt,
+                      provider: msModalProvider !== "auto" ? msModalProvider : undefined,
+                    }}
+                    onApplyVisualDirection={(prompt) => {
+                      setMsModalPrompt(prompt);
+                      setMsModalEditingPrompt(true);
+                    }}
+                    onApplyProvider={(providerId) => {
+                      setMsModalProvider(providerId);
+                    }}
+                  />
                 </div>
               );
             })()}
