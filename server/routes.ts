@@ -33,6 +33,8 @@ export async function registerRoutes(app: Express) {
   app.use('/uploads', express.static('uploads'));
   app.use('/test-images', express.static('public/test-images'));
   app.use('/test-videos', express.static('public/test-videos'));
+  app.use('/email-assets', express.static('public'));
+  app.use('/art-presets', express.static('client/public/art-presets'));
 
   try {
     const mod = await import("./services/universal-video-routes");

@@ -58,15 +58,18 @@ export async function sendWelcomeEmail(newUser: {
   if (!initSendGrid()) return;
 
   const firstName = escapeHtml(newUser.firstName || "there");
+  const fullName = escapeHtml([newUser.firstName, newUser.lastName].filter(Boolean).join(" ") || "there");
   const appUrl = process.env.REPLIT_DEV_DOMAIN
     ? `https://${process.env.REPLIT_DEV_DOMAIN}`
     : "https://neuralcut.ai";
+  const assetBase = `${appUrl}/email-assets`;
+  const presetBase = `${appUrl}/art-presets`;
 
   try {
     await sgMail.send({
       to: newUser.email,
       from: { email: FROM_EMAIL, name: "NeuralCut.AI" },
-      subject: `Welcome to NeuralCut.AI — Let's Create Something Amazing`,
+      subject: `Welcome to NeuralCut.AI, ${newUser.firstName || "there"} — Let's Create Something Amazing`,
       html: `
 <!DOCTYPE html>
 <html>
@@ -74,64 +77,117 @@ export async function sendWelcomeEmail(newUser: {
 <body style="margin: 0; padding: 0; background-color: #09090f; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
   <div style="max-width: 600px; margin: 0 auto; padding: 0;">
 
-    <!-- Header with gradient -->
-    <div style="background: linear-gradient(135deg, #1a0533 0%, #0f0f1a 50%, #0a1628 100%); padding: 48px 32px 40px; text-align: center; border-radius: 0 0 0 0;">
-      <div style="margin-bottom: 24px;">
-        <span style="font-size: 36px; font-weight: 800; background: linear-gradient(135deg, #a78bfa, #7c3aed, #6366f1); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; letter-spacing: -0.5px;">NeuralCut.AI</span>
+    <div style="background: linear-gradient(135deg, #1a0533 0%, #0f0f1a 50%, #0a1628 100%); padding: 48px 32px 40px; text-align: center;">
+      <div style="margin-bottom: 28px;">
+        <img src="${assetBase}/neuralcut-full-logo.png" alt="NeuralCut.AI" width="220" style="display: inline-block; max-width: 220px; height: auto;" />
       </div>
-      <h1 style="color: #f1f5f9; font-size: 28px; font-weight: 700; margin: 0 0 12px; line-height: 1.3;">Welcome aboard, ${firstName}!</h1>
+      <h1 style="color: #f1f5f9; font-size: 28px; font-weight: 700; margin: 0 0 8px; line-height: 1.3;">Welcome aboard, ${fullName}!</h1>
       <p style="color: #94a3b8; font-size: 16px; margin: 0; line-height: 1.6;">Your AI-powered video production studio is ready.</p>
+      <div style="margin-top: 20px; display: inline-block; background: rgba(124, 58, 237, 0.15); border: 1px solid rgba(124, 58, 237, 0.3); border-radius: 20px; padding: 6px 16px;">
+        <span style="color: #a78bfa; font-size: 13px;">&#x1F389; Account created for ${escapeHtml(newUser.email)}</span>
+      </div>
     </div>
 
-    <!-- Main content -->
     <div style="background-color: #0f0f1a; padding: 40px 32px;">
 
-      <p style="color: #cbd5e1; font-size: 15px; line-height: 1.7; margin: 0 0 28px;">
-        You've just unlocked access to a platform that turns your ideas into professional-quality videos using cutting-edge AI. Here's how to get started:
+      <p style="color: #cbd5e1; font-size: 15px; line-height: 1.7; margin: 0 0 32px;">
+        Hi ${firstName}! You've just unlocked access to a platform that turns your ideas into professional-quality videos using cutting-edge AI. Here's how to get started:
       </p>
 
-      <!-- Step 1 -->
+      <!--[if mso]><table role="presentation" width="100%"><tr><td><![endif]-->
       <div style="background: linear-gradient(135deg, #1e1b4b 0%, #1a1a2e 100%); border: 1px solid #2d2d54; border-radius: 12px; padding: 24px; margin-bottom: 16px;">
-        <div style="display: flex; align-items: flex-start;">
-          <div style="background: linear-gradient(135deg, #7c3aed, #6366f1); color: white; width: 32px; height: 32px; border-radius: 50%; display: inline-block; text-align: center; line-height: 32px; font-weight: 700; font-size: 14px; margin-right: 16px; flex-shrink: 0;">1</div>
-          <div>
-            <h3 style="color: #e2e8f0; font-size: 16px; font-weight: 600; margin: 0 0 6px;">Create Your First Project</h3>
-            <p style="color: #94a3b8; font-size: 14px; margin: 0; line-height: 1.6;">Click "Create new" in the sidebar and describe your video concept. Our AI will generate a complete scene-by-scene script for you.</p>
-          </div>
-        </div>
+        <table role="presentation" style="width: 100%; border-collapse: collapse;">
+          <tr>
+            <td style="width: 48px; vertical-align: top; padding-right: 16px;">
+              <div style="background: linear-gradient(135deg, #7c3aed, #6366f1); color: white; width: 36px; height: 36px; border-radius: 50%; text-align: center; line-height: 36px; font-weight: 700; font-size: 15px;">1</div>
+            </td>
+            <td style="vertical-align: top;">
+              <h3 style="color: #e2e8f0; font-size: 16px; font-weight: 600; margin: 0 0 6px;">Create Your First Project</h3>
+              <p style="color: #94a3b8; font-size: 14px; margin: 0; line-height: 1.6;">Click "Create new" in the sidebar and describe your video concept. Our AI will generate a complete scene-by-scene script for you.</p>
+            </td>
+          </tr>
+        </table>
       </div>
 
-      <!-- Step 2 -->
       <div style="background: linear-gradient(135deg, #1e1b4b 0%, #1a1a2e 100%); border: 1px solid #2d2d54; border-radius: 12px; padding: 24px; margin-bottom: 16px;">
-        <div style="display: flex; align-items: flex-start;">
-          <div style="background: linear-gradient(135deg, #7c3aed, #6366f1); color: white; width: 32px; height: 32px; border-radius: 50%; display: inline-block; text-align: center; line-height: 32px; font-weight: 700; font-size: 14px; margin-right: 16px; flex-shrink: 0;">2</div>
-          <div>
-            <h3 style="color: #e2e8f0; font-size: 16px; font-weight: 600; margin: 0 0 6px;">Choose Your Visual Style</h3>
-            <p style="color: #94a3b8; font-size: 14px; margin: 0; line-height: 1.6;">Pick from 9 art presets — 3D Illustration, Cinematic Realism, Watercolor, and more. Each one transforms how your entire video looks and feels.</p>
-          </div>
-        </div>
+        <table role="presentation" style="width: 100%; border-collapse: collapse;">
+          <tr>
+            <td style="width: 48px; vertical-align: top; padding-right: 16px;">
+              <div style="background: linear-gradient(135deg, #7c3aed, #6366f1); color: white; width: 36px; height: 36px; border-radius: 50%; text-align: center; line-height: 36px; font-weight: 700; font-size: 15px;">2</div>
+            </td>
+            <td style="vertical-align: top;">
+              <h3 style="color: #e2e8f0; font-size: 16px; font-weight: 600; margin: 0 0 6px;">Choose Your Visual Style</h3>
+              <p style="color: #94a3b8; font-size: 14px; margin: 0; line-height: 1.6;">Pick from 9 stunning art presets. Each one completely transforms how your video looks and feels.</p>
+            </td>
+          </tr>
+        </table>
       </div>
 
-      <!-- Step 3 -->
-      <div style="background: linear-gradient(135deg, #1e1b4b 0%, #1a1a2e 100%); border: 1px solid #2d2d54; border-radius: 12px; padding: 24px; margin-bottom: 16px;">
-        <div style="display: flex; align-items: flex-start;">
-          <div style="background: linear-gradient(135deg, #7c3aed, #6366f1); color: white; width: 32px; height: 32px; border-radius: 50%; display: inline-block; text-align: center; line-height: 32px; font-weight: 700; font-size: 14px; margin-right: 16px; flex-shrink: 0;">3</div>
-          <div>
-            <h3 style="color: #e2e8f0; font-size: 16px; font-weight: 600; margin: 0 0 6px;">Generate & Render</h3>
-            <p style="color: #94a3b8; font-size: 14px; margin: 0; line-height: 1.6;">Generate AI video clips for each scene, add voiceover and music, then render your finished video — all within the platform.</p>
-          </div>
-        </div>
+      <div style="background: linear-gradient(135deg, #1e1b4b 0%, #1a1a2e 100%); border: 1px solid #2d2d54; border-radius: 12px; padding: 24px; margin-bottom: 24px;">
+        <table role="presentation" style="width: 100%; border-collapse: collapse;">
+          <tr>
+            <td style="width: 48px; vertical-align: top; padding-right: 16px;">
+              <div style="background: linear-gradient(135deg, #7c3aed, #6366f1); color: white; width: 36px; height: 36px; border-radius: 50%; text-align: center; line-height: 36px; font-weight: 700; font-size: 15px;">3</div>
+            </td>
+            <td style="vertical-align: top;">
+              <h3 style="color: #e2e8f0; font-size: 16px; font-weight: 600; margin: 0 0 6px;">Generate &amp; Render</h3>
+              <p style="color: #94a3b8; font-size: 14px; margin: 0; line-height: 1.6;">Generate AI video clips for each scene, add voiceover and music, then render your finished video &mdash; all within the platform.</p>
+            </td>
+          </tr>
+        </table>
       </div>
 
-      <!-- Pro tip -->
+      <div style="margin: 32px 0;">
+        <h3 style="color: #a78bfa; font-size: 14px; font-weight: 600; margin: 0 0 4px; text-transform: uppercase; letter-spacing: 1px;">&#x1F3A8; Art Style Presets</h3>
+        <p style="color: #94a3b8; font-size: 13px; margin: 0 0 16px;">Choose from 9 visual styles to define the look of your entire video</p>
+        <table role="presentation" style="width: 100%; border-collapse: collapse;">
+          <tr>
+            <td style="width: 33.33%; padding: 4px;">
+              <img src="${presetBase}/3d-illustration.png" alt="3D Illustration" width="168" style="width: 100%; border-radius: 8px; display: block;" />
+              <p style="color: #cbd5e1; font-size: 11px; text-align: center; margin: 6px 0 0;">3D Illustration</p>
+            </td>
+            <td style="width: 33.33%; padding: 4px;">
+              <img src="${presetBase}/cinematic-realism.png" alt="Cinematic Realism" width="168" style="width: 100%; border-radius: 8px; display: block;" />
+              <p style="color: #cbd5e1; font-size: 11px; text-align: center; margin: 6px 0 0;">Cinematic Realism</p>
+            </td>
+            <td style="width: 33.33%; padding: 4px;">
+              <img src="${presetBase}/watercolor.png" alt="Watercolor" width="168" style="width: 100%; border-radius: 8px; display: block;" />
+              <p style="color: #cbd5e1; font-size: 11px; text-align: center; margin: 6px 0 0;">Watercolor</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="width: 33.33%; padding: 4px;">
+              <img src="${presetBase}/claymation.png" alt="Claymation" width="168" style="width: 100%; border-radius: 8px; display: block;" />
+              <p style="color: #cbd5e1; font-size: 11px; text-align: center; margin: 6px 0 0;">Claymation</p>
+            </td>
+            <td style="width: 33.33%; padding: 4px;">
+              <img src="${presetBase}/neon-futuristic.png" alt="Neon Futuristic" width="168" style="width: 100%; border-radius: 8px; display: block;" />
+              <p style="color: #cbd5e1; font-size: 11px; text-align: center; margin: 6px 0 0;">Neon Futuristic</p>
+            </td>
+            <td style="width: 33.33%; padding: 4px;">
+              <img src="${presetBase}/minimalist-flat.png" alt="Minimalist Flat" width="168" style="width: 100%; border-radius: 8px; display: block;" />
+              <p style="color: #cbd5e1; font-size: 11px; text-align: center; margin: 6px 0 0;">Minimalist Flat</p>
+            </td>
+          </tr>
+        </table>
+      </div>
+
       <div style="background: linear-gradient(135deg, #0c1a0c 0%, #0f1a0f 100%); border: 1px solid #1a3a1a; border-radius: 12px; padding: 20px 24px; margin: 28px 0;">
-        <p style="color: #4ade80; font-size: 13px; font-weight: 600; margin: 0 0 6px; text-transform: uppercase; letter-spacing: 0.5px;">Pro Tip</p>
-        <p style="color: #86efac; font-size: 14px; margin: 0; line-height: 1.6;">Try Ask Suzzie — your AI creative assistant. She can help write visual directions, recommend the best AI providers for your scene, and guide you through every step.</p>
+        <table role="presentation" style="width: 100%; border-collapse: collapse;">
+          <tr>
+            <td style="width: 36px; vertical-align: top; padding-right: 12px;">
+              <span style="font-size: 24px;">&#x1F4A1;</span>
+            </td>
+            <td>
+              <p style="color: #4ade80; font-size: 13px; font-weight: 600; margin: 0 0 6px; text-transform: uppercase; letter-spacing: 0.5px;">Pro Tip</p>
+              <p style="color: #86efac; font-size: 14px; margin: 0; line-height: 1.6;">Try <strong>Ask Suzzie</strong> &mdash; your AI creative assistant. She can help write visual directions, recommend the best AI providers for your scene, and guide you through every step.</p>
+            </td>
+          </tr>
+        </table>
       </div>
 
-      <!-- CTA Button -->
       <div style="text-align: center; margin: 36px 0 20px;">
-        <a href="${appUrl}/projects/new" style="display: inline-block; background: linear-gradient(135deg, #7c3aed, #6366f1); color: white; font-size: 16px; font-weight: 600; text-decoration: none; padding: 14px 40px; border-radius: 10px; letter-spacing: 0.3px;">Start Creating</a>
+        <a href="${appUrl}/projects/new" style="display: inline-block; background: linear-gradient(135deg, #7c3aed, #6366f1); color: white; font-size: 16px; font-weight: 600; text-decoration: none; padding: 16px 48px; border-radius: 10px; letter-spacing: 0.3px; box-shadow: 0 4px 20px rgba(124, 58, 237, 0.4);">&#x1F680; Start Creating</a>
       </div>
 
       <p style="color: #64748b; font-size: 13px; text-align: center; margin: 0; line-height: 1.6;">
@@ -139,8 +195,8 @@ export async function sendWelcomeEmail(newUser: {
       </p>
     </div>
 
-    <!-- Footer -->
     <div style="background-color: #080810; padding: 28px 32px; text-align: center; border-top: 1px solid #1e1e2e;">
+      <img src="${assetBase}/neuralcut-icon.png" alt="NeuralCut.AI" width="32" style="display: inline-block; margin-bottom: 12px; opacity: 0.6;" />
       <p style="color: #475569; font-size: 12px; margin: 0 0 8px;">
         <span style="font-weight: 600; color: #64748b;">NeuralCut.AI</span> &mdash; AI-Powered Video Creation
       </p>
@@ -153,7 +209,7 @@ export async function sendWelcomeEmail(newUser: {
 </body>
 </html>
       `,
-      text: `Welcome to NeuralCut.AI, ${newUser.firstName || "there"}!\n\nYour AI-powered video production studio is ready.\n\n1. Create Your First Project — Click "Create new" and describe your video concept.\n2. Choose Your Visual Style — Pick from 9 art presets like 3D Illustration or Cinematic Realism.\n3. Generate & Render — Generate AI video clips, add voiceover and music, then render.\n\nPro Tip: Try Ask Suzzie, your AI creative assistant, for help with visual directions and provider recommendations.\n\nStart creating: ${appUrl}/projects/new\n\nReply to this email if you have any questions.\n\n— NeuralCut.AI`,
+      text: `Welcome to NeuralCut.AI, ${fullName}!\n\nYour AI-powered video production studio is ready.\n\nAccount created for: ${newUser.email}\n\n1. Create Your First Project — Click "Create new" and describe your video concept.\n2. Choose Your Visual Style — Pick from 9 art presets like 3D Illustration, Cinematic Realism, Watercolor, Claymation, and more.\n3. Generate & Render — Generate AI video clips, add voiceover and music, then render.\n\nPro Tip: Try Ask Suzzie, your AI creative assistant, for help with visual directions and provider recommendations.\n\nStart creating: ${appUrl}/projects/new\n\nReply to this email if you have any questions.\n\n— NeuralCut.AI`,
     });
     console.log(`[Notifications] Welcome email sent to ${newUser.email}`);
   } catch (err: any) {
