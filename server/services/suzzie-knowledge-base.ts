@@ -99,7 +99,8 @@ const WORKFLOW_GUIDANCE = `## Workflow Guidance
 - Be concrete and specific — describe what we literally SEE
 - Include: subject, setting, lighting, mood, camera angle
 - Avoid abstract concepts like "journey" or "transformation"
-- For stylized presets, always include the style marker (e.g., "Pixar-style 3D animated...")
+- CRITICAL: Always match the project's selected Art Style preset. If the art style is "Scientific / Medical", write prompts in a clinical/scientific visual style. If "Watercolor", describe scenes in watercolor terms. If "3D Illustration", use 3D animated language. NEVER default to "Pixar-style 3D" unless the actual selected preset is "3D Illustration".
+- The art style prefix should match the EXACT selected preset — e.g., "Scientific medical visualization style...", "Cinematic realistic...", "Watercolor painted...", "Claymation stop-motion..."
 - Keep it 2-4 sentences (40-80 words) for best results
 
 ### Provider Selection Tips
@@ -119,7 +120,7 @@ export function buildSuzzieSystemPrompt(context: SuzzieSceneContext): string {
     sceneContext = `\n## Current Scene Context`;
     if (context.projectTitle) sceneContext += `\nProject: "${context.projectTitle}"`;
     if (context.sceneType) sceneContext += `\nScene Type: ${context.sceneType}`;
-    if (context.artPresetName) sceneContext += `\nArt Style: ${context.artPresetName}`;
+    if (context.artPresetName) sceneContext += `\nArt Style: ${context.artPresetName} (IMPORTANT: All suggested prompts MUST match this art style. Do NOT use a different style like "Pixar 3D" if the selected style is "${context.artPresetName}".)`;
     if (context.provider) sceneContext += `\nSelected Provider: ${context.provider}`;
     if (context.narration) sceneContext += `\nNarration: "${context.narration}"`;
     if (context.visualDirection) sceneContext += `\nCurrent Visual Direction: "${context.visualDirection}"`;

@@ -1458,15 +1458,19 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
           <textarea
             ref={narrationRef}
             value={editValues.narration}
-            onChange={(e) => setEditValues({ ...editValues, narration: e.target.value })}
-            disabled={!isEditing}
-            rows={3}
-            className="w-full text-sm rounded-lg border px-3 py-2 bg-transparent outline-none resize-none disabled:opacity-70"
-            style={{
-              borderColor: isEditing ? "rgba(124,58,237,0.3)" : "var(--border-subtle)",
-              color: "var(--text-primary)",
-              backgroundColor: isEditing ? "rgba(124,58,237,0.05)" : "transparent",
+            onChange={(e) => {
+              if (!isEditing) setIsEditing(true);
+              setEditValues({ ...editValues, narration: e.target.value });
             }}
+            rows={3}
+            className="w-full text-sm rounded-lg border px-3 py-2 bg-transparent outline-none resize-none"
+            style={{
+              borderColor: "rgba(124,58,237,0.3)",
+              color: "var(--text-primary)",
+              backgroundColor: "rgba(124,58,237,0.05)",
+              cursor: "text",
+            }}
+            placeholder="Enter the voiceover narration for this scene..."
           />
         </div>
 
@@ -1514,15 +1518,19 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
           <textarea
             ref={visualDirectionRef}
             value={editValues.visualDirection}
-            onChange={(e) => setEditValues({ ...editValues, visualDirection: e.target.value })}
-            disabled={!isEditing}
-            rows={3}
-            className="w-full text-sm rounded-lg border px-3 py-2 bg-transparent outline-none resize-none disabled:opacity-70"
-            style={{
-              borderColor: isEditing ? "rgba(124,58,237,0.3)" : "var(--border-subtle)",
-              color: "var(--text-primary)",
-              backgroundColor: isEditing ? "rgba(124,58,237,0.05)" : "transparent",
+            onChange={(e) => {
+              if (!isEditing) setIsEditing(true);
+              setEditValues({ ...editValues, visualDirection: e.target.value });
             }}
+            rows={3}
+            className="w-full text-sm rounded-lg border px-3 py-2 bg-transparent outline-none resize-none"
+            style={{
+              borderColor: "rgba(124,58,237,0.3)",
+              color: "var(--text-primary)",
+              backgroundColor: "rgba(124,58,237,0.05)",
+              cursor: "text",
+            }}
+            placeholder="Describe what should appear in this video scene..."
           />
           {isEditing && referenceImageUrls.length > 0 && (() => {
             const multiImg = getMultiImageSupport(provider === "auto" ? "" : provider);

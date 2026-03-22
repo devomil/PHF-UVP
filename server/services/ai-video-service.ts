@@ -88,6 +88,11 @@ const TIER_PROVIDER_VERSIONS: Record<string, Record<string, string>> = {
     premium: 'wan-2.6',
     standard: 'wan-2.6',
   },
+  sora: {
+    ultra: 'sora-2-pro',
+    premium: 'sora-2',
+    standard: 'sora-2',
+  },
   runway: {
     ultra: 'runway-4.5',
     premium: 'runway-4.5',
@@ -685,7 +690,7 @@ class AIVideoService {
       }
       
       if (fallbackProvider && !isProviderAvailable(fallbackProvider)) {
-        fallbackProvider = configuredProviders[1]?.split('-')[0] || configuredProviders[0]?.split('-')[0] || 'hailuo';
+        fallbackProvider = configuredProviders[1]?.split('-')[0] || configuredProviders[0]?.split('-')[0] || 'kling';
       }
       
       const providerOrder: string[] = [primaryProvider];

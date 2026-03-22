@@ -88,7 +88,9 @@ PROVIDER SPECIALIZATIONS:
   * Runway Act Two: Character performance and acting specialization. Best for emotional scenes, testimonials, character reactions, dialogue, and human performance.
 - KLING: Best for human subjects, people, faces, talking heads, testimonials. Natural human movement and expressions. Kling 2.6 adds native audio and lip-sync.
 - LUMA: Best for product reveals, product shots, close-ups of objects, commercial product showcases.
-- HAILUO: Best for B-roll, ambient footage, nature scenes, establishing shots, background visuals. Cost-effective for simpler content.
+- VEO: Best for high-quality cinematic content, sweeping establishing shots, nature footage, and premium B-roll. Produces film-quality visuals. Veo 3.1 available.
+- SORA: Best for creative, cinematic, and artistic content. High-quality generation with strong motion. Sora 2 and Sora 2 Pro available.
+- HAILUO: Lower-tier provider for simple ambient content. Use only as a last resort when quality is not a priority.
 - WAN: Best for text rendering, character consistency, conceptual illustrations, metaphorical visuals. Budget-friendly with good quality.
 - REMOTION: Best for infographics, diagrams, data visualization, step-by-step processes, charts, lists, motion graphics with text overlays. Uses programmatic animation instead of AI video.
 
@@ -111,14 +113,26 @@ For each scene, analyze the narration and visual direction to determine:
 3. Your confidence level (0-100)
 4. Brief reasoning
 
+IMPORTANT PROVIDER PREFERENCE ORDER:
+1. Kling (default for most content, especially human subjects and general scenes)
+2. Runway 4.5 (cinematic, dramatic, emotional content)
+3. Veo (premium B-roll, nature, establishing shots)
+4. Sora (creative, artistic content)
+5. Luma (product reveals)
+6. Wan (text rendering, conceptual)
+7. Remotion (infographics, motion graphics)
+8. Hailuo (ONLY as absolute last resort — avoid recommending this provider)
+
+When in doubt, default to Kling. For fallbacks, prefer Runway 4.5, Sora, or Veo over Hailuo.
+
 Respond with ONLY a JSON array (no markdown, no code blocks):
 [
   {
     "sceneIndex": 0,
     "sceneId": "scene_id",
     "contentClassification": "cinematic|human_subjects|product_reveal|broll|conceptual_explanatory|infographic_diagram|motion_graphics|mixed",
-    "recommendedProvider": "runway|kling|luma|hailuo|wan|remotion",
-    "fallbackProvider": "runway|kling|luma|hailuo|wan|remotion",
+    "recommendedProvider": "runway|kling|luma|veo|sora|wan|remotion",
+    "fallbackProvider": "runway|kling|luma|veo|sora|wan|remotion",
     "confidence": 85,
     "reasoning": "Brief explanation of why this provider is best"
   }
@@ -144,7 +158,7 @@ Respond with ONLY a JSON array (no markdown, no code blocks):
           reasoning: rec.reasoning || 'AI analysis',
           contentClassification: classification,
           visualFormat: this.determineVisualFormat(classification),
-          fallbackProvider: this.validateProvider(rec.fallbackProvider || 'kling'),
+          fallbackProvider: this.validateProvider(rec.fallbackProvider || 'runway'),
         };
       });
     } catch (error) {
@@ -153,10 +167,10 @@ Respond with ONLY a JSON array (no markdown, no code blocks):
     }
   }
 
-  private validateProvider(provider: string): 'runway' | 'kling' | 'luma' | 'hailuo' | 'wan' | 'remotion' {
-    const valid = ['runway', 'kling', 'luma', 'hailuo', 'wan', 'remotion'];
+  private validateProvider(provider: string): string {
+    const valid = ['runway', 'kling', 'luma', 'hailuo', 'wan', 'remotion', 'veo', 'sora'];
     const normalized = (provider || '').toLowerCase().trim();
-    return valid.includes(normalized) ? normalized as any : 'runway';
+    return valid.includes(normalized) ? normalized : 'kling';
   }
 
   resolveRunwayModel(classification: ContentClassification, sceneType: string): string {
@@ -308,7 +322,7 @@ Respond with ONLY a JSON array (no markdown, no code blocks):
   }
 
   private classifySceneByRules(scene: SceneContent): {
-    provider: 'runway' | 'kling' | 'luma' | 'hailuo' | 'wan' | 'remotion';
+    provider: string;
     classification: ContentClassification;
     confidence: number;
     reasoning: string;
@@ -360,14 +374,14 @@ Respond with ONLY a JSON array (no markdown, no code blocks):
       if (conceptualScore >= 1) {
         return { provider: 'wan', classification: 'conceptual_explanatory', confidence: 75, reasoning: 'Explanation scene with conceptual content' };
       }
-      return { provider: 'hailuo', classification: 'broll', confidence: 75, reasoning: 'B-roll/explanation is cost-effective with Hailuo' };
+      return { provider: 'kling', classification: 'broll', confidence: 75, reasoning: 'B-roll content with Kling for high quality' };
     }
 
     const scores = [
       { type: 'cinematic' as const, provider: 'runway' as const, score: cinematicScore * 2 },
       { type: 'human_subjects' as const, provider: 'kling' as const, score: humanScore * 1.5 },
       { type: 'product_reveal' as const, provider: 'luma' as const, score: productScore * 1.8 },
-      { type: 'broll' as const, provider: 'hailuo' as const, score: brollScore * 1.3 },
+      { type: 'broll' as const, provider: 'kling' as const, score: brollScore * 1.3 },
       { type: 'conceptual_explanatory' as const, provider: 'wan' as const, score: conceptualScore * 2.0 },
       { type: 'infographic_diagram' as const, provider: 'remotion' as const, score: infographicScore * 2.5 },
       { type: 'motion_graphics' as const, provider: 'remotion' as const, score: motionGraphicsScore * 2.5 },
@@ -382,7 +396,7 @@ Respond with ONLY a JSON array (no markdown, no code blocks):
       };
     }
 
-    return { provider: 'runway', classification: 'mixed', confidence: 60, reasoning: 'Default to Runway for best quality' };
+    return { provider: 'kling', classification: 'mixed', confidence: 60, reasoning: 'Default to Kling 2.6 for high-quality results' };
   }
 
   async recommendProviderForScene(scene: SceneContent): Promise<ProviderRecommendation> {
