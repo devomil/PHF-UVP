@@ -171,7 +171,7 @@ class VideoGenerationWorker {
       progress: 0,
       prompt: request.prompt,
       fallbackPrompt: request.fallbackPrompt || null,
-      duration: request.duration || 6,
+      duration: Math.round(request.duration || 6),
       aspectRatio: request.aspectRatio || "16:9",
       negativePrompt: request.negativePrompt || null,
       style: request.style || null,
