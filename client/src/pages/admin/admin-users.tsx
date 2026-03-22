@@ -1,13 +1,14 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { AdminLayout } from "./admin-layout";
 import { useState } from "react";
-import { Search, Shield, ShieldCheck, User, MoreVertical, CheckCircle, XCircle, ChevronDown, ChevronRight, DollarSign } from "lucide-react";
+import { Search, Shield, ShieldCheck, User, MoreVertical, CheckCircle, XCircle, ChevronDown, ChevronRight, DollarSign, Trash2 } from "lucide-react";
 
 export default function AdminUsers() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [editingUser, setEditingUser] = useState<string | null>(null);
   const [expandedUser, setExpandedUser] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ["admin-users"],
@@ -34,6 +35,26 @@ export default function AdminUsers() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+      setEditingUser(null);
+    },
+  });
+
+  const deleteUser = useMutation({
+    mutationFn: async (userId: string) => {
+      const res = await fetch(`/api/admin/users/${userId}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to delete user");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-dashboard"] });
+      setConfirmDelete(null);
       setEditingUser(null);
     },
   });
@@ -197,6 +218,37 @@ export default function AdminUsers() {
                             >
                               {u.isActive ? "Deactivate Account" : "Activate Account"}
                             </button>
+                            <div className="border-t my-1" style={{ borderColor: "var(--border-subtle)" }} />
+                            {confirmDelete === u.id ? (
+                              <div className="px-3 py-2">
+                                <p className="text-xs font-medium mb-2" style={{ color: "#ef4444" }}>Delete this user and all their projects?</p>
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={() => deleteUser.mutate(u.id)}
+                                    disabled={deleteUser.isPending}
+                                    className="flex-1 px-2 py-1.5 rounded text-xs font-medium text-white transition-colors"
+                                    style={{ background: "#dc2626" }}
+                                  >
+                                    {deleteUser.isPending ? "Deleting..." : "Confirm"}
+                                  </button>
+                                  <button
+                                    onClick={() => setConfirmDelete(null)}
+                                    className="flex-1 px-2 py-1.5 rounded text-xs font-medium transition-colors"
+                                    style={{ background: "var(--bg-secondary)", color: "var(--text-secondary)" }}
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => setConfirmDelete(u.id)}
+                                className="w-full text-left px-3 py-1.5 text-xs hover:bg-white/5 flex items-center gap-2 transition-colors"
+                                style={{ color: "#ef4444" }}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" /> Delete Account
+                              </button>
+                            )}
                           </div>
                         )}
                       </div>

@@ -1,6 +1,6 @@
 import { Router, Request, Response } from "express";
 import { db } from "../db";
-import { users, universalVideoProjects, videoGenerationJobs, productionLogs, videoProductions } from "../../shared/schema";
+import { users, universalVideoProjects, videoGenerationJobs, productionLogs, videoProductions, mediaAssets, userMediaUploads, brandAssets, brandMediaLibrary, assetLibrary, piapiTestResults, brandSettings, characterLibrary, sceneRegenerationHistory } from "../../shared/schema";
 import { eq, desc, sql, count, and, gte, lte, ne } from "drizzle-orm";
 import { requireRole, isAuthenticated } from "../auth";
 
@@ -225,6 +225,73 @@ router.patch("/users/:userId", async (req: Request, res: Response) => {
     res.json({ success: true, user: updated });
   } catch (error: any) {
     console.error("[Admin] User update error:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.delete("/users/:userId", async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.params;
+    const adminId = (req.user as any)?.id;
+
+    if (userId === adminId) {
+      return res.status(400).json({ success: false, error: "Cannot delete your own account" });
+    }
+
+    const [existing] = await db
+      .select({ id: users.id, email: users.email })
+      .from(users)
+      .where(eq(users.id, userId));
+
+    if (!existing) {
+      return res.status(404).json({ success: false, error: "User not found" });
+    }
+
+    await db.transaction(async (tx) => {
+      const userProjects = await tx
+        .select({ projectId: universalVideoProjects.projectId })
+        .from(universalVideoProjects)
+        .where(eq(universalVideoProjects.ownerId, userId));
+      const projectIds = userProjects.map(p => p.projectId);
+
+      if (projectIds.length > 0) {
+        for (const pid of projectIds) {
+          await tx.delete(sceneRegenerationHistory).where(eq(sceneRegenerationHistory.projectId, pid));
+          await tx.delete(videoGenerationJobs).where(eq(videoGenerationJobs.projectId, pid));
+        }
+      }
+
+      const userProds = await tx
+        .select({ id: videoProductions.id })
+        .from(videoProductions)
+        .where(eq(videoProductions.createdBy, userId));
+
+      if (userProds.length > 0) {
+        for (const prod of userProds) {
+          await tx.delete(productionLogs).where(eq(productionLogs.productionId, prod.id));
+        }
+      }
+      await tx.delete(videoProductions).where(eq(videoProductions.createdBy, userId));
+
+      await tx.delete(brandSettings).where(eq(brandSettings.userId, userId));
+      await tx.delete(characterLibrary).where(eq(characterLibrary.ownerId, userId));
+      await tx.delete(userMediaUploads).where(eq(userMediaUploads.uploadedBy, userId));
+      await tx.delete(universalVideoProjects).where(eq(universalVideoProjects.ownerId, userId));
+
+      await tx.update(mediaAssets).set({ uploadedBy: null }).where(eq(mediaAssets.uploadedBy, userId));
+      await tx.update(brandAssets).set({ uploadedBy: null }).where(eq(brandAssets.uploadedBy, userId));
+      await tx.update(brandMediaLibrary).set({ uploadedBy: null }).where(eq(brandMediaLibrary.uploadedBy, userId));
+      await tx.update(assetLibrary).set({ createdBy: null }).where(eq(assetLibrary.createdBy, userId));
+      await tx.update(piapiTestResults).set({ testedBy: null }).where(eq(piapiTestResults.testedBy, userId));
+      await tx.update(videoGenerationJobs).set({ triggeredBy: null }).where(eq(videoGenerationJobs.triggeredBy, userId));
+
+      await tx.delete(users).where(eq(users.id, userId));
+    });
+
+    console.log(`[Admin] User ${existing.email} (${userId}) deleted by ${adminId}`);
+    res.json({ success: true, message: `User ${existing.email} has been deleted` });
+  } catch (error: any) {
+    console.error("[Admin] User delete error:", error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
