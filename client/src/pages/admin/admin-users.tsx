@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { AdminLayout } from "./admin-layout";
-import { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Search, Shield, ShieldCheck, User, MoreVertical, CheckCircle, XCircle, ChevronDown, ChevronRight, DollarSign, Trash2 } from "lucide-react";
 
 export default function AdminUsers() {
@@ -9,6 +9,21 @@ export default function AdminUsers() {
   const [editingUser, setEditingUser] = useState<string | null>(null);
   const [expandedUser, setExpandedUser] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+
+  const closeMenus = useCallback(() => {
+    setEditingUser(null);
+    setConfirmDelete(null);
+  }, []);
+
+  useEffect(() => {
+    if (!editingUser) return;
+    const handler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest("[data-user-menu]")) closeMenus();
+    };
+    document.addEventListener("click", handler);
+    return () => document.removeEventListener("click", handler);
+  }, [editingUser, closeMenus]);
 
   const { data, isLoading } = useQuery({
     queryKey: ["admin-users"],
@@ -140,8 +155,8 @@ export default function AdminUsers() {
             </thead>
             <tbody>
               {filtered.map((u: any) => (
-                <>
-                  <tr key={u.id} style={{ borderBottom: expandedUser === u.id ? "none" : "1px solid var(--border-subtle)" }} className="cursor-pointer hover:bg-white/[0.02]" onClick={() => setExpandedUser(expandedUser === u.id ? null : u.id)}>
+                <React.Fragment key={u.id}>
+                  <tr style={{ borderBottom: expandedUser === u.id ? "none" : "1px solid var(--border-subtle)" }} className="cursor-pointer hover:bg-white/[0.02]" onClick={() => setExpandedUser(expandedUser === u.id ? null : u.id)}>
                     <td className="pl-3 py-3">
                       {expandedUser === u.id ? (
                         <ChevronDown className="w-3.5 h-3.5" style={{ color: "var(--text-muted)" }} />
@@ -186,7 +201,7 @@ export default function AdminUsers() {
                       {u.createdAt ? new Date(u.createdAt).toLocaleDateString() : "—"}
                     </td>
                     <td className="text-right py-3 px-4" onClick={e => e.stopPropagation()}>
-                      <div className="relative inline-block">
+                      <div className="relative inline-block" data-user-menu>
                         <button
                           onClick={() => setEditingUser(editingUser === u.id ? null : u.id)}
                           className="p-1.5 rounded-lg hover:bg-white/10 transition-colors"
@@ -195,46 +210,65 @@ export default function AdminUsers() {
                         </button>
                         {editingUser === u.id && (
                           <div
-                            className="absolute right-0 top-full mt-1 w-44 rounded-lg border shadow-xl py-1 z-50"
-                            style={{ background: "var(--bg-primary)", borderColor: "var(--border-subtle)" }}
+                            data-user-menu
+                            className="fixed w-52 rounded-xl border shadow-2xl py-2 z-[9999]"
+                            style={{
+                              background: "#1a1a2e",
+                              borderColor: "rgba(255,255,255,0.12)",
+                              right: "80px",
+                              top: "auto",
+                              boxShadow: "0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.06)",
+                            }}
+                            ref={(el) => {
+                              if (el) {
+                                const rect = el.previousElementSibling?.getBoundingClientRect();
+                                if (rect) {
+                                  el.style.top = `${rect.bottom + 4}px`;
+                                  el.style.right = `${window.innerWidth - rect.right}px`;
+                                }
+                              }
+                            }}
                           >
-                            <div className="px-3 py-1.5 text-xs font-medium" style={{ color: "var(--text-muted)" }}>Change Role</div>
+                            <div className="px-3 py-2 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.4)" }}>Role</div>
                             {["user", "employee", "admin"].map(role => (
                               <button
                                 key={role}
                                 onClick={() => updateUser.mutate({ userId: u.id, updates: { role } })}
                                 disabled={u.role === role}
-                                className="w-full text-left px-3 py-1.5 text-xs hover:bg-white/5 disabled:opacity-30 flex items-center gap-2 transition-colors"
-                                style={{ color: "var(--text-secondary)" }}
+                                className="w-full text-left px-3 py-2 text-sm hover:bg-white/10 disabled:opacity-30 flex items-center gap-2.5 transition-colors"
+                                style={{ color: u.role === role ? "rgba(255,255,255,0.3)" : "rgba(255,255,255,0.85)" }}
                               >
-                                {roleIcon(role)} Set as {role}
+                                {roleIcon(role)} <span>Set as {role}</span>
+                                {u.role === role && <CheckCircle className="w-3.5 h-3.5 ml-auto text-green-400" />}
                               </button>
                             ))}
-                            <div className="border-t my-1" style={{ borderColor: "var(--border-subtle)" }} />
+                            <div className="border-t my-1.5 mx-2" style={{ borderColor: "rgba(255,255,255,0.08)" }} />
+                            <div className="px-3 py-2 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.4)" }}>Account</div>
                             <button
                               onClick={() => updateUser.mutate({ userId: u.id, updates: { isActive: !u.isActive } })}
-                              className="w-full text-left px-3 py-1.5 text-xs hover:bg-white/5 transition-colors"
-                              style={{ color: u.isActive ? "#ef4444" : "#10b981" }}
+                              className="w-full text-left px-3 py-2 text-sm hover:bg-white/10 flex items-center gap-2.5 transition-colors"
+                              style={{ color: u.isActive ? "#f87171" : "#34d399" }}
                             >
+                              {u.isActive ? <XCircle className="w-4 h-4" /> : <CheckCircle className="w-4 h-4" />}
                               {u.isActive ? "Deactivate Account" : "Activate Account"}
                             </button>
-                            <div className="border-t my-1" style={{ borderColor: "var(--border-subtle)" }} />
+                            <div className="border-t my-1.5 mx-2" style={{ borderColor: "rgba(255,255,255,0.08)" }} />
                             {confirmDelete === u.id ? (
-                              <div className="px-3 py-2">
-                                <p className="text-xs font-medium mb-2" style={{ color: "#ef4444" }}>Delete this user and all their projects?</p>
+                              <div className="px-3 py-2.5">
+                                <p className="text-xs font-medium mb-2.5" style={{ color: "#f87171" }}>Delete user and all their data?</p>
                                 <div className="flex gap-2">
                                   <button
                                     onClick={() => deleteUser.mutate(u.id)}
                                     disabled={deleteUser.isPending}
-                                    className="flex-1 px-2 py-1.5 rounded text-xs font-medium text-white transition-colors"
+                                    className="flex-1 px-3 py-2 rounded-lg text-xs font-semibold text-white transition-colors hover:opacity-90"
                                     style={{ background: "#dc2626" }}
                                   >
-                                    {deleteUser.isPending ? "Deleting..." : "Confirm"}
+                                    {deleteUser.isPending ? "Deleting..." : "Yes, Delete"}
                                   </button>
                                   <button
                                     onClick={() => setConfirmDelete(null)}
-                                    className="flex-1 px-2 py-1.5 rounded text-xs font-medium transition-colors"
-                                    style={{ background: "var(--bg-secondary)", color: "var(--text-secondary)" }}
+                                    className="flex-1 px-3 py-2 rounded-lg text-xs font-semibold transition-colors hover:bg-white/10"
+                                    style={{ background: "rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.7)" }}
                                   >
                                     Cancel
                                   </button>
@@ -243,10 +277,10 @@ export default function AdminUsers() {
                             ) : (
                               <button
                                 onClick={() => setConfirmDelete(u.id)}
-                                className="w-full text-left px-3 py-1.5 text-xs hover:bg-white/5 flex items-center gap-2 transition-colors"
-                                style={{ color: "#ef4444" }}
+                                className="w-full text-left px-3 py-2 text-sm hover:bg-white/10 flex items-center gap-2.5 transition-colors"
+                                style={{ color: "#f87171" }}
                               >
-                                <Trash2 className="w-3.5 h-3.5" /> Delete Account
+                                <Trash2 className="w-4 h-4" /> Delete Account
                               </button>
                             )}
                           </div>
@@ -294,7 +328,7 @@ export default function AdminUsers() {
                       </td>
                     </tr>
                   )}
-                </>
+                </React.Fragment>
               ))}
               {filtered.length === 0 && (
                 <tr>
