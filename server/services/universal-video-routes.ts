@@ -2775,11 +2775,11 @@ router.post('/projects/:projectId/generate-script', isAuthenticated, async (req:
     }
 
     if (approvedOutline && Array.isArray(approvedOutline) && approvedOutline.length > 0) {
-      const totalSuggested = approvedOutline.reduce((sum: number, ch: any) => sum + (ch.suggestedScenes || 1), 0);
+      const totalSuggested = approvedOutline.reduce((sum: number, ch: any) => sum + (ch.recommendedSceneCount || 3), 0);
       const chapterBoundaries: number[] = [];
       let cumulative = 0;
       for (const ch of approvedOutline) {
-        const ratio = (ch.suggestedScenes || 1) / totalSuggested;
+        const ratio = (ch.recommendedSceneCount || 3) / totalSuggested;
         cumulative += Math.round(ratio * scenes.length);
         chapterBoundaries.push(Math.min(cumulative, scenes.length));
       }

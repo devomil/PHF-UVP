@@ -186,6 +186,8 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
     }
   }, [chapterOutline]);
 
+  const outlineAutoTriggered = useRef(false);
+
   const generateOutlineMutation = useMutation({
     mutationFn: async () => {
       const res = await fetch(`/api/universal-video/projects/${projectId}/generate-outline`, {
@@ -210,6 +212,13 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
       toast({ title: "Error", description: err.message, variant: "destructive" });
     },
   });
+
+  useEffect(() => {
+    if (isLongStory && !chapterOutline && !outlinePhase && !generateOutlineMutation.isPending && !outlineAutoTriggered.current && scenes.length === 0) {
+      outlineAutoTriggered.current = true;
+      generateOutlineMutation.mutate();
+    }
+  }, [isLongStory, chapterOutline, outlinePhase, scenes.length]);
 
   const approveOutlineMutation = useMutation({
     mutationFn: async (chapters: any[]) => {
