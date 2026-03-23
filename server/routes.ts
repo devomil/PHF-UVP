@@ -21,7 +21,7 @@ import { aiMusicService } from "./services/ai-music-service";
 import { getBrandContext } from "./services/brand-settings-service";
 import { analyzeProductImage } from "./services/product-analysis-service";
 import { assetLibrary } from "../shared/schema";
-import { getProjectType } from "../shared/config/project-types";
+import { getProjectType, getContentStructure } from "../shared/config/project-types";
 
 async function analyzeAndStoreProductMedia(projectId: string, mediaUrl: string, brief: string, userId: string, scriptPresets?: any) {
   console.log(`[Routes] Starting product media analysis for project ${projectId}`);
@@ -341,8 +341,13 @@ export async function registerRoutes(app: Express) {
         if (projectType) {
           progressData.projectType = projectType;
         }
-        if (contentStructure) {
-          progressData.contentStructure = contentStructure;
+        if (contentStructure && projectType === 'educational') {
+          const validStructure = getContentStructure(contentStructure);
+          if (validStructure) {
+            progressData.contentStructure = contentStructure;
+          } else {
+            console.warn(`[Routes] Invalid contentStructure "${contentStructure}" for educational project, ignoring`);
+          }
         }
 
         const [project] = await db.insert(universalVideoProjects).values({

@@ -197,6 +197,7 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
   const [mediaMode, setMediaMode] = useState("video");
   const [videoGenerationMode, setVideoGenerationMode] = useState("auto");
   const [artPresetId, setArtPresetId] = useState("auto");
+  const [artPresetUserOverride, setArtPresetUserOverride] = useState(false);
   const [characterConsistency, setCharacterConsistency] = useState(false);
   const [characters, setCharacters] = useState<any[]>([]);
   const [productMediaFile, setProductMediaFile] = useState<File | null>(null);
@@ -227,13 +228,13 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
   }, [artPresetId]);
 
   useEffect(() => {
-    if (projectTypeId === 'educational' && contentStructure) {
+    if (projectTypeId === 'educational' && contentStructure && !artPresetUserOverride) {
       const cs = CONTENT_STRUCTURES.find(s => s.id === contentStructure);
-      if (cs && artPresetId === 'auto') {
+      if (cs) {
         setArtPresetId(cs.defaultArtPreset);
       }
     }
-  }, [contentStructure, projectTypeId]);
+  }, [contentStructure, projectTypeId, artPresetUserOverride]);
 
   const handleProductMediaSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -494,7 +495,7 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
               <button
                 key={pt.id}
                 type="button"
-                onClick={() => setProjectTypeId(pt.id)}
+                onClick={() => { setProjectTypeId(pt.id); setArtPresetUserOverride(false); }}
                 className="text-left rounded-lg border-2 p-3 transition-all duration-200 hover:border-purple-400/50"
                 style={{
                   backgroundColor: projectTypeId === pt.id ? "rgba(139, 92, 246, 0.12)" : "var(--surface)",
@@ -1306,7 +1307,7 @@ function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () => void; 
           <div className="flex gap-2.5 mt-1.5 overflow-x-auto pb-2 -mx-1 px-1" style={{ scrollbarWidth: "thin" }}>
             <button
               type="button"
-              onClick={() => setArtPresetId("")}
+              onClick={() => { setArtPresetId(""); setArtPresetUserOverride(true); }}
               className="flex-shrink-0 w-[100px] rounded-xl border-2 p-2 transition-all duration-200 hover:-translate-y-0.5"
               style={{
                 backgroundColor: !artPresetId ? "rgba(139, 92, 246, 0.15)" : "var(--surface)",
@@ -1328,7 +1329,7 @@ function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () => void; 
               <button
                 type="button"
                 key={preset.id}
-                onClick={() => setArtPresetId(preset.id)}
+                onClick={() => { setArtPresetId(preset.id); setArtPresetUserOverride(true); }}
                 className="flex-shrink-0 w-[100px] rounded-xl border-2 p-2 transition-all duration-200 hover:-translate-y-0.5"
                 style={{
                   backgroundColor: artPresetId === preset.id ? "rgba(139, 92, 246, 0.15)" : "var(--surface)",
