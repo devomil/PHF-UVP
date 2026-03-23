@@ -305,6 +305,8 @@ export interface Scene {
   visualFormat?: VisualFormat;
   contentTag?: string;
   artPresetId?: string;
+  chapterIndex?: number;
+  chapterTitle?: string;
   voiceoverUrl?: string;
   voiceoverDuration?: number;
   voiceoverWords?: import('./config/caption-styles').CaptionWord[];

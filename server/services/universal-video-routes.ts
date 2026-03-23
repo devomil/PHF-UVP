@@ -2766,6 +2766,27 @@ router.post('/projects/:projectId/generate-script', isAuthenticated, async (req:
       scenes = scenes.slice(0, numScenes);
     }
 
+    if (approvedOutline && Array.isArray(approvedOutline) && approvedOutline.length > 0) {
+      let currentChapterIdx = 0;
+      for (let i = 0; i < scenes.length; i++) {
+        const scene = scenes[i] as any;
+        if (scene.type === 'chapter-title' || (scene.name && /^chapter\s/i.test(scene.name))) {
+          if (currentChapterIdx < approvedOutline.length) {
+            scene.chapterIndex = currentChapterIdx;
+            scene.chapterTitle = approvedOutline[currentChapterIdx].title;
+            currentChapterIdx++;
+          }
+        } else if (currentChapterIdx > 0) {
+          scene.chapterIndex = currentChapterIdx - 1;
+          scene.chapterTitle = approvedOutline[currentChapterIdx - 1]?.title || '';
+        } else {
+          scene.chapterIndex = 0;
+          scene.chapterTitle = approvedOutline[0]?.title || '';
+        }
+      }
+      console.log(`[GenerateScript] Tagged ${scenes.length} scenes with ${approvedOutline.length} chapters`);
+    }
+
     projectData.scenes = scenes;
     projectData.progress = {
       ...projectData.progress,

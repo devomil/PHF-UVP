@@ -748,9 +748,23 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
                 const isUploading = uploadingSceneId === sceneId;
                 const showLibrary = librarySceneId === sceneId;
 
+                const showChapterHeader = scene.chapterTitle && (
+                  index === 0 || scenes[index - 1]?.chapterIndex !== scene.chapterIndex
+                );
+
                 return (
+                  <div key={sceneId}>
+                    {showChapterHeader && (
+                      <div className="flex items-center gap-2 mb-2 mt-3 first:mt-0">
+                        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg" style={{ backgroundColor: "rgba(139, 92, 246, 0.12)" }}>
+                          <BookOpen className="w-3.5 h-3.5 text-purple-400" />
+                          <span className="text-xs font-semibold text-purple-400">Chapter {(scene.chapterIndex ?? 0) + 1}</span>
+                        </div>
+                        <span className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>{scene.chapterTitle}</span>
+                        <div className="flex-1 border-t" style={{ borderColor: "var(--border-subtle)" }} />
+                      </div>
+                    )}
                   <div
-                    key={sceneId}
                     className="border rounded-xl overflow-hidden transition-all"
                     style={{ backgroundColor: "rgba(0,0,0,0.15)", borderColor: isEditing ? "rgba(124,58,237,0.4)" : "var(--border-subtle)" }}
                   >
@@ -848,6 +862,7 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
                         onCharactersChange={setProjectCharacters}
                       />
                     )}
+                  </div>
                   </div>
                 );
               })}
@@ -1641,7 +1656,7 @@ function RepurposePanel({ projectId, scenes }: { projectId: string; scenes: any[
       </p>
       <div className="grid grid-cols-2 gap-2">
         <button
-          onClick={() => repurposeMutation.mutate('highlight')}
+          onClick={() => { setRepurposeType('highlight'); repurposeMutation.mutate('highlight'); }}
           disabled={repurposeMutation.isPending}
           className="flex flex-col items-center gap-1.5 p-3 rounded-lg border-2 transition-all hover:border-purple-400/50"
           style={{ borderColor: "var(--border-subtle)", backgroundColor: "var(--surface-elevated)" }}
@@ -1655,7 +1670,7 @@ function RepurposePanel({ projectId, scenes }: { projectId: string; scenes: any[
           <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>Best moments condensed</span>
         </button>
         <button
-          onClick={() => repurposeMutation.mutate('clips')}
+          onClick={() => { setRepurposeType('clips'); repurposeMutation.mutate('clips'); }}
           disabled={repurposeMutation.isPending}
           className="flex flex-col items-center gap-1.5 p-3 rounded-lg border-2 transition-all hover:border-purple-400/50"
           style={{ borderColor: "var(--border-subtle)", backgroundColor: "var(--surface-elevated)" }}
