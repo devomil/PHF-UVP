@@ -236,6 +236,23 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
       return;
     }
 
+    if (file.type.startsWith('video/')) {
+      const video = document.createElement('video');
+      video.preload = 'metadata';
+      video.onloadedmetadata = () => {
+        URL.revokeObjectURL(video.src);
+        if (video.duration > 60) {
+          setProductMediaFile(null);
+          setProductMediaPreview(null);
+          return;
+        }
+        setProductMediaFile(file);
+        setProductMediaPreview(null);
+      };
+      video.src = URL.createObjectURL(file);
+      return;
+    }
+
     setProductMediaFile(file);
 
     if (file.type.startsWith('image/')) {

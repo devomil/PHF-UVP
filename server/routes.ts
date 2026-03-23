@@ -27,18 +27,28 @@ async function analyzeAndStoreProductMedia(projectId: string, mediaUrl: string, 
 
   const isImage = /\.(jpg|jpeg|png|webp)$/i.test(mediaUrl);
 
+  const [existing] = await db.select().from(universalVideoProjects).where(eq(universalVideoProjects.projectId, projectId));
+  if (!existing) {
+    console.warn(`[Routes] Project ${projectId} not found for product media analysis`);
+    return;
+  }
+
+  const existingAssets = (existing.assets as any) || {};
+  existingAssets.productMediaUrl = mediaUrl;
+  existingAssets.productMediaType = isImage ? 'image' : 'video';
+  await db.update(universalVideoProjects)
+    .set({ assets: existingAssets, updatedAt: new Date() })
+    .where(eq(universalVideoProjects.projectId, projectId));
+
   if (isImage) {
     try {
       const productContext = await analyzeProductImage(mediaUrl, brief);
-      const [existing] = await db.select().from(universalVideoProjects).where(eq(universalVideoProjects.projectId, projectId));
-      if (existing) {
-        const progress = (existing.progress as any) || {};
-        progress.productContext = productContext;
-        await db.update(universalVideoProjects)
-          .set({ progress, updatedAt: new Date() })
-          .where(eq(universalVideoProjects.projectId, projectId));
-        console.log(`[Routes] Product context saved for project ${projectId}: ${productContext.productName}`);
-      }
+      const progress = (existing.progress as any) || {};
+      progress.productContext = productContext;
+      await db.update(universalVideoProjects)
+        .set({ progress, updatedAt: new Date() })
+        .where(eq(universalVideoProjects.projectId, projectId));
+      console.log(`[Routes] Product context saved for project ${projectId}: ${productContext.productName}`);
     } catch (err: any) {
       console.error(`[Routes] Vision analysis failed for ${projectId}:`, err.message);
     }
@@ -46,6 +56,7 @@ async function analyzeAndStoreProductMedia(projectId: string, mediaUrl: string, 
 
   try {
     await db.insert(assetLibrary).values({
+      projectId,
       assetUrl: mediaUrl,
       thumbnailUrl: isImage ? mediaUrl : undefined,
       assetType: isImage ? 'image' : 'video',
