@@ -2563,8 +2563,16 @@ router.post('/projects/:projectId/approve-outline', isAuthenticated, async (req:
       return res.status(403).json({ success: false, error: 'Access denied' });
     }
 
-    if (!chapters || !Array.isArray(chapters) || chapters.length === 0) {
-      return res.status(400).json({ success: false, error: 'No chapters provided' });
+    if (!chapters || !Array.isArray(chapters) || chapters.length < 3) {
+      return res.status(400).json({ success: false, error: 'At least 3 chapters are required' });
+    }
+    if (chapters.length > 15) {
+      return res.status(400).json({ success: false, error: 'Maximum 15 chapters allowed' });
+    }
+    for (const ch of chapters) {
+      if (!ch.title || typeof ch.title !== 'string' || ch.title.trim().length === 0) {
+        return res.status(400).json({ success: false, error: 'All chapters must have a non-empty title' });
+      }
     }
 
     const progress = (projectData.progress as any) || {};
@@ -2767,24 +2775,26 @@ router.post('/projects/:projectId/generate-script', isAuthenticated, async (req:
     }
 
     if (approvedOutline && Array.isArray(approvedOutline) && approvedOutline.length > 0) {
-      let currentChapterIdx = 0;
-      for (let i = 0; i < scenes.length; i++) {
-        const scene = scenes[i] as any;
-        if (scene.type === 'chapter-title' || (scene.name && /^chapter\s/i.test(scene.name))) {
-          if (currentChapterIdx < approvedOutline.length) {
-            scene.chapterIndex = currentChapterIdx;
-            scene.chapterTitle = approvedOutline[currentChapterIdx].title;
-            currentChapterIdx++;
-          }
-        } else if (currentChapterIdx > 0) {
-          scene.chapterIndex = currentChapterIdx - 1;
-          scene.chapterTitle = approvedOutline[currentChapterIdx - 1]?.title || '';
-        } else {
-          scene.chapterIndex = 0;
-          scene.chapterTitle = approvedOutline[0]?.title || '';
-        }
+      const totalSuggested = approvedOutline.reduce((sum: number, ch: any) => sum + (ch.suggestedScenes || 1), 0);
+      const chapterBoundaries: number[] = [];
+      let cumulative = 0;
+      for (const ch of approvedOutline) {
+        const ratio = (ch.suggestedScenes || 1) / totalSuggested;
+        cumulative += Math.round(ratio * scenes.length);
+        chapterBoundaries.push(Math.min(cumulative, scenes.length));
       }
-      console.log(`[GenerateScript] Tagged ${scenes.length} scenes with ${approvedOutline.length} chapters`);
+      chapterBoundaries[chapterBoundaries.length - 1] = scenes.length;
+
+      let chapterIdx = 0;
+      for (let i = 0; i < scenes.length; i++) {
+        while (chapterIdx < chapterBoundaries.length - 1 && i >= chapterBoundaries[chapterIdx]) {
+          chapterIdx++;
+        }
+        const scene = scenes[i] as any;
+        scene.chapterIndex = chapterIdx;
+        scene.chapterTitle = approvedOutline[chapterIdx]?.title || '';
+      }
+      console.log(`[GenerateScript] Tagged ${scenes.length} scenes across ${approvedOutline.length} chapters (deterministic distribution)`);
     }
 
     projectData.scenes = scenes;

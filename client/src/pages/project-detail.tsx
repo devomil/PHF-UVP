@@ -628,7 +628,7 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
                         <button
                           type="button"
                           onClick={() => removeChapter(idx)}
-                          disabled={editableChapters.length <= 2}
+                          disabled={editableChapters.length <= 3}
                           className="p-1 rounded hover:bg-red-500/10 transition-colors disabled:opacity-20"
                         >
                           <Trash2 className="w-3.5 h-3.5 text-red-400" />
@@ -1321,6 +1321,7 @@ export default function ProjectDetail({ params }: { params?: { id: string } }) {
   const scenes = Array.isArray(project.scenes) ? project.scenes : [];
   const jobs = Array.isArray(project.jobs) ? project.jobs : [];
   const isQuickCreate = outputFormat.platform === "quick-create";
+  const isLongStory = (project.progress as any)?.projectType === 'long-story';
   const projectStatus = getStatusInfo(project.status);
 
   return (
