@@ -625,6 +625,14 @@ export interface ScriptVideoInput {
     targetDemographic: string;
     visualDescription: string;
   } | null;
+  scriptPresets?: {
+    productName?: string;
+    productProblem?: string;
+    scriptTone?: string;
+    callToAction?: string;
+  } | null;
+  projectType?: string | null;
+  contentStructure?: string | null;
 }
 
 // Pine Hill Farm Official Brand Colors

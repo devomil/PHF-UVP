@@ -21,6 +21,7 @@ import { aiMusicService } from "./services/ai-music-service";
 import { getBrandContext } from "./services/brand-settings-service";
 import { analyzeProductImage } from "./services/product-analysis-service";
 import { assetLibrary } from "../shared/schema";
+import { getProjectType } from "../shared/config/project-types";
 
 async function analyzeAndStoreProductMedia(projectId: string, mediaUrl: string, brief: string, userId: string, scriptPresets?: any) {
   console.log(`[Routes] Starting product media analysis for project ${projectId}`);
@@ -290,7 +291,12 @@ export async function registerRoutes(app: Express) {
         "1:1": { width: 1080, height: 1080 },
       };
 
-      const resolution = resolutionMap[aspectRatio || "16:9"] || resolutionMap["16:9"];
+      const ptConfig = projectType ? getProjectType(projectType) : null;
+      const derivedPlatform = ptConfig?.platform || platform || "YouTube";
+      const derivedAspectRatio = ptConfig?.aspectRatio || aspectRatio || "16:9";
+      const derivedDuration = ptConfig?.defaultDuration || duration || 60;
+      const derivedQualityTier = ptConfig?.qualityTier || qualityTier || "premium";
+      const resolution = resolutionMap[derivedAspectRatio] || resolutionMap["16:9"];
 
       if (mode === "ai-script" || mode === "custom-script") {
         const type = mode === "ai-script" ? "product" : "script-based";
@@ -346,15 +352,15 @@ export async function registerRoutes(app: Express) {
           title: title || "Untitled Project",
           description: description || script || "",
           targetAudience: targetAudience || null,
-          totalDuration: duration || 60,
+          totalDuration: derivedDuration,
           fps: 30,
-          outputFormat: { aspectRatio: aspectRatio || "16:9", resolution, platform: platform || "YouTube" },
+          outputFormat: { aspectRatio: derivedAspectRatio, resolution, platform: derivedPlatform },
           brand: brandData.brandName ? { name: brandData.brandName, tagline: brandData.tagline, website: brandData.website, colors: { primary: brandData.primaryColor, secondary: brandData.secondaryColor, accent: brandData.accentColor }, logoUrl: brandData.logoUrl, guidelines: brandData.guidelines } : {},
           scenes: preSeededScenes,
           assets: {},
           progress: progressData,
           status: "draft",
-          qualityTier: qualityTier || "premium",
+          qualityTier: derivedQualityTier,
           mediaMode: mediaMode || "video",
           videoGenerationMode: videoGenerationMode || null,
           voiceStyle: voiceStyle || null,

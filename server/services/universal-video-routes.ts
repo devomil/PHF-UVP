@@ -2561,15 +2561,17 @@ router.post('/projects/:projectId/generate-script', isAuthenticated, async (req:
     console.log(`[GenerateScript] Generating script for project ${projectId} - ${targetDuration}s, ${platform}, style: ${visualStyle}${productContext ? `, product: ${productContext.productName}` : ''}`);
 
     const parsed = await universalVideoService.parseScriptWithBrandMatches({
+      title: 'Generated Script',
       script,
-      platform,
+      platform: platform as ScriptVideoInput['platform'],
+      style: 'professional',
       targetDuration,
       artPresetId: artPresetIdFromProgress,
       productContext,
       scriptPresets,
       projectType,
       contentStructure,
-    } as any);
+    });
 
     let scenes = parsed.scenes;
 

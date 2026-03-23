@@ -67,7 +67,7 @@ export const PROJECT_TYPES: Record<string, ProjectTypeConfig> = {
   },
   'product-launch': {
     id: 'product-launch',
-    label: 'Product Launch',
+    label: 'Standard Product Launch',
     subtitle: '16:9 · 90s',
     platform: 'YouTube',
     aspectRatio: '16:9',
