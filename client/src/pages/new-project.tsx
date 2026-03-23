@@ -1307,7 +1307,7 @@ function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () => void; 
           <div className="flex gap-2.5 mt-1.5 overflow-x-auto pb-2 -mx-1 px-1" style={{ scrollbarWidth: "thin" }}>
             <button
               type="button"
-              onClick={() => { setArtPresetId(""); setArtPresetUserOverride(true); }}
+              onClick={() => setArtPresetId("")}
               className="flex-shrink-0 w-[100px] rounded-xl border-2 p-2 transition-all duration-200 hover:-translate-y-0.5"
               style={{
                 backgroundColor: !artPresetId ? "rgba(139, 92, 246, 0.15)" : "var(--surface)",
@@ -1329,7 +1329,7 @@ function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () => void; 
               <button
                 type="button"
                 key={preset.id}
-                onClick={() => { setArtPresetId(preset.id); setArtPresetUserOverride(true); }}
+                onClick={() => setArtPresetId(preset.id)}
                 className="flex-shrink-0 w-[100px] rounded-xl border-2 p-2 transition-all duration-200 hover:-translate-y-0.5"
                 style={{
                   backgroundColor: artPresetId === preset.id ? "rgba(139, 92, 246, 0.15)" : "var(--surface)",
