@@ -48,7 +48,7 @@ interface AIVideoOptions {
   visualStyle?: string;
   imageUrl?: string;
   imageUrls?: string[];
-  qualityTier?: 'ultra' | 'premium' | 'standard';
+  qualityTier?: 'ultra' | 'premium' | 'standard' | 'draft';
   i2vSettings?: I2VSettingsInput;
   motionOverride?: MotionControlConfig;
   artPresetId?: string;
@@ -399,9 +399,6 @@ class AIVideoService {
       tierAdjustedOrder = providerOrder;
     } else {
       tierAdjustedOrder = providerOrder.map(baseProvider => {
-        if (sceneTypeMappedProviders.has(baseProvider)) {
-          return baseProvider;
-        }
         const baseName = baseProvider.split('-')[0];
         const tierVersions = TIER_PROVIDER_VERSIONS[baseName];
         if (tierVersions && tierVersions[qualityTier]) {
