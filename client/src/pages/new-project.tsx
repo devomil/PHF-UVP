@@ -456,7 +456,7 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
           )}
         </div>
 
-        <ArtStyleSelector value={artPresetId} onChange={setArtPresetId} />
+        <ArtStyleSelector value={artPresetId} onChange={(id: string) => { setArtPresetId(id); setArtPresetUserOverride(true); }} />
 
         {artPresetId === '3d-illustration' && (
           <CharacterProfilesPanel
