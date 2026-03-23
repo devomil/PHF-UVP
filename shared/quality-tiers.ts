@@ -1,4 +1,4 @@
-export type QualityTier = 'ultra' | 'premium' | 'standard';
+export type QualityTier = 'ultra' | 'premium' | 'standard' | 'draft';
 
 export const DEFAULT_QUALITY_TIER: QualityTier = 'premium';
 
@@ -68,6 +68,15 @@ export const TIER_COSTS: Record<QualityTier, TierCostConfig> = {
     sceneAnalysis: 0.01,
     qa: 0.01,
   },
+  draft: {
+    videoPer10s: 0.10,
+    imagePer: 0.02,
+    voicePer30s: 0.15,
+    musicPer30s: 0.05,
+    soundfxPer: 0.02,
+    sceneAnalysis: 0.01,
+    qa: 0.00,
+  },
 };
 
 export function calculateCosts(
@@ -125,6 +134,7 @@ export function getTierLabel(tier: QualityTier): string {
     case 'ultra': return 'Ultra Premium';
     case 'premium': return 'Premium';
     case 'standard': return 'Standard';
+    case 'draft': return 'Draft';
     default: return 'Premium';
   }
 }
@@ -137,6 +147,8 @@ export function getTierDescription(tier: QualityTier): string {
       return 'Broadcast quality for TV commercials, streaming ads, professional production';
     case 'standard': 
       return 'Good quality for social media, internal videos, quick turnaround';
+    case 'draft':
+      return 'Fast previews with Seedance — speed and cost priority, lower quality';
     default: 
       return 'Broadcast quality for professional production';
   }

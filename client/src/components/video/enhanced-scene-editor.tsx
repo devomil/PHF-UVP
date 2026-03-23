@@ -496,6 +496,48 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
   const [contentTag, setContentTag] = useState<string | null>(scene.contentTag || null);
   const [sceneArtPreset, setSceneArtPreset] = useState<string>(scene.artPresetId || 'project');
 
+  const { data: projectData } = useQuery({
+    queryKey: ["project", projectId],
+  });
+  const [qualityTier, setQualityTier] = useState<string>((projectData as any)?.qualityTier || 'premium');
+
+  useEffect(() => {
+    if (projectData && (projectData as any).qualityTier) {
+      setQualityTier((projectData as any).qualityTier);
+    }
+  }, [(projectData as any)?.qualityTier]);
+
+  const qualityTierDescriptions: Record<string, string> = {
+    draft: 'Fast previews with Seedance — speed and cost priority',
+    standard: 'Good quality for social media, quick turnaround',
+    premium: 'Broadcast quality — best model variants per style',
+    ultra: 'Cinema-grade with multi-pass, 4K upscaling, color grading',
+  };
+  const qualityTierDescription = qualityTierDescriptions[qualityTier] || '';
+
+  const handleQualityTierChange = async (tier: string) => {
+    const previousTier = qualityTier;
+    setQualityTier(tier);
+    try {
+      const res = await fetch(`/api/universal-video/projects/${projectId}/quality-tier`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ qualityTier: tier }),
+      });
+      if (res.ok) {
+        queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+        toast({ title: `Quality set to ${tier.charAt(0).toUpperCase() + tier.slice(1)}` });
+      } else {
+        setQualityTier(previousTier);
+        toast({ title: 'Failed to update quality tier', variant: 'destructive' });
+      }
+    } catch {
+      setQualityTier(previousTier);
+      toast({ title: 'Failed to update quality tier', variant: 'destructive' });
+    }
+  };
+
   const effectiveArtPresetId = sceneArtPreset === 'project' ? artPresetId : sceneArtPreset === 'auto' ? undefined : sceneArtPreset;
   const activeTag = contentTag ? getSceneContentTag(contentTag) : null;
   const activePreset = effectiveArtPresetId ? getVisualArtPreset(effectiveArtPresetId) : null;
@@ -1259,7 +1301,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
             )}
           </div>
 
-          {/* Provider + Mode Selectors + Regenerate */}
+          {/* Provider + Mode + Quality Tier Selectors + Regenerate */}
           <div className="flex flex-col items-end gap-2">
             <div className="flex gap-2">
               <div>
@@ -1288,6 +1330,24 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                     styleLabel={styleRecLabel}
                   />
                 </div>
+              </div>
+              <div>
+                <p className="text-[11px] font-medium mb-1 text-right" style={{ color: "var(--text-secondary)" }}>Quality</p>
+                <select
+                  value={qualityTier}
+                  onChange={(e) => handleQualityTierChange(e.target.value as any)}
+                  className="text-xs rounded-lg border px-2 py-1.5 bg-transparent outline-none w-24"
+                  style={{
+                    borderColor: qualityTier === 'draft' ? 'rgba(251, 191, 36, 0.4)' : qualityTier === 'premium' ? 'rgba(168, 85, 247, 0.4)' : qualityTier === 'ultra' ? 'rgba(239, 68, 68, 0.4)' : 'var(--border-subtle)',
+                    color: qualityTier === 'draft' ? 'rgb(251, 191, 36)' : qualityTier === 'premium' ? 'rgb(168, 85, 247)' : qualityTier === 'ultra' ? 'rgb(239, 68, 68)' : 'var(--text-primary)',
+                  }}
+                  title={qualityTierDescription}
+                >
+                  <option value="draft">Draft</option>
+                  <option value="standard">Standard</option>
+                  <option value="premium">Premium</option>
+                  <option value="ultra">Ultra</option>
+                </select>
               </div>
             </div>
             <p className="text-[10px] text-right max-w-[280px]" style={{ color: (() => {

@@ -1,6 +1,6 @@
 import { llmClient } from './piapi-llm-client';
 import type { VisualFormat } from '../../shared/video-types';
-import { getVisualArtPreset, isStylizedPreset } from '../../shared/config/visual-art-presets';
+import { getVisualArtPreset, isStylizedPreset, getProviderHierarchy } from '../../shared/config/visual-art-presets';
 
 export interface SceneContent {
   sceneId: string;
@@ -220,11 +220,11 @@ Respond with ONLY a JSON array (no markdown, no code blocks):
     const preset = getVisualArtPreset(artPresetId);
     if (!preset) return recommendations;
 
-    const preferredVideoProviders = preset.recommendedProviders.video || [];
+    const hierarchy = getProviderHierarchy(artPresetId);
     const isStylized = isStylizedPreset(artPresetId);
     const sceneMap = preset.sceneTypeProviderMap;
 
-    console.log(`[IntelligentProvider] Applying art preset "${preset.name}" preferences: video=[${preferredVideoProviders}], stylized=${isStylized}, hasSceneTypeMap=${!!sceneMap}`);
+    console.log(`[IntelligentProvider] Applying art preset "${preset.name}" preferences: hierarchy=${hierarchy.primary}→[${hierarchy.fallback}], stylized=${isStylized}, hasSceneTypeMap=${!!sceneMap}`);
 
     const motionKeywords = /\b(arc|orbit|pull[- ]?back|push[- ]?in|tracking shot|crane|dolly|motion control|sweeping pan|circular)\b/i;
 
@@ -235,6 +235,13 @@ Respond with ONLY a JSON array (no markdown, no code blocks):
         console.log(`[IntelligentProvider] Stylized preset override: scene ${rec.sceneIndex} format ai-image-remotion → ai-video (${preset.name} needs full AI video)`);
         rec = { ...rec, visualFormat: 'ai-video' };
       }
+
+      rec = {
+        ...rec,
+        recommendedProvider: hierarchy.primary,
+        fallbackProvider: hierarchy.fallback[0] || rec.fallbackProvider,
+        reasoning: `${rec.reasoning} (${preset.name}: ${hierarchy.reason})`,
+      };
 
       let mappedProviders: string[] | null = null;
       let mappingKey: string | null = null;
@@ -261,30 +268,17 @@ Respond with ONLY a JSON array (no markdown, no code blocks):
 
       if (mappedProviders && mappedProviders.length > 0) {
         const newProvider = mappedProviders[0];
-        const newFallback = mappedProviders[1] || rec.recommendedProvider;
-        console.log(`[IntelligentProvider] Art preset '${preset.name}' routed scene ${rec.sceneIndex} '${mappingKey}': ${rec.recommendedProvider} → ${newProvider}`);
+        const newFallback = mappedProviders[1] || hierarchy.primary;
+        console.log(`[IntelligentProvider] Art preset '${preset.name}' scene-type routed scene ${rec.sceneIndex} '${mappingKey}': ${rec.recommendedProvider} → ${newProvider}`);
         return {
           ...rec,
           recommendedProvider: newProvider,
           fallbackProvider: newFallback,
-          reasoning: `${rec.reasoning} (${preset.name}: ${mappingKey} routing)`,
+          reasoning: `${rec.reasoning} (${preset.name}: ${mappingKey} scene-type routing)`,
         };
       }
 
-      if (preferredVideoProviders.length > 0) {
-        const currentProvider = rec.recommendedProvider;
-        const newProvider = this.validateProvider(preferredVideoProviders[0]);
-        if (newProvider !== currentProvider) {
-          console.log(`[IntelligentProvider] Art preset '${preset.name}' default override: scene ${rec.sceneIndex} ${currentProvider} → ${newProvider}`);
-          return {
-            ...rec,
-            recommendedProvider: newProvider,
-            fallbackProvider: this.validateProvider(preferredVideoProviders[1] || currentProvider),
-            reasoning: `${rec.reasoning} (${preset.name}: default routing)`,
-          };
-        }
-      }
-
+      console.log(`[IntelligentProvider] Art preset '${preset.name}' hierarchy: scene ${rec.sceneIndex} → ${hierarchy.primary}`);
       return rec;
     });
   }

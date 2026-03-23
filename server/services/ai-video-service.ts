@@ -60,43 +60,57 @@ interface AIVideoOptions {
 const TIER_PROVIDER_VERSIONS: Record<string, Record<string, string>> = {
   kling: {
     ultra: 'kling-2.6',
-    premium: 'kling-2.6',
+    premium: 'kling-2.1-master',
     standard: 'kling-2.6',
+    draft: 'seedance-2.0-fast',
   },
   luma: {
     ultra: 'luma',
     premium: 'luma',
     standard: 'luma',
+    draft: 'seedance-2.0-fast',
   },
   hailuo: {
     ultra: 'hailuo',
     premium: 'hailuo',
     standard: 'hailuo',
+    draft: 'seedance-2.0-fast',
   },
   veo: {
     ultra: 'veo-3.1',
     premium: 'veo-3',
     standard: 'veo-3',
+    draft: 'seedance-2.0-fast',
   },
   hunyuan: {
     ultra: 'hunyuan',
     premium: 'hunyuan',
     standard: 'hunyuan',
+    draft: 'seedance-2.0-fast',
   },
   wan: {
     ultra: 'wan-2.6',
     premium: 'wan-2.6',
     standard: 'wan-2.6',
+    draft: 'seedance-2.0-fast',
   },
   sora: {
     ultra: 'sora-2-pro',
-    premium: 'sora-2',
+    premium: 'sora-2-pro',
     standard: 'sora-2',
+    draft: 'seedance-2.0-fast',
   },
   runway: {
     ultra: 'runway-4.5',
     premium: 'runway-4.5',
     standard: 'runway',
+    draft: 'seedance-2.0-fast',
+  },
+  seedance: {
+    ultra: 'seedance-2.0',
+    premium: 'seedance-2.0',
+    standard: 'seedance-2.0-fast',
+    draft: 'seedance-2.0-fast',
   },
 };
 
@@ -323,11 +337,21 @@ class AIVideoService {
     }
     
     let sceneTypeMappedProviders: Set<string> = new Set();
-    if (artPreset && (!enhancedOptions.preferredProvider || enhancedOptions.preferredProvider === 'auto')) {
-      let sceneTypeProviders: string[] | null = null;
-      let mappingKey: string | null = null;
+    if (!enhancedOptions.preferredProvider || enhancedOptions.preferredProvider === 'auto') {
+      const hierarchy = artPreset?.providerHierarchy || { primary: 'kling-2.6-pro', fallback: ['runway-gen4', 'sora-2', 'veo-3'] };
+      const hierarchyChain = [hierarchy.primary, ...hierarchy.fallback];
+      const availableHierarchy = hierarchyChain.filter(p => configuredProviders.some(cp => cp === p || cp.startsWith(p + '-') || cp.startsWith(p)));
+      
+      if (availableHierarchy.length > 0) {
+        const remaining = providerOrder.filter(p => !availableHierarchy.includes(p));
+        providerOrder = [...availableHierarchy, ...remaining];
+        console.log(`[AIVideo] Art style hierarchy (${artPreset?.name || 'auto'}): ${availableHierarchy.join(' → ')}`);
+      }
 
-      if (artPreset.sceneTypeProviderMap) {
+      if (artPreset?.sceneTypeProviderMap) {
+        let sceneTypeProviders: string[] | null = null;
+        let mappingKey: string | null = null;
+
         const motionKeywords = /\b(arc|orbit|pull[- ]?back|push[- ]?in|tracking shot|crane|dolly|motion control|sweeping pan|circular)\b/i;
         if (motionKeywords.test(options.prompt || '')) {
           sceneTypeProviders = artPreset.sceneTypeProviderMap['motion-control'] || null;
@@ -343,17 +367,16 @@ class AIVideoService {
           sceneTypeProviders = artPreset.sceneTypeProviderMap[contentType] || null;
           mappingKey = `${contentType} (classification)`;
         }
-      }
 
-      const presetProviders = sceneTypeProviders || artPreset.recommendedProviders?.video || [];
-      const filteredProviders = presetProviders.filter((p: string) => configuredProviders.some(cp => cp === p || cp.startsWith(p + '-') || cp.startsWith(p)));
-      if (filteredProviders.length > 0) {
-        const remaining = providerOrder.filter((p: string) => !filteredProviders.includes(p));
-        providerOrder = [...filteredProviders, ...remaining];
         if (sceneTypeProviders) {
-          filteredProviders.forEach(p => sceneTypeMappedProviders.add(p));
+          const filteredProviders = sceneTypeProviders.filter((p: string) => configuredProviders.some(cp => cp === p || cp.startsWith(p + '-') || cp.startsWith(p)));
+          if (filteredProviders.length > 0) {
+            const remaining = providerOrder.filter((p: string) => !filteredProviders.includes(p));
+            providerOrder = [...filteredProviders, ...remaining];
+            filteredProviders.forEach(p => sceneTypeMappedProviders.add(p));
+            console.log(`[AIVideo] Art preset '${artPreset.name}' scene-type routed '${mappingKey}' → [${filteredProviders.join(', ')}]`);
+          }
         }
-        console.log(`[AIVideo] Art preset '${artPreset.name}' routed ${mappingKey ? `'${mappingKey}'` : 'default'} → [${filteredProviders.join(', ')}]`);
       }
     }
 
@@ -366,24 +389,31 @@ class AIVideoService {
       }
     }
 
-    // Map base providers to tier-appropriate versions
-    // Skip tier mapping when user explicitly selected a provider or when providers came from sceneTypeProviderMap
     const isExplicitSelection = !!enhancedOptions.preferredProvider && enhancedOptions.preferredProvider !== 'auto';
-    const tierAdjustedOrder = isExplicitSelection ? providerOrder : providerOrder.map(baseProvider => {
-      if (sceneTypeMappedProviders.has(baseProvider)) {
-        return baseProvider;
-      }
-      const baseName = baseProvider.split('-')[0];
-      const tierVersions = TIER_PROVIDER_VERSIONS[baseName];
-      if (tierVersions && tierVersions[qualityTier]) {
-        const versionedProvider = tierVersions[qualityTier];
-        if (versionedProvider !== baseProvider) {
-          console.log(`[AIVideo] Quality tier ${qualityTier}: ${baseProvider} → ${versionedProvider}`);
+    let tierAdjustedOrder: string[];
+
+    if (qualityTier === 'draft') {
+      tierAdjustedOrder = ['seedance-2.0-fast'];
+      console.log(`[AIVideo] Draft tier: overriding all providers → seedance-2.0-fast`);
+    } else if (isExplicitSelection) {
+      tierAdjustedOrder = providerOrder;
+    } else {
+      tierAdjustedOrder = providerOrder.map(baseProvider => {
+        if (sceneTypeMappedProviders.has(baseProvider)) {
+          return baseProvider;
         }
-        return versionedProvider;
-      }
-      return baseProvider;
-    });
+        const baseName = baseProvider.split('-')[0];
+        const tierVersions = TIER_PROVIDER_VERSIONS[baseName];
+        if (tierVersions && tierVersions[qualityTier]) {
+          const versionedProvider = tierVersions[qualityTier];
+          if (versionedProvider !== baseProvider) {
+            console.log(`[AIVideo] Quality tier ${qualityTier}: ${baseProvider} → ${versionedProvider}`);
+          }
+          return versionedProvider;
+        }
+        return baseProvider;
+      });
+    }
 
     const validOrder = [...new Set(tierAdjustedOrder)].filter(p => {
       if (!AI_VIDEO_PROVIDERS[p]) {
@@ -396,32 +426,45 @@ class AIVideoService {
     console.log(`[AIVideo] Scene: ${enhancedOptions.sceneType}, Quality: ${qualityTier}`);
     console.log(`[AIVideo] Provider order: ${validOrder.join(' → ')}`);
 
+    const artPresetName = artPreset?.name || 'Auto';
+    const artPresetIdentifier = options.artPresetId || 'auto';
+    const failedProviders: Array<{ provider: string; error: string }> = [];
+
     for (const providerKey of validOrder) {
       const provider = AI_VIDEO_PROVIDERS[providerKey];
       
-      console.log(`[AIVideo] Trying ${providerKey}...`);
+      console.log(`[AIVideo] Trying ${providerKey} (preset: ${artPresetIdentifier})...`);
       
       try {
         const result = await this.generateWithProvider(providerKey, provider, enhancedOptions);
         
         if (result.success && result.s3Url) {
-          console.log(`[AIVideo] ✓ Success with ${providerKey}`);
+          if (failedProviders.length > 0) {
+            console.log(`[AIVideo] ✓ Success with ${providerKey} after ${failedProviders.length} fallback(s): ${failedProviders.map(f => `${f.provider}(${f.error})`).join(' → ')}`);
+          } else {
+            console.log(`[AIVideo] ✓ Success with ${providerKey}`);
+          }
           return {
             ...result,
             provider: providerKey,
           };
         }
         
-        console.warn(`[AIVideo] ✗ ${providerKey} failed: ${result.error}`);
+        const errorMsg = result.error || 'unknown error';
+        failedProviders.push({ provider: providerKey, error: errorMsg });
+        console.warn(`[AIVideo] ✗ ${providerKey} failed for preset "${artPresetIdentifier}": ${errorMsg}`);
         
       } catch (error: any) {
-        console.warn(`[AIVideo] ✗ ${providerKey} error: ${error.message}`);
+        failedProviders.push({ provider: providerKey, error: error.message });
+        console.warn(`[AIVideo] ✗ ${providerKey} error for preset "${artPresetIdentifier}": ${error.message}`);
       }
     }
 
+    const failureChain = failedProviders.map(f => `${f.provider}(${f.error})`).join(' → ');
+    console.error(`[AIVideo] All providers exhausted for preset "${artPresetIdentifier}": ${failureChain}`);
     return { 
       success: false, 
-      error: `All providers failed for ${enhancedOptions.sceneType} scene` 
+      error: `All providers failed for ${artPresetName} style — please retry` 
     };
   }
 

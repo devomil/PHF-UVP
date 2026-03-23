@@ -529,6 +529,8 @@ class VideoGenerationWorker {
         const finalImageUrl = job.sourceImageUrl || charRefImageUrl || undefined;
         const finalImageUrls = (job.i2vSettings as any)?.sourceImageUrls || (charRefImageUrls && charRefImageUrls.length > 1 ? charRefImageUrls : undefined);
 
+        const projectQualityTier = projectData?.qualityTier || projectData?.progress?.qualityTier || 'standard';
+
         const result = await aiVideoService.generateVideo({
           prompt: charEnhancedPrompt,
           duration: job.duration || 6,
@@ -540,6 +542,7 @@ class VideoGenerationWorker {
           imageUrl: finalImageUrl,
           imageUrls: finalImageUrls,
           i2vSettings: jobI2vSettings || undefined,
+          qualityTier: projectQualityTier,
           motionOverride: jobMotionControl ? {
             camera_movement: jobMotionControl.camera_movement as any,
             intensity: jobMotionControl.intensity,

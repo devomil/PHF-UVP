@@ -1,3 +1,9 @@
+export interface ProviderHierarchy {
+  primary: string;
+  fallback: string[];
+  reason: string;
+}
+
 export interface VisualArtPreset {
   id: string;
   name: string;
@@ -10,6 +16,7 @@ export interface VisualArtPreset {
     image: string[];
     video: string[];
   };
+  providerHierarchy: ProviderHierarchy;
   sceneTypeProviderMap?: Record<string, string[]>;
   generationStrategy: 'i2v' | 't2v' | 'auto';
   globalStyleNotes?: string;
@@ -42,6 +49,11 @@ export const VISUAL_ART_PRESETS: Record<string, VisualArtPreset> = {
     recommendedProviders: {
       image: ['flux', 'ideogram'],
       video: ['kling', 'runway'],
+    },
+    providerHierarchy: {
+      primary: 'kling-2.1-master',
+      fallback: ['kling-2.6-pro', 'sora-2', 'veo-3'],
+      reason: 'Kling 2.1 Master has superior character face lock and stylized CGI fidelity. Runway excluded — gen4 struggles with maintaining Pixar style consistency.',
     },
     sceneTypeProviderMap: {
       'hook': ['kling-2.1-master', 'sora-2-pro', 'kling-2.6-pro'],
@@ -83,6 +95,11 @@ export const VISUAL_ART_PRESETS: Record<string, VisualArtPreset> = {
       image: ['flux', 'ideogram'],
       video: ['runway', 'kling', 'luma'],
     },
+    providerHierarchy: {
+      primary: 'runway-gen4',
+      fallback: ['sora-2', 'veo-3', 'kling-2.6-pro'],
+      reason: 'Runway Gen4 leads in photorealistic film-grade output. Sora 2 and Veo 3 are strong alternates for realism. Kling is last — it skews stylized.',
+    },
     generationStrategy: 'auto',
   },
 
@@ -97,6 +114,11 @@ export const VISUAL_ART_PRESETS: Record<string, VisualArtPreset> = {
     recommendedProviders: {
       image: ['ideogram', 'flux'],
       video: ['hailuo', 'kling'],
+    },
+    providerHierarchy: {
+      primary: 'kling-2.6-pro',
+      fallback: ['sora-2', 'runway-gen4', 'veo-3'],
+      reason: 'Kling handles stylized flat aesthetics better than Runway for illustrated styles.',
     },
     generationStrategy: 'i2v',
     globalStyleNotes: '2D line art animation • Clean vector outlines • Flat color fills • White or minimal backgrounds • No photorealistic elements • Bold graphic shapes • Editorial illustration quality',
@@ -117,6 +139,11 @@ export const VISUAL_ART_PRESETS: Record<string, VisualArtPreset> = {
       image: ['flux', 'ideogram'],
       video: ['hailuo', 'kling'],
     },
+    providerHierarchy: {
+      primary: 'kling-2.6-pro',
+      fallback: ['runway-gen4', 'sora-2', 'veo-3'],
+      reason: 'Mixed media texture styles perform best on Kling. Runway can handle as fallback.',
+    },
     generationStrategy: 'i2v',
     globalStyleNotes: 'Mixed-media collage animation • Torn paper edges and layered textures • Vintage magazine cutout aesthetic • Overlapping elements with depth • Washi tape and stamp accents • Tactile handmade feel • No clean digital look',
     cameraMotionHints: 'slow zoom with parallax layers, gentle drift, paper-shuffle reveal',
@@ -135,6 +162,11 @@ export const VISUAL_ART_PRESETS: Record<string, VisualArtPreset> = {
     recommendedProviders: {
       image: ['flux', 'ideogram'],
       video: ['kling', 'runway'],
+    },
+    providerHierarchy: {
+      primary: 'kling-2.6-pro',
+      fallback: ['sora-2', 'veo-3', 'runway-gen4'],
+      reason: 'Kling maintains tactile stylized surfaces. Sora 2 handles clay-like material rendering as strong secondary.',
     },
     generationStrategy: 'i2v',
     globalStyleNotes: 'Claymation stop-motion animation • Plasticine/clay material textures • Visible fingerprint impressions • Miniature diorama sets • Warm studio lighting • Shallow depth of field • Wallace and Gromit inspired charm • No digital smoothness',
@@ -155,6 +187,11 @@ export const VISUAL_ART_PRESETS: Record<string, VisualArtPreset> = {
       image: ['flux', 'ideogram'],
       video: ['runway', 'kling', 'luma'],
     },
+    providerHierarchy: {
+      primary: 'runway-gen4',
+      fallback: ['kling-2.6-pro', 'sora-2', 'veo-3'],
+      reason: 'Runway excels at cyberpunk holographic glow aesthetics and high-contrast lighting. Kling as solid secondary.',
+    },
     generationStrategy: 't2v',
     globalStyleNotes: 'Neon cyberpunk aesthetic • Holographic HUD elements • Dark backgrounds with vibrant cyan and magenta neon • Volumetric fog and light rays • Blade Runner inspired atmosphere • Glowing particle effects • No natural or organic tones',
     cameraMotionHints: 'slow dolly through neon corridors, hologram rotation, glitch-cut transitions',
@@ -173,6 +210,11 @@ export const VISUAL_ART_PRESETS: Record<string, VisualArtPreset> = {
     recommendedProviders: {
       image: ['flux', 'ideogram'],
       video: ['hailuo', 'kling'],
+    },
+    providerHierarchy: {
+      primary: 'kling-2.6-pro',
+      fallback: ['sora-2', 'veo-3', 'runway-gen4'],
+      reason: 'Kling renders painterly soft-edge aesthetics more faithfully than Runway.',
     },
     generationStrategy: 'i2v',
     globalStyleNotes: 'Watercolor painting animation • Visible brush strokes and paint texture • Soft color bleeds on wet paper • Pastel and muted tones • Paper grain visible • Dreamy soft-focus atmosphere • No sharp digital edges',
@@ -193,6 +235,11 @@ export const VISUAL_ART_PRESETS: Record<string, VisualArtPreset> = {
       image: ['ideogram', 'flux'],
       video: ['hailuo', 'kling'],
     },
+    providerHierarchy: {
+      primary: 'kling-2.6-pro',
+      fallback: ['sora-2', 'runway-gen4', 'veo-3'],
+      reason: 'Clean geometric flat design stays more stable on Kling. Runway tends to add unwanted texture.',
+    },
     generationStrategy: 'i2v',
     globalStyleNotes: 'Minimalist flat design animation • Clean geometric shapes • Solid color blocks • Ample white/negative space • Bold simple forms • Limited color palette • Bauhaus/Scandinavian aesthetic • No texture or gradients',
     cameraMotionHints: 'smooth geometric transitions, clean slide, shape morph',
@@ -212,6 +259,11 @@ export const VISUAL_ART_PRESETS: Record<string, VisualArtPreset> = {
       image: ['flux', 'ideogram'],
       video: ['wan-2.6', 'kling-2.6'],
     },
+    providerHierarchy: {
+      primary: 'sora-2',
+      fallback: ['kling-2.6-pro', 'veo-3', 'runway-gen4'],
+      reason: 'Sora 2 handles complex 3D scientific visualization and molecular animation with high fidelity. Kling as strong secondary for Pixar-style medical content.',
+    },
     generationStrategy: 'i2v',
     globalStyleNotes: 'Scientific medical 3D visualization • Bioluminescent glow effects • Dark backgrounds with illuminated subjects • Volumetric lighting and particle effects • Cellular/molecular detail • Subsurface scattering • Professional medical-grade rendering',
     cameraMotionHints: 'slow microscopic zoom, cellular fly-through, orbital rotation around molecule',
@@ -220,10 +272,22 @@ export const VISUAL_ART_PRESETS: Record<string, VisualArtPreset> = {
   },
 };
 
+export const AUTO_PROVIDER_HIERARCHY: ProviderHierarchy = {
+  primary: 'kling-2.6-pro',
+  fallback: ['runway-gen4', 'sora-2', 'veo-3'],
+  reason: 'Balanced default — Kling 2.6 handles most styles well',
+};
+
 export type VisualArtPresetId = keyof typeof VISUAL_ART_PRESETS | 'auto';
 
 export function getVisualArtPreset(presetId: string): VisualArtPreset | null {
   return VISUAL_ART_PRESETS[presetId] || null;
+}
+
+export function getProviderHierarchy(presetId: string | undefined | null): ProviderHierarchy {
+  if (!presetId || presetId === 'auto') return AUTO_PROVIDER_HIERARCHY;
+  const preset = VISUAL_ART_PRESETS[presetId];
+  return preset?.providerHierarchy || AUTO_PROVIDER_HIERARCHY;
 }
 
 export function getAllVisualArtPresets(): VisualArtPreset[] {

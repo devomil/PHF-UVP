@@ -443,7 +443,7 @@ const productVideoInputSchema = z.object({
   productImages: z.array(productImageSchema).optional(),
   voiceId: z.string().optional(),
   voiceName: z.string().optional(),
-  qualityTier: z.enum(['standard', 'premium', 'ultra']).optional().default('premium'),
+  qualityTier: z.enum(['standard', 'premium', 'ultra', 'draft']).optional().default('premium'),
 });
 
 // Phase 13: Audio generation settings schema
@@ -561,7 +561,7 @@ const scriptVideoInputSchema = z.object({
   musicMood: z.string().optional(),
   voiceId: z.string().optional(),
   voiceName: z.string().optional(),
-  qualityTier: z.enum(['standard', 'premium', 'ultra']).optional().default('premium'),
+  qualityTier: z.enum(['standard', 'premium', 'ultra', 'draft']).optional().default('premium'),
   artPresetId: z.string().optional(),
   // Phase 13: Audio and motion control generation settings
   generationSettings: generationSettingsSchema.optional(),
@@ -1980,7 +1980,7 @@ router.patch('/projects/:projectId/quality-tier', isAuthenticated, async (req: R
     const { projectId } = req.params;
     const { qualityTier } = req.body;
     
-    const validTiers = ['ultra', 'premium', 'standard'];
+    const validTiers = ['ultra', 'premium', 'standard', 'draft'];
     
     if (!validTiers.includes(qualityTier)) {
       return res.status(400).json({ success: false, error: 'Invalid quality tier' });
@@ -7388,10 +7388,10 @@ router.get('/projects/:projectId/generation-estimate', isAuthenticated, async (r
     
     // Get quality tier for provider selection - prefer query param over stored value
     const tierParam = req.query.tier as string;
-    const validTiers = ['ultra', 'premium', 'standard'] as const;
+    const validTiers = ['ultra', 'premium', 'standard', 'draft'] as const;
     const qualityTier = (tierParam && validTiers.includes(tierParam as any)) 
-      ? tierParam as 'ultra' | 'premium' | 'standard'
-      : ((project as any).qualityTier || 'standard') as 'ultra' | 'premium' | 'standard';
+      ? tierParam as 'ultra' | 'premium' | 'standard' | 'draft'
+      : ((project as any).qualityTier || 'standard') as 'ultra' | 'premium' | 'standard' | 'draft';
     console.log(`[GenerationEstimate] Project ${projectId} using qualityTier: ${qualityTier} (param: ${tierParam}, stored: ${(project as any).qualityTier})`);
     
     // Use intelligent provider selector for all scenes with quality tier
