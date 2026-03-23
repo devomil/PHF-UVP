@@ -199,6 +199,10 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
   const [artPresetId, setArtPresetId] = useState("auto");
   const [characterConsistency, setCharacterConsistency] = useState(false);
   const [characters, setCharacters] = useState<any[]>([]);
+  const [productMediaFile, setProductMediaFile] = useState<File | null>(null);
+  const [productMediaPreview, setProductMediaPreview] = useState<string | null>(null);
+  const [isUploadingMedia, setIsUploadingMedia] = useState(false);
+  const productMediaInputRef = useRef<HTMLInputElement>(null);
 
   const hasLockedCharacters = characters.some((c: any) => c.locked && c.referenceImageUrl);
   const showCharacterI2V = artPresetId === '3d-illustration' && hasLockedCharacters;
@@ -219,8 +223,64 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
     }
   }, [artPresetId]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleProductMediaSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'video/mp4', 'video/quicktime'];
+    if (!allowedTypes.includes(file.type)) {
+      return;
+    }
+
+    if (file.type.startsWith('video/') && file.size > 100 * 1024 * 1024) {
+      return;
+    }
+
+    setProductMediaFile(file);
+
+    if (file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = (ev) => setProductMediaPreview(ev.target?.result as string);
+      reader.readAsDataURL(file);
+    } else {
+      setProductMediaPreview(null);
+    }
+  };
+
+  const removeProductMedia = () => {
+    setProductMediaFile(null);
+    setProductMediaPreview(null);
+    if (productMediaInputRef.current) {
+      productMediaInputRef.current.value = '';
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    let productMediaUrl: string | undefined;
+
+    if (productMediaFile) {
+      setIsUploadingMedia(true);
+      try {
+        const formData = new FormData();
+        formData.append('file', productMediaFile);
+        formData.append('category', 'brand-media');
+        const uploadRes = await fetch('/api/videos/uploads', {
+          method: 'POST',
+          body: formData,
+          credentials: 'include',
+        });
+        if (uploadRes.ok) {
+          const uploadData = await uploadRes.json();
+          productMediaUrl = uploadData.url;
+        }
+      } catch {
+      } finally {
+        setIsUploadingMedia(false);
+      }
+    }
+
     onSubmit({
       mode: "ai-script",
       title,
@@ -235,6 +295,7 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
       artPresetId,
       characterConsistency,
       characters,
+      productMediaUrl,
     });
   };
 
@@ -254,6 +315,51 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
         <div>
           <Label style={{ color: "var(--text-secondary)" }}>Description / Brief</Label>
           <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Describe what you want your video to be about..." rows={4} className="mt-1.5" style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }} />
+        </div>
+
+        <div>
+          <Label style={{ color: "var(--text-secondary)" }}>Product or Brand Media <span className="text-xs font-normal" style={{ color: "var(--text-muted)" }}>(optional)</span></Label>
+          <p className="text-xs mt-0.5 mb-2" style={{ color: "var(--text-muted)" }}>
+            Upload a product photo or brand asset — AI will analyze it to inform your script
+          </p>
+          <input
+            ref={productMediaInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime"
+            onChange={handleProductMediaSelect}
+            className="hidden"
+          />
+          {!productMediaFile ? (
+            <button
+              type="button"
+              onClick={() => productMediaInputRef.current?.click()}
+              className="w-full flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed py-8 transition-colors hover:border-purple-400/50"
+              style={{ borderColor: "var(--border-medium)", backgroundColor: "var(--surface-elevated)" }}
+            >
+              <ImagePlus className="w-8 h-8" style={{ color: "var(--text-muted)" }} />
+              <span className="text-sm" style={{ color: "var(--text-muted)" }}>Click to upload image or video</span>
+              <span className="text-xs" style={{ color: "var(--text-muted)" }}>JPG, PNG, WEBP, MP4, MOV</span>
+            </button>
+          ) : (
+            <div className="relative rounded-lg overflow-hidden border" style={{ borderColor: "var(--border-medium)", backgroundColor: "var(--surface-elevated)" }}>
+              <div className="flex items-center gap-3 p-3">
+                {productMediaPreview ? (
+                  <img src={productMediaPreview} alt="Product media" className="w-16 h-16 rounded object-cover" />
+                ) : (
+                  <div className="w-16 h-16 rounded flex items-center justify-center" style={{ backgroundColor: "var(--input-bg)" }}>
+                    <Film className="w-6 h-6" style={{ color: "var(--text-muted)" }} />
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm truncate" style={{ color: "var(--text-primary)" }}>{productMediaFile.name}</p>
+                  <p className="text-xs" style={{ color: "var(--text-muted)" }}>{(productMediaFile.size / 1024 / 1024).toFixed(1)} MB</p>
+                </div>
+                <button type="button" onClick={removeProductMedia} className="p-1.5 rounded-full hover:bg-red-500/10 transition-colors">
+                  <X className="w-4 h-4 text-red-400" />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         <ArtStyleSelector value={artPresetId} onChange={setArtPresetId} />
@@ -378,8 +484,8 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
           <Button type="button" variant="outline" onClick={onBack} style={{ borderColor: "var(--border-medium)", color: "var(--text-secondary)" }}>
             <ArrowLeft className="w-4 h-4 mr-2" /> Back
           </Button>
-          <Button type="submit" className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500" disabled={isLoading || !title}>
-            {isLoading ? "Creating..." : "Create Project"}
+          <Button type="submit" className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500" disabled={isLoading || isUploadingMedia || !title}>
+            {isUploadingMedia ? (<><Loader2 className="w-4 h-4 mr-2 animate-spin" />Uploading Media...</>) : isLoading ? "Creating..." : "Create Project"}
           </Button>
         </div>
       </div>

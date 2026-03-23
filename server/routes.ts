@@ -19,6 +19,47 @@ import { processVideoJob, recoverStuckJobs } from "./services/job-processor";
 import { universalVideoService } from "./services/universal-video-service";
 import { aiMusicService } from "./services/ai-music-service";
 import { getBrandContext } from "./services/brand-settings-service";
+import { analyzeProductImage } from "./services/product-analysis-service";
+import { assetLibrary } from "../shared/schema";
+
+async function analyzeAndStoreProductMedia(projectId: string, mediaUrl: string, brief: string, userId: string) {
+  console.log(`[Routes] Starting product media analysis for project ${projectId}`);
+
+  const isImage = /\.(jpg|jpeg|png|webp)$/i.test(mediaUrl);
+
+  if (isImage) {
+    try {
+      const productContext = await analyzeProductImage(mediaUrl, brief);
+      const [existing] = await db.select().from(universalVideoProjects).where(eq(universalVideoProjects.projectId, projectId));
+      if (existing) {
+        const progress = (existing.progress as any) || {};
+        progress.productContext = productContext;
+        await db.update(universalVideoProjects)
+          .set({ progress, updatedAt: new Date() })
+          .where(eq(universalVideoProjects.projectId, projectId));
+        console.log(`[Routes] Product context saved for project ${projectId}: ${productContext.productName}`);
+      }
+    } catch (err: any) {
+      console.error(`[Routes] Vision analysis failed for ${projectId}:`, err.message);
+    }
+  }
+
+  try {
+    await db.insert(assetLibrary).values({
+      assetUrl: mediaUrl,
+      thumbnailUrl: isImage ? mediaUrl : undefined,
+      assetType: isImage ? 'image' : 'video',
+      provider: 'user-upload',
+      prompt: `Brand Media — ${brief?.slice(0, 100) || 'Product reference'}`,
+      contentType: 'brand-media',
+      tags: ['brand-media', 'product-reference'],
+      createdBy: userId,
+    });
+    console.log(`[Routes] Brand media asset added to library for project ${projectId}`);
+  } catch (err: any) {
+    console.error(`[Routes] Asset library insert failed for ${projectId}:`, err.message);
+  }
+}
 
 export async function registerRoutes(app: Express) {
   app.use("/api/provider-test", providerTestRouter);
@@ -216,7 +257,7 @@ export async function registerRoutes(app: Express) {
         return res.status(401).json({ error: "Not authenticated" });
       }
 
-      const { mode, title, description, targetAudience, duration, platform, aspectRatio, mediaMode, videoGenerationMode, qualityTier, script, numScenes, visualStyle, voiceStyle, outputType, prompt, imageStyle, provider, saveToLibrary, customScenes, artPresetId, characterConsistency, characters, characterReferenceUrl, characterName, characterDescription, generationMode, negativePrompt, sourceImageUrl, referenceVideoUrl, imageFidelity } = req.body;
+      const { mode, title, description, targetAudience, duration, platform, aspectRatio, mediaMode, videoGenerationMode, qualityTier, script, numScenes, visualStyle, voiceStyle, outputType, prompt, imageStyle, provider, saveToLibrary, customScenes, artPresetId, characterConsistency, characters, characterReferenceUrl, characterName, characterDescription, generationMode, negativePrompt, sourceImageUrl, referenceVideoUrl, imageFidelity, productMediaUrl } = req.body;
 
       const projectId = crypto.randomUUID();
 
@@ -262,6 +303,9 @@ export async function registerRoutes(app: Express) {
         if (characterConsistency) {
           progressData.characterConsistency = true;
         }
+        if (productMediaUrl) {
+          progressData.productMediaUrl = productMediaUrl;
+        }
 
         const [project] = await db.insert(universalVideoProjects).values({
           projectId,
@@ -284,6 +328,12 @@ export async function registerRoutes(app: Express) {
           voiceStyle: voiceStyle || null,
           characters: Array.isArray(characters) ? characters : [],
         }).returning();
+
+        if (productMediaUrl && mode === "ai-script") {
+          analyzeAndStoreProductMedia(projectId, productMediaUrl, description || "", userId).catch((err: any) => {
+            console.error(`[Routes] Product media analysis failed for ${projectId}:`, err.message);
+          });
+        }
 
         return res.json({ projectId: project.projectId, id: project.id, status: "draft" });
       }

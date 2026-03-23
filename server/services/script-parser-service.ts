@@ -45,6 +45,15 @@ export interface ScriptParseOptions {
   visualStyle: string;
   targetDuration?: number;
   artPresetId?: string;
+  productContext?: {
+    productName: string;
+    category: string;
+    keyFeatures: string[];
+    brandTone: string;
+    colorPalette: string[];
+    targetDemographic: string;
+    visualDescription: string;
+  };
 }
 
 class ScriptParserService {
@@ -68,7 +77,7 @@ class ScriptParserService {
     );
 
     const artPreset = options.artPresetId ? getVisualArtPreset(options.artPresetId) : null;
-    const systemPrompt = await this.buildBrandAwareSystemPrompt(brandContext, roleContext, aestheticContext, artPreset);
+    const systemPrompt = await this.buildBrandAwareSystemPrompt(brandContext, roleContext, aestheticContext, artPreset, options.productContext);
     const userPrompt = await this.buildParsingPrompt(script, options, serviceMatches, artPreset);
 
     try {
@@ -86,7 +95,7 @@ class ScriptParserService {
     }
   }
 
-  private async buildBrandAwareSystemPrompt(brandContext: string, roleContext: string, aestheticContext: string, artPreset?: any): Promise<string> {
+  private async buildBrandAwareSystemPrompt(brandContext: string, roleContext: string, aestheticContext: string, artPreset?: any, productContext?: ScriptParseOptions['productContext']): Promise<string> {
     const brand = await getAnyBrandContext();
     const brandName = getBrandNameOrDefault(brand);
     const hasBrand = brand.brandName?.trim();
@@ -97,6 +106,19 @@ class ScriptParserService {
       ? `\nBRAND GUIDELINES (from user):\n${brand.guidelines}\n`
       : '';
 
+    const productBlock = productContext ? `
+PRODUCT CONTEXT (from uploaded product image analysis):
+- Product: ${productContext.productName}
+- Category: ${productContext.category}
+- Key Features: ${productContext.keyFeatures.join(', ')}
+- Brand Tone: ${productContext.brandTone}
+- Color Palette: ${productContext.colorPalette.join(', ')}
+- Target Demographic: ${productContext.targetDemographic}
+- Visual: ${productContext.visualDescription}
+
+IMPORTANT: Incorporate this product information naturally into narration and visual directions. Reference the product's actual features, colors, and appearance. At least one scene should showcase the product prominently.
+` : '';
+
     return `${roleContext}
 
 You are an expert video script parser for ${brandDesc}.
@@ -104,7 +126,7 @@ You are an expert video script parser for ${brandDesc}.
 ${brandContext}
 
 ${aestheticContext}
-${guidelinesBlock}
+${guidelinesBlock}${productBlock}
 YOUR ROLE:
 You parse video scripts into scenes, identifying:
 1. Scene breaks and types (hook, problem, solution, benefit, testimonial, cta)

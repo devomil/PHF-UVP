@@ -2532,12 +2532,17 @@ router.post('/projects/:projectId/generate-script', isAuthenticated, async (req:
     const visualStyle = (projectData as any).visualStyle || req.body?.visualStyle || 'lifestyle';
     const numScenes = req.body?.numScenes || undefined;
 
-    console.log(`[GenerateScript] Generating script for project ${projectId} - ${targetDuration}s, ${platform}, style: ${visualStyle}`);
+    const productContext = (projectData.progress as any)?.productContext || null;
+    const artPresetIdFromProgress = (projectData.progress as any)?.artPresetId || undefined;
+
+    console.log(`[GenerateScript] Generating script for project ${projectId} - ${targetDuration}s, ${platform}, style: ${visualStyle}${productContext ? `, product: ${productContext.productName}` : ''}`);
 
     const parsed = await universalVideoService.parseScriptWithBrandMatches({
       script,
       platform,
       targetDuration,
+      artPresetId: artPresetIdFromProgress,
+      productContext,
     } as any);
 
     let scenes = parsed.scenes;

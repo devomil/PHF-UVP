@@ -753,6 +753,7 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
         visualStyle: "warm",
         targetDuration: input.targetDuration,
         artPresetId: input.artPresetId,
+        productContext: input.productContext || undefined,
       });
 
       const scenes = parsed.scenes.map((s, index: number) => this.createSceneFromRaw({
