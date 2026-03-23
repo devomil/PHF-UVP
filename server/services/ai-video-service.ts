@@ -399,20 +399,29 @@ class AIVideoService {
       tierAdjustedOrder = providerOrder;
     } else {
       tierAdjustedOrder = providerOrder.map(baseProvider => {
-        if (sceneTypeMappedProviders.has(baseProvider)) {
-          console.log(`[AIVideo] Preserving scene-type-routed provider: ${baseProvider} (no tier remap)`);
-          return baseProvider;
-        }
         const baseName = baseProvider.split('-')[0];
         const tierVersions = TIER_PROVIDER_VERSIONS[baseName];
-        if (tierVersions && tierVersions[qualityTier]) {
-          const versionedProvider = tierVersions[qualityTier];
-          if (versionedProvider !== baseProvider) {
-            console.log(`[AIVideo] Quality tier ${qualityTier}: ${baseProvider} → ${versionedProvider}`);
-          }
-          return versionedProvider;
+        if (!tierVersions || !tierVersions[qualityTier]) {
+          return baseProvider;
         }
-        return baseProvider;
+        const versionedProvider = tierVersions[qualityTier];
+
+        if (qualityTier === 'standard') {
+          if (sceneTypeMappedProviders.has(baseProvider)) {
+            console.log(`[AIVideo] Standard: preserving scene-type-routed provider: ${baseProvider}`);
+            return baseProvider;
+          }
+          const isSpecificVariant = baseProvider.includes('-') && baseProvider !== baseName;
+          if (isSpecificVariant && baseProvider !== versionedProvider) {
+            console.log(`[AIVideo] Standard: preserving hierarchy-selected variant: ${baseProvider}`);
+            return baseProvider;
+          }
+        }
+
+        if (versionedProvider !== baseProvider) {
+          console.log(`[AIVideo] Quality tier ${qualityTier}: ${baseProvider} → ${versionedProvider}`);
+        }
+        return versionedProvider;
       });
     }
 
