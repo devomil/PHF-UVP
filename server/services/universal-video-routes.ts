@@ -2563,11 +2563,11 @@ router.post('/projects/:projectId/approve-outline', isAuthenticated, async (req:
       return res.status(403).json({ success: false, error: 'Access denied' });
     }
 
-    if (!chapters || !Array.isArray(chapters) || chapters.length < 3) {
-      return res.status(400).json({ success: false, error: 'At least 3 chapters are required' });
+    if (!chapters || !Array.isArray(chapters) || chapters.length < 4) {
+      return res.status(400).json({ success: false, error: 'At least 4 chapters are required' });
     }
-    if (chapters.length > 15) {
-      return res.status(400).json({ success: false, error: 'Maximum 15 chapters allowed' });
+    if (chapters.length > 8) {
+      return res.status(400).json({ success: false, error: 'Maximum 8 chapters allowed' });
     }
     for (const ch of chapters) {
       if (!ch.title || typeof ch.title !== 'string' || ch.title.trim().length === 0) {
@@ -2794,7 +2794,36 @@ router.post('/projects/:projectId/generate-script', isAuthenticated, async (req:
         scene.chapterIndex = chapterIdx;
         scene.chapterTitle = approvedOutline[chapterIdx]?.title || '';
       }
-      console.log(`[GenerateScript] Tagged ${scenes.length} scenes across ${approvedOutline.length} chapters (deterministic distribution)`);
+      const scenesWithTitleCards: any[] = [];
+      let lastChapterIdx = -1;
+      for (const scene of scenes) {
+        const s = scene as any;
+        if (s.chapterIndex !== lastChapterIdx) {
+          scenesWithTitleCards.push({
+            id: `chapter-title-${s.chapterIndex}`,
+            order: scenesWithTitleCards.length,
+            type: 'chapter-title',
+            duration: 3,
+            narration: '',
+            visualDirection: `Chapter ${(s.chapterIndex ?? 0) + 1}: ${s.chapterTitle}`,
+            textOverlays: [{
+              text: s.chapterTitle || `Chapter ${(s.chapterIndex ?? 0) + 1}`,
+              position: 'center',
+              style: 'title',
+            }],
+            background: { type: 'color', color: '#1a1a2e' },
+            transitionIn: { type: 'fade', duration: 0.5 },
+            transitionOut: { type: 'fade', duration: 0.5 },
+            chapterIndex: s.chapterIndex,
+            chapterTitle: s.chapterTitle,
+          });
+          lastChapterIdx = s.chapterIndex;
+        }
+        s.order = scenesWithTitleCards.length;
+        scenesWithTitleCards.push(s);
+      }
+      scenes = scenesWithTitleCards;
+      console.log(`[GenerateScript] Tagged ${scenes.length} scenes (incl. ${approvedOutline.length} title cards) across ${approvedOutline.length} chapters`);
     }
 
     projectData.scenes = scenes;

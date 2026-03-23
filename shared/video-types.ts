@@ -387,7 +387,8 @@ export type SceneType =
   | 'broll'
   | 'brand'
   | 'cta'
-  | 'outro';
+  | 'outro'
+  | 'chapter-title';
 
 export interface TextOverlay {
   id: string;

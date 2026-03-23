@@ -638,7 +638,7 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
                         <button
                           type="button"
                           onClick={() => removeChapter(idx)}
-                          disabled={editableChapters.length <= 3}
+                          disabled={editableChapters.length <= 4}
                           className="p-1 rounded hover:bg-red-500/10 transition-colors disabled:opacity-20"
                         >
                           <Trash2 className="w-3.5 h-3.5 text-red-400" />

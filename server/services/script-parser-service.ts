@@ -499,6 +499,7 @@ Return ONLY valid JSON matching this structure:
       "brand",
       "feature",
       "social_proof",
+      "chapter-title",
     ];
     return validTypes.includes(type) ? type : "broll";
   }

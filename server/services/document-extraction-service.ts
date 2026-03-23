@@ -34,8 +34,7 @@ export async function extractTextFromBuffer(
   }
 
   if (mimetype === 'application/pdf') {
-    const pdfParseModule = await import('pdf-parse');
-    const pdfParse = (pdfParseModule as any).default || pdfParseModule;
+    const pdfParse = (await import('pdf-parse')).default;
     const result = await pdfParse(buffer);
     const text = result.text.trim();
     return {
