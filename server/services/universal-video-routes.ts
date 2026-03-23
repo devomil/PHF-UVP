@@ -2532,8 +2532,28 @@ router.post('/projects/:projectId/generate-script', isAuthenticated, async (req:
     const visualStyle = (projectData as any).visualStyle || req.body?.visualStyle || 'lifestyle';
     const numScenes = req.body?.numScenes || undefined;
 
-    const productContext = (projectData.progress as any)?.productContext || null;
+    let productContext = (projectData.progress as any)?.productContext || null;
     const artPresetIdFromProgress = (projectData.progress as any)?.artPresetId || undefined;
+    const productMediaUrl = (projectData.progress as any)?.productMediaUrl || (projectData.assets as any)?.productMediaUrl || null;
+
+    if (!productContext && productMediaUrl && /\.(jpg|jpeg|png|webp)$/i.test(productMediaUrl)) {
+      try {
+        const { analyzeProductImage } = await import('./product-analysis-service');
+        console.log(`[GenerateScript] Product context missing but media exists — running inline analysis`);
+        productContext = await analyzeProductImage(productMediaUrl, script);
+        const freshProject = await getProjectFromDb(projectId);
+        if (freshProject) {
+          const latestProgress = (freshProject.progress as any) || {};
+          latestProgress.productContext = productContext;
+          latestProgress.productAnalysisStatus = 'complete';
+          await db.update(universalVideoProjects)
+            .set({ progress: latestProgress, updatedAt: new Date() })
+            .where(eq(universalVideoProjects.projectId, projectId));
+        }
+      } catch (err: any) {
+        console.warn(`[GenerateScript] Inline product analysis failed:`, err.message);
+      }
+    }
 
     console.log(`[GenerateScript] Generating script for project ${projectId} - ${targetDuration}s, ${platform}, style: ${visualStyle}${productContext ? `, product: ${productContext.productName}` : ''}`);
 

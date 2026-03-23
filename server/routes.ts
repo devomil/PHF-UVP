@@ -43,14 +43,26 @@ async function analyzeAndStoreProductMedia(projectId: string, mediaUrl: string, 
   if (isImage) {
     try {
       const productContext = await analyzeProductImage(mediaUrl, brief);
-      const progress = (existing.progress as any) || {};
-      progress.productContext = productContext;
-      await db.update(universalVideoProjects)
-        .set({ progress, updatedAt: new Date() })
-        .where(eq(universalVideoProjects.projectId, projectId));
-      console.log(`[Routes] Product context saved for project ${projectId}: ${productContext.productName}`);
+      const [fresh] = await db.select().from(universalVideoProjects).where(eq(universalVideoProjects.projectId, projectId));
+      if (fresh) {
+        const latestProgress = (fresh.progress as any) || {};
+        latestProgress.productContext = productContext;
+        latestProgress.productAnalysisStatus = 'complete';
+        await db.update(universalVideoProjects)
+          .set({ progress: latestProgress, updatedAt: new Date() })
+          .where(eq(universalVideoProjects.projectId, projectId));
+        console.log(`[Routes] Product context saved for project ${projectId}: ${productContext.productName}`);
+      }
     } catch (err: any) {
       console.error(`[Routes] Vision analysis failed for ${projectId}:`, err.message);
+      const [fresh] = await db.select().from(universalVideoProjects).where(eq(universalVideoProjects.projectId, projectId));
+      if (fresh) {
+        const latestProgress = (fresh.progress as any) || {};
+        latestProgress.productAnalysisStatus = 'failed';
+        await db.update(universalVideoProjects)
+          .set({ progress: latestProgress, updatedAt: new Date() })
+          .where(eq(universalVideoProjects.projectId, projectId));
+      }
     }
   }
 
