@@ -338,8 +338,10 @@ export async function registerRoutes(app: Express) {
         if (scriptPresets) {
           progressData.scriptPresets = scriptPresets;
         }
-        if (projectType) {
+        if (projectType && ptConfig) {
           progressData.projectType = projectType;
+        } else if (projectType) {
+          console.warn(`[Routes] Invalid projectType "${projectType}", ignoring`);
         }
         if (contentStructure && projectType === 'educational') {
           const validStructure = getContentStructure(contentStructure);

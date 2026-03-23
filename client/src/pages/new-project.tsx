@@ -9,7 +9,7 @@ import { CharacterProfilesPanel } from "@/components/video/character-profiles-pa
 import { AssetSuzzieChat } from "@/components/video/AssetSuzzieChat";
 import { getAvailableStyles } from "@shared/visual-style-config";
 import { getAllVisualArtPresets, isStylizedPreset, type VisualArtPreset } from "@shared/config/visual-art-presets";
-import { getAllProjectTypes, getProjectType, CONTENT_STRUCTURES, type ProjectTypeConfig } from "@shared/config/project-types";
+import { getAllProjectTypes, getProjectType, CONTENT_STRUCTURES } from "@shared/config/project-types";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -209,7 +209,6 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
   const [scriptTone, setScriptTone] = useState("educational");
   const [callToAction, setCallToAction] = useState("learn-more");
 
-  const projectTypeConfig = getProjectType(projectTypeId);
   const allProjectTypes = getAllProjectTypes();
 
   const hasLockedCharacters = characters.some((c: any) => c.locked && c.referenceImageUrl);
