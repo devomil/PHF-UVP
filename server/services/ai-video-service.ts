@@ -399,6 +399,10 @@ class AIVideoService {
       tierAdjustedOrder = providerOrder;
     } else {
       tierAdjustedOrder = providerOrder.map(baseProvider => {
+        if (sceneTypeMappedProviders.has(baseProvider)) {
+          console.log(`[AIVideo] Preserving scene-type-routed provider: ${baseProvider} (no tier remap)`);
+          return baseProvider;
+        }
         const baseName = baseProvider.split('-')[0];
         const tierVersions = TIER_PROVIDER_VERSIONS[baseName];
         if (tierVersions && tierVersions[qualityTier]) {

@@ -496,16 +496,16 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
   const [contentTag, setContentTag] = useState<string | null>(scene.contentTag || null);
   const [sceneArtPreset, setSceneArtPreset] = useState<string>(scene.artPresetId || 'project');
 
-  const { data: projectData } = useQuery({
+  const { data: projectData } = useQuery<{ qualityTier?: string }>({
     queryKey: ["project", projectId],
   });
-  const [qualityTier, setQualityTier] = useState<string>((projectData as any)?.qualityTier || 'premium');
+  const [qualityTier, setQualityTier] = useState<string>(projectData?.qualityTier || 'premium');
 
   useEffect(() => {
-    if (projectData && (projectData as any).qualityTier) {
-      setQualityTier((projectData as any).qualityTier);
+    if (projectData?.qualityTier) {
+      setQualityTier(projectData.qualityTier);
     }
-  }, [(projectData as any)?.qualityTier]);
+  }, [projectData?.qualityTier]);
 
   const qualityTierDescriptions: Record<string, string> = {
     draft: 'Fast previews with Seedance — speed and cost priority',
@@ -1335,7 +1335,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                 <p className="text-[11px] font-medium mb-1 text-right" style={{ color: "var(--text-secondary)" }}>Quality</p>
                 <select
                   value={qualityTier}
-                  onChange={(e) => handleQualityTierChange(e.target.value as any)}
+                  onChange={(e) => handleQualityTierChange(e.target.value)}
                   className="text-xs rounded-lg border px-2 py-1.5 bg-transparent outline-none w-24"
                   style={{
                     borderColor: qualityTier === 'draft' ? 'rgba(251, 191, 36, 0.4)' : qualityTier === 'premium' ? 'rgba(168, 85, 247, 0.4)' : qualityTier === 'ultra' ? 'rgba(239, 68, 68, 0.4)' : 'var(--border-subtle)',
