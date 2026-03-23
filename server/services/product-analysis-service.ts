@@ -70,7 +70,16 @@ Return ONLY valid JSON, no markdown fences or extra text.`,
 
   try {
     const cleaned = result.text.replace(/```json\s*|\s*```/g, '').trim();
-    const parsed = JSON.parse(cleaned) as ProductContext;
+    const raw = JSON.parse(cleaned);
+    const parsed: ProductContext = {
+      productName: typeof raw.productName === 'string' ? raw.productName : 'Product',
+      category: typeof raw.category === 'string' ? raw.category : 'general',
+      keyFeatures: Array.isArray(raw.keyFeatures) ? raw.keyFeatures.filter((f: any) => typeof f === 'string') : [],
+      brandTone: typeof raw.brandTone === 'string' ? raw.brandTone : 'professional',
+      colorPalette: Array.isArray(raw.colorPalette) ? raw.colorPalette.filter((c: any) => typeof c === 'string') : [],
+      targetDemographic: typeof raw.targetDemographic === 'string' ? raw.targetDemographic : '',
+      visualDescription: typeof raw.visualDescription === 'string' ? raw.visualDescription : '',
+    };
     console.log(`[ProductAnalysis] Analyzed product: ${parsed.productName} (${parsed.category})`);
     return parsed;
   } catch (err: any) {

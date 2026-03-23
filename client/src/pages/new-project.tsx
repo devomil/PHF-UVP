@@ -187,6 +187,7 @@ function ModeSelection({ onSelect }: { onSelect: (mode: Mode) => void }) {
 }
 
 function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onSubmit: (data: any) => void; isLoading: boolean }) {
+  const { toast } = useToast();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [targetAudience, setTargetAudience] = useState("");
@@ -291,8 +292,11 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
         if (uploadRes.ok) {
           const uploadData = await uploadRes.json();
           productMediaUrl = uploadData.url;
+        } else {
+          toast({ title: "Media upload failed", description: "Your project will be created without product media.", variant: "destructive" });
         }
       } catch {
+        toast({ title: "Media upload failed", description: "Your project will be created without product media.", variant: "destructive" });
       } finally {
         setIsUploadingMedia(false);
       }
