@@ -214,7 +214,8 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
   });
 
   useEffect(() => {
-    if (isLongStory && !chapterOutline && !outlinePhase && !generateOutlineMutation.isPending && !outlineAutoTriggered.current && scenes.length === 0) {
+    const hasOutlineAlready = chapterOutline || outlinePhase === 'outline_review' || outlinePhase === 'outline_approved' || outlinePhase === 'script_ready';
+    if (isLongStory && !hasOutlineAlready && !generateOutlineMutation.isPending && !outlineAutoTriggered.current && scenes.length === 0) {
       outlineAutoTriggered.current = true;
       generateOutlineMutation.mutate();
     }
