@@ -230,10 +230,12 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
 
     const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'video/mp4', 'video/quicktime'];
     if (!allowedTypes.includes(file.type)) {
+      toast({ title: "Unsupported file type", description: "Please upload JPG, PNG, WEBP, MP4, or MOV files.", variant: "destructive" });
       return;
     }
 
     if (file.type.startsWith('video/') && file.size > 100 * 1024 * 1024) {
+      toast({ title: "File too large", description: "Video files must be under 100MB.", variant: "destructive" });
       return;
     }
 
@@ -243,6 +245,7 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
       video.onloadedmetadata = () => {
         URL.revokeObjectURL(video.src);
         if (video.duration > 60) {
+          toast({ title: "Video too long", description: "Product videos must be 60 seconds or shorter.", variant: "destructive" });
           setProductMediaFile(null);
           setProductMediaPreview(null);
           return;
