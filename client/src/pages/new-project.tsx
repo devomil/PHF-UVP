@@ -9,6 +9,7 @@ import { CharacterProfilesPanel } from "@/components/video/character-profiles-pa
 import { AssetSuzzieChat } from "@/components/video/AssetSuzzieChat";
 import { getAvailableStyles } from "@shared/visual-style-config";
 import { getAllVisualArtPresets, isStylizedPreset, type VisualArtPreset } from "@shared/config/visual-art-presets";
+import { getAllProjectTypes, getProjectType, CONTENT_STRUCTURES, type ProjectTypeConfig } from "@shared/config/project-types";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -191,12 +192,10 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [targetAudience, setTargetAudience] = useState("");
-  const [duration, setDuration] = useState("60");
-  const [platform, setPlatform] = useState("YouTube");
-  const [aspectRatio, setAspectRatio] = useState("16:9");
+  const [projectTypeId, setProjectTypeId] = useState("youtube-ad");
+  const [contentStructure, setContentStructure] = useState("explainer");
   const [mediaMode, setMediaMode] = useState("video");
   const [videoGenerationMode, setVideoGenerationMode] = useState("auto");
-  const [qualityTier, setQualityTier] = useState("premium");
   const [artPresetId, setArtPresetId] = useState("auto");
   const [characterConsistency, setCharacterConsistency] = useState(false);
   const [characters, setCharacters] = useState<any[]>([]);
@@ -209,6 +208,9 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
   const [scriptTone, setScriptTone] = useState("educational");
   const [callToAction, setCallToAction] = useState("learn-more");
 
+  const projectTypeConfig = getProjectType(projectTypeId);
+  const allProjectTypes = getAllProjectTypes();
+
   const hasLockedCharacters = characters.some((c: any) => c.locked && c.referenceImageUrl);
   const showCharacterI2V = artPresetId === '3d-illustration' && hasLockedCharacters;
 
@@ -219,14 +221,19 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
   }, [artPresetId, characters, showCharacterI2V, videoGenerationMode]);
 
   useEffect(() => {
-    setAspectRatio(platformAspectMap[platform] || "16:9");
-  }, [platform]);
-
-  useEffect(() => {
     if (isStylizedPreset(artPresetId)) {
       setCharacterConsistency(true);
     }
   }, [artPresetId]);
+
+  useEffect(() => {
+    if (projectTypeId === 'educational' && contentStructure) {
+      const cs = CONTENT_STRUCTURES.find(s => s.id === contentStructure);
+      if (cs && artPresetId === 'auto') {
+        setArtPresetId(cs.defaultArtPreset);
+      }
+    }
+  }, [contentStructure, projectTypeId]);
 
   const handleProductMediaSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -309,21 +316,24 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
       }
     }
 
+    const ptConfig = getProjectType(projectTypeId);
     onSubmit({
       mode: "ai-script",
       title,
       description,
       targetAudience,
-      duration: parseInt(duration),
-      platform,
-      aspectRatio,
+      duration: ptConfig?.defaultDuration || 60,
+      platform: ptConfig?.platform || "YouTube",
+      aspectRatio: ptConfig?.aspectRatio || "16:9",
       mediaMode,
       videoGenerationMode: mediaMode === "video" ? videoGenerationMode : undefined,
-      qualityTier,
+      qualityTier: ptConfig?.qualityTier || "premium",
       artPresetId,
       characterConsistency,
       characters,
       productMediaUrl,
+      projectType: projectTypeId,
+      contentStructure: projectTypeId === 'educational' ? contentStructure : undefined,
       scriptPresets: productMediaUrl ? {
         productName: productName || undefined,
         productProblem: productProblem || undefined,
@@ -474,55 +484,43 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
           <Input value={targetAudience} onChange={(e) => setTargetAudience(e.target.value)} placeholder="e.g., Young professionals, Tech enthusiasts" className="mt-1.5" style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }} />
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <Label style={{ color: "var(--text-secondary)" }}>Target Duration</Label>
-            <Select value={duration} onValueChange={setDuration}>
-              <SelectTrigger className="mt-1.5" style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }}><SelectValue /></SelectTrigger>
-              <SelectContent style={{ backgroundColor: "var(--menu-bg)", borderColor: "var(--border-medium)" }}>
-                {["15", "30", "60", "90", "120", "180"].map((d) => (
-                  <SelectItem key={d} value={d} style={{ color: "var(--text-primary)" }}>{d}s</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label style={{ color: "var(--text-secondary)" }}>Platform</Label>
-            <Select value={platform} onValueChange={setPlatform}>
-              <SelectTrigger className="mt-1.5" style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }}><SelectValue /></SelectTrigger>
-              <SelectContent style={{ backgroundColor: "var(--menu-bg)", borderColor: "var(--border-medium)" }}>
-                {["YouTube", "TikTok", "Instagram Reels", "Instagram Post", "Facebook", "Website"].map((p) => (
-                  <SelectItem key={p} value={p} style={{ color: "var(--text-primary)" }}>{p}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+        <div>
+          <Label style={{ color: "var(--text-secondary)" }}>Project Type</Label>
+          <p className="text-xs mt-0.5 mb-3" style={{ color: "var(--text-muted)" }}>
+            Choose a format — aspect ratio, duration, and quality are set automatically
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            {allProjectTypes.map((pt) => (
+              <button
+                key={pt.id}
+                type="button"
+                onClick={() => setProjectTypeId(pt.id)}
+                className="text-left rounded-lg border-2 p-3 transition-all duration-200 hover:border-purple-400/50"
+                style={{
+                  backgroundColor: projectTypeId === pt.id ? "rgba(139, 92, 246, 0.12)" : "var(--surface)",
+                  borderColor: projectTypeId === pt.id ? "rgb(139, 92, 246)" : "var(--border-subtle)",
+                }}
+              >
+                <span className="font-medium text-sm block" style={{ color: "var(--text-primary)" }}>{pt.label}</span>
+                <span className="text-[11px] block mt-0.5" style={{ color: "var(--text-muted)" }}>{pt.subtitle}</span>
+              </button>
+            ))}
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        {projectTypeId === 'educational' && (
           <div>
-            <Label style={{ color: "var(--text-secondary)" }}>Aspect Ratio</Label>
-            <Select value={aspectRatio} onValueChange={setAspectRatio}>
+            <Label style={{ color: "var(--text-secondary)" }}>Content Structure</Label>
+            <Select value={contentStructure} onValueChange={setContentStructure}>
               <SelectTrigger className="mt-1.5" style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }}><SelectValue /></SelectTrigger>
               <SelectContent style={{ backgroundColor: "var(--menu-bg)", borderColor: "var(--border-medium)" }}>
-                {["16:9", "9:16", "1:1"].map((ar) => (
-                  <SelectItem key={ar} value={ar} style={{ color: "var(--text-primary)" }}>{ar}</SelectItem>
+                {CONTENT_STRUCTURES.map((cs) => (
+                  <SelectItem key={cs.id} value={cs.id} style={{ color: "var(--text-primary)" }}>{cs.label}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
-          <div>
-            <Label style={{ color: "var(--text-secondary)" }}>Quality Tier</Label>
-            <Select value={qualityTier} onValueChange={setQualityTier}>
-              <SelectTrigger className="mt-1.5" style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }}><SelectValue /></SelectTrigger>
-              <SelectContent style={{ backgroundColor: "var(--menu-bg)", borderColor: "var(--border-medium)" }}>
-                {["ultra", "premium", "standard"].map((q) => (
-                  <SelectItem key={q} value={q} style={{ color: "var(--text-primary)" }}>{q.charAt(0).toUpperCase() + q.slice(1)}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
+        )}
 
         <div>
           <Label style={{ color: "var(--text-secondary)" }}>Media Mode</Label>

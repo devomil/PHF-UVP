@@ -2536,6 +2536,8 @@ router.post('/projects/:projectId/generate-script', isAuthenticated, async (req:
     const artPresetIdFromProgress = (projectData.progress as any)?.artPresetId || undefined;
     const productMediaUrl = (projectData.progress as any)?.productMediaUrl || (projectData.assets as any)?.productMediaUrl || null;
     const scriptPresets = (projectData.progress as any)?.scriptPresets || null;
+    const projectType = (projectData.progress as any)?.projectType || null;
+    const contentStructure = (projectData.progress as any)?.contentStructure || null;
 
     if (!productContext && productMediaUrl && /\.(jpg|jpeg|png|webp)$/i.test(productMediaUrl)) {
       try {
@@ -2565,6 +2567,8 @@ router.post('/projects/:projectId/generate-script', isAuthenticated, async (req:
       artPresetId: artPresetIdFromProgress,
       productContext,
       scriptPresets,
+      projectType,
+      contentStructure,
     } as any);
 
     let scenes = parsed.scenes;

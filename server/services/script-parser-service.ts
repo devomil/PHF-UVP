@@ -60,6 +60,8 @@ export interface ScriptParseOptions {
     scriptTone?: string;
     callToAction?: string;
   };
+  projectType?: string;
+  contentStructure?: string;
 }
 
 class ScriptParserService {
@@ -83,7 +85,7 @@ class ScriptParserService {
     );
 
     const artPreset = options.artPresetId ? getVisualArtPreset(options.artPresetId) : null;
-    const systemPrompt = await this.buildBrandAwareSystemPrompt(brandContext, roleContext, aestheticContext, artPreset, options.productContext, options.scriptPresets);
+    const systemPrompt = await this.buildBrandAwareSystemPrompt(brandContext, roleContext, aestheticContext, artPreset, options.productContext, options.scriptPresets, options.projectType, options.contentStructure);
     const userPrompt = await this.buildParsingPrompt(script, options, serviceMatches, artPreset);
 
     try {
@@ -101,7 +103,7 @@ class ScriptParserService {
     }
   }
 
-  private async buildBrandAwareSystemPrompt(brandContext: string, roleContext: string, aestheticContext: string, artPreset?: any, productContext?: ScriptParseOptions['productContext'], scriptPresets?: ScriptParseOptions['scriptPresets']): Promise<string> {
+  private async buildBrandAwareSystemPrompt(brandContext: string, roleContext: string, aestheticContext: string, artPreset?: any, productContext?: ScriptParseOptions['productContext'], scriptPresets?: ScriptParseOptions['scriptPresets'], projectType?: string, contentStructure?: string): Promise<string> {
     const brand = await getAnyBrandContext();
     const brandName = getBrandNameOrDefault(brand);
     const hasBrand = brand.brandName?.trim();
@@ -149,6 +151,56 @@ ${scriptPresets.productProblem ? `- Problem It Solves: ${scriptPresets.productPr
 IMPORTANT: The script MUST match this tone throughout all scenes. The final scene (CTA) must use the specified call to action.${scriptPresets.productProblem ? ` Structure the narrative around the problem "${scriptPresets.productProblem}" and show how ${scriptPresets.productName || 'the product'} solves it.` : ''}
 ` : '';
 
+    let projectTypeBlock = '';
+    if (projectType) {
+      const projectTypePrompts: Record<string, string> = {
+        'tiktok-reels': `PROJECT FORMAT: TikTok / Reels (9:16, 15-30s)
+- Open with a strong hook in the first 2 seconds — this is make-or-break
+- Fast-paced cuts, high energy throughout
+- Every scene must deliver value immediately — no slow buildups
+- End with a clear, punchy call to action
+- Bias scene types toward: hook, benefit, cta`,
+        'youtube-short': `PROJECT FORMAT: YouTube Short (9:16, up to 60s)
+- Start with an attention-grabbing hook
+- Build a mini story arc: problem → solution → payoff
+- Keep energy high throughout — viewers swipe away fast
+- Bias scene types toward: hook, problem, solution, cta`,
+        'youtube-ad': `PROJECT FORMAT: YouTube Ad (16:9, 30-60s)
+- The first 5 seconds are critical — the viewer can skip after that
+- Front-load the hook with the strongest visual and copy
+- Cinematic widescreen framing, professional production quality
+- Bias scene types toward: hook, problem, solution, benefit, cta`,
+        'facebook-feed': `PROJECT FORMAT: Facebook Feed (1:1, 15-30s)
+- Designed for autoplay with sound off — visual storytelling is paramount
+- Bold text overlays for key messages (viewers may not hear audio)
+- Concise and punchy — every second counts
+- Bias scene types toward: hook, benefit, cta`,
+        'product-launch': `PROJECT FORMAT: Product Launch Video (16:9, 90s)
+- Build anticipation with a problem/pain scene
+- Reveal the product as the solution — make this a moment
+- Highlight 2-3 key features with benefit framing
+- Include social proof if available
+- Close with a strong purchase-oriented CTA
+- Bias scene types toward: hook, problem, solution, feature, benefit, testimonial, cta`,
+        'educational': `PROJECT FORMAT: Educational / Training Video (16:9, 2-5 min)
+- Use clear section headers and numbered frameworks
+- Follow concept-then-example structure throughout
+- Include on-screen text overlays for key stats, frameworks, and numbered lists
+- Use 3-4 micro-scenes per scene to allow concept buildup
+- Vary pacing between dense information delivery and visual breathers
+- Bias scene types toward: explanation, demonstration, benefit, proof
+${contentStructure ? `- Content structure: ${contentStructure} format` : ''}`,
+        'long-story': `PROJECT FORMAT: Long Story / Deep Dive (16:9, 5-10 min)
+- Maintain a consistent narrative voice throughout all sections
+- Structure content into clear chapters with natural breaks
+- Each chapter should end with a bridge sentence leading to the next
+- Vary scene pacing — use faster cuts for lists/frameworks, slower for emotional or conceptual moments
+- Include chapter title card moments between major sections
+- Bias scene types toward: story, explanation, feature, benefit, proof, testimonial`,
+      };
+      projectTypeBlock = projectTypePrompts[projectType] ? `\n${projectTypePrompts[projectType]}\n` : '';
+    }
+
     return `${roleContext}
 
 You are an expert video script parser for ${brandDesc}.
@@ -156,7 +208,7 @@ You are an expert video script parser for ${brandDesc}.
 ${brandContext}
 
 ${aestheticContext}
-${guidelinesBlock}${productBlock}${scriptPresetsBlock}
+${guidelinesBlock}${productBlock}${scriptPresetsBlock}${projectTypeBlock}
 YOUR ROLE:
 You parse video scripts into scenes, identifying:
 1. Scene breaks and types (hook, problem, solution, benefit, testimonial, cta)
