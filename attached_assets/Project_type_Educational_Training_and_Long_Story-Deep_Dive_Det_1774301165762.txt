@@ -1,0 +1,50 @@
+Project type: Educational / Training Video
+
+Target: 2-5 minutes, structured learning content for customers, employees, or audiences
+Differences from standard flow:
+
+Add a "Content Structure" selector: Tutorial / Explainer / How-To / Product Education / Health & Wellness
+Script generation prompt biases toward: clear section headers, numbered frameworks, concept-then-example structure
+Default art style: Scientific/Medical for health content, 2D Line Art for frameworks/systems, 3D Illustration for product education
+Default platform: YouTube (16:9)
+Default quality: Premium
+Micro-scene count: higher per scene (3-4 micro-scenes) to allow concept buildup
+Auto-suggest on-screen text overlays for key stats, frameworks, and numbered lists pulled from the brief
+Scene types biased toward: explanation, demonstration, benefit, proof
+
+
+Project type: Long Story / Deep Dive (5-10 min)
+
+This is the document-ingestion mode.
+Key addition — Document/Brief Upload:
+
+Accept .txt, .docx, .pdf, or plain text paste (large text area, no character limit)
+When a document is uploaded, Claude performs pre-processing before script generation:
+
+Extract key sections, frameworks, and named concepts
+Identify natural chapter breaks
+Score each section for visual storytelling potential
+Output a contentOutline with proposed chapters, section titles, and recommended scene counts per chapter
+
+
+Show the user the proposed outline BEFORE generating the full script — let them reorder, rename, or remove chapters
+Only after outline approval does the full script generate
+
+Structure:
+
+Chapters: 4-8 chapters, each 45-90 seconds
+Each chapter gets its own scene group in the project editor
+Chapter titles rendered as title card overlays between sections
+Default duration: 5 minutes (adjustable to 10)
+Default platform: YouTube
+Default quality: Standard (cost-sensitive for long form) with Premium available
+
+Script generation prompt additions for long form:
+
+"Maintain a consistent narrative voice throughout all chapters"
+"Each chapter should end with a bridge sentence leading to the next chapter"
+"Vary scene pacing — use faster cuts for lists/frameworks, slower for emotional or conceptual moments"
+
+
+new addition in UI/UX
+Repurpose Button — Once a long-form video is done, offer one-click repurposing: "Create a 60-second highlight reel from this video" or "Generate 5 social clips from this content." This multiplies the value of every long-form project and is a retention driver.
