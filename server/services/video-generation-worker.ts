@@ -398,6 +398,7 @@ class VideoGenerationWorker {
         let charRefImageUrls: string[] | undefined;
         let isCharacterRef = false;
         let charEnhancedPrompt = promptForGeneration;
+        let projectQualityTier: string = 'standard';
 
         const snapshotArtPresetId = (job.i2vSettings as any)?.snapshotArtPresetId as string | undefined;
 
@@ -522,14 +523,13 @@ class VideoGenerationWorker {
               }
             }
           }
+          projectQualityTier = projectData?.qualityTier || projectData?.progress?.qualityTier || 'standard';
         } catch (e) {
           log.debug(` Job ${job.jobId} could not resolve art preset/content tag: ${(e as any).message}`);
         }
 
         const finalImageUrl = job.sourceImageUrl || charRefImageUrl || undefined;
         const finalImageUrls = (job.i2vSettings as any)?.sourceImageUrls || (charRefImageUrls && charRefImageUrls.length > 1 ? charRefImageUrls : undefined);
-
-        const projectQualityTier = projectData?.qualityTier || projectData?.progress?.qualityTier || 'standard';
 
         const result = await aiVideoService.generateVideo({
           prompt: charEnhancedPrompt,
