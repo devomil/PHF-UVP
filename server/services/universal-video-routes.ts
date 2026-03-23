@@ -2610,6 +2610,14 @@ router.post('/projects/:projectId/repurpose', isAuthenticated, async (req: Reque
       return res.status(403).json({ success: false, error: 'Access denied' });
     }
 
+    const sourceProgress = (sourceProject.progress as any) || {};
+    if (sourceProgress.projectType !== 'long-story') {
+      return res.status(400).json({ success: false, error: 'Repurpose is only available for Long Story projects' });
+    }
+    if (sourceProject.status !== 'completed' && !sourceProject.outputUrl) {
+      return res.status(400).json({ success: false, error: 'Source project must be completed before repurposing' });
+    }
+
     const sourceScenes = sourceProject.scenes || [];
     if (sourceScenes.length === 0) {
       return res.status(400).json({ success: false, error: 'Source project has no scenes' });
