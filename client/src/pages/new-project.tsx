@@ -204,6 +204,10 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
   const [productMediaPreview, setProductMediaPreview] = useState<string | null>(null);
   const [isUploadingMedia, setIsUploadingMedia] = useState(false);
   const productMediaInputRef = useRef<HTMLInputElement>(null);
+  const [productName, setProductName] = useState("");
+  const [productProblem, setProductProblem] = useState("");
+  const [scriptTone, setScriptTone] = useState("educational");
+  const [callToAction, setCallToAction] = useState("learn-more");
 
   const hasLockedCharacters = characters.some((c: any) => c.locked && c.referenceImageUrl);
   const showCharacterI2V = artPresetId === '3d-illustration' && hasLockedCharacters;
@@ -320,6 +324,12 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
       characterConsistency,
       characters,
       productMediaUrl,
+      scriptPresets: productMediaUrl ? {
+        productName: productName || undefined,
+        productProblem: productProblem || undefined,
+        scriptTone,
+        callToAction,
+      } : undefined,
     });
   };
 
@@ -381,6 +391,55 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
                 <button type="button" onClick={removeProductMedia} className="p-1.5 rounded-full hover:bg-red-500/10 transition-colors">
                   <X className="w-4 h-4 text-red-400" />
                 </button>
+              </div>
+            </div>
+          )}
+
+          {productMediaFile && (
+            <div className="mt-3 space-y-3 p-4 rounded-lg border" style={{ borderColor: "var(--border-subtle)", backgroundColor: "var(--surface-elevated)" }}>
+              <p className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>Help AI write a better script for your product</p>
+              <div>
+                <Label className="text-xs" style={{ color: "var(--text-secondary)" }}>Product Name</Label>
+                <Input value={productName} onChange={(e) => setProductName(e.target.value)} placeholder="e.g., GlowSerum Pro, FreshBrew Coffee" className="mt-1" style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }} />
+              </div>
+              <div>
+                <Label className="text-xs" style={{ color: "var(--text-secondary)" }}>What problem does it solve?</Label>
+                <Input value={productProblem} onChange={(e) => setProductProblem(e.target.value)} placeholder="e.g., Dry skin that won't go away, Boring morning coffee routine" className="mt-1" style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs" style={{ color: "var(--text-secondary)" }}>Tone</Label>
+                  <Select value={scriptTone} onValueChange={setScriptTone}>
+                    <SelectTrigger className="mt-1" style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }}><SelectValue /></SelectTrigger>
+                    <SelectContent style={{ backgroundColor: "var(--menu-bg)", borderColor: "var(--border-medium)" }}>
+                      {[
+                        { value: "educational", label: "Educational" },
+                        { value: "emotional", label: "Emotional" },
+                        { value: "urgency", label: "Urgency" },
+                        { value: "humor", label: "Humor" },
+                        { value: "aspirational", label: "Aspirational" },
+                      ].map((t) => (
+                        <SelectItem key={t.value} value={t.value} style={{ color: "var(--text-primary)" }}>{t.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs" style={{ color: "var(--text-secondary)" }}>Call to Action</Label>
+                  <Select value={callToAction} onValueChange={setCallToAction}>
+                    <SelectTrigger className="mt-1" style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }}><SelectValue /></SelectTrigger>
+                    <SelectContent style={{ backgroundColor: "var(--menu-bg)", borderColor: "var(--border-medium)" }}>
+                      {[
+                        { value: "shop-now", label: "Shop Now" },
+                        { value: "learn-more", label: "Learn More" },
+                        { value: "follow-us", label: "Follow Us" },
+                        { value: "book-consultation", label: "Book a Consultation" },
+                      ].map((c) => (
+                        <SelectItem key={c.value} value={c.value} style={{ color: "var(--text-primary)" }}>{c.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </div>
           )}

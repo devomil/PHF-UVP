@@ -54,6 +54,12 @@ export interface ScriptParseOptions {
     targetDemographic: string;
     visualDescription: string;
   };
+  scriptPresets?: {
+    productName?: string;
+    productProblem?: string;
+    scriptTone?: string;
+    callToAction?: string;
+  };
 }
 
 class ScriptParserService {
@@ -77,7 +83,7 @@ class ScriptParserService {
     );
 
     const artPreset = options.artPresetId ? getVisualArtPreset(options.artPresetId) : null;
-    const systemPrompt = await this.buildBrandAwareSystemPrompt(brandContext, roleContext, aestheticContext, artPreset, options.productContext);
+    const systemPrompt = await this.buildBrandAwareSystemPrompt(brandContext, roleContext, aestheticContext, artPreset, options.productContext, options.scriptPresets);
     const userPrompt = await this.buildParsingPrompt(script, options, serviceMatches, artPreset);
 
     try {
@@ -95,7 +101,7 @@ class ScriptParserService {
     }
   }
 
-  private async buildBrandAwareSystemPrompt(brandContext: string, roleContext: string, aestheticContext: string, artPreset?: any, productContext?: ScriptParseOptions['productContext']): Promise<string> {
+  private async buildBrandAwareSystemPrompt(brandContext: string, roleContext: string, aestheticContext: string, artPreset?: any, productContext?: ScriptParseOptions['productContext'], scriptPresets?: ScriptParseOptions['scriptPresets']): Promise<string> {
     const brand = await getAnyBrandContext();
     const brandName = getBrandNameOrDefault(brand);
     const hasBrand = brand.brandName?.trim();
@@ -119,6 +125,30 @@ PRODUCT CONTEXT (from uploaded product image analysis):
 IMPORTANT: Incorporate this product information naturally into narration and visual directions. Reference the product's actual features, colors, and appearance. At least one scene should showcase the product prominently.
 ` : '';
 
+    const toneMap: Record<string, string> = {
+      educational: 'Educational — informative, clear, expert-driven. Teach the audience something valuable.',
+      emotional: 'Emotional — heartfelt, empathetic, story-driven. Connect on a deep personal level.',
+      urgency: 'Urgency — time-sensitive, compelling, action-oriented. Create a sense of "act now."',
+      humor: 'Humor — witty, lighthearted, entertaining. Make the audience smile while delivering the message.',
+      aspirational: 'Aspirational — inspiring, forward-looking, empowering. Show the audience who they could become.',
+    };
+    const ctaMap: Record<string, string> = {
+      'shop-now': 'Shop Now — drive immediate purchase action',
+      'learn-more': 'Learn More — encourage deeper exploration',
+      'follow-us': 'Follow Us — build ongoing social connection',
+      'book-consultation': 'Book a Consultation — generate qualified leads',
+    };
+
+    const scriptPresetsBlock = scriptPresets ? `
+SCRIPT TONE & DIRECTION (user-selected):
+${scriptPresets.productName ? `- Product Name: ${scriptPresets.productName}` : ''}
+${scriptPresets.productProblem ? `- Problem It Solves: ${scriptPresets.productProblem}` : ''}
+- Tone: ${toneMap[scriptPresets.scriptTone || 'educational'] || scriptPresets.scriptTone}
+- Call to Action: ${ctaMap[scriptPresets.callToAction || 'learn-more'] || scriptPresets.callToAction}
+
+IMPORTANT: The script MUST match this tone throughout all scenes. The final scene (CTA) must use the specified call to action.${scriptPresets.productProblem ? ` Structure the narrative around the problem "${scriptPresets.productProblem}" and show how ${scriptPresets.productName || 'the product'} solves it.` : ''}
+` : '';
+
     return `${roleContext}
 
 You are an expert video script parser for ${brandDesc}.
@@ -126,7 +156,7 @@ You are an expert video script parser for ${brandDesc}.
 ${brandContext}
 
 ${aestheticContext}
-${guidelinesBlock}${productBlock}
+${guidelinesBlock}${productBlock}${scriptPresetsBlock}
 YOUR ROLE:
 You parse video scripts into scenes, identifying:
 1. Scene breaks and types (hook, problem, solution, benefit, testimonial, cta)

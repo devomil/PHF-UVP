@@ -2535,12 +2535,13 @@ router.post('/projects/:projectId/generate-script', isAuthenticated, async (req:
     let productContext = (projectData.progress as any)?.productContext || null;
     const artPresetIdFromProgress = (projectData.progress as any)?.artPresetId || undefined;
     const productMediaUrl = (projectData.progress as any)?.productMediaUrl || (projectData.assets as any)?.productMediaUrl || null;
+    const scriptPresets = (projectData.progress as any)?.scriptPresets || null;
 
     if (!productContext && productMediaUrl && /\.(jpg|jpeg|png|webp)$/i.test(productMediaUrl)) {
       try {
         const { analyzeProductImage } = await import('./product-analysis-service');
         console.log(`[GenerateScript] Product context missing but media exists — running inline analysis`);
-        productContext = await analyzeProductImage(productMediaUrl, script);
+        productContext = await analyzeProductImage(productMediaUrl, script, scriptPresets);
         const freshProject = await getProjectFromDb(projectId);
         if (freshProject) {
           const latestProgress = (freshProject.progress as any) || {};
@@ -2563,6 +2564,7 @@ router.post('/projects/:projectId/generate-script', isAuthenticated, async (req:
       targetDuration,
       artPresetId: artPresetIdFromProgress,
       productContext,
+      scriptPresets,
     } as any);
 
     let scenes = parsed.scenes;

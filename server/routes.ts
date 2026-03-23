@@ -22,7 +22,7 @@ import { getBrandContext } from "./services/brand-settings-service";
 import { analyzeProductImage } from "./services/product-analysis-service";
 import { assetLibrary } from "../shared/schema";
 
-async function analyzeAndStoreProductMedia(projectId: string, mediaUrl: string, brief: string, userId: string) {
+async function analyzeAndStoreProductMedia(projectId: string, mediaUrl: string, brief: string, userId: string, scriptPresets?: any) {
   console.log(`[Routes] Starting product media analysis for project ${projectId}`);
 
   const isImage = /\.(jpg|jpeg|png|webp)$/i.test(mediaUrl);
@@ -42,7 +42,7 @@ async function analyzeAndStoreProductMedia(projectId: string, mediaUrl: string, 
 
   if (isImage) {
     try {
-      const productContext = await analyzeProductImage(mediaUrl, brief);
+      const productContext = await analyzeProductImage(mediaUrl, brief, scriptPresets);
       const [fresh] = await db.select().from(universalVideoProjects).where(eq(universalVideoProjects.projectId, projectId));
       if (fresh) {
         const latestProgress = (fresh.progress as any) || {};
@@ -280,7 +280,7 @@ export async function registerRoutes(app: Express) {
         return res.status(401).json({ error: "Not authenticated" });
       }
 
-      const { mode, title, description, targetAudience, duration, platform, aspectRatio, mediaMode, videoGenerationMode, qualityTier, script, numScenes, visualStyle, voiceStyle, outputType, prompt, imageStyle, provider, saveToLibrary, customScenes, artPresetId, characterConsistency, characters, characterReferenceUrl, characterName, characterDescription, generationMode, negativePrompt, sourceImageUrl, referenceVideoUrl, imageFidelity, productMediaUrl } = req.body;
+      const { mode, title, description, targetAudience, duration, platform, aspectRatio, mediaMode, videoGenerationMode, qualityTier, script, numScenes, visualStyle, voiceStyle, outputType, prompt, imageStyle, provider, saveToLibrary, customScenes, artPresetId, characterConsistency, characters, characterReferenceUrl, characterName, characterDescription, generationMode, negativePrompt, sourceImageUrl, referenceVideoUrl, imageFidelity, productMediaUrl, scriptPresets } = req.body;
 
       const projectId = crypto.randomUUID();
 
@@ -329,6 +329,9 @@ export async function registerRoutes(app: Express) {
         if (productMediaUrl) {
           progressData.productMediaUrl = productMediaUrl;
         }
+        if (scriptPresets) {
+          progressData.scriptPresets = scriptPresets;
+        }
 
         const [project] = await db.insert(universalVideoProjects).values({
           projectId,
@@ -353,7 +356,7 @@ export async function registerRoutes(app: Express) {
         }).returning();
 
         if (productMediaUrl && mode === "ai-script") {
-          analyzeAndStoreProductMedia(projectId, productMediaUrl, description || "", userId).catch((err: any) => {
+          analyzeAndStoreProductMedia(projectId, productMediaUrl, description || "", userId, scriptPresets || null).catch((err: any) => {
             console.error(`[Routes] Product media analysis failed for ${projectId}:`, err.message);
           });
         }

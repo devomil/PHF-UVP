@@ -754,6 +754,7 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
         targetDuration: input.targetDuration,
         artPresetId: input.artPresetId,
         productContext: input.productContext || undefined,
+        scriptPresets: (input as any).scriptPresets || undefined,
       });
 
       const scenes = parsed.scenes.map((s, index: number) => this.createSceneFromRaw({

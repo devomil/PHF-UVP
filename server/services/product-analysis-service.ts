@@ -12,9 +12,17 @@ export interface ProductContext {
   visualDescription: string;
 }
 
+export interface ScriptPresets {
+  productName?: string;
+  productProblem?: string;
+  scriptTone?: string;
+  callToAction?: string;
+}
+
 export async function analyzeProductImage(
   imageUrl: string,
-  brief: string
+  brief: string,
+  scriptPresets?: ScriptPresets | null
 ): Promise<ProductContext> {
   const uploadsDir = path.resolve('uploads');
   const localPath = imageUrl.startsWith('/uploads/')
@@ -23,7 +31,7 @@ export async function analyzeProductImage(
 
   if (!localPath || !localPath.startsWith(uploadsDir + path.sep) || !fs.existsSync(localPath)) {
     console.warn(`[ProductAnalysis] Image file not accessible: ${imageUrl}`);
-    return buildFallbackContext(brief);
+    return buildFallbackContext(brief, scriptPresets);
   }
 
   const buffer = fs.readFileSync(localPath);
@@ -38,6 +46,10 @@ export async function analyzeProductImage(
   };
   const mediaType = mediaTypeMap[ext] || 'image/jpeg';
 
+  const userHints = scriptPresets
+    ? `\nUser-provided product details:\n${scriptPresets.productName ? `- Product name: ${scriptPresets.productName}` : ''}${scriptPresets.productProblem ? `\n- Problem it solves: ${scriptPresets.productProblem}` : ''}`
+    : '';
+
   const content: LLMMessageContent[] = [
     {
       type: 'image',
@@ -46,7 +58,7 @@ export async function analyzeProductImage(
     },
     {
       type: 'text',
-      text: `Analyze this product/brand image. The user's brief is: "${brief || 'No brief provided'}"
+      text: `Analyze this product/brand image. The user's brief is: "${brief || 'No brief provided'}"${userHints}
 
 Return a JSON object with these fields:
 - productName: The product name visible or inferred (string)
@@ -72,7 +84,7 @@ Return ONLY valid JSON, no markdown fences or extra text.`,
     const cleaned = result.text.replace(/```json\s*|\s*```/g, '').trim();
     const raw = JSON.parse(cleaned);
     const parsed: ProductContext = {
-      productName: typeof raw.productName === 'string' ? raw.productName : 'Product',
+      productName: typeof raw.productName === 'string' ? raw.productName : (scriptPresets?.productName || 'Product'),
       category: typeof raw.category === 'string' ? raw.category : 'general',
       keyFeatures: Array.isArray(raw.keyFeatures) ? raw.keyFeatures.filter((f: any) => typeof f === 'string') : [],
       brandTone: typeof raw.brandTone === 'string' ? raw.brandTone : 'professional',
@@ -84,13 +96,13 @@ Return ONLY valid JSON, no markdown fences or extra text.`,
     return parsed;
   } catch (err: any) {
     console.error('[ProductAnalysis] Failed to parse LLM response:', err.message);
-    return buildFallbackContext(brief);
+    return buildFallbackContext(brief, scriptPresets);
   }
 }
 
-function buildFallbackContext(brief: string): ProductContext {
+function buildFallbackContext(brief: string, scriptPresets?: ScriptPresets | null): ProductContext {
   return {
-    productName: 'Product',
+    productName: scriptPresets?.productName || 'Product',
     category: 'general',
     keyFeatures: [],
     brandTone: 'professional',
