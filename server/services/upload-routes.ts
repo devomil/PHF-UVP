@@ -19,6 +19,9 @@ const ALLOWED_MIMETYPES = [
   'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/svg+xml',
   'video/mp4', 'video/webm', 'video/quicktime',
   'audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/webm',
+  'text/plain',
+  'application/pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 ];
 
 const memUpload = multer({
@@ -95,6 +98,44 @@ router.get('/uploads', async (req: Request, res: Response) => {
   } catch (error: any) {
     console.error('[Uploads] List error:', error.message);
     res.status(500).json({ error: 'Failed to fetch uploads' });
+  }
+});
+
+router.post('/upload-document', memUpload.single('file'), async (req: Request, res: Response) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file provided' });
+    }
+
+    const userId = (req.user as any)?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'User not found' });
+    }
+
+    const { isSupportedDocumentType, extractTextFromBuffer } = await import('./document-extraction-service');
+
+    if (!isSupportedDocumentType(req.file.mimetype)) {
+      return res.status(400).json({ error: 'Unsupported document type. Accepted: .txt, .pdf, .docx' });
+    }
+
+    const extracted = await extractTextFromBuffer(
+      req.file.buffer,
+      req.file.mimetype,
+      req.file.originalname
+    );
+
+    console.log(`[Uploads] Document extracted: ${extracted.sourceFormat}, ${extracted.wordCount} words`);
+
+    res.status(200).json({
+      text: extracted.text,
+      wordCount: extracted.wordCount,
+      sourceFormat: extracted.sourceFormat,
+      title: extracted.title,
+      originalFilename: req.file.originalname,
+    });
+  } catch (error: any) {
+    console.error('[Uploads] Document extraction error:', error.message);
+    res.status(500).json({ error: 'Failed to extract text from document' });
   }
 });
 

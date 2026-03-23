@@ -3,7 +3,7 @@ import { useLocation, Link } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Sparkles, FileText, Zap, ArrowLeft, Video, Image, Info, Plus, Trash2, ChevronUp, ChevronDown, GripVertical, Palette, Users, UserCheck, Upload, X, ImagePlus, Film, Loader2, AlertCircle } from "lucide-react";
+import { Sparkles, FileText, Zap, ArrowLeft, Video, Image, Info, Plus, Trash2, ChevronUp, ChevronDown, GripVertical, Palette, Users, UserCheck, Upload, X, ImagePlus, Film, Loader2, AlertCircle, FileUp, BookOpen } from "lucide-react";
 import { ProviderCatalogSelector } from "@/components/video/provider-catalog-selector";
 import { CharacterProfilesPanel } from "@/components/video/character-profiles-panel";
 import { AssetSuzzieChat } from "@/components/video/AssetSuzzieChat";
@@ -208,6 +208,10 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
   const [productProblem, setProductProblem] = useState("");
   const [scriptTone, setScriptTone] = useState("educational");
   const [callToAction, setCallToAction] = useState("learn-more");
+  const [documentFile, setDocumentFile] = useState<File | null>(null);
+  const [isExtractingDocument, setIsExtractingDocument] = useState(false);
+  const [documentWordCount, setDocumentWordCount] = useState(0);
+  const documentInputRef = useRef<HTMLInputElement>(null);
 
   const allProjectTypes = getAllProjectTypes();
 
@@ -287,6 +291,56 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
     }
   };
 
+  const handleDocumentUpload = async (file: File) => {
+    const allowedTypes = ['text/plain', 'application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+    if (!allowedTypes.includes(file.type)) {
+      toast({ title: "Unsupported file type", description: "Please upload .txt, .pdf, or .docx files.", variant: "destructive" });
+      return;
+    }
+    if (file.size > 50 * 1024 * 1024) {
+      toast({ title: "File too large", description: "Document files must be under 50MB.", variant: "destructive" });
+      return;
+    }
+    setIsExtractingDocument(true);
+    setDocumentFile(file);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch('/api/videos/upload-document', {
+        method: 'POST',
+        body: formData,
+        credentials: 'include',
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to extract document text');
+      }
+      const data = await res.json();
+      setDescription(data.text);
+      setDocumentWordCount(data.wordCount);
+      if (data.title && !title) {
+        setTitle(data.title);
+      }
+      toast({ title: "Document imported", description: `Extracted ${data.wordCount.toLocaleString()} words from ${data.sourceFormat.toUpperCase()} file.` });
+    } catch (err: any) {
+      toast({ title: "Import failed", description: err.message, variant: "destructive" });
+      setDocumentFile(null);
+    } finally {
+      setIsExtractingDocument(false);
+    }
+  };
+
+  const removeDocument = () => {
+    setDocumentFile(null);
+    setDescription('');
+    setDocumentWordCount(0);
+    if (documentInputRef.current) {
+      documentInputRef.current.value = '';
+    }
+  };
+
+  const isLongStory = projectTypeId === 'long-story';
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -356,10 +410,97 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
           <Input value={title} onChange={(e) => setTitle(e.target.value)} required placeholder="Enter project title" className="mt-1.5" style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }} />
         </div>
 
-        <div>
-          <Label style={{ color: "var(--text-secondary)" }}>Description / Brief</Label>
-          <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Describe what you want your video to be about..." rows={4} className="mt-1.5" style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }} />
-        </div>
+        {isLongStory ? (
+          <div>
+            <Label style={{ color: "var(--text-secondary)" }}>
+              <BookOpen className="w-4 h-4 inline mr-1.5 text-purple-400" />
+              Document / Long-Form Content
+            </Label>
+            <p className="text-xs mt-0.5 mb-2" style={{ color: "var(--text-muted)" }}>
+              Paste your article, blog post, or script below — or upload a document file. AI will break it into chapters.
+            </p>
+            <input
+              ref={documentInputRef}
+              type="file"
+              accept=".txt,.pdf,.docx"
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) handleDocumentUpload(f); }}
+              className="hidden"
+            />
+            {!documentFile && !description ? (
+              <div className="space-y-3">
+                <button
+                  type="button"
+                  onClick={() => documentInputRef.current?.click()}
+                  disabled={isExtractingDocument}
+                  className="w-full flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed py-10 transition-colors hover:border-purple-400/50"
+                  style={{ borderColor: "var(--border-medium)", backgroundColor: "var(--surface-elevated)" }}
+                >
+                  {isExtractingDocument ? (
+                    <>
+                      <Loader2 className="w-8 h-8 animate-spin" style={{ color: "var(--text-muted)" }} />
+                      <span className="text-sm" style={{ color: "var(--text-muted)" }}>Extracting text...</span>
+                    </>
+                  ) : (
+                    <>
+                      <FileUp className="w-8 h-8" style={{ color: "var(--text-muted)" }} />
+                      <span className="text-sm font-medium" style={{ color: "var(--text-muted)" }}>Upload Document</span>
+                      <span className="text-xs" style={{ color: "var(--text-muted)" }}>PDF, DOCX, or TXT (up to 50MB)</span>
+                    </>
+                  )}
+                </button>
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center"><div className="w-full border-t" style={{ borderColor: "var(--border-subtle)" }} /></div>
+                  <div className="relative flex justify-center"><span className="px-3 text-xs" style={{ backgroundColor: "var(--surface)", color: "var(--text-muted)" }}>or paste text directly</span></div>
+                </div>
+                <Textarea
+                  value={description}
+                  onChange={(e) => { setDescription(e.target.value); setDocumentWordCount(e.target.value.split(/\s+/).filter(Boolean).length); }}
+                  placeholder="Paste your long-form content here (articles, blog posts, scripts, research papers...)"
+                  rows={10}
+                  className="mt-1.5"
+                  style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }}
+                />
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <div className="flex items-center gap-3 p-3 rounded-lg border" style={{ borderColor: "var(--border-medium)", backgroundColor: "var(--surface-elevated)" }}>
+                  <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ backgroundColor: "rgba(139, 92, 246, 0.1)" }}>
+                    <FileText className="w-5 h-5 text-purple-400" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate" style={{ color: "var(--text-primary)" }}>
+                      {documentFile ? documentFile.name : 'Pasted content'}
+                    </p>
+                    <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                      {documentWordCount.toLocaleString()} words
+                    </p>
+                  </div>
+                  <button type="button" onClick={removeDocument} className="p-1.5 rounded-full hover:bg-red-500/10 transition-colors">
+                    <X className="w-4 h-4 text-red-400" />
+                  </button>
+                </div>
+                <Textarea
+                  value={description}
+                  onChange={(e) => { setDescription(e.target.value); setDocumentWordCount(e.target.value.split(/\s+/).filter(Boolean).length); }}
+                  rows={8}
+                  className="mt-1"
+                  style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }}
+                />
+                {documentWordCount < 100 && description.trim() && (
+                  <div className="flex items-center gap-2 text-xs p-2 rounded-lg" style={{ backgroundColor: "rgba(245, 158, 11, 0.1)", color: "rgb(245, 158, 11)" }}>
+                    <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                    Short content — for best results, provide at least 200+ words
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div>
+            <Label style={{ color: "var(--text-secondary)" }}>Description / Brief</Label>
+            <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Describe what you want your video to be about..." rows={4} className="mt-1.5" style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }} />
+          </div>
+        )}
 
         <div>
           <Label style={{ color: "var(--text-secondary)" }}>Product or Brand Media <span className="text-xs font-normal" style={{ color: "var(--text-muted)" }}>(optional)</span></Label>

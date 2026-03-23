@@ -2509,6 +2509,184 @@ async function runBackgroundSceneAnalysis(projectId: string, userId: number | st
   }
 }
 
+router.post('/projects/:projectId/generate-outline', isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const userId = (req.user as any)?.id;
+    const { projectId } = req.params;
+
+    const projectData = await getProjectFromDb(projectId);
+    if (!projectData) {
+      return res.status(404).json({ success: false, error: 'Project not found' });
+    }
+    if (projectData.ownerId !== userId) {
+      return res.status(403).json({ success: false, error: 'Access denied' });
+    }
+
+    const text = projectData.description || '';
+    if (!text.trim() || text.split(/\s+/).length < 50) {
+      return res.status(400).json({ success: false, error: 'Document text too short for chapter outline (minimum ~50 words)' });
+    }
+
+    const targetDuration = projectData.totalDuration || 300;
+
+    const { generateChapterOutline } = await import('./chapter-outline-service');
+    const outline = await generateChapterOutline(text, targetDuration);
+
+    const progress = (projectData.progress as any) || {};
+    progress.chapterOutline = outline;
+    progress.phase = 'outline_review';
+
+    await db.update(universalVideoProjects)
+      .set({ progress, updatedAt: new Date() })
+      .where(eq(universalVideoProjects.projectId, projectId));
+
+    console.log(`[GenerateOutline] Generated ${outline.chapters.length} chapters for project ${projectId}`);
+
+    res.json({ success: true, outline });
+  } catch (error: any) {
+    console.error('[GenerateOutline] Error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.post('/projects/:projectId/approve-outline', isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const userId = (req.user as any)?.id;
+    const { projectId } = req.params;
+    const { chapters } = req.body;
+
+    const projectData = await getProjectFromDb(projectId);
+    if (!projectData) {
+      return res.status(404).json({ success: false, error: 'Project not found' });
+    }
+    if (projectData.ownerId !== userId) {
+      return res.status(403).json({ success: false, error: 'Access denied' });
+    }
+
+    if (!chapters || !Array.isArray(chapters) || chapters.length === 0) {
+      return res.status(400).json({ success: false, error: 'No chapters provided' });
+    }
+
+    const progress = (projectData.progress as any) || {};
+    progress.approvedOutline = chapters;
+    progress.phase = 'outline_approved';
+
+    await db.update(universalVideoProjects)
+      .set({ progress, updatedAt: new Date() })
+      .where(eq(universalVideoProjects.projectId, projectId));
+
+    console.log(`[ApproveOutline] Approved ${chapters.length} chapters for project ${projectId}`);
+
+    res.json({ success: true, chapters });
+  } catch (error: any) {
+    console.error('[ApproveOutline] Error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.post('/projects/:projectId/repurpose', isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const userId = (req.user as any)?.id;
+    const { projectId } = req.params;
+    const { type } = req.body;
+
+    if (!type || !['highlight', 'clips'].includes(type)) {
+      return res.status(400).json({ success: false, error: 'Invalid repurpose type. Must be "highlight" or "clips".' });
+    }
+
+    const sourceProject = await getProjectFromDb(projectId);
+    if (!sourceProject) {
+      return res.status(404).json({ success: false, error: 'Source project not found' });
+    }
+    if (sourceProject.ownerId !== userId) {
+      return res.status(403).json({ success: false, error: 'Access denied' });
+    }
+
+    const sourceScenes = sourceProject.scenes || [];
+    if (sourceScenes.length === 0) {
+      return res.status(400).json({ success: false, error: 'Source project has no scenes' });
+    }
+
+    const newProjectId = `repurpose-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    let newScenes: any[];
+    let newTitle: string;
+    let newDuration: number;
+    let newPlatform: string;
+    let newAspectRatio: string;
+
+    if (type === 'highlight') {
+      const scoredScenes = sourceScenes
+        .filter((s: any) => s.id !== 'intro-scene-auto')
+        .map((s: any, i: number) => ({ ...s, score: (s.type === 'hook' ? 10 : s.type === 'cta' ? 8 : 5) - i * 0.1 }))
+        .sort((a: any, b: any) => b.score - a.score);
+
+      newScenes = scoredScenes.slice(0, Math.min(6, scoredScenes.length)).map((s: any, i: number) => ({
+        ...s,
+        id: `highlight-${i}`,
+        duration: Math.min(s.duration || 10, 12),
+      }));
+      newTitle = `${sourceProject.title} — Highlight Reel`;
+      newDuration = 60;
+      newPlatform = 'YouTube';
+      newAspectRatio = '16:9';
+    } else {
+      const chapterScenes = sourceScenes.filter((s: any) => s.id !== 'intro-scene-auto');
+      const chunkSize = Math.ceil(chapterScenes.length / 5);
+      newScenes = [];
+      for (let c = 0; c < 5 && c * chunkSize < chapterScenes.length; c++) {
+        const chunk = chapterScenes.slice(c * chunkSize, (c + 1) * chunkSize);
+        const bestScene = chunk.reduce((best: any, cur: any) =>
+          (cur.type === 'hook' || cur.type === 'benefit') && (!best || best.type === 'content') ? cur : best, chunk[0]);
+        if (bestScene) {
+          newScenes.push({
+            ...bestScene,
+            id: `clip-${c}`,
+            duration: Math.min(bestScene.duration || 10, 15),
+          });
+        }
+      }
+      newTitle = `${sourceProject.title} — Social Clips`;
+      newDuration = 60;
+      newPlatform = 'TikTok';
+      newAspectRatio = '9:16';
+    }
+
+    const newProject = {
+      projectId: newProjectId,
+      title: newTitle,
+      description: `Repurposed from: ${sourceProject.title}`,
+      status: 'draft',
+      scenes: newScenes,
+      totalDuration: newDuration,
+      outputFormat: { platform: newPlatform, aspectRatio: newAspectRatio },
+      assets: {},
+      progress: {
+        phase: 'script_ready',
+        projectType: type === 'highlight' ? 'youtube-ad' : 'tiktok-reels',
+        artPresetId: (sourceProject.progress as any)?.artPresetId || 'auto',
+        completedSteps: ['script'],
+        steps: {
+          script: { status: 'complete', progress: 100, message: 'Repurposed from long-form' },
+          voiceover: { status: 'pending', progress: 0, message: '' },
+          images: { status: 'pending', progress: 0, message: '' },
+          videos: { status: 'pending', progress: 0, message: '' },
+          music: { status: 'pending', progress: 0, message: '' },
+          assembly: { status: 'pending', progress: 0, message: '' },
+        },
+      },
+      ownerId: userId,
+    };
+
+    await saveProjectToDb(newProject, userId);
+    console.log(`[Repurpose] Created ${type} project ${newProjectId} from ${projectId} with ${newScenes.length} scenes`);
+
+    res.json({ success: true, projectId: newProjectId, scenesCount: newScenes.length });
+  } catch (error: any) {
+    console.error('[Repurpose] Error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 router.post('/projects/:projectId/generate-script', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
@@ -2522,7 +2700,7 @@ router.post('/projects/:projectId/generate-script', isAuthenticated, async (req:
       return res.status(403).json({ success: false, error: 'Access denied' });
     }
 
-    const script = projectData.description || '';
+    let script = projectData.description || '';
     if (!script.trim()) {
       return res.status(400).json({ success: false, error: 'No script/description to parse' });
     }
@@ -2538,6 +2716,15 @@ router.post('/projects/:projectId/generate-script', isAuthenticated, async (req:
     const scriptPresets = (projectData.progress as any)?.scriptPresets || null;
     const projectType = (projectData.progress as any)?.projectType || null;
     const contentStructure = (projectData.progress as any)?.contentStructure || null;
+    const approvedOutline = (projectData.progress as any)?.approvedOutline || null;
+
+    if (approvedOutline && Array.isArray(approvedOutline) && approvedOutline.length > 0) {
+      const chapterDirective = approvedOutline.map((ch: any, idx: number) =>
+        `CHAPTER ${idx + 1}: "${ch.title}" (~${ch.estimatedDuration}s, ${ch.recommendedSceneCount} scenes)\n  Summary: ${ch.summary}\n  Key topics: ${(ch.keyTopics || []).join(', ')}`
+      ).join('\n\n');
+
+      script = `[CHAPTER STRUCTURE - Generate scenes following this exact chapter order. Start each chapter with a title card scene (type "chapter-title"). Add a bridge narration sentence at the end of each chapter leading into the next.]\n\n${chapterDirective}\n\n---\n\nSOURCE CONTENT:\n${script}`;
+    }
 
     if (!productContext && productMediaUrl && /\.(jpg|jpeg|png|webp)$/i.test(productMediaUrl)) {
       try {

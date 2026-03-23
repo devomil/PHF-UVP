@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
-import { ArrowLeft, Settings, Play, RefreshCw, Clock, Target, Monitor, BarChart3, Loader2, AlertCircle, Zap, Video, Image, Download, RotateCcw, Save, Trash2, ExternalLink, CheckCircle2, XCircle, X, Type, Film, ChevronDown, ChevronUp, CloudUpload, Mic, Music, Volume2, Palette, Shuffle, Sliders, Wand2, Sparkles, ImagePlus, Upload, Edit2, FileText, Plus, GripVertical, Eye, EyeOff, Layers, Maximize2 } from "lucide-react";
+import { ArrowLeft, Settings, Play, RefreshCw, Clock, Target, Monitor, BarChart3, Loader2, AlertCircle, Zap, Video, Image, Download, RotateCcw, Save, Trash2, ExternalLink, CheckCircle2, XCircle, X, Type, Film, ChevronDown, ChevronUp, CloudUpload, Mic, Music, Volume2, Palette, Shuffle, Sliders, Wand2, Sparkles, ImagePlus, Upload, Edit2, FileText, Plus, GripVertical, Eye, EyeOff, Layers, Maximize2, BookOpen, GripHorizontal, Star } from "lucide-react";
 import { getVisualArtPreset, getAllVisualArtPresets } from "@shared/config/visual-art-presets";
 import { SCENE_CONTENT_TAGS } from "@shared/config/scene-content-tags";
 import { Button } from "@/components/ui/button";
@@ -172,6 +172,84 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
       toast({ title: "Error", description: err.message, variant: "destructive" });
     },
   });
+
+  const isLongStory = (project.progress as any)?.projectType === 'long-story';
+  const chapterOutline = (project.progress as any)?.chapterOutline || null;
+  const approvedOutline = (project.progress as any)?.approvedOutline || null;
+  const outlinePhase = (project.progress as any)?.phase;
+  const [editableChapters, setEditableChapters] = useState<any[]>([]);
+  const [editingChapterIdx, setEditingChapterIdx] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (chapterOutline?.chapters) {
+      setEditableChapters(chapterOutline.chapters);
+    }
+  }, [chapterOutline]);
+
+  const generateOutlineMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/universal-video/projects/${projectId}/generate-outline`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Failed to generate outline");
+      }
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+      if (data.outline?.chapters) {
+        setEditableChapters(data.outline.chapters);
+      }
+      toast({ title: "Outline Generated", description: `${data.outline?.chapters?.length || 0} chapters ready for review.` });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const approveOutlineMutation = useMutation({
+    mutationFn: async (chapters: any[]) => {
+      const res = await fetch(`/api/universal-video/projects/${projectId}/approve-outline`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ chapters }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Failed to approve outline");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+      toast({ title: "Outline Approved", description: "Now generating your chapter-structured script..." });
+      generateScriptMutation.mutate();
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const moveChapter = (fromIdx: number, toIdx: number) => {
+    if (toIdx < 0 || toIdx >= editableChapters.length) return;
+    const updated = [...editableChapters];
+    const [moved] = updated.splice(fromIdx, 1);
+    updated.splice(toIdx, 0, moved);
+    setEditableChapters(updated);
+  };
+
+  const removeChapter = (idx: number) => {
+    setEditableChapters(prev => prev.filter((_, i) => i !== idx));
+  };
+
+  const updateChapterTitle = (idx: number, title: string) => {
+    setEditableChapters(prev => prev.map((ch, i) => i === idx ? { ...ch, title } : ch));
+  };
 
   const updateSceneMutation = useMutation({
     mutationFn: async ({ sceneId, updates }: { sceneId: string; updates: any }) => {
@@ -482,30 +560,137 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
         {/* PHASE 1: Generate Script (no scenes yet) */}
         {!hasScenes && !isGenerating && (
           <div className="space-y-4">
-            <div className="text-center py-6 space-y-3">
-              <div className="w-16 h-16 rounded-2xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center mx-auto">
-                <FileText className="w-8 h-8 text-purple-400" />
+            {/* Long Story: Outline Review Flow */}
+            {isLongStory && outlinePhase === 'outline_review' && editableChapters.length > 0 ? (
+              <div className="space-y-4">
+                <div className="text-center py-4 space-y-2">
+                  <div className="w-14 h-14 rounded-2xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center mx-auto">
+                    <BookOpen className="w-7 h-7 text-purple-400" />
+                  </div>
+                  <h3 className="text-lg font-semibold" style={{ color: "var(--text-primary)" }}>
+                    Review Chapter Outline
+                  </h3>
+                  <p className="text-sm max-w-md mx-auto" style={{ color: "var(--text-muted)" }}>
+                    Reorder, rename, or remove chapters. When ready, approve to generate the full script.
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  {editableChapters.map((ch, idx) => (
+                    <div
+                      key={idx}
+                      className="rounded-lg border p-3 transition-all"
+                      style={{ borderColor: "var(--border-subtle)", backgroundColor: "var(--surface-elevated)" }}
+                    >
+                      <div className="flex items-start gap-2">
+                        <div className="flex flex-col gap-0.5 mt-1">
+                          <button type="button" onClick={() => moveChapter(idx, idx - 1)} disabled={idx === 0} className="p-0.5 rounded hover:bg-white/5 disabled:opacity-20">
+                            <ChevronUp className="w-3.5 h-3.5" style={{ color: "var(--text-muted)" }} />
+                          </button>
+                          <button type="button" onClick={() => moveChapter(idx, idx + 1)} disabled={idx === editableChapters.length - 1} className="p-0.5 rounded hover:bg-white/5 disabled:opacity-20">
+                            <ChevronDown className="w-3.5 h-3.5" style={{ color: "var(--text-muted)" }} />
+                          </button>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded" style={{ backgroundColor: "rgba(139, 92, 246, 0.15)", color: "rgb(139, 92, 246)" }}>CH {idx + 1}</span>
+                            {editingChapterIdx === idx ? (
+                              <input
+                                type="text"
+                                value={ch.title}
+                                onChange={(e) => updateChapterTitle(idx, e.target.value)}
+                                onBlur={() => setEditingChapterIdx(null)}
+                                onKeyDown={(e) => { if (e.key === 'Enter') setEditingChapterIdx(null); }}
+                                autoFocus
+                                className="flex-1 text-sm font-medium px-2 py-0.5 rounded border outline-none"
+                                style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }}
+                              />
+                            ) : (
+                              <span
+                                className="text-sm font-medium cursor-pointer hover:underline"
+                                style={{ color: "var(--text-primary)" }}
+                                onClick={() => setEditingChapterIdx(idx)}
+                              >
+                                {ch.title}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs mb-1.5" style={{ color: "var(--text-muted)" }}>{ch.summary}</p>
+                          <div className="flex items-center gap-3 text-[10px]" style={{ color: "var(--text-muted)" }}>
+                            <span>{ch.recommendedSceneCount} scenes</span>
+                            <span>{ch.estimatedDuration}s</span>
+                            <span className="flex items-center gap-0.5">
+                              <Star className="w-3 h-3 text-amber-400" />
+                              {ch.visualStorytellingScore}/10
+                            </span>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeChapter(idx)}
+                          disabled={editableChapters.length <= 2}
+                          className="p-1 rounded hover:bg-red-500/10 transition-colors disabled:opacity-20"
+                        >
+                          <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex items-center justify-between text-xs p-2 rounded-lg" style={{ backgroundColor: "var(--surface-elevated)", color: "var(--text-muted)" }}>
+                  <span>{editableChapters.length} chapters</span>
+                  <span>{editableChapters.reduce((s, c) => s + (c.estimatedDuration || 0), 0)}s total</span>
+                  <span>{editableChapters.reduce((s, c) => s + (c.recommendedSceneCount || 0), 0)} scenes</span>
+                </div>
+
+                <button
+                  onClick={() => approveOutlineMutation.mutate(editableChapters)}
+                  disabled={approveOutlineMutation.isPending || generateScriptMutation.isPending}
+                  className="w-full py-4 rounded-xl font-semibold text-white text-base flex items-center justify-center gap-2.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  style={{ background: "linear-gradient(135deg, #7c3aed, #4f46e5)" }}
+                >
+                  {approveOutlineMutation.isPending || generateScriptMutation.isPending ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <Sparkles className="w-5 h-5" />
+                  )}
+                  {approveOutlineMutation.isPending ? "Approving..." : generateScriptMutation.isPending ? "Generating Script..." : "Approve & Generate Script"}
+                </button>
               </div>
-              <h3 className="text-lg font-semibold" style={{ color: "var(--text-primary)" }}>
-                Step 1: Generate Your Script
-              </h3>
-              <p className="text-sm max-w-md mx-auto" style={{ color: "var(--text-muted)" }}>
-                AI will create scenes from your script with narration, visual directions, and timing. You can review and edit everything before generating visual assets.
-              </p>
-            </div>
-            <button
-              onClick={() => generateScriptMutation.mutate()}
-              disabled={generateScriptMutation.isPending}
-              className="w-full py-4 rounded-xl font-semibold text-white text-base flex items-center justify-center gap-2.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-              style={{ background: "linear-gradient(135deg, #7c3aed, #4f46e5)" }}
-            >
-              {generateScriptMutation.isPending ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
-              ) : (
-                <FileText className="w-5 h-5" />
-              )}
-              {generateScriptMutation.isPending ? "Generating Script..." : "Generate Script"}
-            </button>
+            ) : (
+              <>
+                <div className="text-center py-6 space-y-3">
+                  <div className="w-16 h-16 rounded-2xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center mx-auto">
+                    {isLongStory ? <BookOpen className="w-8 h-8 text-purple-400" /> : <FileText className="w-8 h-8 text-purple-400" />}
+                  </div>
+                  <h3 className="text-lg font-semibold" style={{ color: "var(--text-primary)" }}>
+                    {isLongStory ? "Step 1: Generate Chapter Outline" : "Step 1: Generate Your Script"}
+                  </h3>
+                  <p className="text-sm max-w-md mx-auto" style={{ color: "var(--text-muted)" }}>
+                    {isLongStory
+                      ? "AI will analyze your document and break it into chapters. You'll review the outline before generating the full script."
+                      : "AI will create scenes from your script with narration, visual directions, and timing. You can review and edit everything before generating visual assets."
+                    }
+                  </p>
+                </div>
+                <button
+                  onClick={() => isLongStory ? generateOutlineMutation.mutate() : generateScriptMutation.mutate()}
+                  disabled={generateScriptMutation.isPending || generateOutlineMutation.isPending}
+                  className="w-full py-4 rounded-xl font-semibold text-white text-base flex items-center justify-center gap-2.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  style={{ background: "linear-gradient(135deg, #7c3aed, #4f46e5)" }}
+                >
+                  {(generateScriptMutation.isPending || generateOutlineMutation.isPending) ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : isLongStory ? (
+                    <BookOpen className="w-5 h-5" />
+                  ) : (
+                    <FileText className="w-5 h-5" />
+                  )}
+                  {generateOutlineMutation.isPending ? "Analyzing Document..." : generateScriptMutation.isPending ? "Generating Script..." : isLongStory ? "Generate Chapter Outline" : "Generate Script"}
+                </button>
+              </>
+            )}
           </div>
         )}
 
@@ -1405,7 +1590,84 @@ export default function ProjectDetail({ params }: { params?: { id: string } }) {
           </div>
         )}
 
+        {isLongStory && (project.status === 'completed' || project.outputUrl) && scenes.length > 0 && (
+          <RepurposePanel projectId={projectId} scenes={scenes} />
+        )}
+
         <RenderConfigPanel projectId={projectId} projectOutputUrl={project.outputUrl} projectStatus={project.status} projectScenes={project.scenes} projectRenderId={project.renderId} projectAspectRatio={project?.outputFormat?.aspectRatio || '16:9'} />
+      </div>
+    </div>
+  );
+}
+
+function RepurposePanel({ projectId, scenes }: { projectId: string; scenes: any[] }) {
+  const [, navigate] = useLocation();
+  const { toast } = useToast();
+  const [repurposeType, setRepurposeType] = useState<'highlight' | 'clips' | null>(null);
+
+  const repurposeMutation = useMutation({
+    mutationFn: async (type: 'highlight' | 'clips') => {
+      const res = await fetch(`/api/universal-video/projects/${projectId}/repurpose`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ type }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Failed to create repurposed project");
+      }
+      return res.json();
+    },
+    onSuccess: (data) => {
+      toast({ title: "Project Created", description: `Repurposed project ready for editing.` });
+      if (data.projectId) {
+        navigate(`/projects/${data.projectId}`);
+      }
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  return (
+    <div className="border rounded-xl p-4 mt-4" style={{ borderColor: "var(--border-subtle)", backgroundColor: "var(--surface)" }}>
+      <h3 className="text-sm font-medium flex items-center gap-2 mb-3" style={{ color: "var(--text-primary)" }}>
+        <Shuffle className="w-4 h-4 text-purple-400" />
+        Repurpose Content
+      </h3>
+      <p className="text-xs mb-3" style={{ color: "var(--text-muted)" }}>
+        Turn your long-form video into shorter content for other platforms.
+      </p>
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          onClick={() => repurposeMutation.mutate('highlight')}
+          disabled={repurposeMutation.isPending}
+          className="flex flex-col items-center gap-1.5 p-3 rounded-lg border-2 transition-all hover:border-purple-400/50"
+          style={{ borderColor: "var(--border-subtle)", backgroundColor: "var(--surface-elevated)" }}
+        >
+          {repurposeMutation.isPending && repurposeType === 'highlight' ? (
+            <Loader2 className="w-5 h-5 animate-spin text-purple-400" />
+          ) : (
+            <Zap className="w-5 h-5 text-amber-400" />
+          )}
+          <span className="text-xs font-medium" style={{ color: "var(--text-primary)" }}>60s Highlight Reel</span>
+          <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>Best moments condensed</span>
+        </button>
+        <button
+          onClick={() => repurposeMutation.mutate('clips')}
+          disabled={repurposeMutation.isPending}
+          className="flex flex-col items-center gap-1.5 p-3 rounded-lg border-2 transition-all hover:border-purple-400/50"
+          style={{ borderColor: "var(--border-subtle)", backgroundColor: "var(--surface-elevated)" }}
+        >
+          {repurposeMutation.isPending && repurposeType === 'clips' ? (
+            <Loader2 className="w-5 h-5 animate-spin text-purple-400" />
+          ) : (
+            <Layers className="w-5 h-5 text-blue-400" />
+          )}
+          <span className="text-xs font-medium" style={{ color: "var(--text-primary)" }}>5 Social Clips</span>
+          <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>TikTok / Reels / Shorts</span>
+        </button>
       </div>
     </div>
   );
