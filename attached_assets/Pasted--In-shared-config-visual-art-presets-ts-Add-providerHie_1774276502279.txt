@@ -1,0 +1,66 @@
+// In shared/config/visual-art-presets.ts
+// Add providerHierarchy to each preset:
+
+const ART_STYLE_PROVIDER_HIERARCHIES = {
+
+  'auto': {
+    primary: 'kling-2.6-pro',
+    fallback: ['runway-gen4', 'sora-2', 'veo-3'],
+    reason: 'Balanced default — Kling 2.6 handles most styles well'
+  },
+
+  '3d-illustration': {
+    primary: 'kling-2.1-master',
+    fallback: ['kling-2.6-pro', 'sora-2', 'veo-3'],
+    reason: 'Kling 2.1 Master has superior character face lock and stylized CGI fidelity. Runway excluded — gen4 struggles with maintaining Pixar style consistency.'
+  },
+
+  'cinematic-realism': {
+    primary: 'runway-gen4',
+    fallback: ['sora-2', 'veo-3', 'kling-2.6-pro'],
+    reason: 'Runway Gen4 leads in photorealistic film-grade output. Sora 2 and Veo 3 are strong alternates for realism. Kling is last — it skews stylized.'
+  },
+
+  '2d-line-art': {
+    primary: 'kling-2.6-pro',
+    fallback: ['sora-2', 'runway-gen4', 'veo-3'],
+    reason: 'Kling handles stylized flat aesthetics better than Runway for illustrated styles.'
+  },
+
+  'collage': {
+    primary: 'kling-2.6-pro',
+    fallback: ['runway-gen4', 'sora-2', 'veo-3'],
+    reason: 'Mixed media texture styles perform best on Kling. Runway can handle as fallback.'
+  },
+
+  'claymation': {
+    primary: 'kling-2.6-pro',
+    fallback: ['sora-2', 'veo-3', 'runway-gen4'],
+    reason: 'Kling maintains tactile stylized surfaces. Sora 2 handles clay-like material rendering as strong secondary.'
+  },
+
+  'neon-futuristic': {
+    primary: 'runway-gen4',
+    fallback: ['kling-2.6-pro', 'sora-2', 'veo-3'],
+    reason: 'Runway excels at cyberpunk holographic glow aesthetics and high-contrast lighting. Kling as solid secondary.'
+  },
+
+  'watercolor': {
+    primary: 'kling-2.6-pro',
+    fallback: ['sora-2', 'veo-3', 'runway-gen4'],
+    reason: 'Kling renders painterly soft-edge aesthetics more faithfully than Runway.'
+  },
+
+  'minimalist-flat': {
+    primary: 'kling-2.6-pro',
+    fallback: ['sora-2', 'runway-gen4', 'veo-3'],
+    reason: 'Clean geometric flat design stays more stable on Kling. Runway tends to add unwanted texture.'
+  },
+
+  'scientific-medical': {
+    primary: 'sora-2',
+    fallback: ['kling-2.6-pro', 'veo-3', 'runway-gen4'],
+    reason: 'Sora 2 handles complex 3D scientific visualization and molecular animation with high fidelity. Kling as strong secondary for Pixar-style medical content.'
+  }
+
+}

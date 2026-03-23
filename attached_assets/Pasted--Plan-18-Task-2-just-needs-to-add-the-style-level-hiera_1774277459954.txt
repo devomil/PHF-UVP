@@ -1,0 +1,24 @@
+
+Plan #18 Task 2 just needs to add the style-level hierarchy firing before that logic runs, which is a clean insertion.
+
+Ultra tier is real and well-built. It has multi-pass generation, 4K upscaling, color grading, frame interpolation, and audio enhancement — a fully featured cinema tier. The Out of Scope callout in the plan ("keep Ultra as-is") is correct. Don't touch it.
+Draft tier insertion is straightforward. The QualityTier type just needs 'draft' added, a cost config entry in TIER_COSTS, and a getTierLabel/getTierDescription entry. Clean, low-risk change.
+
+One Important Observation
+Looking at intelligent-provider-selector.ts, the applyArtPresetPreferences method currently reads providers from preset.recommendedProviders.video — meaning the hierarchy config needs to land in visual-art-presets.ts as part of each preset object, not as a separate ART_STYLE_PROVIDER_HIERARCHIES constant. Tell the agent:
+
+In Task 1, add the provider hierarchy directly to each preset object as a providerHierarchy property rather than as a separate standalone mapping. The applyArtPresetPreferences method in intelligent-provider-selector.ts already reads from the preset object via getVisualArtPreset(artPresetId) — this keeps the pattern consistent and avoids introducing a second lookup path.
+
+Task 5 says Premium promotes to kling-2.1-master for 3D Illustration "on all scene types" — but what about styles where the primary provider is Runway or Sora? The plan doesn't define what "highest model variant" means for those providers. Worth adding:
+
+For Task 5, please also define the premium model variant for each non-Kling primary provider — specifically what "promote to highest variant" means for Runway Gen4, Sora 2, and Veo 3.
+
+Premium Variant Gap — Still Needs Clarification
+The files don't define what "highest model variant" means for Runway, Sora, or Veo for Task 5. The resolveRunwayModel method shows Runway has multiple variants (runway-4.5, runway-act-two, runway-gen4, runway-gen4-aleph). Add this to your instructions:
+
+For Task 5 Premium promotion, define the top variant per provider:
+
+Runway → runway-4.5
+Sora → sora-2-pro
+Veo → veo-3
+Kling → kling-2.1-master
