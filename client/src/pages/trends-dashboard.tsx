@@ -87,9 +87,22 @@ export default function TrendsDashboard() {
     }
   }
 
+  useEffect(() => {
+    if (cooldownMinutes === null || cooldownMinutes <= 0) return;
+    const interval = setInterval(() => {
+      setCooldownMinutes((prev) => {
+        if (prev === null || prev <= 1) {
+          clearInterval(interval);
+          return null;
+        }
+        return prev - 1;
+      });
+    }, 60000);
+    return () => clearInterval(interval);
+  }, [cooldownMinutes]);
+
   async function handleRefresh() {
     setRefreshing(true);
-    setCooldownMinutes(null);
     try {
       const res = await fetch("/api/trend-intelligence/refresh", {
         method: "POST",
@@ -98,6 +111,7 @@ export default function TrendsDashboard() {
       const data = await res.json();
       if (data.success) {
         setTrendData(data);
+        setCooldownMinutes(null);
         toast({ title: "Trends refreshed", description: "Fresh analysis from Google Trends, YouTube & AI." });
       } else if (res.status === 429) {
         setCooldownMinutes(data.remainingMinutes || 60);
@@ -178,7 +192,7 @@ export default function TrendsDashboard() {
           </div>
           <Button
             onClick={handleRefresh}
-            disabled={refreshing || !!notEnabled}
+            disabled={refreshing || !!notEnabled || cooldownMinutes !== null}
             variant="outline"
             className="gap-2"
             style={{ borderColor: "var(--border-medium)", color: "var(--text-secondary)" }}
