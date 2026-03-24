@@ -230,19 +230,23 @@ Return 5 hooks, 10 keywords, 3 formats.`;
     return result;
   } catch (err: any) {
     console.error(`[TrendIntelligence] Claude analysis failed:`, err.message);
+    const nicheWords = contentNiche.split(/[,\s]+/).filter(Boolean);
+    const fallbackKeywords = [...nicheWords, industry, "trending", "viral", "tips", "secrets", "guide", "how to", "best", "top"].slice(0, 10);
     return {
-      hooks: [{
-        template: `What nobody tells you about ${contentNiche}`,
-        psychologicalDriver: "Curiosity gap",
-        example: `A ${contentNiche} deep-dive revealing hidden truths`,
-      }],
-      keywords: contentNiche.split(/[,\s]+/).filter(Boolean).slice(0, 5),
-      formats: [{
-        name: "Problem-Solution",
-        description: "Open with a relatable pain point, then reveal the solution",
-        why: "Timeless format that drives engagement across all platforms",
-      }],
-      insight: `Trending content in ${industry} is currently driven by authenticity and personal experience sharing.`,
+      hooks: [
+        { template: `What nobody tells you about ${contentNiche}`, psychologicalDriver: "Curiosity gap", example: `A ${contentNiche} deep-dive revealing hidden truths` },
+        { template: `Stop making this ${contentNiche} mistake`, psychologicalDriver: "Loss aversion", example: `Common ${contentNiche} error that's costing you results` },
+        { template: `I tested every ${contentNiche} method — here's what actually works`, psychologicalDriver: "Authority + specificity", example: `Comprehensive ${contentNiche} comparison with real data` },
+        { template: `The ${contentNiche} hack that changed everything for me`, psychologicalDriver: "Personal transformation", example: `Before/after story with ${contentNiche} results` },
+        { template: `Why ${targetAudience || "most people"} get ${contentNiche} completely wrong`, psychologicalDriver: "Pattern interrupt", example: `Contrarian take on mainstream ${contentNiche} advice` },
+      ],
+      keywords: fallbackKeywords,
+      formats: [
+        { name: "Problem-Solution", description: "Open with a relatable pain point, then reveal the solution", why: "Timeless format that drives engagement across all platforms" },
+        { name: "Before-After-Bridge", description: "Show the before state, the desired after, and the bridge to get there", why: "Visual transformation content consistently outperforms other formats" },
+        { name: "Myth-Busting", description: "Challenge a common belief, then reveal the surprising truth", why: "Controversy and pattern interrupts drive shares and comments" },
+      ],
+      insight: `Trending content in ${industry} is currently driven by authenticity and personal experience sharing. Focus on relatable storytelling and real results.`,
     };
   }
 }
