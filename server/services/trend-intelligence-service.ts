@@ -6,6 +6,11 @@ import { eq, and, gt } from "drizzle-orm";
 const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY || "";
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || "";
 
+interface WebSearchTool {
+  type: "web_search_20250305";
+  name: "web_search";
+}
+
 const INDUSTRY_YOUTUBE_CATEGORY: Record<string, string> = {
   "Health & Wellness": "26",
   "Fitness": "17",
@@ -203,7 +208,7 @@ Return 5 hooks, 10 keywords, 3 formats.`;
     const response = await anthropic.messages.create({
       model: "claude-sonnet-4-20250514",
       max_tokens: 2000,
-      tools: [{ type: "web_search_20250305" as any, name: "web_search" } as any],
+      tools: [{ type: "web_search_20250305", name: "web_search" } as unknown as Anthropic.Messages.Tool],
       system: `You are a viral content strategist specializing in short-form marketing video for small businesses and social media creators. Return ONLY valid JSON. No markdown, no explanation outside the JSON.`,
       messages: [{ role: "user", content: userPrompt }],
     });
@@ -254,7 +259,7 @@ async function saveToCache(industry: string, contentNiche: string, targetAudienc
       industry,
       contentNiche: contentNiche || "",
       targetAudience: targetAudience || "",
-      result: result as any,
+      result: JSON.parse(JSON.stringify(result)),
       expiresAt,
     });
     console.log(`[TrendIntelligence] Cached result for ${industry}/${contentNiche}, expires ${expiresAt.toISOString()}`);
