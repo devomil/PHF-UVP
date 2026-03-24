@@ -77,14 +77,14 @@ interface BrandInfo {
   industry: string;
   contentNiche: string;
   targetAudience: string;
+  trendAnalysisEnabled: boolean;
 }
 
 async function loadBrandInfo(): Promise<BrandInfo> {
+  const defaults: BrandInfo = { brandName: "", tagline: "", website: "", guidelines: "", industry: "", contentNiche: "", targetAudience: "", trendAnalysisEnabled: false };
   try {
     const [settings] = await db.select().from(brandSettings).limit(1);
-    if (!settings) {
-      return { brandName: "", tagline: "", website: "", guidelines: "", industry: "", contentNiche: "", targetAudience: "" };
-    }
+    if (!settings) return defaults;
     return {
       brandName: settings.brandName || "",
       tagline: settings.tagline || "",
@@ -93,13 +93,15 @@ async function loadBrandInfo(): Promise<BrandInfo> {
       industry: settings.industry || "",
       contentNiche: settings.contentNiche || "",
       targetAudience: settings.targetAudience || "",
+      trendAnalysisEnabled: settings.trendAnalysisEnabled || false,
     };
   } catch {
-    return { brandName: "", tagline: "", website: "", guidelines: "", industry: "", contentNiche: "", targetAudience: "" };
+    return defaults;
   }
 }
 
-async function loadTrendData(brand: BrandInfo): Promise<TrendResult | null> {
+async function loadTrendData(brand: BrandInfo, trendAnalysisEnabled: boolean): Promise<TrendResult | null> {
+  if (!trendAnalysisEnabled) return null;
   if (!brand.industry || !brand.contentNiche) return null;
   try {
     return await getTrendingHooks(brand.industry, brand.contentNiche, brand.targetAudience);
@@ -548,7 +550,7 @@ export async function runScriptPipeline(ctx: PipelineContext): Promise<PipelineR
   console.log(`[ScriptPipeline] Starting 3-stage pipeline for ${ctx.targetDuration}s ${ctx.platform} video`);
 
   const brand = await loadBrandInfo();
-  const trends = await loadTrendData(brand);
+  const trends = await loadTrendData(brand, brand.trendAnalysisEnabled);
   if (trends) {
     console.log(`[ScriptPipeline] Loaded ${trends.hooks.length} trend hooks, ${trends.keywords.length} keywords`);
   }
@@ -579,7 +581,37 @@ export async function runScriptPipeline(ctx: PipelineContext): Promise<PipelineR
     console.log(`[ScriptPipeline] Written ${scenes.length} scenes with narration and visual directions`);
     return { strategy, narrative, scenes, summary };
   } catch (err: any) {
-    console.error(`[ScriptPipeline] Stage 3 failed: ${err.message}`);
-    throw new Error(`Script generation failed at scene writing stage: ${err.message}`);
+    console.warn(`[ScriptPipeline] Stage 3 failed, falling back to single-pass parser: ${err.message}`);
+    try {
+      const { universalVideoService } = await import("./universal-video-service");
+      const fallbackParsed = await universalVideoService.parseScriptWithBrandMatches({
+        title: "Generated Script",
+        script: ctx.description,
+        platform: ctx.platform as any,
+        style: "professional",
+        targetDuration: ctx.targetDuration,
+        artPresetId: ctx.artPresetId,
+        productContext: ctx.productContext || undefined,
+        scriptPresets: ctx.scriptPresets || undefined,
+        projectType: ctx.projectType || undefined,
+        contentStructure: ctx.contentStructure || undefined,
+      });
+      console.log(`[ScriptPipeline] Fallback parser produced ${fallbackParsed.scenes.length} scenes`);
+      return {
+        strategy,
+        narrative,
+        scenes: fallbackParsed.scenes,
+        summary: fallbackParsed.summary || {
+          totalDuration: ctx.targetDuration,
+          sceneCount: fallbackParsed.scenes.length,
+          primaryService: null,
+          targetConditions: [],
+          brandAlignment: "",
+        },
+      };
+    } catch (fallbackErr: any) {
+      console.error(`[ScriptPipeline] Fallback parser also failed: ${fallbackErr.message}`);
+      throw new Error(`Script generation failed: ${err.message}`);
+    }
   }
 }
