@@ -14,6 +14,7 @@ import RenderQueue from "@/pages/render-queue";
 import Providers from "@/pages/providers";
 import Profile from "@/pages/profile";
 import NewProject from "@/pages/new-project";
+import TrendsDashboard from "@/pages/trends-dashboard";
 import ApiTesting from "@/pages/api-testing";
 import Landing from "@/pages/landing";
 import NotFound from "@/pages/not-found";
@@ -59,6 +60,7 @@ function AuthenticatedApp() {
             <Route path="/projects/:id" component={ProjectDetail} />
             <Route path="/assets" component={AssetLibrary} />
             <Route path="/brand" component={BrandSettings} />
+            <Route path="/trends" component={TrendsDashboard} />
             <Route path="/render-queue" component={RenderQueue} />
             <Route path="/providers" component={Providers} />
             <Route path="/api-testing" component={ApiTesting} />

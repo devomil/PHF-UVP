@@ -3,7 +3,7 @@ import { useLocation, Link } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Sparkles, FileText, Zap, ArrowLeft, Video, Image, Info, Plus, Trash2, ChevronUp, ChevronDown, GripVertical, Palette, Users, UserCheck, Upload, X, ImagePlus, Film, Loader2, AlertCircle, FileUp, BookOpen } from "lucide-react";
+import { Sparkles, FileText, Zap, ArrowLeft, Video, Image, Info, Plus, Trash2, ChevronUp, ChevronDown, GripVertical, Palette, Users, UserCheck, Upload, X, ImagePlus, Film, Loader2, AlertCircle, FileUp, BookOpen, TrendingUp } from "lucide-react";
 import { ProviderCatalogSelector } from "@/components/video/provider-catalog-selector";
 import { CharacterProfilesPanel } from "@/components/video/character-profiles-panel";
 import { AssetSuzzieChat } from "@/components/video/AssetSuzzieChat";
@@ -187,12 +187,24 @@ function ModeSelection({ onSelect }: { onSelect: (mode: Mode) => void }) {
   );
 }
 
+interface TrendingHookChip {
+  template: string;
+  psychologicalDriver: string;
+}
+
 function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onSubmit: (data: any) => void; isLoading: boolean }) {
   const { toast } = useToast();
   const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
+  const [description, setDescription] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("hook") || "";
+  });
   const [targetAudience, setTargetAudience] = useState("");
   const [projectTypeId, setProjectTypeId] = useState("youtube-ad");
+  const [trendingHooks, setTrendingHooks] = useState<TrendingHookChip[]>([]);
+  const [trendingIndustry, setTrendingIndustry] = useState("");
+  const [loadingTrends, setLoadingTrends] = useState(false);
+  const [trendsDismissed, setTrendsDismissed] = useState(false);
   const [contentStructure, setContentStructure] = useState("explainer");
   const [mediaMode, setMediaMode] = useState("video");
   const [videoGenerationMode, setVideoGenerationMode] = useState("auto");
@@ -238,6 +250,30 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
       }
     }
   }, [contentStructure, projectTypeId, artPresetUserOverride]);
+
+  useEffect(() => {
+    async function loadTrendingHooks() {
+      try {
+        setLoadingTrends(true);
+        const brandRes = await fetch("/api/brand-settings", { credentials: "include" });
+        const brandData = await brandRes.json();
+        if (!brandData.industry || !brandData.trendAnalysisEnabled) return;
+        setTrendingIndustry(brandData.industry);
+        const trendRes = await fetch("/api/trend-intelligence/hooks", { credentials: "include" });
+        const trendData = await trendRes.json();
+        if (trendData.success && trendData.hooks?.length > 0) {
+          setTrendingHooks(trendData.hooks.slice(0, 3).map((h: TrendingHookChip) => ({
+            template: h.template,
+            psychologicalDriver: h.psychologicalDriver,
+          })));
+        }
+      } catch {
+      } finally {
+        setLoadingTrends(false);
+      }
+    }
+    loadTrendingHooks();
+  }, []);
 
   const handleProductMediaSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -409,6 +445,50 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
           <Label style={{ color: "var(--text-secondary)" }}>Project Title *</Label>
           <Input value={title} onChange={(e) => setTitle(e.target.value)} required placeholder="Enter project title" className="mt-1.5" style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }} />
         </div>
+
+        {!isLongStory && !trendsDismissed && (loadingTrends || trendingHooks.length > 0) && (
+          <div className="rounded-lg border p-4" style={{ backgroundColor: "rgba(139, 92, 246, 0.05)", borderColor: "rgba(139, 92, 246, 0.15)" }}>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-sm font-medium flex items-center gap-1.5" style={{ color: "var(--text-secondary)" }}>
+                <TrendingUp className="w-4 h-4 text-purple-400" />
+                Trending hooks in <span className="text-purple-400">{trendingIndustry}</span> this week:
+              </p>
+              <button
+                type="button"
+                onClick={() => setTrendsDismissed(true)}
+                className="text-xs px-2 py-1 rounded hover:bg-white/5 transition-colors"
+                style={{ color: "var(--text-muted)" }}
+              >
+                Skip
+              </button>
+            </div>
+            {loadingTrends ? (
+              <div className="flex gap-2">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="h-9 rounded-lg bg-purple-500/10 animate-pulse flex-1" />
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {trendingHooks.map((hook, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => {
+                      setDescription(hook.template);
+                      setTrendsDismissed(true);
+                    }}
+                    title={`Why it works: ${hook.psychologicalDriver}`}
+                    className="text-sm px-3 py-2 rounded-lg border transition-all hover:border-purple-400/50 hover:bg-purple-500/10 text-left"
+                    style={{ borderColor: "rgba(139, 92, 246, 0.2)", color: "var(--text-primary)" }}
+                  >
+                    {hook.template}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {isLongStory ? (
           <div>
