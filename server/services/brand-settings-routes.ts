@@ -53,6 +53,10 @@ router.get('/', async (req, res) => {
         accentColor: '#06b6d4',
         logoUrl: null,
         guidelines: '',
+        industry: '',
+        contentNiche: '',
+        targetAudience: '',
+        trendAnalysisEnabled: false,
       });
     }
 
@@ -65,6 +69,10 @@ router.get('/', async (req, res) => {
       accentColor: settings.accentColor || '#06b6d4',
       logoUrl: settings.logoUrl || null,
       guidelines: settings.guidelines || '',
+      industry: settings.industry || '',
+      contentNiche: settings.contentNiche || '',
+      targetAudience: settings.targetAudience || '',
+      trendAnalysisEnabled: settings.trendAnalysisEnabled || false,
     });
   } catch (error: any) {
     console.error('[BrandSettings] GET error:', error.message);
@@ -77,7 +85,7 @@ router.put('/', async (req, res) => {
     return res.status(401).json({ error: 'Not authenticated' });
   }
   const userId = (req.user as any).id;
-  const { brandName, tagline, website, primaryColor, secondaryColor, accentColor, guidelines } = req.body;
+  const { brandName, tagline, website, primaryColor, secondaryColor, accentColor, guidelines, industry, contentNiche, targetAudience, trendAnalysisEnabled } = req.body;
 
   try {
     const [existing] = await db
@@ -97,6 +105,10 @@ router.put('/', async (req, res) => {
           secondaryColor: secondaryColor ?? existing.secondaryColor,
           accentColor: accentColor ?? existing.accentColor,
           guidelines: guidelines ?? existing.guidelines,
+          industry: industry ?? existing.industry,
+          contentNiche: contentNiche ?? existing.contentNiche,
+          targetAudience: targetAudience ?? existing.targetAudience,
+          trendAnalysisEnabled: trendAnalysisEnabled ?? existing.trendAnalysisEnabled,
           updatedAt: new Date(),
         })
         .where(eq(brandSettings.userId, userId))
@@ -117,6 +129,10 @@ router.put('/', async (req, res) => {
         secondaryColor: secondaryColor || '#4f46e5',
         accentColor: accentColor || '#06b6d4',
         guidelines: guidelines || '',
+        industry: industry || null,
+        contentNiche: contentNiche || null,
+        targetAudience: targetAudience || null,
+        trendAnalysisEnabled: trendAnalysisEnabled || false,
       })
       .returning();
 

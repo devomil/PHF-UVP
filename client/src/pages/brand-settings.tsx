@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Palette, Type, Droplets, Image, FileText, Save, Loader2, Check, Upload, Trash2 } from "lucide-react";
+import { Palette, Type, Droplets, Image, FileText, Save, Loader2, Check, Upload, Trash2, TrendingUp, Users, Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 
@@ -12,6 +12,10 @@ interface BrandSettingsData {
   accentColor: string;
   logoUrl: string | null;
   guidelines: string;
+  industry: string;
+  contentNiche: string;
+  targetAudience: string;
+  trendAnalysisEnabled: boolean;
 }
 
 export default function BrandSettings() {
@@ -24,6 +28,10 @@ export default function BrandSettings() {
     accentColor: "#06b6d4",
     logoUrl: null,
     guidelines: "",
+    industry: "",
+    contentNiche: "",
+    targetAudience: "",
+    trendAnalysisEnabled: false,
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -384,6 +392,122 @@ export default function BrandSettings() {
                 onChange={handleLogoUpload}
                 className="hidden"
               />
+            </div>
+          </div>
+
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <Building2 className="w-4 h-4" style={{ color: "var(--text-secondary)" }} />
+              <h2 className="text-sm font-medium uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
+                Industry & Audience
+              </h2>
+            </div>
+            <div
+              className="border rounded-xl p-5 space-y-4"
+              style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)" }}
+            >
+              <div>
+                <label className="block text-sm font-medium mb-1.5" style={{ color: "var(--text-secondary)" }}>
+                  Industry
+                </label>
+                <select
+                  value={settings.industry}
+                  onChange={(e) => updateField("industry", e.target.value)}
+                  className="w-full border rounded-lg px-3.5 py-2.5 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/20 transition-colors"
+                  style={{
+                    backgroundColor: "var(--surface)",
+                    borderColor: "var(--border-subtle)",
+                    color: "var(--text-primary)",
+                  }}
+                >
+                  <option value="">Select your industry</option>
+                  <option value="Health & Wellness">Health & Wellness</option>
+                  <option value="Fitness">Fitness</option>
+                  <option value="Food & Beverage">Food & Beverage</option>
+                  <option value="Education">Education</option>
+                  <option value="Beauty">Beauty</option>
+                  <option value="E-commerce">E-commerce</option>
+                  <option value="Home & Garden">Home & Garden</option>
+                  <option value="Professional Services">Professional Services</option>
+                  <option value="Technology">Technology</option>
+                  <option value="Entertainment">Entertainment</option>
+                  <option value="Finance">Finance</option>
+                  <option value="Travel">Travel</option>
+                  <option value="Real Estate">Real Estate</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1.5" style={{ color: "var(--text-secondary)" }}>
+                  Content Niche
+                </label>
+                <input
+                  type="text"
+                  value={settings.contentNiche}
+                  onChange={(e) => updateField("contentNiche", e.target.value)}
+                  placeholder="e.g., gut health supplements, keto recipes, morning routines"
+                  className="w-full border rounded-lg px-3.5 py-2.5 placeholder-gray-500 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/20 transition-colors"
+                  style={{
+                    backgroundColor: "var(--surface)",
+                    borderColor: "var(--border-subtle)",
+                    color: "var(--text-primary)",
+                  }}
+                />
+                <p className="text-xs mt-1.5" style={{ color: "var(--text-muted)" }}>
+                  Comma-separated topics that define your content focus
+                </p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1.5" style={{ color: "var(--text-secondary)" }}>
+                  Target Audience
+                </label>
+                <textarea
+                  value={settings.targetAudience}
+                  onChange={(e) => updateField("targetAudience", e.target.value)}
+                  placeholder="e.g., women 25-45 interested in natural wellness, busy professionals looking for quick health tips"
+                  rows={3}
+                  className="w-full border rounded-lg px-3.5 py-2.5 placeholder-gray-500 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/20 transition-colors resize-none"
+                  style={{
+                    backgroundColor: "var(--surface)",
+                    borderColor: "var(--border-subtle)",
+                    color: "var(--text-primary)",
+                  }}
+                />
+              </div>
+              <div
+                className="flex items-center justify-between p-4 rounded-lg border"
+                style={{ borderColor: "var(--border-subtle)", backgroundColor: "var(--surface-hover)" }}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-purple-500/10">
+                    <TrendingUp className="w-4 h-4 text-purple-400" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">AI Trend Intelligence</p>
+                    <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                      Analyze Google Trends, YouTube & social media for viral hook suggestions
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={settings.trendAnalysisEnabled}
+                  onClick={() => {
+                    setSettings((prev) => ({ ...prev, trendAnalysisEnabled: !prev.trendAnalysisEnabled }));
+                    setSaved(false);
+                  }}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-purple-500/20 ${
+                    settings.trendAnalysisEnabled ? "bg-purple-600" : "bg-gray-600"
+                  }`}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                      settings.trendAnalysisEnabled ? "translate-x-5" : "translate-x-0"
+                    }`}
+                  />
+                </button>
+              </div>
             </div>
           </div>
 

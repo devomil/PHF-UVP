@@ -671,6 +671,10 @@ export const brandSettings = pgTable("brand_settings", {
   accentColor: varchar("accent_color", { length: 20 }).default("#06b6d4"),
   logoUrl: text("logo_url"),
   guidelines: text("guidelines").default(""),
+  industry: varchar("industry", { length: 100 }),
+  contentNiche: text("content_niche"),
+  targetAudience: text("target_audience"),
+  trendAnalysisEnabled: boolean("trend_analysis_enabled").default(false),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => ({
@@ -717,3 +721,15 @@ export const insertCharacterLibrarySchema = createInsertSchema(characterLibrary)
 
 export type CharacterLibraryEntry = typeof characterLibrary.$inferSelect;
 export type InsertCharacterLibraryEntry = z.infer<typeof insertCharacterLibrarySchema>;
+
+export const trendCache = pgTable("trend_cache", {
+  id: serial("id").primaryKey(),
+  industry: varchar("industry", { length: 100 }).notNull(),
+  contentNiche: text("content_niche"),
+  targetAudience: text("target_audience"),
+  result: jsonb("result").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  expiresAt: timestamp("expires_at").notNull(),
+}, (table) => ({
+  industryNicheAudienceIdx: index("idx_trend_cache_industry_niche_audience").on(table.industry, table.contentNiche, table.targetAudience),
+}));
