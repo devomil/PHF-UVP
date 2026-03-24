@@ -59,8 +59,8 @@ interface AIVideoOptions {
 // Maps base provider + quality tier to the appropriate versioned provider
 const TIER_PROVIDER_VERSIONS: Record<string, Record<string, string>> = {
   kling: {
-    ultra: 'kling-2.6',
-    premium: 'kling-2.1-master',
+    ultra: 'kling-2.6-pro',
+    premium: 'kling-2.6-pro',
     standard: 'kling-2.6',
     draft: 'seedance-2.0-fast',
   },

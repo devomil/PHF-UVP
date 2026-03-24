@@ -1240,10 +1240,18 @@ export default function ProjectDetail({ params }: { params?: { id: string } }) {
     queryKey: ["project", projectId],
     queryFn: async () => {
       const res = await fetch(`/api/projects/${projectId}`);
-      if (!res.ok) throw new Error("Project not found");
+      if (!res.ok) {
+        if (res.status === 404) throw new Error("Project not found");
+        throw new Error(`Server error (${res.status})`);
+      }
       return res.json();
     },
     enabled: !!projectId,
+    retry: (failureCount, err) => {
+      if (err?.message === "Project not found") return false;
+      return failureCount < 3;
+    },
+    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 10000),
     refetchInterval: (query) => {
       const data = query.state.data;
       if (!data) return 5000;
