@@ -15,6 +15,12 @@ const INDUSTRY_YOUTUBE_CATEGORY: Record<string, string> = {
   "E-commerce": "22",
   "Home & Garden": "26",
   "Professional Services": "22",
+  "Technology": "28",
+  "Entertainment": "24",
+  "Finance": "22",
+  "Travel": "19",
+  "Real Estate": "22",
+  "Other": "26",
 };
 
 export interface TrendHook {
