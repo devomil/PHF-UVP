@@ -1,0 +1,192 @@
+Phase 1 — Brand Settings Extension:
+Add a new section to the existing Brand Settings page (/brand) below the current Brand Guidelines field:
+INDUSTRY & AUDIENCE
+├── Primary Industry (dropdown, required for trend analysis)
+│   Options: Health & Wellness, Fitness, Beauty, Food & Beverage,
+│   Education, E-commerce, Home & Garden, Professional Services
+├── Content Niche (text field)
+│   Placeholder: "e.g. hemp wellness, sleep supplements, meal planning"
+├── Target Audience (text field)
+│   Placeholder: "e.g. women 35-55, health-conscious, natural alternatives"
+└── Trend Analysis (toggle)
+    Label: "Enable AI Trend Intelligence"
+    Subtext: "AI analyzes trending content in your industry to suggest hooks"
+    Gate: subscription check — show locked state with upgrade prompt if not eligible
+Save these to the existing brandSettings table as new columns:
+industry (varchar), contentNiche (text), targetAudience (text), trendAnalysisEnabled (boolean, default false)
+Run npm run db:push after schema update.
+
+Phase 2 — Trend Intelligence Service:
+Create server/services/trend-intelligence-service.ts with a single exported function:
+getTrendingHooks(industry: string, contentNiche: string, targetAudience: string)
+The function does the following in order:
+Step 1 — Check cache first:
+Query trend_cache table for a record matching industry + contentNiche where expiresAt is in the future. If found, return cached result immediately without any API calls.
+Step 2 — Google Trends call:
+Use google-trends-api npm package to fetch:
+
+interestOverTime for top 3 keywords derived from contentNiche
+relatedQueries to find rising search terms
+Extract the top 5 rising keywords from the result.
+
+Step 3 — YouTube API call:
+Call YouTube Data API v3 with:
+GET https://www.googleapis.com/youtube/v3/videos
+?part=snippet,statistics
+&chart=mostPopular
+&videoCategoryId=[mapped from industry — see mapping below]
+&maxResults=20
+&key=YOUTUBE_API_KEY
+Industry to YouTube category ID mapping:
+
+Health & Wellness → 26
+Fitness → 17
+Food & Beverage → 26
+Education → 27
+Beauty → 26
+E-commerce → 22
+Home & Garden → 26
+Professional Services → 22
+
+Extract: video titles, descriptions, view counts, like counts from the response.
+Step 4 — Claude analysis with web search:
+Make a Claude Sonnet API call with web_search tool enabled:
+typescript{
+  model: "claude-sonnet-4-20250514",
+  max_tokens: 2000,
+  tools: [{ type: "web_search_20250305", name: "web_search" }],
+  system: `You are a viral content strategist specializing in short-form 
+           marketing video for small businesses and social media creators.
+           Return ONLY valid JSON. No markdown, no explanation outside the JSON.`,
+  messages: [{
+    role: "user",
+    content: `Industry: ${industry}
+               Content Niche: ${contentNiche}
+               Target Audience: ${targetAudience}
+
+               Trending Google searches this week: ${risingKeywords}
+
+               Top performing YouTube titles in this category:
+               ${youtubeTitles}
+
+               Use your web search tool to find 2-3 trending discussions 
+               about "${contentNiche}" on Reddit or health/wellness forums 
+               right now. Look for recurring pain points and questions.
+
+               Based on all of this data, return a JSON object:
+               {
+                 "hooks": [
+                   {
+                     "template": "hook text here",
+                     "psychologicalDriver": "why this works",
+                     "example": "applied to ${contentNiche}"
+                   }
+                 ],
+                 "keywords": ["keyword1", "keyword2", ...],
+                 "formats": [
+                   {
+                     "name": "format name",
+                     "description": "what it looks like",
+                     "why": "why it's working right now"
+                   }
+                 ],
+                 "insight": "one paragraph summary of what's trending and why"
+               }
+
+               Return 5 hooks, 10 keywords, 3 formats.`
+  }]
+}
+Parse the JSON response from Claude.
+Step 5 — Cache the result:
+Insert into trend_cache table:
+industry, contentNiche, result (JSONB), 
+createdAt (now), expiresAt (now + 24 hours)
+Return the parsed result.
+Error handling: If any API call fails, log the error and continue with whatever data is available. Claude can still generate useful hooks from partial data. Never throw — always return something.
+
+Phase 3 — Project Creation Integration:
+In the AI-Generated Script project creation flow, after the user fills in the brief and before they click Create Project:
+
+Check if the brand has trendAnalysisEnabled = true
+If yes, call getTrendingHooks() with the brand's industry/niche (serves from cache if fresh — fast)
+Display the top 3 hooks as clickable suggestion chips above the Description/Brief field:
+
+"Trending hooks in [Industry] this week:"
+[Hook 1 text] [Hook 2 text] [Hook 3 text] [Skip →]
+
+If user clicks a hook chip, pre-populate the brief field with that hook text
+If user clicks Skip or has no trend data, brief field stays empty as normal
+If trendAnalysisEnabled = false, show nothing — no change to current flow
+
+
+Phase 4 — Trends Dashboard Page:
+Create new page at /trends with route added to the app router.
+Page layout:
+TRENDING HOOKS DASHBOARD
+"AI-analyzed trends for [Industry] · Last updated X hours ago"  [↻ Refresh]
+
+┌─ HOOK LIBRARY ──────────────────────────────────────┐
+│ 5 hook cards, each showing:                          │
+│ - Hook template text (large)                         │
+│ - Psychological driver (small, muted)                │
+│ - Example applied to their niche                     │
+│ - [Copy] button                                      │
+└─────────────────────────────────────────────────────┘
+
+┌─ KEYWORD MOMENTUM ──────┐  ┌─ CONTENT FORMATS ──────┐
+│ 10 keyword tags          │  │ 3 format cards          │
+│ (rising searches)        │  │ name + why it works     │
+└─────────────────────────┘  └────────────────────────┘
+
+┌─ TREND INSIGHT ─────────────────────────────────────┐
+│ Claude's one-paragraph summary                       │
+└─────────────────────────────────────────────────────┘
+
+[+ Create Video Using These Trends]  → navigates to 
+ new project creation with top hook pre-populated
+If trendAnalysisEnabled = false: show full page in locked/blurred state with upgrade prompt overlay. Do not hide the page — let users see what they're missing.
+If brand has no industry set: show prompt to complete Brand Settings first with a direct link.
+Manual Refresh button: clears the trend_cache record for this brand's industry and calls getTrendingHooks() again. Show loading spinner during refresh. Limit to once per hour — show "Refresh available in Xm" if called too soon.
+
+New DB table to add to shared/schema.ts:
+typescripttrendCache: {
+  id: serial primary key,
+  industry: varchar(100) not null,
+  contentNiche: text,
+  result: jsonb not null,
+  createdAt: timestamp default now(),
+  expiresAt: timestamp not null
+}
+New files:
+
+server/services/trend-intelligence-service.ts
+client/src/pages/trends.tsx
+
+Modified files:
+
+shared/schema.ts — add trendCache table + brand settings columns
+client/src/pages/brand.tsx — add Industry & Audience section
+Project creation component — add trending hook chips
+App router — add /trends route
+
+After schema changes: Run npm run db:push
+
+
+
+
+
+What the project should do. 
+Step 1: User uploads product image + brief
+    ↓
+Step 1.5 (background, 2-3 seconds):
+    - Claude reads product image → extracts category/keywords
+    - System queries trend cache for those keywords
+    - Claude generates 3 trending hook suggestions
+    ↓
+Step 2: User sees brief field PRE-POPULATED with:
+    "Suggested hooks based on trending content 
+     in Health & Wellness this week:
+     1. 'The reason you wake up at 3am (and the fix)'
+     2. 'I tried [X] for 30 days — here's what happened'
+     3. 'Most doctors won't tell you this about sleep'
+     [Use this hook] [Customize] [Generate my own]"
