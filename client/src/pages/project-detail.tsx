@@ -1239,7 +1239,7 @@ export default function ProjectDetail({ params }: { params?: { id: string } }) {
   const { data: project, isLoading, error } = useQuery({
     queryKey: ["project", projectId],
     queryFn: async () => {
-      const res = await fetch(`/api/projects/${projectId}`);
+      const res = await fetch(`/api/projects/${projectId}`, { credentials: "include" });
       if (!res.ok) {
         if (res.status === 404) throw new Error("Project not found");
         throw new Error(`Server error (${res.status})`);
@@ -1252,6 +1252,7 @@ export default function ProjectDetail({ params }: { params?: { id: string } }) {
       return failureCount < 3;
     },
     retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 10000),
+    staleTime: 0,
     refetchInterval: (query) => {
       const data = query.state.data;
       if (!data) return 5000;
@@ -1319,7 +1320,7 @@ export default function ProjectDetail({ params }: { params?: { id: string } }) {
     );
   }
 
-  if (error || !project) {
+  if (!project && (error || !isLoading)) {
     return (
       <div className="p-6 lg:p-8">
         <Link href="/projects" className="text-sm inline-flex items-center gap-1 mb-6" style={{ color: "var(--text-muted)" }}>
