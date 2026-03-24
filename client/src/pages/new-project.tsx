@@ -205,6 +205,8 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
   const [trendingIndustry, setTrendingIndustry] = useState("");
   const [loadingTrends, setLoadingTrends] = useState(false);
   const [trendsDismissed, setTrendsDismissed] = useState(false);
+  const [analyzingImage, setAnalyzingImage] = useState(false);
+  const [imageAnalyzed, setImageAnalyzed] = useState(false);
   const [contentStructure, setContentStructure] = useState("explainer");
   const [mediaMode, setMediaMode] = useState("video");
   const [videoGenerationMode, setVideoGenerationMode] = useState("auto");
@@ -319,9 +321,47 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
     }
   };
 
+  const analyzeImageForHooks = async () => {
+    if (!productMediaFile || !productMediaFile.type.startsWith("image/")) return;
+    setAnalyzingImage(true);
+    setTrendsDismissed(false);
+    try {
+      const formData = new FormData();
+      formData.append("file", productMediaFile);
+      const uploadRes = await fetch("/api/upload", { method: "POST", body: formData, credentials: "include" });
+      const uploadData = await uploadRes.json();
+      const imageUrl = uploadData.url || uploadData.path;
+      if (!imageUrl) throw new Error("Upload failed");
+
+      const res = await fetch("/api/trend-intelligence/analyze-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ imageUrl }),
+      });
+      const data = await res.json();
+      if (data.success && data.hooks?.length > 0) {
+        setTrendingIndustry(data.industry || "your product");
+        setTrendingHooks(data.hooks.slice(0, 3).map((h: TrendingHookChip) => ({
+          template: h.template,
+          psychologicalDriver: h.psychologicalDriver,
+        })));
+        setImageAnalyzed(true);
+        toast({ title: "Trending hooks found", description: `${data.hooks.length} hook suggestions based on your product image.` });
+      } else {
+        toast({ title: "No hooks found", description: "Try setting your industry in Brand Settings instead.", variant: "destructive" });
+      }
+    } catch {
+      toast({ title: "Analysis failed", description: "Could not analyze the image for trends.", variant: "destructive" });
+    } finally {
+      setAnalyzingImage(false);
+    }
+  };
+
   const removeProductMedia = () => {
     setProductMediaFile(null);
     setProductMediaPreview(null);
+    setImageAnalyzed(false);
     if (productMediaInputRef.current) {
       productMediaInputRef.current.value = '';
     }
@@ -623,6 +663,33 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
                   <X className="w-4 h-4 text-red-400" />
                 </button>
               </div>
+              {productMediaFile.type.startsWith("image/") && !imageAnalyzed && (
+                <div className="px-3 pb-3">
+                  <button
+                    type="button"
+                    onClick={analyzeImageForHooks}
+                    disabled={analyzingImage}
+                    className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all hover:brightness-110"
+                    style={{
+                      background: "linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(168, 85, 247, 0.15))",
+                      border: "1px solid rgba(139, 92, 246, 0.3)",
+                      color: "#c4b5fd",
+                    }}
+                  >
+                    {analyzingImage ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Analyzing product for trending hooks...
+                      </>
+                    ) : (
+                      <>
+                        <TrendingUp className="w-4 h-4" />
+                        Find Trending Hooks for This Product
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
