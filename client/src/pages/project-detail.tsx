@@ -1230,6 +1230,62 @@ function GenerationJobsPanel({ jobs, projectId }: { jobs: any[]; projectId: stri
   );
 }
 
+function CreativeStrategyPanel({ strategy }: { strategy: any }) {
+  const [expanded, setExpanded] = useState(false);
+  if (!strategy) return null;
+
+  const items = [
+    { label: "Narrative Framework", value: strategy.narrativeFramework },
+    { label: "Core Message", value: strategy.coreMessage },
+    { label: "Primary Emotion", value: strategy.primaryEmotion },
+    { label: "Tone", value: strategy.toneGuidance },
+    { label: "Audience Insight", value: strategy.targetAudienceInsight },
+    { label: "Production Notes", value: strategy.productionNotes },
+  ].filter((i) => i.value);
+
+  if (items.length === 0) return null;
+
+  return (
+    <div className="border rounded-xl mb-8 overflow-hidden" style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)" }}>
+      <button
+        className="w-full flex items-center justify-between p-4 text-left hover:bg-white/5 transition-colors"
+        onClick={() => setExpanded(!expanded)}
+      >
+        <div className="flex items-center gap-2">
+          <Sparkles className="w-4 h-4 text-purple-400" />
+          <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>Creative Strategy</span>
+          {!expanded && strategy.narrativeFramework && (
+            <span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: "var(--purple-subtle, rgba(147,51,234,0.1))", color: "var(--text-secondary)" }}>
+              {strategy.narrativeFramework}
+            </span>
+          )}
+        </div>
+        {expanded ? <ChevronUp className="w-4 h-4" style={{ color: "var(--text-muted)" }} /> : <ChevronDown className="w-4 h-4" style={{ color: "var(--text-muted)" }} />}
+      </button>
+      {expanded && (
+        <div className="px-4 pb-4 space-y-3 border-t" style={{ borderColor: "var(--border-subtle)" }}>
+          {items.map((item) => (
+            <div key={item.label} className="pt-3">
+              <p className="text-xs uppercase tracking-wider mb-1" style={{ color: "var(--text-muted)" }}>{item.label}</p>
+              <p className="text-sm leading-relaxed" style={{ color: "var(--text-primary)" }}>{item.value}</p>
+            </div>
+          ))}
+          {strategy.hooks?.length > 0 && (
+            <div className="pt-3">
+              <p className="text-xs uppercase tracking-wider mb-1" style={{ color: "var(--text-muted)" }}>Generated Hooks</p>
+              <div className="space-y-1">
+                {strategy.hooks.map((hook: string, i: number) => (
+                  <p key={i} className="text-sm" style={{ color: "var(--text-secondary)" }}>"{hook}"</p>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ProjectDetail({ params }: { params?: { id: string } }) {
   const projectId = params?.id || "";
   const queryClient = useQueryClient();
@@ -1522,6 +1578,8 @@ export default function ProjectDetail({ params }: { params?: { id: string } }) {
             <p className="text-base leading-relaxed" style={{ color: "var(--text-primary)" }}>{project.description}</p>
           </div>
         )}
+
+        <CreativeStrategyPanel strategy={project.scriptStrategy} />
 
         {progress.currentStep && !isQuickCreate && (() => {
           const stepSt = progress.steps?.[progress.currentStep]?.status;

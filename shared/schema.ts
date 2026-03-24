@@ -492,6 +492,8 @@ export const universalVideoProjects = pgTable("universal_video_projects", {
   bucketName: varchar("bucket_name", { length: 255 }),
   outputUrl: text("output_url"),
   characters: jsonb("characters").default([]),
+  scriptStrategy: jsonb("script_strategy"),
+  scriptNarrative: jsonb("script_narrative"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => ({

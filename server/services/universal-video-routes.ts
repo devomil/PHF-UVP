@@ -16,6 +16,7 @@ import { intelligentPromptImprover } from '../services/intelligent-prompt-improv
 import { regenerationStrategyEngine } from '../services/regeneration-strategy-engine';
 import { promptComplexityAnalyzer } from '../services/prompt-complexity-analyzer';
 import { brandContextService } from '../services/brand-context-service';
+import { runScriptPipeline } from '../services/script-pipeline-service';
 import { videoProviderSelector, SceneForSelection } from '../services/video-provider-selector';
 import { imageProviderSelector } from '../services/image-provider-selector';
 import { motionGraphicsRouter } from '../services/motion-graphics-router';
@@ -2763,26 +2764,52 @@ router.post('/projects/:projectId/generate-script', isAuthenticated, async (req:
 
     console.log(`[GenerateScript] Generating script for project ${projectId} - ${targetDuration}s, ${platform}, style: ${visualStyle}${productContext ? `, product: ${productContext.productName}` : ''}`);
 
-    const parsed = await universalVideoService.parseScriptWithBrandMatches({
-      title: 'Generated Script',
-      script,
-      platform: platform as ScriptVideoInput['platform'],
-      style: 'professional',
-      targetDuration,
-      artPresetId: artPresetIdFromProgress,
-      productContext,
-      scriptPresets,
-      projectType,
-      contentStructure,
-    });
+    const isChapterBased = approvedOutline && Array.isArray(approvedOutline) && approvedOutline.length > 0;
 
-    let scenes = parsed.scenes;
+    let scenes: any[];
+    let summary: any;
+    let pipelineStrategy: any = null;
+    let pipelineNarrative: any = null;
+
+    if (isChapterBased) {
+      const parsed = await universalVideoService.parseScriptWithBrandMatches({
+        title: 'Generated Script',
+        script,
+        platform: platform as ScriptVideoInput['platform'],
+        style: 'professional',
+        targetDuration,
+        artPresetId: artPresetIdFromProgress,
+        productContext,
+        scriptPresets,
+        projectType,
+        contentStructure,
+      });
+      scenes = parsed.scenes;
+      summary = parsed.summary;
+    } else {
+      const trendHooks = (projectData.progress as any)?.selectedTrendHooks || null;
+      const pipelineResult = await runScriptPipeline({
+        description: script,
+        platform,
+        targetDuration,
+        artPresetId: artPresetIdFromProgress,
+        productContext,
+        scriptPresets,
+        projectType,
+        contentStructure,
+        trendHooks,
+      });
+      scenes = pipelineResult.scenes;
+      summary = pipelineResult.summary;
+      pipelineStrategy = pipelineResult.strategy;
+      pipelineNarrative = pipelineResult.narrative;
+    }
 
     if (numScenes && scenes.length > numScenes) {
       scenes = scenes.slice(0, numScenes);
     }
 
-    if (approvedOutline && Array.isArray(approvedOutline) && approvedOutline.length > 0) {
+    if (isChapterBased) {
       const totalSuggested = approvedOutline.reduce((sum: number, ch: any) => sum + (ch.recommendedSceneCount || 3), 0);
       const chapterBoundaries: number[] = [];
       let cumulative = 0;
@@ -2851,22 +2878,26 @@ router.post('/projects/:projectId/generate-script', isAuthenticated, async (req:
       },
     };
 
+    const dbUpdate: any = {
+      scenes: projectData.scenes,
+      progress: projectData.progress,
+      totalDuration: summary?.totalDuration || targetDuration,
+      updatedAt: new Date(),
+    };
+    if (pipelineStrategy) dbUpdate.scriptStrategy = pipelineStrategy;
+    if (pipelineNarrative) dbUpdate.scriptNarrative = pipelineNarrative;
+
     await db.update(universalVideoProjects)
-      .set({
-        scenes: projectData.scenes,
-        progress: projectData.progress,
-        totalDuration: parsed.summary?.totalDuration || targetDuration,
-        updatedAt: new Date(),
-      })
+      .set(dbUpdate)
       .where(eq(universalVideoProjects.projectId, projectId));
 
-    console.log(`[GenerateScript] Generated ${scenes.length} scenes for project ${projectId}`);
+    console.log(`[GenerateScript] Generated ${scenes.length} scenes for project ${projectId}${pipelineStrategy ? ' (pipeline)' : ' (chapter-based)'}`);
 
     res.json({
       success: true,
       scenes,
-      summary: parsed.summary,
-      brandMatches: parsed.brandMatches,
+      summary,
+      strategy: pipelineStrategy || undefined,
     });
   } catch (error: any) {
     console.error('[GenerateScript] Error:', error);

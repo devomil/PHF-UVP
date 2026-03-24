@@ -39,6 +39,8 @@ export function dbRowToVideoProject(row: any): VideoProject {
     renderId: row.renderId,
     bucketName: row.bucketName,
     outputUrl: row.outputUrl,
+    scriptStrategy: row.scriptStrategy || null,
+    scriptNarrative: row.scriptNarrative || null,
     createdAt: row.createdAt?.toISOString?.() || row.createdAt,
     updatedAt: row.updatedAt?.toISOString?.() || row.updatedAt,
   };
