@@ -583,12 +583,10 @@ export async function runScriptPipeline(ctx: PipelineContext): Promise<PipelineR
   } catch (err: any) {
     console.warn(`[ScriptPipeline] Stage 3 failed, falling back to single-pass parser: ${err.message}`);
     try {
-      const { universalVideoService } = await import("./universal-video-service");
-      const fallbackParsed = await universalVideoService.parseScriptWithBrandMatches({
-        title: "Generated Script",
-        script: ctx.description,
-        platform: ctx.platform as any,
-        style: "professional",
+      const { scriptParserService } = await import("./script-parser-service");
+      const fallbackParsed = await scriptParserService.parseScript(ctx.description, {
+        platform: ctx.platform,
+        visualStyle: "professional",
         targetDuration: ctx.targetDuration,
         artPresetId: ctx.artPresetId,
         productContext: ctx.productContext || undefined,
