@@ -328,10 +328,11 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
     try {
       const formData = new FormData();
       formData.append("file", productMediaFile);
-      const uploadRes = await fetch("/api/upload", { method: "POST", body: formData, credentials: "include" });
+      const uploadRes = await fetch("/api/videos/uploads", { method: "POST", body: formData, credentials: "include" });
+      if (!uploadRes.ok) throw new Error("Upload failed");
       const uploadData = await uploadRes.json();
-      const imageUrl = uploadData.url || uploadData.path;
-      if (!imageUrl) throw new Error("Upload failed");
+      const imageUrl = uploadData.url;
+      if (!imageUrl) throw new Error("Upload returned no URL");
 
       const res = await fetch("/api/trend-intelligence/analyze-image", {
         method: "POST",
@@ -339,6 +340,7 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
         credentials: "include",
         body: JSON.stringify({ imageUrl }),
       });
+      if (!res.ok) throw new Error("Analysis request failed");
       const data = await res.json();
       if (data.success && data.hooks?.length > 0) {
         setTrendingIndustry(data.industry || "your product");

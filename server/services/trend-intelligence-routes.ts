@@ -134,28 +134,26 @@ router.post("/analyze-image", async (req: Request, res: Response) => {
   try {
     console.log(`[TrendRoutes] Analyzing product image for trending hooks...`);
 
-    let base64Data: string;
-    let mediaType: "image/jpeg" | "image/png" | "image/webp" = "image/png";
-
-    if (imageUrl.startsWith("/uploads/")) {
-      const filePath = path.join(process.cwd(), imageUrl);
-      if (!fs.existsSync(filePath)) {
-        return res.status(400).json({ error: "Image file not found" });
-      }
-      const fileBuffer = fs.readFileSync(filePath);
-      base64Data = fileBuffer.toString("base64");
-      const ext = path.extname(filePath).toLowerCase();
-      const mimeMap: Record<string, "image/jpeg" | "image/png" | "image/webp"> = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp" };
-      mediaType = mimeMap[ext] || "image/png";
-    } else {
-      const imgRes = await fetch(imageUrl, { signal: AbortSignal.timeout(15000) });
-      if (!imgRes.ok) return res.status(400).json({ error: "Could not fetch image" });
-      const buffer = Buffer.from(await imgRes.arrayBuffer());
-      base64Data = buffer.toString("base64");
-      const ct = imgRes.headers.get("content-type") || "";
-      if (ct.includes("jpeg") || ct.includes("jpg")) mediaType = "image/jpeg";
-      else if (ct.includes("webp")) mediaType = "image/webp";
+    if (!imageUrl.startsWith("/uploads/")) {
+      return res.status(400).json({ error: "Only uploaded images are supported" });
     }
+
+    const filename = path.basename(imageUrl);
+    const uploadsDir = path.resolve(process.cwd(), "uploads");
+    const filePath = path.join(uploadsDir, filename);
+    const resolved = path.resolve(filePath);
+    if (!resolved.startsWith(uploadsDir)) {
+      return res.status(400).json({ error: "Invalid file path" });
+    }
+    if (!fs.existsSync(resolved)) {
+      return res.status(400).json({ error: "Image file not found" });
+    }
+
+    const fileBuffer = fs.readFileSync(resolved);
+    const base64Data = fileBuffer.toString("base64");
+    const ext = path.extname(resolved).toLowerCase();
+    const mimeMap: Record<string, "image/jpeg" | "image/png" | "image/webp"> = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp" };
+    const mediaType: "image/jpeg" | "image/png" | "image/webp" = mimeMap[ext] || "image/png";
 
     const analysisResponse = await llmClient.createChatCompletion({
       systemPrompt: "You analyze product images and extract category information. Respond in valid JSON only.",
