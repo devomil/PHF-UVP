@@ -2792,6 +2792,7 @@ router.post('/projects/:projectId/generate-script', isAuthenticated, async (req:
         description: script,
         platform,
         targetDuration,
+        targetAudience: projectData.targetAudience || null,
         artPresetId: artPresetIdFromProgress,
         productContext,
         scriptPresets,

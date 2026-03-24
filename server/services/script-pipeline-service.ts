@@ -8,6 +8,7 @@ export interface PipelineContext {
   description: string;
   platform: string;
   targetDuration: number;
+  targetAudience?: string | null;
   artPresetId?: string;
   productContext?: {
     productName: string;
@@ -33,6 +34,7 @@ export interface CreativeStrategy {
   narrativeFramework: string;
   coreMessage: string;
   primaryEmotion: string;
+  openingHook: string;
   hooks: string[];
   productionNotes: string;
   targetAudienceInsight: string;
@@ -255,11 +257,13 @@ ${ctx.scriptPresets.productProblem ? `- Problem it solves: ${ctx.scriptPresets.p
 - CTA: ${ctx.scriptPresets.callToAction || "learn-more"}`
     : "";
 
+  const audienceStr = ctx.targetAudience || brand.targetAudience || "";
+
   const userPrompt = `Develop a creative strategy for a ${ctx.targetDuration}s video for ${brandDesc}.
 
 ${brand.industry ? `INDUSTRY: ${brand.industry}` : ""}
 ${brand.contentNiche ? `NICHE: ${brand.contentNiche}` : ""}
-${brand.targetAudience ? `TARGET AUDIENCE: ${brand.targetAudience}` : ""}
+${audienceStr ? `TARGET AUDIENCE: ${audienceStr}` : ""}
 ${brand.guidelines ? `BRAND GUIDELINES:\n${brand.guidelines}` : ""}
 ${productBlock}
 ${presetsBlock}
@@ -285,11 +289,20 @@ Return a JSON object:
   const raw = await callLLMWithRetry(systemPrompt, userPrompt, 2000, "Stage 1: Strategy");
   const parsed = extractJSON(raw);
 
+  let hooks = Array.isArray(parsed.hooks) ? parsed.hooks.slice(0, 5) : [];
+  let openingHook = hooks[0] || "";
+
+  if (ctx.trendHooks?.length) {
+    openingHook = ctx.trendHooks[0];
+    hooks = [openingHook, ...hooks.filter((h: string) => h !== openingHook)].slice(0, 5);
+  }
+
   return {
     narrativeFramework: parsed.narrativeFramework || "Problem-Solution",
     coreMessage: parsed.coreMessage || "",
     primaryEmotion: parsed.primaryEmotion || "curiosity",
-    hooks: Array.isArray(parsed.hooks) ? parsed.hooks.slice(0, 5) : [],
+    openingHook,
+    hooks,
     productionNotes: parsed.productionNotes || "",
     targetAudienceInsight: parsed.targetAudienceInsight || "",
     toneGuidance: parsed.toneGuidance || "",
@@ -316,7 +329,7 @@ CREATIVE STRATEGY:
 - Primary Emotion: ${strategy.primaryEmotion}
 - Tone: ${strategy.toneGuidance}
 - Production Notes: ${strategy.productionNotes}
-- Best Hook: "${strategy.hooks[0] || ""}"
+- Opening Hook (MUST USE THIS EXACT LINE as the narration for Scene 1): "${strategy.openingHook}"
 
 PLATFORM RULES:
 ${platformRules}
@@ -434,7 +447,7 @@ CREATIVE STRATEGY:
 - Framework: ${strategy.narrativeFramework}
 - Core Message: ${strategy.coreMessage}
 - Tone: ${strategy.toneGuidance}
-- Opening Hook: "${strategy.hooks[0] || ""}"
+- Opening Hook (Scene 1 MUST use this exact line as narration): "${strategy.openingHook}"
 ${ctaDirective}
 ${productBlock}
 
@@ -494,6 +507,39 @@ Return ONLY valid JSON:
   return { scenes, summary };
 }
 
+function buildFallbackStrategy(ctx: PipelineContext): CreativeStrategy {
+  const tone = ctx.scriptPresets?.scriptTone || "educational";
+  const openingHook = ctx.trendHooks?.[0] || `Discover how ${ctx.scriptPresets?.productName || "this"} can transform your routine`;
+  return {
+    narrativeFramework: "Problem-Solution",
+    coreMessage: ctx.scriptPresets?.productProblem || "A better solution exists",
+    primaryEmotion: "curiosity",
+    openingHook,
+    hooks: [openingHook],
+    productionNotes: `Tone: ${tone}. Keep it concise and direct.`,
+    targetAudienceInsight: ctx.targetAudience || "",
+    toneGuidance: tone,
+  };
+}
+
+function buildFallbackNarrative(ctx: PipelineContext): NarrativeArchitecture {
+  const sceneCount = Math.max(4, Math.min(8, Math.ceil(ctx.targetDuration / 8)));
+  const perScene = Math.round(ctx.targetDuration / sceneCount);
+  const types = ["hook", "problem", "solution", "benefit", "cta"];
+  const scenes: NarrativeScene[] = [];
+  for (let i = 0; i < sceneCount; i++) {
+    scenes.push({
+      order: i + 1,
+      type: types[Math.min(i, types.length - 1)],
+      purpose: "",
+      duration: i === sceneCount - 1 ? ctx.targetDuration - perScene * (sceneCount - 1) : perScene,
+      emotionalBeat: "",
+      keyMessage: "",
+    });
+  }
+  return { scenes, totalDuration: ctx.targetDuration, pacing: "moderate" };
+}
+
 export async function runScriptPipeline(ctx: PipelineContext): Promise<PipelineResult> {
   if (!llmClient.isAvailable()) {
     throw new Error("No LLM API configured — set PIAPI_API_KEY or ANTHROPIC_API_KEY");
@@ -507,17 +553,33 @@ export async function runScriptPipeline(ctx: PipelineContext): Promise<PipelineR
     console.log(`[ScriptPipeline] Loaded ${trends.hooks.length} trend hooks, ${trends.keywords.length} keywords`);
   }
 
+  let strategy: CreativeStrategy;
   console.log("[ScriptPipeline] === Stage 1: Creative Strategy ===");
-  const strategy = await stageOneStrategy(ctx, brand, trends);
-  console.log(`[ScriptPipeline] Strategy: framework="${strategy.narrativeFramework}", emotion="${strategy.primaryEmotion}", ${strategy.hooks.length} hooks`);
+  try {
+    strategy = await stageOneStrategy(ctx, brand, trends);
+    console.log(`[ScriptPipeline] Strategy: framework="${strategy.narrativeFramework}", emotion="${strategy.primaryEmotion}", ${strategy.hooks.length} hooks`);
+  } catch (err: any) {
+    console.warn(`[ScriptPipeline] Stage 1 failed, using fallback strategy: ${err.message}`);
+    strategy = buildFallbackStrategy(ctx);
+  }
 
+  let narrative: NarrativeArchitecture;
   console.log("[ScriptPipeline] === Stage 2: Narrative Architecture ===");
-  const narrative = await stageTwoNarrative(ctx, brand, strategy);
-  console.log(`[ScriptPipeline] Architecture: ${narrative.scenes.length} scenes, ${narrative.totalDuration}s total, pacing="${narrative.pacing.substring(0, 60)}..."`);
+  try {
+    narrative = await stageTwoNarrative(ctx, brand, strategy);
+    console.log(`[ScriptPipeline] Architecture: ${narrative.scenes.length} scenes, ${narrative.totalDuration}s total, pacing="${(narrative.pacing || "").substring(0, 60)}..."`);
+  } catch (err: any) {
+    console.warn(`[ScriptPipeline] Stage 2 failed, using fallback narrative: ${err.message}`);
+    narrative = buildFallbackNarrative(ctx);
+  }
 
   console.log("[ScriptPipeline] === Stage 3: Scene Writing ===");
-  const { scenes, summary } = await stageThreeSceneWriting(ctx, brand, strategy, narrative);
-  console.log(`[ScriptPipeline] Written ${scenes.length} scenes with narration and visual directions`);
-
-  return { strategy, narrative, scenes, summary };
+  try {
+    const { scenes, summary } = await stageThreeSceneWriting(ctx, brand, strategy, narrative);
+    console.log(`[ScriptPipeline] Written ${scenes.length} scenes with narration and visual directions`);
+    return { strategy, narrative, scenes, summary };
+  } catch (err: any) {
+    console.error(`[ScriptPipeline] Stage 3 failed: ${err.message}`);
+    throw new Error(`Script generation failed at scene writing stage: ${err.message}`);
+  }
 }

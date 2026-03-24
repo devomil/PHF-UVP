@@ -1238,6 +1238,7 @@ function CreativeStrategyPanel({ strategy }: { strategy: any }) {
     { label: "Narrative Framework", value: strategy.narrativeFramework },
     { label: "Core Message", value: strategy.coreMessage },
     { label: "Primary Emotion", value: strategy.primaryEmotion },
+    { label: "Opening Hook", value: strategy.openingHook },
     { label: "Tone", value: strategy.toneGuidance },
     { label: "Audience Insight", value: strategy.targetAudienceInsight },
     { label: "Production Notes", value: strategy.productionNotes },
