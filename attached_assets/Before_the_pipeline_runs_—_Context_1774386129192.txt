@@ -1,0 +1,27 @@
+Before the pipeline runs — Context Assembly:
+Gather all available context before Stage 1 fires. Assemble a scriptContext object:
+
+const scriptContext = {
+  // From user input
+  userBrief: req.body.description,
+  projectTitle: req.body.title,
+  targetAudience: req.body.targetAudience,
+  platform: req.body.platform, // youtube, tiktok, instagram, facebook
+  targetDuration: req.body.targetDuration, // 30s, 60s, 90s, 5min etc
+  contentType: req.body.contentType, // promotional, educational, story, etc
+  selectedHook: req.body.selectedTrendHook || null, // from trending hooks if user selected one
+
+  // From Brand Settings (query brandSettings for this user)
+  brandName: brand.name,
+  brandTagline: brand.tagline,
+  brandGuidelines: brand.guidelines,
+  industry: brand.industry,
+  contentNiche: brand.contentNiche,
+  brandTargetAudience: brand.targetAudience,
+
+  // From Trend Intelligence (query trend_cache if trendAnalysisEnabled)
+  trendData: trendEnabled ? await getTrendingHooks(...) : null,
+
+  // From product image if uploaded (Claude vision extraction)
+  productContext: productImage ? await extractProductContext(productImage) : null
+}

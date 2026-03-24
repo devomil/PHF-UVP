@@ -1,0 +1,23 @@
+Additional Platform-Specific Rules to Inject:
+Add this to Stage 3 based on selected platform:
+
+const platformRules = {
+  tiktok: "Hook in first 2 seconds. Fast cuts. Casual voice. End with pattern interrupt before CTA.",
+  instagram_reels: "Visual-first. Hook in 3 seconds. Aspirational tone. Strong closing visual.",
+  youtube: "Hook in 5 seconds. Can build slower. Authoritative but warm. Clear chapter structure.",
+  youtube_shorts: "Hook in 2 seconds. One idea only. Fast. End with subscribe hook.",
+  facebook: "Hook addresses pain point directly. Trust-building tone. Longer acceptable.",
+}
+
+
+New columns to add to universalVideoProjects in shared/schema.ts:
+
+scriptStrategy (JSONB) — Stage 1 output
+scriptNarrative (JSONB) — Stage 2 output
+
+After schema changes: Run npm run db:push
+Files to modify:
+
+Script generation service/route (wherever current single-call generation lives)
+shared/schema.ts — add two new columns
+Project editor — surface productionNotes somewhere visible to the user

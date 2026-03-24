@@ -1,0 +1,53 @@
+Stage 3 — Scene-by-Scene Script Writing:
+Now write the actual script using everything built above.
+
+Stage 3 system prompt:
+"You are an elite video scriptwriter. You write scripts that feel 
+human, emotionally resonant, and platform-native. Your narration 
+is conversational but precise. Every word earns its place. 
+You write for the ear, not the eye — short sentences, natural rhythm, 
+no corporate speak. You understand that the first 3 seconds determine 
+everything and the last 5 seconds determine ROI."
+
+Stage 3 user prompt:
+`Write the complete scene-by-scene script for this video.
+
+STRATEGY: ${JSON.stringify(stage1Result)}
+NARRATIVE STRUCTURE: ${JSON.stringify(stage2Result)}
+BRAND: ${brandName}
+TONE: ${stage1Result.toneKeywords.join(', ')}
+PLATFORM: ${platform}
+${selectedHook ? `OPEN WITH THIS TRENDING HOOK: "${selectedHook}"` : ''}
+
+WRITING RULES:
+1. Opening line MUST be the exact hook from the strategy — no warmup, no intro
+2. Sentences are short. Maximum 15 words each.
+3. Write for spoken audio — contractions, natural pauses, rhythm
+4. No corporate language: never use "utilize", "leverage", "innovative", "cutting-edge"
+5. Every section transition must feel earned — no jarring jumps
+6. CTA must be specific and low-friction: tell them exactly what to do
+7. Vary sentence length for rhythm — short punch. Then a slightly longer explanation. Then short again.
+
+Return a JSON script:
+{
+  "scenes": [
+    {
+      "sceneNumber": 1,
+      "sectionName": "Opening Hook",
+      "narrativeRole": "from stage 2",
+      "durationSeconds": 3,
+      "narration": "exact words spoken",
+      "visualDirection": "what should be happening on screen",
+      "emotionalTone": "energy/feeling of this scene",
+      "sceneType": "hook|problem|agitate|solution|proof|benefit|cta",
+      "onScreenText": "optional text overlay if needed — null if none"
+    }
+  ],
+  "totalScenes": number,
+  "estimatedDuration": number,
+  "productionNotes": "overall direction for the video editor"
+}
+
+Create enough scenes to fill ${targetDuration} using the narrative 
+structure above. Each scene should be 3-8 seconds of narration.
+Return ONLY valid JSON.`

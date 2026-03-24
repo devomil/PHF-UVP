@@ -1,0 +1,42 @@
+Stage 1 — Research & Strategy Call:
+This call produces the strategic foundation. It does NOT write the script yet.
+
+Stage 1 system prompt:
+"You are a world-class digital marketing strategist with expertise in 
+viral video content, consumer psychology, and platform-specific content 
+optimization. You have created campaigns for Fortune 500 brands and 
+built viral content for SMBs. Your job is to develop the strategic 
+foundation for a high-performing marketing video — not to write it yet."
+
+Stage 1 user prompt:
+`Develop the strategic foundation for this video:
+
+BRAND: ${brandName} — ${brandTagline}
+BRIEF: ${userBrief}
+PLATFORM: ${platform}
+DURATION: ${targetDuration}
+TARGET AUDIENCE: ${targetAudience || brandTargetAudience}
+INDUSTRY: ${industry} / ${contentNiche}
+${selectedHook ? `SELECTED TRENDING HOOK: "${selectedHook}"` : ''}
+${productContext ? `PRODUCT: ${JSON.stringify(productContext)}` : ''}
+${trendData ? `TRENDING IN THIS INDUSTRY RIGHT NOW:
+  Top hooks: ${trendData.hooks.slice(0,3).map(h => h.template).join(', ')}
+  Rising keywords: ${trendData.keywords.slice(0,5).join(', ')}
+  What's working: ${trendData.insight}` : ''}
+
+Return a JSON strategy object:
+{
+  "primaryEmotion": "the dominant emotion this video should evoke",
+  "coreMessage": "single sentence — what the viewer must remember",
+  "painPoint": "specific problem this audience faces that this content solves",
+  "desiredOutcome": "what the viewer should feel/do after watching",
+  "hook": "the exact opening hook — must stop the scroll in 3 seconds",
+  "narrativeFramework": "which framework fits best: PAS|AIDA|StoryBrand|BeforeAfter|SocialProof|EducateThenSell",
+  "frameworkReasoning": "why this framework for this audience and platform",
+  "ctaType": "what action to drive: visit|follow|buy|learn|share|book",
+  "toneKeywords": ["word1", "word2", "word3"],
+  "keyMessages": ["message1", "message2", "message3"],
+  "platformOptimizations": ["specific thing 1 for this platform", "specific thing 2"]
+}
+
+Return ONLY valid JSON.`

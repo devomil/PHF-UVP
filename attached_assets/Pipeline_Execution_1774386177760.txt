@@ -1,0 +1,23 @@
+Pipeline Execution:
+
+async function generateIntelligentScript(scriptContext) {
+  // Stage 1
+  const stage1Result = await callClaude(stage1Prompt(scriptContext));
+  const strategy = JSON.parse(stage1Result);
+
+  // Stage 2
+  const stage2Result = await callClaude(stage2Prompt(scriptContext, strategy));
+  const narrative = JSON.parse(stage2Result);
+
+  // Stage 3
+  const stage3Result = await callClaude(stage3Prompt(scriptContext, strategy, narrative));
+  const script = JSON.parse(stage3Result);
+
+  // Return full package — store strategy + narrative + script on project
+  return {
+    strategy,    // save to project for reference
+    narrative,   // save to project for reference  
+    scenes: script.scenes,  // these become the project scenes
+    productionNotes: script.productionNotes
+  }
+}

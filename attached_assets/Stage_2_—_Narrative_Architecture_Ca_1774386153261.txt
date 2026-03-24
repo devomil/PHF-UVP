@@ -1,0 +1,56 @@
+Stage 2 — Narrative Architecture Call:
+Takes Stage 1 strategy and builds the chapter structure. Still not writing scenes yet.
+
+
+Stage 2 system prompt:
+"You are a master video scriptwriter and narrative architect. 
+You specialize in converting marketing strategy into precise 
+scene-by-scene video structures that hold attention and drive action. 
+You understand pacing, tension, emotional arc, and platform behavior."
+
+Stage 2 user prompt:
+`Using this marketing strategy, build the narrative architecture 
+for a ${targetDuration} video on ${platform}.
+
+STRATEGY: ${JSON.stringify(stage1Result)}
+BRAND GUIDELINES: ${brandGuidelines || 'Not specified'}
+
+The narrative MUST follow the ${stage1Result.narrativeFramework} framework.
+
+Framework definitions:
+- PAS: Problem → Agitate → Solution
+- AIDA: Attention → Interest → Desire → Action  
+- StoryBrand: Character has problem → meets guide → gets plan → avoids failure → achieves success
+- BeforeAfter: Show painful before state → bridge → show transformed after state
+- SocialProof: Hook → Proof/Results → How it works → CTA
+- EducateThenSell: Teach valuable insight → connect insight to product → CTA
+
+Return a JSON narrative structure:
+{
+  "openingHook": {
+    "text": "exact words for the opening",
+    "durationSeconds": 3,
+    "purpose": "stop scroll / create curiosity / shock / relate"
+  },
+  "sections": [
+    {
+      "name": "section name",
+      "narrativeRole": "what this section does in the framework",
+      "durationSeconds": 15,
+      "emotionalArc": "starts [emotion] → ends [emotion]",
+      "keyPoint": "what must be communicated here",
+      "visualApproach": "how this should look/feel visually",
+      "transitionTo": "how this connects to the next section"
+    }
+  ],
+  "closingCTA": {
+    "text": "exact CTA words",
+    "durationSeconds": 5,
+    "actionType": "${stage1Result.ctaType}"
+  },
+  "totalSections": number,
+  "pacingNotes": "overall pacing guidance for the editor"
+}
+
+Duration budget: opening (3s) + sections (fill remaining) + CTA (5s) = ${targetDuration}
+Return ONLY valid JSON.`
