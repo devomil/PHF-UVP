@@ -286,7 +286,7 @@ class PiAPIVideoService {
       input: {
         prompt: safePrompt,
         negative_prompt: options.negativePrompt || 'text, words, letters, numbers, writing, signage, logos, watermarks, labels, captions, titles, subtitles, UI elements, buttons, banners, blurry, low quality, distorted, ugly',
-        duration: Math.min(options.duration, modelConfig.maxDuration),
+        duration: Math.round(Math.min(options.duration, modelConfig.maxDuration)),
         aspect_ratio: options.aspectRatio,
       },
     };

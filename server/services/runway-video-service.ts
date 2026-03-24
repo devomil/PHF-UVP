@@ -82,7 +82,7 @@ class RunwayVideoService {
     const apiModel = this.resolveApiModel(providerKey);
 
     try {
-      const clampedDuration = Math.min(options.duration || 5, 10);
+      const clampedDuration = Math.round(Math.min(options.duration || 5, 10));
       console.log(`[Runway] Starting generation with provider: ${providerKey}, API model: ${apiModel}`);
       console.log(`[Runway] Prompt: ${options.prompt.substring(0, 100)}...`);
       console.log(`[Runway] Duration: ${clampedDuration}s (requested: ${options.duration || 5}s, max: 10s)`);

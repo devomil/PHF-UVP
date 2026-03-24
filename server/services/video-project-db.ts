@@ -104,7 +104,7 @@ export async function saveProjectToDb(
     }
     updateData.assets = assetsToSave;
   }
-  if (project.totalDuration !== undefined) updateData.totalDuration = project.totalDuration;
+  if (project.totalDuration !== undefined) updateData.totalDuration = Math.round(project.totalDuration);
   if (renderId !== undefined) updateData.renderId = renderId;
   if (bucketName !== undefined) updateData.bucketName = bucketName;
   if (outputUrl !== undefined) updateData.outputUrl = outputUrl;
