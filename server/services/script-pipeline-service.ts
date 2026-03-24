@@ -69,6 +69,34 @@ export interface PipelineResult {
   };
 }
 
+const ALLOWED_FRAMEWORKS: Record<string, string> = {
+  "PAS": "PAS \u2014 Problem \u2192 Agitate \u2192 Solution",
+  "AIDA": "AIDA \u2014 Attention \u2192 Interest \u2192 Desire \u2192 Action",
+  "StoryBrand": "StoryBrand \u2014 Hero \u2192 Problem \u2192 Guide \u2192 Plan \u2192 Action \u2192 Result",
+  "BeforeAfter": "Before & After \u2014 Current State \u2192 Transformation \u2192 New Reality",
+  "SocialProof": "Social Proof \u2014 Claim \u2192 Evidence \u2192 Testimonial \u2192 CTA",
+  "EducateThenSell": "Educate Then Sell \u2014 Teach Value \u2192 Position Product \u2192 Offer",
+};
+
+const FRAMEWORK_KEYS = Object.keys(ALLOWED_FRAMEWORKS);
+const DEFAULT_FRAMEWORK = "PAS";
+
+function normalizeFramework(raw: string): string {
+  if (!raw) return ALLOWED_FRAMEWORKS[DEFAULT_FRAMEWORK];
+  const lower = raw.toLowerCase().replace(/[^a-z]/g, "");
+  for (const [key, display] of Object.entries(ALLOWED_FRAMEWORKS)) {
+    if (lower === key.toLowerCase().replace(/[^a-z]/g, "")) return display;
+    if (lower.includes(key.toLowerCase().replace(/[^a-z]/g, ""))) return display;
+  }
+  if (lower.includes("problem") && (lower.includes("agitate") || lower.includes("solution"))) return ALLOWED_FRAMEWORKS["PAS"];
+  if (lower.includes("attention") || lower.includes("aida")) return ALLOWED_FRAMEWORKS["AIDA"];
+  if (lower.includes("story") || lower.includes("hero")) return ALLOWED_FRAMEWORKS["StoryBrand"];
+  if (lower.includes("before") && lower.includes("after")) return ALLOWED_FRAMEWORKS["BeforeAfter"];
+  if (lower.includes("social") || lower.includes("proof") || lower.includes("testimonial")) return ALLOWED_FRAMEWORKS["SocialProof"];
+  if (lower.includes("educate") || lower.includes("teach")) return ALLOWED_FRAMEWORKS["EducateThenSell"];
+  return ALLOWED_FRAMEWORKS[DEFAULT_FRAMEWORK];
+}
+
 interface BrandInfo {
   brandName: string;
   tagline: string;
@@ -279,7 +307,7 @@ ${ctx.description}
 
 Return a JSON object:
 {
-  "narrativeFramework": "The storytelling framework to use (e.g. Problem-Agitate-Solve, Before-After-Bridge, Hero's Journey micro-arc, etc.)",
+  "narrativeFramework": "Choose exactly one: PAS, AIDA, StoryBrand, BeforeAfter, SocialProof, or EducateThenSell",
   "coreMessage": "The single most important takeaway for the viewer (one sentence)",
   "primaryEmotion": "The dominant emotion to evoke (e.g. curiosity, relief, aspiration, urgency)",
   "hooks": ["3-5 specific opening hook lines that could start this video"],
@@ -300,7 +328,7 @@ Return a JSON object:
   }
 
   return {
-    narrativeFramework: parsed.narrativeFramework || "Problem-Solution",
+    narrativeFramework: normalizeFramework(parsed.narrativeFramework || ""),
     coreMessage: parsed.coreMessage || "",
     primaryEmotion: parsed.primaryEmotion || "curiosity",
     openingHook,
@@ -513,7 +541,7 @@ function buildFallbackStrategy(ctx: PipelineContext): CreativeStrategy {
   const tone = ctx.scriptPresets?.scriptTone || "educational";
   const openingHook = ctx.trendHooks?.[0] || `Discover how ${ctx.scriptPresets?.productName || "this"} can transform your routine`;
   return {
-    narrativeFramework: "Problem-Solution",
+    narrativeFramework: ALLOWED_FRAMEWORKS[DEFAULT_FRAMEWORK],
     coreMessage: ctx.scriptPresets?.productProblem || "A better solution exists",
     primaryEmotion: "curiosity",
     openingHook,
