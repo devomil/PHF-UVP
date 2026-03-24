@@ -1,7 +1,7 @@
 import { Router, Request, Response } from "express";
 import { db } from "../db";
-import { brandSettings, trendCache } from "../../shared/schema";
-import { eq, and, gt } from "drizzle-orm";
+import { brandSettings } from "../../shared/schema";
+import { eq } from "drizzle-orm";
 import { getTrendingHooks, clearCacheForIndustry } from "./trend-intelligence-service";
 
 const router = Router();

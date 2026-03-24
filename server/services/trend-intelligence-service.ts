@@ -6,11 +6,6 @@ import { eq, and, gt } from "drizzle-orm";
 const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY || "";
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || "";
 
-interface WebSearchTool {
-  type: "web_search_20250305";
-  name: "web_search";
-}
-
 const INDUSTRY_YOUTUBE_CATEGORY: Record<string, string> = {
   "Health & Wellness": "26",
   "Fitness": "17",

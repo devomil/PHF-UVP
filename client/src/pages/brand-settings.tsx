@@ -397,6 +397,35 @@ export default function BrandSettings() {
 
           <div>
             <div className="flex items-center gap-2 mb-3">
+              <FileText className="w-4 h-4" style={{ color: "var(--text-secondary)" }} />
+              <h2 className="text-sm font-medium uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
+                Brand Guidelines
+              </h2>
+            </div>
+            <div
+              className="border rounded-xl p-5"
+              style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)" }}
+            >
+              <textarea
+                value={settings.guidelines}
+                onChange={(e) => updateField("guidelines", e.target.value)}
+                placeholder="Describe your brand voice, style guidelines, dos and don'ts for video content..."
+                rows={6}
+                className="w-full border rounded-lg px-3.5 py-2.5 placeholder-gray-500 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/20 transition-colors resize-none"
+                style={{
+                  backgroundColor: "var(--surface)",
+                  borderColor: "var(--border-subtle)",
+                  color: "var(--text-primary)",
+                }}
+              />
+              <p className="text-xs mt-2" style={{ color: "var(--text-muted)" }}>
+                These guidelines will be used to inform AI-generated scripts, visual directions, and voiceover tone.
+              </p>
+            </div>
+          </div>
+
+          <div>
+            <div className="flex items-center gap-2 mb-3">
               <Building2 className="w-4 h-4" style={{ color: "var(--text-secondary)" }} />
               <h2 className="text-sm font-medium uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
                 Industry & Audience
@@ -508,35 +537,6 @@ export default function BrandSettings() {
                   />
                 </button>
               </div>
-            </div>
-          </div>
-
-          <div>
-            <div className="flex items-center gap-2 mb-3">
-              <FileText className="w-4 h-4" style={{ color: "var(--text-secondary)" }} />
-              <h2 className="text-sm font-medium uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
-                Brand Guidelines
-              </h2>
-            </div>
-            <div
-              className="border rounded-xl p-5"
-              style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)" }}
-            >
-              <textarea
-                value={settings.guidelines}
-                onChange={(e) => updateField("guidelines", e.target.value)}
-                placeholder="Describe your brand voice, style guidelines, dos and don'ts for video content..."
-                rows={6}
-                className="w-full border rounded-lg px-3.5 py-2.5 placeholder-gray-500 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/20 transition-colors resize-none"
-                style={{
-                  backgroundColor: "var(--surface)",
-                  borderColor: "var(--border-subtle)",
-                  color: "var(--text-primary)",
-                }}
-              />
-              <p className="text-xs mt-2" style={{ color: "var(--text-muted)" }}>
-                These guidelines will be used to inform AI-generated scripts, visual directions, and voiceover tone.
-              </p>
             </div>
           </div>
         </div>
