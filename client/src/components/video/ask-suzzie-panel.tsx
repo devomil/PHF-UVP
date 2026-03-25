@@ -51,6 +51,14 @@ export function AskSuzziePanel({ sceneContext, onApplyVisualDirection, onApplyPr
   const inputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const prevVisualDirectionRef = useRef(sceneContext.visualDirection);
+  useEffect(() => {
+    if (prevVisualDirectionRef.current !== sceneContext.visualDirection && messages.length > 0) {
+      setMessages([]);
+    }
+    prevVisualDirectionRef.current = sceneContext.visualDirection;
+  }, [sceneContext.visualDirection]);
+
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
