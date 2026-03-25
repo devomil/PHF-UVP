@@ -814,7 +814,7 @@ router.delete('/projects/:projectId', isAuthenticated, async (req: Request, res:
 // Ask Suzzie (Claude AI) - dual mode: visual direction generation + general assistant
 router.post('/ask-suzzie', isAuthenticated, async (req: Request, res: Response) => {
   try {
-    const { mode, question, conversationHistory, narration, sceneType, projectTitle, workflowPath, matchedAssets, selectedProduct, artPresetId, artPresetName, visualDirection, provider, imageAttachment } = req.body;
+    const { mode, question, conversationHistory, narration, sceneType, projectTitle, workflowPath, matchedAssets, selectedProduct, artPresetId, artPresetName, visualDirection, provider, imageAttachment, hasReferenceImage } = req.body;
     
     if (mode === 'assistant') {
       if (!question) {
@@ -849,7 +849,7 @@ router.post('/ask-suzzie', isAuthenticated, async (req: Request, res: Response) 
       console.log(`[AskSuzzie:Assistant] Question: "${truncatedQuestion.substring(0, 80)}..." | Scene: ${sceneType || 'none'} | Art: ${artPresetName || 'none'} | History: ${Array.isArray(conversationHistory) ? conversationHistory.length : 0} msgs | Image: ${hasImage ? 'yes' : 'no'}`);
       
       const systemPrompt = buildSuzzieSystemPrompt({
-        narration, sceneType, artPresetId, artPresetName, visualDirection, projectTitle, provider,
+        narration, sceneType, artPresetId, artPresetName, visualDirection, projectTitle, provider, hasReferenceImage: !!hasReferenceImage,
       });
       
       let llmMessages: any[];

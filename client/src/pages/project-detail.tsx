@@ -4551,6 +4551,7 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
                     visualDirection: promptText,
                     provider: selectedProvider,
                     projectTitle: assetsQuery.data?.project?.title || '',
+                    hasReferenceImage: !!(overrideSourceImage || assetsQuery.data?.generationInfo?.sourceImageUrl),
                   }}
                   onApplyVisualDirection={(newPrompt) => setPromptText(newPrompt)}
                   onApplyProvider={(providerId) => setSelectedProvider(providerId)}

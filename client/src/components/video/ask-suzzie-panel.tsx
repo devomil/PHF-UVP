@@ -9,6 +9,7 @@ interface SuzzieSceneContext {
   visualDirection?: string;
   provider?: string;
   projectTitle?: string;
+  hasReferenceImage?: boolean;
 }
 
 interface ImageAttachment {
@@ -131,6 +132,7 @@ export function AskSuzziePanel({ sceneContext, onApplyVisualDirection, onApplyPr
           visualDirection: sceneContext.visualDirection,
           provider: sceneContext.provider,
           projectTitle: sceneContext.projectTitle,
+          hasReferenceImage: sceneContext.hasReferenceImage,
           ...(currentAttachment ? {
             imageAttachment: {
               base64: currentAttachment.base64,

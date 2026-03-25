@@ -2816,6 +2816,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                       artPresetName: activePreset?.name,
                       visualDirection: msModalPrompt,
                       provider: msModalProvider !== "auto" ? msModalProvider : undefined,
+                      hasReferenceImage: referenceImageUrls.length > 0 || !!brandAssetUrl,
                     }}
                     onApplyVisualDirection={(prompt) => {
                       setMsModalPrompt(prompt);
@@ -2943,6 +2944,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
           artPresetName: activePreset?.name,
           visualDirection: editValues.visualDirection,
           provider: provider !== "auto" ? provider : undefined,
+          hasReferenceImage: referenceImageUrls.length > 0 || !!brandAssetUrl,
         }}
         onApplyVisualDirection={(prompt) => {
           setEditValues(prev => ({ ...prev, visualDirection: prompt }));

@@ -9,6 +9,7 @@ interface SuzzieSceneContext {
   visualDirection?: string;
   projectTitle?: string;
   provider?: string;
+  hasReferenceImage?: boolean;
 }
 
 export interface SuzzieAssetLibraryContext {
@@ -122,9 +123,22 @@ export function buildSuzzieSystemPrompt(context: SuzzieSceneContext): string {
     if (context.sceneType) sceneContext += `\nScene Type: ${context.sceneType}`;
     if (context.artPresetName) sceneContext += `\nArt Style: ${context.artPresetName} (IMPORTANT: All suggested prompts MUST match this art style. Do NOT use a different style like "Pixar 3D" if the selected style is "${context.artPresetName}".)`;
     if (context.provider) sceneContext += `\nSelected Provider: ${context.provider}`;
+    if (context.hasReferenceImage) sceneContext += `\nReference Image: YES — This scene has a product/brand reference image attached. The AI will use Image-to-Video (I2V) mode.`;
     if (context.narration) sceneContext += `\nNarration: "${context.narration}"`;
     if (context.visualDirection) sceneContext += `\nCurrent Visual Direction: "${context.visualDirection}"`;
   }
+
+  const i2vGuidance = context.hasReferenceImage ? `
+
+## CRITICAL: I2V Reference Image Rules
+This scene has a reference image attached. The AI will use Image-to-Video (I2V) mode, which means:
+- The reference image IS the starting frame — the AI animates FROM this image
+- DO NOT describe the product/subject appearance in the prompt (the image already shows it)
+- Instead, describe: camera MOTION (slow push-in, orbit, dolly), ENVIRONMENT changes (light shifts, particles, background elements), TEXT OVERLAYS that should appear, and MOOD/ATMOSPHERE
+- Good I2V prompt: "Slow push-in toward the bottle. Warm golden light sweeps across from the right. Soft bokeh particles float upward. Bold white text fades in reading 'Clinically Studied · Standardized Extract'. Shallow depth of field, cinematic color grade."
+- Bad I2V prompt: "A white supplement bottle with a blue label sits on a counter..." (this re-describes the image, confusing the AI)
+- Focus on WHAT HAPPENS, not WHAT EXISTS — the image already shows what exists` : '';
+
 
   return `You are Suzzie, a friendly and knowledgeable AI assistant for a video production platform. You help users create better videos by:
 - Writing and improving visual directions/prompts for AI video generation
@@ -145,6 +159,7 @@ ${providerKnowledge}
 ## Art Style Presets
 ${artStyleKnowledge}
 ${sceneContext}
+${i2vGuidance}
 
 ## Image Analysis
 When the user attaches an image (photo of a location, store, product, etc.), analyze it in detail:
