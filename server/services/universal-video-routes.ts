@@ -2806,6 +2806,19 @@ router.post('/projects/:projectId/generate-script', isAuthenticated, async (req:
       pipelineNarrative = pipelineResult.narrative;
     }
 
+    if (productMediaUrl && scenes.length > 0) {
+      const productSceneTypes = ['product', 'solution', 'hero', 'benefit', 'proof'];
+      let targetScene = scenes.find((s: any) => productSceneTypes.includes(s.type));
+      if (!targetScene) {
+        const midIndex = Math.min(Math.floor(scenes.length / 2), scenes.length - 1);
+        targetScene = scenes[midIndex];
+      }
+      if (targetScene) {
+        targetScene.brandAssetUrl = productMediaUrl;
+        console.log(`[GenerateScript] Assigned product image to scene "${targetScene.id}" (type: ${targetScene.type}) for I2V generation`);
+      }
+    }
+
     if (numScenes && scenes.length > numScenes) {
       scenes = scenes.slice(0, numScenes);
     }
