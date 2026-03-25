@@ -2986,9 +2986,9 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
                         taglineColor={settings.introCard?.taglineColor || '#E8D5B7'}
                         taglineFontFamily={settings.introCard?.taglineFontFamily || 'Great Vibes'}
                         taglineFontWeight={settings.introCard?.taglineFontWeight ?? 400}
-                        contactWebsite={settings.introCard?.contactWebsite || ''}
-                        contactPhone={settings.introCard?.contactPhone || ''}
-                        contactEmail={settings.introCard?.contactEmail || ''}
+                        websiteText={settings.introCard?.contactWebsite || ''}
+                        phoneText={settings.introCard?.contactPhone || ''}
+                        emailText={settings.introCard?.contactEmail || ''}
                         websitePositionY={settings.introCard?.websitePositionY || 75}
                         websiteFontSize={settings.introCard?.websiteFontSize || 22}
                         websiteColor={settings.introCard?.websiteColor || '#FFFFFF'}
