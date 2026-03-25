@@ -11,6 +11,7 @@ import { EnhancedSceneEditor } from "@/components/video/enhanced-scene-editor";
 import { SceneOverlayEditor, SceneOverlayItem } from "@/components/video/scene-overlay-editor";
 import { S3BackgroundPicker } from "@/components/video/S3BackgroundPicker";
 import { EndCardPreview } from "@/components/video/EndCardPreview";
+import { AskSuzziePanel } from "@/components/video/ask-suzzie-panel";
 
 const statusDot: Record<string, string> = {
   pending: "bg-gray-500",
@@ -4540,6 +4541,19 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
                   rows={3}
                   className="w-full rounded-lg border p-3 text-sm resize-none transition-colors focus:outline-none focus:ring-2 focus:ring-purple-500/30 focus:border-purple-500/50"
                   style={{ backgroundColor: "rgba(0,0,0,0.2)", borderColor: "var(--border-subtle)", color: "var(--text-primary)" }}
+                />
+                <AskSuzziePanel
+                  sceneContext={{
+                    narration: narrationText || promptText,
+                    sceneType: 'product',
+                    artPresetId: artPresetId || 'auto',
+                    artPresetName: artPresetId ? (getVisualArtPreset(artPresetId)?.name || artPresetId) : 'Auto',
+                    visualDirection: promptText,
+                    provider: selectedProvider,
+                    projectTitle: assetsQuery.data?.project?.title || '',
+                  }}
+                  onApplyVisualDirection={(newPrompt) => setPromptText(newPrompt)}
+                  onApplyProvider={(providerId) => setSelectedProvider(providerId)}
                 />
               </div>
 
