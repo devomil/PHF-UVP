@@ -203,6 +203,7 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
   const [projectTypeId, setProjectTypeId] = useState("youtube-ad");
   const [trendingHooks, setTrendingHooks] = useState<TrendingHookChip[]>([]);
   const [trendingIndustry, setTrendingIndustry] = useState("");
+  const [trendingNiche, setTrendingNiche] = useState("");
   const [loadingTrends, setLoadingTrends] = useState(false);
   const [trendsDismissed, setTrendsDismissed] = useState(false);
   const [analyzingImage, setAnalyzingImage] = useState(false);
@@ -268,6 +269,7 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
             template: h.template,
             psychologicalDriver: h.psychologicalDriver,
           })));
+          if (trendData.contentNiche) setTrendingNiche(trendData.contentNiche);
         }
       } catch {
       } finally {
@@ -344,6 +346,7 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
       const data = await res.json();
       if (data.success && data.hooks?.length > 0) {
         setTrendingIndustry(data.industry || "your product");
+        if (data.contentNiche) setTrendingNiche(data.contentNiche);
         setTrendingHooks(data.hooks.slice(0, 3).map((h: TrendingHookChip) => ({
           template: h.template,
           psychologicalDriver: h.psychologicalDriver,
@@ -516,9 +519,21 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
                   <button
                     key={i}
                     type="button"
-                    onClick={() => {
+                    onClick={async () => {
                       setDescription(hook.template);
                       setTrendsDismissed(true);
+                      try {
+                        const res = await fetch("/api/trend-intelligence/derive-problem", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          credentials: "include",
+                          body: JSON.stringify({ hookTemplate: hook.template, contentNiche: trendingNiche }),
+                        });
+                        const data = await res.json();
+                        if (data.success && data.problem) {
+                          setProductProblem(data.problem);
+                        }
+                      } catch {}
                     }}
                     title={`Why it works: ${hook.psychologicalDriver}`}
                     className="text-sm px-3 py-2 rounded-lg border transition-all hover:border-purple-400/50 hover:bg-purple-500/10 text-left"

@@ -208,4 +208,35 @@ Respond in valid JSON only:
   }
 });
 
+router.post("/derive-problem", async (req: Request, res: Response) => {
+  if (!req.isAuthenticated() || !req.user) {
+    return res.status(401).json({ error: "Not authenticated" });
+  }
+
+  const { hookTemplate, contentNiche } = req.body;
+  if (!hookTemplate) {
+    return res.status(400).json({ error: "hookTemplate is required" });
+  }
+
+  try {
+    const result = await llmClient.createChatCompletion({
+      systemPrompt: "You extract the core problem or pain point from a marketing hook. Respond with ONLY a short, plain-language problem statement (one sentence, no quotes, no explanation). Write it as if completing the sentence 'This product helps with...'",
+      messages: [
+        {
+          role: "user",
+          content: `Hook: "${hookTemplate}"${contentNiche ? `\nProduct niche: ${contentNiche}` : ""}\n\nWhat specific problem or pain point does this hook address? Reply with just the problem statement.`,
+        },
+      ],
+      maxTokens: 100,
+      temperature: 0.3,
+    });
+
+    const problem = result.text.replace(/^["']|["']$/g, "").trim();
+    res.json({ success: true, problem });
+  } catch (error: any) {
+    console.error("[TrendRoutes] POST /derive-problem error:", error.message);
+    res.status(500).json({ error: "Failed to derive problem from hook" });
+  }
+});
+
 export default router;
