@@ -10,6 +10,10 @@ import { eq } from "drizzle-orm";
 import crypto from "crypto";
 import { sendNewUserSignupNotification, sendWelcomeEmail } from "./services/notification-service";
 
+const ADMIN_EMAILS = [
+  "ryan@pinehillfarm.co",
+];
+
 const PgSession = connectPgSimple(session);
 
 passport.use(
@@ -27,6 +31,11 @@ passport.use(
         const isValid = await bcrypt.compare(password, user.password);
         if (!isValid) {
           return done(null, false, { message: "Invalid email or password" });
+        }
+        if (ADMIN_EMAILS.includes(user.email.toLowerCase()) && user.role !== "admin") {
+          await db.update(users).set({ role: "admin" }).where(eq(users.id, user.id));
+          user.role = "admin";
+          console.log(`[Auth] Auto-promoted ${user.email} to admin role`);
         }
         return done(null, user);
       } catch (err) {
@@ -101,7 +110,7 @@ export function setupAuth(app: Express) {
           password: hashedPassword,
           firstName: firstName || null,
           lastName: lastName || null,
-          role: "employee",
+          role: ADMIN_EMAILS.includes(email.toLowerCase()) ? "admin" : "employee",
         })
         .returning();
 
