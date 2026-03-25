@@ -2814,8 +2814,15 @@ router.post('/projects/:projectId/generate-script', isAuthenticated, async (req:
         targetScene = scenes[midIndex];
       }
       if (targetScene) {
-        targetScene.brandAssetUrl = productMediaUrl;
-        console.log(`[GenerateScript] Assigned product image to scene "${targetScene.id}" (type: ${targetScene.type}) for I2V generation`);
+        let resolvedProductUrl = productMediaUrl;
+        if (productMediaUrl.startsWith('/uploads/')) {
+          const baseUrl = process.env.REPLIT_DEV_DOMAIN
+            ? `https://${process.env.REPLIT_DEV_DOMAIN}`
+            : (process.env.REPLIT_DOMAINS ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}` : 'http://localhost:5000');
+          resolvedProductUrl = `${baseUrl}${productMediaUrl}`;
+        }
+        targetScene.brandAssetUrl = resolvedProductUrl;
+        console.log(`[GenerateScript] Assigned product image to scene "${targetScene.id}" (type: ${targetScene.type}) for I2V generation: ${resolvedProductUrl.substring(0, 80)}`);
       }
     }
 

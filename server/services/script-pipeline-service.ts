@@ -436,8 +436,8 @@ async function stageThreeSceneWriting(
 - Features: ${ctx.productContext.keyFeatures.join(", ")}
 - Tone: ${ctx.productContext.brandTone}
 - Colors: ${ctx.productContext.colorPalette.join(", ")}
-- Visual: ${ctx.productContext.visualDescription}
-Incorporate this product naturally. At least one scene should showcase it prominently.`
+- Visual Appearance: ${ctx.productContext.visualDescription}
+IMPORTANT: Incorporate this product naturally. At least one scene (preferably a "product" or "solution" type) MUST describe the actual product in the visual direction — reference its physical appearance (${ctx.productContext.visualDescription}) so the AI video generator can depict it accurately. The uploaded product image will be used as a starting frame for that scene.`
     : "";
 
   const ctaMap: Record<string, string> = {
@@ -448,7 +448,7 @@ Incorporate this product naturally. At least one scene should showcase it promin
   };
 
   const ctaDirective = ctx.scriptPresets?.callToAction
-    ? `CTA DIRECTIVE: The final scene must use a "${ctaMap[ctx.scriptPresets.callToAction] || ctx.scriptPresets.callToAction}" call to action.`
+    ? `CTA DIRECTIVE: The final scene must use a "${ctaMap[ctx.scriptPresets.callToAction] || ctx.scriptPresets.callToAction}" call to action. Mention the brand name or website directly instead of referring to links.`
     : "";
 
   const visualDirectionExample = isStylized
@@ -468,6 +468,11 @@ ${brand.guidelines ? `BRAND GUIDELINES:\n${brand.guidelines}\n` : ""}
 ${visualRules}
 
 ${platformRules}
+
+CRITICAL RULES FOR NARRATION:
+- NEVER say "link below", "link in bio", "click the link", "link in the description", or any reference to clickable links. These are generated videos — there are no clickable elements.
+- For CTAs, say the brand name or website URL directly (e.g. "Visit ${brand.website || brand.brandName || "our website"}" or "Search for ${brand.brandName || "us"} online").
+- Keep narration natural and conversational. Avoid sounding like a text ad.
 
 You return ONLY valid JSON. No markdown, no explanation outside the JSON.`;
 
