@@ -84,6 +84,8 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
   const rawVideoUrl = scene.assets?.videoUrl;
   const imageUrl = scene.assets?.imageUrl || scene.background?.url;
   const hasRawVideo = !!rawVideoUrl;
+  const brandAssetUrl = scene.brandAssetUrl as string | undefined;
+  const isProductScene = ['product', 'solution', 'hero', 'benefit', 'proof'].includes(scene.type);
   const hasImage = !!imageUrl;
   const assembledClipUrl = scene.assemblyManifest?.assembledClipUrl;
   const assembledClipValid = scene.assemblyManifest && !scene.assemblyManifest.assemblyFailed && scene.assemblyManifest.assembledClipValid !== false && !!assembledClipUrl;
@@ -99,7 +101,13 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
   const [provider, setProvider] = useState("auto");
   const [generationMode, setGenerationMode] = useState("auto");
   const [referenceImageUrls, setReferenceImageUrls] = useState<string[]>(
-    () => scene.assets?.referenceImages || []
+    () => {
+      const existing = scene.assets?.referenceImages || [];
+      if (scene.brandAssetUrl && !existing.includes(scene.brandAssetUrl)) {
+        return [scene.brandAssetUrl, ...existing];
+      }
+      return existing;
+    }
   );
   const [referenceVideoUrl, setReferenceVideoUrl] = useState<string>(
     () => scene.assets?.referenceVideoUrl || ''
@@ -148,6 +156,16 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const prevVideoUrl = useRef(videoUrl);
   const prevImageUrl = useRef(imageUrl);
+
+  useEffect(() => {
+    const incoming = scene.assets?.referenceImages || [];
+    const withBrand = scene.brandAssetUrl && !incoming.includes(scene.brandAssetUrl)
+      ? [scene.brandAssetUrl, ...incoming]
+      : incoming;
+    if (JSON.stringify(withBrand) !== JSON.stringify(referenceImageUrls)) {
+      setReferenceImageUrls(withBrand);
+    }
+  }, [scene.brandAssetUrl, scene.assets?.referenceImages]);
 
   const handleRegenerateVisualDirection = async () => {
     setRegeneratingVisualDirection(true);
@@ -1201,7 +1219,27 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
           <div>
             <p className="text-[11px] font-medium flex items-center gap-1 mb-1" style={{ color: "var(--text-secondary)" }}>
               <Image className="w-3 h-3" /> Reference Images
+              {brandAssetUrl && (
+                <span className="ml-1 text-[9px] px-1.5 py-0.5 rounded-full bg-green-500/15 text-green-400 border border-green-500/20">
+                  Product Image Attached
+                </span>
+              )}
             </p>
+            {isProductScene && !brandAssetUrl && referenceImageUrls.length === 0 && !imageUrl && (
+              <div 
+                className="mb-2 px-2.5 py-2 rounded-lg border border-dashed cursor-pointer transition-colors hover:border-amber-500/40 hover:bg-amber-500/5"
+                style={{ borderColor: "rgba(245,158,11,0.3)", backgroundColor: "rgba(245,158,11,0.03)" }}
+                onClick={() => refFileInputRef.current?.click()}
+              >
+                <p className="text-[10px] font-medium flex items-center gap-1.5" style={{ color: "rgb(245,158,11)" }}>
+                  <ImagePlus className="w-3 h-3 flex-shrink-0" />
+                  Upload your product image for this scene
+                </p>
+                <p className="text-[9px] mt-0.5 ml-[18px]" style={{ color: "var(--text-muted)" }}>
+                  This scene is designed to showcase your product. Upload a photo to use as the starting frame for AI video generation (I2V).
+                </p>
+              </div>
+            )}
             <p className="text-[10px] mb-1.5" style={{ color: "var(--text-muted)" }}>For I2V (image-to-video)</p>
             <div className="flex items-center gap-1.5 flex-wrap">
               {imageUrl && (

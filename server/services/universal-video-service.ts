@@ -3919,7 +3919,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
           updatedProject.assets.images.push({
             sceneId: scene.id,
             url: assignedImage.url,
-            prompt: scene.background.source,
+            prompt: scene.visualDirection || scene.background?.source || '',
             source: 'uploaded',
           });
           updatedProject.scenes[i].assets!.imageUrl = assignedImage.url;
@@ -3933,7 +3933,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
         updatedProject.assets.images.push({
           sceneId: scene.id,
           url: imageToUse.url,
-          prompt: scene.background.source,
+          prompt: scene.visualDirection || scene.background?.source || '',
           source: 'uploaded',
         });
         updatedProject.scenes[i].assets!.imageUrl = imageToUse.url;
@@ -3997,7 +3997,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
               updatedProject.assets.images.push({
                 sceneId: scene.id,
                 url: firstImageUrl,
-                prompt: scene.visualDirection || scene.background.source,
+                prompt: scene.visualDirection || scene.background?.source || '',
                 source: 'ai',
               });
               updatedProject.scenes[i].assets!.imageUrl = firstImageUrl;
@@ -4015,7 +4015,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
             updatedProject.assets.images.push({
               sceneId: scene.id,
               url: contentResult.imageUrl,
-              prompt: scene.visualDirection || scene.background.source,
+              prompt: scene.visualDirection || scene.background?.source || '',
               source: contentResult.source.includes('fal.ai') ? 'ai' : 'stock',
             });
             
@@ -4036,7 +4036,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
               updatedProject.assets.images.push({
                 sceneId: scene.id,
                 url: stockResult.imageUrl,
-                prompt: scene.visualDirection || scene.background.source,
+                prompt: scene.visualDirection || scene.background?.source || '',
                 source: 'stock',
               });
               updatedProject.scenes[i].assets!.imageUrl = stockResult.imageUrl;
@@ -4054,7 +4054,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
             console.log(`[UniversalVideoService] Generating AI background for ${scene.type} scene: ${scene.id}`);
             const projAR = project.outputFormat?.aspectRatio || '16:9';
             const backgroundResult = await this.generateAIBackground(
-              scene.background.source,
+              scene.visualDirection || scene.background?.source || '',
               scene.type,
               projAR
             );
@@ -4067,7 +4067,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
               updatedProject.assets.images.push({
                 sceneId: scene.id,
                 url: backgroundResult.backgroundUrl,
-                prompt: scene.background.source,
+                prompt: scene.visualDirection || scene.background?.source || '',
                 source: 'ai',
               });
               
@@ -4100,7 +4100,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
               updatedProject.assets.images.push({
                 sceneId: scene.id,
                 url: resolvedProductUrl,
-                prompt: scene.background.source,
+                prompt: scene.visualDirection || scene.background?.source || '',
                 source: 'uploaded',
               });
               updatedProject.scenes[i].assets!.imageUrl = resolvedProductUrl;
@@ -4111,7 +4111,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
             updatedProject.assets.images.push({
               sceneId: scene.id,
               url: resolvedUrl,
-              prompt: scene.background.source,
+              prompt: scene.visualDirection || scene.background?.source || '',
               source: 'uploaded',
             });
             updatedProject.scenes[i].assets!.imageUrl = resolvedUrl;
@@ -4121,13 +4121,14 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
       } else {
         // This is in createProductVideoProject context - always sanitize product terms
         const projAR2 = project.outputFormat?.aspectRatio || '16:9';
-        const imageResult = await this.generateImage(scene.background.source, scene.id, true, 'content', projAR2);
+        const bgPrompt = scene.visualDirection || scene.background?.source || '';
+        const imageResult = await this.generateImage(bgPrompt, scene.id, true, 'content', projAR2);
 
         if (imageResult.success) {
           updatedProject.assets.images.push({
             sceneId: scene.id,
             url: imageResult.url,
-            prompt: scene.background.source,
+            prompt: bgPrompt,
             source: imageResult.source.includes('fal.ai') ? 'ai' : 'stock',
           });
           updatedProject.scenes[i].assets!.imageUrl = imageResult.url;
