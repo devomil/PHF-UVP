@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { db } from "../db";
 import { trendCache } from "../../shared/schema";
 import { eq, and, gt } from "drizzle-orm";
+import { llmClient } from "./piapi-llm-client";
 
 const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY || "";
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || "";
@@ -154,15 +155,18 @@ async function fetchYouTubeTrending(industry: string): Promise<YouTubeVideo[]> {
   }
 }
 
-async function analyzeWithClaude(
+interface AnalysisResult {
+  trendResult: TrendResult;
+  isFallback: boolean;
+}
+
+function buildTrendPrompts(
   industry: string,
   contentNiche: string,
   targetAudience: string,
   risingKeywords: string[],
   youtubeVideos: YouTubeVideo[]
-): Promise<TrendResult> {
-  const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
-
+): { systemPrompt: string; userPrompt: string } {
   const youtubeTitles = youtubeVideos
     .slice(0, 15)
     .map((v) => `- "${v.title}" (${Number(v.viewCount).toLocaleString()} views)`)
@@ -170,7 +174,9 @@ async function analyzeWithClaude(
 
   const keywordsStr = risingKeywords.length > 0
     ? risingKeywords.join(", ")
-    : "No trending search data available — use your web search to find current trends";
+    : "No trending search data available";
+
+  const systemPrompt = `You are a viral content strategist specializing in short-form marketing video for small businesses and social media creators. Return ONLY valid JSON. No markdown, no explanation outside the JSON.`;
 
   const userPrompt = `Industry: ${industry}
 Content Niche: ${contentNiche}
@@ -181,9 +187,9 @@ Trending Google searches this week: ${keywordsStr}
 Top performing YouTube titles in this category:
 ${youtubeTitles || "No YouTube data available"}
 
-Use your web search tool to find 2-3 trending discussions about "${contentNiche}" on Reddit or health/wellness forums right now. Look for recurring pain points and questions.
+Based on all of this data, create highly specific and original hooks that reference actual trends, product categories, or audience pain points. Do NOT use generic templates like "What nobody tells you about X" — every hook must be unique and tailored to the specific niche data above.
 
-Based on all of this data, return a JSON object:
+Return a JSON object:
 {
   "hooks": [
     {
@@ -205,56 +211,96 @@ Based on all of this data, return a JSON object:
 
 Return 5 hooks, 10 keywords, 3 formats.`;
 
-  try {
-    const response = await anthropic.messages.create({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 2000,
-      tools: [{ type: "web_search_20250305", name: "web_search" } as unknown as Anthropic.Messages.Tool],
-      system: `You are a viral content strategist specializing in short-form marketing video for small businesses and social media creators. Return ONLY valid JSON. No markdown, no explanation outside the JSON.`,
-      messages: [{ role: "user", content: userPrompt }],
-    });
+  return { systemPrompt, userPrompt };
+}
 
-    let resultText = "";
-    for (const block of response.content) {
-      if (block.type === "text") {
-        resultText += block.text;
-      }
+function parseTrendResponse(raw: string): TrendResult {
+  const cleaned = raw.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+  const parsed = JSON.parse(cleaned);
+  return {
+    hooks: Array.isArray(parsed.hooks) ? parsed.hooks.slice(0, 5) : [],
+    keywords: Array.isArray(parsed.keywords) ? parsed.keywords.slice(0, 10) : [],
+    formats: Array.isArray(parsed.formats) ? parsed.formats.slice(0, 3) : [],
+    insight: parsed.insight || "",
+  };
+}
+
+function buildFallbackTrendResult(industry: string, contentNiche: string, targetAudience: string): TrendResult {
+  const nicheWords = contentNiche.split(/[,\s]+/).filter(Boolean);
+  const fallbackKeywords = [...nicheWords, industry, "trending", "viral", "tips", "secrets", "guide", "how to", "best", "top"].slice(0, 10);
+  return {
+    hooks: [
+      { template: `What nobody tells you about ${contentNiche}`, psychologicalDriver: "Curiosity gap", example: `A ${contentNiche} deep-dive revealing hidden truths` },
+      { template: `Stop making this ${contentNiche} mistake`, psychologicalDriver: "Loss aversion", example: `Common ${contentNiche} error that's costing you results` },
+      { template: `I tested every ${contentNiche} method — here's what actually works`, psychologicalDriver: "Authority + specificity", example: `Comprehensive ${contentNiche} comparison with real data` },
+      { template: `The ${contentNiche} hack that changed everything for me`, psychologicalDriver: "Personal transformation", example: `Before/after story with ${contentNiche} results` },
+      { template: `Why ${targetAudience || "most people"} get ${contentNiche} completely wrong`, psychologicalDriver: "Pattern interrupt", example: `Contrarian take on mainstream ${contentNiche} advice` },
+    ],
+    keywords: fallbackKeywords,
+    formats: [
+      { name: "Problem-Solution", description: "Open with a relatable pain point, then reveal the solution", why: "Timeless format that drives engagement across all platforms" },
+      { name: "Before-After-Bridge", description: "Show the before state, the desired after, and the bridge to get there", why: "Visual transformation content consistently outperforms other formats" },
+      { name: "Myth-Busting", description: "Challenge a common belief, then reveal the surprising truth", why: "Controversy and pattern interrupts drive shares and comments" },
+    ],
+    insight: `Trending content in ${industry} is currently driven by authenticity and personal experience sharing. Focus on relatable storytelling and real results.`,
+  };
+}
+
+async function analyzeWithClaude(
+  industry: string,
+  contentNiche: string,
+  targetAudience: string,
+  risingKeywords: string[],
+  youtubeVideos: YouTubeVideo[]
+): Promise<AnalysisResult> {
+  const { systemPrompt, userPrompt } = buildTrendPrompts(industry, contentNiche, targetAudience, risingKeywords, youtubeVideos);
+
+  if (llmClient.isAvailable()) {
+    try {
+      console.log(`[TrendIntelligence] Trying PiAPI LLM client for trend analysis...`);
+      const llmResult = await llmClient.createChatCompletion({
+        systemPrompt,
+        messages: [{ role: "user", content: userPrompt }],
+        maxTokens: 2000,
+        temperature: 0.7,
+      });
+      const trendResult = parseTrendResponse(llmResult.text);
+      console.log(`[TrendIntelligence] PiAPI analysis complete (${llmResult.provider}): ${trendResult.hooks.length} hooks, ${trendResult.keywords.length} keywords`);
+      return { trendResult, isFallback: false };
+    } catch (err: any) {
+      console.warn(`[TrendIntelligence] PiAPI LLM client failed: ${err.message?.substring(0, 150)}`);
     }
-
-    resultText = resultText.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
-
-    const parsed = JSON.parse(resultText);
-
-    const result: TrendResult = {
-      hooks: Array.isArray(parsed.hooks) ? parsed.hooks.slice(0, 5) : [],
-      keywords: Array.isArray(parsed.keywords) ? parsed.keywords.slice(0, 10) : [],
-      formats: Array.isArray(parsed.formats) ? parsed.formats.slice(0, 3) : [],
-      insight: parsed.insight || "",
-    };
-
-    console.log(`[TrendIntelligence] Claude analysis complete: ${result.hooks.length} hooks, ${result.keywords.length} keywords`);
-    return result;
-  } catch (err: any) {
-    console.error(`[TrendIntelligence] Claude analysis failed:`, err.message);
-    const nicheWords = contentNiche.split(/[,\s]+/).filter(Boolean);
-    const fallbackKeywords = [...nicheWords, industry, "trending", "viral", "tips", "secrets", "guide", "how to", "best", "top"].slice(0, 10);
-    return {
-      hooks: [
-        { template: `What nobody tells you about ${contentNiche}`, psychologicalDriver: "Curiosity gap", example: `A ${contentNiche} deep-dive revealing hidden truths` },
-        { template: `Stop making this ${contentNiche} mistake`, psychologicalDriver: "Loss aversion", example: `Common ${contentNiche} error that's costing you results` },
-        { template: `I tested every ${contentNiche} method — here's what actually works`, psychologicalDriver: "Authority + specificity", example: `Comprehensive ${contentNiche} comparison with real data` },
-        { template: `The ${contentNiche} hack that changed everything for me`, psychologicalDriver: "Personal transformation", example: `Before/after story with ${contentNiche} results` },
-        { template: `Why ${targetAudience || "most people"} get ${contentNiche} completely wrong`, psychologicalDriver: "Pattern interrupt", example: `Contrarian take on mainstream ${contentNiche} advice` },
-      ],
-      keywords: fallbackKeywords,
-      formats: [
-        { name: "Problem-Solution", description: "Open with a relatable pain point, then reveal the solution", why: "Timeless format that drives engagement across all platforms" },
-        { name: "Before-After-Bridge", description: "Show the before state, the desired after, and the bridge to get there", why: "Visual transformation content consistently outperforms other formats" },
-        { name: "Myth-Busting", description: "Challenge a common belief, then reveal the surprising truth", why: "Controversy and pattern interrupts drive shares and comments" },
-      ],
-      insight: `Trending content in ${industry} is currently driven by authenticity and personal experience sharing. Focus on relatable storytelling and real results.`,
-    };
   }
+
+  if (ANTHROPIC_API_KEY) {
+    try {
+      console.log(`[TrendIntelligence] Trying direct Anthropic with web search...`);
+      const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
+      const webSearchPrompt = userPrompt.replace(
+        "Based on all of this data,",
+        `Also use your web search tool to find 2-3 trending discussions about "${contentNiche}" on Reddit or forums. Look for recurring pain points and questions.\n\nBased on all of this data,`
+      );
+      const response = await anthropic.messages.create({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 2000,
+        tools: [{ type: "web_search_20250305", name: "web_search" } as unknown as Anthropic.Messages.Tool],
+        system: systemPrompt,
+        messages: [{ role: "user", content: webSearchPrompt }],
+      });
+      let resultText = "";
+      for (const block of response.content) {
+        if (block.type === "text") resultText += block.text;
+      }
+      const trendResult = parseTrendResponse(resultText);
+      console.log(`[TrendIntelligence] Anthropic direct analysis complete: ${trendResult.hooks.length} hooks, ${trendResult.keywords.length} keywords`);
+      return { trendResult, isFallback: false };
+    } catch (err: any) {
+      console.error(`[TrendIntelligence] Anthropic direct analysis failed:`, err.message?.substring(0, 150));
+    }
+  }
+
+  console.warn(`[TrendIntelligence] All LLM providers failed, using fallback templates`);
+  return { trendResult: buildFallbackTrendResult(industry, contentNiche, targetAudience), isFallback: true };
 }
 
 async function saveToCache(industry: string, contentNiche: string, targetAudience: string, result: TrendResult): Promise<void> {
@@ -288,15 +334,18 @@ export async function getTrendingHooks(
     fetchYouTubeTrending(industry),
   ]);
 
-  const result = await analyzeWithClaude(industry, contentNiche, targetAudience, risingKeywords, youtubeVideos);
+  const { trendResult, isFallback } = await analyzeWithClaude(industry, contentNiche, targetAudience, risingKeywords, youtubeVideos);
 
-  await saveToCache(industry, contentNiche, targetAudience, result);
+  if (!isFallback) {
+    await saveToCache(industry, contentNiche, targetAudience, trendResult);
+    const now = new Date();
+    trendResult.cachedAt = now.toISOString();
+    trendResult.expiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString();
+  } else {
+    console.warn(`[TrendIntelligence] Skipping cache — result is from fallback templates`);
+  }
 
-  const now = new Date();
-  result.cachedAt = now.toISOString();
-  result.expiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString();
-
-  return result;
+  return trendResult;
 }
 
 export async function clearCacheForIndustry(industry: string, contentNiche: string, targetAudience: string): Promise<void> {
