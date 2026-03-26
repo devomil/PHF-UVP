@@ -28,6 +28,7 @@ import { LogoOverlay } from "./components/LogoOverlay";
 import { WatermarkOverlay } from "./components/WatermarkOverlay";
 import { KenBurnsImage } from "./components/KenBurnsImage";
 import { CustomImageOverlay } from "./components/CustomImageOverlay";
+import { CustomTextOverlay } from "./components/CustomTextOverlay";
 import { MicroSceneOverlayCompositor } from "./components/MicroSceneOverlayCompositor";
 import { MotionGraphicsScene } from "./compositions/MotionGraphicsScene";
 import { AnimatedEndCard } from "./components/endcard/AnimatedEndCard";
@@ -2144,7 +2145,7 @@ export const UniversalVideoComposition: React.FC<UniversalVideoProps> = ({
             />
           )}
           
-          {/* Custom user-positioned image overlays (drag-and-drop via SceneOverlayEditor) */}
+          {/* Custom user-positioned overlays (drag-and-drop via SceneOverlayEditor) */}
           {/* Skip scene-level overlays when micro-scenes handle their own overlays
               to prevent carryover (scene-level renders for full duration, micro-scene
               overlays are scoped to their time window by MicroSceneOverlayCompositor) */}
@@ -2152,18 +2153,29 @@ export const UniversalVideoComposition: React.FC<UniversalVideoProps> = ({
             const hasMicroScenes = scene.microScenes && scene.microScenes.length > 0;
             const msHaveOverlays = hasMicroScenes && scene.microScenes!.some((ms: any) => ms.overlayItems && ms.overlayItems.length > 0);
             if (msHaveOverlays) return null;
-            return scene.overlayItems?.map((overlay, overlayIdx) => (
-              <CustomImageOverlay
-                key={`custom-overlay-${scene.id}-${overlayIdx}`}
-                url={overlay.url}
-                x={overlay.x}
-                y={overlay.y}
-                width={overlay.width}
-                height={overlay.height}
-                opacity={overlay.opacity}
-                durationInFrames={durationInFrames}
-              />
-            ));
+            return scene.overlayItems?.map((overlay: any, overlayIdx: number) => {
+              if (overlay.type === 'text') {
+                return (
+                  <CustomTextOverlay
+                    key={`custom-text-overlay-${scene.id}-${overlayIdx}`}
+                    overlay={overlay}
+                    durationInFrames={durationInFrames}
+                  />
+                );
+              }
+              return (
+                <CustomImageOverlay
+                  key={`custom-overlay-${scene.id}-${overlayIdx}`}
+                  url={overlay.url}
+                  x={overlay.x}
+                  y={overlay.y}
+                  width={overlay.width}
+                  height={overlay.height}
+                  opacity={overlay.opacity}
+                  durationInFrames={durationInFrames}
+                />
+              );
+            });
           })()}
         </AbsoluteFill>
       </Sequence>

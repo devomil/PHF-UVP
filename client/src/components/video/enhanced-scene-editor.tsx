@@ -119,7 +119,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
   const [regenStartedAt, setRegenStartedAt] = useState<number | null>(null);
   const [regenElapsed, setRegenElapsed] = useState(0);
   const [sceneOverlays, setSceneOverlays] = useState<SceneOverlayItem[]>(
-    () => scene.overlayItems || []
+    () => (scene.overlayItems || []).map((o: any) => o.type ? o : { ...o, type: 'image' as const })
   );
   const [editingMicroScene, setEditingMicroScene] = useState<number | null>(null);
   const [microSceneEditValue, setMicroSceneEditValue] = useState("");
@@ -272,7 +272,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
 
   useEffect(() => {
     if (pendingOverlaySaveRef.current !== null) return;
-    const incoming = scene.overlayItems || [];
+    const incoming = (scene.overlayItems || []).map((o: any) => o.type ? o : { ...o, type: 'image' as const });
     if (JSON.stringify(incoming) !== JSON.stringify(sceneOverlays)) {
       setSceneOverlays(incoming);
     }

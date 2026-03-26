@@ -182,6 +182,50 @@ export interface MicroSceneOverlayItem {
   entranceAnimation: EntranceAnimation;
 }
 
+export type TextOverlayAnimation = 'none' | 'fade' | 'slide-up' | 'slide-down' | 'slide-left' | 'slide-right' | 'pop' | 'typewriter' | 'blur-in';
+
+export interface ImageOverlayItem {
+  type: 'image';
+  id: string;
+  url: string;
+  name: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  opacity: number;
+  locked: boolean;
+}
+
+export interface TextOverlayItem {
+  type: 'text';
+  id: string;
+  name: string;
+  text: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  opacity: number;
+  locked: boolean;
+  fontSize: number;
+  fontFamily: string;
+  fontWeight: string;
+  color: string;
+  textAlign: 'left' | 'center' | 'right';
+  backgroundColor?: string;
+  backgroundOpacity?: number;
+  borderRadius?: number;
+  letterSpacing?: number;
+  lineHeight?: number;
+  textShadow?: boolean;
+  enterAnimation: TextOverlayAnimation;
+  exitAnimation: TextOverlayAnimation;
+  animationDuration: number;
+}
+
+export type SceneOverlayItem = ImageOverlayItem | TextOverlayItem;
+
 export interface MicroScene {
   id: string;
   narration: string;
@@ -274,18 +318,7 @@ export interface Scene {
   // Phase 13: Audio and motion control settings
   audioSettings?: AudioGenerationSettings;
   motionControlSettings?: MotionControlSettings;
-  // Custom image overlays (logos, badges, watermarks) positioned by user
-  overlayItems?: Array<{
-    id: string;
-    url: string;
-    name: string;
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-    opacity: number;
-    locked: boolean;
-  }>;
+  overlayItems?: SceneOverlayItem[];
   // Phase 13D: Reference image configuration
   referenceConfig?: ReferenceConfig;
   // Phase 14A: Brand requirement analysis results
