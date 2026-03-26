@@ -88,9 +88,9 @@ const TEXT_PRESETS: TextPreset[] = [
     enterAnimation: "rise",
     exitAnimation: "fade",
     defaultText: "Big Headline",
-    width: 85,
-    height: 18,
-    x: 7,
+    width: 50,
+    height: 14,
+    x: 25,
     y: 30,
   },
   {
@@ -104,9 +104,9 @@ const TEXT_PRESETS: TextPreset[] = [
     enterAnimation: "fade",
     exitAnimation: "fade",
     defaultText: "Emphasis Text",
-    width: 70,
-    height: 10,
-    x: 15,
+    width: 40,
+    height: 8,
+    x: 30,
     y: 50,
   },
   {
@@ -120,8 +120,8 @@ const TEXT_PRESETS: TextPreset[] = [
     enterAnimation: "fade",
     exitAnimation: "fade",
     defaultText: "Body text paragraph for longer descriptions.",
-    width: 60,
-    height: 14,
+    width: 45,
+    height: 12,
     x: 10,
     y: 55,
   },
@@ -136,8 +136,8 @@ const TEXT_PRESETS: TextPreset[] = [
     enterAnimation: "rise",
     exitAnimation: "fade",
     defaultText: "Key Points",
-    width: 65,
-    height: 20,
+    width: 35,
+    height: 18,
     x: 10,
     y: 35,
   },
@@ -154,9 +154,9 @@ const TEXT_PRESETS: TextPreset[] = [
     enterAnimation: "scale-pop",
     exitAnimation: "scale-down",
     defaultText: "99%",
-    width: 30,
-    height: 14,
-    x: 35,
+    width: 22,
+    height: 12,
+    x: 39,
     y: 35,
   },
   {
@@ -172,7 +172,7 @@ const TEXT_PRESETS: TextPreset[] = [
     enterAnimation: "wipe-left",
     exitAnimation: "fade",
     defaultText: "Lower Third Text",
-    width: 50,
+    width: 40,
     height: 8,
     x: 5,
     y: 82,
@@ -190,9 +190,9 @@ const TEXT_PRESETS: TextPreset[] = [
     enterAnimation: "scale-pop",
     exitAnimation: "fade",
     defaultText: "Get Started",
-    width: 35,
+    width: 28,
     height: 8,
-    x: 32,
+    x: 36,
     y: 78,
   },
   {
@@ -208,9 +208,9 @@ const TEXT_PRESETS: TextPreset[] = [
     enterAnimation: "fade",
     exitAnimation: "fade",
     defaultText: "Caption text goes here",
-    width: 60,
+    width: 45,
     height: 6,
-    x: 20,
+    x: 27,
     y: 88,
   },
 ];
@@ -1742,6 +1742,38 @@ export function SceneOverlayEditor({
               />
             </div>
           </div>
+          {isSelectedText && selectedTextOverlay && (
+            <button
+              onClick={() => {
+                const text = selectedTextOverlay.text || '';
+                const fontSize = selectedTextOverlay.fontSize || 24;
+                const charWidth = fontSize * 0.55;
+                const lineHeight = (selectedTextOverlay.lineHeight ?? 1.3) * fontSize;
+                const renderWidth = 1920;
+                const renderHeight = (() => {
+                  const parts = (aspectRatio || '16:9').split(':');
+                  const w = parseInt(parts[0]) || 16;
+                  const h = parseInt(parts[1]) || 9;
+                  return Math.round(renderWidth * h / w);
+                })();
+                const bulletCount = selectedTextOverlay.bulletPoints?.length || 0;
+                const longestLine = text.split('\n').reduce((max, line) => Math.max(max, line.length), 0);
+                const bulletMaxLen = selectedTextOverlay.bulletPoints?.reduce((max, bp) => Math.max(max, bp.length), 0) || 0;
+                const maxChars = Math.max(longestLine, bulletMaxLen);
+                const textWidthPx = maxChars * charWidth + fontSize * 2;
+                const lineCount = text.split('\n').length + bulletCount;
+                const textHeightPx = lineCount * lineHeight + fontSize * 1.5;
+                const newWidth = Math.min(90, Math.max(8, (textWidthPx / renderWidth) * 100));
+                const newHeight = Math.min(80, Math.max(5, (textHeightPx / renderHeight) * 100));
+                updateOverlay(selectedOverlay.id, { width: Math.round(newWidth * 2) / 2, height: Math.round(newHeight * 2) / 2 });
+              }}
+              className="w-full text-[10px] py-1 px-2 rounded border transition-colors hover:bg-blue-500/10 hover:border-blue-500/40"
+              style={{ borderColor: "var(--border-subtle)", color: "var(--text-muted)" }}
+            >
+              <Maximize2 className="w-3 h-3 inline mr-1" />
+              Auto-fit to Text
+            </button>
+          )}
 
           {/* 9-Point Snap Grid */}
           {isSelectedText && (
