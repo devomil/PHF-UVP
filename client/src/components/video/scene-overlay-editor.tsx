@@ -215,15 +215,23 @@ const TEXT_PRESETS: TextPreset[] = [
   },
 ];
 
-const FONT_OPTIONS = [
-  "Inter",
-  "Arial",
-  "Georgia",
-  "Courier New",
-  "Impact",
-  "Verdana",
-  "Trebuchet MS",
-  "Palatino",
+const FONT_GROUPS: { label: string; fonts: string[] }[] = [
+  {
+    label: "Script / Handwritten",
+    fonts: ["Great Vibes", "Dancing Script", "Sacramento", "Pacifico", "Caveat", "Satisfy", "Kaushan Script", "Allura"],
+  },
+  {
+    label: "Elegant / Serif",
+    fonts: ["Playfair Display", "Lora", "Cormorant Garamond", "Libre Baskerville", "EB Garamond", "Georgia"],
+  },
+  {
+    label: "Modern / Sans-Serif",
+    fonts: ["Poppins", "Montserrat", "Raleway", "Inter", "Oswald", "Quicksand", "Nunito", "Open Sans"],
+  },
+  {
+    label: "Display / Impact",
+    fonts: ["Impact", "Arial", "Verdana", "Trebuchet MS", "Courier New", "Palatino"],
+  },
 ];
 
 const DEFAULT_COLOR_SWATCHES = [
@@ -431,6 +439,27 @@ export function SceneOverlayEditor({
   const currentBackgroundType = isMicroSceneMode && activeMs
     ? (activeMs.videoUrl ? "video" : activeMs.imageUrl ? "image" : undefined)
     : backgroundType;
+
+  const SYSTEM_FONTS = new Set(["Inter", "Arial", "Georgia", "Courier New", "Impact", "Verdana", "Trebuchet MS", "Palatino"]);
+  useEffect(() => {
+    const usedFonts = currentOverlays
+      .filter(isTextOverlay)
+      .map(o => (o as TextOverlayItem).fontFamily)
+      .filter((f): f is string => !!f && !SYSTEM_FONTS.has(f));
+    const unique = [...new Set(usedFonts)];
+    if (unique.length === 0) return;
+    const id = 'overlay-google-fonts';
+    const params = unique.map(f => `family=${f.replace(/ /g, '+')}:wght@300;400;500;600;700;800;900`).join('&');
+    const href = `https://fonts.googleapis.com/css2?${params}&display=swap`;
+    const existing = document.getElementById(id);
+    if (existing?.getAttribute('href') === href) return;
+    if (existing) existing.remove();
+    const link = document.createElement('link');
+    link.id = id;
+    link.rel = 'stylesheet';
+    link.href = href;
+    document.head.appendChild(link);
+  }, [currentOverlays]);
 
   const handleCurrentChange = useCallback((newOverlays: AnyOverlayItem[]) => {
     if (isMicroSceneMode && onMicroSceneOverlayChange) {
@@ -1354,8 +1383,12 @@ export function SceneOverlayEditor({
                     className="w-full text-xs rounded border px-2 py-1 bg-transparent outline-none cursor-pointer"
                     style={{ borderColor: "var(--border-subtle)", color: "var(--text-primary)" }}
                   >
-                    {FONT_OPTIONS.map((f) => (
-                      <option key={f} value={f}>{f}</option>
+                    {FONT_GROUPS.map((group) => (
+                      <optgroup key={group.label} label={group.label}>
+                        {group.fonts.map((f) => (
+                          <option key={f} value={f}>{f}</option>
+                        ))}
+                      </optgroup>
                     ))}
                   </select>
                 </div>

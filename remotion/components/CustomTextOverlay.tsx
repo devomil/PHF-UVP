@@ -1,6 +1,18 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useCurrentFrame, useVideoConfig, interpolate, spring } from 'remotion';
 import type { TextOverlayItem, TextOverlayEnterAnimation, TextOverlayExitAnimation, TextEmphasisAnimation } from '../../shared/video-types';
+
+const SYSTEM_FONTS = new Set(["Inter", "Arial", "Georgia", "Courier New", "Impact", "Verdana", "Trebuchet MS", "Palatino", "Open Sans"]);
+
+const GoogleFontLink: React.FC<{ fontFamily?: string }> = ({ fontFamily }) => {
+  const href = useMemo(() => {
+    if (!fontFamily || SYSTEM_FONTS.has(fontFamily)) return null;
+    const param = `family=${fontFamily.replace(/ /g, '+')}:wght@300;400;500;600;700;800;900`;
+    return `https://fonts.googleapis.com/css2?${param}&display=swap`;
+  }, [fontFamily]);
+  if (!href) return null;
+  return <link rel="stylesheet" href={href} />;
+};
 
 export interface CustomTextOverlayProps {
   overlay: TextOverlayItem;
@@ -211,6 +223,8 @@ export const CustomTextOverlay: React.FC<CustomTextOverlayProps> = ({
   const filterStr = filterParts.length > 0 ? filterParts.join(' ') : undefined;
 
   return (
+    <>
+    <GoogleFontLink fontFamily={overlay.fontFamily} />
     <div
       style={{
         position: 'absolute',
@@ -306,6 +320,7 @@ export const CustomTextOverlay: React.FC<CustomTextOverlayProps> = ({
         );
       })}
     </div>
+    </>
   );
 };
 
