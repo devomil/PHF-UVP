@@ -1485,8 +1485,7 @@ export function SceneOverlayEditor({
                     max={100}
                     value={selectedTextOverlay.backgroundOpacity ?? 0}
                     onChange={(e) => updateOverlay(selectedOverlay.id, { backgroundOpacity: parseInt(e.target.value) })}
-                    className="w-full h-1.5 rounded-full appearance-none cursor-pointer"
-                    style={{ accentColor: "rgb(59,130,246)" }}
+                    className="w-full styled-slider"
                   />
                 </div>
               </div>
@@ -1514,8 +1513,7 @@ export function SceneOverlayEditor({
                       max={90}
                       value={selectedTextOverlay.autoBackgroundOpacity ?? 50}
                       onChange={(e) => updateOverlay(selectedOverlay.id, { autoBackgroundOpacity: parseInt(e.target.value) })}
-                      className="w-full h-1.5 rounded-full appearance-none cursor-pointer"
-                      style={{ accentColor: "rgb(59,130,246)" }}
+                      className="w-full styled-slider"
                     />
                   </div>
                 )}
@@ -1561,8 +1559,7 @@ export function SceneOverlayEditor({
                   step={0.1}
                   value={selectedTextOverlay.animationDuration ?? 0.4}
                   onChange={(e) => updateOverlay(selectedOverlay.id, { animationDuration: parseFloat(e.target.value) })}
-                  className="w-full h-1.5 rounded-full appearance-none cursor-pointer"
-                  style={{ accentColor: "rgb(59,130,246)" }}
+                  className="w-full styled-slider"
                 />
               </div>
 
@@ -1592,8 +1589,7 @@ export function SceneOverlayEditor({
                     step={0.1}
                     value={selectedTextOverlay.timingStart ?? 0}
                     onChange={(e) => updateOverlay(selectedOverlay.id, { timingStart: parseFloat(e.target.value) })}
-                    className="w-full h-1.5 rounded-full appearance-none cursor-pointer"
-                    style={{ accentColor: "rgb(59,130,246)" }}
+                    className="w-full styled-slider"
                   />
                 </div>
                 <div>
@@ -1608,8 +1604,7 @@ export function SceneOverlayEditor({
                       step={0.1}
                       value={selectedTextOverlay.timingDuration ?? (sceneDurationSec ?? 10)}
                       onChange={(e) => updateOverlay(selectedOverlay.id, { timingDuration: parseFloat(e.target.value) })}
-                      className="flex-1 h-1.5 rounded-full appearance-none cursor-pointer"
-                      style={{ accentColor: "rgb(59,130,246)" }}
+                      className="flex-1 styled-slider"
                     />
                     <button
                       onClick={() => updateOverlay(selectedOverlay.id, { timingDuration: undefined })}
@@ -1713,8 +1708,7 @@ export function SceneOverlayEditor({
                       step={0.1}
                       value={selectedTextOverlay.bulletDelay ?? 0.3}
                       onChange={(e) => updateOverlay(selectedOverlay.id, { bulletDelay: parseFloat(e.target.value) })}
-                      className="w-full h-1.5 rounded-full appearance-none cursor-pointer"
-                      style={{ accentColor: "rgb(59,130,246)" }}
+                      className="w-full styled-slider"
                     />
                   </div>
                 )}
@@ -1852,8 +1846,7 @@ export function SceneOverlayEditor({
               max={100}
               value={selectedOverlay.opacity}
               onChange={(e) => updateOverlay(selectedOverlay.id, { opacity: parseInt(e.target.value) })}
-              className="w-full h-1.5 rounded-full appearance-none cursor-pointer"
-              style={{ accentColor: isSelectedText ? "rgb(59,130,246)" : "rgb(124,58,237)" }}
+              className="w-full styled-slider"
             />
           </div>
 
