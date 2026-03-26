@@ -661,6 +661,7 @@ export interface ScriptVideoInput {
     introLogoUrl?: string;
     watermarkImageUrl?: string;
     ctaText?: string;
+    colors?: string[];
   };
   musicEnabled?: boolean;
   musicMood?: string;

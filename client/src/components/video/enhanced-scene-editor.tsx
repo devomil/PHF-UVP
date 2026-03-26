@@ -66,9 +66,10 @@ interface EnhancedSceneEditorProps {
   artPresetId?: string;
   characters?: CharacterProfile[];
   onCharactersChange?: (characters: CharacterProfile[]) => void;
+  brandColors?: string[];
 }
 
-export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, aspectRatio = "16:9", artPresetId, characters = [], onCharactersChange }: EnhancedSceneEditorProps) {
+export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, aspectRatio = "16:9", artPresetId, characters = [], onCharactersChange, brandColors }: EnhancedSceneEditorProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -2865,6 +2866,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
           onMicroSceneOverlayChange={handleMicroSceneOverlayChange}
           microSceneOverlays={msOverlayState}
           sceneDurationSec={scene.duration || 5}
+          brandColors={brandColors}
         />
 
         {/* Character Profiles - visible only for 3D Illustration art style */}

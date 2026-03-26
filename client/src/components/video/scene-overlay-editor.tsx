@@ -300,6 +300,7 @@ export function SceneOverlayEditor({
     startY: number;
     origW: number;
     origH: number;
+    origFontSize?: number;
   } | null>(null);
 
   const isMicroSceneMode = activeMicroSceneIndex !== null && activeMicroSceneIndex !== undefined && activeMicroSceneIndex >= 0 && microScenes !== undefined && activeMicroSceneIndex < microScenes.length;
@@ -523,6 +524,7 @@ export function SceneOverlayEditor({
         startY: e.clientY,
         origW: overlay.width,
         origH: overlay.height,
+        origFontSize: isTextOverlay(overlay) ? overlay.fontSize : undefined,
       });
     }
   }, [currentOverlays]);
@@ -554,10 +556,9 @@ export function SceneOverlayEditor({
           width: Math.round(newW * 10) / 10,
           height: Math.round(newH * 10) / 10,
         };
-        const target = currentOverlays.find((o) => o.id === resizing.id);
-        if (target && isTextOverlay(target)) {
+        if (resizing.origFontSize != null) {
           const scale = newW / resizing.origW;
-          updates.fontSize = Math.max(12, Math.round(target.fontSize * scale));
+          updates.fontSize = Math.max(12, Math.round(resizing.origFontSize * scale));
         }
         updateOverlay(resizing.id, updates);
       }
@@ -1020,6 +1021,7 @@ export function SceneOverlayEditor({
                     <option value="600">Semi-Bold</option>
                     <option value="700">Bold</option>
                     <option value="800">Extra Bold</option>
+                    <option value="900">Black</option>
                   </select>
                 </div>
                 <div>

@@ -871,6 +871,7 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
                         artPresetId={project?.progress?.artPresetId || (project as any)?.artPresetId}
                         characters={projectCharacters}
                         onCharactersChange={setProjectCharacters}
+                        brandColors={project?.brandSettings?.colors}
                       />
                     )}
                   </div>
