@@ -1044,7 +1044,7 @@ export function SceneOverlayEditor({
         {currentBackgroundUrl && currentBackgroundType === "video" && (
           <video src={currentBackgroundUrl} className="w-full h-full object-contain absolute inset-0" muted />
         )}
-        {showSafeZones && getSafeZones(aspectRatio).map((zone, idx) => {
+        {(showSafeZones || currentOverlays.some(o => isTextOverlay(o) && isOverlayInDangerZone(o, aspectRatio))) && getSafeZones(aspectRatio).map((zone, idx) => {
           const zoneStyle: React.CSSProperties = {
             position: 'absolute',
             left: `${zone.left}%`,
@@ -1144,9 +1144,14 @@ export function SceneOverlayEditor({
                   draggable={false}
                 />
               )}
-              {inDangerZone && selectedId !== overlay.id && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-30 pointer-events-none">
-                  <AlertTriangle className="w-4 h-4 text-amber-400 drop-shadow-md" />
+              {inDangerZone && (
+                <div className="absolute -top-5 left-1/2 -translate-x-1/2 z-30 pointer-events-none group/warn">
+                  <div className="relative flex flex-col items-center">
+                    <div className="absolute bottom-full mb-1 px-2 py-1 rounded bg-amber-900/90 border border-amber-500/40 text-[8px] text-amber-200 whitespace-nowrap opacity-0 group-hover/warn:opacity-100 transition-opacity">
+                      Text may be hidden on some platforms — move inside the safe area
+                    </div>
+                    <AlertTriangle className="w-4 h-4 text-amber-400 drop-shadow-md" />
+                  </div>
                 </div>
               )}
               {selectedId === overlay.id && !overlay.locked && (
