@@ -399,6 +399,7 @@ class RemotionLambdaService {
     console.log('[DEBUG] Scenes being rendered:', JSON.stringify(params.inputProps.scenes?.map((s: any) => ({
       id: s.id,
       type: s.type,
+      duration: s.duration,
       bgType: s.background?.type,
       hasVideo: !!s.assets?.videoUrl,
       hasImage: !!s.assets?.imageUrl
