@@ -544,7 +544,11 @@ export function SceneOverlayEditor({
         if (!overlay) return;
         const newX = Math.max(0, Math.min(100 - overlay.width, dragging.origX + dx));
         const newY = Math.max(0, Math.min(100 - overlay.height, dragging.origY + dy));
-        updateOverlay(dragging.id, { x: Math.round(newX * 10) / 10, y: Math.round(newY * 10) / 10 });
+        const dragUpdates: Partial<AnyOverlayItem> = { x: Math.round(newX * 10) / 10, y: Math.round(newY * 10) / 10 };
+        if (isTextOverlay(overlay)) {
+          (dragUpdates as Partial<TextOverlayItem>).snapPosition = 'custom';
+        }
+        updateOverlay(dragging.id, dragUpdates);
       }
       if (resizing) {
         const dx = ((e.clientX - resizing.startX) / rect.width) * 100;
@@ -1401,20 +1405,20 @@ export function SceneOverlayEditor({
             <div>
               <label className="text-[10px] block mb-1" style={{ color: "var(--text-muted)" }}>Quick Position</label>
               <div className="grid grid-cols-3 gap-1 w-24">
-                {[
-                  { label: "TL", x: 5, y: 5 },
-                  { label: "TC", x: 50 - (selectedOverlay.width / 2), y: 5 },
-                  { label: "TR", x: 95 - selectedOverlay.width, y: 5 },
-                  { label: "ML", x: 5, y: 50 - (selectedOverlay.height / 2) },
-                  { label: "MC", x: 50 - (selectedOverlay.width / 2), y: 50 - (selectedOverlay.height / 2) },
-                  { label: "MR", x: 95 - selectedOverlay.width, y: 50 - (selectedOverlay.height / 2) },
-                  { label: "BL", x: 5, y: 85 - selectedOverlay.height },
-                  { label: "BC", x: 50 - (selectedOverlay.width / 2), y: 85 - selectedOverlay.height },
-                  { label: "BR", x: 95 - selectedOverlay.width, y: 85 - selectedOverlay.height },
-                ].map((pos) => (
+                {([
+                  { label: "TL", x: 5, y: 5, snap: 'top-left' as const },
+                  { label: "TC", x: 50 - (selectedOverlay.width / 2), y: 5, snap: 'top-center' as const },
+                  { label: "TR", x: 95 - selectedOverlay.width, y: 5, snap: 'top-right' as const },
+                  { label: "ML", x: 5, y: 50 - (selectedOverlay.height / 2), snap: 'middle-left' as const },
+                  { label: "MC", x: 50 - (selectedOverlay.width / 2), y: 50 - (selectedOverlay.height / 2), snap: 'middle-center' as const },
+                  { label: "MR", x: 95 - selectedOverlay.width, y: 50 - (selectedOverlay.height / 2), snap: 'middle-right' as const },
+                  { label: "BL", x: 5, y: 85 - selectedOverlay.height, snap: 'bottom-left' as const },
+                  { label: "BC", x: 50 - (selectedOverlay.width / 2), y: 85 - selectedOverlay.height, snap: 'bottom-center' as const },
+                  { label: "BR", x: 95 - selectedOverlay.width, y: 85 - selectedOverlay.height, snap: 'bottom-right' as const },
+                ]).map((pos) => (
                   <button
                     key={pos.label}
-                    onClick={() => updateOverlay(selectedOverlay.id, { x: Math.max(0, pos.x), y: Math.max(0, pos.y) })}
+                    onClick={() => updateOverlay(selectedOverlay.id, { x: Math.max(0, pos.x), y: Math.max(0, pos.y), snapPosition: pos.snap })}
                     className="w-7 h-7 rounded border text-[9px] font-medium transition-colors hover:bg-blue-500/20 hover:border-blue-500/40"
                     style={{ borderColor: "var(--border-subtle)", color: "var(--text-muted)" }}
                   >

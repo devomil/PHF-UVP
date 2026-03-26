@@ -871,7 +871,14 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
                         artPresetId={project?.progress?.artPresetId || (project as any)?.artPresetId}
                         characters={projectCharacters}
                         onCharactersChange={setProjectCharacters}
-                        brandColors={project?.brandSettings?.colors}
+                        brandColors={(() => {
+                          const bc = project?.brand?.colors;
+                          if (bc && typeof bc === 'object' && !Array.isArray(bc)) {
+                            return [bc.primary, bc.secondary, bc.accent, bc.text, bc.textLight].filter(Boolean);
+                          }
+                          const vc = project?.brandSettings?.colors;
+                          return Array.isArray(vc) ? vc : undefined;
+                        })()}
                       />
                     )}
                   </div>
