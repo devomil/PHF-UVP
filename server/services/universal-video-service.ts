@@ -5415,7 +5415,8 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
         const isVideoByExtension = /\.(mp4|webm|mov|avi|mkv)$/i.test(visualUrl || '');
         const isVideo = !!(visualVideoUrl || qcAssets.visual?.type === 'video' || isVideoByExtension);
         const finalVideoUrl = isVideo ? (visualVideoUrl || visualUrl) : undefined;
-        const duration = qcAssets.voiceover?.duration || qcAssets.music?.duration || 6;
+        const duration = qcAssets.voiceover?.duration ?? qcAssets.visual?.duration ?? qcAssets.music?.duration ?? preparedProject.totalDuration ?? 6;
+        console.log('[PrepareAssets] Scene duration resolved:', { voiceoverDur: qcAssets.voiceover?.duration, visualDur: qcAssets.visual?.duration, musicDur: qcAssets.music?.duration, projectDur: preparedProject.totalDuration, final: duration });
         
         console.log('[PrepareAssets] Visual asset detection:', { 
           visualUrl: visualUrl?.substring(0, 60), 

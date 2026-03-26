@@ -3378,8 +3378,9 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
     
     // Ensure Quick Create visual asset is populated (fix race condition where voiceover/music overwrites visual)
     const qcAssets = (projectData as any).assets?.quickCreate;
-    if (qcAssets && !qcAssets.visual?.url) {
-      console.log('[PrepareAssets] Quick Create visual missing from assets, checking video_generation_jobs fallback...');
+    if (qcAssets && (!qcAssets.visual?.url || (qcAssets.visual?.url && qcAssets.visual?.duration == null))) {
+      const missingUrl = !qcAssets.visual?.url;
+      console.log(`[PrepareAssets] Quick Create visual ${missingUrl ? 'missing' : 'missing duration'}, checking video_generation_jobs fallback...`);
       try {
         const [latestJob] = await db
           .select()
@@ -3391,21 +3392,27 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
         if (latestJob?.status === 'completed' && latestJob.videoUrl) {
           const jobUrl = latestJob.videoUrl;
           const jobIsVideo = /\.(mp4|webm|mov|avi|mkv)$/i.test(jobUrl) || latestJob.sceneType === 'video';
-          console.log(`[PrepareAssets] Found visual from job fallback: ${jobUrl.substring(0, 60)}... (isVideo: ${jobIsVideo})`);
           
-          if (!projectData.assets) projectData.assets = {} as any;
-          (projectData as any).assets.quickCreate = {
-            ...qcAssets,
-            visual: {
-              status: 'completed',
-              url: jobUrl,
-              videoUrl: jobIsVideo ? jobUrl : undefined,
-              imageUrl: !jobIsVideo ? jobUrl : undefined,
-              type: jobIsVideo ? 'video' : 'image',
-              provider: latestJob.provider || 'kling',
-              error: null,
-            },
-          };
+          if (missingUrl) {
+            console.log(`[PrepareAssets] Found visual from job fallback: ${jobUrl.substring(0, 60)}... (isVideo: ${jobIsVideo}, duration: ${latestJob.duration})`);
+            if (!projectData.assets) projectData.assets = {} as any;
+            (projectData as any).assets.quickCreate = {
+              ...qcAssets,
+              visual: {
+                status: 'completed',
+                url: jobUrl,
+                videoUrl: jobIsVideo ? jobUrl : undefined,
+                imageUrl: !jobIsVideo ? jobUrl : undefined,
+                type: jobIsVideo ? 'video' : 'image',
+                provider: latestJob.provider || 'kling',
+                duration: latestJob.duration ?? undefined,
+                error: null,
+              },
+            };
+          } else if (latestJob.duration) {
+            console.log(`[PrepareAssets] Recovered visual duration from job: ${latestJob.duration}s`);
+            (projectData as any).assets.quickCreate.visual.duration = latestJob.duration;
+          }
         }
       } catch (err: any) {
         console.warn('[PrepareAssets] Job fallback lookup failed:', err.message);
