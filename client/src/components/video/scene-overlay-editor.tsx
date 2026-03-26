@@ -622,7 +622,7 @@ export function SceneOverlayEditor({
               }}
               title="Add text overlay"
             >
-              <Type className="w-3.5 h-3.5" /> Text
+              <Type className="w-3.5 h-3.5" /> Add Text
             </button>
           )}
           <input
