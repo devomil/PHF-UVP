@@ -17,6 +17,7 @@ import type {
   TextOverlayEnterAnimation,
   TextOverlayExitAnimation,
   TextEmphasisAnimation,
+  TextPresetType,
 } from "@shared/video-types";
 
 export type { SceneOverlayItem };
@@ -288,6 +289,25 @@ function isOverlayInDangerZone(overlay: AnyOverlayItem, aspectRatio: string): bo
     }
   }
   return false;
+}
+
+const VALID_TEXT_PRESETS: TextPresetType[] = ['headline', 'script-accent', 'body', 'bullet-list', 'stat-callout', 'lower-third', 'cta-badge', 'caption-bar'];
+const VALID_ENTER_ANIMATIONS: TextOverlayEnterAnimation[] = ['none', 'fade', 'rise', 'drop', 'wipe-left', 'wipe-right', 'scale-pop', 'typewriter', 'blur-in'];
+const VALID_EXIT_ANIMATIONS: TextOverlayExitAnimation[] = ['none', 'fade', 'slide-out', 'scale-down'];
+
+function toTextPreset(val: string | undefined): TextPresetType {
+  if (val && VALID_TEXT_PRESETS.includes(val as TextPresetType)) return val as TextPresetType;
+  return 'body';
+}
+
+function toEnterAnimation(val: string | undefined): TextOverlayEnterAnimation {
+  if (val && VALID_ENTER_ANIMATIONS.includes(val as TextOverlayEnterAnimation)) return val as TextOverlayEnterAnimation;
+  return 'fade';
+}
+
+function toExitAnimation(val: string | undefined): TextOverlayExitAnimation {
+  if (val && VALID_EXIT_ANIMATIONS.includes(val as TextOverlayExitAnimation)) return val as TextOverlayExitAnimation;
+  return 'fade';
 }
 
 interface AiSuggestion {
@@ -579,8 +599,9 @@ export function SceneOverlayEditor({
       } else {
         throw new Error(data.error || 'No suggestions returned');
       }
-    } catch (err: any) {
-      toast({ title: "AI Suggestion Error", description: err.message, variant: "destructive" });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      toast({ title: "AI Suggestion Error", description: message, variant: "destructive" });
       setAiSuggestions(null);
     } finally {
       setLoadingSuggestions(false);
@@ -593,7 +614,7 @@ export function SceneOverlayEditor({
       id: generateId(),
       name: suggestion.name,
       text: suggestion.text,
-      textPreset: suggestion.textPreset as any,
+      textPreset: toTextPreset(suggestion.textPreset),
       fontSize: suggestion.fontSize,
       fontFamily: suggestion.fontFamily || 'Inter',
       fontWeight: suggestion.fontWeight,
@@ -605,8 +626,8 @@ export function SceneOverlayEditor({
       height: suggestion.height,
       opacity: suggestion.opacity,
       locked: false,
-      enterAnimation: suggestion.enterAnimation as any,
-      exitAnimation: suggestion.exitAnimation as any,
+      enterAnimation: toEnterAnimation(suggestion.enterAnimation),
+      exitAnimation: toExitAnimation(suggestion.exitAnimation),
       animationDuration: suggestion.animationDuration,
       textShadow: suggestion.textShadow,
       backgroundColor: suggestion.backgroundColor,
@@ -1060,7 +1081,7 @@ export function SceneOverlayEditor({
         {[...currentOverlays].sort((a, b) => (a.layerOrder ?? 0) - (b.layerOrder ?? 0)).map((overlay, sortedIdx) => {
           const isText = isTextOverlay(overlay);
           const textOvl = isText ? (overlay as TextOverlayItem) : null;
-          const inDangerZone = showSafeZones && isText && isOverlayInDangerZone(overlay, aspectRatio);
+          const inDangerZone = isText && isOverlayInDangerZone(overlay, aspectRatio);
 
           return (
             <div
@@ -1160,7 +1181,7 @@ export function SceneOverlayEditor({
         {currentOverlays.length > 0 && (
           <div className="absolute bottom-1 left-1 right-1 flex gap-1 flex-wrap z-30 pointer-events-none">
             {currentOverlays.map((overlay) => {
-              const layerDanger = showSafeZones && isTextOverlay(overlay) && isOverlayInDangerZone(overlay, aspectRatio);
+              const layerDanger = isTextOverlay(overlay) && isOverlayInDangerZone(overlay, aspectRatio);
               return (
                 <span
                   key={overlay.id}
