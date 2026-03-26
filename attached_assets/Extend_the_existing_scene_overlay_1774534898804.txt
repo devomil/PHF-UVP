@@ -1,0 +1,66 @@
+Extend the existing scene overlay editor to support text overlays as a first-class overlay type alongside image overlays. Text overlays are composited in Remotion at render time — not baked into video clips.
+New overlay type: Add type: 'text' | 'image' to the SceneOverlayItem interface in shared/video-types.ts. Text overlays add these additional fields:
+
+// Additional fields for text overlays
+text: string;
+textType: 'headline' | 'script-accent' | 'body' | 'bullet-list' | 'stat-callout' | 'lower-third' | 'cta-badge' | 'caption-bar';
+fontFamily: string;
+fontWeight: 300 | 400 | 500 | 700 | 900;
+fontSize: number; // percentage of canvas height
+color: string; // hex
+backgroundColor?: string; // hex with alpha, for badge/bar types
+textAlign: 'left' | 'center' | 'right'; // text alignment WITHIN the block only — canvas position is controlled by x/y via drag-and-drop
+opacity: number;
+bulletPoints?: string[]; // for bullet-list type
+entranceAnimation: 'fade' | 'rise' | 'drop' | 'wipe-left' | 'wipe-right' | 'scale-pop' | 'typewriter' | 'blur-in' | 'none';
+emphasisAnimation: 'pulse' | 'float' | 'shimmer' | 'none';
+exitAnimation: 'fade' | 'slide-out' | 'scale-down' | 'none';
+startTime: number; // seconds from scene start
+duration: number; // seconds visible, 0 = full scene
+bulletDelay: number; // seconds between bullet entrances, default 0.4
+snapPosition?: 'top-left' | 'top-center' | 'top-right' | 'middle-left' | 'center' | 'middle-right' | 'bottom-left' | 'bottom-center' | 'bottom-right' | null; // last snapped position — null means free-positioned by drag
+
+UI changes to overlay editor:
+Add "Add Text" button alongside the existing Upload and Library buttons
+When clicked, show a text type selector with the 8 preset types listed above as visual cards
+Selected type opens an inline text editor panel on the right side with all controls
+Add a Layers panel on the left side listing all overlays (text and image) with visibility toggle, type icon, and drag-to-reorder
+Add a timing bar at the bottom of the canvas for overlays that have startTime/duration set — colored bars showing each overlay's timing window
+Brand color swatches in the color picker — pull from brandSettings.primaryColor, secondaryColor, accentColor
+
+Remotion rendering:
+In remotion/UniversalVideoComposition.tsx, extend the overlay compositor to handle text overlays. Use Remotion's interpolate and spring for entrance/exit animations. For bullet lists, stagger each bullet's entrance by bulletDelay seconds using delayRender. Map animation types to Remotion animation primitives.
+AI text suggestions:
+Add a "Suggest text overlays" button in the overlay editor. When clicked, send the scene's narration text and sceneType to Claude with a prompt asking it to suggest a headline, bullet points if appropriate, and CTA text. Return as pre-configured text overlay objects ready to add to the canvas. Show as a suggestion panel — user clicks to accept each suggestion.
+Relevant files:
+
+shared/video-types.ts — extend SceneOverlayItem
+client/src/components/video/scene-overlay-editor.tsx — main UI changes
+client/src/components/video/enhanced-scene-editor.tsx — layers panel integration
+remotion/UniversalVideoComposition.tsx — text overlay rendering
+server/services/universal-video-routes.ts — AI suggestion endpoint
+
+
+Safe Zones (The Pro Feature)
+Add an optional Show Safe Zones toggle that overlays a guide on the canvas showing:
+┌─────────────────────────────┐
+│  ░░░░░░░░░░░░░░░░░░░░░░░░  │ ← top safe zone (avoid for TikTok UI)
+│  ░                       ░  │
+│  ░   ✓ SAFE TEXT AREA    ░  │
+│  ░                       ░  │
+│  ░░░░░░░░░░░░░░░░░░░░░░░░  │ ← bottom safe zone (avoid for captions)
+└─────────────────────────────┘
+Platform-aware:
+
+TikTok/Reels 9:16 — warns if text is in the top 15% (covered by UI) or bottom 20% (covered by captions/buttons)
+YouTube 16:9 — standard broadcast safe zones
+Square 1:1 — centered safe zone guides
+
+Positioning behavior for text overlays:
+Text overlays must use identical drag-and-drop free positioning as image overlays — click and drag to place anywhere on canvas, corner handles to resize with proportional font scaling, position stored as percentage-based X/Y coordinates.
+The text alignment control (left/center/right) applies only to text alignment WITHIN the text block itself — not to canvas position. Canvas position is always controlled by drag-and-drop.
+Replace fixed alignment buttons with a 9-point Quick Position grid that snaps the overlay to common screen zones (top-left, top-center, top-right, middle-left, center, middle-right, bottom-left, bottom-center, bottom-right). After snapping, user can drag to fine-tune from that position.
+Add a "Show Safe Zones" toggle button in the overlay editor toolbar. When enabled, display platform-appropriate safe zone guides as semi-transparent overlays on the canvas. For 9:16 content warn when text overlays are positioned in the top 15% or bottom 20% of the frame. For 16:9 use standard broadcast safe zones. Safe zone guides are display-only and do not affect export.
+
+
+
