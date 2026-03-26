@@ -4,7 +4,8 @@ import {
   Plus, Upload, FolderOpen, Trash2, Loader2, X,
   Minus, Move, Maximize2, Eye, EyeOff, GripVertical,
   ChevronUp, ChevronDown, ChevronsUp, ChevronsDown, Layers,
-  Type, Image as ImageIcon, Bold, Italic, AlignLeft, AlignCenter, AlignRight
+  Type, Image as ImageIcon, Bold, Italic, AlignLeft, AlignCenter, AlignRight,
+  Shield, Sparkles, Check, AlertTriangle
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type {
@@ -237,6 +238,86 @@ interface MicroSceneOption {
   overlayItems?: MicroSceneOverlayItem[];
 }
 
+interface SafeZone {
+  top: number;
+  bottom: number;
+  left: number;
+  right: number;
+  label: string;
+}
+
+function getSafeZones(aspectRatio: string): SafeZone[] {
+  switch (aspectRatio) {
+    case '9:16':
+      return [
+        { top: 0, left: 0, right: 100, bottom: 15, label: 'Top UI Zone (15%)' },
+        { top: 80, left: 0, right: 100, bottom: 100, label: 'Bottom UI Zone (20%)' },
+      ];
+    case '1:1':
+      return [
+        { top: 0, left: 0, right: 100, bottom: 10, label: 'Top margin (10%)' },
+        { top: 90, left: 0, right: 100, bottom: 100, label: 'Bottom margin (10%)' },
+        { top: 10, left: 0, right: 5, bottom: 90, label: 'Left margin (5%)' },
+        { top: 10, left: 95, right: 100, bottom: 90, label: 'Right margin (5%)' },
+      ];
+    default:
+      return [
+        { top: 0, left: 0, right: 100, bottom: 10, label: 'Top safe zone (10%)' },
+        { top: 90, left: 0, right: 100, bottom: 100, label: 'Bottom safe zone (10%)' },
+        { top: 10, left: 0, right: 5, bottom: 90, label: 'Left safe zone (5%)' },
+        { top: 10, left: 95, right: 100, bottom: 90, label: 'Right safe zone (5%)' },
+      ];
+  }
+}
+
+function isOverlayInDangerZone(overlay: AnyOverlayItem, aspectRatio: string): boolean {
+  const zones = getSafeZones(aspectRatio);
+  const oLeft = overlay.x;
+  const oTop = overlay.y;
+  const oRight = overlay.x + overlay.width;
+  const oBottom = overlay.y + overlay.height;
+
+  for (const zone of zones) {
+    const zLeft = zone.left;
+    const zTop = zone.top;
+    const zRight = zone.right;
+    const zBottom = zone.bottom;
+
+    if (oLeft < zRight && oRight > zLeft && oTop < zBottom && oBottom > zTop) {
+      return true;
+    }
+  }
+  return false;
+}
+
+interface AiSuggestion {
+  type: 'text';
+  id: string;
+  name: string;
+  text: string;
+  textPreset: string;
+  fontSize: number;
+  fontWeight: string;
+  fontFamily: string;
+  color: string;
+  textAlign: 'left' | 'center' | 'right';
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  opacity: number;
+  locked: boolean;
+  enterAnimation: string;
+  exitAnimation: string;
+  animationDuration: number;
+  textShadow?: boolean;
+  backgroundColor?: string;
+  backgroundOpacity?: number;
+  bulletPoints?: string[];
+  bulletDelay?: number;
+  reason?: string;
+}
+
 interface SceneOverlayEditorProps {
   overlays: SceneOverlayItem[];
   onChange: (overlays: SceneOverlayItem[]) => void;
@@ -251,6 +332,11 @@ interface SceneOverlayEditorProps {
   microSceneOverlays?: Record<number, MicroSceneOverlayItem[]>;
   sceneDurationSec?: number;
   brandColors?: string[];
+  aspectRatio?: string;
+  projectId?: string;
+  sceneId?: string;
+  narration?: string;
+  sceneType?: string;
 }
 
 function generateId() {
@@ -279,6 +365,11 @@ export function SceneOverlayEditor({
   microSceneOverlays,
   sceneDurationSec,
   brandColors,
+  aspectRatio = '16:9',
+  projectId,
+  sceneId,
+  narration,
+  sceneType,
 }: SceneOverlayEditorProps) {
   const { toast } = useToast();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -287,6 +378,10 @@ export function SceneOverlayEditor({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showLibrary, setShowLibrary] = useState(false);
   const [showTextPresets, setShowTextPresets] = useState(false);
+  const [showSafeZones, setShowSafeZones] = useState(false);
+  const [aiSuggestions, setAiSuggestions] = useState<AiSuggestion[] | null>(null);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const [dragging, setDragging] = useState<{
     id: string;
     startX: number;
@@ -462,6 +557,69 @@ export function SceneOverlayEditor({
     const minZ = Math.min(...currentOverlays.map(getZIndex));
     updateOverlay(id, { zIndex: minZ - 1 });
   }, [currentOverlays, updateOverlay]);
+
+  const fetchAiSuggestions = useCallback(async () => {
+    if (!projectId || !sceneId || !narration) {
+      toast({ title: "Cannot generate suggestions", description: "Scene narration is required", variant: "destructive" });
+      return;
+    }
+    setLoadingSuggestions(true);
+    setShowSuggestions(true);
+    try {
+      const res = await fetch(`/api/universal-video/projects/${projectId}/scenes/${sceneId}/suggest-text-overlays`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ narration, sceneType, brandColors }),
+      });
+      if (!res.ok) throw new Error('Failed to get suggestions');
+      const data = await res.json();
+      if (data.success && data.suggestions) {
+        setAiSuggestions(data.suggestions);
+      } else {
+        throw new Error(data.error || 'No suggestions returned');
+      }
+    } catch (err: any) {
+      toast({ title: "AI Suggestion Error", description: err.message, variant: "destructive" });
+      setAiSuggestions(null);
+    } finally {
+      setLoadingSuggestions(false);
+    }
+  }, [projectId, sceneId, narration, sceneType, brandColors, toast]);
+
+  const acceptSuggestion = useCallback((suggestion: AiSuggestion) => {
+    const overlay: TextOverlayItem = {
+      type: 'text',
+      id: generateId(),
+      name: suggestion.name,
+      text: suggestion.text,
+      textPreset: suggestion.textPreset as any,
+      fontSize: suggestion.fontSize,
+      fontFamily: suggestion.fontFamily || 'Inter',
+      fontWeight: suggestion.fontWeight,
+      color: suggestion.color,
+      textAlign: suggestion.textAlign,
+      x: suggestion.x,
+      y: suggestion.y,
+      width: suggestion.width,
+      height: suggestion.height,
+      opacity: suggestion.opacity,
+      locked: false,
+      enterAnimation: suggestion.enterAnimation as any,
+      exitAnimation: suggestion.exitAnimation as any,
+      animationDuration: suggestion.animationDuration,
+      textShadow: suggestion.textShadow,
+      backgroundColor: suggestion.backgroundColor,
+      backgroundOpacity: suggestion.backgroundOpacity,
+      bulletPoints: suggestion.bulletPoints,
+      bulletDelay: suggestion.bulletDelay,
+      layerOrder: currentOverlays.length,
+    };
+    handleCurrentChange([...currentOverlays, overlay]);
+    setSelectedId(overlay.id);
+    setAiSuggestions(prev => prev?.filter(s => s.id !== suggestion.id) || null);
+    toast({ title: "Overlay Added", description: `Added "${suggestion.name}" overlay` });
+  }, [currentOverlays, handleCurrentChange, toast]);
 
   const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -652,6 +810,33 @@ export function SceneOverlayEditor({
           >
             <FolderOpen className="w-3.5 h-3.5" /> Library
           </button>
+          <button
+            onClick={() => setShowSafeZones(!showSafeZones)}
+            className="text-xs px-2.5 py-1.5 rounded-lg border flex items-center gap-1 transition-colors"
+            style={{
+              borderColor: showSafeZones ? "rgba(245,158,11,0.5)" : "var(--border-subtle)",
+              color: showSafeZones ? "rgb(245,158,11)" : "var(--text-secondary)",
+              backgroundColor: showSafeZones ? "rgba(245,158,11,0.1)" : "transparent",
+            }}
+            title="Show safe zones"
+          >
+            <Shield className="w-3.5 h-3.5" />
+          </button>
+          {!isMicroSceneMode && narration && projectId && sceneId && (
+            <button
+              onClick={fetchAiSuggestions}
+              disabled={loadingSuggestions}
+              className="text-xs px-2.5 py-1.5 rounded-lg border flex items-center gap-1 transition-colors hover:border-emerald-500/40 hover:bg-emerald-500/10"
+              style={{
+                borderColor: showSuggestions ? "rgba(16,185,129,0.5)" : "var(--border-subtle)",
+                color: showSuggestions ? "rgb(16,185,129)" : "var(--text-secondary)",
+                backgroundColor: showSuggestions ? "rgba(16,185,129,0.1)" : "transparent",
+              }}
+              title="AI-suggest text overlays"
+            >
+              {loadingSuggestions ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+            </button>
+          )}
         </div>
       </div>
 
@@ -720,6 +905,78 @@ export function SceneOverlayEditor({
         </div>
       )}
 
+      {showSuggestions && (
+        <div className="border rounded-lg p-2.5" style={{ borderColor: "rgba(16,185,129,0.3)", backgroundColor: "rgba(16,185,129,0.03)" }}>
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-[10px] uppercase tracking-wider font-medium flex items-center gap-1" style={{ color: "rgb(16,185,129)" }}>
+              <Sparkles className="w-3 h-3" /> AI Suggestions
+            </p>
+            <button onClick={() => { setShowSuggestions(false); setAiSuggestions(null); }} className="text-[10px] p-0.5 rounded hover:bg-white/10">
+              <X className="w-3 h-3" style={{ color: "var(--text-muted)" }} />
+            </button>
+          </div>
+          {loadingSuggestions ? (
+            <div className="flex items-center justify-center py-6">
+              <Loader2 className="w-5 h-5 animate-spin" style={{ color: "rgb(16,185,129)" }} />
+              <span className="ml-2 text-xs" style={{ color: "var(--text-muted)" }}>Analyzing scene...</span>
+            </div>
+          ) : aiSuggestions && aiSuggestions.length > 0 ? (
+            <div className="space-y-2">
+              {aiSuggestions.map((sug) => (
+                <div
+                  key={sug.id}
+                  className="border rounded-lg p-2 transition-colors hover:border-emerald-500/40"
+                  style={{ borderColor: "var(--border-subtle)", backgroundColor: "rgba(0,0,0,0.2)" }}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/25">
+                          {sug.textPreset}
+                        </span>
+                      </div>
+                      <p className="text-xs font-medium truncate" style={{ color: "var(--text-primary)" }}>
+                        {sug.text}
+                      </p>
+                      {sug.bulletPoints && sug.bulletPoints.length > 0 && (
+                        <div className="mt-1 space-y-0.5">
+                          {sug.bulletPoints.map((bp, i) => (
+                            <p key={i} className="text-[10px] pl-2" style={{ color: "var(--text-muted)" }}>
+                              - {bp}
+                            </p>
+                          ))}
+                        </div>
+                      )}
+                      {sug.reason && (
+                        <p className="text-[9px] mt-1 italic" style={{ color: "var(--text-muted)" }}>{sug.reason}</p>
+                      )}
+                    </div>
+                    <div className="flex gap-1 flex-shrink-0">
+                      <button
+                        onClick={() => acceptSuggestion(sug)}
+                        className="p-1 rounded border border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/20 transition-colors"
+                        title="Accept"
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => setAiSuggestions(prev => prev?.filter(s => s.id !== sug.id) || null)}
+                        className="p-1 rounded border border-red-500/30 text-red-400 hover:bg-red-500/20 transition-colors"
+                        title="Reject"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : aiSuggestions !== null ? (
+            <p className="text-xs text-center py-4" style={{ color: "var(--text-muted)" }}>No suggestions available.</p>
+          ) : null}
+        </div>
+      )}
+
       {showLibrary && (
         <div className="border rounded-lg p-2 max-h-40 overflow-y-auto" style={{ borderColor: "var(--border-subtle)", backgroundColor: "var(--surface)" }}>
           {libraryQuery.isLoading ? (
@@ -766,6 +1023,29 @@ export function SceneOverlayEditor({
         {currentBackgroundUrl && currentBackgroundType === "video" && (
           <video src={currentBackgroundUrl} className="w-full h-full object-contain absolute inset-0" muted />
         )}
+        {showSafeZones && getSafeZones(aspectRatio).map((zone, idx) => {
+          const zoneStyle: React.CSSProperties = {
+            position: 'absolute',
+            left: `${zone.left}%`,
+            top: `${zone.top}%`,
+            width: `${zone.right - zone.left}%`,
+            height: `${zone.bottom - zone.top}%`,
+            backgroundColor: 'rgba(245, 158, 11, 0.15)',
+            border: '1px dashed rgba(245, 158, 11, 0.5)',
+            zIndex: 5,
+            pointerEvents: 'none',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          };
+          return (
+            <div key={idx} style={zoneStyle}>
+              <span className="text-[8px] px-1 py-0.5 rounded bg-amber-500/30 text-amber-300 whitespace-nowrap">
+                {zone.label}
+              </span>
+            </div>
+          );
+        })}
         {currentOverlays.length === 0 && (
           <div className="absolute inset-0 flex items-center justify-center z-10">
             <div className="text-center bg-black/40 rounded-lg px-4 py-3 backdrop-blur-sm">
@@ -780,6 +1060,7 @@ export function SceneOverlayEditor({
         {[...currentOverlays].sort((a, b) => (a.layerOrder ?? 0) - (b.layerOrder ?? 0)).map((overlay, sortedIdx) => {
           const isText = isTextOverlay(overlay);
           const textOvl = isText ? (overlay as TextOverlayItem) : null;
+          const inDangerZone = showSafeZones && isText && isOverlayInDangerZone(overlay, aspectRatio);
 
           return (
             <div
@@ -842,13 +1123,18 @@ export function SceneOverlayEditor({
                   draggable={false}
                 />
               )}
+              {inDangerZone && selectedId !== overlay.id && (
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-30 pointer-events-none">
+                  <AlertTriangle className="w-4 h-4 text-amber-400 drop-shadow-md" />
+                </div>
+              )}
               {selectedId === overlay.id && !overlay.locked && (
                 <>
                   <div
                     className="absolute inset-0 border-2 rounded pointer-events-none"
                     style={{
-                      borderColor: isText ? 'rgb(59, 130, 246)' : 'rgb(124, 58, 237)',
-                      boxShadow: "0 0 0 1px rgba(0,0,0,0.3)",
+                      borderColor: inDangerZone ? 'rgb(245, 158, 11)' : isText ? 'rgb(59, 130, 246)' : 'rgb(124, 58, 237)',
+                      boxShadow: inDangerZone ? "0 0 8px rgba(245,158,11,0.4)" : "0 0 0 1px rgba(0,0,0,0.3)",
                     }}
                   />
                   <div
@@ -873,23 +1159,29 @@ export function SceneOverlayEditor({
 
         {currentOverlays.length > 0 && (
           <div className="absolute bottom-1 left-1 right-1 flex gap-1 flex-wrap z-30 pointer-events-none">
-            {currentOverlays.map((overlay) => (
-              <span
-                key={overlay.id}
-                className={`text-[9px] px-1.5 py-0.5 rounded-full pointer-events-auto cursor-pointer transition-all flex items-center gap-1 ${
-                  selectedId === overlay.id
-                    ? isTextOverlay(overlay) ? "bg-blue-500 text-white" : "bg-purple-500 text-white"
-                    : "bg-black/50 text-white/70 hover:bg-black/70"
-                }`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setSelectedId(overlay.id);
-                }}
-              >
-                {isTextOverlay(overlay) ? <Type className="w-2.5 h-2.5" /> : <ImageIcon className="w-2.5 h-2.5" />}
-                {overlay.name.length > 12 ? overlay.name.slice(0, 12) + "..." : overlay.name}
-              </span>
-            ))}
+            {currentOverlays.map((overlay) => {
+              const layerDanger = showSafeZones && isTextOverlay(overlay) && isOverlayInDangerZone(overlay, aspectRatio);
+              return (
+                <span
+                  key={overlay.id}
+                  className={`text-[9px] px-1.5 py-0.5 rounded-full pointer-events-auto cursor-pointer transition-all flex items-center gap-1 ${
+                    layerDanger
+                      ? "bg-amber-500/80 text-white"
+                      : selectedId === overlay.id
+                        ? isTextOverlay(overlay) ? "bg-blue-500 text-white" : "bg-purple-500 text-white"
+                        : "bg-black/50 text-white/70 hover:bg-black/70"
+                  }`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedId(overlay.id);
+                  }}
+                >
+                  {layerDanger && <AlertTriangle className="w-2.5 h-2.5" />}
+                  {isTextOverlay(overlay) ? <Type className="w-2.5 h-2.5" /> : <ImageIcon className="w-2.5 h-2.5" />}
+                  {overlay.name.length > 12 ? overlay.name.slice(0, 12) + "..." : overlay.name}
+                </span>
+              );
+            })}
           </div>
         )}
       </div>
@@ -1138,6 +1430,36 @@ export function SceneOverlayEditor({
                     style={{ accentColor: "rgb(59,130,246)" }}
                   />
                 </div>
+              </div>
+
+              <div className="border-t pt-2" style={{ borderColor: "var(--border-subtle)" }}>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-[10px] flex items-center gap-1 cursor-pointer" style={{ color: "var(--text-muted)" }}>
+                    <input
+                      type="checkbox"
+                      checked={selectedTextOverlay.autoBackground ?? false}
+                      onChange={(e) => updateOverlay(selectedOverlay.id, { autoBackground: e.target.checked })}
+                      className="rounded"
+                    />
+                    Smart Contrast Background
+                  </label>
+                </div>
+                {selectedTextOverlay.autoBackground && (
+                  <div>
+                    <label className="text-[10px] block mb-1" style={{ color: "var(--text-muted)" }}>
+                      Contrast Opacity: {selectedTextOverlay.autoBackgroundOpacity ?? 50}%
+                    </label>
+                    <input
+                      type="range"
+                      min={10}
+                      max={90}
+                      value={selectedTextOverlay.autoBackgroundOpacity ?? 50}
+                      onChange={(e) => updateOverlay(selectedOverlay.id, { autoBackgroundOpacity: parseInt(e.target.value) })}
+                      className="w-full h-1.5 rounded-full appearance-none cursor-pointer"
+                      style={{ accentColor: "rgb(59,130,246)" }}
+                    />
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-2">

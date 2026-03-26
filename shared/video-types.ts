@@ -236,6 +236,8 @@ export interface TextOverlayItem {
   bulletPoints?: string[];
   bulletDelay?: number;
   layerOrder?: number;
+  autoBackground?: boolean;
+  autoBackgroundOpacity?: number;
 }
 
 export type SceneOverlayItem = ImageOverlayItem | TextOverlayItem;

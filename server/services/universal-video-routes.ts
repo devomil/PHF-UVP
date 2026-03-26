@@ -11947,4 +11947,105 @@ router.post('/projects/:projectId/characters/import', isAuthenticated, async (re
   }
 });
 
+// ============================================================
+// AI TEXT OVERLAY SUGGESTIONS
+// ============================================================
+router.post('/projects/:projectId/scenes/:sceneId/suggest-text-overlays', isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const { projectId, sceneId } = req.params;
+    const userId = (req as any).user?.id;
+    const { narration, sceneType, brandColors } = req.body;
+
+    const projectData = await getProjectFromDb(projectId);
+    if (projectData.ownerId !== userId) return res.status(403).json({ success: false, error: 'Access denied' });
+
+    if (!narration) {
+      return res.status(400).json({ success: false, error: 'narration is required' });
+    }
+
+    const { llmClient } = await import('./piapi-llm-client');
+    if (!llmClient.isAvailable()) {
+      return res.status(503).json({ success: false, error: 'No LLM API configured' });
+    }
+
+    const systemPrompt = `You are a professional video text overlay designer. Given a scene's narration and type, suggest compelling text overlays. Return a JSON array of overlay suggestions. Each suggestion should have:
+- "presetType": one of "headline", "script-accent", "body", "bullet-list", "stat-callout", "lower-third", "cta-badge", "caption-bar"
+- "text": the overlay text content
+- "bulletPoints": array of strings (only for bullet-list preset)
+- "reason": brief explanation of why this overlay works
+
+Guidelines:
+- For "hook" scenes: bold headline + optional stat-callout
+- For "benefit"/"feature" scenes: bullet-list or body text highlighting key points
+- For "cta" scenes: cta-badge with action text + lower-third with supporting info
+- For "testimonial"/"proof" scenes: quote-style body or stat-callout
+- For "intro"/"brand" scenes: headline with brand identity
+- Extract key numbers/stats for stat-callout when available
+- Keep headlines under 6 words
+- Keep CTA text under 4 words
+- Extract 2-4 bullet points from narration when using bullet-list
+- Suggest 2-4 overlays total, not more
+
+Return ONLY a valid JSON array, no markdown fences.`;
+
+    const userMessage = `Scene type: ${sceneType || 'general'}
+Narration: "${narration}"
+${brandColors?.length ? `Brand colors available: ${brandColors.join(', ')}` : ''}
+
+Suggest text overlays for this scene.`;
+
+    const result = await llmClient.createChatCompletion({
+      systemPrompt,
+      messages: [{ role: 'user', content: userMessage }],
+      maxTokens: 1500,
+      temperature: 0.7,
+    });
+
+    let suggestions: any[] = [];
+    try {
+      const cleaned = result.text.replace(/```json?\s*/g, '').replace(/```\s*/g, '').trim();
+      suggestions = JSON.parse(cleaned);
+    } catch {
+      console.error('[TextSuggestions] Failed to parse LLM response:', result.text.substring(0, 200));
+      return res.status(500).json({ success: false, error: 'Failed to parse AI response' });
+    }
+
+    const PRESET_DEFAULTS: Record<string, any> = {
+      'headline': { fontSize: 72, fontWeight: '800', color: '#FFFFFF', textAlign: 'center', width: 85, height: 18, x: 7, y: 30, enterAnimation: 'rise', exitAnimation: 'fade', textShadow: true },
+      'script-accent': { fontSize: 36, fontWeight: '500', color: '#FFFFFF', textAlign: 'center', width: 70, height: 10, x: 15, y: 50, enterAnimation: 'fade', exitAnimation: 'fade', textShadow: true },
+      'body': { fontSize: 24, fontWeight: '400', color: '#D1D5DB', textAlign: 'left', width: 60, height: 14, x: 10, y: 55, enterAnimation: 'fade', exitAnimation: 'fade', textShadow: true },
+      'bullet-list': { fontSize: 28, fontWeight: '500', color: '#FFFFFF', textAlign: 'left', width: 65, height: 20, x: 10, y: 35, enterAnimation: 'rise', exitAnimation: 'fade', textShadow: true },
+      'stat-callout': { fontSize: 56, fontWeight: '700', color: '#34D399', textAlign: 'center', width: 30, height: 14, x: 35, y: 35, enterAnimation: 'scale-pop', exitAnimation: 'scale-down', textShadow: false, backgroundColor: '#000000', backgroundOpacity: 50 },
+      'lower-third': { fontSize: 28, fontWeight: '600', color: '#FFFFFF', textAlign: 'left', width: 50, height: 8, x: 5, y: 82, enterAnimation: 'wipe-left', exitAnimation: 'fade', textShadow: false, backgroundColor: '#000000', backgroundOpacity: 55 },
+      'cta-badge': { fontSize: 32, fontWeight: '700', color: '#FFFFFF', textAlign: 'center', width: 35, height: 8, x: 32, y: 78, enterAnimation: 'scale-pop', exitAnimation: 'fade', textShadow: false, backgroundColor: '#7C3AED', backgroundOpacity: 90 },
+      'caption-bar': { fontSize: 22, fontWeight: '400', color: '#E0E0E0', textAlign: 'center', width: 60, height: 6, x: 20, y: 88, enterAnimation: 'fade', exitAnimation: 'fade', textShadow: false, backgroundColor: '#000000', backgroundOpacity: 40 },
+    };
+
+    const overlayItems = suggestions.map((s: any, idx: number) => {
+      const preset = PRESET_DEFAULTS[s.presetType] || PRESET_DEFAULTS['body'];
+      return {
+        type: 'text' as const,
+        id: `sug_${Date.now()}_${idx}`,
+        name: s.presetType || 'body',
+        text: s.text || '',
+        textPreset: s.presetType || 'body',
+        fontFamily: 'Inter',
+        opacity: 100,
+        locked: false,
+        animationDuration: 0.4,
+        ...preset,
+        bulletPoints: s.presetType === 'bullet-list' ? s.bulletPoints : undefined,
+        bulletDelay: s.presetType === 'bullet-list' ? 0.3 : undefined,
+        reason: s.reason || '',
+      };
+    });
+
+    console.log(`[TextSuggestions] Generated ${overlayItems.length} suggestions for scene ${sceneId}`);
+    res.json({ success: true, suggestions: overlayItems });
+  } catch (error: any) {
+    console.error('[TextSuggestions] Error:', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 export default router;

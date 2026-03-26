@@ -194,6 +194,8 @@ export const CustomTextOverlay: React.FC<CustomTextOverlayProps> = ({
 
   const bgOpacity = overlay.backgroundOpacity ?? 0;
   const hasBg = overlay.backgroundColor && bgOpacity > 0;
+  const hasAutoBackground = overlay.autoBackground === true;
+  const autoBackgroundOpacity = overlay.autoBackgroundOpacity ?? 50;
 
   const backgroundStyle: React.CSSProperties = hasBg
     ? {
@@ -233,6 +235,19 @@ export const CustomTextOverlay: React.FC<CustomTextOverlayProps> = ({
         willChange: 'transform, opacity, filter',
       }}
     >
+      {hasAutoBackground && !hasBg && (
+        <div
+          style={{
+            position: 'absolute',
+            inset: '-8%',
+            backgroundColor: `rgba(0, 0, 0, ${autoBackgroundOpacity / 100})`,
+            backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)',
+            borderRadius: (overlay.borderRadius ?? 0) + 4,
+            zIndex: -1,
+          }}
+        />
+      )}
       <div
         style={{
           fontSize: overlay.fontSize,

@@ -2867,6 +2867,11 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
           microSceneOverlays={msOverlayState}
           sceneDurationSec={scene.duration || 5}
           brandColors={brandColors}
+          aspectRatio={aspectRatio}
+          projectId={projectId}
+          sceneId={sceneId}
+          narration={editValues.narration || scene.narration || ""}
+          sceneType={editValues.type || scene.type || "scene"}
         />
 
         {/* Character Profiles - visible only for 3D Illustration art style */}
