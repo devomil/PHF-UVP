@@ -182,9 +182,11 @@ export interface MicroSceneOverlayItem {
   entranceAnimation: EntranceAnimation;
 }
 
-export type TextOverlayAnimation = 'none' | 'fade' | 'slide-up' | 'slide-down' | 'slide-left' | 'slide-right' | 'pop' | 'typewriter' | 'blur-in';
-export type TextEmphasisAnimation = 'none' | 'pulse' | 'glow' | 'shake' | 'bounce' | 'color-cycle';
-export type TextPresetType = 'headline' | 'subtitle' | 'lower-third' | 'cta-badge' | 'caption-bar' | 'bold-statement' | 'body' | 'stat-callout';
+export type TextOverlayEnterAnimation = 'none' | 'fade' | 'rise' | 'drop' | 'wipe-left' | 'wipe-right' | 'scale-pop' | 'typewriter' | 'blur-in';
+export type TextOverlayExitAnimation = 'none' | 'fade' | 'slide-out' | 'scale-down';
+export type TextOverlayAnimation = TextOverlayEnterAnimation | TextOverlayExitAnimation;
+export type TextEmphasisAnimation = 'none' | 'pulse' | 'float' | 'shimmer';
+export type TextPresetType = 'headline' | 'script-accent' | 'body' | 'bullet-list' | 'stat-callout' | 'lower-third' | 'cta-badge' | 'caption-bar';
 export type SnapPosition = 'top-left' | 'top-center' | 'top-right' | 'middle-left' | 'middle-center' | 'middle-right' | 'bottom-left' | 'bottom-center' | 'bottom-right' | 'custom';
 
 export interface ImageOverlayItem {
@@ -223,8 +225,8 @@ export interface TextOverlayItem {
   letterSpacing?: number;
   lineHeight?: number;
   textShadow?: boolean;
-  enterAnimation: TextOverlayAnimation;
-  exitAnimation: TextOverlayAnimation;
+  enterAnimation: TextOverlayEnterAnimation;
+  exitAnimation: TextOverlayExitAnimation;
   emphasisAnimation?: TextEmphasisAnimation;
   animationDuration: number;
   timingStart?: number;

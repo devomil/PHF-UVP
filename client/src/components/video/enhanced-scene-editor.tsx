@@ -2864,6 +2864,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
           onMicroSceneSelect={setActiveMsOverlayScope}
           onMicroSceneOverlayChange={handleMicroSceneOverlayChange}
           microSceneOverlays={msOverlayState}
+          sceneDurationSec={scene.duration || 5}
         />
 
         {/* Character Profiles - visible only for 3D Illustration art style */}

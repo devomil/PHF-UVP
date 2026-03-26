@@ -1,6 +1,6 @@
 import React from 'react';
 import { useCurrentFrame, useVideoConfig, interpolate, spring } from 'remotion';
-import type { TextOverlayItem, TextOverlayAnimation, TextEmphasisAnimation } from '../../shared/video-types';
+import type { TextOverlayItem, TextOverlayEnterAnimation, TextOverlayExitAnimation, TextEmphasisAnimation } from '../../shared/video-types';
 
 export interface CustomTextOverlayProps {
   overlay: TextOverlayItem;
@@ -8,7 +8,7 @@ export interface CustomTextOverlayProps {
 }
 
 function hexToRgb(hex: string): string {
-  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})?$/i.exec(hex);
   if (!result) return '0, 0, 0';
   return `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}`;
 }
@@ -21,16 +21,70 @@ function easeInCubic(t: number): number {
   return t * t * t;
 }
 
-function computeAnimation(
-  animation: TextOverlayAnimation,
+interface AnimResult {
+  opacity: number;
+  translateX: number;
+  translateY: number;
+  scale: number;
+  blur: number;
+  clipPath: string | null;
+}
+
+function computeEnterAnimation(
+  animation: TextOverlayEnterAnimation,
   progress: number,
-  direction: 'enter' | 'exit',
   frame: number,
   fps: number,
-): { opacity: number; translateX: number; translateY: number; scale: number; blur: number } {
-  const result = { opacity: 1, translateX: 0, translateY: 0, scale: 1, blur: 0 };
-  const eased = direction === 'enter' ? easeOutCubic(progress) : easeInCubic(progress);
-  const factor = direction === 'enter' ? eased : 1 - eased;
+  textLength: number,
+): AnimResult {
+  const result: AnimResult = { opacity: 1, translateX: 0, translateY: 0, scale: 1, blur: 0, clipPath: null };
+  const eased = easeOutCubic(progress);
+
+  switch (animation) {
+    case 'none':
+      break;
+    case 'fade':
+      result.opacity = eased;
+      break;
+    case 'rise':
+      result.opacity = eased;
+      result.translateY = interpolate(eased, [0, 1], [50, 0]);
+      break;
+    case 'drop':
+      result.opacity = eased;
+      result.translateY = interpolate(eased, [0, 1], [-50, 0]);
+      break;
+    case 'wipe-left':
+      result.clipPath = `inset(0 ${100 - eased * 100}% 0 0)`;
+      break;
+    case 'wipe-right':
+      result.clipPath = `inset(0 0 0 ${100 - eased * 100}%)`;
+      break;
+    case 'scale-pop':
+      result.opacity = eased;
+      result.scale = spring({
+        frame,
+        fps,
+        config: { damping: 10, stiffness: 200 },
+      });
+      break;
+    case 'typewriter':
+      break;
+    case 'blur-in':
+      result.opacity = eased;
+      result.blur = interpolate(eased, [0, 1], [16, 0]);
+      break;
+  }
+  return result;
+}
+
+function computeExitAnimation(
+  animation: TextOverlayExitAnimation,
+  progress: number,
+): AnimResult {
+  const result: AnimResult = { opacity: 1, translateX: 0, translateY: 0, scale: 1, blur: 0, clipPath: null };
+  const eased = easeInCubic(progress);
+  const factor = 1 - eased;
 
   switch (animation) {
     case 'none':
@@ -38,51 +92,13 @@ function computeAnimation(
     case 'fade':
       result.opacity = factor;
       break;
-    case 'slide-up':
+    case 'slide-out':
       result.opacity = factor;
-      result.translateY = direction === 'enter'
-        ? interpolate(eased, [0, 1], [50, 0])
-        : interpolate(eased, [0, 1], [0, -40]);
+      result.translateY = interpolate(eased, [0, 1], [0, -40]);
       break;
-    case 'slide-down':
+    case 'scale-down':
       result.opacity = factor;
-      result.translateY = direction === 'enter'
-        ? interpolate(eased, [0, 1], [-50, 0])
-        : interpolate(eased, [0, 1], [0, 40]);
-      break;
-    case 'slide-left':
-      result.opacity = factor;
-      result.translateX = direction === 'enter'
-        ? interpolate(eased, [0, 1], [80, 0])
-        : interpolate(eased, [0, 1], [0, -80]);
-      break;
-    case 'slide-right':
-      result.opacity = factor;
-      result.translateX = direction === 'enter'
-        ? interpolate(eased, [0, 1], [-80, 0])
-        : interpolate(eased, [0, 1], [0, 80]);
-      break;
-    case 'pop':
-      result.opacity = factor;
-      if (direction === 'enter') {
-        result.scale = spring({
-          frame,
-          fps,
-          config: { damping: 10, stiffness: 200 },
-        });
-      } else {
-        result.scale = interpolate(eased, [0, 1], [1, 0.8]);
-      }
-      break;
-    case 'typewriter':
-      break;
-    case 'blur-in':
-      result.opacity = factor;
-      if (direction === 'enter') {
-        result.blur = interpolate(eased, [0, 1], [16, 0]);
-      } else {
-        result.blur = interpolate(eased, [0, 1], [0, 16]);
-      }
+      result.scale = interpolate(eased, [0, 1], [1, 0.7]);
       break;
   }
   return result;
@@ -92,8 +108,8 @@ function computeEmphasis(
   emphasis: TextEmphasisAnimation,
   frame: number,
   fps: number,
-): { scale: number; filterExtra: string; colorShift: string | null } {
-  const result = { scale: 1, filterExtra: '', colorShift: null as string | null };
+): { scale: number; filterExtra: string } {
+  const result = { scale: 1, filterExtra: '' };
   const cycle = (frame % (fps * 2)) / (fps * 2);
   const pulse = Math.sin(cycle * Math.PI * 2) * 0.5 + 0.5;
 
@@ -103,20 +119,11 @@ function computeEmphasis(
     case 'pulse':
       result.scale = 1 + pulse * 0.05;
       break;
-    case 'glow':
-      result.filterExtra = `drop-shadow(0 0 ${4 + pulse * 12}px rgba(255,255,255,${0.3 + pulse * 0.4}))`;
+    case 'float':
+      result.scale = 1 + Math.sin(frame * 0.08) * 0.02;
       break;
-    case 'shake': {
-      const shakeX = Math.sin(frame * 0.8) * 1.5;
-      const shakeY = Math.cos(frame * 1.1) * 1;
-      result.filterExtra = `translate(${shakeX}px, ${shakeY}px)`;
-      break;
-    }
-    case 'bounce':
-      result.scale = 1 + Math.abs(Math.sin(frame * 0.15)) * 0.08;
-      break;
-    case 'color-cycle':
-      result.colorShift = `hue-rotate(${(frame * 3) % 360}deg)`;
+    case 'shimmer':
+      result.filterExtra = `brightness(${1 + pulse * 0.3})`;
       break;
   }
   return result;
@@ -149,18 +156,22 @@ export const CustomTextOverlay: React.FC<CustomTextOverlayProps> = ({
   let translateY = 0;
   let scale = 1;
   let blur = 0;
+  let clipPath: string | null = null;
+
+  const text = overlay.text || '';
 
   if (localFrame < fadeInEnd && overlay.enterAnimation !== 'none') {
     const progress = localFrame / fadeInEnd;
-    const anim = computeAnimation(overlay.enterAnimation, progress, 'enter', localFrame, fps);
+    const anim = computeEnterAnimation(overlay.enterAnimation, progress, localFrame, fps, text.length);
     opacity = anim.opacity;
     translateX = anim.translateX;
     translateY = anim.translateY;
     scale = anim.scale;
     blur = anim.blur;
+    clipPath = anim.clipPath;
   } else if (localFrame > fadeOutStart && overlay.exitAnimation !== 'none') {
     const progress = (localFrame - fadeOutStart) / animDuration;
-    const anim = computeAnimation(overlay.exitAnimation, progress, 'exit', localFrame - fadeOutStart, fps);
+    const anim = computeExitAnimation(overlay.exitAnimation, progress);
     opacity = anim.opacity;
     translateX = anim.translateX;
     translateY = anim.translateY;
@@ -177,7 +188,6 @@ export const CustomTextOverlay: React.FC<CustomTextOverlayProps> = ({
 
   const hasBullets = overlay.bulletPoints && overlay.bulletPoints.length > 0;
   const bulletDelay = overlay.bulletDelay ?? 0.3;
-  const text = overlay.text || '';
   const displayText = overlay.enterAnimation === 'typewriter' && localFrame < fadeInEnd
     ? text.substring(0, Math.floor(interpolate(localFrame, [0, fadeInEnd], [0, text.length], { extrapolateRight: 'clamp' })))
     : text;
@@ -192,13 +202,11 @@ export const CustomTextOverlay: React.FC<CustomTextOverlayProps> = ({
       }
     : {};
 
-  const filterStr = [
+  const filterParts = [
     blur > 0 ? `blur(${blur}px)` : '',
-    emphasis?.colorShift || '',
-  ].filter(Boolean).join(' ') || undefined;
-
-  const emphasisFilter = emphasis?.filterExtra || '';
-  const transformStr = `translate(${translateX}px, ${translateY}px) scale(${scale}) ${emphasisFilter}`;
+    emphasis?.filterExtra || '',
+  ].filter(Boolean);
+  const filterStr = filterParts.length > 0 ? filterParts.join(' ') : undefined;
 
   return (
     <div
@@ -209,8 +217,9 @@ export const CustomTextOverlay: React.FC<CustomTextOverlayProps> = ({
         width: `${overlay.width}%`,
         height: `${overlay.height}%`,
         opacity: (overlay.opacity / 100) * opacity,
-        transform: transformStr,
+        transform: `translate(${translateX}px, ${translateY}px) scale(${scale})`,
         filter: filterStr,
+        clipPath: clipPath || undefined,
         zIndex: 55,
         pointerEvents: 'none',
         display: 'flex',

@@ -13,7 +13,8 @@ import type {
   SceneOverlayItem,
   ImageOverlayItem,
   TextOverlayItem,
-  TextOverlayAnimation,
+  TextOverlayEnterAnimation,
+  TextOverlayExitAnimation,
   TextEmphasisAnimation,
 } from "@shared/video-types";
 
@@ -28,39 +29,35 @@ const ENTRANCE_ANIMATIONS: { id: EntranceAnimation; label: string }[] = [
   { id: "drift", label: "Drift" },
 ];
 
-const ENTER_ANIMATIONS: { id: TextOverlayAnimation; label: string }[] = [
+const ENTER_ANIMATIONS: { id: TextOverlayEnterAnimation; label: string }[] = [
   { id: "none", label: "None" },
   { id: "fade", label: "Fade" },
-  { id: "slide-up", label: "Slide Up" },
-  { id: "slide-down", label: "Slide Down" },
-  { id: "slide-left", label: "Slide Left" },
-  { id: "slide-right", label: "Slide Right" },
-  { id: "pop", label: "Pop" },
+  { id: "rise", label: "Rise" },
+  { id: "drop", label: "Drop" },
+  { id: "wipe-left", label: "Wipe Left" },
+  { id: "wipe-right", label: "Wipe Right" },
+  { id: "scale-pop", label: "Scale Pop" },
   { id: "typewriter", label: "Typewriter" },
   { id: "blur-in", label: "Blur In" },
 ];
 
-const EXIT_ANIMATIONS: { id: TextOverlayAnimation; label: string }[] = [
+const EXIT_ANIMATIONS: { id: TextOverlayExitAnimation; label: string }[] = [
   { id: "none", label: "None" },
   { id: "fade", label: "Fade" },
-  { id: "slide-up", label: "Slide Up" },
-  { id: "slide-down", label: "Slide Down" },
-  { id: "slide-left", label: "Slide Left" },
-  { id: "slide-right", label: "Slide Right" },
-  { id: "pop", label: "Pop" },
+  { id: "slide-out", label: "Slide Out" },
+  { id: "scale-down", label: "Scale Down" },
 ];
 
 const EMPHASIS_ANIMATIONS: { id: TextEmphasisAnimation; label: string }[] = [
   { id: "none", label: "None" },
   { id: "pulse", label: "Pulse" },
-  { id: "glow", label: "Glow" },
-  { id: "shake", label: "Shake" },
-  { id: "bounce", label: "Bounce" },
-  { id: "color-cycle", label: "Color Cycle" },
+  { id: "float", label: "Float" },
+  { id: "shimmer", label: "Shimmer" },
 ];
 
 interface TextPreset {
   label: string;
+  presetType: TextOverlayItem['textPreset'];
   fontSize: number;
   fontWeight: string;
   color: string;
@@ -68,8 +65,8 @@ interface TextPreset {
   backgroundColor?: string;
   backgroundOpacity?: number;
   textShadow: boolean;
-  enterAnimation: TextOverlayAnimation;
-  exitAnimation: TextOverlayAnimation;
+  enterAnimation: TextOverlayEnterAnimation;
+  exitAnimation: TextOverlayExitAnimation;
   defaultText: string;
   width: number;
   height: number;
@@ -79,107 +76,14 @@ interface TextPreset {
 
 const TEXT_PRESETS: TextPreset[] = [
   {
-    label: "Title",
-    fontSize: 64,
-    fontWeight: "700",
-    color: "#FFFFFF",
-    textAlign: "center",
-    textShadow: true,
-    enterAnimation: "fade",
-    exitAnimation: "fade",
-    defaultText: "Your Title Here",
-    width: 80,
-    height: 15,
-    x: 10,
-    y: 35,
-  },
-  {
-    label: "Subtitle",
-    fontSize: 36,
-    fontWeight: "500",
-    color: "#FFFFFF",
-    textAlign: "center",
-    textShadow: true,
-    enterAnimation: "slide-up",
-    exitAnimation: "fade",
-    defaultText: "Subtitle Text",
-    width: 70,
-    height: 10,
-    x: 15,
-    y: 50,
-  },
-  {
-    label: "Lower Third",
-    fontSize: 28,
-    fontWeight: "600",
-    color: "#FFFFFF",
-    textAlign: "left",
-    backgroundColor: "#000000",
-    backgroundOpacity: 55,
-    textShadow: false,
-    enterAnimation: "slide-left",
-    exitAnimation: "fade",
-    defaultText: "Lower Third Text",
-    width: 50,
-    height: 8,
-    x: 5,
-    y: 82,
-  },
-  {
-    label: "CTA Button",
-    fontSize: 32,
-    fontWeight: "700",
-    color: "#FFFFFF",
-    textAlign: "center",
-    backgroundColor: "#7C3AED",
-    backgroundOpacity: 90,
-    textShadow: false,
-    enterAnimation: "pop",
-    exitAnimation: "fade",
-    defaultText: "Get Started",
-    width: 35,
-    height: 8,
-    x: 32,
-    y: 78,
-  },
-  {
-    label: "Caption",
-    fontSize: 22,
-    fontWeight: "400",
-    color: "#E0E0E0",
-    textAlign: "center",
-    textShadow: true,
-    enterAnimation: "fade",
-    exitAnimation: "fade",
-    defaultText: "Caption text goes here",
-    width: 60,
-    height: 6,
-    x: 20,
-    y: 88,
-  },
-  {
-    label: "Bold Statement",
-    fontSize: 48,
-    fontWeight: "800",
-    color: "#FACC15",
-    textAlign: "center",
-    textShadow: true,
-    enterAnimation: "pop",
-    exitAnimation: "fade",
-    defaultText: "KEY MESSAGE",
-    width: 70,
-    height: 12,
-    x: 15,
-    y: 40,
-  },
-  {
     label: "Headline",
+    presetType: "headline",
     fontSize: 72,
     fontWeight: "800",
     color: "#FFFFFF",
     textAlign: "center",
     textShadow: true,
-    enterAnimation: "slide-up",
+    enterAnimation: "rise",
     exitAnimation: "fade",
     defaultText: "Big Headline",
     width: 85,
@@ -188,7 +92,24 @@ const TEXT_PRESETS: TextPreset[] = [
     y: 30,
   },
   {
+    label: "Script Accent",
+    presetType: "script-accent",
+    fontSize: 36,
+    fontWeight: "500",
+    color: "#FFFFFF",
+    textAlign: "center",
+    textShadow: true,
+    enterAnimation: "fade",
+    exitAnimation: "fade",
+    defaultText: "Emphasis Text",
+    width: 70,
+    height: 10,
+    x: 15,
+    y: 50,
+  },
+  {
     label: "Body",
+    presetType: "body",
     fontSize: 24,
     fontWeight: "400",
     color: "#D1D5DB",
@@ -196,11 +117,99 @@ const TEXT_PRESETS: TextPreset[] = [
     textShadow: true,
     enterAnimation: "fade",
     exitAnimation: "fade",
-    defaultText: "Body text paragraph for longer form content and descriptions.",
+    defaultText: "Body text paragraph for longer descriptions.",
     width: 60,
     height: 14,
     x: 10,
     y: 55,
+  },
+  {
+    label: "Bullet List",
+    presetType: "bullet-list",
+    fontSize: 28,
+    fontWeight: "500",
+    color: "#FFFFFF",
+    textAlign: "left",
+    textShadow: true,
+    enterAnimation: "rise",
+    exitAnimation: "fade",
+    defaultText: "Key Points",
+    width: 65,
+    height: 20,
+    x: 10,
+    y: 35,
+  },
+  {
+    label: "Stat Callout",
+    presetType: "stat-callout",
+    fontSize: 56,
+    fontWeight: "700",
+    color: "#34D399",
+    textAlign: "center",
+    backgroundColor: "#000000",
+    backgroundOpacity: 50,
+    textShadow: false,
+    enterAnimation: "scale-pop",
+    exitAnimation: "scale-down",
+    defaultText: "99%",
+    width: 30,
+    height: 14,
+    x: 35,
+    y: 35,
+  },
+  {
+    label: "Lower Third",
+    presetType: "lower-third",
+    fontSize: 28,
+    fontWeight: "600",
+    color: "#FFFFFF",
+    textAlign: "left",
+    backgroundColor: "#000000",
+    backgroundOpacity: 55,
+    textShadow: false,
+    enterAnimation: "wipe-left",
+    exitAnimation: "fade",
+    defaultText: "Lower Third Text",
+    width: 50,
+    height: 8,
+    x: 5,
+    y: 82,
+  },
+  {
+    label: "CTA Badge",
+    presetType: "cta-badge",
+    fontSize: 32,
+    fontWeight: "700",
+    color: "#FFFFFF",
+    textAlign: "center",
+    backgroundColor: "#7C3AED",
+    backgroundOpacity: 90,
+    textShadow: false,
+    enterAnimation: "scale-pop",
+    exitAnimation: "fade",
+    defaultText: "Get Started",
+    width: 35,
+    height: 8,
+    x: 32,
+    y: 78,
+  },
+  {
+    label: "Caption Bar",
+    presetType: "caption-bar",
+    fontSize: 22,
+    fontWeight: "400",
+    color: "#E0E0E0",
+    textAlign: "center",
+    backgroundColor: "#000000",
+    backgroundOpacity: 40,
+    textShadow: false,
+    enterAnimation: "fade",
+    exitAnimation: "fade",
+    defaultText: "Caption text goes here",
+    width: 60,
+    height: 6,
+    x: 20,
+    y: 88,
   },
 ];
 
@@ -215,7 +224,7 @@ const FONT_OPTIONS = [
   "Palatino",
 ];
 
-const COLOR_SWATCHES = [
+const DEFAULT_COLOR_SWATCHES = [
   "#FFFFFF", "#000000", "#FF0000", "#00FF00", "#0000FF",
   "#FACC15", "#F97316", "#EC4899", "#7C3AED", "#14B8A6",
 ];
@@ -240,6 +249,8 @@ interface SceneOverlayEditorProps {
   onMicroSceneSelect?: (index: number | null) => void;
   onMicroSceneOverlayChange?: (msIdx: number, overlays: MicroSceneOverlayItem[]) => void;
   microSceneOverlays?: Record<number, MicroSceneOverlayItem[]>;
+  sceneDurationSec?: number;
+  brandColors?: string[];
 }
 
 function generateId() {
@@ -266,6 +277,8 @@ export function SceneOverlayEditor({
   onMicroSceneSelect,
   onMicroSceneOverlayChange,
   microSceneOverlays,
+  sceneDurationSec,
+  brandColors,
 }: SceneOverlayEditorProps) {
   const { toast } = useToast();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -370,6 +383,7 @@ export function SceneOverlayEditor({
       id: generateId(),
       name: preset.label,
       text: preset.defaultText,
+      textPreset: preset.presetType,
       x: preset.x,
       y: preset.y,
       width: preset.width,
@@ -388,6 +402,8 @@ export function SceneOverlayEditor({
       enterAnimation: preset.enterAnimation,
       exitAnimation: preset.exitAnimation,
       animationDuration: 0.4,
+      bulletPoints: preset.presetType === 'bullet-list' ? ['Point 1', 'Point 2', 'Point 3'] : undefined,
+      bulletDelay: preset.presetType === 'bullet-list' ? 0.3 : undefined,
     };
     handleCurrentChange([...currentOverlays, newOverlay]);
     setSelectedId(newOverlay.id);
@@ -869,7 +885,72 @@ export function SceneOverlayEditor({
         )}
       </div>
 
-      {/* Property Editor for selected overlay */}
+      {currentOverlays.length > 0 && (() => {
+        const sceneTotal = sceneDurationSec ?? 10;
+        const textOverlays = currentOverlays.filter(isTextOverlay);
+        const imageOverlays = currentOverlays.filter(isImageOverlay);
+        const allTimed = [
+          ...textOverlays.map((o) => ({
+            id: o.id,
+            name: o.name,
+            start: o.timingStart ?? 0,
+            duration: o.timingDuration ?? sceneTotal,
+            isText: true,
+          })),
+          ...imageOverlays.map((o) => ({
+            id: o.id,
+            name: o.name,
+            start: 0,
+            duration: sceneTotal,
+            isText: false,
+          })),
+        ];
+        if (allTimed.length === 0) return null;
+        return (
+          <div className="border rounded-lg p-2" style={{ borderColor: "var(--border-subtle)", backgroundColor: "var(--surface)" }}>
+            <p className="text-[10px] mb-1 uppercase tracking-wider font-medium" style={{ color: "var(--text-muted)" }}>
+              Timeline ({sceneTotal.toFixed(0)}s)
+            </p>
+            <div className="space-y-1">
+              {allTimed.map((item) => {
+                const startPct = Math.min((item.start / sceneTotal) * 100, 100);
+                const widthPct = Math.min((item.duration / sceneTotal) * 100, 100 - startPct);
+                return (
+                  <div
+                    key={item.id}
+                    className={`flex items-center gap-1.5 cursor-pointer ${selectedId === item.id ? 'opacity-100' : 'opacity-70 hover:opacity-100'}`}
+                    onClick={() => setSelectedId(item.id)}
+                  >
+                    <span className="text-[9px] w-16 truncate flex-shrink-0" style={{ color: "var(--text-muted)" }}>
+                      {item.name}
+                    </span>
+                    <div
+                      className="flex-1 h-2.5 rounded-sm relative overflow-hidden"
+                      style={{ backgroundColor: "rgba(255,255,255,0.06)" }}
+                    >
+                      <div
+                        className="absolute top-0 h-full rounded-sm"
+                        style={{
+                          left: `${startPct}%`,
+                          width: `${Math.max(widthPct, 1)}%`,
+                          backgroundColor: item.isText ? "rgba(59,130,246,0.5)" : "rgba(124,58,237,0.5)",
+                          border: `1px solid ${item.isText ? "rgba(59,130,246,0.7)" : "rgba(124,58,237,0.7)"}`,
+                        }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="flex justify-between text-[8px] mt-0.5" style={{ color: "var(--text-muted)" }}>
+              <span>0s</span>
+              <span>{(sceneTotal / 2).toFixed(0)}s</span>
+              <span>{sceneTotal.toFixed(0)}s</span>
+            </div>
+          </div>
+        );
+      })()}
+
       {selectedOverlay && (
         <div
           className="border rounded-lg p-3 space-y-3"
@@ -964,7 +1045,7 @@ export function SceneOverlayEditor({
                       style={{ borderColor: "var(--border-subtle)" }}
                     />
                     <div className="flex gap-0.5">
-                      {COLOR_SWATCHES.slice(0, 5).map((c) => (
+                      {(brandColors && brandColors.length > 0 ? brandColors : DEFAULT_COLOR_SWATCHES).slice(0, 5).map((c) => (
                         <button
                           key={c}
                           onClick={() => updateOverlay(selectedOverlay.id, { color: c })}
@@ -1054,7 +1135,7 @@ export function SceneOverlayEditor({
                   <label className="text-[10px] block mb-1" style={{ color: "var(--text-muted)" }}>Enter Animation</label>
                   <select
                     value={selectedTextOverlay.enterAnimation}
-                    onChange={(e) => updateOverlay(selectedOverlay.id, { enterAnimation: e.target.value as TextOverlayAnimation })}
+                    onChange={(e) => updateOverlay(selectedOverlay.id, { enterAnimation: e.target.value as TextOverlayEnterAnimation })}
                     className="w-full text-xs rounded border px-2 py-1 bg-transparent outline-none cursor-pointer"
                     style={{ borderColor: "var(--border-subtle)", color: "var(--text-primary)" }}
                   >
@@ -1067,7 +1148,7 @@ export function SceneOverlayEditor({
                   <label className="text-[10px] block mb-1" style={{ color: "var(--text-muted)" }}>Exit Animation</label>
                   <select
                     value={selectedTextOverlay.exitAnimation}
-                    onChange={(e) => updateOverlay(selectedOverlay.id, { exitAnimation: e.target.value as TextOverlayAnimation })}
+                    onChange={(e) => updateOverlay(selectedOverlay.id, { exitAnimation: e.target.value as TextOverlayExitAnimation })}
                     className="w-full text-xs rounded border px-2 py-1 bg-transparent outline-none cursor-pointer"
                     style={{ borderColor: "var(--border-subtle)", color: "var(--text-primary)" }}
                   >
@@ -1142,9 +1223,9 @@ export function SceneOverlayEditor({
               </div>
 
               {(() => {
+                const sceneTotal = sceneDurationSec ?? 10;
                 const start = selectedTextOverlay.timingStart ?? 0;
-                const dur = selectedTextOverlay.timingDuration ?? 10;
-                const sceneTotal = 30;
+                const dur = selectedTextOverlay.timingDuration ?? sceneTotal;
                 const startPct = Math.min((start / sceneTotal) * 100, 100);
                 const widthPct = Math.min((dur / sceneTotal) * 100, 100 - startPct);
                 return (
@@ -1167,7 +1248,7 @@ export function SceneOverlayEditor({
                     <div className="flex justify-between text-[9px] mt-0.5" style={{ color: "var(--text-muted)" }}>
                       <span>0s</span>
                       <span>{start.toFixed(1)}s – {(start + dur).toFixed(1)}s</span>
-                      <span>{sceneTotal}s</span>
+                      <span>{sceneTotal.toFixed(0)}s</span>
                     </div>
                   </div>
                 );
