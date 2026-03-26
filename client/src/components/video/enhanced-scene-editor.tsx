@@ -1125,7 +1125,8 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
               <video
                 ref={videoRef}
                 src={videoUrl}
-                className="w-full aspect-video object-contain bg-black"
+                className="w-full object-cover bg-black mx-auto"
+                style={{ aspectRatio: aspectRatio === '9:16' ? '9/16' : aspectRatio === '1:1' ? '1/1' : '16/9', maxHeight: aspectRatio === '9:16' ? '500px' : undefined }}
                 playsInline
                 preload="auto"
                 onError={assembledClipValid ? handleAssemblyVideoError : undefined}
@@ -1168,7 +1169,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
             </div>
           ) : hasImage ? (
             <div className="relative">
-              <img src={imageUrl} alt={`Scene ${sceneIndex + 1}`} className="w-full aspect-video object-contain bg-black" />
+              <img src={imageUrl} alt={`Scene ${sceneIndex + 1}`} className="w-full object-cover bg-black mx-auto" style={{ aspectRatio: aspectRatio === '9:16' ? '9/16' : aspectRatio === '1:1' ? '1/1' : '16/9', maxHeight: aspectRatio === '9:16' ? '500px' : undefined }} />
               <div className="absolute top-2 right-2">
                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-black/60 text-white/70 border border-white/10">
                   Image Only
@@ -1176,7 +1177,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
               </div>
             </div>
           ) : (
-            <div className="aspect-video flex items-center justify-center">
+            <div className="flex items-center justify-center" style={{ aspectRatio: aspectRatio === '9:16' ? '9/16' : aspectRatio === '1:1' ? '1/1' : '16/9' }}>
               <div className="text-center">
                 <ImagePlus className="w-8 h-8 mx-auto mb-2" style={{ color: "var(--text-muted)" }} />
                 <p className="text-xs" style={{ color: "var(--text-muted)" }}>No visual asset generated yet</p>

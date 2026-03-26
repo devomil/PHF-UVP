@@ -421,9 +421,12 @@ export function SceneOverlayEditor({
     id: string;
     startX: number;
     startY: number;
+    origX: number;
+    origY: number;
     origW: number;
     origH: number;
     origFontSize?: number;
+    handle: 'br' | 'bl' | 'tr' | 'tl' | 'r' | 'l' | 't' | 'b';
   } | null>(null);
 
   const isMicroSceneMode = activeMicroSceneIndex !== null && activeMicroSceneIndex !== undefined && activeMicroSceneIndex >= 0 && microScenes !== undefined && activeMicroSceneIndex < microScenes.length;
@@ -710,7 +713,7 @@ export function SceneOverlayEditor({
     if (fileInputRef.current) fileInputRef.current.value = "";
   }, [addImageOverlay, toast]);
 
-  const handleMouseDown = useCallback((e: React.MouseEvent, id: string, type: "move" | "resize") => {
+  const handleMouseDown = useCallback((e: React.MouseEvent, id: string, type: "move" | "resize", handle?: 'br' | 'bl' | 'tr' | 'tl' | 'r' | 'l' | 't' | 'b') => {
     e.preventDefault();
     e.stopPropagation();
     const overlay = currentOverlays.find((o) => o.id === id);
@@ -730,9 +733,12 @@ export function SceneOverlayEditor({
         id,
         startX: e.clientX,
         startY: e.clientY,
+        origX: overlay.x,
+        origY: overlay.y,
         origW: overlay.width,
         origH: overlay.height,
         origFontSize: isTextOverlay(overlay) ? overlay.fontSize : undefined,
+        handle: handle || 'br',
       });
     }
   }, [currentOverlays]);
@@ -761,10 +767,34 @@ export function SceneOverlayEditor({
       if (resizing) {
         const dx = ((e.clientX - resizing.startX) / rect.width) * 100;
         const dy = ((e.clientY - resizing.startY) / rect.height) * 100;
-        const delta = Math.max(dx, dy);
-        const newW = Math.max(3, Math.min(100, resizing.origW + delta));
-        const newH = Math.max(3, Math.min(100, resizing.origH + delta));
+        const h = resizing.handle;
+        let newX = resizing.origX;
+        let newY = resizing.origY;
+        let newW = resizing.origW;
+        let newH = resizing.origH;
+
+        if (h === 'r' || h === 'br' || h === 'tr') {
+          newW = Math.max(5, Math.min(100 - newX, resizing.origW + dx));
+        }
+        if (h === 'l' || h === 'bl' || h === 'tl') {
+          const maxShift = resizing.origW - 5;
+          const shift = Math.max(-resizing.origX, Math.min(maxShift, dx));
+          newX = resizing.origX + shift;
+          newW = resizing.origW - shift;
+        }
+        if (h === 'b' || h === 'br' || h === 'bl') {
+          newH = Math.max(3, Math.min(100 - newY, resizing.origH + dy));
+        }
+        if (h === 't' || h === 'tr' || h === 'tl') {
+          const maxShift = resizing.origH - 3;
+          const shift = Math.max(-resizing.origY, Math.min(maxShift, dy));
+          newY = resizing.origY + shift;
+          newH = resizing.origH - shift;
+        }
+
         const updates: Partial<AnyOverlayItem> = {
+          x: Math.round(newX * 10) / 10,
+          y: Math.round(newY * 10) / 10,
           width: Math.round(newW * 10) / 10,
           height: Math.round(newH * 10) / 10,
         };
@@ -1068,10 +1098,10 @@ export function SceneOverlayEditor({
         onClick={() => setSelectedId(null)}
       >
         {currentBackgroundUrl && currentBackgroundType === "image" && (
-          <img src={currentBackgroundUrl} alt="" className="w-full h-full object-contain absolute inset-0" />
+          <img src={currentBackgroundUrl} alt="" className="w-full h-full object-cover absolute inset-0" />
         )}
         {currentBackgroundUrl && currentBackgroundType === "video" && (
-          <video src={currentBackgroundUrl} className="w-full h-full object-contain absolute inset-0" muted />
+          <video src={currentBackgroundUrl} className="w-full h-full object-cover absolute inset-0" muted />
         )}
         {(showSafeZones || currentOverlays.some(o => isTextOverlay(o) && isOverlayInDangerZone(o, aspectRatio))) && getSafeZones(aspectRatio).map((zone, idx) => {
           const zoneStyle: React.CSSProperties = {
@@ -1183,31 +1213,39 @@ export function SceneOverlayEditor({
                   </div>
                 </div>
               )}
-              {selectedId === overlay.id && !overlay.locked && (
-                <>
-                  <div
-                    className="absolute inset-0 border-2 rounded pointer-events-none"
-                    style={{
-                      borderColor: inDangerZone ? 'rgb(245, 158, 11)' : isText ? 'rgb(59, 130, 246)' : 'rgb(124, 58, 237)',
-                      boxShadow: inDangerZone ? "0 0 8px rgba(245,158,11,0.4)" : "0 0 0 1px rgba(0,0,0,0.3)",
-                    }}
-                  />
-                  <div
-                    className="absolute -bottom-1.5 -right-1.5 w-4 h-4 rounded-full cursor-se-resize border-2 border-white shadow-lg z-30"
-                    style={{ backgroundColor: isText ? 'rgb(59, 130, 246)' : 'rgb(124, 58, 237)' }}
-                    onMouseDown={(e) => handleMouseDown(e, overlay.id, "resize")}
-                  />
-                  <button
-                    className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white shadow-lg z-30 hover:bg-red-400 transition-colors"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      removeOverlay(overlay.id);
-                    }}
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                </>
-              )}
+              {selectedId === overlay.id && !overlay.locked && (() => {
+                const handleColor = isText ? 'rgb(59, 130, 246)' : 'rgb(124, 58, 237)';
+                const cornerCls = "absolute w-3 h-3 rounded-sm border-2 border-white shadow-lg z-30";
+                const edgeCls = "absolute w-2 h-2 rounded-sm border border-white/80 shadow-md z-30";
+                return (
+                  <>
+                    <div
+                      className="absolute inset-0 border-2 rounded pointer-events-none"
+                      style={{
+                        borderColor: inDangerZone ? 'rgb(245, 158, 11)' : handleColor,
+                        boxShadow: inDangerZone ? "0 0 8px rgba(245,158,11,0.4)" : "0 0 0 1px rgba(0,0,0,0.3)",
+                      }}
+                    />
+                    <div className={`${cornerCls} -top-1.5 -left-1.5 cursor-nw-resize`} style={{ backgroundColor: handleColor }} onMouseDown={(e) => handleMouseDown(e, overlay.id, "resize", "tl")} />
+                    <div className={`${cornerCls} -top-1.5 -right-1.5 cursor-ne-resize`} style={{ backgroundColor: handleColor }} onMouseDown={(e) => handleMouseDown(e, overlay.id, "resize", "tr")} />
+                    <div className={`${cornerCls} -bottom-1.5 -left-1.5 cursor-sw-resize`} style={{ backgroundColor: handleColor }} onMouseDown={(e) => handleMouseDown(e, overlay.id, "resize", "bl")} />
+                    <div className={`${cornerCls} -bottom-1.5 -right-1.5 cursor-se-resize`} style={{ backgroundColor: handleColor }} onMouseDown={(e) => handleMouseDown(e, overlay.id, "resize", "br")} />
+                    <div className={`${edgeCls} -top-1 left-1/2 -translate-x-1/2 cursor-n-resize`} style={{ backgroundColor: handleColor }} onMouseDown={(e) => handleMouseDown(e, overlay.id, "resize", "t")} />
+                    <div className={`${edgeCls} -bottom-1 left-1/2 -translate-x-1/2 cursor-s-resize`} style={{ backgroundColor: handleColor }} onMouseDown={(e) => handleMouseDown(e, overlay.id, "resize", "b")} />
+                    <div className={`${edgeCls} top-1/2 -left-1 -translate-y-1/2 cursor-w-resize`} style={{ backgroundColor: handleColor }} onMouseDown={(e) => handleMouseDown(e, overlay.id, "resize", "l")} />
+                    <div className={`${edgeCls} top-1/2 -right-1 -translate-y-1/2 cursor-e-resize`} style={{ backgroundColor: handleColor }} onMouseDown={(e) => handleMouseDown(e, overlay.id, "resize", "r")} />
+                    <button
+                      className="absolute -top-3 -right-3 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white shadow-lg z-40 hover:bg-red-400 transition-colors"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeOverlay(overlay.id);
+                      }}
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </>
+                );
+              })()}
             </div>
           );
         })}
