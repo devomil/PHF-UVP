@@ -183,6 +183,9 @@ export interface MicroSceneOverlayItem {
 }
 
 export type TextOverlayAnimation = 'none' | 'fade' | 'slide-up' | 'slide-down' | 'slide-left' | 'slide-right' | 'pop' | 'typewriter' | 'blur-in';
+export type TextEmphasisAnimation = 'none' | 'pulse' | 'glow' | 'shake' | 'bounce' | 'color-cycle';
+export type TextPresetType = 'headline' | 'subtitle' | 'lower-third' | 'cta-badge' | 'caption-bar' | 'bold-statement' | 'body' | 'stat-callout';
+export type SnapPosition = 'top-left' | 'top-center' | 'top-right' | 'middle-left' | 'middle-center' | 'middle-right' | 'bottom-left' | 'bottom-center' | 'bottom-right' | 'custom';
 
 export interface ImageOverlayItem {
   type: 'image';
@@ -208,6 +211,7 @@ export interface TextOverlayItem {
   height: number;
   opacity: number;
   locked: boolean;
+  textPreset?: TextPresetType;
   fontSize: number;
   fontFamily: string;
   fontWeight: string;
@@ -221,7 +225,13 @@ export interface TextOverlayItem {
   textShadow?: boolean;
   enterAnimation: TextOverlayAnimation;
   exitAnimation: TextOverlayAnimation;
+  emphasisAnimation?: TextEmphasisAnimation;
   animationDuration: number;
+  timingStart?: number;
+  timingDuration?: number;
+  snapPosition?: SnapPosition;
+  bulletPoints?: string[];
+  bulletDelay?: number;
 }
 
 export type SceneOverlayItem = ImageOverlayItem | TextOverlayItem;

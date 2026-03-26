@@ -1,6 +1,6 @@
 import React from 'react';
 import { useCurrentFrame, useVideoConfig, interpolate, spring } from 'remotion';
-import type { TextOverlayItem, TextOverlayAnimation } from '../../shared/video-types';
+import type { TextOverlayItem, TextOverlayAnimation, TextEmphasisAnimation } from '../../shared/video-types';
 
 export interface CustomTextOverlayProps {
   overlay: TextOverlayItem;
@@ -88,6 +88,40 @@ function computeAnimation(
   return result;
 }
 
+function computeEmphasis(
+  emphasis: TextEmphasisAnimation,
+  frame: number,
+  fps: number,
+): { scale: number; filterExtra: string; colorShift: string | null } {
+  const result = { scale: 1, filterExtra: '', colorShift: null as string | null };
+  const cycle = (frame % (fps * 2)) / (fps * 2);
+  const pulse = Math.sin(cycle * Math.PI * 2) * 0.5 + 0.5;
+
+  switch (emphasis) {
+    case 'none':
+      break;
+    case 'pulse':
+      result.scale = 1 + pulse * 0.05;
+      break;
+    case 'glow':
+      result.filterExtra = `drop-shadow(0 0 ${4 + pulse * 12}px rgba(255,255,255,${0.3 + pulse * 0.4}))`;
+      break;
+    case 'shake': {
+      const shakeX = Math.sin(frame * 0.8) * 1.5;
+      const shakeY = Math.cos(frame * 1.1) * 1;
+      result.filterExtra = `translate(${shakeX}px, ${shakeY}px)`;
+      break;
+    }
+    case 'bounce':
+      result.scale = 1 + Math.abs(Math.sin(frame * 0.15)) * 0.08;
+      break;
+    case 'color-cycle':
+      result.colorShift = `hue-rotate(${(frame * 3) % 360}deg)`;
+      break;
+  }
+  return result;
+}
+
 export const CustomTextOverlay: React.FC<CustomTextOverlayProps> = ({
   overlay,
   durationInFrames,
@@ -95,9 +129,20 @@ export const CustomTextOverlay: React.FC<CustomTextOverlayProps> = ({
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
+  const startFrame = overlay.timingStart != null ? Math.round(overlay.timingStart * fps) : 0;
+  const overlayDuration = overlay.timingDuration != null
+    ? Math.round(overlay.timingDuration * fps)
+    : durationInFrames;
+  const endFrame = startFrame + overlayDuration;
+
+  if (frame < startFrame || frame >= endFrame) {
+    return null;
+  }
+
+  const localFrame = frame - startFrame;
   const animDuration = Math.max(1, Math.round((overlay.animationDuration ?? 0.4) * fps));
   const fadeInEnd = animDuration;
-  const fadeOutStart = durationInFrames - animDuration;
+  const fadeOutStart = overlayDuration - animDuration;
 
   let opacity = 1;
   let translateX = 0;
@@ -105,17 +150,17 @@ export const CustomTextOverlay: React.FC<CustomTextOverlayProps> = ({
   let scale = 1;
   let blur = 0;
 
-  if (frame < fadeInEnd && overlay.enterAnimation !== 'none') {
-    const progress = frame / fadeInEnd;
-    const anim = computeAnimation(overlay.enterAnimation, progress, 'enter', frame, fps);
+  if (localFrame < fadeInEnd && overlay.enterAnimation !== 'none') {
+    const progress = localFrame / fadeInEnd;
+    const anim = computeAnimation(overlay.enterAnimation, progress, 'enter', localFrame, fps);
     opacity = anim.opacity;
     translateX = anim.translateX;
     translateY = anim.translateY;
     scale = anim.scale;
     blur = anim.blur;
-  } else if (frame > fadeOutStart && overlay.exitAnimation !== 'none') {
-    const progress = (frame - fadeOutStart) / animDuration;
-    const anim = computeAnimation(overlay.exitAnimation, progress, 'exit', frame - fadeOutStart, fps);
+  } else if (localFrame > fadeOutStart && overlay.exitAnimation !== 'none') {
+    const progress = (localFrame - fadeOutStart) / animDuration;
+    const anim = computeAnimation(overlay.exitAnimation, progress, 'exit', localFrame - fadeOutStart, fps);
     opacity = anim.opacity;
     translateX = anim.translateX;
     translateY = anim.translateY;
@@ -123,9 +168,18 @@ export const CustomTextOverlay: React.FC<CustomTextOverlayProps> = ({
     blur = anim.blur;
   }
 
+  const emphasis = overlay.emphasisAnimation && overlay.emphasisAnimation !== 'none'
+    ? computeEmphasis(overlay.emphasisAnimation, localFrame, fps)
+    : null;
+  if (emphasis) {
+    scale *= emphasis.scale;
+  }
+
+  const hasBullets = overlay.bulletPoints && overlay.bulletPoints.length > 0;
+  const bulletDelay = overlay.bulletDelay ?? 0.3;
   const text = overlay.text || '';
-  const displayText = overlay.enterAnimation === 'typewriter' && frame < fadeInEnd
-    ? text.substring(0, Math.floor(interpolate(frame, [0, fadeInEnd], [0, text.length], { extrapolateRight: 'clamp' })))
+  const displayText = overlay.enterAnimation === 'typewriter' && localFrame < fadeInEnd
+    ? text.substring(0, Math.floor(interpolate(localFrame, [0, fadeInEnd], [0, text.length], { extrapolateRight: 'clamp' })))
     : text;
 
   const bgOpacity = overlay.backgroundOpacity ?? 0;
@@ -138,6 +192,14 @@ export const CustomTextOverlay: React.FC<CustomTextOverlayProps> = ({
       }
     : {};
 
+  const filterStr = [
+    blur > 0 ? `blur(${blur}px)` : '',
+    emphasis?.colorShift || '',
+  ].filter(Boolean).join(' ') || undefined;
+
+  const emphasisFilter = emphasis?.filterExtra || '';
+  const transformStr = `translate(${translateX}px, ${translateY}px) scale(${scale}) ${emphasisFilter}`;
+
   return (
     <div
       style={{
@@ -147,13 +209,14 @@ export const CustomTextOverlay: React.FC<CustomTextOverlayProps> = ({
         width: `${overlay.width}%`,
         height: `${overlay.height}%`,
         opacity: (overlay.opacity / 100) * opacity,
-        transform: `translate(${translateX}px, ${translateY}px) scale(${scale})`,
-        filter: blur > 0 ? `blur(${blur}px)` : undefined,
+        transform: transformStr,
+        filter: filterStr,
         zIndex: 55,
         pointerEvents: 'none',
         display: 'flex',
-        alignItems: 'center',
-        justifyContent: overlay.textAlign === 'left' ? 'flex-start' : overlay.textAlign === 'right' ? 'flex-end' : 'center',
+        flexDirection: 'column',
+        alignItems: overlay.textAlign === 'left' ? 'flex-start' : overlay.textAlign === 'right' ? 'flex-end' : 'center',
+        justifyContent: 'center',
         ...backgroundStyle,
         borderRadius: overlay.borderRadius ?? 0,
         padding: '0.5%',
@@ -178,6 +241,46 @@ export const CustomTextOverlay: React.FC<CustomTextOverlayProps> = ({
       >
         {displayText}
       </div>
+
+      {hasBullets && overlay.bulletPoints!.map((bullet, idx) => {
+        const bulletStartFrame = Math.round(idx * bulletDelay * fps);
+        if (localFrame < bulletStartFrame) return null;
+
+        const bulletLocalFrame = localFrame - bulletStartFrame;
+        const bulletFadeIn = Math.min(Math.round(fps * 0.3), 10);
+        const bulletOpacity = interpolate(
+          bulletLocalFrame,
+          [0, bulletFadeIn],
+          [0, 1],
+          { extrapolateRight: 'clamp' }
+        );
+        const bulletSlide = interpolate(
+          bulletLocalFrame,
+          [0, bulletFadeIn],
+          [20, 0],
+          { extrapolateRight: 'clamp' }
+        );
+
+        return (
+          <div
+            key={idx}
+            style={{
+              fontSize: Math.round(overlay.fontSize * 0.8),
+              fontFamily: overlay.fontFamily || 'Inter, sans-serif',
+              fontWeight: '500',
+              color: overlay.color || '#FFFFFF',
+              textAlign: overlay.textAlign || 'left',
+              textShadow: overlay.textShadow !== false ? '1px 1px 4px rgba(0,0,0,0.6)' : undefined,
+              opacity: bulletOpacity,
+              transform: `translateY(${bulletSlide}px)`,
+              marginTop: '0.5%',
+              width: '100%',
+            }}
+          >
+            {bullet}
+          </div>
+        );
+      })}
     </div>
   );
 };

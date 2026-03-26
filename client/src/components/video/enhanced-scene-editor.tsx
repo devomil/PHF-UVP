@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { SceneOverlayEditor, type SceneOverlayItem } from "./scene-overlay-editor";
-import type { MicroSceneOverlayItem } from "@shared/video-types";
+import type { MicroSceneOverlayItem, ImageOverlayItem } from "@shared/video-types";
 import { ProviderCapabilitySelector, getProviderRecommendationText } from "./ProviderCapabilityCard";
 import { AskSuzziePanel } from "./ask-suzzie-panel";
 import { VIDEO_PROVIDERS as PROVIDER_CONFIG, getMultiImageSupport, type MultiImageSupport } from "@shared/provider-config";
@@ -119,7 +119,9 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
   const [regenStartedAt, setRegenStartedAt] = useState<number | null>(null);
   const [regenElapsed, setRegenElapsed] = useState(0);
   const [sceneOverlays, setSceneOverlays] = useState<SceneOverlayItem[]>(
-    () => (scene.overlayItems || []).map((o: any) => o.type ? o : { ...o, type: 'image' as const })
+    () => (scene.overlayItems || []).map((o: SceneOverlayItem) =>
+      o.type ? o : { ...o, type: 'image' as const } as ImageOverlayItem
+    )
   );
   const [editingMicroScene, setEditingMicroScene] = useState<number | null>(null);
   const [microSceneEditValue, setMicroSceneEditValue] = useState("");
@@ -272,7 +274,9 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
 
   useEffect(() => {
     if (pendingOverlaySaveRef.current !== null) return;
-    const incoming = (scene.overlayItems || []).map((o: any) => o.type ? o : { ...o, type: 'image' as const });
+    const incoming: SceneOverlayItem[] = (scene.overlayItems || []).map((o: SceneOverlayItem) =>
+      o.type ? o : { ...o, type: 'image' as const } as ImageOverlayItem
+    );
     if (JSON.stringify(incoming) !== JSON.stringify(sceneOverlays)) {
       setSceneOverlays(incoming);
     }

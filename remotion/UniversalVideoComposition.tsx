@@ -21,6 +21,7 @@ import type {
   OutputFormat,
   SceneSoundDesign,
   AssemblyManifest,
+  SceneOverlayItem,
 } from "../shared/video-types";
 
 import { EnhancedTextOverlay } from "./components/TextOverlay";
@@ -2151,9 +2152,9 @@ export const UniversalVideoComposition: React.FC<UniversalVideoProps> = ({
               overlays are scoped to their time window by MicroSceneOverlayCompositor) */}
           {(() => {
             const hasMicroScenes = scene.microScenes && scene.microScenes.length > 0;
-            const msHaveOverlays = hasMicroScenes && scene.microScenes!.some((ms: any) => ms.overlayItems && ms.overlayItems.length > 0);
+            const msHaveOverlays = hasMicroScenes && scene.microScenes!.some((ms: MicroScene) => ms.overlayItems && ms.overlayItems.length > 0);
             if (msHaveOverlays) return null;
-            return scene.overlayItems?.map((overlay: any, overlayIdx: number) => {
+            return scene.overlayItems?.map((overlay: SceneOverlayItem, overlayIdx: number) => {
               if (overlay.type === 'text') {
                 return (
                   <CustomTextOverlay

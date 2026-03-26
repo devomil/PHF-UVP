@@ -14,6 +14,7 @@ import type {
   ImageOverlayItem,
   TextOverlayItem,
   TextOverlayAnimation,
+  TextEmphasisAnimation,
 } from "@shared/video-types";
 
 export type { SceneOverlayItem };
@@ -47,6 +48,15 @@ const EXIT_ANIMATIONS: { id: TextOverlayAnimation; label: string }[] = [
   { id: "slide-left", label: "Slide Left" },
   { id: "slide-right", label: "Slide Right" },
   { id: "pop", label: "Pop" },
+];
+
+const EMPHASIS_ANIMATIONS: { id: TextEmphasisAnimation; label: string }[] = [
+  { id: "none", label: "None" },
+  { id: "pulse", label: "Pulse" },
+  { id: "glow", label: "Glow" },
+  { id: "shake", label: "Shake" },
+  { id: "bounce", label: "Bounce" },
+  { id: "color-cycle", label: "Color Cycle" },
 ];
 
 interface TextPreset {
@@ -162,6 +172,36 @@ const TEXT_PRESETS: TextPreset[] = [
     x: 15,
     y: 40,
   },
+  {
+    label: "Headline",
+    fontSize: 72,
+    fontWeight: "800",
+    color: "#FFFFFF",
+    textAlign: "center",
+    textShadow: true,
+    enterAnimation: "slide-up",
+    exitAnimation: "fade",
+    defaultText: "Big Headline",
+    width: 85,
+    height: 18,
+    x: 7,
+    y: 30,
+  },
+  {
+    label: "Body",
+    fontSize: 24,
+    fontWeight: "400",
+    color: "#D1D5DB",
+    textAlign: "left",
+    textShadow: true,
+    enterAnimation: "fade",
+    exitAnimation: "fade",
+    defaultText: "Body text paragraph for longer form content and descriptions.",
+    width: 60,
+    height: 14,
+    x: 10,
+    y: 55,
+  },
 ];
 
 const FONT_OPTIONS = [
@@ -207,7 +247,7 @@ function generateId() {
 }
 
 function isTextOverlay(o: AnyOverlayItem): o is TextOverlayItem {
-  return 'type' in o && (o as any).type === 'text';
+  return 'type' in o && 'fontSize' in o;
 }
 
 function isImageOverlay(o: AnyOverlayItem): o is ImageOverlayItem {
@@ -492,10 +532,16 @@ export function SceneOverlayEditor({
         const delta = Math.max(dx, dy);
         const newW = Math.max(3, Math.min(100, resizing.origW + delta));
         const newH = Math.max(3, Math.min(100, resizing.origH + delta));
-        updateOverlay(resizing.id, {
+        const updates: Partial<AnyOverlayItem> = {
           width: Math.round(newW * 10) / 10,
           height: Math.round(newH * 10) / 10,
-        });
+        };
+        const target = currentOverlays.find((o) => o.id === resizing.id);
+        if (target && isTextOverlay(target)) {
+          const scale = newW / resizing.origW;
+          updates.fontSize = Math.max(12, Math.round(target.fontSize * scale));
+        }
+        updateOverlay(resizing.id, updates);
       }
     };
 
@@ -1047,6 +1093,143 @@ export function SceneOverlayEditor({
                   style={{ accentColor: "rgb(59,130,246)" }}
                 />
               </div>
+
+              <div>
+                <label className="text-[10px] block mb-1" style={{ color: "var(--text-muted)" }}>Emphasis Animation</label>
+                <select
+                  value={selectedTextOverlay.emphasisAnimation ?? 'none'}
+                  onChange={(e) => updateOverlay(selectedOverlay.id, { emphasisAnimation: e.target.value as TextEmphasisAnimation })}
+                  className="w-full text-xs rounded border px-2 py-1 bg-transparent outline-none cursor-pointer"
+                  style={{ borderColor: "var(--border-subtle)", color: "var(--text-primary)" }}
+                >
+                  {EMPHASIS_ANIMATIONS.map((a) => (
+                    <option key={a.id} value={a.id}>{a.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[10px] block mb-1" style={{ color: "var(--text-muted)" }}>
+                    Start Time: {(selectedTextOverlay.timingStart ?? 0).toFixed(1)}s
+                  </label>
+                  <input
+                    type="range"
+                    min={0}
+                    max={30}
+                    step={0.1}
+                    value={selectedTextOverlay.timingStart ?? 0}
+                    onChange={(e) => updateOverlay(selectedOverlay.id, { timingStart: parseFloat(e.target.value) })}
+                    className="w-full h-1.5 rounded-full appearance-none cursor-pointer"
+                    style={{ accentColor: "rgb(59,130,246)" }}
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] block mb-1" style={{ color: "var(--text-muted)" }}>
+                    Duration: {selectedTextOverlay.timingDuration != null ? `${selectedTextOverlay.timingDuration.toFixed(1)}s` : "Full"}
+                  </label>
+                  <input
+                    type="range"
+                    min={0.5}
+                    max={30}
+                    step={0.1}
+                    value={selectedTextOverlay.timingDuration ?? 10}
+                    onChange={(e) => updateOverlay(selectedOverlay.id, { timingDuration: parseFloat(e.target.value) })}
+                    className="w-full h-1.5 rounded-full appearance-none cursor-pointer"
+                    style={{ accentColor: "rgb(59,130,246)" }}
+                  />
+                </div>
+              </div>
+
+              {(() => {
+                const start = selectedTextOverlay.timingStart ?? 0;
+                const dur = selectedTextOverlay.timingDuration ?? 10;
+                const sceneTotal = 30;
+                const startPct = Math.min((start / sceneTotal) * 100, 100);
+                const widthPct = Math.min((dur / sceneTotal) * 100, 100 - startPct);
+                return (
+                  <div>
+                    <label className="text-[10px] block mb-1" style={{ color: "var(--text-muted)" }}>Timing Bar</label>
+                    <div
+                      className="w-full h-3 rounded-full relative overflow-hidden"
+                      style={{ backgroundColor: "rgba(255,255,255,0.08)" }}
+                    >
+                      <div
+                        className="absolute top-0 h-full rounded-full"
+                        style={{
+                          left: `${startPct}%`,
+                          width: `${widthPct}%`,
+                          backgroundColor: "rgba(59,130,246,0.5)",
+                          border: "1px solid rgba(59,130,246,0.8)",
+                        }}
+                      />
+                    </div>
+                    <div className="flex justify-between text-[9px] mt-0.5" style={{ color: "var(--text-muted)" }}>
+                      <span>0s</span>
+                      <span>{start.toFixed(1)}s – {(start + dur).toFixed(1)}s</span>
+                      <span>{sceneTotal}s</span>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-[10px]" style={{ color: "var(--text-muted)" }}>Bullet Points</label>
+                  <button
+                    onClick={() => {
+                      const current = selectedTextOverlay.bulletPoints || [];
+                      updateOverlay(selectedOverlay.id, { bulletPoints: [...current, `Point ${current.length + 1}`] });
+                    }}
+                    className="text-[9px] px-1.5 py-0.5 rounded border transition-colors hover:border-blue-500/40 hover:bg-blue-500/10"
+                    style={{ borderColor: "var(--border-subtle)", color: "var(--text-muted)" }}
+                  >
+                    <Plus className="w-2.5 h-2.5 inline mr-0.5" />Add
+                  </button>
+                </div>
+                {(selectedTextOverlay.bulletPoints || []).map((bp, idx) => (
+                  <div key={idx} className="flex items-center gap-1 mb-1">
+                    <span className="text-[9px] w-3 text-right flex-shrink-0" style={{ color: "var(--text-muted)" }}>{idx + 1}.</span>
+                    <input
+                      type="text"
+                      value={bp}
+                      onChange={(e) => {
+                        const newBullets = [...(selectedTextOverlay.bulletPoints || [])];
+                        newBullets[idx] = e.target.value;
+                        updateOverlay(selectedOverlay.id, { bulletPoints: newBullets });
+                      }}
+                      className="flex-1 text-[10px] rounded border px-1.5 py-0.5 bg-transparent outline-none"
+                      style={{ borderColor: "var(--border-subtle)", color: "var(--text-primary)" }}
+                    />
+                    <button
+                      onClick={() => {
+                        const newBullets = (selectedTextOverlay.bulletPoints || []).filter((_, i) => i !== idx);
+                        updateOverlay(selectedOverlay.id, { bulletPoints: newBullets.length > 0 ? newBullets : undefined });
+                      }}
+                      className="text-red-400 hover:text-red-300 transition-colors"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+                {(selectedTextOverlay.bulletPoints?.length ?? 0) > 0 && (
+                  <div className="mt-1">
+                    <label className="text-[10px] block mb-1" style={{ color: "var(--text-muted)" }}>
+                      Stagger Delay: {(selectedTextOverlay.bulletDelay ?? 0.3).toFixed(1)}s
+                    </label>
+                    <input
+                      type="range"
+                      min={0.1}
+                      max={2}
+                      step={0.1}
+                      value={selectedTextOverlay.bulletDelay ?? 0.3}
+                      onChange={(e) => updateOverlay(selectedOverlay.id, { bulletDelay: parseFloat(e.target.value) })}
+                      className="w-full h-1.5 rounded-full appearance-none cursor-pointer"
+                      style={{ accentColor: "rgb(59,130,246)" }}
+                    />
+                  </div>
+                )}
+              </div>
             </>
           )}
 
@@ -1231,21 +1414,43 @@ export function SceneOverlayEditor({
         </div>
       )}
 
-      {/* Layers Panel */}
       {currentOverlays.length > 1 && (
         <div className="border rounded-lg p-2" style={{ borderColor: "var(--border-subtle)", backgroundColor: "var(--surface)" }}>
           <p className="text-[10px] mb-1.5 uppercase tracking-wider font-medium" style={{ color: "var(--text-muted)" }}>
             Layers ({currentOverlays.length})
           </p>
           <div className="space-y-0.5">
-            {[...currentOverlays].reverse().map((overlay) => (
+            {[...currentOverlays].reverse().map((overlay, displayIdx) => (
               <div
                 key={overlay.id}
-                className={`flex items-center gap-2 px-2 py-1 rounded cursor-pointer transition-colors ${
+                className={`flex items-center gap-1.5 px-2 py-1 rounded cursor-pointer transition-colors group ${
                   selectedId === overlay.id ? "bg-purple-500/15" : "hover:bg-white/5"
                 }`}
                 onClick={() => setSelectedId(overlay.id)}
+                draggable
+                onDragStart={(e) => {
+                  e.dataTransfer.setData("text/plain", overlay.id);
+                  e.dataTransfer.effectAllowed = "move";
+                }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = "move";
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  const dragId = e.dataTransfer.getData("text/plain");
+                  if (dragId === overlay.id) return;
+                  const reversed = [...currentOverlays].reverse();
+                  const fromIdx = reversed.findIndex((o) => o.id === dragId);
+                  const toIdx = displayIdx;
+                  if (fromIdx < 0) return;
+                  const reordered = [...reversed];
+                  const [moved] = reordered.splice(fromIdx, 1);
+                  reordered.splice(toIdx, 0, moved);
+                  handleCurrentChange(reordered.reverse());
+                }}
               >
+                <GripVertical className="w-3 h-3 flex-shrink-0 cursor-grab opacity-30 group-hover:opacity-70" style={{ color: "var(--text-muted)" }} />
                 {isTextOverlay(overlay) ? (
                   <Type className="w-3 h-3 text-blue-400 flex-shrink-0" />
                 ) : (
@@ -1254,10 +1459,22 @@ export function SceneOverlayEditor({
                 <span className="text-[10px] truncate flex-1" style={{ color: "var(--text-primary)" }}>
                   {overlay.name}
                 </span>
-                {overlay.locked && <EyeOff className="w-2.5 h-2.5" style={{ color: "var(--text-muted)" }} />}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    updateOverlay(overlay.id, { opacity: overlay.opacity > 0 ? 0 : 100 });
+                  }}
+                  className="transition-colors flex-shrink-0"
+                  title={overlay.opacity > 0 ? "Hide" : "Show"}
+                >
+                  {overlay.opacity > 0
+                    ? <Eye className="w-3 h-3" style={{ color: "var(--text-muted)" }} />
+                    : <EyeOff className="w-3 h-3" style={{ color: "var(--text-muted)" }} />}
+                </button>
+                {overlay.locked && <EyeOff className="w-2.5 h-2.5" style={{ color: "rgba(234,179,8,0.6)" }} title="Locked" />}
                 <button
                   onClick={(e) => { e.stopPropagation(); removeOverlay(overlay.id); }}
-                  className="opacity-0 group-hover:opacity-100 hover:text-red-400 transition-opacity"
+                  className="opacity-0 group-hover:opacity-100 hover:text-red-400 transition-opacity flex-shrink-0"
                 >
                   <X className="w-3 h-3" style={{ color: "var(--text-muted)" }} />
                 </button>
