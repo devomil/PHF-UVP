@@ -369,6 +369,7 @@ export function SceneOverlayEditor({
         height: 15,
         opacity: 100,
         locked: false,
+        layerOrder: currentOverlays.length,
       };
       handleCurrentChange([...currentOverlays, newOverlay]);
       setSelectedId(newOverlay.id);
@@ -404,6 +405,7 @@ export function SceneOverlayEditor({
       animationDuration: 0.4,
       bulletPoints: preset.presetType === 'bullet-list' ? ['Point 1', 'Point 2', 'Point 3'] : undefined,
       bulletDelay: preset.presetType === 'bullet-list' ? 0.3 : undefined,
+      layerOrder: currentOverlays.length,
     };
     handleCurrentChange([...currentOverlays, newOverlay]);
     setSelectedId(newOverlay.id);
@@ -604,18 +606,20 @@ export function SceneOverlayEditor({
           )}
         </div>
         <div className="flex gap-1.5">
-          <button
-            onClick={() => { setShowTextPresets(!showTextPresets); setShowLibrary(false); }}
-            className="text-xs px-3 py-1.5 rounded-lg border flex items-center gap-1.5 transition-colors hover:border-purple-500/40 hover:bg-purple-500/10"
-            style={{
-              borderColor: showTextPresets ? "rgba(124,58,237,0.4)" : "var(--border-subtle)",
-              color: showTextPresets ? "rgb(124,58,237)" : "var(--text-secondary)",
-              backgroundColor: showTextPresets ? "rgba(124,58,237,0.1)" : "transparent",
-            }}
-            title="Add text overlay"
-          >
-            <Type className="w-3.5 h-3.5" /> Text
-          </button>
+          {!isMicroSceneMode && (
+            <button
+              onClick={() => { setShowTextPresets(!showTextPresets); setShowLibrary(false); }}
+              className="text-xs px-3 py-1.5 rounded-lg border flex items-center gap-1.5 transition-colors hover:border-purple-500/40 hover:bg-purple-500/10"
+              style={{
+                borderColor: showTextPresets ? "rgba(124,58,237,0.4)" : "var(--border-subtle)",
+                color: showTextPresets ? "rgb(124,58,237)" : "var(--text-secondary)",
+                backgroundColor: showTextPresets ? "rgba(124,58,237,0.1)" : "transparent",
+              }}
+              title="Add text overlay"
+            >
+              <Type className="w-3.5 h-3.5" /> Text
+            </button>
+          )}
           <input
             ref={fileInputRef}
             type="file"
@@ -768,7 +772,7 @@ export function SceneOverlayEditor({
           </div>
         )}
 
-        {currentOverlays.map((overlay) => {
+        {[...currentOverlays].sort((a, b) => (a.layerOrder ?? 0) - (b.layerOrder ?? 0)).map((overlay, sortedIdx) => {
           const isText = isTextOverlay(overlay);
           const textOvl = isText ? (overlay as TextOverlayItem) : null;
 
@@ -782,7 +786,7 @@ export function SceneOverlayEditor({
                 width: `${overlay.width}%`,
                 height: `${overlay.height}%`,
                 opacity: overlay.opacity / 100,
-                zIndex: selectedId === overlay.id ? 20 : (getZIndex(overlay) || 10),
+                zIndex: selectedId === overlay.id ? 100 : (10 + sortedIdx),
               }}
               onClick={(e) => {
                 e.stopPropagation();
@@ -1207,18 +1211,35 @@ export function SceneOverlayEditor({
                 </div>
                 <div>
                   <label className="text-[10px] block mb-1" style={{ color: "var(--text-muted)" }}>
-                    Duration: {selectedTextOverlay.timingDuration != null ? `${selectedTextOverlay.timingDuration.toFixed(1)}s` : "Full"}
+                    Duration: {selectedTextOverlay.timingDuration != null ? `${selectedTextOverlay.timingDuration.toFixed(1)}s` : "Full Scene"}
                   </label>
-                  <input
-                    type="range"
-                    min={0.5}
-                    max={30}
-                    step={0.1}
-                    value={selectedTextOverlay.timingDuration ?? 10}
-                    onChange={(e) => updateOverlay(selectedOverlay.id, { timingDuration: parseFloat(e.target.value) })}
-                    className="w-full h-1.5 rounded-full appearance-none cursor-pointer"
-                    style={{ accentColor: "rgb(59,130,246)" }}
-                  />
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="range"
+                      min={0.5}
+                      max={sceneDurationSec ?? 30}
+                      step={0.1}
+                      value={selectedTextOverlay.timingDuration ?? (sceneDurationSec ?? 10)}
+                      onChange={(e) => updateOverlay(selectedOverlay.id, { timingDuration: parseFloat(e.target.value) })}
+                      className="flex-1 h-1.5 rounded-full appearance-none cursor-pointer"
+                      style={{ accentColor: "rgb(59,130,246)" }}
+                    />
+                    <button
+                      onClick={() => updateOverlay(selectedOverlay.id, { timingDuration: undefined })}
+                      className={`text-[9px] px-1.5 py-0.5 rounded border transition-colors flex-shrink-0 ${
+                        selectedTextOverlay.timingDuration == null
+                          ? 'border-blue-500/50 text-blue-400 bg-blue-500/10'
+                          : 'hover:border-blue-500/40 hover:bg-blue-500/10'
+                      }`}
+                      style={{
+                        borderColor: selectedTextOverlay.timingDuration == null ? undefined : "var(--border-subtle)",
+                        color: selectedTextOverlay.timingDuration == null ? undefined : "var(--text-muted)",
+                      }}
+                      title="Reset to full scene duration"
+                    >
+                      Full
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -1528,7 +1549,8 @@ export function SceneOverlayEditor({
                   const reordered = [...reversed];
                   const [moved] = reordered.splice(fromIdx, 1);
                   reordered.splice(toIdx, 0, moved);
-                  handleCurrentChange(reordered.reverse());
+                  const withOrder = reordered.reverse().map((o, idx) => ({ ...o, layerOrder: idx }));
+                  handleCurrentChange(withOrder);
                 }}
               >
                 <GripVertical className="w-3 h-3 flex-shrink-0 cursor-grab opacity-30 group-hover:opacity-70" style={{ color: "var(--text-muted)" }} />

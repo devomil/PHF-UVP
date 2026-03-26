@@ -2154,27 +2154,33 @@ export const UniversalVideoComposition: React.FC<UniversalVideoProps> = ({
             const hasMicroScenes = scene.microScenes && scene.microScenes.length > 0;
             const msHaveOverlays = hasMicroScenes && scene.microScenes!.some((ms: MicroScene) => ms.overlayItems && ms.overlayItems.length > 0);
             if (msHaveOverlays) return null;
-            return scene.overlayItems?.map((overlay: SceneOverlayItem, overlayIdx: number) => {
+            const sortedOverlays = [...(scene.overlayItems || [])].sort(
+              (a, b) => (a.layerOrder ?? 0) - (b.layerOrder ?? 0)
+            );
+            return sortedOverlays.map((overlay: SceneOverlayItem, overlayIdx: number) => {
+              const zIndex = 50 + overlayIdx;
               if (overlay.type === 'text') {
                 return (
-                  <CustomTextOverlay
-                    key={`custom-text-overlay-${scene.id}-${overlayIdx}`}
-                    overlay={overlay}
-                    durationInFrames={durationInFrames}
-                  />
+                  <div key={`custom-text-overlay-${scene.id}-${overlayIdx}`} style={{ position: 'absolute', inset: 0, zIndex }}>
+                    <CustomTextOverlay
+                      overlay={overlay}
+                      durationInFrames={durationInFrames}
+                    />
+                  </div>
                 );
               }
               return (
-                <CustomImageOverlay
-                  key={`custom-overlay-${scene.id}-${overlayIdx}`}
-                  url={overlay.url}
-                  x={overlay.x}
-                  y={overlay.y}
-                  width={overlay.width}
-                  height={overlay.height}
-                  opacity={overlay.opacity}
-                  durationInFrames={durationInFrames}
-                />
+                <div key={`custom-overlay-${scene.id}-${overlayIdx}`} style={{ position: 'absolute', inset: 0, zIndex }}>
+                  <CustomImageOverlay
+                    url={overlay.url}
+                    x={overlay.x}
+                    y={overlay.y}
+                    width={overlay.width}
+                    height={overlay.height}
+                    opacity={overlay.opacity}
+                    durationInFrames={durationInFrames}
+                  />
+                </div>
               );
             });
           })()}

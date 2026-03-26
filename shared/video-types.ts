@@ -200,6 +200,7 @@ export interface ImageOverlayItem {
   height: number;
   opacity: number;
   locked: boolean;
+  layerOrder?: number;
 }
 
 export interface TextOverlayItem {
@@ -234,6 +235,7 @@ export interface TextOverlayItem {
   snapPosition?: SnapPosition;
   bulletPoints?: string[];
   bulletDelay?: number;
+  layerOrder?: number;
 }
 
 export type SceneOverlayItem = ImageOverlayItem | TextOverlayItem;
