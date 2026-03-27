@@ -1193,6 +1193,8 @@ const ProductReveal: React.FC<{
 // SCENE RENDERER - WITH FULL ERROR HANDLING
 // ============================================================
 
+const AI_VIDEO_TRIM_FRAMES = 9;
+
 const MicroSceneAudioVideo: React.FC<{
   src: string;
   volume: number;
@@ -1220,6 +1222,7 @@ const MicroSceneAudioVideo: React.FC<{
       src={src}
       style={{ width: '100%', height: '100%', objectFit: 'cover' }}
       volume={computedVolume}
+      startFrom={AI_VIDEO_TRIM_FRAMES}
     />
   );
 };
@@ -1229,8 +1232,9 @@ const SafeVideo: React.FC<{
   style?: React.CSSProperties;
   muted?: boolean;
   loopDurationInFrames?: number;
+  startFrom?: number;
   fallback: React.ReactNode;
-}> = ({ src, style, muted, loopDurationInFrames, fallback }) => {
+}> = ({ src, style, muted, loopDurationInFrames, startFrom, fallback }) => {
   const [error, setError] = React.useState(false);
 
   if (error || !src) {
@@ -1242,6 +1246,7 @@ const SafeVideo: React.FC<{
       src={src}
       style={style}
       muted={muted}
+      startFrom={startFrom}
       onError={() => {
         console.warn(`[SafeVideo] Failed to load: ${src.substring(0, 80)}`);
         setError(true);
@@ -1378,6 +1383,7 @@ const MicroSceneBackground: React.FC<{
                       src={videoSrc}
                       style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                       muted
+                      startFrom={AI_VIDEO_TRIM_FRAMES}
                       fallback={fallback}
                     />
                   )}

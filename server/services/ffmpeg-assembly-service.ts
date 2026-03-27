@@ -216,6 +216,11 @@ class FFmpegAssemblyService {
 
         await this.normalizeClip(clip.filePath, normalizedPath, targetRes);
         normalizedClips.push(normalizedPath);
+
+        const normalizedDuration = await this.probeClipDuration(normalizedPath);
+        if (normalizedDuration > 0) {
+          clip.probedDuration = normalizedDuration;
+        }
       }
 
       const outputPath = path.join(workDir, `assembled_${sceneId}.mp4`);
@@ -302,13 +307,48 @@ class FFmpegAssemblyService {
     return { width: maxWidth, height: maxHeight };
   }
 
+  private async detectBlackIntro(filePath: string): Promise<number> {
+    const MAX_BLACK_INTRO_SEC = 1.0;
+    const BRIGHTNESS_THRESHOLD = 0.02;
+    try {
+      const { stderr } = await execAsync(
+        `ffmpeg -i "${filePath}" -t ${MAX_BLACK_INTRO_SEC} -vf "blackdetect=d=0.05:pix_th=${BRIGHTNESS_THRESHOLD}" -an -f null -`,
+        { timeout: 15000 }
+      );
+      const output = stderr || '';
+      const match = output.match(/black_start:0[.\d]*\s+black_end:([\d.]+)/);
+      if (match) {
+        const blackEnd = parseFloat(match[1]);
+        if (blackEnd > 0.05 && blackEnd <= MAX_BLACK_INTRO_SEC) {
+          log(`Black intro detected in ${path.basename(filePath)}: ${blackEnd.toFixed(3)}s — will trim`);
+          return blackEnd;
+        }
+      }
+      return 0;
+    } catch (err: any) {
+      const errOutput = err?.stderr || err?.message || '';
+      const match = errOutput.match(/black_start:0[.\d]*\s+black_end:([\d.]+)/);
+      if (match) {
+        const blackEnd = parseFloat(match[1]);
+        if (blackEnd > 0.05 && blackEnd <= MAX_BLACK_INTRO_SEC) {
+          log(`Black intro detected in ${path.basename(filePath)}: ${blackEnd.toFixed(3)}s — will trim`);
+          return blackEnd;
+        }
+      }
+      return 0;
+    }
+  }
+
   private async normalizeClip(
     inputPath: string,
     outputPath: string,
     target: { width: number; height: number }
   ): Promise<void> {
+    const trimStart = await this.detectBlackIntro(inputPath);
+    const ssArg = trimStart > 0 ? `-ss ${trimStart.toFixed(3)}` : '';
     const cmd = [
       'ffmpeg -y',
+      ssArg,
       `-i "${inputPath}"`,
       `-vf "scale=${target.width}:${target.height}:force_original_aspect_ratio=decrease,pad=${target.width}:${target.height}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,eq=brightness=0:contrast=1:saturation=1"`,
       `-c:v libx264 -preset fast -crf 18`,
@@ -316,11 +356,11 @@ class FFmpegAssemblyService {
       `-pix_fmt yuv420p`,
       `-an`,
       `"${outputPath}"`,
-    ].join(' ');
+    ].filter(Boolean).join(' ');
 
     try {
       await execAsync(cmd, { timeout: CONCAT_TIMEOUT_MS });
-      log(`Normalized: ${path.basename(inputPath)} -> ${target.width}x${target.height}`);
+      log(`Normalized: ${path.basename(inputPath)} -> ${target.width}x${target.height}${trimStart > 0 ? ` (trimmed ${trimStart.toFixed(3)}s black intro)` : ''}`);
     } catch (err: any) {
       throw new Error(`Normalize failed for ${path.basename(inputPath)}: ${err.message?.substring(0, 200)}`);
     }
