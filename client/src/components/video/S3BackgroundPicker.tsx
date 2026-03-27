@@ -56,7 +56,8 @@ export const S3BackgroundPicker: React.FC<S3BackgroundPickerProps> = ({
     }
   }, [expanded]);
 
-  const isSelected = (url: string) => selectedUrl === url;
+  const stripQuery = (u: string) => u.split('?')[0];
+  const isSelected = (url: string) => selectedUrl === url || (selectedUrl && stripQuery(selectedUrl) === stripQuery(url));
 
   return (
     <div className="space-y-2">
@@ -158,7 +159,11 @@ export const S3BackgroundPicker: React.FC<S3BackgroundPickerProps> = ({
                   <button
                     key={asset.key}
                     onClick={() => {
-                      onSelect(isSelected(asset.url) ? null : asset.url);
+                      if (isSelected(asset.url) && selectedUrl === asset.url) {
+                        onSelect(null);
+                      } else {
+                        onSelect(asset.url);
+                      }
                     }}
                     className={`relative rounded-lg overflow-hidden border-2 transition-all group ${
                       isSelected(asset.url)

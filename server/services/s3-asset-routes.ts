@@ -65,12 +65,13 @@ router.get('/list', async (req: Request, res: Response) => {
           svg: 'image/svg+xml', webp: 'image/webp',
           ttf: 'font/ttf', otf: 'font/otf', woff: 'font/woff', woff2: 'font/woff2',
         };
+        const ts = obj.LastModified ? obj.LastModified.getTime() : Date.now();
         return {
           key,
           name,
           size: obj.Size || 0,
           lastModified: obj.LastModified?.toISOString() || null,
-          url: `https://${BUCKET}.s3.${REGION}.amazonaws.com/${key}`,
+          url: `https://${BUCKET}.s3.${REGION}.amazonaws.com/${key}?v=${ts}`,
           contentType: contentTypeMap[ext] || 'application/octet-stream',
         };
       });
@@ -105,10 +106,12 @@ router.post('/upload', memUpload.single('file'), async (req: Request, res: Respo
       Body: req.file.buffer,
       ContentType: req.file.mimetype || 'application/octet-stream',
       ACL: 'public-read',
+      CacheControl: 'no-cache, no-store, must-revalidate',
     });
 
     await s3.send(command);
-    const publicUrl = `https://${BUCKET}.s3.${REGION}.amazonaws.com/${key}`;
+    const cacheBuster = `v=${Date.now()}`;
+    const publicUrl = `https://${BUCKET}.s3.${REGION}.amazonaws.com/${key}?${cacheBuster}`;
 
     console.log(`[S3Assets] Uploaded: ${key} (${req.file.size} bytes)`);
     res.json({ success: true, key, publicUrl });
