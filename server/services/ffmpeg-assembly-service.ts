@@ -271,6 +271,7 @@ class FFmpegAssemblyService {
         sceneId,
         createdAt: new Date().toISOString(),
         sourceVideoHashes,
+        assemblyVersion: FFmpegAssemblyService.ASSEMBLY_VERSION,
       };
 
       const manifestUrl = await this.uploadManifestToS3(manifest, projectId, sceneId);
@@ -425,10 +426,17 @@ class FFmpegAssemblyService {
     log(`Crossfade concat complete: ${clipPaths.length} clips -> ${(stats.size / 1024 / 1024).toFixed(2)}MB`);
   }
 
+  private static readonly ASSEMBLY_VERSION = 2;
+
   isAssemblyStale(manifest: AssemblyManifest, currentMicroScenes: MicroScene[], voiceoverWords?: CaptionWord[]): boolean {
     if (manifest.assemblyFailed) return true;
     if (!manifest.sourceVideoHashes || manifest.sourceVideoHashes.length === 0) return true;
     if (!manifest.assembledClipValid) return true;
+
+    if (manifest.assemblyVersion !== FFmpegAssemblyService.ASSEMBLY_VERSION) {
+      log(`Assembly stale: version mismatch (manifest=${manifest.assemblyVersion}, current=${FFmpegAssemblyService.ASSEMBLY_VERSION})`);
+      return true;
+    }
 
     const currentUrls = currentMicroScenes
       .filter(ms => !!ms.videoUrl)

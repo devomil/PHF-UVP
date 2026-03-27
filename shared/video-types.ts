@@ -288,6 +288,7 @@ export interface AssemblyManifest {
   createdAt: string;
   error?: string;
   sourceVideoHashes?: string[];
+  assemblyVersion?: number;
 }
 
 export interface Scene {

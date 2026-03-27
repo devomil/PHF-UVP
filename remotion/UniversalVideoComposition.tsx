@@ -1298,6 +1298,9 @@ const MicroSceneBackground: React.FC<{
   const anyMsHasOverlays = microScenes.some(ms => ms.overlayItems && ms.overlayItems.length > 0);
 
   if (hasAssembledClip) {
+    const assemblyDurationSec = assemblyManifest!.totalDurationSec || totalDuration;
+    const assemblyFrames = Math.round(assemblyDurationSec * fps);
+    const needsLoop = assemblyFrames < totalSceneFrames - 2;
     return (
       <AbsoluteFill>
         <SafeVideo
@@ -1305,6 +1308,7 @@ const MicroSceneBackground: React.FC<{
           style={{ width: '100%', height: '100%', objectFit: 'cover' }}
           muted
           startFrom={AI_VIDEO_TRIM_FRAMES}
+          loopDurationInFrames={needsLoop ? assemblyFrames : undefined}
           fallback={fallback}
         />
         {anyMsHasOverlays && (() => {
