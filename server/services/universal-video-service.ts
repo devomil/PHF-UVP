@@ -4832,7 +4832,24 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
         updatedProject.progress.overallPercent = 50;
         await saveProgress();
         
-        const settledResults = await Promise.allSettled(deferredVideoTasks.map(t => t.promise));
+        let completedVideoCount = 0;
+        const totalVideoTasks = deferredVideoTasks.length;
+        const trackedPromises = deferredVideoTasks.map(t => 
+          t.promise.then(result => {
+            completedVideoCount++;
+            updatedProject.progress.steps.videos.message = `Generated ${completedVideoCount}/${totalVideoTasks} videos...`;
+            updatedProject.progress.overallPercent = 50 + Math.round((completedVideoCount / totalVideoTasks) * 20);
+            saveProgress().catch(() => {});
+            return result;
+          }).catch(err => {
+            completedVideoCount++;
+            updatedProject.progress.steps.videos.message = `Generated ${completedVideoCount}/${totalVideoTasks} videos...`;
+            updatedProject.progress.overallPercent = 50 + Math.round((completedVideoCount / totalVideoTasks) * 20);
+            saveProgress().catch(() => {});
+            throw err;
+          })
+        );
+        const settledResults = await Promise.allSettled(trackedPromises);
         
         const parallelDurationSec = ((Date.now() - parallelStartTime) / 1000).toFixed(1);
         console.log(`[ParallelVideo] All ${deferredVideoTasks.length} tasks completed in ${parallelDurationSec}s`);
@@ -4976,7 +4993,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
 
     // MUSIC STEP - Generate background music with Udio (with ElevenLabs/Jamendo fallback)
     updatedProject.progress.currentStep = 'music';
-    updatedProject.progress.overallPercent = 60;
+    updatedProject.progress.overallPercent = Math.max(updatedProject.progress.overallPercent || 0, 70);
 
     if (shouldSkipStep('music')) {
       console.log('[Assets] Music already complete, skipping');
@@ -5090,7 +5107,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
     updatedProject.progress.currentStep = 'assembly';
     updatedProject.progress.steps.assembly.status = 'in-progress';
     updatedProject.progress.steps.assembly.message = 'Caching assets to cloud storage...';
-    updatedProject.progress.overallPercent = 70;
+    updatedProject.progress.overallPercent = Math.max(updatedProject.progress.overallPercent || 0, 80);
     await saveProgress();
     
     console.log('[UniversalVideoService] Caching all external assets to S3...');
@@ -5267,7 +5284,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
     }
     updatedProject.progress.steps.assembly.progress = 75;
     updatedProject.progress.steps.assembly.message = 'Scene analysis complete, generating composition...';
-    updatedProject.progress.overallPercent = 80;
+    updatedProject.progress.overallPercent = Math.max(updatedProject.progress.overallPercent || 0, 85);
     await saveProgress();
     // ========== END SCENE ANALYSIS ==========
 

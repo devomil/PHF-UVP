@@ -528,17 +528,29 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
       <div className="px-5 py-5 space-y-5">
         {/* Pipeline Progress Tracker */}
         <div className="space-y-3">
-          {(isGenerating || progress.overallPercent > 0) && (
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>Pipeline Progress</span>
-              <span className="text-xs font-bold" style={{ color: "var(--text-primary)" }}>{progress.overallPercent || 0}%</span>
+          {isGenerating && (
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-purple-500/10 border border-purple-500/20">
+              <div className="w-2.5 h-2.5 rounded-full bg-purple-400 animate-pulse flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-purple-300">
+                  {currentStep === 'voiceover' ? 'Generating voiceovers...' :
+                   currentStep === 'images' ? 'Creating scene images...' :
+                   currentStep === 'videos' ? 'Generating AI videos — this may take 2-5 minutes...' :
+                   currentStep === 'music' ? 'Composing background music...' :
+                   currentStep === 'assembly' ? 'Assembling final video...' :
+                   'Processing assets...'}
+                </p>
+                <p className="text-xs text-purple-400/70 mt-0.5">
+                  {progress.steps?.[currentStep]?.message || (progress.overallPercent > 0 ? `${progress.overallPercent}% complete` : 'Starting pipeline...')}
+                </p>
+              </div>
             </div>
           )}
           {(isGenerating || progress.overallPercent > 0) && (
             <div className="w-full bg-gray-700 rounded-full h-2">
               <div
                 className="bg-gradient-to-r from-purple-600 to-indigo-600 h-2 rounded-full transition-all duration-500"
-                style={{ width: `${progress.overallPercent || 0}%` }}
+                style={{ width: `${Math.max(progress.overallPercent || 0, isGenerating ? 2 : 0)}%` }}
               />
             </div>
           )}
