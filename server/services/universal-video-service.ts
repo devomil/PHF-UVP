@@ -4251,11 +4251,19 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
       }
       
       let videoSceneIndex = 0;
+      const deferredVideoTasks: Array<{
+        sceneId: string;
+        type: 'single' | 'micro';
+        promise: Promise<any>;
+        microScenes?: any[];
+      }> = [];
+      const needsSequentialFirstScene = characterConsistencyEnabled && !characterReferenceUrl && !isStylizedPreset(projectArtPresetIdForVideo);
+      let firstAIVideoSceneProcessed = false;
       for (const scene of scenesNeedingVideo) {
         // Update per-scene progress (40% to 60% range)
         updatedProject.progress.overallPercent = 40 + Math.round((videoSceneIndex / scenesNeedingVideo.length) * 20);
         updatedProject.progress.steps.videos.progress = Math.round((videoSceneIndex / scenesNeedingVideo.length) * 100);
-        updatedProject.progress.steps.videos.message = `Generating video ${videoSceneIndex + 1} of ${scenesNeedingVideo.length}${videosGenerated > 0 ? ` (${videosGenerated} ready)` : ''}`;
+        updatedProject.progress.steps.videos.message = `Preparing video ${videoSceneIndex + 1} of ${scenesNeedingVideo.length}${videosGenerated > 0 ? ` (${videosGenerated} ready)` : ''}`;
         await saveProgress();
         videoSceneIndex++;
         
@@ -4493,45 +4501,54 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
               .catch(err => ({ msIdx, skipped: false, success: false, error: err.message, s3Url: undefined, provider: undefined }));
           });
           
-          const msResults = await Promise.all(microScenePromises);
-          
-          for (const msResult of msResults) {
-            const msIdx = msResult.msIdx;
-            if (msResult.skipped) {
-              microSuccessCount++;
-              continue;
+          // === PARALLEL: Handle micro-scene video generation ===
+          if (needsSequentialFirstScene && !firstAIVideoSceneProcessed) {
+            // Process first micro-scene batch sequentially for character reference extraction
+            firstAIVideoSceneProcessed = true;
+            console.log(`[ParallelVideo] Processing first micro-scene batch (scene ${scene.id}) sequentially for character reference extraction`);
+            const msResults = await Promise.all(microScenePromises);
+            let microSuccessCount = 0;
+            for (const msResult of msResults) {
+              const msIdx = msResult.msIdx;
+              if (msResult.skipped) { microSuccessCount++; continue; }
+              if (msResult.success && msResult.s3Url) {
+                microScenes[msIdx].videoUrl = msResult.s3Url;
+                microSuccessCount++;
+                aiVideosGenerated++;
+                console.log(`[ParallelVideo] Micro-scene ${microScenes[msIdx].id} video ready (${msResult.provider}): ${msResult.s3Url}`);
+              } else {
+                console.warn(`[ParallelVideo] Micro-scene ${microScenes[msIdx].id} video failed: ${(msResult as any).error}`);
+              }
             }
-            if (msResult.success && msResult.s3Url) {
-              microScenes[msIdx].videoUrl = msResult.s3Url;
-              microSuccessCount++;
-              aiVideosGenerated++;
-              console.log(`[Assets] Micro-scene ${microScenes[msIdx].id} video ready (${msResult.provider}): ${msResult.s3Url}`);
-            } else {
-              console.warn(`[Assets] Micro-scene ${microScenes[msIdx].id} video failed: ${(msResult as any).error}`);
+            if (videoSceneIdx >= 0) {
+              (updatedProject.scenes[videoSceneIdx] as any).microScenes = microScenes;
             }
-          }
-          
-          if (videoSceneIdx >= 0) {
-            (updatedProject.scenes[videoSceneIdx] as any).microScenes = microScenes;
-          }
-          
-          if (microSuccessCount > 0) {
-            videoResult = { url: microScenes[0].videoUrl || '', source: 'ai-micro', duration: scene.duration };
-            videosGenerated++;
-            console.log(`[Assets] ${microSuccessCount}/${microScenes.length} micro-scene videos generated for scene ${scene.id}`);
-            
-            if (characterConsistencyEnabled && !characterReferenceUrl) {
-              const firstMsVideoUrl = microScenes.find((ms: any) => ms.videoUrl)?.videoUrl;
-              if (firstMsVideoUrl) {
-                characterReferenceUrl = await this.extractCharacterReferenceFrame(firstMsVideoUrl, project.projectId);
-                if (characterReferenceUrl) {
-                  console.log(`[CharRef] Captured character reference from scene ${scene.id} micro-scene → will inject into ${scenesNeedingVideo.length - videoSceneIndex} remaining scenes`);
+            if (microSuccessCount > 0) {
+              videoResult = { url: microScenes[0].videoUrl || '', source: 'ai-micro', duration: scene.duration };
+              videosGenerated++;
+              console.log(`[ParallelVideo] ${microSuccessCount}/${microScenes.length} micro-scene videos generated for scene ${scene.id} (sequential first)`);
+              if (characterConsistencyEnabled && !characterReferenceUrl) {
+                const firstMsVideoUrl = microScenes.find((ms: any) => ms.videoUrl)?.videoUrl;
+                if (firstMsVideoUrl) {
+                  characterReferenceUrl = await this.extractCharacterReferenceFrame(firstMsVideoUrl, project.projectId);
+                  if (characterReferenceUrl) {
+                    console.log(`[CharRef] Captured character reference from micro-scene batch ${scene.id} → will inject into remaining parallel scenes`);
+                  }
                 }
               }
             }
+            await saveProgress();
+          } else {
+            // Defer micro-scene results to post-loop parallel await
+            deferredVideoTasks.push({
+              sceneId: scene.id,
+              type: 'micro',
+              promise: Promise.all(microScenePromises),
+              microScenes,
+            });
+            console.log(`[ParallelVideo] Deferred ${microScenePromises.length} micro-scene video tasks for scene ${scene.id}`);
+            continue; // Results applied after parallel await
           }
-          
-          await saveProgress();
         } else if (shouldGenerateVideo && aiVideoService.isAvailable()) {
           const sceneRefImageUrl = (scene as any).brandAssetUrl || 
                                    scene.referenceConfig?.imageUrl ||
@@ -4593,39 +4610,62 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
           console.log(`[Assets] Using AI video for ${scene.type} scene ${scene.id} (isHero=${isHeroScene}, sceneQualityTier=${sceneQualityTier}, mode=${sceneRefImageUrl ? 'I2V' : (sceneImageUrl ? 'I2V-CharRef' : 'T2V')})...`);
           console.log(`[Assets] Using quality tier: ${sceneQualityTier} (scene override: ${scene.qualityTier || 'none'})`);
           
-          const aiResult = await aiVideoService.generateVideo({
-            prompt: sceneVideoPrompt,
-            duration: Math.min(scene.duration || 5, 10),
-            aspectRatio: (project.outputFormat?.aspectRatio as '16:9' | '9:16' | '1:1') || '16:9',
-            sceneType: scene.type,
-            narration: scene.narration,
-            mood: (scene as any).analysis?.mood,
-            contentType: (scene as any).analysis?.contentType as 'person' | 'product' | 'nature' | 'abstract' | 'lifestyle' | undefined,
-            qualityTier: sceneQualityTier,
-            artPresetId: scene.artPresetId || projectArtPresetIdForVideo,
-            ...(sceneImageUrl ? { imageUrl: sceneImageUrl } : {}),
-            ...(sceneCharRefUrls.length > 1 ? { imageUrls: sceneCharRefUrls } : {}),
-            ...(scene.contentTag ? { contentTag: scene.contentTag } : {}),
-            ...(sceneIsCharRef ? { isCharacterReference: true } : {}),
-          });
-          
-          if (aiResult.success && aiResult.s3Url) {
-            videoResult = { 
-              url: aiResult.s3Url, 
-              source: aiResult.provider || 'ai',
-              duration: aiResult.duration,
-            };
-            aiVideosGenerated++;
-            console.log(`[Assets] AI video ready (${aiResult.provider}) for scene ${scene.id}: ${aiResult.s3Url}`);
-            
-            if (characterConsistencyEnabled && !characterReferenceUrl) {
-              characterReferenceUrl = await this.extractCharacterReferenceFrame(aiResult.s3Url, project.projectId);
-              if (characterReferenceUrl) {
-                console.log(`[CharRef] Captured character reference from scene ${scene.id} → will inject into ${scenesNeedingVideo.length - videoSceneIndex} remaining scenes`);
+          // === PARALLEL: Defer single-scene video generation to post-loop parallel await ===
+          // For non-stylized presets needing character consistency, process first scene sequentially
+          if (needsSequentialFirstScene && !firstAIVideoSceneProcessed) {
+            firstAIVideoSceneProcessed = true;
+            console.log(`[ParallelVideo] Processing first scene ${scene.id} sequentially for character reference extraction`);
+            const aiResult = await aiVideoService.generateVideo({
+              prompt: sceneVideoPrompt,
+              duration: Math.min(scene.duration || 5, 10),
+              aspectRatio: (project.outputFormat?.aspectRatio as '16:9' | '9:16' | '1:1') || '16:9',
+              sceneType: scene.type,
+              narration: scene.narration,
+              mood: (scene as any).analysis?.mood,
+              contentType: (scene as any).analysis?.contentType as 'person' | 'product' | 'nature' | 'abstract' | 'lifestyle' | undefined,
+              qualityTier: sceneQualityTier,
+              artPresetId: scene.artPresetId || projectArtPresetIdForVideo,
+              ...(sceneImageUrl ? { imageUrl: sceneImageUrl } : {}),
+              ...(sceneCharRefUrls.length > 1 ? { imageUrls: sceneCharRefUrls } : {}),
+              ...(scene.contentTag ? { contentTag: scene.contentTag } : {}),
+              ...(sceneIsCharRef ? { isCharacterReference: true } : {}),
+            });
+            if (aiResult.success && aiResult.s3Url) {
+              videoResult = { url: aiResult.s3Url, source: aiResult.provider || 'ai', duration: aiResult.duration };
+              aiVideosGenerated++;
+              console.log(`[ParallelVideo] First scene AI video ready (${aiResult.provider}) for scene ${scene.id}: ${aiResult.s3Url}`);
+              if (characterConsistencyEnabled && !characterReferenceUrl) {
+                characterReferenceUrl = await this.extractCharacterReferenceFrame(aiResult.s3Url, project.projectId);
+                if (characterReferenceUrl) {
+                  console.log(`[CharRef] Captured character reference from first scene ${scene.id} → will inject into remaining parallel scenes`);
+                }
               }
+            } else {
+              console.warn(`[Assets] AI video failed for ${scene.type} scene ${scene.id}: ${aiResult.error}`);
             }
           } else {
-            console.warn(`[Assets] AI video failed for ${scene.type} scene ${scene.id}, falling back to stock: ${aiResult.error}`);
+            const genParams = {
+              prompt: sceneVideoPrompt,
+              duration: Math.min(scene.duration || 5, 10),
+              aspectRatio: (project.outputFormat?.aspectRatio as '16:9' | '9:16' | '1:1') || '16:9',
+              sceneType: scene.type,
+              narration: scene.narration,
+              mood: (scene as any).analysis?.mood,
+              contentType: (scene as any).analysis?.contentType as 'person' | 'product' | 'nature' | 'abstract' | 'lifestyle' | undefined,
+              qualityTier: sceneQualityTier,
+              artPresetId: scene.artPresetId || projectArtPresetIdForVideo,
+              ...(sceneImageUrl ? { imageUrl: sceneImageUrl } : {}),
+              ...(sceneCharRefUrls.length > 1 ? { imageUrls: sceneCharRefUrls } : {}),
+              ...(scene.contentTag ? { contentTag: scene.contentTag } : {}),
+              ...(sceneIsCharRef ? { isCharacterReference: true } : {}),
+            };
+            deferredVideoTasks.push({
+              sceneId: scene.id,
+              type: 'single',
+              promise: aiVideoService.generateVideo(genParams),
+            });
+            console.log(`[ParallelVideo] Deferred single-scene video task for scene ${scene.id} (mode=${sceneRefImageUrl ? 'I2V' : (sceneImageUrl ? 'I2V-CharRef' : 'T2V')})`);
+            continue; // Results applied after parallel await
           }
         }
         
@@ -4779,6 +4819,131 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
         }
       }
       
+      // ===== PARALLEL VIDEO EXECUTION: Await all deferred video tasks =====
+      if (deferredVideoTasks.length > 0) {
+        console.log(`[ParallelVideo] Awaiting ${deferredVideoTasks.length} video generation tasks running in parallel (PiAPI supports 30 concurrent)...`);
+        const parallelStartTime = Date.now();
+        
+        updatedProject.progress.steps.videos.message = `Generating ${deferredVideoTasks.length} videos in parallel...`;
+        updatedProject.progress.overallPercent = 50;
+        await saveProgress();
+        
+        const settledResults = await Promise.allSettled(deferredVideoTasks.map(t => t.promise));
+        
+        const parallelDurationSec = ((Date.now() - parallelStartTime) / 1000).toFixed(1);
+        console.log(`[ParallelVideo] All ${deferredVideoTasks.length} tasks completed in ${parallelDurationSec}s`);
+        
+        for (let taskIdx = 0; taskIdx < deferredVideoTasks.length; taskIdx++) {
+          const task = deferredVideoTasks[taskIdx];
+          const settled = settledResults[taskIdx];
+          const dSceneIndex = updatedProject.scenes.findIndex(s => s.id === task.sceneId);
+          if (dSceneIndex < 0) continue;
+          
+          if (!updatedProject.scenes[dSceneIndex].assets) {
+            updatedProject.scenes[dSceneIndex].assets = {};
+          }
+          
+          const dProductPosition = this.getProductOverlayPosition(updatedProject.scenes[dSceneIndex].type);
+          updatedProject.scenes[dSceneIndex].assets!.productOverlayPosition = dProductPosition;
+          
+          if (settled.status === 'rejected') {
+            videosFailed++;
+            console.warn(`[ParallelVideo] Scene ${task.sceneId} generation rejected: ${settled.reason}`);
+            if (updatedProject.scenes[dSceneIndex].background) {
+              updatedProject.scenes[dSceneIndex].background!.type = 'image';
+            }
+            continue;
+          }
+          
+          if (task.type === 'micro') {
+            const msResults = settled.value;
+            let microSuccessCount = 0;
+            const dMicroScenes = task.microScenes!;
+            
+            for (const msResult of msResults) {
+              if (msResult.skipped) { microSuccessCount++; continue; }
+              if (msResult.success && msResult.s3Url) {
+                dMicroScenes[msResult.msIdx].videoUrl = msResult.s3Url;
+                microSuccessCount++;
+                aiVideosGenerated++;
+                console.log(`[ParallelVideo] Micro-scene ${dMicroScenes[msResult.msIdx].id} video ready (${msResult.provider}): ${msResult.s3Url}`);
+              } else {
+                console.warn(`[ParallelVideo] Micro-scene ${dMicroScenes[msResult.msIdx].id} video failed: ${(msResult as any).error}`);
+              }
+            }
+            
+            (updatedProject.scenes[dSceneIndex] as any).microScenes = dMicroScenes;
+            
+            if (microSuccessCount > 0) {
+              const dFirstMsUrl = dMicroScenes.find((ms: any) => ms.videoUrl)?.videoUrl;
+              if (dFirstMsUrl) {
+                updatedProject.assets.videos.push({
+                  sceneId: task.sceneId,
+                  url: dFirstMsUrl,
+                  source: 'ai' as any,
+                });
+                if (!updatedProject.scenes[dSceneIndex].background) {
+                  updatedProject.scenes[dSceneIndex].background = { type: 'video', source: '', videoUrl: dFirstMsUrl };
+                } else {
+                  updatedProject.scenes[dSceneIndex].background!.type = 'video';
+                  updatedProject.scenes[dSceneIndex].background!.videoUrl = dFirstMsUrl;
+                  updatedProject.scenes[dSceneIndex].background!.mediaUrl = dFirstMsUrl;
+                }
+                updatedProject.scenes[dSceneIndex].assets!.videoUrl = dFirstMsUrl;
+                updatedProject.scenes[dSceneIndex].assets!.videoSource = 'ai';
+              }
+              videosGenerated++;
+              console.log(`[ParallelVideo] ${microSuccessCount}/${dMicroScenes.length} micro-scene videos generated for scene ${task.sceneId}`);
+            } else {
+              videosFailed++;
+              if (updatedProject.scenes[dSceneIndex].background) {
+                updatedProject.scenes[dSceneIndex].background!.type = 'image';
+              }
+              console.warn(`[ParallelVideo] All micro-scene videos failed for scene ${task.sceneId}`);
+            }
+          } else {
+            const aiResult = settled.value;
+            if (aiResult.success && aiResult.s3Url) {
+              const dVideoResult = {
+                url: aiResult.s3Url,
+                source: aiResult.provider || 'ai',
+                duration: aiResult.duration,
+              };
+              updatedProject.assets.videos.push({
+                sceneId: task.sceneId,
+                url: dVideoResult.url,
+                source: dVideoResult.source as any,
+              });
+              if (!updatedProject.scenes[dSceneIndex].background) {
+                updatedProject.scenes[dSceneIndex].background = {
+                  type: 'video',
+                  source: '',
+                  videoUrl: dVideoResult.url,
+                };
+              } else {
+                updatedProject.scenes[dSceneIndex].background!.type = 'video';
+                updatedProject.scenes[dSceneIndex].background!.videoUrl = dVideoResult.url;
+                updatedProject.scenes[dSceneIndex].background!.mediaUrl = dVideoResult.url;
+              }
+              updatedProject.scenes[dSceneIndex].assets!.videoUrl = dVideoResult.url;
+              updatedProject.scenes[dSceneIndex].assets!.videoSource = dVideoResult.source;
+              videosGenerated++;
+              aiVideosGenerated++;
+              console.log(`[ParallelVideo] AI video ready (${dVideoResult.source}) for scene ${task.sceneId}: ${dVideoResult.url.substring(0, 80)}...`);
+            } else {
+              videosFailed++;
+              console.warn(`[ParallelVideo] AI video failed for scene ${task.sceneId}: ${aiResult.error}`);
+              if (updatedProject.scenes[dSceneIndex].background) {
+                updatedProject.scenes[dSceneIndex].background!.type = 'image';
+              }
+            }
+          }
+        }
+        
+        await saveProgress();
+        console.log(`[ParallelVideo] Parallel execution complete: ${videosGenerated} videos generated, ${videosFailed} failed, ${aiVideosGenerated} from AI`);
+      }
+
       updatedProject.progress.steps.videos.progress = 100;
       updatedProject.progress.steps.videos.status = 'complete';
       updatedProject.progress.steps.videos.message = videosGenerated > 0 
