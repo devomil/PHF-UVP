@@ -256,6 +256,7 @@ export interface MicroScene {
   contentTag?: string;
   artPresetId?: string;
   overlayItems?: MicroSceneOverlayItem[];
+  pipelineStage?: number;
 }
 
 export interface AssemblyWordMarker {
@@ -296,9 +297,11 @@ export interface Scene {
   duration: number;
   narration: string;
   visualDirection?: string;
+  cinematicNotes?: string;
+  negativePrompt?: string;
   microScenes?: MicroScene[];
   assemblyManifest?: AssemblyManifest;
-  qualityTier?: 'standard' | 'premium' | 'ultra'; // Per-scene quality tier override
+  qualityTier?: 'standard' | 'premium' | 'ultra';
   searchQuery?: string;
   fallbackQuery?: string;
   textOverlays: TextOverlay[];

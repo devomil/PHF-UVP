@@ -542,6 +542,169 @@ Return ONLY valid JSON:
   return { scenes, summary };
 }
 
+function buildProviderHints(primary: string): string {
+  const base = primary.split('-')[0];
+  const hints: Record<string, string> = {
+    sora: 'Optimize for Sora — use rich scene description, strong physics, emotional atmosphere, environmental storytelling.',
+    runway: 'Optimize for Runway — emphasize cinematic composition, dramatic lighting contrasts, film-grade color grading, painterly quality.',
+    kling: 'Optimize for Kling — emphasize character consistency, natural fluid motion, warm color grading, expressive faces.',
+    veo: 'Optimize for Veo — leverage photorealistic rendering, precise object physics, natural motion, coherent spatial environments.',
+    hailuo: 'Optimize for Hailuo — emphasize clean compositions, smooth camera motion, consistent character appearance.',
+    hunyuan: 'Optimize for Hunyuan — emphasize detailed textures, atmospheric depth, cinematic framing.',
+  };
+  return hints[base] || 'Optimize for cinematic quality with rich scene description and atmospheric depth.';
+}
+
+function buildArtStyleBlock(artPreset: VisualArtPreset | null): string {
+  if (!artPreset) {
+    return `ART STYLE: Cinematic Realism
+STYLE SUFFIX TO APPEND: Cinematic quality, natural lighting, shallow depth of field, warm color grading, 4K. No text in scene.
+NEGATIVE PROMPT GUIDANCE: blurry, low quality, text, watermark, logo, words, labels`;
+  }
+  const suffix = [
+    artPreset.imagePromptPrefix,
+    artPreset.imagePromptSuffix,
+    artPreset.globalStyleNotes || '',
+  ].filter(Boolean).join(' ');
+  return `ART STYLE: ${artPreset.name}
+STYLE DESCRIPTION: ${artPreset.description}
+STYLE MARKER (MUST appear in every visual direction): ${artPreset.styleMarkerPrefix || artPreset.name}
+STYLE SUFFIX TO APPEND: ${suffix}. No text, no labels, no readable words in scene.
+${artPreset.cameraMotionHints ? `CAMERA MOTION SUGGESTIONS: ${artPreset.cameraMotionHints}` : ''}
+${artPreset.globalStyleNotes ? `GLOBAL STYLE NOTES: ${artPreset.globalStyleNotes}` : ''}
+NEGATIVE PROMPT GUIDANCE: ${artPreset.negativePromptAdditions.join(', ')}, text, watermark, logo, words, labels`;
+}
+
+async function stageFourVisualDirections(
+  stage3Scenes: any[],
+  strategy: CreativeStrategy,
+  narrative: NarrativeArchitecture,
+  ctx: PipelineContext,
+  brand: BrandInfo,
+): Promise<any[]> {
+  const artPreset = ctx.artPresetId ? getVisualArtPreset(ctx.artPresetId) : null;
+  const isStylized = artPreset && isStylizedPreset(artPreset.id);
+  const primaryProvider = artPreset?.providerHierarchy?.primary || 'kling-2.6-pro';
+  const providerHints = buildProviderHints(primaryProvider);
+  const artStyleBlock = buildArtStyleBlock(artPreset);
+
+  const systemPrompt = `You are a world-class AI video director and prompt engineer with deep expertise in generative AI video models (Kling, Runway, Sora, Veo). You write visual direction prompts that produce stunning, cinematic, emotionally resonant AI video output. You understand that AI video models respond to specific cinematic language — shot type, camera movement, lighting mood, color palette, depth of field, texture, and art style instruction. You never write generic stock footage descriptions. Every prompt you write is designed to produce a 'wow' reaction from the viewer.
+
+${artStyleBlock}
+
+${providerHints}
+
+SCENE TYPE VISUAL FRAMEWORKS:
+- hook: Pattern interrupt — unexpected scale, dramatic reveal, something visually arresting. Wide or extreme close-up. High contrast.
+- problem: Relatable reality — warm but slightly desaturated, imperfect lived-in environment, subtle visual tension. Medium shot.
+- agitation: Heightened problem — tighter framing, cooler color temperature, more contrast, slight unease in composition.
+- solution: Transformation moment — warmer light enters frame, product reveal, environment brightens. Slow push-in or reveal camera.
+- product: Hero showcase — product centered with clean background, premium lighting, slight orbital or push-in camera. Maximum visual clarity.
+- proof: Credibility visual — clean clinical or scientific environment, precise and trustworthy. Steady camera, symmetrical composition.
+- benefit: Aspirational outcome — golden warm light, healthy vibrant environment, elevated lifestyle. Gentle camera drift.
+- testimonial: Human connection — medium close-up, natural warm lighting, authentic setting. Subtle shallow depth of field.
+- cta: Brand moment — product hero shot with clean background, premium feel. Slight zoom or subtle motion. Space for text overlay in composition.
+- explanation: Educational clarity — clean environment, clear subject visibility, steady smooth camera. Well-lit and organized.
+- intro: Establishing shot — wide environmental reveal, sets mood and context. Slow pan or crane movement.
+- brand: Identity moment — brand colors and aesthetic prominent, polished premium feel. Clean composition.
+
+CRITICAL RULES:
+1. Every visual direction MUST open with shot type and camera movement (e.g. "Extreme macro push-in", "Slow orbital arc", "Wide establishing crane reveal")
+2. Describe subjects with cinematic specificity — not "a bottle" but "the supplement tub centered on a moss-covered stone surface"
+3. Specify lighting mood (e.g. "golden hour side lighting", "cool clinical ambient glow", "warm amber window light")
+4. Include environment depth — foreground, midground, background layers when appropriate
+5. Add motion elements — floating particles, gentle sway, slow breathing, subtle camera drift, atmospheric haze
+6. NEVER include text, words, signs, labels, brand names, or typography in visual descriptions — AI cannot render readable text
+7. Describe products by PHYSICAL APPEARANCE only (shape, color, container type) — never describe label text
+8. ${isStylized ? `EVERY visual direction MUST include the style marker "${artPreset!.styleMarkerPrefix || artPreset!.name}"` : 'Keep descriptions cinematic but grounded in realism'}
+9. Keep each visual direction 40-80 words — detailed but focused
+10. Vary camera movements and shot types across scenes — no two scenes should feel visually identical
+
+CHARACTER CONSISTENCY: If a recurring character appears, define their appearance in the FIRST scene and reference the EXACT SAME description in every subsequent scene.
+
+You return ONLY valid JSON. No markdown, no explanation outside the JSON.`;
+
+  const scenesForPrompt = stage3Scenes.map((s: any, i: number) => {
+    const narrativeScene = narrative.scenes[i];
+    return `Scene ${i + 1}:
+Type: ${s.type || narrativeScene?.type || 'content'}
+Duration: ${s.duration || narrativeScene?.duration || 8}s
+Emotional Beat: ${narrativeScene?.emotionalBeat || 'neutral'}
+Narration: "${s.narration || ''}"
+Current Visual Direction: "${s.visualDirection || ''}"`;
+  }).join('\n\n');
+
+  const productDesc = ctx.productContext
+    ? `\nPRODUCT: ${ctx.productContext.productName} (${ctx.productContext.category})
+Physical appearance: ${ctx.productContext.visualDescription}
+Brand tone: ${ctx.productContext.brandTone}
+Colors: ${ctx.productContext.colorPalette.join(', ')}`
+    : '';
+
+  const userPrompt = `Transform each scene's visual direction into a production-grade AI video generation prompt with micro-scene breakdowns.
+
+PROJECT CONTEXT:
+Brand: ${brand.brandName || 'the brand'}
+Platform: ${ctx.platform}
+Primary Emotion: ${strategy.primaryEmotion}
+Narrative Framework: ${strategy.narrativeFramework}
+Tone: ${strategy.toneGuidance}${productDesc}
+
+SCENES TO TRANSFORM:
+${scenesForPrompt}
+
+For each scene, write:
+1. An enhanced visual direction prompt following all rules above
+2. A brief cinematicNotes explaining your visual approach for this scene
+3. A scene-specific negativePrompt (things to avoid in generation)
+4. Split the narration into 2-4 micro-scenes at natural topic shifts. Each micro-scene gets its own cinematic visual direction that inherits the parent scene's visual world, lighting, and mood. Short scenes (under 5s or 1-2 sentences) should have just 1 micro-scene.
+
+Return ONLY valid JSON:
+{
+  "scenes": [
+    {
+      "sceneNumber": 1,
+      "visualDirection": "full production-grade AI video prompt (40-80 words)",
+      "negativePrompt": "scene-specific items to avoid",
+      "cinematicNotes": "brief note on why this visual approach serves the narrative",
+      "microScenes": [
+        { "narration": "exact text from narration for this segment", "visualDirection": "cinematic prompt inheriting parent mood (30-60 words)", "duration": 4 },
+        { "narration": "next segment", "visualDirection": "different angle/moment same visual world", "duration": 3 }
+      ]
+    }
+  ]
+}`;
+
+  const raw = await callLLMWithRetry(systemPrompt, userPrompt, 8000, "Stage 4: Visual Directions");
+  const parsed = extractJSON(raw);
+  const s4Scenes = Array.isArray(parsed.scenes) ? parsed.scenes : [];
+
+  const enhanced = stage3Scenes.map((original: any, i: number) => {
+    const s4 = s4Scenes.find((s: any) => s.sceneNumber === i + 1) || s4Scenes[i];
+    if (!s4 || !s4.visualDirection) return original;
+
+    const microScenes = Array.isArray(s4.microScenes) && s4.microScenes.length > 0
+      ? s4.microScenes.map((ms: any, idx: number) => ({
+          id: `${original.id || `scene-${i + 1}`}-micro-${idx + 1}`,
+          narration: ms.narration || '',
+          visualDirection: ms.visualDirection || '',
+          duration: ms.duration || Math.round((original.duration || 10) / s4.microScenes.length),
+          pipelineStage: 4,
+        }))
+      : undefined;
+
+    return {
+      ...original,
+      visualDirection: s4.visualDirection,
+      negativePrompt: s4.negativePrompt || undefined,
+      cinematicNotes: s4.cinematicNotes || undefined,
+      ...(microScenes ? { microScenes } : {}),
+    };
+  });
+
+  return enhanced;
+}
+
 function buildFallbackStrategy(ctx: PipelineContext): CreativeStrategy {
   const tone = ctx.scriptPresets?.scriptTone || "educational";
   const openingHook = ctx.trendHooks?.[0] || `Discover how ${ctx.scriptPresets?.productName || "this"} can transform your routine`;
@@ -580,7 +743,7 @@ export async function runScriptPipeline(ctx: PipelineContext): Promise<PipelineR
     throw new Error("No LLM API configured — set PIAPI_API_KEY or ANTHROPIC_API_KEY");
   }
 
-  console.log(`[ScriptPipeline] Starting 3-stage pipeline for ${ctx.targetDuration}s ${ctx.platform} video`);
+  console.log(`[ScriptPipeline] Starting 4-stage pipeline for ${ctx.targetDuration}s ${ctx.platform} video`);
 
   const brand = await loadBrandInfo();
   const trends = await loadTrendData(brand, brand.trendAnalysisEnabled);
@@ -610,8 +773,21 @@ export async function runScriptPipeline(ctx: PipelineContext): Promise<PipelineR
 
   console.log("[ScriptPipeline] === Stage 3: Scene Writing ===");
   try {
-    const { scenes, summary } = await stageThreeSceneWriting(ctx, brand, strategy, narrative);
-    console.log(`[ScriptPipeline] Written ${scenes.length} scenes with narration and visual directions`);
+    const { scenes: stage3Scenes, summary } = await stageThreeSceneWriting(ctx, brand, strategy, narrative);
+    console.log(`[ScriptPipeline] Written ${stage3Scenes.length} scenes with narration and visual directions`);
+
+    let scenes = stage3Scenes;
+    console.log("[ScriptPipeline] === Stage 4: Visual Direction Enhancement ===");
+    const s4Start = Date.now();
+    try {
+      scenes = await stageFourVisualDirections(stage3Scenes, strategy, narrative, ctx, brand);
+      const s4Ms = Date.now() - s4Start;
+      const microSceneCount = scenes.reduce((sum: number, s: any) => sum + (s.microScenes?.length || 0), 0);
+      console.log(`[ScriptPipeline] Stage 4 enhanced ${scenes.length} scenes with ${microSceneCount} micro-scenes in ${s4Ms}ms`);
+    } catch (s4Err: any) {
+      console.warn(`[ScriptPipeline] Stage 4 failed, using Stage 3 visual directions: ${s4Err.message}`);
+    }
+
     return { strategy, narrative, scenes, summary };
   } catch (err: any) {
     console.warn(`[ScriptPipeline] Stage 3 failed, falling back to single-pass parser: ${err.message}`);

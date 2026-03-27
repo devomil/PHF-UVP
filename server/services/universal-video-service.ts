@@ -3251,6 +3251,12 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
         
         for (let i = 0; i < updatedProject.scenes.length; i++) {
           const scene = updatedProject.scenes[i];
+          const hasStage4MicroScenes = scene.microScenes?.length > 0
+            && scene.microScenes.some((ms: any) => ms.pipelineStage === 4);
+          if (hasStage4MicroScenes) {
+            console.log(`[Assets] Scene ${i + 1} already has Stage 4 micro-scenes — skipping independent generation`);
+            continue;
+          }
           if (scene.visualDirection && scene.visualDirection.trim().length >= 10) {
             continue;
           }
@@ -4486,6 +4492,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
             
             const msContentTag = ms.contentTag || scene.contentTag;
             const msArtPresetId = ms.artPresetId || scene.artPresetId || projectArtPresetIdForVideo;
+            const msNegativePrompt = (ms as any).negativePrompt || scene.negativePrompt;
             return aiVideoService.generateVideo({
               prompt: msPrompt,
               duration: Math.min(ms.duration || 5, 10),
@@ -4498,6 +4505,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
               ...(charRefImageUrls.length > 1 ? { imageUrls: charRefImageUrls } : {}),
               ...(msContentTag ? { contentTag: msContentTag } : {}),
               ...(isCharRef ? { isCharacterReference: true } : {}),
+              ...(msNegativePrompt ? { negativePrompt: msNegativePrompt } : {}),
             }).then(msResult => ({ msIdx, skipped: false, ...msResult }))
               .catch(err => ({ msIdx, skipped: false, success: false, error: err.message, s3Url: undefined, provider: undefined }));
           });
@@ -4636,6 +4644,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
               ...(sceneCharRefUrls.length > 1 ? { imageUrls: sceneCharRefUrls } : {}),
               ...(scene.contentTag ? { contentTag: scene.contentTag } : {}),
               ...(sceneIsCharRef ? { isCharacterReference: true } : {}),
+              ...(scene.negativePrompt ? { negativePrompt: scene.negativePrompt } : {}),
             });
             if (aiResult.success && aiResult.s3Url) {
               videoResult = { url: aiResult.s3Url, source: aiResult.provider || 'ai', duration: aiResult.duration };
@@ -4665,6 +4674,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
               ...(sceneCharRefUrls.length > 1 ? { imageUrls: sceneCharRefUrls } : {}),
               ...(scene.contentTag ? { contentTag: scene.contentTag } : {}),
               ...(sceneIsCharRef ? { isCharacterReference: true } : {}),
+              ...(scene.negativePrompt ? { negativePrompt: scene.negativePrompt } : {}),
             };
             deferredVideoTasks.push({
               sceneId: scene.id,
@@ -4726,6 +4736,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
                 qualityTier: sceneQualityTier,
                 artPresetId: scene.artPresetId || projectArtPresetIdForVideo,
                 imageUrl: sourceImageUrl,
+                ...(scene.negativePrompt ? { negativePrompt: scene.negativePrompt } : {}),
               });
               
               if (i2vResult.success && i2vResult.s3Url) {
@@ -4752,6 +4763,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
                   qualityTier: sceneQualityTier,
                   artPresetId: scene.artPresetId || projectArtPresetIdForVideo,
                   imageUrl: aiGeneratedImage,
+                  ...(scene.negativePrompt ? { negativePrompt: scene.negativePrompt } : {}),
                 });
                 
                 if (i2vResult.success && i2vResult.s3Url) {
@@ -4778,6 +4790,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
                 aspectRatio: updatedProject.outputFormat?.aspectRatio || '16:9',
                 qualityTier: sceneQualityTier,
                 artPresetId: scene.artPresetId || projectArtPresetIdForVideo,
+                ...(scene.negativePrompt ? { negativePrompt: scene.negativePrompt } : {}),
               });
               
               if (t2vResult.success && t2vResult.s3Url) {
@@ -6165,6 +6178,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
           mood: (scene as any).analysis?.mood,
           contentType: (scene as any).analysis?.contentType as 'person' | 'product' | 'nature' | 'abstract' | 'lifestyle' | undefined,
           qualityTier: sceneQualityTier as 'ultra' | 'premium' | 'standard',
+          ...(scene.negativePrompt ? { negativePrompt: scene.negativePrompt } : {}),
         });
         
         if (aiResult.success && aiResult.s3Url) {
