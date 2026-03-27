@@ -374,14 +374,23 @@ Return a JSON object with this structure:
 Keep visual descriptions SIMPLE. These will be used for AI video generation.
 
 ✅ GOOD: "A woman in her 40s taking supplements with morning coffee in a sunny kitchen"
-✅ GOOD: "Hands opening a Pine Hill supplement bottle on a wooden table"
+✅ GOOD: "Hands opening a supplement bottle on a wooden table"
 ✅ GOOD: "Happy family having breakfast together, warm morning light"
+✅ GOOD: "A white supplement tub sits on a clean kitchen counter next to a glass of green juice"
 
 ❌ BAD: "Cinematic shot with golden hour lighting, shallow depth of field, 35mm lens"
 ❌ BAD: "Rule of thirds composition, film grain texture, teal and orange color grading"
+❌ BAD: "A tub with a label reading Cultivating Wellness – Ultra Greens Concentrated Superfood" (NEVER describe text on labels)
 
 Focus on: WHO is doing WHAT, WHERE, with WHAT MOOD
-Avoid: Camera jargon, lighting instructions, film terminology, lens specifications`;
+Avoid: Camera jargon, lighting instructions, film terminology, lens specifications
+
+## NO TEXT IN VIDEO (CRITICAL)
+- NEVER describe text, words, labels, brand names, logos, or typography in visual directions
+- NEVER write "reading [text]", "label says", "brand name appears", or "lettering"
+- AI video models CANNOT render readable text — any mentioned text appears as garbled characters
+- Describe PHYSICAL APPEARANCE of products (shape, color, size) but NOT what is written on them
+- Text overlays are added separately in post-production by Remotion`;
 
 export function buildHealthScriptContext(
   description: string,

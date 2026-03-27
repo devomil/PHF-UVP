@@ -437,7 +437,7 @@ async function stageThreeSceneWriting(
 - Tone: ${ctx.productContext.brandTone}
 - Colors: ${ctx.productContext.colorPalette.join(", ")}
 - Visual Appearance: ${ctx.productContext.visualDescription}
-IMPORTANT: Incorporate this product naturally. At least one scene (preferably a "product" or "solution" type) MUST describe the actual product in the visual direction — reference its physical appearance (${ctx.productContext.visualDescription}) so the AI video generator can depict it accurately. The uploaded product image will be used as a starting frame for that scene.`
+IMPORTANT: Incorporate this product naturally. At least one scene (preferably a "product" or "solution" type) MUST describe the actual product in the visual direction — reference its physical appearance (${ctx.productContext.visualDescription}) so the AI video generator can depict it accurately. NEVER describe text, brand names, or label wording on the product — AI video models CANNOT render readable text and it will appear garbled. Describe only the product's shape, color, and container type. The uploaded product image will be used as a starting frame for that scene.`
     : "";
 
   const ctaMap: Record<string, string> = {

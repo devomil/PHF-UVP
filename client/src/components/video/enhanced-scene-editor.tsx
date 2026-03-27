@@ -101,6 +101,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
   const [isEditing, setIsEditing] = useState(false);
   const [provider, setProvider] = useState("auto");
   const [generationMode, setGenerationMode] = useState("auto");
+  const [brandAssetDismissed, setBrandAssetDismissed] = useState(false);
   const [referenceImageUrls, setReferenceImageUrls] = useState<string[]>(
     () => {
       const existing = scene.assets?.referenceImages || [];
@@ -161,14 +162,18 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
   const prevImageUrl = useRef(imageUrl);
 
   useEffect(() => {
+    setBrandAssetDismissed(false);
+  }, [scene.id]);
+
+  useEffect(() => {
     const incoming = scene.assets?.referenceImages || [];
-    const withBrand = scene.brandAssetUrl && !incoming.includes(scene.brandAssetUrl)
+    const withBrand = scene.brandAssetUrl && !brandAssetDismissed && !incoming.includes(scene.brandAssetUrl)
       ? [scene.brandAssetUrl, ...incoming]
       : incoming;
     if (JSON.stringify(withBrand) !== JSON.stringify(referenceImageUrls)) {
       setReferenceImageUrls(withBrand);
     }
-  }, [scene.brandAssetUrl, scene.assets?.referenceImages]);
+  }, [scene.brandAssetUrl, scene.assets?.referenceImages, brandAssetDismissed]);
 
   const handleRegenerateVisualDirection = async () => {
     setRegeneratingVisualDirection(true);
@@ -1270,6 +1275,9 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                   </div>
                   <button
                     onClick={() => {
+                      if (url === scene.brandAssetUrl) {
+                        setBrandAssetDismissed(true);
+                      }
                       const newImages = referenceImageUrls.filter((_, idx) => idx !== i);
                       setReferenceImageUrls(newImages);
                       persistReferenceImages(newImages);
@@ -1865,6 +1873,9 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                   <img src={url} alt="" className="w-full h-full object-cover" />
                   <button
                     onClick={() => {
+                      if (url === scene.brandAssetUrl) {
+                        setBrandAssetDismissed(true);
+                      }
                       const newImages = referenceImageUrls.filter((_, idx) => idx !== i);
                       setReferenceImageUrls(newImages);
                       persistReferenceImages(newImages);

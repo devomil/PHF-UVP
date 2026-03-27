@@ -663,7 +663,10 @@ CRITICAL VISUAL DIRECTION RULES:
 - Keep visual descriptions SIMPLE (15-25 words max)
 - Focus on: WHO is doing WHAT, WHERE, with WHAT MOOD
 - AVOID camera jargon: NO "cinematic", "35mm", "shallow DOF", "golden hour", "color grading"
-- Good example: "A woman in her 40s taking supplements with morning coffee in a sunny kitchen"
+- NEVER describe text, words, labels, or what is written on product packaging — AI video models CANNOT render readable text and it will appear garbled
+- Describe products by PHYSICAL APPEARANCE (shape, color, container type) NOT by label text
+- Good example: "A white supplement tub sits on a clean kitchen counter next to a glass of green juice"
+- Bad example: "A tub with a label reading Cultivating Wellness Ultra Greens Concentrated Superfood"
 - Bad example: "Cinematic shot with golden hour lighting, shallow depth of field, 35mm lens"
 
 Narration should be conversational, warm, and ${input.style.toLowerCase()}.

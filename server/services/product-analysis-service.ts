@@ -67,7 +67,7 @@ Return a JSON object with these fields:
 - brandTone: The brand's visual tone - e.g. "premium", "playful", "clinical", "natural" (string)
 - colorPalette: Up to 5 dominant colors visible in hex format (string array)
 - targetDemographic: Who this product seems designed for (string)
-- visualDescription: A concise 2-sentence description of what's visible in the image (string)
+- visualDescription: A concise 2-sentence description of the product's PHYSICAL APPEARANCE only — describe shape, color, container type, and setting. Do NOT transcribe or quote any text, words, brand names, or labels visible on the product packaging. (string)
 
 Return ONLY valid JSON, no markdown fences or extra text.`,
     },
