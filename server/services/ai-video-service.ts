@@ -134,6 +134,24 @@ class AIVideoService {
     return getTestedProviders();
   }
 
+  private stripTextInstructionsFromPrompt(prompt: string): string {
+    let cleaned = prompt;
+    cleaned = cleaned.replace(/\b(The\s+)?[\w\s]*\bbrand\s+name\s+appears?\s+[^.]*\./gi, '');
+    cleaned = cleaned.replace(/\b[\w\s]*\btext\s+overlay[^.]*\./gi, '');
+    cleaned = cleaned.replace(/\b[\w\s]*\blettering\s+(beneath|above|below|beside|near|on|in|across)[^.]*\./gi, '');
+    cleaned = cleaned.replace(/\b[\w\s]*\btext\s+(label|title|caption|heading)[^.]*\./gi, '');
+    cleaned = cleaned.replace(/\bClean\s+background\s+surfaces?\s+suitable\s+for\s+text\s+overlay\s+compositing\.?/gi, '');
+    cleaned = cleaned.replace(/\bNo\s+text,?\s*no\s+signs?,?\s*no\s+labels?,?\s*no\s+readable\s+words?\s+anywhere[^.]*\.?/gi, '');
+    cleaned = cleaned.replace(/\b[\w\s]*readable\s+(text|words?|lettering|typography)[^.]*\./gi, '');
+    cleaned = cleaned.replace(/\b[\w\s]*\btypography[^.]*\./gi, '');
+    cleaned = cleaned.replace(/\n\s*\n/g, '\n');
+    cleaned = cleaned.trim();
+    if (cleaned !== prompt) {
+      console.log(`[AIVideo] Stripped text/overlay instructions from prompt to prevent garbled AI text rendering`);
+    }
+    return cleaned;
+  }
+
   async generateVideo(options: AIVideoOptions): Promise<AIVideoResult> {
     const configuredProviders = await getTestedProviders();
     
@@ -142,6 +160,8 @@ class AIVideoService {
     }
     
     console.log(`[AIVideo] Using ${configuredProviders.length} tested providers: ${configuredProviders.join(', ')}`);
+
+    options = { ...options, prompt: this.stripTextInstructionsFromPrompt(options.prompt) };
 
     // Get visual style configuration (Phase 5B)
     const styleConfig = getVisualStyleConfig(options.visualStyle || 'professional');

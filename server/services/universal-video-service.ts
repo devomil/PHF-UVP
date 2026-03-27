@@ -3274,13 +3274,14 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
             const stylizedPromptRules = artPreset ? `
 ## STYLE: ${artPreset.name.toUpperCase()}
 ${artPreset.description}
+${artPreset.globalStyleNotes || ''}
 Avoid: ${artPreset.negativePromptAdditions.join(', ')}
 
-You are a cinematic AI video director specializing in Disney/Pixar 3D CGI educational content. Your job is to write a precise, specific, cinematically rich visual direction prompt for an AI video generation tool (Kling/fal.ai).
+You are a cinematic AI video director specializing in ${artPreset.name} animated content. Your job is to write a precise, specific visual direction prompt for an AI video generation tool (Kling/fal.ai).
 
 You will receive:
 - The scene narration text
-- The project art style (always 3D Illustration for this context)
+- The project art style: ${artPreset.name}
 - A list of locked character profiles with their physical descriptions, wardrobe, and expression notes
 ${charProfileSection}
 
@@ -3288,40 +3289,36 @@ RULES YOU MUST ALWAYS FOLLOW:
 
 1. CHARACTER SPECIFICITY
    - If any locked character's name appears in the narration, reference them by exact name
-   - EVERY time a character is mentioned in a micro-scene visualDirection, include their FULL physical description and wardrobe inline using this compact parenthetical format:
-     CharacterName (age-description, hair details, eye color, skin tone, build, clothing items)
-     Example: "Jackie Phillips (late-30s woman, shoulder-length dark brown hair, warm blue eyes, fair skin, athletic build, blue V-neck sweater, blue jeans, small hoop earrings)"
+   - EVERY time a character is mentioned in a visual direction, include their FULL physical description and wardrobe inline
    - Pull ALL details from the LOCKED CHARACTER PROFILES above — do NOT abbreviate or omit wardrobe/outfit
    - Never describe a character generically (e.g., "a woman" or "a person") when a named locked character exists
-   - Always append: "Maintain exact character appearance as described — same face, hair, clothing, and art style."
-   - IMPORTANT: Do NOT reference any "reference image" — character consistency comes from the detailed text descriptions only. Never write "from reference image" or "from the reference".
+   - IMPORTANT: Do NOT reference any "reference image" — character consistency comes from the detailed text descriptions only
 
 2. NARRATION-VISUAL ALIGNMENT
-   - The environment, camera movement, and character action must directly reinforce the MEANING of the narration — not just illustrate it generically
+   - The environment, camera movement, and subject must directly reinforce the MEANING of the narration
    - Ask yourself: what does this narration mean conceptually? Then express that concept visually
-   - Example: "bridging conventional and holistic medicine" → split environment with clinical elements on one side, botanical/natural elements on the other, character centered between them
+   - For product-focused scenes (CTA, closing), describe the PRODUCT — do NOT add characters unless the narration explicitly features a character performing an action
 
-3. REQUIRED VISUAL ELEMENTS — always specify all six:
+3. REQUIRED VISUAL ELEMENTS — always specify:
    a) Shot type (medium shot, close-up, wide establishing, etc.)
-   b) Camera movement (slow push-in, subtle arc left-to-right, static hold, gentle orbit, etc.)
-   c) Lighting mood (warm golden, cool clinical white, soft ambient, split warm-cool, etc.)
+   b) Camera movement (${artPreset.cameraMotionHints || 'slow push-in, subtle arc, static hold'})
+   c) Lighting mood (warm golden, cool clinical white, soft ambient, etc.)
    d) Background environment (specific, thematic, never generic)
-   e) Character action and gesture (what are they doing physically that matches the narration meaning)
-   f) Art style suffix (always end with the standard suffix below)
+   e) Art style prefix — always START the prompt with "${artPreset.styleMarkerPrefix || artPreset.name} —"
 
-4. STANDARD ART STYLE SUFFIX — always end every prompt with:
-   "Disney/Pixar 3D CGI animation quality, subsurface skin scattering, shallow depth of field, cinematic warm color grading, 4K render. No text, no signs, no labels, no readable words anywhere in the scene. Clean background surfaces suitable for text overlay compositing. Smooth natural movement — gentle gestures, soft blinks, subtle breathing motion."
+4. CRITICAL — NO TEXT IN VIDEO
+   - NEVER describe text, labels, brand names, lettering, or typography appearing in the scene
+   - NEVER mention "brand name appears", "text overlay", or "lettering beneath/above/on"
+   - The AI video generator will try to render any mentioned text as garbled characters
+   - Text overlays are added separately in post-production — they must NOT be in the visual direction
 
-5. ENVIRONMENT AND BACKGROUND
-   - When describing the scene environment, always include at least one compositionally clean surface or area that could naturally hold a text label or title — such as a wall, a chalkboard, a desk surface, an open sky area, or negative space beside the character. This prepares the scene for Remotion text overlay compositing in post-production.
-
-6. NEVER USE:
+5. NEVER USE:
    - Generic room descriptions ("cozy office", "modern workspace")
    - Vague character descriptions ("a woman", "a professional")
-   - Static, non-cinematic framing descriptions
+   - Text, labels, or readable words in the scene description
    - Environments unrelated to the narration's meaning
 
-7. EVERY micro-scene prompt MUST include the art style marker (e.g. "Pixar-style 3D animated", "claymation", etc.) — AI video providers treat each prompt independently and will default to photorealistic if the style is not explicitly stated.
+6. EVERY prompt MUST include the art style marker ("${artPreset.styleMarkerPrefix || artPreset.name}") — AI video providers treat each prompt independently and will default to photorealistic if the style is not explicitly stated.
 
 ` : '';
 
@@ -3361,6 +3358,7 @@ RULES:
 6. REAL SETTINGS, NOT SETS - Everyday places that look lived-in and real.
 7. NO CINEMATIC LANGUAGE - No camera angles, color palettes, or lighting rigs.
 8. VISUAL VARIETY - Each micro-scene should use a DIFFERENT visual type.
+9. NO TEXT IN VIDEO - NEVER describe text, labels, brand names, lettering, or typography appearing in the scene. The AI video generator will render mentioned text as garbled characters. Text overlays are added separately in post-production.
 
 ## WRONG vs RIGHT EXAMPLES
 WRONG: "A progression from calorie counting misconceptions to the deeper reality of body toxin overload"
@@ -4434,8 +4432,8 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
             let msPrompt = ms.visualDirection || visualPrompt;
             const explicitRef = ms.imageUrl || parentRefImageUrl;
             
-            const msText = `${ms.narration || ''} ${ms.visualDirection || ''} ${visualPrompt || ''}`;
-            const matchedChars = matchCharactersInText(msText);
+            const msVisualText = `${ms.visualDirection || ''} ${visualPrompt || ''}`;
+            const matchedChars = matchCharactersInText(msVisualText);
             let charRefImageUrl: string | null = null;
             let charRefImageUrls: string[] = [];
             let isCharRef = false;
@@ -4555,8 +4553,14 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
                                    updatedProject.assets.images.find(img => img.sceneId === scene.id && img.source === 'uploaded')?.url;
           const autoGeneratedImageUrl = updatedProject.scenes.find(s => s.id === scene.id)?.assets?.imageUrl;
           
-          const sceneText = `${scene.narration || ''} ${scene.visualDirection || ''} ${visualPrompt || ''}`;
-          const sceneMatchedChars = matchCharactersInText(sceneText);
+          const sceneVisualText = `${scene.visualDirection || ''} ${visualPrompt || ''}`;
+          const sceneMatchedChars = matchCharactersInText(sceneVisualText);
+          if (sceneMatchedChars.length === 0) {
+            const narrationOnlyChars = matchCharactersInText(scene.narration || '');
+            if (narrationOnlyChars.length > 0) {
+              console.log(`[CharRef] Scene ${scene.id}: characters [${narrationOnlyChars.map(c => c.name).join(', ')}] found in narration but NOT in visual direction — skipping character injection to preserve product/scene-focused visual`);
+            }
+          }
           let sceneCharRefUrl: string | null = null;
           let sceneCharRefUrls: string[] = [];
           let sceneVideoPrompt = visualPrompt;

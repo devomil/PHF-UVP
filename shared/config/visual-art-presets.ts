@@ -121,7 +121,7 @@ export const VISUAL_ART_PRESETS: Record<string, VisualArtPreset> = {
       reason: 'Kling handles stylized flat aesthetics better than Runway for illustrated styles.',
     },
     generationStrategy: 'i2v',
-    globalStyleNotes: '2D line art animation • Clean vector outlines • Flat color fills • White or minimal backgrounds • No photorealistic elements • Bold graphic shapes • Editorial illustration quality',
+    globalStyleNotes: '2D line art animation • Clean vector outlines • Flat color fills • White or minimal backgrounds • No photorealistic elements • Bold graphic shapes • Editorial illustration quality • No text, no words, no letters, no labels, no readable characters anywhere in the scene',
     cameraMotionHints: 'gentle pan, smooth slide, subtle parallax',
     styleMarkerPrefix: '2D line art animated',
     styleKeywords: ['2d line art', 'line art', 'vector illustration', 'line drawing'],
