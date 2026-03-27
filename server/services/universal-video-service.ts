@@ -4427,10 +4427,20 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
           console.log(`[Assets] Scene ${scene.id} has ${microScenes.length} micro-scenes — generating ALL in parallel`);
           let microSuccessCount = 0;
           
-          const parentSceneImageUrl = updatedProject.scenes.find(s => s.id === scene.id)?.assets?.imageUrl;
+          const parentSceneData = updatedProject.scenes.find(s => s.id === scene.id);
+          const parentSceneImageUrl = parentSceneData?.assets?.imageUrl;
           const parentRefImageUrl = (scene as any).brandAssetUrl || 
+                                     (parentSceneData as any)?.brandAssetUrl ||
                                      scene.referenceConfig?.imageUrl ||
                                      updatedProject.assets.images.find(img => img.sceneId === scene.id && img.source === 'uploaded')?.url;
+          const isProductScene = ['product', 'solution', 'cta', 'benefit'].includes((scene.type || '').toLowerCase());
+          const productImageForScene = isProductScene 
+            ? (parentSceneData?.assets as any)?.productOverlayUrl || 
+              (project.assets.productImages || []).find((img: any) => img.isPrimary)?.url
+            : null;
+          if (productImageForScene && !parentRefImageUrl) {
+            console.log(`[Assets] Scene ${scene.id} (${scene.type}): product image available for micro-scene I2V cascade: ${String(productImageForScene).substring(0, 80)}`);
+          }
           
           const microScenePromises = microScenes.map((ms: any, msIdx: number) => {
             if (ms.videoUrl) {
@@ -4439,7 +4449,8 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
             }
             
             let msPrompt = ms.visualDirection || visualPrompt;
-            const explicitRef = ms.imageUrl || parentRefImageUrl;
+            const resolvedProductRef = productImageForScene ? this.resolveProductImageUrl(productImageForScene) : null;
+            const explicitRef = ms.imageUrl || parentRefImageUrl || resolvedProductRef;
             
             const msVisualText = `${ms.visualDirection || ''} ${visualPrompt || ''}`;
             const matchedChars = matchCharactersInText(msVisualText);
