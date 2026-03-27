@@ -46,6 +46,8 @@ import { TextLabelOverlay } from "./components/overlays/TextLabelOverlay";
 // Phase 18B: Scene overlay configurations from overlay-configuration-service
 import type { SceneOverlayConfig } from '../shared/types/scene-overlays';
 
+const AI_VIDEO_TRIM_FRAMES = 9;
+
 export interface UniversalVideoProps {
   scenes: Scene[];
   voiceoverUrl: string | null;
@@ -737,7 +739,7 @@ const KenBurnsBackground: React.FC<{
           src={src}
           style={{ width: '100%', height: '100%', objectFit: 'cover' }}
           muted
-          startFrom={3}
+          startFrom={AI_VIDEO_TRIM_FRAMES}
         />
       );
     }
@@ -794,7 +796,7 @@ const KenBurnsBackground: React.FC<{
         src={src}
         style={style}
         muted
-        startFrom={3}
+        startFrom={AI_VIDEO_TRIM_FRAMES}
       />
     );
   }
@@ -1193,8 +1195,6 @@ const ProductReveal: React.FC<{
 // SCENE RENDERER - WITH FULL ERROR HANDLING
 // ============================================================
 
-const AI_VIDEO_TRIM_FRAMES = 9;
-
 const MicroSceneAudioVideo: React.FC<{
   src: string;
   volume: number;
@@ -1298,16 +1298,13 @@ const MicroSceneBackground: React.FC<{
   const anyMsHasOverlays = microScenes.some(ms => ms.overlayItems && ms.overlayItems.length > 0);
 
   if (hasAssembledClip) {
-    const assemblyDurationSec = assemblyManifest!.totalDurationSec || totalDuration;
-    const assemblyFrames = Math.round(assemblyDurationSec * fps);
-    const needsLoop = assemblyFrames < totalSceneFrames - 2;
     return (
       <AbsoluteFill>
         <SafeVideo
           src={assemblyManifest!.assembledClipUrl!}
           style={{ width: '100%', height: '100%', objectFit: 'cover' }}
           muted
-          loopDurationInFrames={needsLoop ? assemblyFrames : undefined}
+          startFrom={AI_VIDEO_TRIM_FRAMES}
           fallback={fallback}
         />
         {anyMsHasOverlays && (() => {
@@ -1561,7 +1558,7 @@ const SceneRenderer: React.FC<{
             src={brandAssetUrl}
             style={{ width: '100%', height: '100%', objectFit: 'cover' }}
             muted
-            startFrom={3}
+            startFrom={AI_VIDEO_TRIM_FRAMES}
           />
         ) : hasValidBrandAsset && brandAssetType === 'image' ? (
           <KenBurnsImage
