@@ -6178,6 +6178,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
           mood: (scene as any).analysis?.mood,
           contentType: (scene as any).analysis?.contentType as 'person' | 'product' | 'nature' | 'abstract' | 'lifestyle' | undefined,
           qualityTier: sceneQualityTier as 'ultra' | 'premium' | 'standard',
+          artPresetId: scene.artPresetId || (project as any).artPresetId,
           ...(scene.negativePrompt ? { negativePrompt: scene.negativePrompt } : {}),
         });
         
