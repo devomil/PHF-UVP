@@ -5018,13 +5018,15 @@ export default function UniversalVideoProducer() {
 
   useEffect(() => {
     if (!project) return;
+    const isGeneratingAssets = project.status === 'generating' || project.status === 'queued';
     const isChunkedInProgress = 
       (project.status === 'render_queued' || project.status === 'rendering' || project.status === 'lambda_pending') &&
       ((project.progress as any)?.renderMethod === 'chunked' || project.status === 'lambda_pending');
     
-    if (!isChunkedInProgress) return;
+    if (!isChunkedInProgress && !isGeneratingAssets) return;
 
     let active = true;
+    const pollInterval = isGeneratingAssets ? 8000 : 5000;
     const interval = setInterval(async () => {
       if (!active) return;
       try {
@@ -5032,6 +5034,12 @@ export default function UniversalVideoProducer() {
         const data = await response.json();
         if (active && data.project) {
           setProject(data.project);
+          if (isGeneratingAssets && data.project.status === 'draft') {
+            toast({
+              title: 'Assets Generated',
+              description: 'All assets have been generated. Review the results and continue.',
+            });
+          }
           const rs = (data.project.progress as any)?.renderStatus;
           if (rs?.percent !== undefined) {
             setRenderProgress({
@@ -5050,9 +5058,9 @@ export default function UniversalVideoProducer() {
           }
         }
       } catch (err) {
-        console.error('[ChunkedPoll] Error fetching project:', err);
+        console.error('[ProjectPoll] Error fetching project:', err);
       }
-    }, 5000);
+    }, pollInterval);
 
     return () => { active = false; clearInterval(interval); };
   }, [project?.id, project?.status, (project?.progress as any)?.renderMethod]);
@@ -5526,7 +5534,7 @@ export default function UniversalVideoProducer() {
                       );
                     })()
                   )}
-                  {project.status === 'draft' && !showGenerationPreview && (() => {
+                  {(project.status === 'draft' || project.status === 'generating' || project.status === 'queued') && !showGenerationPreview && (() => {
                     const steps = ['voiceover', 'images', 'videos', 'music', 'assembly'] as const;
                     const stepLabels: Record<string, string> = {
                       voiceover: 'Voiceover', images: 'Images', videos: 'Videos', music: 'Music', assembly: 'Final Assembly'
@@ -5599,16 +5607,16 @@ export default function UniversalVideoProducer() {
                           <div className="flex items-center gap-1">
                             <Button
                               onClick={() => generateStepMutation.mutate(nextStep)}
-                              disabled={generateStepMutation.isPending || skipToStepMutation.isPending}
+                              disabled={generateStepMutation.isPending || skipToStepMutation.isPending || project.status === 'generating' || project.status === 'queued'}
                               className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
                               data-testid={`button-generate-step-${nextStep}`}
                             >
-                              {generateStepMutation.isPending ? (
+                              {(generateStepMutation.isPending || project.status === 'generating' || project.status === 'queued') ? (
                                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                               ) : (
                                 <Sparkles className="w-4 h-4 mr-2" />
                               )}
-                              {generateStepMutation.isPending
+                              {(generateStepMutation.isPending || project.status === 'generating' || project.status === 'queued')
                                 ? `Generating ${stepLabels[nextStep]}...`
                                 : `Generate ${stepLabels[nextStep]}`}
                             </Button>
