@@ -1,0 +1,124 @@
+Plan: Stage 4 — Intelligent Visual Direction Generation
+Problem: The current three-stage pipeline writes visual directions as generic human-editor descriptions, not as AI video generation prompts. Visual directions lack art style instruction, camera language, lighting mood, compositional guidance, and the cinematic specificity needed to produce high-quality AI video output.
+Solution: Add Stage 4 to the script generation pipeline — a dedicated Claude call that transforms each scene's narration into a production-grade AI video prompt, art-style aware, platform-optimized, and tailored to the selected provider hierarchy.
+Add to the pipeline service after Stage 3:
+
+Stage 4 system prompt:
+"You are a world-class AI video director and prompt engineer with deep 
+expertise in generative AI video models (Kling, Runway, Sora, Veo). 
+You write visual direction prompts that produce stunning, cinematic, 
+emotionally resonant AI video output. You understand that AI video 
+models respond to specific cinematic language — shot type, camera 
+movement, lighting mood, color palette, depth of field, texture, 
+and art style instruction. You never write generic stock footage 
+descriptions. Every prompt you write is designed to produce a 
+'wow' reaction from the viewer."
+
+Stage 4 user prompt:
+`Transform each scene's narration into a production-grade AI video 
+generation prompt.
+
+PROJECT CONTEXT:
+Brand: ${brandName}
+Product: ${productName}
+Platform: ${platform}
+Art Style: ${selectedArtStyle}
+Narrative Framework: ${stage1Result.narrativeFramework}
+Primary Emotion: ${stage1Result.primaryEmotion}
+Tone Keywords: ${stage1Result.toneKeywords.join(', ')}
+
+ART STYLE INSTRUCTION TO EMBED IN EVERY PROMPT:
+${getArtStyleSuffix(selectedArtStyle)}
+
+PROVIDER CONTEXT:
+Primary provider: ${primaryProvider}
+${primaryProvider === 'sora' ? 'Optimize for Sora — use rich scene description, strong physics, emotional atmosphere' : ''}
+${primaryProvider === 'runway' ? 'Optimize for Runway — emphasize cinematic composition, dramatic lighting, film-grade aesthetics' : ''}
+${primaryProvider === 'kling' ? 'Optimize for Kling — emphasize character consistency, natural motion, warm color grading' : ''}
+
+SCENES TO TRANSFORM:
+${stage3Scenes.map((scene, i) => `
+Scene ${i + 1}:
+Narration: "${scene.narration}"
+Scene Type: ${scene.sceneType}
+Emotional Tone: ${scene.emotionalTone}
+Duration: ${scene.durationSeconds}s
+Current Visual Direction: "${scene.visualDirection}"
+`).join('\n')}
+
+For each scene, write a visual direction prompt that:
+1. Opens with shot type and camera movement 
+   (e.g. "Extreme macro push-in", "Slow orbital arc", "Wide establishing crane reveal")
+2. Describes the subject with cinematic specificity — not "a bottle" but 
+   "the Ultra Greens tub centered on a moss-covered stone surface"
+3. Specifies lighting mood 
+   (e.g. "golden hour side lighting", "cool bioluminescent glow", 
+   "warm amber clinical lighting")
+4. Includes environment/atmosphere with depth 
+   (foreground, midground, background layers)
+5. Adds motion elements 
+   (floating particles, gentle sway, slow breathing, subtle camera drift)
+6. Specifies compositional negative space for text overlay
+7. Ends with the full art style suffix
+8. Adds negative prompt guidance for this scene type
+
+SCENE TYPE VISUAL FRAMEWORKS:
+- hook: Pattern interrupt visual — unexpected scale, dramatic reveal, 
+  something the viewer has never seen
+- problem: Relatable reality — warm but slightly desaturated, 
+  imperfect environment, subtle tension
+- agitate: Heightened problem — tighter framing, cooler temperature, 
+  more contrast
+- solution: Transformation moment — warmer light enters frame, 
+  product reveal, environment brightens
+- proof: Credibility visual — clean clinical or scientific environment, 
+  precise and trustworthy
+- benefit: Aspirational outcome — golden light, healthy environment, 
+  elevated lifestyle
+- cta: Brand moment — product hero shot, clean background, 
+  maximum label legibility
+
+ART STYLE SUFFIXES:
+- scientific-medical: "Scientific/Medical 3D visualization quality, 
+  bioluminescent cellular structures, volumetric molecular detail, 
+  clean clinical environment, translucent membrane textures, 
+  soft particle effects, 4K render. No text, no labels, 
+  no readable words in scene."
+- cinematic-realism: "Photorealistic film-grade imagery, 
+  natural lighting with cinematic color grading, 
+  shallow depth of field, 4K. No text in scene."
+- 3d-illustration: "Disney/Pixar 3D CGI animation quality, 
+  subsurface skin scattering, shallow depth of field, 
+  cinematic warm color grading, 4K render. No text in scene."
+- 2d-line-art: "Clean vector illustration style, crisp line drawing 
+  aesthetic, flat fills, bold outlines, minimal color palette. 
+  No text in scene."
+- auto: "Cinematic quality, natural lighting, shallow depth of field, 
+  warm color grading, 4K. No text in scene."
+
+Return a JSON array:
+[
+  {
+    "sceneNumber": 1,
+    "visualDirection": "full production-grade AI video prompt",
+    "negativePrompt": "scene-specific negative prompt",
+    "suggestedArtStyle": "if different from project art style, suggest override",
+    "cinematicNotes": "brief note on why this approach serves the narrative"
+  }
+]
+
+Return ONLY valid JSON.`
+
+
+
+After Stage 4: Merge the visual directions back into the Stage 3 scenes array, replacing the original visualDirection field with the Stage 4 output. Store cinematicNotes on each scene for display in the project editor.
+Art style auto-suggestion: If Stage 4 returns a suggestedArtStyle different from the project's selected style for 2+ scenes, surface a UI prompt: "Our AI recommends [style] for this content type. Switch art style?" — one-click accept or dismiss.
+New files:
+
+Add generateVisualDirections() function to the pipeline service
+
+Modified files:
+
+Pipeline service — add Stage 4 after Stage 3
+shared/schema.ts — add cinematicNotes (text) to scene data structure
+Project detail page — show cinematicNotes as a tooltip or expandable note on each scene card
