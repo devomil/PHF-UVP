@@ -185,8 +185,7 @@ function SocialHub() {
               <button
                 onClick={async () => {
                   try {
-                    await fetch("/api/social/profile", { method: "POST" });
-                    const res = await fetch("/api/social/connect-url");
+                    const res = await fetch("/api/social/accounts/connect", { method: "POST" });
                     const data = await res.json();
                     if (data.url) window.open(data.url, "_blank");
                   } catch (err) {

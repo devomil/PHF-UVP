@@ -339,4 +339,136 @@ router.get("/optimal-times", isAuthenticated, async (req: Request, res: Response
   }
 });
 
+router.get("/scheduled", isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const user = req.user as any;
+    const status = req.query.status as string | undefined;
+    if (status && !VALID_STATUSES.includes(status)) {
+      return res.status(400).json({ error: "Invalid status filter" });
+    }
+    const posts = await socialPublishingService.getUserPosts(user.id, status);
+    res.json({ posts });
+  } catch (error: any) {
+    res.status(500).json({ error: "Failed to fetch posts" });
+  }
+});
+
+router.post("/schedule", isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const user = req.user as any;
+    const { caption, captions, platforms, mediaUrl, mediaType, thumbnailUrl, scheduledFor, title, hashtags, projectId, assetId } = req.body;
+
+    const validPlatforms = validatePlatforms(platforms);
+    if (!validPlatforms) {
+      return res.status(400).json({ error: "At least one valid platform is required" });
+    }
+
+    let captionsObj: Record<string, string>;
+    if (captions && typeof captions === "object") {
+      captionsObj = captions;
+    } else if (caption && typeof caption === "string") {
+      captionsObj = {};
+      for (const p of validPlatforms) captionsObj[p] = caption;
+    } else {
+      return res.status(400).json({ error: "Caption or captions object is required" });
+    }
+
+    let parsedScheduledFor: Date | undefined;
+    if (scheduledFor) {
+      parsedScheduledFor = new Date(scheduledFor);
+      if (isNaN(parsedScheduledFor.getTime()) || parsedScheduledFor <= new Date()) {
+        return res.status(400).json({ error: "Invalid or past scheduled date" });
+      }
+    }
+
+    const hashtagsObj: Record<string, string[]> = {};
+    if (Array.isArray(hashtags)) {
+      for (const p of validPlatforms) hashtagsObj[p] = hashtags;
+    } else if (typeof hashtags === "object" && hashtags) {
+      Object.assign(hashtagsObj, hashtags);
+    }
+
+    const result = await socialPublishingService.createScheduledPost(user.id, {
+      projectId: typeof projectId === "string" ? projectId : undefined,
+      assetId: typeof assetId === "number" ? assetId : undefined,
+      mediaUrl: typeof mediaUrl === "string" ? mediaUrl : undefined,
+      mediaType: typeof mediaType === "string" ? mediaType : undefined,
+      thumbnailUrl: typeof thumbnailUrl === "string" ? thumbnailUrl : undefined,
+      captions: captionsObj,
+      hashtags: hashtagsObj,
+      platforms: validPlatforms,
+      scheduledFor: parsedScheduledFor,
+      title: typeof title === "string" ? title.substring(0, 500) : undefined,
+    });
+
+    res.status(201).json(result);
+  } catch (error: any) {
+    console.error("[SocialRoutes] Schedule post error:", error.message);
+    res.status(500).json({ error: "Failed to schedule post" });
+  }
+});
+
+router.put("/scheduled/:postId", isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const user = req.user as any;
+    const postId = parsePostId(req.params.postId);
+    if (!postId) return res.status(400).json({ error: "Invalid post ID" });
+
+    const { captions, hashtags, platforms, scheduledFor, title, mediaUrl, mediaType, thumbnailUrl } = req.body;
+    const updates: any = {};
+
+    if (captions !== undefined) updates.captions = captions;
+    if (hashtags !== undefined) updates.hashtags = hashtags;
+    if (platforms !== undefined) {
+      const valid = validatePlatforms(platforms);
+      if (!valid) return res.status(400).json({ error: "Invalid platforms" });
+      updates.platforms = valid;
+    }
+    if (scheduledFor !== undefined) {
+      if (scheduledFor === null) {
+        updates.scheduledFor = null;
+      } else {
+        const d = new Date(scheduledFor);
+        if (isNaN(d.getTime())) return res.status(400).json({ error: "Invalid date" });
+        updates.scheduledFor = d;
+      }
+    }
+    if (title !== undefined) updates.title = typeof title === "string" ? title.substring(0, 500) : null;
+    if (mediaUrl !== undefined) updates.mediaUrl = mediaUrl;
+    if (mediaType !== undefined) updates.mediaType = mediaType;
+    if (thumbnailUrl !== undefined) updates.thumbnailUrl = thumbnailUrl;
+
+    const updated = await socialPublishingService.updatePost(user.id, postId, updates);
+    res.json(updated);
+  } catch (error: any) {
+    res.status(error.message === "Post not found" ? 404 : 400).json({ error: error.message });
+  }
+});
+
+router.delete("/scheduled/:postId", isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const user = req.user as any;
+    const postId = parsePostId(req.params.postId);
+    if (!postId) return res.status(400).json({ error: "Invalid post ID" });
+    await socialPublishingService.deletePost(user.id, postId);
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(error.message === "Post not found" ? 404 : 400).json({ error: error.message });
+  }
+});
+
+router.post("/publish", isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const user = req.user as any;
+    const { postId } = req.body;
+    const id = typeof postId === "number" ? postId : parsePostId(String(postId));
+    if (!id) return res.status(400).json({ error: "Invalid post ID" });
+    const result = await socialPublishingService.publishNow(user.id, id);
+    res.json(result);
+  } catch (error: any) {
+    console.error("[SocialRoutes] Publish error:", error.message);
+    res.status(500).json({ error: "Failed to publish post" });
+  }
+});
+
 export default router;
