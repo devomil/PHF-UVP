@@ -34,6 +34,7 @@ interface ConnectedAccount {
   connected: boolean;
   username?: string;
   profileUrl?: string;
+  profileImageUrl?: string;
 }
 
 interface ContentReadyItem {
@@ -188,12 +189,20 @@ class SocialPublishingService {
       const data = await response.json();
       const accounts: ConnectedAccount[] = [];
 
+      const socialProfiles = data.socialProfiles || {};
       for (const platform of SUPPORTED_PLATFORMS) {
         const isActive = data.activeSocialAccounts?.some(
           (a: string) => a.toLowerCase() === platform
         );
         if (isActive) {
-          accounts.push({ platform, connected: true });
+          const profile = socialProfiles[platform] || {};
+          accounts.push({
+            platform,
+            connected: true,
+            username: profile.username || profile.screenName || profile.name || undefined,
+            profileUrl: profile.profileUrl || profile.url || undefined,
+            profileImageUrl: profile.profileImageUrl || profile.avatarUrl || profile.picture || undefined,
+          });
         }
       }
 
@@ -231,7 +240,13 @@ class SocialPublishingService {
       const projects = await db
         .select()
         .from(universalVideoProjects)
-        .where(eq(universalVideoProjects.ownerId, userId))
+        .where(and(
+          eq(universalVideoProjects.ownerId, userId),
+          or(
+            eq(universalVideoProjects.status, "completed"),
+            eq(universalVideoProjects.status, "rendered")
+          )
+        ))
         .orderBy(desc(universalVideoProjects.createdAt));
 
       for (const project of projects) {
@@ -689,6 +704,7 @@ class SocialPublishingService {
       characterCount: number;
       characterLimit: number;
     }>;
+    byPlatform: Record<string, { caption: string; hashtags: string[]; characterCount: number; characterLimit: number }>;
   }> {
     const platformLimits: Record<string, number> = {
       twitter: 280,
@@ -761,19 +777,25 @@ class SocialPublishingService {
 
     const effectiveTopic = topic || contentNiche || "our latest content";
 
+    const buildResponse = (captionsArr: Array<{ platform: string; caption: string; hashtags: string[]; characterCount: number; characterLimit: number }>) => {
+      const byPlatform: Record<string, { caption: string; hashtags: string[]; characterCount: number; characterLimit: number }> = {};
+      for (const c of captionsArr) {
+        byPlatform[c.platform] = { caption: c.caption, hashtags: c.hashtags, characterCount: c.characterCount, characterLimit: c.characterLimit };
+      }
+      return { captions: captionsArr, byPlatform };
+    };
+
     if (!llmClient.isAvailable()) {
-      return {
-        captions: platforms.map((p) => {
-          const caption = `Check out our latest ${effectiveTopic}!`;
-          return {
-            platform: p,
-            caption,
-            hashtags: ["viral", "trending", effectiveTopic.replace(/\s+/g, "")],
-            characterCount: caption.length,
-            characterLimit: platformLimits[p] || 5000,
-          };
-        }),
-      };
+      return buildResponse(platforms.map((p) => {
+        const caption = `Check out our latest ${effectiveTopic}!`;
+        return {
+          platform: p,
+          caption,
+          hashtags: ["viral", "trending", effectiveTopic.replace(/\s+/g, "")],
+          characterCount: caption.length,
+          characterLimit: platformLimits[p] || 5000,
+        };
+      }));
     }
 
     const systemPrompt = `You are a social media expert. Generate engaging captions optimized for each platform. ${brandContext} Return ONLY valid JSON.`;
@@ -818,29 +840,25 @@ Rules:
 
       const cleaned = result.text.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
       const parsed = JSON.parse(cleaned);
-      return {
-        captions: (parsed.captions || []).map((c: any) => ({
-          platform: c.platform,
-          caption: c.caption || "",
-          hashtags: c.hashtags || [],
-          characterCount: (c.caption || "").length,
-          characterLimit: platformLimits[c.platform] || 5000,
-        })),
-      };
+      return buildResponse((parsed.captions || []).map((c: any) => ({
+        platform: c.platform,
+        caption: c.caption || "",
+        hashtags: c.hashtags || [],
+        characterCount: (c.caption || "").length,
+        characterLimit: platformLimits[c.platform] || 5000,
+      })));
     } catch (error: any) {
       console.error(`[SocialPublishing] Caption generation failed: ${error.message}`);
-      return {
-        captions: platforms.map((p) => {
-          const caption = `${topic} - ${tone}`;
-          return {
-            platform: p,
-            caption,
-            hashtags: [topic.replace(/\s+/g, "")],
-            characterCount: caption.length,
-            characterLimit: platformLimits[p] || 5000,
-          };
-        }),
-      };
+      return buildResponse(platforms.map((p) => {
+        const caption = `${effectiveTopic} - ${tone}`;
+        return {
+          platform: p,
+          caption,
+          hashtags: [effectiveTopic.replace(/\s+/g, "")],
+          characterCount: caption.length,
+          characterLimit: platformLimits[p] || 5000,
+        };
+      }));
     }
   }
 
