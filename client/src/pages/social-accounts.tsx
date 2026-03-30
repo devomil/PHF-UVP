@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link2, Unlink, RefreshCw, CheckCircle, Wifi, WifiOff, ExternalLink } from "lucide-react";
+import { PlatformIcon } from "@/components/social/platform-icons";
 
 const PLATFORMS = [
   { id: "twitter", label: "X / Twitter", color: "#1DA1F2", bgGrad: "from-sky-500/20 to-sky-600/10" },
@@ -173,21 +174,27 @@ function SocialAccounts() {
                   <div className="relative p-5">
                     <div className="flex items-start justify-between">
                       <div className="flex items-center gap-3">
-                        {isConnected && accountInfo.profileImageUrl ? (
-                          <img
-                            src={accountInfo.profileImageUrl}
-                            alt={accountInfo.username || platform.label}
-                            className="w-10 h-10 rounded-xl object-cover"
-                            onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-                          />
-                        ) : (
+                        <div className="relative">
                           <div
-                            className="w-10 h-10 rounded-xl flex items-center justify-center text-lg font-bold"
+                            className="w-10 h-10 rounded-xl flex items-center justify-center"
                             style={{ backgroundColor: `${platform.color}20`, color: platform.color }}
                           >
-                            {platform.label[0]}
+                            {PlatformIcon[platform.id] ? (
+                              (() => { const Icon = PlatformIcon[platform.id]; return <Icon className="w-5 h-5" />; })()
+                            ) : (
+                              <span className="text-lg font-bold">{platform.label[0]}</span>
+                            )}
                           </div>
-                        )}
+                          {isConnected && accountInfo.profileImageUrl && (
+                            <img
+                              src={accountInfo.profileImageUrl}
+                              alt={accountInfo.username || platform.label}
+                              className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full border-2 object-cover"
+                              style={{ borderColor: "var(--surface)" }}
+                              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                            />
+                          )}
+                        </div>
                         <div>
                           <p className="font-semibold text-sm" style={{ color: "var(--text-primary)" }}>
                             {platform.label}
