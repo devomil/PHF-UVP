@@ -1,138 +1,445 @@
-import { useQuery } from "@tanstack/react-query";
-import { Calendar, ChevronLeft, ChevronRight } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  ChevronLeft,
+  ChevronRight,
+  CalendarDays,
+  Clock,
+  Video,
+  Image,
+  ChevronDown,
+  ChevronUp,
+  Inbox,
+  Send,
+} from "lucide-react";
 import { useState, useMemo } from "react";
+import PublishingPanel from "@/components/social/publishing-panel";
+
+interface ContentItem {
+  id: string;
+  type: "project" | "asset";
+  title: string;
+  mediaUrl: string;
+  mediaType: string;
+  thumbnailUrl?: string;
+  publishStatus: string;
+  createdAt: string;
+}
+
+interface ScheduledPost {
+  id: number;
+  title?: string;
+  captions?: Record<string, string>;
+  hashtags?: Record<string, string[]>;
+  platforms?: string[];
+  status: string;
+  scheduledFor?: string;
+  thumbnailUrl?: string;
+  mediaUrl?: string;
+  mediaType?: string;
+}
+
+const platformColors: Record<string, string> = {
+  twitter: "#1DA1F2",
+  instagram: "#E4405F",
+  tiktok: "#69C9D0",
+  facebook: "#1877F2",
+  linkedin: "#0A66C2",
+  youtube: "#FF0000",
+  pinterest: "#BD081C",
+  threads: "#888888",
+};
 
 function SocialCalendar() {
+  const queryClient = useQueryClient();
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [viewMode, setViewMode] = useState<"month" | "week">("month");
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [publishPanel, setPublishPanel] = useState<{
+    contentItem?: ContentItem;
+    editPost?: ScheduledPost;
+    prefillDate?: string;
+  } | null>(null);
 
   const { data: postsData } = useQuery({
     queryKey: ["/api/social/posts"],
     queryFn: async () => {
       const res = await fetch("/api/social/posts");
-      if (!res.ok) throw new Error("Failed to fetch posts");
+      if (!res.ok) throw new Error("Failed");
       return res.json();
     },
   });
 
-  const posts = postsData?.posts || [];
+  const { data: contentReady } = useQuery({
+    queryKey: ["/api/social/content-ready"],
+    queryFn: async () => {
+      const res = await fetch("/api/social/content-ready");
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+  });
+
+  const posts: ScheduledPost[] = postsData?.posts || postsData || [];
+  const contentItems: ContentItem[] = contentReady?.items || [];
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
 
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const firstDay = new Date(year, month, 1).getDay();
+  const getWeekStart = (d: Date) => {
+    const clone = new Date(d);
+    clone.setDate(clone.getDate() - clone.getDay());
+    return clone;
+  };
 
-  const calendarDays = useMemo(() => {
-    const days: Array<{ day: number; posts: any[] }> = [];
-    for (let i = 1; i <= daysInMonth; i++) {
-      const dayPosts = posts.filter((p: any) => {
-        if (!p.scheduledFor) return false;
-        const d = new Date(p.scheduledFor);
-        return d.getFullYear() === year && d.getMonth() === month && d.getDate() === i;
-      });
-      days.push({ day: i, posts: dayPosts });
+  const calendarCells = useMemo(() => {
+    if (viewMode === "month") {
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      const firstDay = new Date(year, month, 1).getDay();
+      const cells: Array<{ date: Date | null; posts: ScheduledPost[] }> = [];
+      for (let i = 0; i < firstDay; i++) cells.push({ date: null, posts: [] });
+      for (let d = 1; d <= daysInMonth; d++) {
+        const date = new Date(year, month, d);
+        const dayPosts = posts.filter((p) => {
+          if (!p.scheduledFor) return false;
+          const pd = new Date(p.scheduledFor);
+          return pd.getFullYear() === year && pd.getMonth() === month && pd.getDate() === d;
+        });
+        cells.push({ date, posts: dayPosts });
+      }
+      return cells;
+    } else {
+      const weekStart = getWeekStart(currentDate);
+      const cells: Array<{ date: Date; posts: ScheduledPost[] }> = [];
+      for (let i = 0; i < 7; i++) {
+        const date = new Date(weekStart);
+        date.setDate(weekStart.getDate() + i);
+        const dayPosts = posts.filter((p) => {
+          if (!p.scheduledFor) return false;
+          const pd = new Date(p.scheduledFor);
+          return pd.toDateString() === date.toDateString();
+        });
+        cells.push({ date, posts: dayPosts });
+      }
+      return cells;
     }
-    return days;
-  }, [posts, year, month, daysInMonth]);
+  }, [posts, year, month, currentDate, viewMode]);
 
-  const monthName = currentDate.toLocaleString("default", { month: "long", year: "numeric" });
+  const navigatePrev = () => {
+    if (viewMode === "month") {
+      setCurrentDate(new Date(year, month - 1, 1));
+    } else {
+      const d = new Date(currentDate);
+      d.setDate(d.getDate() - 7);
+      setCurrentDate(d);
+    }
+  };
+
+  const navigateNext = () => {
+    if (viewMode === "month") {
+      setCurrentDate(new Date(year, month + 1, 1));
+    } else {
+      const d = new Date(currentDate);
+      d.setDate(d.getDate() + 7);
+      setCurrentDate(d);
+    }
+  };
+
+  const headerText =
+    viewMode === "month"
+      ? currentDate.toLocaleString("default", { month: "long", year: "numeric" })
+      : (() => {
+          const ws = getWeekStart(currentDate);
+          const we = new Date(ws);
+          we.setDate(ws.getDate() + 6);
+          return `${ws.toLocaleDateString("en-US", { month: "short", day: "numeric" })} - ${we.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`;
+        })();
+
+  const today = new Date();
+  const isToday = (d: Date | null) =>
+    d !== null && d.getDate() === today.getDate() && d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear();
+
+  const refreshData = () => {
+    queryClient.invalidateQueries({ queryKey: ["/api/social/posts"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/social/content-ready"] });
+  };
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold" style={{ color: "var(--text-primary)" }}>
-            Content Calendar
-          </h1>
-          <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
-            View and manage your scheduled social posts
-          </p>
-        </div>
-      </div>
-
-      <div
-        className="rounded-xl border overflow-hidden"
-        style={{ borderColor: "var(--border-subtle)", backgroundColor: "var(--surface-card)" }}
-      >
-        <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: "1px solid var(--border-subtle)" }}>
-          <button
-            onClick={() => setCurrentDate(new Date(year, month - 1, 1))}
-            className="p-1.5 rounded-lg transition-colors"
-            style={{ color: "var(--text-secondary)" }}
-          >
-            <ChevronLeft className="w-5 h-5" />
-          </button>
-          <h2 className="text-lg font-semibold" style={{ color: "var(--text-primary)" }}>
-            {monthName}
-          </h2>
-          <button
-            onClick={() => setCurrentDate(new Date(year, month + 1, 1))}
-            className="p-1.5 rounded-lg transition-colors"
-            style={{ color: "var(--text-secondary)" }}
-          >
-            <ChevronRight className="w-5 h-5" />
-          </button>
-        </div>
-
-        <div className="grid grid-cols-7">
-          {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
-            <div
-              key={d}
-              className="px-3 py-2 text-center text-xs font-medium"
-              style={{ color: "var(--text-muted)", borderBottom: "1px solid var(--border-subtle)" }}
-            >
-              {d}
+    <div className="flex h-full" style={{ color: "var(--text-primary)" }}>
+      {sidebarOpen && (
+        <div
+          className="w-64 shrink-0 border-r overflow-y-auto p-4 space-y-3"
+          style={{ borderColor: "var(--border-subtle)", backgroundColor: "var(--surface)" }}
+        >
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-semibold">Content Queue</h3>
+            <button onClick={() => setSidebarOpen(false)} className="p-0.5" style={{ color: "var(--text-muted)" }}>
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+          </div>
+          {contentItems.length === 0 ? (
+            <div className="text-center py-6">
+              <Inbox className="w-8 h-8 mx-auto mb-2" style={{ color: "var(--text-muted)" }} />
+              <p className="text-xs" style={{ color: "var(--text-muted)" }}>No content ready</p>
             </div>
-          ))}
-
-          {Array.from({ length: firstDay }).map((_, i) => (
-            <div
-              key={`empty-${i}`}
-              className="min-h-[80px] p-2"
-              style={{ borderBottom: "1px solid var(--border-subtle)", borderRight: "1px solid var(--border-subtle)" }}
-            />
-          ))}
-
-          {calendarDays.map(({ day, posts: dayPosts }) => {
-            const isToday =
-              day === new Date().getDate() &&
-              month === new Date().getMonth() &&
-              year === new Date().getFullYear();
-            return (
+          ) : (
+            contentItems.map((item) => (
               <div
-                key={day}
-                className="min-h-[80px] p-2"
+                key={item.id}
+                className="rounded-lg border p-2 cursor-pointer transition-all hover:shadow-md"
+                style={{ borderColor: "var(--border-subtle)", backgroundColor: "var(--app-bg)" }}
+                onClick={() => setPublishPanel({ contentItem: item })}
+                draggable
+              >
+                <div className="flex items-center gap-2">
+                  {item.thumbnailUrl ? (
+                    <img src={item.thumbnailUrl} alt="" className="w-10 h-10 rounded object-cover shrink-0" />
+                  ) : (
+                    <div className="w-10 h-10 rounded flex items-center justify-center shrink-0" style={{ backgroundColor: "var(--surface-hover)" }}>
+                      {item.mediaType === "video" ? <Video className="w-4 h-4" style={{ color: "var(--text-muted)" }} /> : <Image className="w-4 h-4" style={{ color: "var(--text-muted)" }} />}
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium truncate" style={{ color: "var(--text-primary)" }}>{item.title}</p>
+                    <p className="text-[10px] capitalize" style={{ color: "var(--text-muted)" }}>{item.mediaType}</p>
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <div
+          className="flex items-center justify-between px-6 py-4 shrink-0"
+          style={{ borderBottom: "1px solid var(--border-subtle)" }}
+        >
+          <div className="flex items-center gap-3">
+            {!sidebarOpen && (
+              <button
+                onClick={() => setSidebarOpen(true)}
+                className="p-1.5 rounded-lg border mr-2"
+                style={{ borderColor: "var(--border-medium)", color: "var(--text-secondary)" }}
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            )}
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-xl bg-purple-500/10 border border-purple-500/20">
+                <CalendarDays className="w-5 h-5 text-purple-400" />
+              </div>
+              <h1 className="text-xl font-bold">Content Calendar</h1>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <div className="flex items-center rounded-lg border overflow-hidden" style={{ borderColor: "var(--border-medium)" }}>
+              <button
+                onClick={() => setViewMode("month")}
+                className="px-3 py-1.5 text-xs font-medium transition-all"
                 style={{
-                  borderBottom: "1px solid var(--border-subtle)",
-                  borderRight: "1px solid var(--border-subtle)",
-                  backgroundColor: isToday ? "rgba(124,58,237,0.05)" : undefined,
+                  backgroundColor: viewMode === "month" ? "var(--surface-active)" : "transparent",
+                  color: viewMode === "month" ? "var(--text-primary)" : "var(--text-muted)",
                 }}
               >
-                <span
-                  className={`text-xs font-medium ${isToday ? "bg-purple-600 text-white px-1.5 py-0.5 rounded-full" : ""}`}
-                  style={isToday ? {} : { color: "var(--text-secondary)" }}
-                >
-                  {day}
-                </span>
-                {dayPosts.map((p: any) => (
+                Month
+              </button>
+              <button
+                onClick={() => setViewMode("week")}
+                className="px-3 py-1.5 text-xs font-medium transition-all"
+                style={{
+                  backgroundColor: viewMode === "week" ? "var(--surface-active)" : "transparent",
+                  color: viewMode === "week" ? "var(--text-primary)" : "var(--text-muted)",
+                }}
+              >
+                Week
+              </button>
+            </div>
+
+            <div className="flex items-center gap-1">
+              <button onClick={navigatePrev} className="p-1.5 rounded-lg transition-colors" style={{ color: "var(--text-secondary)" }}>
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+              <span className="text-sm font-semibold min-w-[180px] text-center">{headerText}</span>
+              <button onClick={navigateNext} className="p-1.5 rounded-lg transition-colors" style={{ color: "var(--text-secondary)" }}>
+                <ChevronRight className="w-5 h-5" />
+              </button>
+            </div>
+
+            <button
+              onClick={() => setCurrentDate(new Date())}
+              className="px-3 py-1.5 rounded-lg text-xs font-medium border transition-all"
+              style={{ borderColor: "var(--border-medium)", color: "var(--text-secondary)" }}
+            >
+              Today
+            </button>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-auto">
+          {viewMode === "month" ? (
+            <div className="h-full flex flex-col">
+              <div className="grid grid-cols-7 shrink-0">
+                {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
                   <div
-                    key={p.id}
-                    className="mt-1 text-xs px-1.5 py-0.5 rounded truncate"
-                    style={{
-                      backgroundColor:
-                        p.status === "published" ? "rgba(34,197,94,0.15)" : "rgba(59,130,246,0.15)",
-                      color:
-                        p.status === "published" ? "rgb(34,197,94)" : "rgb(59,130,246)",
-                    }}
+                    key={d}
+                    className="px-3 py-2 text-center text-xs font-medium"
+                    style={{ color: "var(--text-muted)", borderBottom: "1px solid var(--border-subtle)" }}
                   >
-                    {p.title || p.platforms?.join(", ")}
+                    {d}
                   </div>
                 ))}
               </div>
-            );
-          })}
+              <div className="grid grid-cols-7 flex-1">
+                {calendarCells.map((cell, i) => (
+                  <div
+                    key={i}
+                    className={`min-h-[100px] p-1.5 transition-colors ${cell.date ? "cursor-pointer hover:bg-purple-500/5" : ""}`}
+                    style={{
+                      borderBottom: "1px solid var(--border-subtle)",
+                      borderRight: "1px solid var(--border-subtle)",
+                      backgroundColor: cell.date && isToday(cell.date) ? "rgba(124,58,237,0.05)" : undefined,
+                    }}
+                    onClick={() => {
+                      if (cell.date && contentItems.length > 0) {
+                        setPublishPanel({
+                          contentItem: contentItems[0],
+                          prefillDate: cell.date.toISOString().split("T")[0],
+                        });
+                      }
+                    }}
+                  >
+                    {cell.date && (
+                      <>
+                        <div className="flex items-center justify-between mb-1">
+                          <span
+                            className={`text-xs font-medium ${isToday(cell.date) ? "bg-purple-600 text-white w-6 h-6 rounded-full flex items-center justify-center" : ""}`}
+                            style={isToday(cell.date) ? {} : { color: "var(--text-secondary)" }}
+                          >
+                            {cell.date.getDate()}
+                          </span>
+                          {cell.posts.length > 0 && (
+                            <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-purple-500/10 text-purple-400 font-medium">
+                              {cell.posts.length}
+                            </span>
+                          )}
+                        </div>
+                        <div className="space-y-0.5">
+                          {cell.posts.slice(0, 3).map((p) => (
+                            <div
+                              key={p.id}
+                              className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] truncate cursor-pointer transition-all hover:opacity-80"
+                              style={{
+                                backgroundColor: p.status === "published" ? "rgba(34,197,94,0.12)" : "rgba(59,130,246,0.12)",
+                                color: p.status === "published" ? "rgb(34,197,94)" : "rgb(96,165,250)",
+                              }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setPublishPanel({ editPost: p });
+                              }}
+                            >
+                              {p.platforms?.slice(0, 2).map((pl) => (
+                                <span
+                                  key={pl}
+                                  className="w-1.5 h-1.5 rounded-full shrink-0"
+                                  style={{ backgroundColor: platformColors[pl] || "var(--text-muted)" }}
+                                />
+                              ))}
+                              <span className="truncate">{p.title || p.platforms?.join(", ")}</span>
+                            </div>
+                          ))}
+                          {cell.posts.length > 3 && (
+                            <span className="text-[9px] px-1.5" style={{ color: "var(--text-muted)" }}>
+                              +{cell.posts.length - 3} more
+                            </span>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-7 h-full">
+              {(calendarCells as Array<{ date: Date; posts: ScheduledPost[] }>).map((cell, i) => (
+                <div
+                  key={i}
+                  className="flex flex-col p-2 cursor-pointer transition-colors hover:bg-purple-500/5"
+                  style={{
+                    borderRight: "1px solid var(--border-subtle)",
+                    backgroundColor: isToday(cell.date) ? "rgba(124,58,237,0.05)" : undefined,
+                  }}
+                  onClick={() => {
+                    if (contentItems.length > 0) {
+                      setPublishPanel({
+                        contentItem: contentItems[0],
+                        prefillDate: cell.date.toISOString().split("T")[0],
+                      });
+                    }
+                  }}
+                >
+                  <div className="text-center mb-2">
+                    <div className="text-[10px] font-medium" style={{ color: "var(--text-muted)" }}>
+                      {cell.date.toLocaleDateString("en-US", { weekday: "short" })}
+                    </div>
+                    <div
+                      className={`text-lg font-bold ${isToday(cell.date) ? "bg-purple-600 text-white w-8 h-8 rounded-full flex items-center justify-center mx-auto" : ""}`}
+                      style={isToday(cell.date) ? {} : { color: "var(--text-primary)" }}
+                    >
+                      {cell.date.getDate()}
+                    </div>
+                  </div>
+                  <div className="flex-1 space-y-1.5 overflow-y-auto">
+                    {cell.posts.map((p) => (
+                      <div
+                        key={p.id}
+                        className="p-2 rounded-lg border transition-all hover:shadow-md cursor-pointer"
+                        style={{ borderColor: "var(--border-subtle)", backgroundColor: "var(--surface)" }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setPublishPanel({ editPost: p });
+                        }}
+                      >
+                        {p.thumbnailUrl && (
+                          <img src={p.thumbnailUrl} alt="" className="w-full h-12 rounded object-cover mb-1" />
+                        )}
+                        <p className="text-[10px] font-medium truncate" style={{ color: "var(--text-primary)" }}>
+                          {p.title || "Untitled"}
+                        </p>
+                        <div className="flex items-center gap-1 mt-0.5">
+                          {p.platforms?.slice(0, 3).map((pl) => (
+                            <span
+                              key={pl}
+                              className="w-2 h-2 rounded-full"
+                              style={{ backgroundColor: platformColors[pl] || "var(--text-muted)" }}
+                            />
+                          ))}
+                          {p.scheduledFor && (
+                            <span className="text-[9px] ml-auto" style={{ color: "var(--text-muted)" }}>
+                              {new Date(p.scheduledFor).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
+
+      {publishPanel && (
+        <PublishingPanel
+          open={true}
+          onClose={() => setPublishPanel(null)}
+          onSuccess={refreshData}
+          contentItem={publishPanel.contentItem}
+          editPost={publishPanel.editPost}
+          prefillDate={publishPanel.prefillDate}
+        />
+      )}
     </div>
   );
 }
