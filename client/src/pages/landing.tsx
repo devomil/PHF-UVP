@@ -21,6 +21,10 @@ import {
   Check,
 } from "lucide-react";
 import neuralcutFullLogo from "@/assets/neuralcut-full-logo.png";
+import landingSceneEditor from "@/assets/landing-scene-editor.png";
+import landingMicroScenes from "@/assets/landing-micro-scenes.png";
+import landingFilmAudio from "@/assets/landing-film-audio.png";
+import landingBrandAssets from "@/assets/landing-brand-assets.png";
 
 const capabilities = [
   { name: "Video Generation (T2V)", providers: "19 models", icon: Video, description: "Generate videos from text prompts using Kling, Runway, Luma, Veo, Pika, Hailuo, Sora, Wan, and Seedance models." },
@@ -95,9 +99,9 @@ export default function Landing() {
     <div className="min-h-screen relative" style={{ backgroundColor: "#0a0a0f", color: "var(--text-primary)" }}>
 
       <nav className="fixed top-0 left-0 right-0 z-50 backdrop-blur-xl bg-[#0a0a0f]/80 border-b" style={{ borderColor: "rgba(255,255,255,0.06)" }}>
-        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-6 h-24 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <img src={neuralcutFullLogo} alt="NeuralCut.AI" className="h-8 object-contain" />
+            <img src={neuralcutFullLogo} alt="NeuralCut.AI" className="h-20 object-contain" />
           </div>
           <div className="hidden md:flex items-center gap-6 text-sm" style={{ color: "var(--text-secondary)" }}>
             <a href="#features" className="hover:text-white transition-colors">Features</a>
@@ -186,10 +190,15 @@ export default function Landing() {
                 <span className="text-[10px] ml-2" style={{ color: "var(--text-muted)" }}>AI Editing Tools</span>
               </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                {["Scene Editor", "Micro-Scenes", "Film & Audio", "Brand Assets"].map((label) => (
+                {[
+                  { label: "Scene Editor", img: landingSceneEditor },
+                  { label: "Micro-Scenes", img: landingMicroScenes },
+                  { label: "Film & Audio", img: landingFilmAudio },
+                  { label: "Brand Assets", img: landingBrandAssets },
+                ].map(({ label, img }) => (
                   <div key={label} className="rounded-lg p-3 text-center" style={{ backgroundColor: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.05)" }}>
-                    <div className="w-full h-16 rounded bg-gradient-to-br from-purple-900/30 to-indigo-900/20 mb-2 flex items-center justify-center">
-                      <Sparkles className="w-5 h-5 text-purple-400/50" />
+                    <div className="w-full h-28 rounded overflow-hidden mb-2">
+                      <img src={img} alt={label} className="w-full h-full object-cover rounded" loading="lazy" />
                     </div>
                     <span className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>{label}</span>
                   </div>
@@ -333,7 +342,7 @@ export default function Landing() {
         <div className="max-w-6xl mx-auto px-6">
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="flex items-center gap-2">
-              <img src={neuralcutFullLogo} alt="NeuralCut.AI" className="h-6 object-contain" />
+              <img src={neuralcutFullLogo} alt="NeuralCut.AI" className="h-14 object-contain" />
             </div>
             <div className="flex items-center gap-6 text-xs" style={{ color: "var(--text-muted)" }}>
               <a href="#features" className="hover:text-white transition-colors">Features</a>
