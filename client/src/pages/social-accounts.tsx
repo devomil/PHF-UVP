@@ -17,7 +17,7 @@ function SocialAccounts() {
   const queryClient = useQueryClient();
   const [polling, setPolling] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval>>();
-  const initialCountRef = useRef<number | null>(null);
+  const initialStateRef = useRef<string | null>(null);
 
   const [provisioned, setProvisioned] = useState(false);
 
@@ -57,7 +57,8 @@ function SocialAccounts() {
     onSuccess: (data) => {
       if (data.url) {
         window.open(data.url, "_blank");
-        initialCountRef.current = (accountsData?.accounts || []).length;
+        const accts = accountsData?.accounts || [];
+        initialStateRef.current = JSON.stringify(accts.map((a: { platform: string }) => a.platform).sort());
         setPolling(true);
       }
     },
@@ -76,10 +77,11 @@ function SocialAccounts() {
 
   useEffect(() => {
     if (polling) {
-      const currentCount = (accountsData?.accounts || []).length;
-      if (initialCountRef.current !== null && currentCount > initialCountRef.current) {
+      const currentAccts = accountsData?.accounts || [];
+      const currentState = JSON.stringify(currentAccts.map((a: { platform: string }) => a.platform).sort());
+      if (initialStateRef.current !== null && currentState !== initialStateRef.current) {
         setPolling(false);
-        initialCountRef.current = null;
+        initialStateRef.current = null;
         return;
       }
       let elapsed = 0;
@@ -88,7 +90,7 @@ function SocialAccounts() {
         queryClient.invalidateQueries({ queryKey: ["/api/social/accounts"] });
         if (elapsed >= 30000) {
           setPolling(false);
-          initialCountRef.current = null;
+          initialStateRef.current = null;
           clearInterval(pollRef.current);
         }
       }, 3000);
@@ -97,8 +99,8 @@ function SocialAccounts() {
   }, [polling, queryClient, accountsData]);
 
   const accounts = accountsData?.accounts || [];
-  const connectedMap = new Map<string, { platform: string; profileUrl?: string; displayName?: string }>(
-    accounts.map((a: { platform: string; profileUrl?: string; displayName?: string }) => [a.platform, a])
+  const connectedMap = new Map<string, { platform: string; profileUrl?: string; displayName?: string; username?: string; profileImageUrl?: string }>(
+    accounts.map((a: { platform: string; profileUrl?: string; displayName?: string; username?: string; profileImageUrl?: string }) => [a.platform, a])
   );
 
   return (
@@ -166,12 +168,21 @@ function SocialAccounts() {
                   <div className="relative p-5">
                     <div className="flex items-start justify-between">
                       <div className="flex items-center gap-3">
-                        <div
-                          className="w-10 h-10 rounded-xl flex items-center justify-center text-lg font-bold"
-                          style={{ backgroundColor: `${platform.color}20`, color: platform.color }}
-                        >
-                          {platform.label[0]}
-                        </div>
+                        {isConnected && accountInfo.profileImageUrl ? (
+                          <img
+                            src={accountInfo.profileImageUrl}
+                            alt={accountInfo.username || platform.label}
+                            className="w-10 h-10 rounded-xl object-cover"
+                            onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                          />
+                        ) : (
+                          <div
+                            className="w-10 h-10 rounded-xl flex items-center justify-center text-lg font-bold"
+                            style={{ backgroundColor: `${platform.color}20`, color: platform.color }}
+                          >
+                            {platform.label[0]}
+                          </div>
+                        )}
                         <div>
                           <p className="font-semibold text-sm" style={{ color: "var(--text-primary)" }}>
                             {platform.label}
@@ -180,9 +191,9 @@ function SocialAccounts() {
                             <div className="flex items-center gap-1 mt-0.5">
                               <CheckCircle className="w-3 h-3 text-green-500" />
                               <span className="text-xs text-green-500 font-medium">Connected</span>
-                              {accountInfo.displayName && (
+                              {(accountInfo.username || accountInfo.displayName) && (
                                 <span className="text-xs ml-1" style={{ color: "var(--text-muted)" }}>
-                                  @{accountInfo.displayName}
+                                  @{accountInfo.username || accountInfo.displayName}
                                 </span>
                               )}
                             </div>

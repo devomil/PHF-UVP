@@ -59,6 +59,7 @@ function SocialCalendar() {
     editPost?: ScheduledPost;
     prefillDate?: string;
   } | null>(null);
+  const [contentPicker, setContentPicker] = useState<{ date: string } | null>(null);
   const [dragItem, setDragItem] = useState<ContentItem | null>(null);
   const [dragOverDate, setDragOverDate] = useState<string | null>(null);
 
@@ -332,9 +333,11 @@ function SocialCalendar() {
                     onDrop={cell.date ? () => handleDropOnCell(cell.date!.toISOString().split("T")[0]) : undefined}
                     onClick={() => {
                       if (cell.date) {
-                        setPublishPanel({
-                          prefillDate: cell.date.toISOString().split("T")[0],
-                        });
+                        if (contentItems.length === 1) {
+                          setPublishPanel({ contentItem: contentItems[0], prefillDate: cell.date.toISOString().split("T")[0] });
+                        } else if (contentItems.length > 1) {
+                          setContentPicker({ date: cell.date.toISOString().split("T")[0] });
+                        }
                       }
                     }}
                   >
@@ -405,9 +408,11 @@ function SocialCalendar() {
                   onDragLeave={() => setDragOverDate(null)}
                   onDrop={() => handleDropOnCell(cell.date.toISOString().split("T")[0])}
                   onClick={() => {
-                    setPublishPanel({
-                      prefillDate: cell.date.toISOString().split("T")[0],
-                    });
+                    if (contentItems.length === 1) {
+                      setPublishPanel({ contentItem: contentItems[0], prefillDate: cell.date.toISOString().split("T")[0] });
+                    } else if (contentItems.length > 1) {
+                      setContentPicker({ date: cell.date.toISOString().split("T")[0] });
+                    }
                   }}
                 >
                   <div className="text-center mb-2">
@@ -461,6 +466,60 @@ function SocialCalendar() {
           )}
         </div>
       </div>
+
+      {contentPicker && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0" style={{ backgroundColor: "var(--overlay-bg)" }} onClick={() => setContentPicker(null)} />
+          <div
+            className="relative w-full max-w-md max-h-[70vh] overflow-y-auto rounded-2xl shadow-2xl p-6"
+            style={{ backgroundColor: "var(--app-bg)" }}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-base font-bold" style={{ color: "var(--text-primary)" }}>Select Content</h3>
+                <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                  Schedule for {new Date(contentPicker.date + "T00:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
+                </p>
+              </div>
+              <button onClick={() => setContentPicker(null)} className="p-1" style={{ color: "var(--text-muted)" }}>
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="space-y-2">
+              {contentItems.map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => {
+                    setContentPicker(null);
+                    setPublishPanel({ contentItem: item, prefillDate: contentPicker.date });
+                  }}
+                  className="w-full flex items-center gap-3 p-3 rounded-lg border transition-all hover:shadow-md text-left"
+                  style={{ borderColor: "var(--border-subtle)", backgroundColor: "var(--surface)" }}
+                >
+                  {item.thumbnailUrl ? (
+                    <img src={item.thumbnailUrl} alt="" className="w-12 h-12 rounded-lg object-cover shrink-0" />
+                  ) : (
+                    <div className="w-12 h-12 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: "var(--surface-hover)" }}>
+                      {item.mediaType === "video" ? <Video className="w-5 h-5" style={{ color: "var(--text-muted)" }} /> : <Image className="w-5 h-5" style={{ color: "var(--text-muted)" }} />}
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate" style={{ color: "var(--text-primary)" }}>{item.title}</p>
+                    <p className="text-[10px] capitalize" style={{ color: "var(--text-muted)" }}>{item.mediaType}</p>
+                  </div>
+                  <Send className="w-4 h-4 shrink-0" style={{ color: "var(--text-muted)" }} />
+                </button>
+              ))}
+              {contentItems.length === 0 && (
+                <div className="text-center py-8">
+                  <Inbox className="w-8 h-8 mx-auto mb-2" style={{ color: "var(--text-muted)" }} />
+                  <p className="text-sm" style={{ color: "var(--text-muted)" }}>No content ready to schedule</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {publishPanel && (
         <PublishingPanel
