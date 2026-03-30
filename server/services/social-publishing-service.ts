@@ -5,6 +5,22 @@ import { llmClient } from "./piapi-llm-client";
 import { brandBibleService } from "./brand-bible-service";
 import { getTrendingHooks } from "./trend-intelligence-service";
 
+interface ProjectProgress {
+  outputUrl?: string;
+  renderOutputUrl?: string;
+  [key: string]: unknown;
+}
+
+interface ProjectConcept {
+  description?: string;
+  [key: string]: unknown;
+}
+
+interface ProjectAssets {
+  productMediaUrl?: string;
+  [key: string]: unknown;
+}
+
 const AYRSHARE_API_BASE = "https://api.ayrshare.com/api";
 const AYRSHARE_API_KEY = process.env.AYRSHARE_API_KEY || "";
 
@@ -14,6 +30,12 @@ const SUPPORTED_PLATFORMS = [
 ] as const;
 
 export type SupportedPlatform = (typeof SUPPORTED_PLATFORMS)[number];
+
+type ScheduledPost = typeof scheduledPosts.$inferSelect;
+
+interface PostStatusResult extends ScheduledPost {
+  liveStatus?: Record<string, unknown>;
+}
 
 interface AyrshareProfileResponse {
   status: string;
@@ -250,9 +272,8 @@ class SocialPublishingService {
         .orderBy(desc(universalVideoProjects.createdAt));
 
       for (const project of projects) {
-        const progress = project.progress as any;
-        const assets = project.assets as any;
-        const outputUrl = progress?.outputUrl || progress?.renderOutputUrl;
+        const progress = (project.progress ?? {}) as ProjectProgress;
+        const outputUrl = progress.outputUrl || progress.renderOutputUrl;
         if (!outputUrl) continue;
 
         const existingPost = await db
@@ -352,8 +373,8 @@ class SocialPublishingService {
         mediaType: post.mediaType || null,
         thumbnailUrl: post.thumbnailUrl || null,
         title: post.title || null,
-        captions: post.captions as any,
-        hashtags: post.hashtags as any,
+        captions: post.captions as Record<string, string>,
+        hashtags: post.hashtags as Record<string, string[]>,
         platforms: post.platforms,
         status: "draft",
         scheduledFor: post.scheduledFor || null,
@@ -381,7 +402,7 @@ class SocialPublishingService {
           .set({
             status: "scheduled",
             ayrsharePostId: ayrshareResult.id,
-            platformPostIds: ayrshareResult.postIds as any,
+            platformPostIds: ayrshareResult.postIds as Array<{ platform: string; postId: string; postUrl?: string }>,
             updatedAt: new Date(),
           })
           .where(eq(scheduledPosts.id, dbPost.id));
@@ -442,7 +463,7 @@ class SocialPublishingService {
           status: "published",
           publishedAt: new Date(),
           ayrsharePostId: result.id,
-          platformPostIds: result.postIds as any,
+          platformPostIds: result.postIds as Array<{ platform: string; postId: string; postUrl?: string }>,
           updatedAt: new Date(),
         })
         .where(eq(scheduledPosts.id, postId));
@@ -461,7 +482,7 @@ class SocialPublishingService {
     }
   }
 
-  async getPostStatus(userId: string, postId: number): Promise<any> {
+  async getPostStatus(userId: string, postId: number): Promise<PostStatusResult> {
     const [post] = await db
       .select()
       .from(scheduledPosts)
@@ -489,7 +510,7 @@ class SocialPublishingService {
     return post;
   }
 
-  async getUserPosts(userId: string, status?: string): Promise<any[]> {
+  async getUserPosts(userId: string, status?: string): Promise<ScheduledPost[]> {
     if (status) {
       return await db
         .select()
@@ -517,7 +538,7 @@ class SocialPublishingService {
       mediaType?: string;
       thumbnailUrl?: string;
     }
-  ): Promise<any> {
+  ): Promise<ScheduledPost> {
     const [existing] = await db
       .select()
       .from(scheduledPosts)
@@ -528,7 +549,7 @@ class SocialPublishingService {
       throw new Error("Cannot edit a published or publishing post");
     }
 
-    const setValues: any = { updatedAt: new Date() };
+    const setValues: Partial<typeof scheduledPosts.$inferInsert> & { updatedAt: Date } = { updatedAt: new Date() };
     if (updates.captions !== undefined) setValues.captions = updates.captions;
     if (updates.hashtags !== undefined) setValues.hashtags = updates.hashtags;
     if (updates.platforms !== undefined) setValues.platforms = updates.platforms;
@@ -595,7 +616,7 @@ class SocialPublishingService {
           .from(universalVideoProjects)
           .where(and(eq(universalVideoProjects.projectId, item.contentId), eq(universalVideoProjects.ownerId, userId)));
         if (project) {
-          const progress = project.progress as any;
+          const progress = (project.progress ?? {}) as ProjectProgress;
           mediaUrl = progress?.outputUrl || progress?.renderOutputUrl;
           mediaType = "video";
           thumbnailUrl = this.extractThumbnail(project);
@@ -647,10 +668,10 @@ class SocialPublishingService {
     return { posts: results };
   }
 
-  async handleWebhook(body: any): Promise<void> {
+  async handleWebhook(body: Record<string, unknown>): Promise<void> {
     try {
-      const postId = body.id;
-      const status = body.status;
+      const postId = body.id as string | undefined;
+      const status = body.status as string | undefined;
 
       if (!postId) return;
 
@@ -664,28 +685,29 @@ class SocialPublishingService {
         return;
       }
 
-      const updates: any = { updatedAt: new Date() };
+      const webhookUpdate: Partial<typeof scheduledPosts.$inferInsert> & { updatedAt: Date } = { updatedAt: new Date() };
 
       if (status === "success" || status === "published") {
-        updates.status = "published";
-        updates.publishedAt = new Date();
+        webhookUpdate.status = "published";
+        webhookUpdate.publishedAt = new Date();
       } else if (status === "error" || status === "failed") {
-        updates.status = "failed";
-        updates.failureReason = body.error || body.message || "Publishing failed";
+        webhookUpdate.status = "failed";
+        webhookUpdate.failureReason = (body.error as string) || (body.message as string) || "Publishing failed";
       }
 
       if (body.postIds) {
-        updates.platformPostIds = body.postIds;
+        webhookUpdate.platformPostIds = body.postIds as Array<{ platform: string; postId: string; postUrl?: string }>;
       }
 
       await db
         .update(scheduledPosts)
-        .set(updates)
+        .set(webhookUpdate)
         .where(eq(scheduledPosts.id, post.id));
 
-      console.log(`[SocialPublishing] Webhook updated post ${post.id} -> ${updates.status || "updated"}`);
-    } catch (error: any) {
-      console.error(`[SocialPublishing] Webhook error: ${error.message}`);
+      console.log(`[SocialPublishing] Webhook updated post ${post.id} -> ${webhookUpdate.status || "updated"}`);
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : String(error);
+      console.error(`[SocialPublishing] Webhook error: ${msg}`);
     }
   }
 
@@ -740,7 +762,10 @@ class SocialPublishingService {
           .where(and(eq(universalVideoProjects.projectId, projectId), eq(universalVideoProjects.ownerId, userId)));
         if (project) {
           contentContext = `Content: Video project "${project.title || "Untitled"}".`;
-          if (project.concept) contentContext += ` Concept: ${(project.concept as any)?.description || JSON.stringify(project.concept).substring(0, 200)}.`;
+          if (project.concept) {
+            const concept = project.concept as ProjectConcept;
+            contentContext += ` Concept: ${concept.description || JSON.stringify(project.concept).substring(0, 200)}.`;
+          }
           if (!topic) contentNiche = project.title || industry;
         }
       } catch (e: any) {
@@ -765,7 +790,7 @@ class SocialPublishingService {
     try {
       const trends = await getTrendingHooks(industry, contentNiche, "general audience");
       if (trends.hooks?.length) {
-        const topHooks = trends.hooks.slice(0, 3).map((h: any) => h.hook || h).join("; ");
+        const topHooks = trends.hooks.slice(0, 3).map((h: { hook?: string }) => h.hook || String(h)).join("; ");
         trendContext = `Current trending hooks: ${topHooks}.`;
       }
       if (trends.hashtags?.length) {
@@ -840,7 +865,7 @@ Rules:
 
       const cleaned = result.text.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
       const parsed = JSON.parse(cleaned);
-      return buildResponse((parsed.captions || []).map((c: any) => ({
+      return buildResponse((parsed.captions || []).map((c: { platform: string; caption?: string; hashtags?: string[] }) => ({
         platform: c.platform,
         caption: c.caption || "",
         hashtags: c.hashtags || [],
@@ -893,7 +918,7 @@ Rules:
         try {
           const trends = await getTrendingHooks(brandIndustry, brandIndustry, "general audience");
           if (trends.hooks?.length) {
-            trendInsight = `Current trending topics in ${brandIndustry}: ${trends.hooks.slice(0, 3).map((h: any) => h.hook || h).join("; ")}. Consider timing posts to align with peak engagement for trending content.`;
+            trendInsight = `Current trending topics in ${brandIndustry}: ${trends.hooks.slice(0, 3).map((h: { hook?: string }) => h.hook || String(h)).join("; ")}. Consider timing posts to align with peak engagement for trending content.`;
           }
         } catch (e) {}
 
@@ -921,7 +946,7 @@ Return JSON:
         const cleaned = result.text.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
         const parsed = JSON.parse(cleaned);
         if (parsed.platforms?.length) {
-          return parsed.platforms.map((p: any) => ({
+          return parsed.platforms.map((p: { platform: string; times?: string[]; frequency?: string }) => ({
             platform: p.platform,
             times: p.times || baseOptimalTimes[p.platform]?.times || ["10:00 AM", "2:00 PM", "6:00 PM"],
             timezone: "America/New_York",
@@ -959,14 +984,14 @@ Return JSON:
     const profileKey = await this.getProfileKey(userId);
     if (!profileKey) throw new Error("No social profile configured");
 
-    const body: any = { post: caption, platforms };
-    if (mediaUrls?.length) body.mediaUrls = mediaUrls;
-    if (scheduledDate) body.scheduleDate = scheduledDate.toISOString();
+    const postBody: Record<string, unknown> = { post: caption, platforms };
+    if (mediaUrls?.length) postBody.mediaUrls = mediaUrls;
+    if (scheduledDate) postBody.scheduleDate = scheduledDate.toISOString();
 
     const response = await fetch(`${AYRSHARE_API_BASE}/post`, {
       method: "POST",
       headers: this.getHeaders(profileKey),
-      body: JSON.stringify(body),
+      body: JSON.stringify(postBody),
     });
 
     if (!response.ok) {
@@ -977,17 +1002,17 @@ Return JSON:
     return (await response.json()) as AyrsharePostResponse;
   }
 
-  private extractThumbnail(project: any): string | undefined {
+  private extractThumbnail(project: { scenes?: unknown; assets?: unknown }): string | undefined {
     try {
       const scenes = project.scenes;
       if (Array.isArray(scenes)) {
-        for (const scene of scenes) {
+        for (const scene of scenes as Array<{ thumbnailUrl?: string; imageUrl?: string }>) {
           if (scene.thumbnailUrl) return scene.thumbnailUrl;
           if (scene.imageUrl) return scene.imageUrl;
         }
       }
-      const assets = project.assets as any;
-      if (assets?.productMediaUrl) return assets.productMediaUrl;
+      const assets = (project.assets ?? {}) as ProjectAssets;
+      if (assets.productMediaUrl) return assets.productMediaUrl;
     } catch (e) {}
     return undefined;
   }

@@ -2,6 +2,31 @@ import { Router, Request, Response } from "express";
 import { socialPublishingService } from "./social-publishing-service";
 import { isAuthenticated } from "../auth";
 
+interface AuthUser {
+  id: string;
+  email: string;
+  role?: string;
+}
+
+interface RequestWithRawBody extends Request {
+  rawBody?: Buffer;
+}
+
+interface PostUpdateFields {
+  captions?: Record<string, string>;
+  hashtags?: Record<string, string[]>;
+  platforms?: string[];
+  scheduledFor?: Date | null;
+  title?: string;
+  mediaUrl?: string;
+  mediaType?: string;
+  thumbnailUrl?: string;
+}
+
+function getAuthUser(req: Request): AuthUser {
+  return req.user as AuthUser;
+}
+
 const VALID_PLATFORMS = ["twitter", "facebook", "instagram", "tiktok", "linkedin", "youtube", "pinterest", "threads"];
 const VALID_STATUSES = ["draft", "scheduled", "publishing", "published", "failed"];
 const VALID_TONES = ["professional", "casual", "humorous", "inspirational"];
@@ -29,7 +54,7 @@ router.get("/status", isAuthenticated, async (req: Request, res: Response) => {
 
 router.post("/provision", isAuthenticated, async (req: Request, res: Response) => {
   try {
-    const user = req.user as any;
+    const user = getAuthUser(req);
     const result = await socialPublishingService.createUserProfile(user.id, user.email);
     res.json(result);
   } catch (error: any) {
@@ -40,7 +65,7 @@ router.post("/provision", isAuthenticated, async (req: Request, res: Response) =
 
 router.get("/accounts", isAuthenticated, async (req: Request, res: Response) => {
   try {
-    const user = req.user as any;
+    const user = getAuthUser(req);
     await socialPublishingService.ensureProfile(user.id, user.email);
     const accounts = await socialPublishingService.getConnectedAccounts(user.id);
     res.json({ accounts });
@@ -52,7 +77,7 @@ router.get("/accounts", isAuthenticated, async (req: Request, res: Response) => 
 
 router.post("/accounts/connect", isAuthenticated, async (req: Request, res: Response) => {
   try {
-    const user = req.user as any;
+    const user = getAuthUser(req);
     await socialPublishingService.createUserProfile(user.id, user.email);
     const result = await socialPublishingService.getConnectUrl(user.id);
     res.json(result);
@@ -64,7 +89,7 @@ router.post("/accounts/connect", isAuthenticated, async (req: Request, res: Resp
 
 router.delete("/accounts/:platform", isAuthenticated, async (req: Request, res: Response) => {
   try {
-    const user = req.user as any;
+    const user = getAuthUser(req);
     const { platform } = req.params;
     if (!VALID_PLATFORMS.includes(platform)) {
       return res.status(400).json({ error: "Invalid platform" });
@@ -79,7 +104,7 @@ router.delete("/accounts/:platform", isAuthenticated, async (req: Request, res: 
 
 router.get("/content-ready", isAuthenticated, async (req: Request, res: Response) => {
   try {
-    const user = req.user as any;
+    const user = getAuthUser(req);
     const items = await socialPublishingService.getContentReady(user.id);
     res.json({ items });
   } catch (error: any) {
@@ -89,7 +114,7 @@ router.get("/content-ready", isAuthenticated, async (req: Request, res: Response
 
 router.get("/posts", isAuthenticated, async (req: Request, res: Response) => {
   try {
-    const user = req.user as any;
+    const user = getAuthUser(req);
     const status = req.query.status as string | undefined;
     if (status && !VALID_STATUSES.includes(status)) {
       return res.status(400).json({ error: "Invalid status filter" });
@@ -103,7 +128,7 @@ router.get("/posts", isAuthenticated, async (req: Request, res: Response) => {
 
 router.post("/posts", isAuthenticated, async (req: Request, res: Response) => {
   try {
-    const user = req.user as any;
+    const user = getAuthUser(req);
     const { caption, captions, platforms, mediaUrl, mediaType, thumbnailUrl, scheduledFor, title, hashtags, projectId, assetId } = req.body;
 
     const validPlatforms = validatePlatforms(platforms);
@@ -158,7 +183,7 @@ router.post("/posts", isAuthenticated, async (req: Request, res: Response) => {
 
 router.get("/posts/:postId", isAuthenticated, async (req: Request, res: Response) => {
   try {
-    const user = req.user as any;
+    const user = getAuthUser(req);
     const postId = parsePostId(req.params.postId);
     if (!postId) return res.status(400).json({ error: "Invalid post ID" });
     const post = await socialPublishingService.getPostStatus(user.id, postId);
@@ -170,12 +195,12 @@ router.get("/posts/:postId", isAuthenticated, async (req: Request, res: Response
 
 router.put("/posts/:postId", isAuthenticated, async (req: Request, res: Response) => {
   try {
-    const user = req.user as any;
+    const user = getAuthUser(req);
     const postId = parsePostId(req.params.postId);
     if (!postId) return res.status(400).json({ error: "Invalid post ID" });
 
     const { captions, hashtags, platforms, scheduledFor, title, mediaUrl, mediaType, thumbnailUrl } = req.body;
-    const updates: any = {};
+    const updates: PostUpdateFields = {};
 
     if (captions !== undefined) updates.captions = captions;
     if (hashtags !== undefined) updates.hashtags = hashtags;
@@ -193,7 +218,7 @@ router.put("/posts/:postId", isAuthenticated, async (req: Request, res: Response
         updates.scheduledFor = d;
       }
     }
-    if (title !== undefined) updates.title = typeof title === "string" ? title.substring(0, 500) : null;
+    if (title !== undefined) updates.title = typeof title === "string" ? title.substring(0, 500) : undefined;
     if (mediaUrl !== undefined) updates.mediaUrl = mediaUrl;
     if (mediaType !== undefined) updates.mediaType = mediaType;
     if (thumbnailUrl !== undefined) updates.thumbnailUrl = thumbnailUrl;
@@ -207,7 +232,7 @@ router.put("/posts/:postId", isAuthenticated, async (req: Request, res: Response
 
 router.delete("/posts/:postId", isAuthenticated, async (req: Request, res: Response) => {
   try {
-    const user = req.user as any;
+    const user = getAuthUser(req);
     const postId = parsePostId(req.params.postId);
     if (!postId) return res.status(400).json({ error: "Invalid post ID" });
     await socialPublishingService.deletePost(user.id, postId);
@@ -219,7 +244,7 @@ router.delete("/posts/:postId", isAuthenticated, async (req: Request, res: Respo
 
 router.post("/posts/:postId/publish", isAuthenticated, async (req: Request, res: Response) => {
   try {
-    const user = req.user as any;
+    const user = getAuthUser(req);
     const postId = parsePostId(req.params.postId);
     if (!postId) return res.status(400).json({ error: "Invalid post ID" });
     const result = await socialPublishingService.publishNow(user.id, postId);
@@ -232,7 +257,7 @@ router.post("/posts/:postId/publish", isAuthenticated, async (req: Request, res:
 
 router.post("/bulk-schedule", isAuthenticated, async (req: Request, res: Response) => {
   try {
-    const user = req.user as any;
+    const user = getAuthUser(req);
     const { items, platforms, startDate, intervalStrategy, customIntervalHours } = req.body;
 
     if (!Array.isArray(items) || items.length === 0) {
@@ -258,9 +283,9 @@ router.post("/bulk-schedule", isAuthenticated, async (req: Request, res: Respons
 
     const result = await socialPublishingService.bulkSchedule(
       user.id,
-      items.map((i: any) => ({
+      items.map((i: { contentId?: string; id?: string; contentType?: string }) => ({
         contentId: String(i.contentId || i.id),
-        contentType: i.contentType === "asset" ? "asset" : "project",
+        contentType: i.contentType === "asset" ? "asset" as const : "project" as const,
       })),
       validPlatforms,
       parsedStartDate,
@@ -283,7 +308,7 @@ router.post("/webhook", async (req: Request, res: Response) => {
       return res.status(401).json({ error: "Unauthorized" });
     }
     const crypto = await import("crypto");
-    const rawBody = (req as any).rawBody as Buffer | undefined;
+    const rawBody = (req as RequestWithRawBody).rawBody;
     const bodyToVerify = rawBody || Buffer.from(JSON.stringify(req.body));
     const expectedSig = crypto
       .createHmac("sha256", ayrshareApiKey)
@@ -303,7 +328,7 @@ router.post("/webhook", async (req: Request, res: Response) => {
 
 router.post("/generate-captions", isAuthenticated, async (req: Request, res: Response) => {
   try {
-    const user = req.user as any;
+    const user = getAuthUser(req);
     const { projectId, assetId, platforms, tone, topic } = req.body;
 
     const validPlatforms = validatePlatforms(platforms);
@@ -344,7 +369,7 @@ router.get("/optimal-times", isAuthenticated, async (req: Request, res: Response
 
 router.get("/scheduled", isAuthenticated, async (req: Request, res: Response) => {
   try {
-    const user = req.user as any;
+    const user = getAuthUser(req);
     const status = req.query.status as string | undefined;
     if (status && !VALID_STATUSES.includes(status)) {
       return res.status(400).json({ error: "Invalid status filter" });
@@ -358,7 +383,7 @@ router.get("/scheduled", isAuthenticated, async (req: Request, res: Response) =>
 
 router.post("/schedule", isAuthenticated, async (req: Request, res: Response) => {
   try {
-    const user = req.user as any;
+    const user = getAuthUser(req);
     const { caption, captions, platforms, mediaUrl, mediaType, thumbnailUrl, scheduledFor, title, hashtags, projectId, assetId } = req.body;
 
     const validPlatforms = validatePlatforms(platforms);
@@ -413,12 +438,12 @@ router.post("/schedule", isAuthenticated, async (req: Request, res: Response) =>
 
 router.put("/scheduled/:postId", isAuthenticated, async (req: Request, res: Response) => {
   try {
-    const user = req.user as any;
+    const user = getAuthUser(req);
     const postId = parsePostId(req.params.postId);
     if (!postId) return res.status(400).json({ error: "Invalid post ID" });
 
     const { captions, hashtags, platforms, scheduledFor, title, mediaUrl, mediaType, thumbnailUrl } = req.body;
-    const updates: any = {};
+    const updates: PostUpdateFields = {};
 
     if (captions !== undefined) updates.captions = captions;
     if (hashtags !== undefined) updates.hashtags = hashtags;
@@ -436,7 +461,7 @@ router.put("/scheduled/:postId", isAuthenticated, async (req: Request, res: Resp
         updates.scheduledFor = d;
       }
     }
-    if (title !== undefined) updates.title = typeof title === "string" ? title.substring(0, 500) : null;
+    if (title !== undefined) updates.title = typeof title === "string" ? title.substring(0, 500) : undefined;
     if (mediaUrl !== undefined) updates.mediaUrl = mediaUrl;
     if (mediaType !== undefined) updates.mediaType = mediaType;
     if (thumbnailUrl !== undefined) updates.thumbnailUrl = thumbnailUrl;
@@ -450,7 +475,7 @@ router.put("/scheduled/:postId", isAuthenticated, async (req: Request, res: Resp
 
 router.delete("/scheduled/:postId", isAuthenticated, async (req: Request, res: Response) => {
   try {
-    const user = req.user as any;
+    const user = getAuthUser(req);
     const postId = parsePostId(req.params.postId);
     if (!postId) return res.status(400).json({ error: "Invalid post ID" });
     await socialPublishingService.deletePost(user.id, postId);
@@ -462,7 +487,7 @@ router.delete("/scheduled/:postId", isAuthenticated, async (req: Request, res: R
 
 router.post("/publish", isAuthenticated, async (req: Request, res: Response) => {
   try {
-    const user = req.user as any;
+    const user = getAuthUser(req);
     const { postId } = req.body;
     const id = typeof postId === "number" ? postId : parsePostId(String(postId));
     if (!id) return res.status(400).json({ error: "Invalid post ID" });
