@@ -52,6 +52,7 @@ export const users = pgTable("users", {
   billingState: varchar("billing_state"),
   billingZipCode: varchar("billing_zip_code"),
   billingCountry: varchar("billing_country"),
+  ayrshareProfileKey: varchar("ayrshare_profile_key"),
   lastLogin: timestamp("last_login"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -735,3 +736,40 @@ export const trendCache = pgTable("trend_cache", {
 }, (table) => ({
   industryNicheAudienceIdx: index("idx_trend_cache_industry_niche_audience").on(table.industry, table.contentNiche, table.targetAudience),
 }));
+
+export const scheduledPosts = pgTable("scheduled_posts", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  projectId: varchar("project_id"),
+  title: varchar("title", { length: 500 }),
+  caption: text("caption"),
+  hashtags: text("hashtags").array(),
+  mediaUrls: text("media_urls").array(),
+  platforms: text("platforms").array().notNull(),
+  status: varchar("status", { length: 20 }).notNull().default("draft"),
+  scheduledFor: timestamp("scheduled_for"),
+  publishedAt: timestamp("published_at"),
+  ayrsharePostId: varchar("ayrshare_post_id"),
+  ayrshareResponse: jsonb("ayrshare_response"),
+  errorMessage: text("error_message"),
+  platformResults: jsonb("platform_results"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  userIdx: index("idx_scheduled_posts_user_id").on(table.userId),
+  statusIdx: index("idx_scheduled_posts_status").on(table.status),
+  scheduledForIdx: index("idx_scheduled_posts_scheduled_for").on(table.scheduledFor),
+}));
+
+export const scheduledPostsRelations = relations(scheduledPosts, ({ one }) => ({
+  user: one(users, { fields: [scheduledPosts.userId], references: [users.id] }),
+}));
+
+export const insertScheduledPostSchema = createInsertSchema(scheduledPosts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type ScheduledPost = typeof scheduledPosts.$inferSelect;
+export type InsertScheduledPost = z.infer<typeof insertScheduledPostSchema>;

@@ -15,6 +15,9 @@ import Providers from "@/pages/providers";
 import Profile from "@/pages/profile";
 import NewProject from "@/pages/new-project";
 import TrendsDashboard from "@/pages/trends-dashboard";
+import SocialHub from "@/pages/social-hub";
+import SocialCalendar from "@/pages/social-calendar";
+import SocialNewPost from "@/pages/social-new-post";
 import ApiTesting from "@/pages/api-testing";
 import Landing from "@/pages/landing";
 import NotFound from "@/pages/not-found";
@@ -61,6 +64,9 @@ function AuthenticatedApp() {
             <Route path="/assets" component={AssetLibrary} />
             <Route path="/brand" component={BrandSettings} />
             <Route path="/trends" component={TrendsDashboard} />
+            <Route path="/social" component={SocialHub} />
+            <Route path="/social/calendar" component={SocialCalendar} />
+            <Route path="/social/new" component={SocialNewPost} />
             <Route path="/render-queue" component={RenderQueue} />
             <Route path="/providers" component={Providers} />
             <Route path="/api-testing" component={ApiTesting} />

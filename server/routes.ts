@@ -16,6 +16,7 @@ import assetLibraryRouter from "./services/asset-library-routes";
 import uploadRouter from "./services/upload-routes";
 import brandSettingsRouter from "./services/brand-settings-routes";
 import trendIntelligenceRouter from "./services/trend-intelligence-routes";
+import socialPublishingRouter from "./services/social-publishing-routes";
 import { processVideoJob, recoverStuckJobs } from "./services/job-processor";
 import { universalVideoService } from "./services/universal-video-service";
 import { aiMusicService } from "./services/ai-music-service";
@@ -97,6 +98,7 @@ export async function registerRoutes(app: Express) {
   app.use("/api/videos", uploadRouter);
   app.use("/api/brand-settings", brandSettingsRouter);
   app.use("/api/trend-intelligence", trendIntelligenceRouter);
+  app.use("/api/social", socialPublishingRouter);
   app.use('/uploads', express.static('uploads'));
   app.use('/test-images', express.static('public/test-images'));
   app.use('/test-videos', express.static('public/test-videos'));

@@ -20,6 +20,8 @@ import {
   Moon,
   ShieldCheck,
   TrendingUp,
+  Share2,
+  CalendarDays,
 } from "lucide-react";
 import neuralcutIcon from "@/assets/neuralcut-icon.png";
 
@@ -29,6 +31,8 @@ const navItems = [
   { label: "Asset Library", icon: Images, path: "/assets" },
   { label: "Brand", icon: Palette, path: "/brand" },
   { label: "Trends", icon: TrendingUp, path: "/trends" },
+  { label: "Social Hub", icon: Share2, path: "/social" },
+  { label: "Calendar", icon: CalendarDays, path: "/social/calendar" },
   { label: "Render Queue", icon: Layers, path: "/render-queue" },
   { label: "AI Providers", icon: Cpu, path: "/providers" },
   { label: "API Testing", icon: FlaskConical, path: "/api-testing" },
