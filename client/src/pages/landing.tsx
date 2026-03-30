@@ -535,7 +535,7 @@ export default function Landing() {
         <div className="max-w-6xl mx-auto px-6">
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="flex items-center gap-2">
-              <img src={neuralcutFullLogo} alt="NeuralCut.AI" className="h-14 object-contain" />
+              <img src={neuralcutFullLogo} alt="NeuralCut.AI" className="h-40 object-contain" />
             </div>
             <div className="flex items-center gap-6 text-xs" style={{ color: "var(--text-muted)" }}>
               <a href="#features" className="hover:text-white transition-colors">Features</a>
