@@ -740,8 +740,8 @@ export const trendCache = pgTable("trend_cache", {
 export const scheduledPosts = pgTable("scheduled_posts", {
   id: serial("id").primaryKey(),
   userId: varchar("user_id").notNull().references(() => users.id),
-  projectId: varchar("project_id"),
-  assetId: integer("asset_id"),
+  projectId: varchar("project_id").references(() => universalVideoProjects.projectId),
+  assetId: integer("asset_id").references(() => mediaAssets.id),
   mediaUrl: text("media_url"),
   mediaType: varchar("media_type", { length: 20 }),
   thumbnailUrl: text("thumbnail_url"),
@@ -765,6 +765,8 @@ export const scheduledPosts = pgTable("scheduled_posts", {
 
 export const scheduledPostsRelations = relations(scheduledPosts, ({ one }) => ({
   user: one(users, { fields: [scheduledPosts.userId], references: [users.id] }),
+  project: one(universalVideoProjects, { fields: [scheduledPosts.projectId], references: [universalVideoProjects.projectId] }),
+  asset: one(mediaAssets, { fields: [scheduledPosts.assetId], references: [mediaAssets.id] }),
 }));
 
 export const insertScheduledPostSchema = createInsertSchema(scheduledPosts).omit({

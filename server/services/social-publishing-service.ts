@@ -3,6 +3,7 @@ import { users, scheduledPosts, universalVideoProjects, mediaAssets } from "../.
 import { eq, and, desc, or, inArray } from "drizzle-orm";
 import { llmClient } from "./piapi-llm-client";
 import { brandBibleService } from "./brand-bible-service";
+import { getTrendingHooks } from "./trend-intelligence-service";
 
 const AYRSHARE_API_BASE = "https://api.ayrshare.com/api";
 const AYRSHARE_API_KEY = process.env.AYRSHARE_API_KEY || "";
@@ -116,7 +117,7 @@ class SocialPublishingService {
       console.log(`[SocialPublishing] Stored profile for user ${userId}`);
     } catch (dbError: any) {
       console.error(
-        `[SocialPublishing] CRITICAL: DB write failed for user ${userId} profile. profileKey=REDACTED Error: ${dbError.message}`
+        `[SocialPublishing] CRITICAL_RECOVERY: DB write failed for user ${userId} profile. profileKey=${profileKey} — Save this key for manual recovery. Error: ${dbError.message}`
       );
       throw new Error("Profile created but failed to save. Please contact support.");
     }
@@ -216,7 +217,7 @@ class SocialPublishingService {
       const projects = await db
         .select()
         .from(universalVideoProjects)
-        .where(eq(universalVideoProjects.userId, userId))
+        .where(eq(universalVideoProjects.ownerId, userId))
         .orderBy(desc(universalVideoProjects.createdAt));
 
       for (const project of projects) {
@@ -253,7 +254,7 @@ class SocialPublishingService {
       const assets = await db
         .select()
         .from(mediaAssets)
-        .where(eq(mediaAssets.source, "generated"))
+        .where(and(eq(mediaAssets.source, "generated"), eq(mediaAssets.uploadedBy, userId)))
         .orderBy(desc(mediaAssets.createdAt));
 
       for (const asset of assets) {
@@ -550,7 +551,7 @@ class SocialPublishingService {
         const [project] = await db
           .select()
           .from(universalVideoProjects)
-          .where(eq(universalVideoProjects.projectId, item.contentId));
+          .where(and(eq(universalVideoProjects.projectId, item.contentId), eq(universalVideoProjects.ownerId, userId)));
         if (project) {
           const progress = project.progress as any;
           mediaUrl = progress?.outputUrl || progress?.renderOutputUrl;
@@ -564,7 +565,7 @@ class SocialPublishingService {
           const [asset] = await db
             .select()
             .from(mediaAssets)
-            .where(eq(mediaAssets.id, assetId));
+            .where(and(eq(mediaAssets.id, assetId), eq(mediaAssets.uploadedBy, userId)));
           if (asset) {
             mediaUrl = asset.url;
             mediaType = asset.type;
@@ -673,12 +674,29 @@ class SocialPublishingService {
 
     let brandContext = "";
     let trendContext = "";
+    let industry = "general";
+    let contentNiche = topic;
 
     try {
       const bible = await brandBibleService.getBrandBible();
       brandContext = `Brand: ${bible.brandName}. Industry: ${bible.industry || "general"}. Tagline: ${bible.tagline || "none"}. Tone: professional, trustworthy. Colors: ${bible.colors.primary}/${bible.colors.secondary}.`;
+      industry = bible.industry || "general";
+      contentNiche = topic || bible.industry || "general";
     } catch (e: any) {
       console.warn(`[SocialPublishing] Brand context unavailable: ${e.message}`);
+    }
+
+    try {
+      const trends = await getTrendingHooks(industry, contentNiche, "general audience");
+      if (trends.hooks?.length) {
+        const topHooks = trends.hooks.slice(0, 3).map((h: any) => h.hook || h).join("; ");
+        trendContext = `Current trending hooks: ${topHooks}.`;
+      }
+      if (trends.hashtags?.length) {
+        trendContext += ` Trending hashtags: ${trends.hashtags.slice(0, 5).join(", ")}.`;
+      }
+    } catch (e: any) {
+      console.warn(`[SocialPublishing] Trend context unavailable: ${e.message}`);
     }
 
     if (!llmClient.isAvailable()) {
@@ -785,16 +803,24 @@ Rules:
     if (llmClient.isAvailable()) {
       try {
         let brandIndustry = "general";
+        let trendInsight = "";
         try {
           const bible = await brandBibleService.getBrandBible();
           brandIndustry = bible.industry || "general";
+        } catch (e) {}
+
+        try {
+          const trends = await getTrendingHooks(brandIndustry, brandIndustry, "general audience");
+          if (trends.hooks?.length) {
+            trendInsight = `Current trending topics in ${brandIndustry}: ${trends.hooks.slice(0, 3).map((h: any) => h.hook || h).join("; ")}. Consider timing posts to align with peak engagement for trending content.`;
+          }
         } catch (e) {}
 
         const result = await llmClient.createChatCompletion({
           systemPrompt: "You are a social media timing expert. Return ONLY valid JSON.",
           messages: [{
             role: "user",
-            content: `Recommend 3 best posting times this week for these platforms: ${platforms.join(", ")}. Industry: ${brandIndustry}. Include recommended posting frequency per platform.
+            content: `Recommend 3 best posting times this week for these platforms: ${platforms.join(", ")}. Industry: ${brandIndustry}.${trendInsight ? ` ${trendInsight}` : ""} Include recommended posting frequency per platform.
 
 Return JSON:
 {
