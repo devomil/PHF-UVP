@@ -1,0 +1,17 @@
+Plan: Social Publishing Hub — Phase 1 MVP
+Technical foundation: Integrate Ayrshare as the unified social media publishing layer. Do not build individual platform OAuth integrations. All publishing, scheduling, account connection, and analytics retrieval goes through Ayrshare's API using the Node.js SDK.
+New Replit Secret: AYRSHARE_API_KEY
+npm package: @ayrshare/social-post-api
+Phase 1 scope — get this working first:
+Task 1 — Social Accounts Connection:
+New page at /social/accounts. Users connect their social accounts via Ayrshare's OAuth flow. Show connected/disconnected status for: TikTok, Instagram, YouTube, Facebook, LinkedIn, X, Threads, Pinterest. Store connection tokens via Ayrshare (they manage token refresh). Show account profile photo and handle when connected.
+Task 2 — Content Ready Queue:
+On the /social page, show all completed NeuralCut video projects and image assets in a "Ready to Publish" panel. A project is "ready" when it has a rendered video URL or completed asset URL. Pull from universalVideoProjects where status = 'completed' and mediaAssets where type = 'video' or 'image'. Each item shows: thumbnail, title, duration, creation date, and publish status (unpublished/scheduled/published).
+Task 3 — Visual Content Calendar:
+Drag-and-drop calendar at /social/calendar. Monthly and weekly views. Users drag content from the Ready Queue onto calendar slots. Clicking a scheduled slot opens the publishing configuration. Store scheduled posts in a new scheduledPosts table: id, projectId, assetId, scheduledFor (timestamp), platforms (text array), status (scheduled/published/failed), platformPostIds (JSONB), captions (JSONB — one per platform), publishedAt, createdAt.
+Task 4 — Publishing Configuration Panel:
+When a user schedules or posts content, show a platform configuration panel with: per-platform caption (Claude auto-generates from video narration using brand voice), per-platform hashtags (Claude suggests based on industry and trending data from trend cache), scheduled time picker with timezone support, platform toggle (publish to all or select specific). For video content, show thumbnail selector.
+Task 5 — Publishing Execution:
+Server endpoint POST /api/social/publish that calls Ayrshare API to publish or schedule the post. Handle video upload to Ayrshare from S3 URL. On success, update scheduledPosts.status and store platformPostIds. On failure, log error and surface clear message to UI. Webhook handler for Ayrshare post status callbacks — update DB when posts go live or fail.
+Task 6 — Optimal Time Suggestions:
+When user opens the time picker, show Claude-generated suggestions: "Best times for [industry] on [platform] this week" — pull from trend cache industry data and use Claude to recommend 3 time windows per platform. Display as clickable suggestion chips above the time picker.

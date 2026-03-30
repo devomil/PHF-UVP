@@ -1,0 +1,29 @@
+Phase 1 social
+
+New DB table:
+scheduledPosts: {
+  id: serial primary key,
+  userId: varchar references users,
+  projectId: integer references universalVideoProjects (nullable),
+  assetId: integer references mediaAssets (nullable),
+  scheduledFor: timestamp,
+  platforms: text[],
+  captions: jsonb, // { tiktok: "...", instagram: "...", etc }
+  hashtags: jsonb,
+  status: varchar default 'scheduled',
+  platformPostIds: jsonb,
+  publishedAt: timestamp,
+  failureReason: text,
+  createdAt: timestamp default now()
+}
+
+New files:
+
+server/services/social-publishing-service.ts (Ayrshare integration)
+server/services/social-publishing-routes.ts
+client/src/pages/social.tsx
+client/src/pages/social-calendar.tsx
+client/src/pages/social-accounts.tsx
+shared/schema.ts — add scheduledPosts table
+
+Phase 2 (next session): Performance analytics pull, unified inbox, campaign series builder, auto-repurpose trigger.
