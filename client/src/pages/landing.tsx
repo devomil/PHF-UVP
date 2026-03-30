@@ -19,6 +19,8 @@ import {
   MessageSquare,
   Zap,
   Check,
+  Clock,
+  CheckCircle,
 } from "lucide-react";
 import neuralcutFullLogo from "@/assets/neuralcut-full-logo.png";
 import landingSceneEditor from "@/assets/landing-scene-editor.png";
@@ -26,23 +28,175 @@ import landingMicroScenes from "@/assets/landing-micro-scenes.png";
 import landingFilmAudio from "@/assets/landing-film-audio.png";
 import landingBrandAssets from "@/assets/landing-brand-assets.png";
 
-const capabilities = [
-  { name: "Video Generation (T2V)", providers: "19 models", icon: Video, description: "Generate videos from text prompts using Kling, Runway, Luma, Veo, Pika, Hailuo, Sora, Wan, and Seedance models." },
-  { name: "Image-to-Video (I2V)", providers: "15 models", icon: Zap, description: "Animate any image into cinematic video with character consistency and product-aware scene generation." },
-  { name: "Video-to-Video (V2V)", providers: "3 models", icon: Layers, description: "Transform existing videos with object replacement, style transfer, and character performance capture." },
-  { name: "Character Performance", providers: "1 model", icon: Users, description: "Bring characters to life with Runway Act Two — drive performances from reference videos and images." },
-  { name: "Image Generation (T2I)", providers: "5 models", icon: Image, description: "Generate stunning images from text with Flux Pro, DALL-E, and Stable Diffusion for scene references and assets." },
-  { name: "Image-to-Image (I2I)", providers: "4 modes", icon: Palette, description: "Style transfer, background generation, scene integration, and product placement with AI-powered image editing." },
-  { name: "Toolkit (Upscale / BG Remove)", providers: "4 tools", icon: Wand2, description: "Upscale images to 4K, remove backgrounds, and enhance quality with the Qubic Image Toolkit." },
-  { name: "Audio Generation", providers: "3 services", icon: Music, description: "AI music composition, ElevenLabs voiceover with word-level timing, and intelligent sound design." },
-  { name: "LLM", providers: "Multiple", icon: Brain, description: "Claude-powered script pipeline with 4-stage intelligent writing, creative strategy, and cinematic visual direction." },
-  { name: "LLM Vision Integration", providers: "Active", icon: Eye, description: "AI scene classification, content-aware provider routing, quality evaluation, and smart text overlay extraction." },
+type ProviderStatus = "active" | "coming-soon";
+interface ProviderModel {
+  name: string;
+  provider: string;
+  status: ProviderStatus;
+}
+interface Capability {
+  name: string;
+  count: string;
+  icon: typeof Video;
+  description: string;
+  models: ProviderModel[];
+}
+
+const capabilities: Capability[] = [
+  {
+    name: "Video Generation (T2V)",
+    count: "23 models",
+    icon: Video,
+    description: "Generate videos from text prompts using the world's best AI video models.",
+    models: [
+      { name: "Kling 2.6", provider: "Kling", status: "active" },
+      { name: "Kling 3.0 Omni", provider: "Kling", status: "active" },
+      { name: "Kling 2.5", provider: "Kling", status: "active" },
+      { name: "Kling Effects (VFX)", provider: "Kling", status: "active" },
+      { name: "Kling AI Avatar", provider: "Kling", status: "active" },
+      { name: "Hailuo v2.3", provider: "Hailuo", status: "active" },
+      { name: "Hunyuan", provider: "Tencent", status: "active" },
+      { name: "Luma Ray v2", provider: "Luma", status: "coming-soon" },
+      { name: "Wan 2.6", provider: "Wan", status: "active" },
+      { name: "Wan 2.2", provider: "Wan", status: "active" },
+      { name: "Wan 2.1", provider: "Wan", status: "active" },
+      { name: "Seedance 2 Preview", provider: "Seedance", status: "active" },
+      { name: "Seedance 2 Fast", provider: "Seedance", status: "active" },
+      { name: "Veo 3", provider: "Google", status: "active" },
+      { name: "Veo 3.1", provider: "Google", status: "active" },
+      { name: "Runway 4.5", provider: "Runway", status: "active" },
+      { name: "Runway Gen-4", provider: "Runway", status: "active" },
+      { name: "Runway Gen-4 Aleph", provider: "Runway", status: "active" },
+      { name: "Runway Act Two", provider: "Runway", status: "active" },
+      { name: "Sora 2", provider: "OpenAI", status: "active" },
+      { name: "Sora 2 Pro", provider: "OpenAI", status: "active" },
+      { name: "OmniHuman 1.5", provider: "OmniHuman", status: "coming-soon" },
+      { name: "OmniAvatar", provider: "OmniAvatar", status: "coming-soon" },
+    ],
+  },
+  {
+    name: "Image-to-Video (I2V)",
+    count: "11 models",
+    icon: Zap,
+    description: "Animate any image into cinematic video with character consistency and motion control.",
+    models: [
+      { name: "Kling 2.6 I2V", provider: "Kling", status: "active" },
+      { name: "Kling 2.5 I2V", provider: "Kling", status: "active" },
+      { name: "Hailuo I2V", provider: "Hailuo", status: "active" },
+      { name: "Hailuo Director I2V", provider: "Hailuo", status: "active" },
+      { name: "Wan 2.6 I2V", provider: "Wan", status: "active" },
+      { name: "Luma I2V", provider: "Luma", status: "active" },
+      { name: "Veo 3 I2V", provider: "Google", status: "active" },
+      { name: "Veo 3.1 I2V", provider: "Google", status: "active" },
+      { name: "Seedance 2 I2V", provider: "Seedance", status: "active" },
+      { name: "Seedance 2 Fast I2V", provider: "Seedance", status: "active" },
+      { name: "Skyreels I2V", provider: "Skyreels", status: "active" },
+    ],
+  },
+  {
+    name: "Video-to-Video (V2V)",
+    count: "2 models",
+    icon: Layers,
+    description: "Transform existing videos with style transfer, object replacement, and re-rendering.",
+    models: [
+      { name: "Runway Gen-4 Aleph V2V", provider: "Runway", status: "active" },
+      { name: "Kling V2V Object Replace", provider: "Kling", status: "active" },
+    ],
+  },
+  {
+    name: "Character Performance",
+    count: "1 model",
+    icon: Users,
+    description: "Drive character performances from reference videos — animate any portrait with natural motion.",
+    models: [
+      { name: "Runway Act Two", provider: "Runway", status: "active" },
+    ],
+  },
+  {
+    name: "Image Generation (T2I)",
+    count: "8 models",
+    icon: Image,
+    description: "Generate images from text for scene references, product shots, and creative assets.",
+    models: [
+      { name: "Flux Schnell", provider: "Flux", status: "active" },
+      { name: "Flux Dev", provider: "Flux", status: "active" },
+      { name: "Qwen Image", provider: "Qwen", status: "active" },
+      { name: "Gemini 2.5 Flash", provider: "Google", status: "active" },
+      { name: "Nano Banana Pro", provider: "Google", status: "active" },
+      { name: "Z Image Turbo", provider: "Qubico", status: "active" },
+      { name: "GPT-Image-1", provider: "OpenAI", status: "coming-soon" },
+      { name: "Seedream 4.0", provider: "ByteDance", status: "coming-soon" },
+    ],
+  },
+  {
+    name: "Image-to-Image (I2I)",
+    count: "4 models",
+    icon: Palette,
+    description: "Style transfer, image editing, and creative transformation with AI-powered tools.",
+    models: [
+      { name: "Flux Schnell I2I", provider: "Flux", status: "active" },
+      { name: "Flux Dev I2I", provider: "Flux", status: "active" },
+      { name: "Qwen Image I2I", provider: "Qwen", status: "active" },
+      { name: "Seedream 4.0 I2I", provider: "ByteDance", status: "coming-soon" },
+    ],
+  },
+  {
+    name: "Toolkit (Upscale / BG Remove)",
+    count: "4 tools",
+    icon: Wand2,
+    description: "Upscale images and video to 4K, remove backgrounds, and enhance quality.",
+    models: [
+      { name: "Image Upscale", provider: "Qubico", status: "active" },
+      { name: "Video Upscale", provider: "Qubico", status: "active" },
+      { name: "Image BG Removal", provider: "Qubico", status: "active" },
+      { name: "Video BG Removal", provider: "Qubico", status: "active" },
+    ],
+  },
+  {
+    name: "Audio Generation",
+    count: "5 services",
+    icon: Music,
+    description: "AI music composition, voice cloning, text-to-speech, and video-to-audio generation.",
+    models: [
+      { name: "DiffRhythm", provider: "DiffRhythm", status: "active" },
+      { name: "Udio", provider: "Udio", status: "active" },
+      { name: "ACE Step AI", provider: "ACE", status: "active" },
+      { name: "F5 TTS", provider: "F5", status: "active" },
+      { name: "MMAudio", provider: "MMAudio", status: "coming-soon" },
+    ],
+  },
+  {
+    name: "AI Script & Creative Pipeline",
+    count: "6 services",
+    icon: Brain,
+    description: "4-stage intelligent writing pipeline with strategy, narrative, scene writing, and visual direction.",
+    models: [
+      { name: "Script Generation", provider: "Claude / GPT-4o", status: "active" },
+      { name: "Visual Direction", provider: "Claude / GPT-4o", status: "active" },
+      { name: "Prompt Enhancement", provider: "Claude / GPT-4o", status: "active" },
+      { name: "Provider Selection", provider: "Claude / GPT-4o", status: "active" },
+      { name: "Text Label Extraction", provider: "Claude / GPT-4o", status: "active" },
+      { name: "Ask Suzzie Assistant", provider: "Claude / GPT-4o", status: "active" },
+    ],
+  },
+  {
+    name: "LLM Models",
+    count: "4 models",
+    icon: Eye,
+    description: "Production LLM backbone for script writing, content analysis, and intelligent routing.",
+    models: [
+      { name: "Claude Sonnet 4", provider: "Anthropic", status: "active" },
+      { name: "GPT-4o", provider: "OpenAI", status: "active" },
+      { name: "DeepSeek", provider: "DeepSeek", status: "active" },
+      { name: "Deep Research", provider: "Deep Research", status: "active" },
+    ],
+  },
 ];
 
 const valueProps = [
   { title: "Built for Small Businesses & Content Creators", description: "Professional video production without the agency price tag. Create scroll-stopping content in minutes." },
   { title: "Cost Transparency — No Tokens", description: "Predictable pricing with no hidden token costs. Know exactly what you'll pay before you generate." },
-  { title: "71+ AI Generation Services", description: "Access the world's best AI video, image, and audio models — all in one studio." },
+  { title: "68+ AI Generation Services", description: "Access the world's best AI video, image, and audio models — all in one studio." },
 ];
 
 const productFeatures = [
@@ -58,8 +212,10 @@ const trustPoints = [
   "Professional cinematic output",
 ];
 
-function CapabilityAccordion({ cap, isOpen, onToggle }: { cap: typeof capabilities[0]; isOpen: boolean; onToggle: () => void }) {
+function CapabilityAccordion({ cap, isOpen, onToggle }: { cap: Capability; isOpen: boolean; onToggle: () => void }) {
   const Icon = cap.icon;
+  const activeCount = cap.models.filter(m => m.status === "active").length;
+  const comingSoonCount = cap.models.filter(m => m.status === "coming-soon").length;
   return (
     <div
       className="border-b transition-colors"
@@ -74,18 +230,55 @@ function CapabilityAccordion({ cap, isOpen, onToggle }: { cap: typeof capabiliti
             <Icon className="w-4 h-4 text-purple-400" />
           </div>
           <span className="font-medium" style={{ color: "var(--text-primary)" }}>{cap.name}</span>
-          <span className="text-xs px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400 font-medium">{cap.providers}</span>
+          <span className="text-xs px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400 font-medium">{cap.count}</span>
+          {comingSoonCount > 0 && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-400 font-medium">{comingSoonCount} coming soon</span>
+          )}
         </div>
-        <ChevronDown
-          className={`w-4 h-4 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
-          style={{ color: "var(--text-muted)" }}
-        />
+        <div className="flex items-center gap-3">
+          <span className="text-xs hidden sm:inline" style={{ color: "var(--text-muted)" }}>
+            {activeCount} active
+          </span>
+          <ChevronDown
+            className={`w-4 h-4 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
+            style={{ color: "var(--text-muted)" }}
+          />
+        </div>
       </button>
       {isOpen && (
-        <div className="px-4 pb-4 pl-15">
-          <p className="text-sm leading-relaxed ml-11" style={{ color: "var(--text-secondary)" }}>
+        <div className="px-4 pb-5">
+          <p className="text-sm leading-relaxed ml-11 mb-4" style={{ color: "var(--text-secondary)" }}>
             {cap.description}
           </p>
+          <div className="ml-11 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+            {cap.models.map((model) => (
+              <div
+                key={model.name}
+                className="flex items-center gap-2.5 px-3 py-2 rounded-lg transition-colors"
+                style={{
+                  backgroundColor: model.status === "active" ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.015)",
+                  border: `1px solid ${model.status === "active" ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.03)"}`,
+                }}
+              >
+                {model.status === "active" ? (
+                  <CheckCircle className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                ) : (
+                  <Clock className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+                )}
+                <div className="min-w-0 flex-1">
+                  <span className={`text-xs font-medium block truncate ${model.status === "active" ? "text-white/90" : "text-white/50"}`}>
+                    {model.name}
+                  </span>
+                  <span className="text-[10px] block truncate" style={{ color: "var(--text-muted)" }}>
+                    {model.provider}
+                  </span>
+                </div>
+                {model.status === "coming-soon" && (
+                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 font-medium whitespace-nowrap flex-shrink-0">Soon</span>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>
@@ -93,7 +286,7 @@ function CapabilityAccordion({ cap, isOpen, onToggle }: { cap: typeof capabiliti
 }
 
 export default function Landing() {
-  const [openAccordion, setOpenAccordion] = useState<number | null>(null);
+  const [openAccordion, setOpenAccordion] = useState<number | null>(0);
 
   return (
     <div className="min-h-screen relative" style={{ backgroundColor: "#0a0a0f", color: "var(--text-primary)" }}>
@@ -250,7 +443,7 @@ export default function Landing() {
 
       <section id="capabilities" className="max-w-3xl mx-auto px-6 py-20">
         <h2 className="text-3xl md:text-4xl font-bold text-center mb-3 bg-gradient-to-r from-white to-purple-200 bg-clip-text text-transparent">
-          71+ AI Generation Services
+          68+ AI Generation Services
         </h2>
         <p className="text-center mb-10 text-sm" style={{ color: "var(--text-muted)" }}>
           Every model you need, unified in one production pipeline
