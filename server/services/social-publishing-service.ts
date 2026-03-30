@@ -263,6 +263,17 @@ class SocialPublishingService {
         const isImage = asset.type === "image" || asset.mimeType?.startsWith("image/");
         if (!isVideo && !isImage) continue;
 
+        const existingAssetPost = await db
+          .select({ id: scheduledPosts.id, status: scheduledPosts.status })
+          .from(scheduledPosts)
+          .where(
+            and(
+              eq(scheduledPosts.userId, userId),
+              eq(scheduledPosts.assetId, asset.id)
+            )
+          )
+          .limit(1);
+
         items.push({
           id: String(asset.id),
           type: "asset",
@@ -271,7 +282,9 @@ class SocialPublishingService {
           mediaType: isVideo ? "video" : "image",
           thumbnailUrl: asset.thumbnailUrl || undefined,
           duration: asset.duration || undefined,
-          publishStatus: "unpublished",
+          publishStatus: existingAssetPost.length > 0
+            ? (existingAssetPost[0].status === "published" ? "published" : "scheduled")
+            : "unpublished",
           createdAt: asset.createdAt?.toISOString() || new Date().toISOString(),
         });
       }
@@ -648,10 +661,12 @@ class SocialPublishingService {
   }
 
   async generateCaptions(
+    userId: string,
     projectId: string | undefined,
+    assetId: number | undefined,
     platforms: string[],
     tone: string,
-    topic: string
+    topic: string | undefined
   ): Promise<{
     captions: Array<{
       platform: string;
@@ -674,8 +689,9 @@ class SocialPublishingService {
 
     let brandContext = "";
     let trendContext = "";
+    let contentContext = "";
     let industry = "general";
-    let contentNiche = topic;
+    let contentNiche = topic || "general";
 
     try {
       const bible = await brandBibleService.getBrandBible();
@@ -684,6 +700,36 @@ class SocialPublishingService {
       contentNiche = topic || bible.industry || "general";
     } catch (e: any) {
       console.warn(`[SocialPublishing] Brand context unavailable: ${e.message}`);
+    }
+
+    if (projectId) {
+      try {
+        const [project] = await db
+          .select()
+          .from(universalVideoProjects)
+          .where(and(eq(universalVideoProjects.projectId, projectId), eq(universalVideoProjects.ownerId, userId)));
+        if (project) {
+          contentContext = `Content: Video project "${project.title || "Untitled"}".`;
+          if (project.concept) contentContext += ` Concept: ${(project.concept as any)?.description || JSON.stringify(project.concept).substring(0, 200)}.`;
+          if (!topic) contentNiche = project.title || industry;
+        }
+      } catch (e: any) {
+        console.warn(`[SocialPublishing] Project context unavailable: ${e.message}`);
+      }
+    } else if (assetId) {
+      try {
+        const [asset] = await db
+          .select()
+          .from(mediaAssets)
+          .where(and(eq(mediaAssets.id, assetId), eq(mediaAssets.uploadedBy, userId)));
+        if (asset) {
+          contentContext = `Content: ${asset.type} asset "${asset.name}". Type: ${asset.mimeType || asset.type}.`;
+          if (asset.description) contentContext += ` Description: ${asset.description}.`;
+          if (!topic) contentNiche = asset.name || industry;
+        }
+      } catch (e: any) {
+        console.warn(`[SocialPublishing] Asset context unavailable: ${e.message}`);
+      }
     }
 
     try {
@@ -699,14 +745,16 @@ class SocialPublishingService {
       console.warn(`[SocialPublishing] Trend context unavailable: ${e.message}`);
     }
 
+    const effectiveTopic = topic || contentNiche || "our latest content";
+
     if (!llmClient.isAvailable()) {
       return {
         captions: platforms.map((p) => {
-          const caption = `Check out our latest ${topic}!`;
+          const caption = `Check out our latest ${effectiveTopic}!`;
           return {
             platform: p,
             caption,
-            hashtags: ["viral", "trending", topic.replace(/\s+/g, "")],
+            hashtags: ["viral", "trending", effectiveTopic.replace(/\s+/g, "")],
             characterCount: caption.length,
             characterLimit: platformLimits[p] || 5000,
           };
@@ -717,8 +765,9 @@ class SocialPublishingService {
     const systemPrompt = `You are a social media expert. Generate engaging captions optimized for each platform. ${brandContext} Return ONLY valid JSON.`;
     const userPrompt = `Generate social media captions for: ${platforms.join(", ")}
 
-Topic: ${topic}
+Topic: ${effectiveTopic}
 Tone: ${tone}
+${contentContext ? `Content details: ${contentContext}` : ""}
 ${trendContext ? `Trending context: ${trendContext}` : ""}
 ${brandContext ? `Brand context: ${brandContext}` : ""}
 
