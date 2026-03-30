@@ -22,6 +22,7 @@ import {
   TrendingUp,
   Share2,
   CalendarDays,
+  Users,
 } from "lucide-react";
 import neuralcutIcon from "@/assets/neuralcut-icon.png";
 
@@ -31,11 +32,15 @@ const navItems = [
   { label: "Asset Library", icon: Images, path: "/assets" },
   { label: "Brand", icon: Palette, path: "/brand" },
   { label: "Trends", icon: TrendingUp, path: "/trends" },
-  { label: "Social Hub", icon: Share2, path: "/social" },
-  { label: "Calendar", icon: CalendarDays, path: "/social/calendar" },
   { label: "Render Queue", icon: Layers, path: "/render-queue" },
   { label: "AI Providers", icon: Cpu, path: "/providers" },
   { label: "API Testing", icon: FlaskConical, path: "/api-testing" },
+];
+
+const socialNavItems = [
+  { label: "Social Hub", icon: Share2, path: "/social" },
+  { label: "Calendar", icon: CalendarDays, path: "/social/calendar" },
+  { label: "Accounts", icon: Users, path: "/social/accounts" },
 ];
 
 function AppLayout({ children }: { children: ReactNode }) {
@@ -101,6 +106,38 @@ function AppLayout({ children }: { children: ReactNode }) {
 
         <nav className="flex-1 px-2 py-2 space-y-0.5 overflow-y-auto">
           {navItems.map((item) => {
+            const active = isActive(item.path);
+            return (
+              <Link
+                key={item.path}
+                href={item.path}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 group relative ${
+                  active
+                    ? "theme-nav-active text-purple-600"
+                    : "theme-text-secondary theme-nav-hover"
+                } ${collapsed ? "justify-center" : ""}`}
+                style={active ? { color: "rgb(124, 58, 237)" } : {}}
+              >
+                {active && (
+                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-purple-500 rounded-r-full" />
+                )}
+                <item.icon
+                  className="w-5 h-5 shrink-0"
+                  style={{ color: active ? "rgb(124, 58, 237)" : "var(--icon-default)" }}
+                />
+                {!collapsed && <span>{item.label}</span>}
+              </Link>
+            );
+          })}
+          <div className="my-2 mx-3" style={{ borderTop: "1px solid var(--border-subtle)" }} />
+          {!collapsed && (
+            <div className="px-3 py-1">
+              <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+                Social
+              </span>
+            </div>
+          )}
+          {socialNavItems.map((item) => {
             const active = isActive(item.path);
             return (
               <Link

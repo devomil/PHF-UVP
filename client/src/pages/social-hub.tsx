@@ -114,7 +114,7 @@ function SocialHub() {
                 >
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate" style={{ color: "var(--text-primary)" }}>
-                      {post.title || post.caption?.substring(0, 80) || "Untitled"}
+                      {post.title || (typeof post.captions === "object" && post.captions ? Object.values(post.captions)[0] as string : "")?.substring(0, 80) || "Untitled"}
                     </p>
                     <div className="flex items-center gap-3 mt-1">
                       <span className="text-xs" style={{ color: "var(--text-muted)" }}>

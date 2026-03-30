@@ -40,14 +40,22 @@ function SocialNewPost() {
         scheduledFor = new Date(`${scheduledDate}T${scheduledTime}`).toISOString();
       }
 
+      const captionsObj: Record<string, string> = {};
+      for (const p of selectedPlatforms) captionsObj[p] = caption;
+
+      const hashtagsObj: Record<string, string[]> = {};
+      if (hashtagList.length > 0) {
+        for (const p of selectedPlatforms) hashtagsObj[p] = hashtagList;
+      }
+
       const res = await fetch("/api/social/posts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          caption,
+          captions: captionsObj,
           title: title || undefined,
           platforms: selectedPlatforms,
-          hashtags: hashtagList.length > 0 ? hashtagList : undefined,
+          hashtags: hashtagsObj,
           scheduledFor,
         }),
       });
