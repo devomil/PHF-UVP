@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "wouter";
+import { Link, useSearch } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -34,9 +34,17 @@ function formatDate(dateStr: string | null | undefined) {
 }
 
 export default function Projects() {
-  const [activeFilter, setActiveFilter] = useState("all");
+  const searchString = useSearch();
+  const urlStatus = new URLSearchParams(searchString).get("status");
+  const [activeFilter, setActiveFilter] = useState(urlStatus && filters.includes(urlStatus) ? urlStatus : "all");
   const [searchQuery, setSearchQuery] = useState("");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+
+  useEffect(() => {
+    if (urlStatus && filters.includes(urlStatus)) {
+      setActiveFilter(urlStatus);
+    }
+  }, [urlStatus]);
 
   const { data: projects = [], isLoading } = useQuery({
     queryKey: ["projects"],
