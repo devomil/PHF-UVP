@@ -28,6 +28,27 @@ const projectGradients = [
   "from-cyan-600/40 to-cyan-900/20",
 ];
 
+function getProjectThumbnail(project: any): string | null {
+  try {
+    if (project.scenes && Array.isArray(project.scenes)) {
+      for (const scene of project.scenes) {
+        if (scene.thumbnailUrl) return scene.thumbnailUrl;
+        if (scene.imageUrl) return scene.imageUrl;
+      }
+    }
+    if (project.assets) {
+      const assets = typeof project.assets === "string" ? JSON.parse(project.assets) : project.assets;
+      if (assets && typeof assets === "object") {
+        if (assets.productMediaUrl) return assets.productMediaUrl;
+        if (assets.logoUrl) return assets.logoUrl;
+      }
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
 const statusConfig: Record<string, { bg: string; text: string; label: string }> = {
   draft: { bg: "bg-gray-500", text: "text-white", label: "Draft" },
   generating: { bg: "bg-purple-500", text: "text-purple-100", label: "Generating" },
@@ -216,14 +237,27 @@ export default function Dashboard() {
           </Link>
           <Link href="/render-queue">
             <div
-              className="p-5 rounded-lg backdrop-blur border transition-all hover:border-amber-500/30 cursor-pointer group"
-              style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)" }}
+              className={`p-5 rounded-lg backdrop-blur border transition-all hover:border-amber-500/30 cursor-pointer group relative overflow-hidden ${activeRenders > 0 ? "border-amber-500/20" : ""}`}
+              style={{ backgroundColor: "var(--surface)", borderColor: activeRenders > 0 ? undefined : "var(--border-subtle)" }}
             >
               <div className="flex items-center justify-between mb-2">
-                <p className="text-sm" style={{ color: "var(--text-secondary)" }}>Active Renders</p>
-                <Activity className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity text-amber-400" />
+                <div className="flex items-center gap-2">
+                  <p className="text-sm" style={{ color: "var(--text-secondary)" }}>Active Renders</p>
+                  {activeRenders > 0 && (
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500" />
+                    </span>
+                  )}
+                </div>
+                <Activity className={`w-4 h-4 transition-opacity text-amber-400 ${activeRenders > 0 ? "opacity-100 animate-pulse" : "opacity-0 group-hover:opacity-100"}`} />
               </div>
               <p className="text-3xl font-bold text-amber-400">{activeRenders}</p>
+              {activeRenders > 0 && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-amber-500/20 overflow-hidden">
+                  <div className="h-full w-1/3 bg-amber-500" style={{ animation: "shimmer 1.5s ease-in-out infinite" }} />
+                </div>
+              )}
             </div>
           </Link>
           <Link href="/projects?status=completed">
@@ -312,6 +346,7 @@ export default function Dashboard() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
               {recentProjects.map((project: any, index: number) => {
                 const status = statusConfig[project.status] || statusConfig.draft;
+                const thumbnail = getProjectThumbnail(project);
                 return (
                   <Link key={project.projectId} href={`/projects/${project.projectId}`}>
                     <div
@@ -319,13 +354,26 @@ export default function Dashboard() {
                       style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)" }}
                     >
                       <div
-                        className={`h-32 bg-gradient-to-br ${projectGradients[index % projectGradients.length]} group-hover:opacity-80 transition-opacity relative`}
+                        className={`h-36 relative overflow-hidden bg-gradient-to-br ${projectGradients[index % projectGradients.length]}`}
                       >
+                        {thumbnail && (
+                          <img
+                            src={thumbnail}
+                            alt={project.title}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                            loading="lazy"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display = "none";
+                            }}
+                          />
+                        )}
                         {["generating", "rendering", "processing"].includes(project.status) && (
                           <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/30 overflow-hidden">
-                            <div className="h-full bg-purple-500 w-1/3 animate-[shimmer_1.5s_ease-in-out_infinite]" style={{ animation: "shimmer 1.5s ease-in-out infinite" }} />
-                            <style>{`@keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(400%); } }`}</style>
+                            <div className="h-full bg-purple-500 w-1/3" style={{ animation: "shimmer 1.5s ease-in-out infinite" }} />
                           </div>
+                        )}
+                        {thumbnail && (
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
                         )}
                       </div>
                       <div className="p-4 space-y-3">

@@ -28,6 +28,27 @@ const projectGradients = [
 
 const filters = ["all", "draft", "generating", "completed", "failed"];
 
+function getProjectThumbnail(project: any): string | null {
+  try {
+    if (project.scenes && Array.isArray(project.scenes)) {
+      for (const scene of project.scenes) {
+        if (scene.thumbnailUrl) return scene.thumbnailUrl;
+        if (scene.imageUrl) return scene.imageUrl;
+      }
+    }
+    if (project.assets) {
+      const assets = typeof project.assets === "string" ? JSON.parse(project.assets) : project.assets;
+      if (assets && typeof assets === "object") {
+        if (assets.productMediaUrl) return assets.productMediaUrl;
+        if (assets.logoUrl) return assets.logoUrl;
+      }
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
 function formatDate(dateStr: string | null | undefined) {
   if (!dateStr) return "";
   return new Date(dateStr).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
@@ -158,7 +179,9 @@ export default function Projects() {
           </div>
         ) : viewMode === "grid" ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {filtered.map((project: any, index: number) => (
+            {filtered.map((project: any, index: number) => {
+              const thumbnail = getProjectThumbnail(project);
+              return (
               <Link
                 key={project.projectId}
                 href={`/projects/${project.projectId}`}
@@ -167,6 +190,15 @@ export default function Projects() {
                 <a className="group cursor-pointer">
                   <div className="border rounded-xl overflow-hidden transition-all duration-300 hover:translate-y-[-2px] hover:shadow-lg hover:shadow-purple-500/5" style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)" }}>
                     <div className={`h-36 bg-gradient-to-br ${projectGradients[index % projectGradients.length]} relative overflow-hidden`}>
+                      {thumbnail && (
+                        <img
+                          src={thumbnail}
+                          alt={project.title}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                          loading="lazy"
+                          onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                        />
+                      )}
                       <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors duration-300" />
                       <div className="absolute bottom-3 left-3">
                         {project.mediaMode === "image" ? (
@@ -200,7 +232,8 @@ export default function Projects() {
                   </div>
                 </a>
               </Link>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <div className="space-y-2">

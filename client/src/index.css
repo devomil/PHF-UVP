@@ -228,3 +228,8 @@ input[type="range"].styled-slider::-moz-range-thumb:hover {
   transform: scale(1.15);
   box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.25), 0 1px 4px rgba(0, 0, 0, 0.4);
 }
+
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(400%); }
+}
