@@ -292,9 +292,9 @@ export default function Landing() {
     <div className="min-h-screen relative" style={{ backgroundColor: "#0a0a0f", color: "var(--text-primary)" }}>
 
       <nav className="fixed top-0 left-0 right-0 z-50 backdrop-blur-xl bg-[#0a0a0f]/80 border-b" style={{ borderColor: "rgba(255,255,255,0.06)" }}>
-        <div className="max-w-7xl mx-auto px-6 h-24 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-6 h-32 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <img src={neuralcutFullLogo} alt="NeuralCut.AI" className="h-20 object-contain" />
+            <img src={neuralcutFullLogo} alt="NeuralCut.AI" className="h-40 object-contain" />
           </div>
           <div className="hidden md:flex items-center gap-6 text-sm" style={{ color: "var(--text-secondary)" }}>
             <a href="#features" className="hover:text-white transition-colors">Features</a>
@@ -316,7 +316,7 @@ export default function Landing() {
         </div>
       </nav>
 
-      <section className="relative pt-32 pb-8 overflow-hidden">
+      <section className="relative pt-40 pb-8 overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-b from-purple-900/15 via-transparent to-transparent" />
         <div className="absolute top-20 left-1/4 w-[500px] h-[500px] bg-purple-600/8 rounded-full blur-[120px]" />
         <div className="absolute top-40 right-1/4 w-[400px] h-[400px] bg-indigo-600/8 rounded-full blur-[120px]" />
