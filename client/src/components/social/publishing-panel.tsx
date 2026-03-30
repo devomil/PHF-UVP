@@ -10,7 +10,11 @@ import {
   Loader2,
   CheckCircle,
   AlertCircle,
+  Globe,
+  Hash,
+  Eye,
 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 const PLATFORMS = [
   { id: "twitter", label: "X / Twitter", color: "#1DA1F2", charLimit: 280, aspect: "16:9" },
@@ -22,6 +26,25 @@ const PLATFORMS = [
   { id: "pinterest", label: "Pinterest", color: "#BD081C", charLimit: 500, aspect: "2:3" },
   { id: "threads", label: "Threads", color: "#000000", charLimit: 500, aspect: "1:1" },
 ];
+
+const TIMEZONES = [
+  { value: "America/New_York", label: "Eastern (ET)" },
+  { value: "America/Chicago", label: "Central (CT)" },
+  { value: "America/Denver", label: "Mountain (MT)" },
+  { value: "America/Los_Angeles", label: "Pacific (PT)" },
+  { value: "Europe/London", label: "London (GMT)" },
+  { value: "Europe/Paris", label: "Paris (CET)" },
+  { value: "Asia/Tokyo", label: "Tokyo (JST)" },
+  { value: "UTC", label: "UTC" },
+];
+
+function getAspectCompatibility(contentAspect: string | undefined, platformAspect: string): "green" | "yellow" | "red" {
+  if (!contentAspect) return "yellow";
+  const platformAspects = platformAspect.split(",").map((a) => a.trim());
+  if (platformAspects.some((a) => a === contentAspect)) return "green";
+  if (contentAspect === "16:9" || contentAspect === "1:1") return "yellow";
+  return "yellow";
+}
 
 interface PublishingPanelProps {
   open: boolean;
@@ -35,6 +58,8 @@ interface PublishingPanelProps {
     mediaUrl: string;
     mediaType: string;
     thumbnailUrl?: string;
+    aspectRatio?: string;
+    duration?: number;
   };
   editPost?: {
     id: number;
@@ -48,14 +73,17 @@ interface PublishingPanelProps {
 }
 
 export default function PublishingPanel({ open, onClose, onSuccess, prefillDate, contentItem, editPost }: PublishingPanelProps) {
+  const { toast } = useToast();
   const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([]);
   const [captions, setCaptions] = useState<Record<string, string>>({});
   const [hashtags, setHashtags] = useState<Record<string, string[]>>({});
   const [title, setTitle] = useState("");
   const [scheduleDate, setScheduleDate] = useState("");
   const [scheduleTime, setScheduleTime] = useState("");
+  const [timezone, setTimezone] = useState(() => Intl.DateTimeFormat().resolvedOptions().timeZone || "America/New_York");
   const [captionTopic, setCaptionTopic] = useState("");
   const [captionTone, setCaptionTone] = useState("professional");
+  const [previewPlatform, setPreviewPlatform] = useState<string | null>(null);
 
   useEffect(() => {
     if (editPost) {
@@ -102,7 +130,7 @@ export default function PublishingPanel({ open, onClose, onSuccess, prefillDate,
           assetId: contentItem?.type === "asset" ? contentItem.id : undefined,
         }),
       });
-      if (!res.ok) throw new Error("Failed");
+      if (!res.ok) throw new Error("Failed to generate captions");
       return res.json();
     },
     onSuccess: (data) => {
@@ -126,6 +154,34 @@ export default function PublishingPanel({ open, onClose, onSuccess, prefillDate,
         setCaptions((prev) => ({ ...prev, ...newCaptions }));
         setHashtags((prev) => ({ ...prev, ...newHashtags }));
       }
+      toast({ title: "Captions generated", description: "AI captions have been filled in for your selected platforms" });
+    },
+    onError: () => {
+      toast({ title: "Caption generation failed", variant: "destructive" });
+    },
+  });
+
+  const suggestHashtags = useMutation({
+    mutationFn: async (platform: string) => {
+      const res = await fetch("/api/social/generate-captions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          platforms: [platform],
+          topic: captionTopic || title || captions[platform]?.substring(0, 100) || "content",
+          tone: captionTone,
+          hashtagsOnly: true,
+        }),
+      });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    onSuccess: (data, platform) => {
+      if (data.byPlatform?.[platform]?.hashtags) {
+        setHashtags((prev) => ({ ...prev, [platform]: data.byPlatform[platform].hashtags }));
+      } else if (data.captions?.[0]?.hashtags) {
+        setHashtags((prev) => ({ ...prev, [platform]: data.captions[0].hashtags }));
+      }
     },
   });
 
@@ -140,7 +196,7 @@ export default function PublishingPanel({ open, onClose, onSuccess, prefillDate,
         const res = await fetch(`/api/social/posts/${editPost.id}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ captions, hashtags, platforms: selectedPlatforms, title, scheduledFor }),
+          body: JSON.stringify({ captions, hashtags, platforms: selectedPlatforms, title, scheduledFor, timezone }),
         });
         if (!res.ok) throw new Error("Failed to update post");
         if (action === "publish") {
@@ -159,6 +215,7 @@ export default function PublishingPanel({ open, onClose, onSuccess, prefillDate,
           platforms: selectedPlatforms,
           title,
           scheduledFor,
+          timezone,
           mediaUrl: contentItem?.mediaUrl,
           mediaType: contentItem?.mediaType,
           thumbnailUrl: contentItem?.thumbnailUrl,
@@ -177,9 +234,18 @@ export default function PublishingPanel({ open, onClose, onSuccess, prefillDate,
       }
       return post;
     },
-    onSuccess: () => {
+    onSuccess: (_, action) => {
+      const messages: Record<string, string> = {
+        draft: "Draft saved",
+        schedule: "Post scheduled",
+        publish: "Post published successfully",
+      };
+      toast({ title: messages[action] || "Success" });
       onSuccess?.();
       onClose();
+    },
+    onError: (error: Error) => {
+      toast({ title: "Failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -233,6 +299,7 @@ export default function PublishingPanel({ open, onClose, onSuccess, prefillDate,
                 </p>
                 <p className="text-xs mt-0.5 capitalize" style={{ color: "var(--text-muted)" }}>
                   {contentItem.mediaType} - {contentItem.type}
+                  {contentItem.duration ? ` - ${Math.round(contentItem.duration)}s` : ""}
                 </p>
               </div>
             </div>
@@ -259,6 +326,8 @@ export default function PublishingPanel({ open, onClose, onSuccess, prefillDate,
             <div className="grid grid-cols-2 gap-2">
               {PLATFORMS.map((p) => {
                 const selected = selectedPlatforms.includes(p.id);
+                const compat = getAspectCompatibility(contentItem?.aspectRatio, p.aspect);
+                const compatColor = compat === "green" ? "rgb(34,197,94)" : compat === "yellow" ? "rgb(234,179,8)" : "rgb(239,68,68)";
                 return (
                   <button
                     key={p.id}
@@ -274,7 +343,10 @@ export default function PublishingPanel({ open, onClose, onSuccess, prefillDate,
                       {selected && <CheckCircle className="w-3 h-3" style={{ color: p.color }} />}
                     </div>
                     <span>{p.label}</span>
-                    <span className="ml-auto text-[10px] opacity-60">{p.aspect}</span>
+                    <span className="ml-auto flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: compatColor }} title={`Aspect: ${p.aspect}`} />
+                      <span className="text-[10px] opacity-60">{p.aspect}</span>
+                    </span>
                   </button>
                 );
               })}
@@ -334,9 +406,29 @@ export default function PublishingPanel({ open, onClose, onSuccess, prefillDate,
                         <span className="text-xs font-medium" style={{ color: platform.color }}>
                           {platform.label}
                         </span>
-                        <span className={`text-[10px] ${overLimit ? "text-red-400" : ""}`} style={overLimit ? {} : { color: "var(--text-muted)" }}>
-                          {charCount}/{platform.charLimit}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => suggestHashtags.mutate(pId)}
+                            disabled={suggestHashtags.isPending}
+                            className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded transition-colors"
+                            style={{ color: "var(--text-muted)" }}
+                            title="Suggest hashtags"
+                          >
+                            <Hash className="w-2.5 h-2.5" />
+                            Suggest
+                          </button>
+                          <button
+                            onClick={() => setPreviewPlatform(previewPlatform === pId ? null : pId)}
+                            className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded transition-colors"
+                            style={{ color: previewPlatform === pId ? platform.color : "var(--text-muted)" }}
+                            title="Preview"
+                          >
+                            <Eye className="w-2.5 h-2.5" />
+                          </button>
+                          <span className={`text-[10px] ${overLimit ? "text-red-400" : ""}`} style={overLimit ? {} : { color: "var(--text-muted)" }}>
+                            {charCount}/{platform.charLimit}
+                          </span>
+                        </div>
                       </div>
                       <textarea
                         value={caption}
@@ -351,12 +443,40 @@ export default function PublishingPanel({ open, onClose, onSuccess, prefillDate,
                           {hashtags[pId].map((tag, i) => (
                             <span
                               key={i}
-                              className="text-[10px] px-1.5 py-0.5 rounded-full"
+                              className="text-[10px] px-1.5 py-0.5 rounded-full cursor-pointer hover:line-through"
                               style={{ backgroundColor: `${platform.color}15`, color: platform.color }}
+                              onClick={() => setHashtags((prev) => ({ ...prev, [pId]: prev[pId].filter((_, idx) => idx !== i) }))}
                             >
                               #{tag}
                             </span>
                           ))}
+                        </div>
+                      )}
+                      {previewPlatform === pId && (
+                        <div
+                          className="mt-2 p-3 rounded-lg border"
+                          style={{ borderColor: `${platform.color}30`, backgroundColor: "var(--surface)" }}
+                        >
+                          <div className="flex items-center gap-2 mb-2">
+                            <div className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white" style={{ backgroundColor: platform.color }}>
+                              {platform.label[0]}
+                            </div>
+                            <div>
+                              <p className="text-[11px] font-semibold" style={{ color: "var(--text-primary)" }}>Your Brand</p>
+                              <p className="text-[9px]" style={{ color: "var(--text-muted)" }}>Just now</p>
+                            </div>
+                          </div>
+                          {contentItem?.thumbnailUrl && (
+                            <img src={contentItem.thumbnailUrl} alt="" className="w-full h-28 rounded object-cover mb-2" />
+                          )}
+                          <p className="text-[11px] leading-relaxed" style={{ color: "var(--text-primary)" }}>
+                            {caption || "Your caption will appear here..."}
+                          </p>
+                          {hashtags[pId]?.length > 0 && (
+                            <p className="text-[10px] mt-1" style={{ color: platform.color }}>
+                              {hashtags[pId].map((t) => `#${t}`).join(" ")}
+                            </p>
+                          )}
                         </div>
                       )}
                     </div>
@@ -386,6 +506,19 @@ export default function PublishingPanel({ open, onClose, onSuccess, prefillDate,
                 style={{ backgroundColor: "var(--input-bg)", color: "var(--text-primary)", border: "1px solid var(--border-medium)" }}
               />
             </div>
+            <div className="mt-2 flex items-center gap-2">
+              <Globe className="w-3.5 h-3.5" style={{ color: "var(--text-muted)" }} />
+              <select
+                value={timezone}
+                onChange={(e) => setTimezone(e.target.value)}
+                className="flex-1 px-2 py-1 rounded text-xs outline-none"
+                style={{ backgroundColor: "var(--input-bg)", color: "var(--text-primary)", border: "1px solid var(--border-medium)" }}
+              >
+                {TIMEZONES.map((tz) => (
+                  <option key={tz.value} value={tz.value}>{tz.label}</option>
+                ))}
+              </select>
+            </div>
             {Array.isArray(optimalTimes) && optimalTimes.length > 0 && (
               <div className="mt-2">
                 <p className="text-[10px] font-medium mb-1" style={{ color: "var(--text-muted)" }}>
@@ -397,7 +530,7 @@ export default function PublishingPanel({ open, onClose, onSuccess, prefillDate,
                       <button
                         key={`${ot.platform}-${t}`}
                         onClick={() => fillOptimalTime(t)}
-                        className="text-[10px] px-2 py-0.5 rounded-full border transition-colors"
+                        className="text-[10px] px-2 py-0.5 rounded-full border transition-colors hover:bg-purple-500/10"
                         style={{ borderColor: "var(--border-medium)", color: "var(--text-secondary)" }}
                       >
                         {t}

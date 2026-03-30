@@ -11,7 +11,7 @@ import {
   Inbox,
   Send,
 } from "lucide-react";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import PublishingPanel from "@/components/social/publishing-panel";
 
 interface ContentItem {
@@ -59,6 +59,30 @@ function SocialCalendar() {
     editPost?: ScheduledPost;
     prefillDate?: string;
   } | null>(null);
+  const [dragItem, setDragItem] = useState<ContentItem | null>(null);
+  const [dragOverDate, setDragOverDate] = useState<string | null>(null);
+
+  const handleDragStart = useCallback((item: ContentItem) => {
+    setDragItem(item);
+  }, []);
+
+  const handleDragOverCell = useCallback((e: React.DragEvent, dateStr: string) => {
+    e.preventDefault();
+    setDragOverDate(dateStr);
+  }, []);
+
+  const handleDropOnCell = useCallback((dateStr: string) => {
+    if (dragItem) {
+      setPublishPanel({ contentItem: dragItem, prefillDate: dateStr });
+    }
+    setDragItem(null);
+    setDragOverDate(null);
+  }, [dragItem]);
+
+  const handleDragEnd = useCallback(() => {
+    setDragItem(null);
+    setDragOverDate(null);
+  }, []);
 
   const { data: postsData } = useQuery({
     queryKey: ["/api/social/posts"],
@@ -188,6 +212,8 @@ function SocialCalendar() {
                 style={{ borderColor: "var(--border-subtle)", backgroundColor: "var(--app-bg)" }}
                 onClick={() => setPublishPanel({ contentItem: item })}
                 draggable
+                onDragStart={() => handleDragStart(item)}
+                onDragEnd={handleDragEnd}
               >
                 <div className="flex items-center gap-2">
                   {item.thumbnailUrl ? (
@@ -297,12 +323,16 @@ function SocialCalendar() {
                     style={{
                       borderBottom: "1px solid var(--border-subtle)",
                       borderRight: "1px solid var(--border-subtle)",
-                      backgroundColor: cell.date && isToday(cell.date) ? "rgba(124,58,237,0.05)" : undefined,
+                      backgroundColor: cell.date && dragOverDate === cell.date.toISOString().split("T")[0]
+                        ? "rgba(124,58,237,0.15)"
+                        : cell.date && isToday(cell.date) ? "rgba(124,58,237,0.05)" : undefined,
                     }}
+                    onDragOver={cell.date ? (e) => handleDragOverCell(e, cell.date!.toISOString().split("T")[0]) : undefined}
+                    onDragLeave={() => setDragOverDate(null)}
+                    onDrop={cell.date ? () => handleDropOnCell(cell.date!.toISOString().split("T")[0]) : undefined}
                     onClick={() => {
-                      if (cell.date && contentItems.length > 0) {
+                      if (cell.date) {
                         setPublishPanel({
-                          contentItem: contentItems[0],
                           prefillDate: cell.date.toISOString().split("T")[0],
                         });
                       }
@@ -367,15 +397,17 @@ function SocialCalendar() {
                   className="flex flex-col p-2 cursor-pointer transition-colors hover:bg-purple-500/5"
                   style={{
                     borderRight: "1px solid var(--border-subtle)",
-                    backgroundColor: isToday(cell.date) ? "rgba(124,58,237,0.05)" : undefined,
+                    backgroundColor: dragOverDate === cell.date.toISOString().split("T")[0]
+                      ? "rgba(124,58,237,0.15)"
+                      : isToday(cell.date) ? "rgba(124,58,237,0.05)" : undefined,
                   }}
+                  onDragOver={(e) => handleDragOverCell(e, cell.date.toISOString().split("T")[0])}
+                  onDragLeave={() => setDragOverDate(null)}
+                  onDrop={() => handleDropOnCell(cell.date.toISOString().split("T")[0])}
                   onClick={() => {
-                    if (contentItems.length > 0) {
-                      setPublishPanel({
-                        contentItem: contentItems[0],
-                        prefillDate: cell.date.toISOString().split("T")[0],
-                      });
-                    }
+                    setPublishPanel({
+                      prefillDate: cell.date.toISOString().split("T")[0],
+                    });
                   }}
                 >
                   <div className="text-center mb-2">

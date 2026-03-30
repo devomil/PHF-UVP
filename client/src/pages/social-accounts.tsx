@@ -19,6 +19,8 @@ function SocialAccounts() {
   const pollRef = useRef<ReturnType<typeof setInterval>>();
   const initialCountRef = useRef<number | null>(null);
 
+  const [provisioned, setProvisioned] = useState(false);
+
   const { data: statusData } = useQuery({
     queryKey: ["/api/social/status"],
     queryFn: async () => {
@@ -28,6 +30,14 @@ function SocialAccounts() {
     },
   });
 
+  useEffect(() => {
+    if (statusData?.configured && !provisioned) {
+      fetch("/api/social/provision", { method: "POST" })
+        .then(() => setProvisioned(true))
+        .catch(() => {});
+    }
+  }, [statusData?.configured, provisioned]);
+
   const { data: accountsData, isLoading } = useQuery({
     queryKey: ["/api/social/accounts"],
     queryFn: async () => {
@@ -35,6 +45,7 @@ function SocialAccounts() {
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
+    enabled: provisioned || !!statusData?.configured,
   });
 
   const connectMutation = useMutation({

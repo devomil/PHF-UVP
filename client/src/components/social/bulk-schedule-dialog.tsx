@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { X, Calendar, Clock, Loader2, AlertCircle, CheckCircle, GripVertical } from "lucide-react";
+import { X, Calendar, Clock, Loader2, AlertCircle, CheckCircle, GripVertical, ArrowUp, ArrowDown } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 const PLATFORMS = [
   { id: "twitter", label: "X / Twitter", color: "#1DA1F2" },
@@ -35,6 +36,7 @@ interface BulkScheduleDialogProps {
 }
 
 export default function BulkScheduleDialog({ open, onClose, onSuccess, items }: BulkScheduleDialogProps) {
+  const { toast } = useToast();
   const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(["instagram", "tiktok"]);
   const [startDate, setStartDate] = useState(() => {
     const tomorrow = new Date();
@@ -45,10 +47,37 @@ export default function BulkScheduleDialog({ open, onClose, onSuccess, items }: 
   const [strategy, setStrategy] = useState("recommended");
   const [customHours, setCustomHours] = useState(48);
   const [orderedItems, setOrderedItems] = useState<ContentItem[]>(items);
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
 
   useEffect(() => {
     setOrderedItems(items);
   }, [items]);
+
+  const moveItem = (from: number, to: number) => {
+    if (to < 0 || to >= orderedItems.length) return;
+    setOrderedItems((prev) => {
+      const next = [...prev];
+      const [item] = next.splice(from, 1);
+      next.splice(to, 0, item);
+      return next;
+    });
+  };
+
+  const handleDragStart = (index: number) => {
+    setDragIndex(index);
+  };
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    if (dragIndex !== null && dragIndex !== index) {
+      moveItem(dragIndex, index);
+      setDragIndex(index);
+    }
+  };
+
+  const handleDragEnd = () => {
+    setDragIndex(null);
+  };
 
   const bulkSchedule = useMutation({
     mutationFn: async () => {
@@ -73,8 +102,12 @@ export default function BulkScheduleDialog({ open, onClose, onSuccess, items }: 
       return res.json();
     },
     onSuccess: () => {
+      toast({ title: "Bulk schedule created", description: `${orderedItems.length} posts scheduled successfully` });
       onSuccess?.();
       onClose();
+    },
+    onError: (error: Error) => {
+      toast({ title: "Bulk schedule failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -118,17 +151,41 @@ export default function BulkScheduleDialog({ open, onClose, onSuccess, items }: 
 
         <div className="p-6 space-y-5">
           <div>
-            <label className="text-xs font-medium mb-2 block" style={{ color: "var(--text-secondary)" }}>Content Order</label>
+            <label className="text-xs font-medium mb-2 block" style={{ color: "var(--text-secondary)" }}>
+              Content Order <span className="font-normal" style={{ color: "var(--text-muted)" }}>(drag or use arrows to reorder)</span>
+            </label>
             <div className="space-y-1.5 max-h-40 overflow-y-auto">
               {orderedItems.map((item, i) => (
                 <div
                   key={item.id}
-                  className="flex items-center gap-2 p-2 rounded-lg text-xs"
-                  style={{ backgroundColor: "var(--surface)" }}
+                  draggable
+                  onDragStart={() => handleDragStart(i)}
+                  onDragOver={(e) => handleDragOver(e, i)}
+                  onDragEnd={handleDragEnd}
+                  className={`flex items-center gap-2 p-2 rounded-lg text-xs transition-all ${dragIndex === i ? "opacity-50 ring-1 ring-purple-500" : ""}`}
+                  style={{ backgroundColor: "var(--surface)", cursor: "grab" }}
                 >
                   <GripVertical className="w-3.5 h-3.5 shrink-0" style={{ color: "var(--text-muted)" }} />
                   {item.thumbnailUrl && <img src={item.thumbnailUrl} alt="" className="w-8 h-8 rounded object-cover" />}
                   <span className="flex-1 truncate" style={{ color: "var(--text-primary)" }}>{item.title}</span>
+                  <div className="flex items-center gap-0.5 shrink-0">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); moveItem(i, i - 1); }}
+                      disabled={i === 0}
+                      className="p-0.5 rounded hover:bg-purple-500/10 disabled:opacity-30"
+                      style={{ color: "var(--text-muted)" }}
+                    >
+                      <ArrowUp className="w-3 h-3" />
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); moveItem(i, i + 1); }}
+                      disabled={i === orderedItems.length - 1}
+                      className="p-0.5 rounded hover:bg-purple-500/10 disabled:opacity-30"
+                      style={{ color: "var(--text-muted)" }}
+                    >
+                      <ArrowDown className="w-3 h-3" />
+                    </button>
+                  </div>
                   <span className="text-[10px] shrink-0" style={{ color: "var(--text-muted)" }}>{previewDates[i]}</span>
                 </div>
               ))}

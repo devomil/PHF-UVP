@@ -29,6 +29,8 @@ interface ContentItem {
   thumbnailUrl?: string;
   publishStatus: string;
   createdAt: string;
+  duration?: number;
+  aspectRatio?: string;
 }
 
 interface ScheduledPost {
@@ -239,7 +241,7 @@ function SocialHub() {
                         {item.title}
                       </p>
                       <p className="text-xs mt-1 capitalize" style={{ color: "var(--text-muted)" }}>
-                        {item.mediaType} - {formatRelativeTime(item.createdAt)}
+                        {item.mediaType}{item.duration ? ` - ${Math.round(item.duration)}s` : ""} - {formatRelativeTime(item.createdAt)}
                       </p>
                       {!multiSelect && (
                         <div className="flex gap-2 mt-3">
