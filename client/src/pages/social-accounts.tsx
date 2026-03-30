@@ -18,6 +18,7 @@ function SocialAccounts() {
   const [polling, setPolling] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval>>();
   const initialStateRef = useRef<string | null>(null);
+  const pollingStartRef = useRef<number>(0);
 
   const [provisioned, setProvisioned] = useState(false);
 
@@ -59,6 +60,7 @@ function SocialAccounts() {
         window.open(data.url, "_blank");
         const accts = accountsData?.accounts || [];
         initialStateRef.current = JSON.stringify(accts.map((a: { platform: string }) => a.platform).sort());
+        pollingStartRef.current = Date.now();
         setPolling(true);
       }
     },
@@ -84,11 +86,14 @@ function SocialAccounts() {
         initialStateRef.current = null;
         return;
       }
-      let elapsed = 0;
+      if (pollingStartRef.current && Date.now() - pollingStartRef.current >= 30000) {
+        setPolling(false);
+        initialStateRef.current = null;
+        return;
+      }
       pollRef.current = setInterval(() => {
-        elapsed += 3000;
         queryClient.invalidateQueries({ queryKey: ["/api/social/accounts"] });
-        if (elapsed >= 30000) {
+        if (pollingStartRef.current && Date.now() - pollingStartRef.current >= 30000) {
           setPolling(false);
           initialStateRef.current = null;
           clearInterval(pollRef.current);

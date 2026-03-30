@@ -85,7 +85,7 @@ function SocialCalendar() {
     setDragOverDate(null);
   }, []);
 
-  const { data: postsData } = useQuery({
+  const { data: postsData, isLoading: postsLoading } = useQuery({
     queryKey: ["/api/social/posts"],
     queryFn: async () => {
       const res = await fetch("/api/social/posts");
@@ -94,7 +94,7 @@ function SocialCalendar() {
     },
   });
 
-  const { data: contentReady } = useQuery({
+  const { data: contentReady, isLoading: contentLoading } = useQuery({
     queryKey: ["/api/social/content-ready"],
     queryFn: async () => {
       const res = await fetch("/api/social/content-ready");
@@ -200,7 +200,21 @@ function SocialCalendar() {
               <ChevronLeft className="w-4 h-4" />
             </button>
           </div>
-          {contentItems.length === 0 ? (
+          {contentLoading ? (
+            <div className="space-y-2">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="rounded-lg p-2 animate-pulse" style={{ backgroundColor: "var(--app-bg)" }}>
+                  <div className="flex items-center gap-2">
+                    <div className="w-10 h-10 rounded shrink-0" style={{ backgroundColor: "var(--surface-hover)" }} />
+                    <div className="flex-1 space-y-1">
+                      <div className="h-3 rounded w-3/4" style={{ backgroundColor: "var(--surface-hover)" }} />
+                      <div className="h-2 rounded w-1/2" style={{ backgroundColor: "var(--surface-hover)" }} />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : contentItems.length === 0 ? (
             <div className="text-center py-6">
               <Inbox className="w-8 h-8 mx-auto mb-2" style={{ color: "var(--text-muted)" }} />
               <p className="text-xs" style={{ color: "var(--text-muted)" }}>No content ready</p>
@@ -303,7 +317,25 @@ function SocialCalendar() {
         </div>
 
         <div className="flex-1 overflow-auto">
-          {viewMode === "month" ? (
+          {postsLoading ? (
+            <div className="h-full flex flex-col">
+              <div className="grid grid-cols-7 shrink-0">
+                {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
+                  <div key={d} className="px-3 py-2 text-center text-xs font-medium" style={{ color: "var(--text-muted)", borderBottom: "1px solid var(--border-subtle)" }}>
+                    {d}
+                  </div>
+                ))}
+              </div>
+              <div className="grid grid-cols-7 flex-1">
+                {Array.from({ length: 35 }).map((_, i) => (
+                  <div key={i} className="min-h-[100px] p-2" style={{ borderBottom: "1px solid var(--border-subtle)", borderRight: "1px solid var(--border-subtle)" }}>
+                    <div className="w-5 h-5 rounded animate-pulse mb-1" style={{ backgroundColor: "var(--surface-hover)" }} />
+                    {i % 5 === 0 && <div className="h-3 rounded animate-pulse w-3/4 mt-1" style={{ backgroundColor: "var(--surface-hover)" }} />}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : viewMode === "month" ? (
             <div className="h-full flex flex-col">
               <div className="grid grid-cols-7 shrink-0">
                 {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
@@ -360,7 +392,7 @@ function SocialCalendar() {
                           {cell.posts.slice(0, 3).map((p) => (
                             <div
                               key={p.id}
-                              className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] truncate cursor-pointer transition-all hover:opacity-80"
+                              className="flex items-center gap-1 px-1 py-0.5 rounded text-[10px] cursor-pointer transition-all hover:opacity-80"
                               style={{
                                 backgroundColor: p.status === "published" ? "rgba(34,197,94,0.12)" : "rgba(59,130,246,0.12)",
                                 color: p.status === "published" ? "rgb(34,197,94)" : "rgb(96,165,250)",
@@ -370,6 +402,9 @@ function SocialCalendar() {
                                 setPublishPanel({ editPost: p });
                               }}
                             >
+                              {p.thumbnailUrl ? (
+                                <img src={p.thumbnailUrl} alt="" className="w-4 h-4 rounded-sm object-cover shrink-0" />
+                              ) : null}
                               {p.platforms?.slice(0, 2).map((pl) => (
                                 <span
                                   key={pl}
