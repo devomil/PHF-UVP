@@ -3,7 +3,14 @@ import { setupAuth } from "./auth";
 import { registerRoutes } from "./routes";
 
 const app = express();
-app.use(express.json({ limit: "50mb" }));
+app.use(express.json({
+  limit: "50mb",
+  verify: (req: any, _res, buf) => {
+    if (req.originalUrl === "/api/social/webhook" || req.url === "/api/social/webhook") {
+      req.rawBody = buf;
+    }
+  },
+}));
 app.use(express.urlencoded({ extended: false }));
 
 setupAuth(app);

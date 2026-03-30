@@ -41,6 +41,7 @@ router.post("/provision", isAuthenticated, async (req: Request, res: Response) =
 router.get("/accounts", isAuthenticated, async (req: Request, res: Response) => {
   try {
     const user = req.user as any;
+    await socialPublishingService.ensureProfile(user.id, user.email);
     const accounts = await socialPublishingService.getConnectedAccounts(user.id);
     res.json({ accounts });
   } catch (error: any) {
@@ -282,9 +283,11 @@ router.post("/webhook", async (req: Request, res: Response) => {
       return res.status(401).json({ error: "Unauthorized" });
     }
     const crypto = await import("crypto");
+    const rawBody = (req as any).rawBody as Buffer | undefined;
+    const bodyToVerify = rawBody || Buffer.from(JSON.stringify(req.body));
     const expectedSig = crypto
       .createHmac("sha256", ayrshareApiKey)
-      .update(JSON.stringify(req.body))
+      .update(bodyToVerify)
       .digest("hex");
     if (signature.length !== expectedSig.length ||
         !crypto.timingSafeEqual(Buffer.from(signature, "utf8"), Buffer.from(expectedSig, "utf8"))) {

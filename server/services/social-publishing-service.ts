@@ -125,6 +125,20 @@ class SocialPublishingService {
     return { success: true };
   }
 
+  async ensureProfile(userId: string, email?: string): Promise<void> {
+    if (!this.isConfigured()) return;
+    const [user] = await db
+      .select({ ayrshareProfileKey: users.ayrshareProfileKey, email: users.email })
+      .from(users)
+      .where(eq(users.id, userId));
+    if (user?.ayrshareProfileKey) return;
+    try {
+      await this.createUserProfile(userId, email || user?.email || "");
+    } catch (e: any) {
+      console.warn(`[SocialPublishing] Auto-provision skipped: ${e.message}`);
+    }
+  }
+
   async getConnectUrl(userId: string): Promise<{ url: string }> {
     if (!this.isConfigured()) {
       throw new Error("Ayrshare API key not configured");
