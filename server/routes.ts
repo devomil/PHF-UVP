@@ -1157,6 +1157,42 @@ export async function registerRoutes(app: Express) {
     }
   });
 
+  app.get("/api/render-queue", async (req, res) => {
+    if (!req.isAuthenticated() || !req.user) {
+      return res.status(401).json({ error: "Authentication required" });
+    }
+    try {
+      const userId = (req.user as any).id;
+      const userProjects = await db
+        .select({ projectId: universalVideoProjects.projectId, title: universalVideoProjects.title })
+        .from(universalVideoProjects)
+        .where(eq(universalVideoProjects.ownerId, userId));
+
+      if (userProjects.length === 0) {
+        return res.json([]);
+      }
+
+      const projectIds = userProjects.map(p => p.projectId);
+      const projectTitleMap = Object.fromEntries(userProjects.map(p => [p.projectId, p.title]));
+
+      const jobs = await db
+        .select()
+        .from(videoGenerationJobs)
+        .where(inArray(videoGenerationJobs.projectId, projectIds))
+        .orderBy(desc(videoGenerationJobs.createdAt))
+        .limit(100);
+
+      const enrichedJobs = jobs.map(job => ({
+        ...job,
+        projectTitle: projectTitleMap[job.projectId] || "Unknown Project",
+      }));
+
+      res.json(enrichedJobs);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch render queue" });
+    }
+  });
+
   app.delete("/api/video-generation-jobs/:jobId", async (req, res) => {
     try {
       if (!req.isAuthenticated() || !req.user) {
