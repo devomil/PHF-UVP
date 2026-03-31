@@ -1053,7 +1053,13 @@ Return JSON:
 
     if (!response.ok) {
       const errorText = await response.text().catch(() => "unknown");
-      throw new Error(`Ayrshare post failed (${response.status})`);
+      console.error(`[Ayrshare] Post failed (${response.status}):`, errorText);
+      let detail = "";
+      try {
+        const errJson = JSON.parse(errorText);
+        detail = errJson.message || errJson.error || errorText;
+      } catch { detail = errorText; }
+      throw new Error(`Ayrshare post failed (${response.status}): ${detail}`);
     }
 
     return (await response.json()) as AyrsharePostResponse;

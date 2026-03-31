@@ -198,10 +198,16 @@ export default function PublishingPanel({ open, onClose, onSuccess, prefillDate,
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ captions, hashtags, platforms: selectedPlatforms, title, scheduledFor, timezone }),
         });
-        if (!res.ok) throw new Error("Failed to update post");
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || "Failed to update post");
+        }
         if (action === "publish") {
           const pubRes = await fetch(`/api/social/posts/${editPost.id}/publish`, { method: "POST" });
-          if (!pubRes.ok) throw new Error("Failed to publish");
+          if (!pubRes.ok) {
+            const errData = await pubRes.json().catch(() => ({}));
+            throw new Error(errData.error || "Failed to publish");
+          }
         }
         return res.json();
       }
@@ -224,13 +230,16 @@ export default function PublishingPanel({ open, onClose, onSuccess, prefillDate,
         }),
       });
       if (!res.ok) {
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
         throw new Error(data.error || "Failed to create post");
       }
       const post = await res.json();
       if (action === "publish" && post.id) {
         const pubRes = await fetch(`/api/social/posts/${post.id}/publish`, { method: "POST" });
-        if (!pubRes.ok) throw new Error("Failed to publish");
+        if (!pubRes.ok) {
+          const errData = await pubRes.json().catch(() => ({}));
+          throw new Error(errData.error || "Failed to publish");
+        }
       }
       return post;
     },

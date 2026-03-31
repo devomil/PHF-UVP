@@ -251,7 +251,7 @@ router.post("/posts/:postId/publish", isAuthenticated, async (req: Request, res:
     res.json(result);
   } catch (error: any) {
     console.error("[SocialRoutes] Publish error:", error.message);
-    res.status(500).json({ error: "Failed to publish post" });
+    res.status(500).json({ error: error.message || "Failed to publish post" });
   }
 });
 
@@ -495,7 +495,7 @@ router.post("/publish", isAuthenticated, async (req: Request, res: Response) => 
     res.json(result);
   } catch (error: any) {
     console.error("[SocialRoutes] Publish error:", error.message);
-    res.status(500).json({ error: "Failed to publish post" });
+    res.status(500).json({ error: error.message || "Failed to publish post" });
   }
 });
 

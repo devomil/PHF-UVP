@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Share2,
@@ -16,6 +16,10 @@ import {
   Loader2,
   ArrowRight,
   Inbox,
+  X,
+  Download,
+  ExternalLink,
+  Play,
 } from "lucide-react";
 import PublishingPanel from "@/components/social/publishing-panel";
 import BulkScheduleDialog from "@/components/social/bulk-schedule-dialog";
@@ -81,6 +85,16 @@ function SocialHub() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [publishPanel, setPublishPanel] = useState<{ contentItem?: ContentItem; editPost?: ScheduledPost } | null>(null);
   const [bulkDialog, setBulkDialog] = useState(false);
+  const [previewItem, setPreviewItem] = useState<ContentItem | null>(null);
+
+  useEffect(() => {
+    if (!previewItem) return;
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setPreviewItem(null);
+    };
+    document.addEventListener("keydown", handleKey);
+    return () => document.removeEventListener("keydown", handleKey);
+  }, [previewItem]);
 
   const { data: contentReady, isLoading: contentLoading } = useQuery({
     queryKey: ["/api/social/content-ready"],
@@ -198,7 +212,7 @@ function SocialHub() {
                     key={item.id}
                     className={`rounded-xl border overflow-hidden transition-all group cursor-pointer ${isSelected ? "ring-2 ring-purple-500" : "hover:shadow-lg"}`}
                     style={{ borderColor: "var(--border-subtle)", backgroundColor: "var(--surface)" }}
-                    onClick={() => multiSelect && toggleSelect(item.id)}
+                    onClick={() => multiSelect ? toggleSelect(item.id) : setPreviewItem(item)}
                   >
                     <div className="h-36 relative overflow-hidden" style={{ backgroundColor: "var(--surface-hover)" }}>
                       {item.thumbnailUrl ? (
@@ -216,6 +230,13 @@ function SocialHub() {
                           ) : (
                             <Image className="w-10 h-10" style={{ color: "var(--text-muted)" }} />
                           )}
+                        </div>
+                      )}
+                      {!multiSelect && item.mediaUrl && (
+                        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/30">
+                          <div className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                            <Play className="w-5 h-5 text-white fill-white" />
+                          </div>
                         </div>
                       )}
                       {multiSelect && (
@@ -410,6 +431,100 @@ function SocialHub() {
           onSuccess={refreshData}
           items={selectedItems}
         />
+      )}
+
+      {previewItem && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          onClick={() => setPreviewItem(null)}
+        >
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
+          <div
+            className="relative w-full max-w-3xl rounded-2xl overflow-hidden shadow-2xl"
+            style={{ backgroundColor: "var(--surface)" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-4 border-b" style={{ borderColor: "var(--border-subtle)" }}>
+              <div>
+                <h3 className="font-semibold text-base" style={{ color: "var(--text-primary)" }}>{previewItem.title}</h3>
+                <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
+                  {previewItem.mediaType === "video" ? "Video" : "Image"}
+                  {previewItem.duration ? ` · ${previewItem.duration >= 60 ? `${Math.floor(previewItem.duration / 60)}:${String(Math.round(previewItem.duration % 60)).padStart(2, "0")}` : `0:${String(Math.round(previewItem.duration)).padStart(2, "0")}`}` : ""}
+                  {previewItem.aspectRatio ? ` · ${previewItem.aspectRatio}` : ""}
+                </p>
+              </div>
+              <button
+                onClick={() => setPreviewItem(null)}
+                className="p-1.5 rounded-lg transition-colors hover:bg-white/10"
+              >
+                <X className="w-5 h-5" style={{ color: "var(--text-secondary)" }} />
+              </button>
+            </div>
+
+            <div className="bg-black">
+              {previewItem.mediaUrl ? (
+                previewItem.mediaType === "video" ? (
+                  <video
+                    src={previewItem.mediaUrl}
+                    controls
+                    autoPlay
+                    className="w-full max-h-[60vh] mx-auto"
+                    style={{ objectFit: "contain" }}
+                  />
+                ) : (
+                  <img
+                    src={previewItem.mediaUrl}
+                    alt={previewItem.title}
+                    className="w-full max-h-[60vh] mx-auto object-contain"
+                  />
+                )
+              ) : (
+                <div className="flex items-center justify-center h-48" style={{ color: "var(--text-muted)" }}>
+                  <p className="text-sm">No media file available</p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center gap-3 px-5 py-4 border-t" style={{ borderColor: "var(--border-subtle)" }}>
+              {previewItem.mediaUrl && (
+                <>
+                  <a
+                    href={previewItem.mediaUrl}
+                    download
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-all hover:bg-white/5"
+                    style={{ borderColor: "var(--border-medium)", color: "var(--text-primary)" }}
+                  >
+                    <Download className="w-4 h-4" />
+                    Download
+                  </a>
+                  <a
+                    href={previewItem.mediaUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-all hover:bg-white/5"
+                    style={{ borderColor: "var(--border-medium)", color: "var(--text-secondary)" }}
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                    Open
+                  </a>
+                </>
+              )}
+              <div className="flex-1" />
+              <button
+                onClick={() => {
+                  setPreviewItem(null);
+                  setPublishPanel({ contentItem: previewItem });
+                }}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-gradient-to-r from-purple-600 to-violet-500 text-white hover:from-purple-500 hover:to-violet-400 transition-all"
+              >
+                <Send className="w-4 h-4" />
+                Publish This
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
