@@ -340,6 +340,7 @@ class SocialPublishingService {
           mediaUrl: outputUrl,
           mediaType: "video",
           thumbnailUrl: this.extractThumbnail(project),
+          duration: project.totalDuration || undefined,
           publishStatus: existingPost.length > 0
             ? (existingPost[0].status === "published" ? "published" : "scheduled")
             : "unpublished",

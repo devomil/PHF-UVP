@@ -30,17 +30,23 @@ const filters = ["all", "draft", "generating", "completed", "failed"];
 
 function getProjectThumbnail(project: any): string | null {
   try {
-    if (project.scenes && Array.isArray(project.scenes)) {
-      for (const scene of project.scenes) {
-        if (scene.thumbnailUrl) return scene.thumbnailUrl;
-        if (scene.imageUrl) return scene.imageUrl;
-      }
-    }
     if (project.assets) {
       const assets = typeof project.assets === "string" ? JSON.parse(project.assets) : project.assets;
       if (assets && typeof assets === "object") {
         if (assets.productMediaUrl) return assets.productMediaUrl;
         if (assets.logoUrl) return assets.logoUrl;
+      }
+    }
+    if (project.scenes && Array.isArray(project.scenes)) {
+      for (const scene of project.scenes) {
+        if (scene.thumbnailUrl) return scene.thumbnailUrl;
+        if (scene.imageUrl) return scene.imageUrl;
+        const sa = scene.assets;
+        if (sa) {
+          if (sa.videoUrl) return sa.videoUrl;
+          if (sa.imageUrl) return sa.imageUrl;
+          if (sa.backgroundUrl) return sa.backgroundUrl;
+        }
       }
     }
   } catch {
@@ -207,6 +213,11 @@ export default function Projects() {
                           <Video className="w-5 h-5 text-white/60" />
                         )}
                       </div>
+                      {project.totalDuration ? (
+                        <div className="absolute bottom-3 right-3 bg-black/70 text-white text-[10px] font-medium px-1.5 py-0.5 rounded">
+                          {project.totalDuration >= 60 ? `${Math.floor(project.totalDuration / 60)}:${String(Math.round(project.totalDuration % 60)).padStart(2, "0")}` : `0:${String(Math.round(project.totalDuration)).padStart(2, "0")}`}
+                        </div>
+                      ) : null}
                     </div>
 
                     <div className="p-4 space-y-3">

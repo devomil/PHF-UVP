@@ -235,6 +235,11 @@ function SocialHub() {
                           {pubStatus.label}
                         </span>
                       </div>
+                      {item.duration ? (
+                        <div className="absolute bottom-2 right-2 bg-black/70 text-white text-[10px] font-medium px-1.5 py-0.5 rounded">
+                          {item.duration >= 60 ? `${Math.floor(item.duration / 60)}:${String(Math.round(item.duration % 60)).padStart(2, "0")}` : `0:${String(Math.round(item.duration)).padStart(2, "0")}`}
+                        </div>
+                      ) : null}
                     </div>
                     <div className="p-4">
                       <p className="font-medium text-sm line-clamp-1" style={{ color: "var(--text-primary)" }}>
