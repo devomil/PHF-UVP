@@ -196,6 +196,10 @@ class SocialPublishingService {
       });
 
       if (!response.ok) {
+        if (response.status === 403) {
+          console.log(`[SocialPublishing] JWT not available on this plan. Redirecting to Ayrshare dashboard.`);
+          return { url: "https://app.ayrshare.com" };
+        }
         const body = await response.text();
         console.error(`[SocialPublishing] Primary JWT failed (${response.status}): ${body}`);
         throw new Error(`Failed to generate connect URL (${response.status})`);
@@ -231,10 +235,12 @@ class SocialPublishingService {
     if (!profileKey) return [];
 
     try {
-      const headers = this.isPrimaryProfile(profileKey)
+      const isPrimary = this.isPrimaryProfile(profileKey);
+      const headers = isPrimary
         ? this.getHeaders()
         : this.getHeaders(profileKey);
-      const response = await fetch(`${AYRSHARE_API_BASE}/profiles`, {
+      const endpoint = isPrimary ? `${AYRSHARE_API_BASE}/user` : `${AYRSHARE_API_BASE}/profiles`;
+      const response = await fetch(endpoint, {
         method: "GET",
         headers,
       });
@@ -247,9 +253,10 @@ class SocialPublishingService {
       const data = await response.json();
       const accounts: ConnectedAccount[] = [];
 
+      const activeSocials: string[] = data.activeSocialAccounts || [];
       const socialProfiles = data.socialProfiles || {};
       for (const platform of SUPPORTED_PLATFORMS) {
-        const isActive = data.activeSocialAccounts?.some(
+        const isActive = activeSocials.some(
           (a: string) => a.toLowerCase() === platform
         );
         if (isActive) {

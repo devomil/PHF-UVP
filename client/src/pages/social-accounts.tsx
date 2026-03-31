@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link2, Unlink, RefreshCw, CheckCircle, Wifi, WifiOff, ExternalLink } from "lucide-react";
 import { PlatformIcon } from "@/components/social/platform-icons";
+import { useToast } from "@/hooks/use-toast";
 
 const PLATFORMS = [
   { id: "twitter", label: "X / Twitter", color: "#1DA1F2", bgGrad: "from-sky-500/20 to-sky-600/10" },
@@ -16,6 +17,7 @@ const PLATFORMS = [
 
 function SocialAccounts() {
   const queryClient = useQueryClient();
+  const { toast } = useToast();
   const [polling, setPolling] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval>>();
   const initialStateRef = useRef<string | null>(null);
@@ -53,17 +55,36 @@ function SocialAccounts() {
   const connectMutation = useMutation({
     mutationFn: async () => {
       const res = await fetch("/api/social/accounts/connect", { method: "POST" });
-      if (!res.ok) throw new Error("Failed");
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || "Failed to connect");
+      }
       return res.json();
     },
     onSuccess: (data) => {
       if (data.url) {
-        window.open(data.url, "_blank");
+        const popup = window.open(data.url, "_blank");
+        if (!popup) {
+          toast({
+            title: "Popup blocked",
+            description: "Please allow popups for this site and try again.",
+            variant: "destructive",
+          });
+          return;
+        }
+        toast({ title: "Connect your account", description: "A new tab has been opened. Connect your social account there, then return here." });
         const accts = accountsData?.accounts || [];
         initialStateRef.current = JSON.stringify(accts.map((a: { platform: string }) => a.platform).sort());
         pollingStartRef.current = Date.now();
         setPolling(true);
       }
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Connection failed",
+        description: error.message,
+        variant: "destructive",
+      });
     },
   });
 
