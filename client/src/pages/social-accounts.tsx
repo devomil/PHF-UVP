@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Link2, Unlink, RefreshCw, CheckCircle, Wifi, WifiOff, ExternalLink } from "lucide-react";
+import { Link2, Unlink, RefreshCw, CheckCircle, Wifi, WifiOff, ExternalLink, Shield, ArrowRight } from "lucide-react";
 import { PlatformIcon } from "@/components/social/platform-icons";
 import { useToast } from "@/hooks/use-toast";
 
@@ -18,10 +18,6 @@ const PLATFORMS = [
 function SocialAccounts() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const [polling, setPolling] = useState(false);
-  const pollRef = useRef<ReturnType<typeof setInterval>>();
-  const initialStateRef = useRef<string | null>(null);
-  const pollingStartRef = useRef<number>(0);
 
   const [provisioned, setProvisioned] = useState(false);
 
@@ -52,42 +48,6 @@ function SocialAccounts() {
     enabled: provisioned || !!statusData?.configured,
   });
 
-  const connectMutation = useMutation({
-    mutationFn: async () => {
-      const res = await fetch("/api/social/accounts/connect", { method: "POST" });
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || "Failed to connect");
-      }
-      return res.json();
-    },
-    onSuccess: (data) => {
-      if (data.url) {
-        const popup = window.open(data.url, "_blank");
-        if (!popup) {
-          toast({
-            title: "Popup blocked",
-            description: "Please allow popups for this site and try again.",
-            variant: "destructive",
-          });
-          return;
-        }
-        toast({ title: "Connect your account", description: "A new tab has been opened. Connect your social account there, then return here." });
-        const accts = accountsData?.accounts || [];
-        initialStateRef.current = JSON.stringify(accts.map((a: { platform: string }) => a.platform).sort());
-        pollingStartRef.current = Date.now();
-        setPolling(true);
-      }
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Connection failed",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
   const disconnectMutation = useMutation({
     mutationFn: async (platform: string) => {
       const res = await fetch(`/api/social/accounts/${platform}`, { method: "DELETE" });
@@ -98,32 +58,6 @@ function SocialAccounts() {
       queryClient.invalidateQueries({ queryKey: ["/api/social/accounts"] });
     },
   });
-
-  useEffect(() => {
-    if (polling) {
-      const currentAccts = accountsData?.accounts || [];
-      const currentState = JSON.stringify(currentAccts.map((a: { platform: string }) => a.platform).sort());
-      if (initialStateRef.current !== null && currentState !== initialStateRef.current) {
-        setPolling(false);
-        initialStateRef.current = null;
-        return;
-      }
-      if (pollingStartRef.current && Date.now() - pollingStartRef.current >= 30000) {
-        setPolling(false);
-        initialStateRef.current = null;
-        return;
-      }
-      pollRef.current = setInterval(() => {
-        queryClient.invalidateQueries({ queryKey: ["/api/social/accounts"] });
-        if (pollingStartRef.current && Date.now() - pollingStartRef.current >= 30000) {
-          setPolling(false);
-          initialStateRef.current = null;
-          clearInterval(pollRef.current);
-        }
-      }, 3000);
-      return () => clearInterval(pollRef.current);
-    }
-  }, [polling, queryClient, accountsData]);
 
   const accounts = accountsData?.accounts || [];
   const connectedMap = new Map<string, { platform: string; profileUrl?: string; displayName?: string; username?: string; profileImageUrl?: string }>(
@@ -143,27 +77,50 @@ function SocialAccounts() {
               <p className="text-sm" style={{ color: "var(--text-secondary)" }}>Manage your social media connections</p>
             </div>
           </div>
-          {statusData?.configured && (
-            <button
-              onClick={() => connectMutation.mutate()}
-              disabled={connectMutation.isPending || polling}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-gradient-to-r from-purple-600 to-violet-500 text-white font-medium text-sm hover:from-purple-500 hover:to-violet-400 transition-all disabled:opacity-50"
+          <div className="flex items-center gap-2">
+            {statusData?.configured && (
+              <button
+                onClick={() => { queryClient.invalidateQueries({ queryKey: ["/api/social/accounts"] }); toast({ title: "Refreshing accounts..." }); }}
+                className="flex items-center gap-2 px-3 py-2.5 rounded-lg border text-sm font-medium transition-all hover:opacity-80"
+                style={{ borderColor: "var(--border-subtle)", color: "var(--text-secondary)" }}
+              >
+                <RefreshCw className="w-4 h-4" />
+                Refresh
+              </button>
+            )}
+            <a
+              href="https://app.ayrshare.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-gradient-to-r from-purple-600 to-violet-500 text-white font-medium text-sm hover:from-purple-500 hover:to-violet-400 transition-all"
             >
-              {polling ? (
-                <>
-                  <RefreshCw className="w-4 h-4 animate-spin" />
-                  Waiting for connection...
-                </>
-              ) : connectMutation.isPending ? (
-                "Opening..."
-              ) : (
-                <>
-                  <Link2 className="w-4 h-4" />
-                  Connect Account
-                </>
-              )}
-            </button>
-          )}
+              <Link2 className="w-4 h-4" />
+              Connect Account
+            </a>
+          </div>
+        </div>
+
+        <div className="rounded-xl border mb-6 overflow-hidden" style={{ borderColor: "var(--border-subtle)", backgroundColor: "var(--surface)" }}>
+          <div className="p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+            <div className="p-2.5 rounded-xl bg-gradient-to-br from-purple-500/20 to-blue-500/20 border border-purple-500/20 shrink-0">
+              <Shield className="w-6 h-6 text-purple-400" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="text-sm font-semibold mb-1">Powered by Ayrshare</h3>
+              <p className="text-xs leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+                We partner with Ayrshare to manage your social media connections. Ayrshare integrates directly with each social network's official APIs and partnership programs, ensuring the most reliable, secure, and compliant social media management experience.
+              </p>
+            </div>
+            <a
+              href="https://app.ayrshare.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="shrink-0 flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-purple-600 to-violet-500 text-white font-medium text-xs hover:from-purple-500 hover:to-violet-400 transition-all"
+            >
+              Manage Connections
+              <ArrowRight className="w-3.5 h-3.5" />
+            </a>
+          </div>
         </div>
 
         {!statusData?.configured ? (
@@ -171,7 +128,10 @@ function SocialAccounts() {
             <WifiOff className="w-12 h-12 mx-auto mb-4" style={{ color: "var(--text-muted)" }} />
             <h3 className="text-lg font-semibold mb-2">Social publishing not configured</h3>
             <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-              An Ayrshare API key is needed to connect social accounts
+              An Ayrshare API key is needed to connect social accounts.{" "}
+              <a href="https://www.ayrshare.com/?via=neuralcut" target="_blank" rel="noopener noreferrer" className="text-purple-400 hover:text-purple-300 underline">
+                Click here to sign up
+              </a>
             </p>
           </div>
         ) : isLoading ? (
@@ -247,15 +207,16 @@ function SocialAccounts() {
                       )}
                     </div>
                     {!isConnected && (
-                      <button
-                        onClick={() => connectMutation.mutate()}
-                        disabled={connectMutation.isPending || polling}
-                        className="mt-3 flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border transition-all"
+                      <a
+                        href="https://app.ayrshare.com"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border transition-all hover:opacity-80"
                         style={{ borderColor: `${platform.color}40`, color: platform.color }}
                       >
                         <ExternalLink className="w-3 h-3" />
-                        Connect
-                      </button>
+                        Connect via Ayrshare
+                      </a>
                     )}
                   </div>
                 </div>
