@@ -122,6 +122,18 @@ class SocialPublishingService {
     });
 
     if (!response.ok) {
+      if (response.status === 403) {
+        console.log(`[SocialPublishing] Sub-profile creation not available (403). Using primary profile for user ${userId}`);
+        try {
+          await db
+            .update(users)
+            .set({ ayrshareProfileKey: "primary", updatedAt: new Date() })
+            .where(eq(users.id, userId));
+        } catch (dbError: any) {
+          console.error(`[SocialPublishing] DB write failed setting primary profile: ${dbError.message}`);
+        }
+        return { success: true };
+      }
       throw new Error(`Failed to create social profile (${response.status})`);
     }
 
@@ -172,6 +184,27 @@ class SocialPublishingService {
       throw new Error("No social profile found. Please set up your profile first.");
     }
 
+    if (this.isPrimaryProfile(profileKey)) {
+      const response = await fetch(`${AYRSHARE_API_BASE}/profiles/generateJWT`, {
+        method: "POST",
+        headers: this.getHeaders(),
+        body: JSON.stringify({
+          domain: process.env.REPLIT_DEV_DOMAIN
+            ? `https://${process.env.REPLIT_DEV_DOMAIN}`
+            : "https://neuralcut.ai",
+        }),
+      });
+
+      if (!response.ok) {
+        const body = await response.text();
+        console.error(`[SocialPublishing] Primary JWT failed (${response.status}): ${body}`);
+        throw new Error(`Failed to generate connect URL (${response.status})`);
+      }
+
+      const data = await response.json();
+      return { url: data.url || data.link };
+    }
+
     const response = await fetch(`${AYRSHARE_API_BASE}/profiles/generateJWT`, {
       method: "POST",
       headers: this.getHeaders(),
@@ -198,9 +231,12 @@ class SocialPublishingService {
     if (!profileKey) return [];
 
     try {
+      const headers = this.isPrimaryProfile(profileKey)
+        ? this.getHeaders()
+        : this.getHeaders(profileKey);
       const response = await fetch(`${AYRSHARE_API_BASE}/profiles`, {
         method: "GET",
-        headers: this.getHeaders(profileKey),
+        headers,
       });
 
       if (!response.ok) {
@@ -245,9 +281,12 @@ class SocialPublishingService {
       throw new Error("No social profile found");
     }
 
+    const headers = this.isPrimaryProfile(profileKey)
+      ? this.getHeaders()
+      : this.getHeaders(profileKey);
     const response = await fetch(`${AYRSHARE_API_BASE}/profiles/social/${platform}`, {
       method: "DELETE",
-      headers: this.getHeaders(profileKey),
+      headers,
     });
 
     if (!response.ok) {
@@ -494,8 +533,11 @@ class SocialPublishingService {
       try {
         const profileKey = await this.getProfileKey(userId);
         if (profileKey) {
+          const headers = this.isPrimaryProfile(profileKey)
+            ? this.getHeaders()
+            : this.getHeaders(profileKey);
           const response = await fetch(`${AYRSHARE_API_BASE}/post/${post.ayrsharePostId}`, {
-            headers: this.getHeaders(profileKey),
+            headers,
           });
           if (response.ok) {
             const statusData = await response.json();
@@ -974,6 +1016,10 @@ Return JSON:
     return user?.ayrshareProfileKey || null;
   }
 
+  private isPrimaryProfile(profileKey: string | null): boolean {
+    return profileKey === "primary";
+  }
+
   private async publishToAyrshare(
     userId: string,
     caption: string,
@@ -988,9 +1034,12 @@ Return JSON:
     if (mediaUrls?.length) postBody.mediaUrls = mediaUrls;
     if (scheduledDate) postBody.scheduleDate = scheduledDate.toISOString();
 
+    const headers = this.isPrimaryProfile(profileKey)
+      ? this.getHeaders()
+      : this.getHeaders(profileKey);
     const response = await fetch(`${AYRSHARE_API_BASE}/post`, {
       method: "POST",
-      headers: this.getHeaders(profileKey),
+      headers,
       body: JSON.stringify(postBody),
     });
 
