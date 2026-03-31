@@ -1059,27 +1059,33 @@ Return JSON:
     return (await response.json()) as AyrsharePostResponse;
   }
 
+  private isImageUrl(url: string | undefined | null): url is string {
+    if (!url || !url.trim()) return false;
+    const lower = url.toLowerCase();
+    if (lower.endsWith(".mp4") || lower.endsWith(".webm") || lower.endsWith(".mov")) return false;
+    return true;
+  }
+
   private extractThumbnail(project: { scenes?: unknown; assets?: unknown; progress?: unknown }): string | undefined {
     try {
       const assets = (project.assets ?? {}) as ProjectAssets;
-      if (assets.productMediaUrl) return assets.productMediaUrl;
+      if (this.isImageUrl(assets.productMediaUrl)) return assets.productMediaUrl;
 
       const scenes = project.scenes;
       if (Array.isArray(scenes)) {
         for (const scene of scenes as Array<{ thumbnailUrl?: string; imageUrl?: string; assets?: { imageUrl?: string; videoUrl?: string; backgroundUrl?: string } }>) {
-          if (scene.thumbnailUrl) return scene.thumbnailUrl;
-          if (scene.imageUrl) return scene.imageUrl;
+          if (this.isImageUrl(scene.thumbnailUrl)) return scene.thumbnailUrl;
+          if (this.isImageUrl(scene.imageUrl)) return scene.imageUrl;
           const sa = scene.assets;
           if (sa) {
-            if (sa.videoUrl) return sa.videoUrl;
-            if (sa.imageUrl) return sa.imageUrl;
-            if (sa.backgroundUrl) return sa.backgroundUrl;
+            if (this.isImageUrl(sa.imageUrl)) return sa.imageUrl;
+            if (this.isImageUrl(sa.backgroundUrl)) return sa.backgroundUrl;
           }
         }
       }
 
       const progress = (project.progress ?? {}) as Record<string, unknown>;
-      if (typeof progress.thumbnailUrl === "string" && progress.thumbnailUrl) {
+      if (typeof progress.thumbnailUrl === "string" && this.isImageUrl(progress.thumbnailUrl)) {
         return progress.thumbnailUrl;
       }
     } catch (e) {}
