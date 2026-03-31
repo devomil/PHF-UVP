@@ -319,7 +319,7 @@ class SocialPublishingService {
 
       for (const project of projects) {
         const progress = (project.progress ?? {}) as ProjectProgress;
-        const outputUrl = progress.outputUrl || progress.renderOutputUrl;
+        const outputUrl = project.outputUrl || progress.outputUrl || progress.renderOutputUrl;
         if (!outputUrl) continue;
 
         const existingPost = await db
@@ -1058,17 +1058,29 @@ Return JSON:
     return (await response.json()) as AyrsharePostResponse;
   }
 
-  private extractThumbnail(project: { scenes?: unknown; assets?: unknown }): string | undefined {
+  private extractThumbnail(project: { scenes?: unknown; assets?: unknown; progress?: unknown }): string | undefined {
     try {
-      const scenes = project.scenes;
-      if (Array.isArray(scenes)) {
-        for (const scene of scenes as Array<{ thumbnailUrl?: string; imageUrl?: string }>) {
-          if (scene.thumbnailUrl) return scene.thumbnailUrl;
-          if (scene.imageUrl) return scene.imageUrl;
-        }
-      }
       const assets = (project.assets ?? {}) as ProjectAssets;
       if (assets.productMediaUrl) return assets.productMediaUrl;
+
+      const scenes = project.scenes;
+      if (Array.isArray(scenes)) {
+        for (const scene of scenes as Array<{ thumbnailUrl?: string; imageUrl?: string; assets?: { imageUrl?: string; videoUrl?: string; backgroundUrl?: string } }>) {
+          if (scene.thumbnailUrl) return scene.thumbnailUrl;
+          if (scene.imageUrl) return scene.imageUrl;
+          const sa = scene.assets;
+          if (sa) {
+            if (sa.videoUrl) return sa.videoUrl;
+            if (sa.imageUrl) return sa.imageUrl;
+            if (sa.backgroundUrl) return sa.backgroundUrl;
+          }
+        }
+      }
+
+      const progress = (project.progress ?? {}) as Record<string, unknown>;
+      if (typeof progress.thumbnailUrl === "string" && progress.thumbnailUrl) {
+        return progress.thumbnailUrl;
+      }
     } catch (e) {}
     return undefined;
   }
