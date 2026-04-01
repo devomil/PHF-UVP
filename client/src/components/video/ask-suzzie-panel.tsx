@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Sparkles, X, Send, Loader2, Wand2, Zap, HelpCircle, ChevronRight, Paperclip, ImageIcon } from "lucide-react";
+import { Sparkles, X, Send, Loader2, Wand2, Zap, HelpCircle, ChevronRight, Paperclip, ImageIcon, Palette } from "lucide-react";
 
 interface SuzzieSceneContext {
   narration?: string;
@@ -24,6 +24,7 @@ interface ChatMessage {
   content: string;
   suggestedPrompt?: string;
   suggestedProvider?: string;
+  suggestedArtStyle?: { id: string; name: string };
   imagePreviewUrl?: string;
 }
 
@@ -31,16 +32,17 @@ interface AskSuzziePanelProps {
   sceneContext: SuzzieSceneContext;
   onApplyVisualDirection?: (prompt: string) => void;
   onApplyProvider?: (providerId: string) => void;
+  onApplyArtStyle?: (artStyleId: string) => void;
   zIndex?: number;
 }
 
 const QUICK_ACTIONS = [
-  { label: "Write visual direction", icon: Wand2, prompt: "Write me a visual direction/prompt for this scene based on the narration and art style." },
-  { label: "Best provider?", icon: Zap, prompt: "Which AI video provider would you recommend for this scene and why?" },
+  { label: "Write visual direction", icon: Wand2, prompt: "Write me a visual direction/prompt for this scene based on the narration. Recommend the best art style and provider for this content." },
+  { label: "Best style & provider?", icon: Palette, prompt: "Which art style preset and AI video provider would you recommend for this scene and why?" },
   { label: "How to add a logo?", icon: HelpCircle, prompt: "How do I add a logo or watermark to this scene?" },
 ];
 
-export function AskSuzziePanel({ sceneContext, onApplyVisualDirection, onApplyProvider, zIndex }: AskSuzziePanelProps) {
+export function AskSuzziePanel({ sceneContext, onApplyVisualDirection, onApplyProvider, onApplyArtStyle, zIndex }: AskSuzziePanelProps) {
   const zStyle = zIndex ? { zIndex } : {};
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -157,6 +159,7 @@ export function AskSuzziePanel({ sceneContext, onApplyVisualDirection, onApplyPr
           content: data.message,
           suggestedPrompt: data.suggestedPrompt,
           suggestedProvider: data.suggestedProvider,
+          suggestedArtStyle: data.suggestedArtStyle,
         };
         setMessages(prev => [...prev, assistantMessage]);
       } else {
@@ -324,6 +327,40 @@ export function AskSuzziePanel({ sceneContext, onApplyVisualDirection, onApplyPr
                       </button>
                     </div>
                   )}
+                </div>
+              )}
+
+              {msg.suggestedArtStyle && (
+                <div
+                  className="mt-2 rounded-lg overflow-hidden"
+                  style={{
+                    background: "rgba(251,146,60,0.08)",
+                    border: "1px solid rgba(251,146,60,0.2)",
+                  }}
+                >
+                  <div className="px-2.5 py-1.5 flex items-center gap-1.5" style={{ borderBottom: "1px solid rgba(251,146,60,0.15)" }}>
+                    <Palette className="w-3 h-3" style={{ color: "rgba(251,191,36,0.8)" }} />
+                    <span className="text-[10px] font-semibold" style={{ color: "rgba(251,191,36,0.9)" }}>Recommended Art Style</span>
+                  </div>
+                  <div className="px-2.5 py-2 flex items-center justify-between gap-2">
+                    <span className="text-[11px] font-medium" style={{ color: "rgba(255,255,255,0.85)" }}>
+                      {msg.suggestedArtStyle.name}
+                    </span>
+                    {onApplyArtStyle && (
+                      <button
+                        onClick={() => onApplyArtStyle(msg.suggestedArtStyle!.id)}
+                        className="flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-semibold transition-all hover:scale-[1.02] shrink-0"
+                        style={{
+                          background: "linear-gradient(135deg, rgba(251,146,60,0.35), rgba(245,158,11,0.25))",
+                          color: "rgba(253,224,71,0.95)",
+                          border: "1px solid rgba(251,146,60,0.3)",
+                        }}
+                      >
+                        <Palette className="w-3 h-3" />
+                        Apply Style
+                      </button>
+                    )}
+                  </div>
                 </div>
               )}
 

@@ -173,12 +173,16 @@ When the user attaches an image (photo of a location, store, product, etc.), ana
 4. Always include a suggested prompt in your JSON block so the user can apply it directly
 
 ## Response Format
-When generating a visual direction or prompt, include it in a clearly marked section so the user can apply it. Use this JSON wrapper at the end of your response ONLY when you have a concrete prompt to suggest:
+When generating a visual direction or prompt, ALWAYS include a recommended art style AND the prompt itself. Combine them into a single JSON block at the end of your response:
 \`\`\`json
-{"suggestedPrompt": "your visual direction here"}
+{"suggestedPrompt": "your visual direction here", "suggestedArtStyle": {"id": "preset-id", "name": "Preset Name"}, "suggestedProvider": "provider-id-here"}
 \`\`\`
 
-When recommending a provider, include:
+- **suggestedPrompt** (required when you have a prompt): The visual direction text
+- **suggestedArtStyle** (required when you have a prompt): The art style preset that best matches this prompt. Pick from the available presets listed above. Consider the scene content, narration, and brand — e.g., clinical/health content pairs well with "scientific-medical", product showcases with "cinematic-realism", playful/fun brands with "3d-illustration" or "claymation", etc. If the user already has an art style selected, recommend keeping it unless a different one would be clearly better.
+- **suggestedProvider** (optional): Include when you have a specific provider recommendation
+
+You can also recommend just a provider separately if the user asks about providers:
 \`\`\`json
 {"suggestedProvider": "provider-id-here"}
 \`\`\`

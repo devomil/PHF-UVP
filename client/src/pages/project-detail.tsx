@@ -4575,6 +4575,7 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
                   }}
                   onApplyVisualDirection={(newPrompt) => setPromptText(newPrompt)}
                   onApplyProvider={(providerId) => setSelectedProvider(providerId)}
+                  onApplyArtStyle={(artStyleId) => setArtPresetId(artStyleId)}
                 />
               </div>
 

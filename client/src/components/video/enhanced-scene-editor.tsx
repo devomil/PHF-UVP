@@ -2876,6 +2876,10 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                     onApplyProvider={(providerId) => {
                       setMsModalProvider(providerId);
                     }}
+                    onApplyArtStyle={(artStyleId) => {
+                      setSceneArtPreset(artStyleId);
+                      updateSceneMutation.mutate({ artPresetId: artStyleId });
+                    }}
                     zIndex={10001}
                   />
                 </div>
@@ -3010,6 +3014,10 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
         }}
         onApplyProvider={(providerId) => {
           setProvider(providerId);
+        }}
+        onApplyArtStyle={(artStyleId) => {
+          setSceneArtPreset(artStyleId);
+          updateSceneMutation.mutate({ artPresetId: artStyleId });
         }}
       />
     </div>

@@ -883,6 +883,7 @@ router.post('/ask-suzzie', isAuthenticated, async (req: Request, res: Response) 
       
       let suggestedPrompt: string | undefined;
       let suggestedProvider: string | undefined;
+      let suggestedArtStyle: { id: string; name: string } | undefined;
       
       const jsonBlocks = text.match(/```json\s*([\s\S]*?)```/g) || [];
       for (const block of jsonBlocks) {
@@ -891,6 +892,9 @@ router.post('/ask-suzzie', isAuthenticated, async (req: Request, res: Response) 
           const parsed = JSON.parse(jsonStr);
           if (parsed.suggestedPrompt && !suggestedPrompt) suggestedPrompt = parsed.suggestedPrompt;
           if (parsed.suggestedProvider && !suggestedProvider) suggestedProvider = parsed.suggestedProvider;
+          if (parsed.suggestedArtStyle && !suggestedArtStyle && parsed.suggestedArtStyle.id && parsed.suggestedArtStyle.name) {
+            suggestedArtStyle = { id: parsed.suggestedArtStyle.id, name: parsed.suggestedArtStyle.name };
+          }
         } catch {}
       }
       
@@ -901,6 +905,7 @@ router.post('/ask-suzzie', isAuthenticated, async (req: Request, res: Response) 
         message: cleanMessage,
         suggestedPrompt,
         suggestedProvider,
+        suggestedArtStyle,
       });
     }
     
