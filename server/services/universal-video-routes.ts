@@ -1775,6 +1775,9 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
     }
 
     projectData.scenes[sceneIndex].visualDirection = visualDirection;
+    if (!projectData.scenes[sceneIndex].background) {
+      projectData.scenes[sceneIndex].background = {};
+    }
     projectData.scenes[sceneIndex].background.source = visualDirection;
     if (microScenes.length > 0) {
       (projectData.scenes[sceneIndex] as any).microScenes = microScenes;

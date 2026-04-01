@@ -472,13 +472,21 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
   useEffect(() => {
     if (regenStartedAt) {
       timerIntervalRef.current = setInterval(() => {
-        setRegenElapsed(Math.floor((Date.now() - regenStartedAt) / 1000));
+        const elapsed = Math.floor((Date.now() - regenStartedAt) / 1000);
+        setRegenElapsed(elapsed);
+        if (elapsed > 300 && regeneratingType) {
+          setRegeneratingType(null);
+          setRegenStartedAt(null);
+          setRegenElapsed(0);
+          if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+          toast({ title: "Generation timed out", description: "The generation appears stuck. Check the scene — your video may already be ready.", variant: "destructive" });
+        }
       }, 1000);
     }
     return () => {
       if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
     };
-  }, [regenStartedAt]);
+  }, [regenStartedAt, regeneratingType]);
 
   useEffect(() => {
     if (regeneratingType) {
