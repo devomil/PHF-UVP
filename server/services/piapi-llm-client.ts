@@ -118,7 +118,7 @@ class PiAPILLMClient {
     };
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 120000);
+    const timeout = setTimeout(() => controller.abort(), 30000);
 
     try {
       const response = await fetch(PIAPI_LLM_ENDPOINT, {
