@@ -35,25 +35,41 @@ function isImageUrl(url: string | undefined | null): url is string {
   return true;
 }
 
-function getProjectThumbnail(project: any): string | null {
+function isVideoUrl(url: string | undefined | null): url is string {
+  if (!url || !url.trim()) return false;
+  const lower = url.toLowerCase();
+  return lower.endsWith(".mp4") || lower.endsWith(".webm") || lower.endsWith(".mov");
+}
+
+function getProjectThumbnail(project: any): { type: "image" | "video"; url: string } | null {
   try {
     if (project.assets) {
       const assets = typeof project.assets === "string" ? JSON.parse(project.assets) : project.assets;
       if (assets && typeof assets === "object") {
-        if (isImageUrl(assets.productMediaUrl)) return assets.productMediaUrl;
-        if (isImageUrl(assets.logoUrl)) return assets.logoUrl;
+        if (isImageUrl(assets.productMediaUrl)) return { type: "image", url: assets.productMediaUrl };
+        if (isImageUrl(assets.logoUrl)) return { type: "image", url: assets.logoUrl };
       }
     }
     if (project.scenes && Array.isArray(project.scenes)) {
       for (const scene of project.scenes) {
-        if (isImageUrl(scene.thumbnailUrl)) return scene.thumbnailUrl;
-        if (isImageUrl(scene.imageUrl)) return scene.imageUrl;
+        if (isImageUrl(scene.thumbnailUrl)) return { type: "image", url: scene.thumbnailUrl };
+        if (isImageUrl(scene.imageUrl)) return { type: "image", url: scene.imageUrl };
         const sa = scene.assets;
         if (sa) {
-          if (isImageUrl(sa.imageUrl)) return sa.imageUrl;
-          if (isImageUrl(sa.backgroundUrl)) return sa.backgroundUrl;
+          if (isImageUrl(sa.imageUrl)) return { type: "image", url: sa.imageUrl };
+          if (isImageUrl(sa.backgroundUrl)) return { type: "image", url: sa.backgroundUrl };
         }
       }
+      for (const scene of project.scenes) {
+        const sa = scene.assets;
+        if (sa) {
+          if (isVideoUrl(sa.videoUrl)) return { type: "video", url: sa.videoUrl };
+        }
+        if (isVideoUrl(scene.videoUrl)) return { type: "video", url: scene.videoUrl };
+      }
+    }
+    if (project.outputUrl && isVideoUrl(project.outputUrl)) {
+      return { type: "video", url: project.outputUrl };
     }
   } catch {
     return null;
@@ -202,13 +218,23 @@ export default function Projects() {
                 <a className="group cursor-pointer">
                   <div className="border rounded-xl overflow-hidden transition-all duration-300 hover:translate-y-[-2px] hover:shadow-lg hover:shadow-purple-500/5" style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)" }}>
                     <div className={`h-36 bg-gradient-to-br ${projectGradients[index % projectGradients.length]} relative overflow-hidden`}>
-                      {thumbnail && (
+                      {thumbnail?.type === "image" && (
                         <img
-                          src={thumbnail}
+                          src={thumbnail.url}
                           alt={project.title}
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                           loading="lazy"
                           onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                        />
+                      )}
+                      {thumbnail?.type === "video" && (
+                        <video
+                          src={thumbnail.url}
+                          muted
+                          preload="metadata"
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                          onLoadedData={(e) => { (e.target as HTMLVideoElement).currentTime = 0.5; }}
+                          onError={(e) => { (e.target as HTMLVideoElement).style.display = "none"; }}
                         />
                       )}
                       <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors duration-300" />

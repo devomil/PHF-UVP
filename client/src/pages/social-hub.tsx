@@ -223,6 +223,15 @@ function SocialHub() {
                           loading="lazy"
                           onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
                         />
+                      ) : item.mediaType === "video" && item.mediaUrl ? (
+                        <video
+                          src={item.mediaUrl}
+                          muted
+                          preload="metadata"
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                          onLoadedData={(e) => { (e.target as HTMLVideoElement).currentTime = 0.5; }}
+                          onError={(e) => { (e.target as HTMLVideoElement).style.display = "none"; }}
+                        />
                       ) : (
                         <div className="flex items-center justify-center h-full">
                           {item.mediaType === "video" ? (
