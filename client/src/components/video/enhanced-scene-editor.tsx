@@ -1181,6 +1181,20 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                 </span>
               </div>
             </div>
+          ) : scene.microScenes && scene.microScenes.length > 0 ? (
+            <div className="flex items-center justify-center" style={{ aspectRatio: aspectRatio === '9:16' ? '9/16' : aspectRatio === '1:1' ? '1/1' : '16/9' }}>
+              <div className="text-center px-4">
+                <Layers className="w-8 h-8 mx-auto mb-2" style={{ color: "var(--text-muted)" }} />
+                <p className="text-xs font-medium mb-1" style={{ color: "var(--text-secondary)" }}>
+                  {scene.microScenes.filter((ms: any) => ms.videoUrl).length}/{scene.microScenes.length} micro-scenes generated
+                </p>
+                <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+                  {scene.microScenes.every((ms: any) => ms.videoUrl)
+                    ? "All clips ready — assemble to create scene video"
+                    : "Generate micro-scene videos below, then assemble"}
+                </p>
+              </div>
+            </div>
           ) : (
             <div className="flex items-center justify-center" style={{ aspectRatio: aspectRatio === '9:16' ? '9/16' : aspectRatio === '1:1' ? '1/1' : '16/9' }}>
               <div className="text-center">
