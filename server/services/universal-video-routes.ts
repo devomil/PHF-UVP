@@ -6252,6 +6252,7 @@ router.get('/:projectId/scenes/:sceneId/latest-job-status', isAuthenticated, asy
   try {
     const userId = (req.user as any)?.id;
     const { projectId, sceneId } = req.params;
+    const sinceMs = req.query.since ? parseInt(req.query.since as string, 10) : 0;
     
     const projectData = await getProjectFromDb(projectId);
     if (!projectData) {
@@ -6263,7 +6264,10 @@ router.get('/:projectId/scenes/:sceneId/latest-job-status', isAuthenticated, asy
     
     const { videoGenerationWorker } = await import('../services/video-generation-worker');
     const jobs = await videoGenerationWorker.getJobsByScene(projectId, sceneId);
-    const sorted = jobs.sort((a, b) => {
+    const filtered = sinceMs > 0
+      ? jobs.filter(j => (j.createdAt?.getTime() || 0) >= sinceMs)
+      : jobs;
+    const sorted = filtered.sort((a, b) => {
       const aTime = a.completedAt?.getTime() || a.createdAt?.getTime() || 0;
       const bTime = b.completedAt?.getTime() || b.createdAt?.getTime() || 0;
       return bTime - aTime;

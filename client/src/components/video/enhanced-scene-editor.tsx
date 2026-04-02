@@ -490,14 +490,16 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
 
   useEffect(() => {
     if (regeneratingType) {
+      const regenStartTime = Date.now();
       pollIntervalRef.current = setInterval(async () => {
         queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+        if (regeneratingType !== 'video') return;
         try {
           const res = await fetch(`/api/universal-video/${projectId}/scenes/${sceneId}/active-jobs`, { credentials: "include" });
           if (res.ok) {
             const data = await res.json();
             if (data.success && data.jobs.length === 0) {
-              const latestRes = await fetch(`/api/universal-video/${projectId}/scenes/${sceneId}/latest-job-status`, { credentials: "include" });
+              const latestRes = await fetch(`/api/universal-video/${projectId}/scenes/${sceneId}/latest-job-status?since=${regenStartTime}`, { credentials: "include" });
               if (latestRes.ok) {
                 const latest = await latestRes.json();
                 if (latest.success && latest.status === 'failed') {
@@ -746,6 +748,22 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
     },
     onError: (err: Error) => {
       toast({ title: "Save Failed", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const silentSaveMutation = useMutation({
+    mutationFn: async (updates: any) => {
+      const res = await fetch(`/api/universal-video/projects/${projectId}/scenes/${sceneId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(updates),
+      });
+      if (!res.ok) throw new Error("Failed to update scene");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
     },
   });
 
@@ -3029,14 +3047,14 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
         }}
         onApplyVisualDirection={(prompt) => {
           setEditValues(prev => ({ ...prev, visualDirection: prompt }));
-          if (!isEditing) setIsEditing(true);
+          silentSaveMutation.mutate({ visualDirection: prompt });
         }}
         onApplyProvider={(providerId) => {
           setProvider(providerId);
         }}
         onApplyArtStyle={(artStyleId) => {
           setSceneArtPreset(artStyleId);
-          updateSceneMutation.mutate({ artPresetId: artStyleId });
+          silentSaveMutation.mutate({ artPresetId: artStyleId });
         }}
       />
     </div>
