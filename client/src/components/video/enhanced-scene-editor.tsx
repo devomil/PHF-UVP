@@ -490,14 +490,33 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
 
   useEffect(() => {
     if (regeneratingType) {
-      pollIntervalRef.current = setInterval(() => {
+      pollIntervalRef.current = setInterval(async () => {
         queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+        try {
+          const res = await fetch(`/api/universal-video/${projectId}/scenes/${sceneId}/active-jobs`, { credentials: "include" });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.success && data.jobs.length === 0) {
+              const latestRes = await fetch(`/api/universal-video/${projectId}/scenes/${sceneId}/latest-job-status`, { credentials: "include" });
+              if (latestRes.ok) {
+                const latest = await latestRes.json();
+                if (latest.success && latest.status === 'failed') {
+                  setRegeneratingType(null);
+                  setRegenStartedAt(null);
+                  setRegenElapsed(0);
+                  if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+                  toast({ title: "Generation failed", description: latest.error || "The video provider returned an error. Try a different provider or shorter prompt.", variant: "destructive" });
+                }
+              }
+            }
+          }
+        } catch {}
       }, 5000);
     }
     return () => {
       if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
     };
-  }, [regeneratingType, projectId, queryClient]);
+  }, [regeneratingType, projectId, sceneId, queryClient]);
 
   useEffect(() => {
     if (regeneratingMicroScenes.size > 0) {

@@ -92,12 +92,17 @@ class RunwayVideoService {
       let endpoint: string;
       let body: any;
 
+      const truncatedPrompt = options.prompt.length > 1000 ? options.prompt.substring(0, 997) + '...' : options.prompt;
+      if (truncatedPrompt.length < options.prompt.length) {
+        console.log(`[Runway] Prompt truncated from ${options.prompt.length} to ${truncatedPrompt.length} chars (Runway limit: 1000)`);
+      }
+
       if (options.imageUrl) {
         endpoint = `${RUNWAY_API_BASE}/image_to_video`;
         body = {
           model: apiModel,
           promptImage: options.imageUrl,
-          promptText: options.prompt,
+          promptText: truncatedPrompt,
           duration: clampedDuration,
           ratio,
         };
@@ -105,7 +110,7 @@ class RunwayVideoService {
         endpoint = `${RUNWAY_API_BASE}/text_to_video`;
         body = {
           model: apiModel,
-          promptText: options.prompt,
+          promptText: truncatedPrompt,
           duration: clampedDuration,
           ratio,
         };

@@ -6248,6 +6248,45 @@ router.get('/:projectId/scenes/:sceneId/active-jobs', isAuthenticated, async (re
   }
 });
 
+router.get('/:projectId/scenes/:sceneId/latest-job-status', isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const userId = (req.user as any)?.id;
+    const { projectId, sceneId } = req.params;
+    
+    const projectData = await getProjectFromDb(projectId);
+    if (!projectData) {
+      return res.status(404).json({ success: false, error: 'Project not found' });
+    }
+    if (projectData.ownerId !== userId) {
+      return res.status(403).json({ success: false, error: 'Access denied' });
+    }
+    
+    const { videoGenerationWorker } = await import('../services/video-generation-worker');
+    const jobs = await videoGenerationWorker.getJobsByScene(projectId, sceneId);
+    const sorted = jobs.sort((a, b) => {
+      const aTime = a.completedAt?.getTime() || a.createdAt?.getTime() || 0;
+      const bTime = b.completedAt?.getTime() || b.createdAt?.getTime() || 0;
+      return bTime - aTime;
+    });
+    const latest = sorted[0];
+    
+    if (!latest) {
+      return res.json({ success: true, status: 'none' });
+    }
+    
+    return res.json({
+      success: true,
+      status: latest.status,
+      error: latest.errorMessage || null,
+      provider: latest.provider,
+      completedAt: latest.completedAt,
+    });
+  } catch (error: any) {
+    console.error('[UniversalVideo] Get latest job status error:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Video Object Replacement Schema
 const replaceObjectSchema = z.object({
   replacementImageUrl: z.string().min(1, 'Replacement image URL is required').refine(
