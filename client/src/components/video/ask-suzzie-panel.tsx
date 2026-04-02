@@ -54,9 +54,14 @@ export function AskSuzziePanel({ sceneContext, onApplyVisualDirection, onApplyPr
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const prevVisualDirectionRef = useRef(sceneContext.visualDirection);
+  const appliedBySuzzieRef = useRef(false);
   useEffect(() => {
     if (prevVisualDirectionRef.current !== sceneContext.visualDirection && messages.length > 0) {
-      setMessages([]);
+      if (appliedBySuzzieRef.current) {
+        appliedBySuzzieRef.current = false;
+      } else {
+        setMessages([]);
+      }
     }
     prevVisualDirectionRef.current = sceneContext.visualDirection;
   }, [sceneContext.visualDirection]);
@@ -314,7 +319,7 @@ export function AskSuzziePanel({ sceneContext, onApplyVisualDirection, onApplyPr
                   {onApplyVisualDirection && (
                     <div className="px-2.5 py-1.5" style={{ borderTop: "1px solid rgba(124,58,237,0.15)" }}>
                       <button
-                        onClick={() => onApplyVisualDirection(msg.suggestedPrompt!)}
+                        onClick={() => { appliedBySuzzieRef.current = true; onApplyVisualDirection(msg.suggestedPrompt!); }}
                         className="w-full flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-semibold transition-all hover:scale-[1.01]"
                         style={{
                           background: "linear-gradient(135deg, rgba(124,58,237,0.4), rgba(168,85,247,0.3))",
