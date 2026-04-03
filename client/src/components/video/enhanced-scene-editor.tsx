@@ -552,7 +552,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
   });
   const [contentTag, setContentTag] = useState<string | null>(scene.contentTag || null);
   const [sceneArtPreset, setSceneArtPreset] = useState<string>(scene.artPresetId || 'project');
-  const [pipelineAssignedStyle] = useState<string | null>((scene as any).assignedStyleId || null);
+  const [pipelineAssignedStyle] = useState<string | null>(scene.assignedStyleId || null);
 
   const { data: projectData } = useQuery<{ qualityTier?: string }>({
     queryKey: ["project", projectId],

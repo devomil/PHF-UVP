@@ -358,6 +358,7 @@ export interface Scene {
   visualFormat?: VisualFormat;
   contentTag?: string;
   artPresetId?: string;
+  assignedStyleId?: string;
   chapterIndex?: number;
   chapterTitle?: string;
   voiceoverUrl?: string;
@@ -673,6 +674,7 @@ export interface ScriptVideoInput {
   musicMood?: string;
   qualityTier?: 'standard' | 'premium' | 'ultra';
   artPresetId?: string;
+  artPresetIds?: string[];
   productContext?: {
     productName: string;
     category: string;

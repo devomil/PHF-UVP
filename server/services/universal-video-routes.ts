@@ -2788,6 +2788,7 @@ router.post('/projects/:projectId/generate-script', isAuthenticated, async (req:
         style: 'professional',
         targetDuration,
         artPresetId: artPresetIdFromProgress,
+        artPresetIds: artPresetIdsFromProgress,
         productContext,
         scriptPresets,
         projectType,
@@ -2795,6 +2796,20 @@ router.post('/projects/:projectId/generate-script', isAuthenticated, async (req:
       });
       scenes = parsed.scenes;
       summary = parsed.summary;
+      if (artPresetIdsFromProgress && artPresetIdsFromProgress.length > 1) {
+        const { getVisualArtPreset } = await import("../../shared/config/visual-art-presets");
+        const validPresets = artPresetIdsFromProgress.map(id => getVisualArtPreset(id)).filter(Boolean);
+        if (validPresets.length > 1) {
+          const contentScenes = scenes.filter((s: any) => s.type !== 'chapter-title');
+          contentScenes.forEach((scene: any, idx: number) => {
+            const presetIdx = idx % validPresets.length;
+            const preset = validPresets[presetIdx]!;
+            scene.artPresetId = preset.id;
+            scene.assignedStyleId = preset.id;
+          });
+          console.log(`[GenerateScript] Chapter-based multi-style: distributed ${validPresets.length} styles across ${contentScenes.length} content scenes`);
+        }
+      }
     } else {
       const trendHooks = (projectData.progress as any)?.selectedTrendHooks || null;
       const pipelineResult = await runScriptPipeline({
