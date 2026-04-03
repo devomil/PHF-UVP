@@ -774,9 +774,63 @@ Return ONLY valid JSON:
   ]
 }`;
 
-  const raw = await callLLMWithRetry(systemPrompt, userPrompt, 8000, "Stage 4: Visual Directions");
-  const parsed = extractJSON(raw);
-  const s4Scenes = Array.isArray(parsed.scenes) ? parsed.scenes : [];
+  const sceneCount = stage3Scenes.length;
+  const tokensPerScene = 500;
+  const estimatedTokens = Math.min(16000, Math.max(8000, sceneCount * tokensPerScene));
+  console.log(`[Pipeline S4] ${sceneCount} scenes, requesting ${estimatedTokens} max tokens`);
+
+  let s4Scenes: any[] = [];
+
+  if (sceneCount > 12) {
+    const chunkSize = Math.ceil(sceneCount / 2);
+    const chunks = [];
+    for (let ci = 0; ci < sceneCount; ci += chunkSize) {
+      chunks.push(stage3Scenes.slice(ci, ci + chunkSize));
+    }
+    console.log(`[Pipeline S4] Splitting ${sceneCount} scenes into ${chunks.length} chunks of ~${chunkSize}`);
+
+    for (let ci = 0; ci < chunks.length; ci++) {
+      const chunk = chunks[ci];
+      const offset = ci * chunkSize;
+      const chunkScenesForPrompt = chunk.map((s: any, i: number) => {
+        const globalIdx = offset + i;
+        const narrativeScene = narrative.scenes[globalIdx];
+        const prevScene = globalIdx > 0 ? stage3Scenes[globalIdx - 1] : null;
+        const prevContext = prevScene
+          ? `Previous Scene Narration: "${(prevScene.narration || '').substring(0, 120)}..."
+Previous Scene Visual Direction: "${(prevScene.visualDirection || '').substring(0, 120)}..."`
+          : 'Previous Scene: NONE (this is the first scene — establish the visual world)';
+        return `Scene ${globalIdx + 1}:
+Type: ${s.type || narrativeScene?.type || 'content'}
+Duration: ${s.duration || narrativeScene?.duration || 8}s
+Emotional Beat: ${narrativeScene?.emotionalBeat || 'neutral'}
+${prevContext}
+Narration: "${s.narration || ''}"
+Current Visual Direction: "${s.visualDirection || ''}"
+${s.chapterTitle ? `Chapter Title: "${s.chapterTitle}" (create a visual METAPHOR for this theme — NO text rendering)` : ''}`;
+      }).join('\n\n');
+
+      const chunkUserPrompt = userPrompt.replace(scenesForPrompt, chunkScenesForPrompt);
+      const chunkTokens = Math.min(10000, Math.max(6000, chunk.length * tokensPerScene));
+
+      try {
+        const chunkRaw = await callLLMWithRetry(systemPrompt, chunkUserPrompt, chunkTokens, `Stage 4: Visual Directions (chunk ${ci + 1}/${chunks.length})`);
+        const chunkParsed = extractJSON(chunkRaw);
+        const chunkScenes = Array.isArray(chunkParsed.scenes) ? chunkParsed.scenes : [];
+        chunkScenes.forEach((s: any, i: number) => {
+          if (!s.sceneNumber) s.sceneNumber = offset + i + 1;
+        });
+        s4Scenes.push(...chunkScenes);
+        console.log(`[Pipeline S4] Chunk ${ci + 1}: got ${chunkScenes.length} scenes`);
+      } catch (chunkErr: any) {
+        console.warn(`[Pipeline S4] Chunk ${ci + 1} failed: ${chunkErr.message?.substring(0, 100)}`);
+      }
+    }
+  } else {
+    const raw = await callLLMWithRetry(systemPrompt, userPrompt, estimatedTokens, "Stage 4: Visual Directions");
+    const parsed = extractJSON(raw);
+    s4Scenes = Array.isArray(parsed.scenes) ? parsed.scenes : [];
+  }
 
   const validStyleIds = multiStyleMode ? new Set(artPresets.map(p => p.id)) : new Set<string>();
 
