@@ -44,7 +44,7 @@ const ART_PRESET_IMAGES: Record<string, string> = {
 
 function ArtStyleSelector({ value, onChange, multiSelect = false, selectedIds = [], onMultiChange }: { value: string; onChange: (id: string) => void; multiSelect?: boolean; selectedIds?: string[]; onMultiChange?: (ids: string[]) => void }) {
   const presets = getAllVisualArtPresets();
-  const MAX_STYLES = 3;
+  const allSelected = multiSelect && selectedIds.length === presets.length;
 
   const handleClick = (id: string) => {
     if (!multiSelect || !onMultiChange) {
@@ -56,12 +56,17 @@ function ArtStyleSelector({ value, onChange, multiSelect = false, selectedIds = 
       onChange("auto");
       return;
     }
+    if (id === "all") {
+      const allIds = presets.map(p => p.id);
+      onMultiChange(allIds);
+      onChange(allIds[0]);
+      return;
+    }
     const isSelected = selectedIds.includes(id);
     let next: string[];
     if (isSelected) {
       next = selectedIds.filter(s => s !== id);
     } else {
-      if (selectedIds.length >= MAX_STYLES) return;
       next = [...selectedIds, id];
     }
     onMultiChange(next);
@@ -78,14 +83,41 @@ function ArtStyleSelector({ value, onChange, multiSelect = false, selectedIds = 
         <Label style={{ color: "var(--text-secondary)" }}>Art Style</Label>
         {multiSelect && selectedIds.length > 0 && (
           <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ backgroundColor: "rgba(139,92,246,0.2)", color: "rgb(167,139,250)" }}>
-            {selectedIds.length}/{MAX_STYLES} selected
+            {allSelected ? "Smart Mix — All styles" : `${selectedIds.length} selected`}
           </span>
         )}
       </div>
       <p className="text-xs mb-3" style={{ color: "var(--text-muted)" }}>
-        {multiSelect ? "Select up to 3 styles — AI will assign the best style per scene based on content" : "Choose a visual art direction that applies consistently across all scenes"}
+        {multiSelect ? "Select styles for AI to choose from — it will assign the best style per scene based on content" : "Choose a visual art direction that applies consistently across all scenes"}
       </p>
       <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1" style={{ scrollbarWidth: "thin" }}>
+        {multiSelect && (
+          <button
+            type="button"
+            onClick={() => handleClick("all")}
+            className="flex-shrink-0 w-[140px] rounded-xl border-2 p-3 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg"
+            style={{
+              backgroundColor: allSelected ? "rgba(139, 92, 246, 0.15)" : "var(--surface)",
+              borderColor: allSelected ? "rgb(139, 92, 246)" : "var(--border-subtle)",
+              backdropFilter: "blur(12px)",
+            }}
+          >
+            <div
+              className="w-full h-16 rounded-lg mb-2 flex items-center justify-center"
+              style={{
+                background: "linear-gradient(135deg, rgba(168,85,247,0.4), rgba(59,130,246,0.3), rgba(236,72,153,0.3), rgba(34,197,94,0.3))",
+                border: "1px solid rgba(139,92,246,0.3)",
+              }}
+            >
+              <Sparkles className="w-5 h-5 text-purple-300" />
+            </div>
+            <span className="font-medium text-xs block" style={{ color: "var(--text-primary)" }}>Smart Mix</span>
+            <span className="text-[10px] mt-0.5 block leading-snug" style={{ color: "var(--text-muted)" }}>
+              AI picks the best style per scene
+            </span>
+          </button>
+        )}
+
         <button
           type="button"
           onClick={() => handleClick("auto")}
@@ -107,13 +139,13 @@ function ArtStyleSelector({ value, onChange, multiSelect = false, selectedIds = 
           </div>
           <span className="font-medium text-xs block" style={{ color: "var(--text-primary)" }}>Auto</span>
           <span className="text-[10px] mt-0.5 block leading-snug" style={{ color: "var(--text-muted)" }}>
-            AI picks the best style for your content
+            {multiSelect ? "Single style — AI picks one" : "AI picks the best style for your content"}
           </span>
         </button>
 
         {presets.map((preset) => {
           const active = isPresetActive(preset.id);
-          const atLimit = multiSelect && selectedIds.length >= MAX_STYLES && !active;
+          const atLimit = false;
           return (
           <button
             key={preset.id}

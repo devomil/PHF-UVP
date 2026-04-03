@@ -115,15 +115,20 @@ export interface ContentStructureConfig {
   defaultArtPresetIds?: string[];
 }
 
-export const CONTENT_STRUCTURES: ContentStructureConfig[] = [
-  { id: 'tutorial', label: 'Tutorial', defaultArtPreset: '3d-illustration', defaultArtPresetIds: ['3d-illustration', 'cinematic-realism'] },
-  { id: 'explainer', label: 'Explainer', defaultArtPreset: '2d-line-art', defaultArtPresetIds: ['2d-line-art', 'cinematic-realism'] },
-  { id: 'how-to', label: 'How-To', defaultArtPreset: '3d-illustration', defaultArtPresetIds: ['3d-illustration', 'cinematic-realism'] },
-  { id: 'product-education', label: 'Product Education', defaultArtPreset: '3d-illustration', defaultArtPresetIds: ['3d-illustration', 'cinematic-realism', 'scientific-medical'] },
-  { id: 'health-wellness', label: 'Health & Wellness', defaultArtPreset: 'scientific-medical', defaultArtPresetIds: ['cinematic-realism', 'scientific-medical'] },
+export const ALL_ART_PRESET_IDS = [
+  'cinematic-realism', '3d-illustration', '2d-line-art', 'scientific-medical',
+  'collage', 'claymation', 'neon-futuristic', 'watercolor', 'minimalist-flat',
 ];
 
-export const LONG_STORY_DEFAULT_ART_PRESET_IDS = ['cinematic-realism', '3d-illustration'];
+export const CONTENT_STRUCTURES: ContentStructureConfig[] = [
+  { id: 'tutorial', label: 'Tutorial', defaultArtPreset: '3d-illustration', defaultArtPresetIds: ALL_ART_PRESET_IDS },
+  { id: 'explainer', label: 'Explainer', defaultArtPreset: '2d-line-art', defaultArtPresetIds: ALL_ART_PRESET_IDS },
+  { id: 'how-to', label: 'How-To', defaultArtPreset: '3d-illustration', defaultArtPresetIds: ALL_ART_PRESET_IDS },
+  { id: 'product-education', label: 'Product Education', defaultArtPreset: '3d-illustration', defaultArtPresetIds: ALL_ART_PRESET_IDS },
+  { id: 'health-wellness', label: 'Health & Wellness', defaultArtPreset: 'scientific-medical', defaultArtPresetIds: ALL_ART_PRESET_IDS },
+];
+
+export const LONG_STORY_DEFAULT_ART_PRESET_IDS = ALL_ART_PRESET_IDS;
 
 export function getProjectType(id: string): ProjectTypeConfig | null {
   return PROJECT_TYPES[id] || null;
