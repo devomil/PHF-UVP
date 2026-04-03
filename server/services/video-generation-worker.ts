@@ -365,13 +365,17 @@ class VideoGenerationWorker {
         ` Provider: ${job.provider}, Duration: ${job.duration}s, Aspect: ${job.aspectRatio}`,
       );
 
-      const provider = (job.provider === "auto" ? undefined : job.provider) as
+      const i2vProviderHint = (job.i2vSettings as any)?.providerHint;
+      const provider = (job.provider === "auto"
+        ? (i2vProviderHint || undefined)
+        : job.provider) as
         | "runway"
         | "kling"
         | "luma"
         | "hailuo"
         | "hunyuan"
         | "veo";
+      const isProviderHint = job.provider === "auto" && !!i2vProviderHint;
 
       let videoUrl: string | null = null;
 
@@ -658,12 +662,17 @@ class VideoGenerationWorker {
         const finalImageUrl = textImageUrl || job.sourceImageUrl || charRefImageUrl || undefined;
         const finalImageUrls = (job.i2vSettings as any)?.sourceImageUrls || (charRefImageUrls && charRefImageUrls.length > 1 ? charRefImageUrls : undefined);
 
+        if (isProviderHint) {
+          log.info(` Job ${job.jobId} using provider hint: ${provider} (soft preference with fallbacks)`);
+        }
+
         const result = await aiVideoService.generateVideo({
           prompt: textImagePromptOverride || charEnhancedPrompt,
           duration: job.duration || 6,
           aspectRatio,
           sceneType: job.sceneType || "hook",
           preferredProvider: provider,
+          isProviderHint,
           negativePrompt: textImageUrl ? (job.negativePrompt || "") : enhancedNegativePrompt,
           visualStyle: job.style || "professional",
           imageUrl: finalImageUrl,

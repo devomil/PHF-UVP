@@ -54,6 +54,7 @@ interface AIVideoOptions {
   artPresetId?: string;
   contentTag?: string;
   isCharacterReference?: boolean;
+  isProviderHint?: boolean;
 }
 
 // Maps base provider + quality tier to the appropriate versioned provider
@@ -345,9 +346,12 @@ class AIVideoService {
     let providerOrder: string[];
     const qualityTier = options.qualityTier || 'standard';
     
-    if (enhancedOptions.preferredProvider && enhancedOptions.preferredProvider !== 'auto') {
+    if (enhancedOptions.preferredProvider && enhancedOptions.preferredProvider !== 'auto' && !options.isProviderHint) {
       providerOrder = [enhancedOptions.preferredProvider];
       console.log(`[AIVideo] Using STRICT user-selected provider: ${enhancedOptions.preferredProvider} (no fallbacks)`);
+    } else if (enhancedOptions.preferredProvider && enhancedOptions.preferredProvider !== 'auto' && options.isProviderHint) {
+      providerOrder = [enhancedOptions.preferredProvider, ...this.selectProvidersForStyle(styleConfig.preferredVideoProviders, enhancedOptions.sceneType, contentType, configuredProviders).filter(p => p !== enhancedOptions.preferredProvider)];
+      console.log(`[AIVideo] Using provider HINT: ${enhancedOptions.preferredProvider} (preferred first, with fallbacks: ${providerOrder.slice(1, 4).join(', ')})`);
     } else if (options.narration && options.prompt) {
       const recommendation = await this.getIntelligentProviderRecommendation(options, configuredProviders);
       providerOrder = recommendation.providerOrder;
@@ -409,7 +413,7 @@ class AIVideoService {
       }
     }
 
-    const isExplicitSelection = !!enhancedOptions.preferredProvider && enhancedOptions.preferredProvider !== 'auto';
+    const isExplicitSelection = !!enhancedOptions.preferredProvider && enhancedOptions.preferredProvider !== 'auto' && !options.isProviderHint;
     let tierAdjustedOrder: string[];
 
     if (qualityTier === 'draft') {

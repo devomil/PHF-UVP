@@ -5709,7 +5709,7 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, asy
     const sceneProviderHint = (scene as any).providerHint;
     const effectiveProvider = provider || undefined;
     if (!provider && sceneProviderHint) {
-      console.log(`[Phase9B-Async] Pipeline providerHint available: ${sceneProviderHint} (passed as preference, not strict lock)`);
+      console.log(`[Phase9B-Async] Pipeline providerHint: ${sceneProviderHint} (soft preference via i2vSettings)`);
     }
 
     let finalSourceImageUrls: string[] | undefined = undefined;
@@ -5744,6 +5744,11 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, asy
       console.log(`[Phase16] Using intelligent motion control for scene type: ${scene.type || 'content'}`);
     }
     
+    const jobI2vWithHint = {
+      ...(i2vSettings || {}),
+      ...(!provider && sceneProviderHint ? { providerHint: sceneProviderHint } : {}),
+    };
+
     const job = await videoGenerationWorker.createJob({
       projectId,
       sceneId,
@@ -5756,7 +5761,7 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, asy
       triggeredBy: userId,
       sourceImageUrl: finalSourceImageUrl,
       sourceImageUrls: finalSourceImageUrls,
-      i2vSettings: i2vSettings || undefined,
+      i2vSettings: Object.keys(jobI2vWithHint).length > 0 ? jobI2vWithHint : undefined,
       motionControl: normalizedMotionControl,
       sceneType: scene.type || 'content',
     });
@@ -5821,6 +5826,7 @@ router.post('/:projectId/scenes/:sceneId/micro-scene/:microSceneIndex/regenerate
     const artPreset = projectArtPresetId ? getVisualArtPreset(projectArtPresetId) : null;
     const isStylizedArt = projectArtPresetId ? isStylizedPreset(projectArtPresetId) : false;
     console.log(`[MicroScene-Regen] Art preset: ${projectArtPresetId || 'none'} (${artPreset?.name || 'N/A'}), stylized: ${isStylizedArt}, strategy: ${artPreset?.generationStrategy || 'N/A'}, generationMode: ${generationMode || 'auto'}`);
+    const msData = (scene as any).microScenes?.[msIdx];
     const needsImageFirst = artPreset && artPreset.generationStrategy === 'i2v'
       && !finalSourceImageUrl && generationMode !== 't2v';
 
@@ -5836,7 +5842,6 @@ router.post('/:projectId/scenes/:sceneId/micro-scene/:microSceneIndex/regenerate
         const { fal } = await import("@fal-ai/client");
         fal.config({ credentials: falKey });
         const { sanitizePromptForAI } = await import('../services/prompt-sanitizer');
-        const msData = (scene as any).microScenes?.[msIdx];
         const msImagePrompt = msData?.imagePrompt;
         const imagePrompt = msImagePrompt
           ? msImagePrompt
@@ -5913,6 +5918,8 @@ router.post('/:projectId/scenes/:sceneId/micro-scene/:microSceneIndex/regenerate
       console.log(`[MicroScene-Regen] Pipeline providerHint: ${msProviderHint} (preference, not strict lock)`);
     }
 
+    const msI2vWithHint = !provider && msProviderHint ? { providerHint: msProviderHint } : undefined;
+
     const job = await videoGenerationWorker.createJob({
       projectId,
       sceneId: `${sceneId}__micro_${msIdx}`,
@@ -5924,6 +5931,7 @@ router.post('/:projectId/scenes/:sceneId/micro-scene/:microSceneIndex/regenerate
       style: (projectData as any).settings?.visualStyle || 'professional',
       triggeredBy: userId,
       sourceImageUrl: finalSourceImageUrl,
+      i2vSettings: msI2vWithHint,
       sceneType: scene.type || 'content',
     });
 
@@ -6070,6 +6078,9 @@ router.post('/:projectId/scenes/:sceneId/regenerate-all-micro-scene-videos', isA
       const jobI2vSettings: any = {};
       if (projectArtPresetId) {
         jobI2vSettings.snapshotArtPresetId = projectArtPresetId;
+      }
+      if (!provider && msProviderHint) {
+        jobI2vSettings.providerHint = msProviderHint;
       }
 
       const job = await videoGenerationWorker.createJob({
@@ -7104,6 +7115,11 @@ router.post('/:projectId/cinematic-flow-regenerate', isAuthenticated, async (req
           const effectiveProvider = provider || undefined;
           const effectivePrompt = (sourceImageUrl && sceneMotionPrompt) ? sceneMotionPrompt : (scene.visualDirection || 'Professional video');
 
+          const cinFlowI2v: any = {};
+          if (!provider && sceneProviderHint) {
+            cinFlowI2v.providerHint = sceneProviderHint;
+          }
+
           const { videoGenerationWorker } = await import('../services/video-generation-worker');
           const job = await videoGenerationWorker.createJob({
             projectId,
@@ -7117,6 +7133,7 @@ router.post('/:projectId/cinematic-flow-regenerate', isAuthenticated, async (req
             triggeredBy: userId,
             sourceImageUrl,
             sceneType: scene.type || 'content',
+            i2vSettings: Object.keys(cinFlowI2v).length > 0 ? cinFlowI2v : undefined,
           });
 
           console.log(`[CinematicFlow] Scene ${i}: Created job ${job.jobId}, waiting for completion...`);
