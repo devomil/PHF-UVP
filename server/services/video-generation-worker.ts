@@ -6,85 +6,149 @@ import { createLogger } from "../utils/logger";
 import { intelligentRegenerationService } from "./intelligent-regeneration-service";
 import { db } from "../db";
 import { universalVideoProjects, videoGenerationJobs } from "@shared/schema";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { preparePromptForProvider, type SanitizedPrompt } from "./prompt-sanitizer";
 
 const log = createLogger("VideoWorker");
 
+async function findSceneIndex(projectId: string, sceneId: string): Promise<{ sceneIndex: number; scenes: any[] } | null> {
+  const rows = await db.select({ scenes: universalVideoProjects.scenes })
+    .from(universalVideoProjects)
+    .where(eq(universalVideoProjects.projectId, projectId))
+    .limit(1);
+
+  if (rows.length === 0) return null;
+  const scenes = rows[0].scenes as any[];
+  const sceneIndex = scenes.findIndex((s: any) => s.id === sceneId);
+  if (sceneIndex === -1) return null;
+  return { sceneIndex, scenes };
+}
+
 async function updateSceneMedia(projectId: string, sceneId: string, videoUrl: string): Promise<boolean> {
   const timestamp = new Date().toISOString();
-  log.info(`[SCENE_UPDATE ${timestamp}] Starting scene media update for project=${projectId}, scene=${sceneId}`);
+  log.info(`[SCENE_UPDATE ${timestamp}] Starting atomic scene media update for project=${projectId}, scene=${sceneId}`);
   log.info(`[SCENE_UPDATE ${timestamp}] New video URL: ${videoUrl}`);
   
   try {
-    const rows = await db.select().from(universalVideoProjects)
-      .where(eq(universalVideoProjects.projectId, projectId))
-      .limit(1);
-    
-    if (rows.length === 0) {
-      log.warn(`[SCENE_UPDATE ${timestamp}] Project ${projectId} not found when updating scene media`);
-      return false;
-    }
-    
-    const project = rows[0];
-    const scenes = project.scenes as any[];
-    
     const microMatch = sceneId.match(/^(.+)__micro_(\d+)$/);
     const realSceneId = microMatch ? microMatch[1] : sceneId;
     const microIndex = microMatch ? parseInt(microMatch[2], 10) : -1;
 
-    const sceneIndex = scenes.findIndex((s: any) => s.id === realSceneId);
-    if (sceneIndex === -1) {
+    const found = await findSceneIndex(projectId, realSceneId);
+    if (!found) {
       log.warn(`[SCENE_UPDATE ${timestamp}] Scene ${realSceneId} not found in project ${projectId}`);
       return false;
     }
 
+    const { sceneIndex, scenes } = found;
+    const idx = sceneIndex.toString();
+
     if (microIndex >= 0) {
       const microScenes = scenes[sceneIndex].microScenes || [];
-      if (microIndex < microScenes.length) {
-        microScenes[microIndex].videoUrl = videoUrl;
-        scenes[sceneIndex].microScenes = microScenes;
-        log.info(`[SCENE_UPDATE ${timestamp}] Updated micro-scene ${microIndex} of scene ${realSceneId} with new videoUrl`);
-
-        if (scenes[sceneIndex].assemblyManifest) {
-          scenes[sceneIndex].assemblyManifest.assembledClipValid = false;
-          log.info(`[SCENE_UPDATE ${timestamp}] Invalidated FFmpeg assembly for scene ${realSceneId} (micro-scene ${microIndex} changed)`);
-        }
-
-        if (microIndex === 0) {
-          scenes[sceneIndex].background = scenes[sceneIndex].background || {};
-          scenes[sceneIndex].background.videoUrl = videoUrl;
-          scenes[sceneIndex].background.mediaUrl = videoUrl;
-          scenes[sceneIndex].background.type = 'video';
-          scenes[sceneIndex].assets = scenes[sceneIndex].assets || {};
-          scenes[sceneIndex].assets.videoUrl = videoUrl;
-          log.info(`[SCENE_UPDATE ${timestamp}] Also updated main scene asset to match micro-scene 0`);
-        }
-      } else {
+      if (microIndex >= microScenes.length) {
         log.warn(`[SCENE_UPDATE ${timestamp}] Micro-scene index ${microIndex} out of range for scene ${realSceneId}`);
         return false;
       }
+      const mi = microIndex.toString();
+
+      let atomicUpdate = sql`
+        jsonb_set(
+          jsonb_set(
+            ${universalVideoProjects.scenes},
+            ${`{${idx},microScenes,${mi},videoUrl}`}::text[],
+            ${JSON.stringify(videoUrl)}::jsonb
+          ),
+          ${`{${idx},assemblyManifest,assembledClipValid}`}::text[],
+          'false'::jsonb,
+          true
+        )
+      `;
+
+      if (microIndex === 0) {
+        atomicUpdate = sql`
+          jsonb_set(
+            jsonb_set(
+              jsonb_set(
+                jsonb_set(
+                  jsonb_set(
+                    jsonb_set(
+                      ${universalVideoProjects.scenes},
+                      ${`{${idx},microScenes,${mi},videoUrl}`}::text[],
+                      ${JSON.stringify(videoUrl)}::jsonb
+                    ),
+                    ${`{${idx},assemblyManifest,assembledClipValid}`}::text[],
+                    'false'::jsonb,
+                    true
+                  ),
+                  ${`{${idx},background,videoUrl}`}::text[],
+                  ${JSON.stringify(videoUrl)}::jsonb,
+                  true
+                ),
+                ${`{${idx},background,mediaUrl}`}::text[],
+                ${JSON.stringify(videoUrl)}::jsonb,
+                true
+              ),
+              ${`{${idx},background,type}`}::text[],
+              '"video"'::jsonb,
+              true
+            ),
+            ${`{${idx},assets,videoUrl}`}::text[],
+            ${JSON.stringify(videoUrl)}::jsonb,
+            true
+          )
+        `;
+        log.info(`[SCENE_UPDATE ${timestamp}] Atomic update: micro-scene ${microIndex} + main scene asset for scene ${realSceneId}`);
+      } else {
+        log.info(`[SCENE_UPDATE ${timestamp}] Atomic update: micro-scene ${microIndex} of scene ${realSceneId}`);
+      }
+
+      await db.update(universalVideoProjects)
+        .set({
+          scenes: atomicUpdate as any,
+          updatedAt: new Date(),
+        })
+        .where(eq(universalVideoProjects.projectId, projectId));
     } else {
-      const oldVideoUrl = scenes[sceneIndex].background?.videoUrl || scenes[sceneIndex].assets?.videoUrl || 'none';
-      log.info(`[SCENE_UPDATE ${timestamp}] Previous video URL: ${oldVideoUrl}`);
+      const atomicUpdate = sql`
+        jsonb_set(
+          jsonb_set(
+            jsonb_set(
+              jsonb_set(
+                jsonb_set(
+                  ${universalVideoProjects.scenes},
+                  ${`{${idx},background,videoUrl}`}::text[],
+                  ${JSON.stringify(videoUrl)}::jsonb,
+                  true
+                ),
+                ${`{${idx},background,mediaUrl}`}::text[],
+                ${JSON.stringify(videoUrl)}::jsonb,
+                true
+              ),
+              ${`{${idx},background,type}`}::text[],
+              '"video"'::jsonb,
+              true
+            ),
+            ${`{${idx},assets,videoUrl}`}::text[],
+            ${JSON.stringify(videoUrl)}::jsonb,
+            true
+          ),
+          ${`{${idx},assets,imageUrl}`}::text[],
+          ${JSON.stringify(videoUrl)}::jsonb,
+          true
+        )
+      `;
 
-      scenes[sceneIndex].background = scenes[sceneIndex].background || {};
-      scenes[sceneIndex].background.videoUrl = videoUrl;
-      scenes[sceneIndex].background.mediaUrl = videoUrl;
-      scenes[sceneIndex].background.type = 'video';
+      log.info(`[SCENE_UPDATE ${timestamp}] Atomic update: main scene ${realSceneId} at index ${idx}`);
 
-      scenes[sceneIndex].assets = scenes[sceneIndex].assets || {};
-      scenes[sceneIndex].assets.videoUrl = videoUrl;
+      await db.update(universalVideoProjects)
+        .set({
+          scenes: atomicUpdate as any,
+          updatedAt: new Date(),
+        })
+        .where(eq(universalVideoProjects.projectId, projectId));
     }
 
-    await db.update(universalVideoProjects)
-      .set({
-        scenes: scenes,
-        updatedAt: new Date(),
-      })
-      .where(eq(universalVideoProjects.projectId, projectId));
-
-    log.info(`[SCENE_UPDATE ${timestamp}] SUCCESS - Scene ${realSceneId} updated.`);
+    log.info(`[SCENE_UPDATE ${timestamp}] SUCCESS - Scene ${realSceneId} updated atomically (no read-modify-write).`);
     return true;
   } catch (error: any) {
     log.error(`[SCENE_UPDATE ${timestamp}] FAILED - Error updating scene ${sceneId}:`, error.message);
