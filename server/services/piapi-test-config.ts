@@ -740,7 +740,7 @@ export const PIAPI_TEST_DEFINITIONS: PiAPITestDefinition[] = [
     id: 'ideogram-v2',
     name: 'Ideogram V2',
     category: 'image',
-    model: 'ideogram-v2',
+    model: 'Qubico/ideogram-v2',
     taskType: 'txt2img',
     input: {
       prompt: 'A professional book cover design with the title "THE WEIGHT LOSS ILLUSION" in elegant gold serif typography on a dark navy background, subtle geometric patterns, premium editorial design, clean readable text',
@@ -751,6 +751,22 @@ export const PIAPI_TEST_DEFINITIONS: PiAPITestDefinition[] = [
     estimatedCost: '$0.05',
     estimatedTime: '~15s',
     notes: 'Ideogram V2 via PiAPI - excellent at rendering readable text in images',
+  },
+  {
+    id: 'ideogram-v2-alt',
+    name: 'Ideogram V2 (Alt Model ID)',
+    category: 'image',
+    model: 'ideogram-v2',
+    taskType: 'txt2img',
+    input: {
+      prompt: 'A professional book cover design with the title "THE WEIGHT LOSS ILLUSION" in elegant gold serif typography on a dark navy background, subtle geometric patterns, premium editorial design, clean readable text',
+      width: 1024,
+      height: 1024,
+    },
+    pollForResult: true,
+    estimatedCost: '$0.05',
+    estimatedTime: '~15s',
+    notes: 'Ideogram V2 via PiAPI (alternate model ID format) - testing which model name PiAPI accepts',
   },
   {
     id: 'gpt-image-1',

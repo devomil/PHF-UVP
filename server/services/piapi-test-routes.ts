@@ -830,12 +830,11 @@ async function runOpenAIDirectImageTest(test: any): Promise<TestResult> {
   }
 
   try {
-    const body = {
+    const body: any = {
       model: test.model || 'gpt-image-1',
       prompt: test.input.prompt,
       n: 1,
       size: '1024x1024',
-      quality: 'high',
     };
 
     const imageRes = await fetch('https://api.openai.com/v1/images/generations', {
@@ -862,11 +861,17 @@ async function runOpenAIDirectImageTest(test: any): Promise<TestResult> {
     }
 
     const imageData: any = await imageRes.json();
-    const outputUrl = imageData.data?.[0]?.url || imageData.data?.[0]?.b64_json;
+    const imageEntry = imageData.data?.[0];
+    let outputUrl = imageEntry?.url;
 
-    let finalUrl = outputUrl;
-    if (imageData.data?.[0]?.b64_json && !imageData.data?.[0]?.url) {
-      finalUrl = `data:image/png;base64,${imageData.data[0].b64_json.substring(0, 100)}...`;
+    if (!outputUrl && imageEntry?.b64_json) {
+      const b64 = imageEntry.b64_json;
+      const buffer = Buffer.from(b64, 'base64');
+      const filename = `openai-test-${Date.now()}.png`;
+      const filePath = path.join(TEST_IMAGE_DIR, filename);
+      fs.writeFileSync(filePath, buffer);
+      outputUrl = buildPublicUrl(`test-images/${filename}`);
+      console.log(`[OpenAI Test] Saved base64 image to ${filePath}, URL: ${outputUrl}`);
     }
 
     return {
@@ -875,11 +880,11 @@ async function runOpenAIDirectImageTest(test: any): Promise<TestResult> {
       category: test.category,
       status: outputUrl ? 'pass' : 'fail',
       responseTime,
-      outputUrl: imageData.data?.[0]?.url || undefined,
+      outputUrl: outputUrl || undefined,
       rawResponse: {
         model: test.model,
         created: imageData.created,
-        revisedPrompt: imageData.data?.[0]?.revised_prompt,
+        revisedPrompt: imageEntry?.revised_prompt,
       },
     };
   } catch (error: any) {
