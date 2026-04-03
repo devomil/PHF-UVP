@@ -2737,6 +2737,7 @@ router.post('/projects/:projectId/generate-script', isAuthenticated, async (req:
 
     let productContext = (projectData.progress as any)?.productContext || null;
     const artPresetIdFromProgress = (projectData.progress as any)?.artPresetId || undefined;
+    const artPresetIdsFromProgress: string[] | undefined = (projectData.progress as any)?.artPresetIds || undefined;
     const productMediaUrl = (projectData.progress as any)?.productMediaUrl || (projectData.assets as any)?.productMediaUrl || null;
     const scriptPresets = (projectData.progress as any)?.scriptPresets || null;
     const projectType = (projectData.progress as any)?.projectType || null;
@@ -2802,6 +2803,7 @@ router.post('/projects/:projectId/generate-script', isAuthenticated, async (req:
         targetDuration,
         targetAudience: projectData.targetAudience || null,
         artPresetId: artPresetIdFromProgress,
+        artPresetIds: artPresetIdsFromProgress,
         productContext,
         scriptPresets,
         projectType,

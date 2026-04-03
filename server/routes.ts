@@ -285,7 +285,7 @@ export async function registerRoutes(app: Express) {
         return res.status(401).json({ error: "Not authenticated" });
       }
 
-      const { mode, title, description, targetAudience, duration, platform, aspectRatio, mediaMode, videoGenerationMode, qualityTier, script, numScenes, visualStyle, voiceStyle, outputType, prompt, imageStyle, provider, saveToLibrary, customScenes, artPresetId, characterConsistency, characters, characterReferenceUrl, characterName, characterDescription, generationMode, negativePrompt, sourceImageUrl, referenceVideoUrl, imageFidelity, productMediaUrl, scriptPresets, projectType, contentStructure } = req.body;
+      const { mode, title, description, targetAudience, duration, platform, aspectRatio, mediaMode, videoGenerationMode, qualityTier, script, numScenes, visualStyle, voiceStyle, outputType, prompt, imageStyle, provider, saveToLibrary, customScenes, artPresetId, artPresetIds, characterConsistency, characters, characterReferenceUrl, characterName, characterDescription, generationMode, negativePrompt, sourceImageUrl, referenceVideoUrl, imageFidelity, productMediaUrl, scriptPresets, projectType, contentStructure } = req.body;
 
       const projectId = crypto.randomUUID();
 
@@ -325,7 +325,16 @@ export async function registerRoutes(app: Express) {
         }
 
         const progressData: any = preSeededScenes.length > 0 ? { phase: "scenes-ready", percentage: 20, currentStep: "Scenes defined" } : { phase: "draft", percentage: 0, currentStep: "" };
-        if (artPresetId && artPresetId !== "auto") {
+        if (artPresetIds && Array.isArray(artPresetIds) && artPresetIds.length > 0) {
+          const { getVisualArtPreset } = await import("../shared/config/visual-art-presets");
+          const uniqueIds = [...new Set(artPresetIds as string[])];
+          const validIds = uniqueIds.filter((id: string) => getVisualArtPreset(id)).slice(0, 3);
+          if (validIds.length > 0) {
+            progressData.artPresetIds = validIds;
+            progressData.artPresetId = validIds[0];
+            console.log(`[Routes] Multi-style selection: ${validIds.join(', ')}`);
+          }
+        } else if (artPresetId && artPresetId !== "auto") {
           const { getVisualArtPreset } = await import("../shared/config/visual-art-presets");
           if (getVisualArtPreset(artPresetId)) {
             progressData.artPresetId = artPresetId;

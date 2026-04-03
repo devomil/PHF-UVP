@@ -10,6 +10,7 @@ export interface PipelineContext {
   targetDuration: number;
   targetAudience?: string | null;
   artPresetId?: string;
+  artPresetIds?: string[];
   productContext?: {
     productName: string;
     category: string;
@@ -582,11 +583,40 @@ async function stageFourVisualDirections(
   ctx: PipelineContext,
   brand: BrandInfo,
 ): Promise<any[]> {
-  const artPreset = ctx.artPresetId ? getVisualArtPreset(ctx.artPresetId) : null;
+  const multiStyleMode = ctx.artPresetIds && ctx.artPresetIds.length > 1;
+  const artPresets = multiStyleMode
+    ? ctx.artPresetIds!.map(id => getVisualArtPreset(id)).filter(Boolean) as VisualArtPreset[]
+    : [];
+  const singlePreset = !multiStyleMode && ctx.artPresetId ? getVisualArtPreset(ctx.artPresetId) : null;
+  const artPreset = multiStyleMode ? artPresets[0] : singlePreset;
   const isStylized = artPreset && isStylizedPreset(artPreset.id);
   const primaryProvider = artPreset?.providerHierarchy?.primary || 'kling-2.6-pro';
   const providerHints = buildProviderHints(primaryProvider);
-  const artStyleBlock = buildArtStyleBlock(artPreset);
+
+  let artStyleBlock: string;
+  if (multiStyleMode && artPresets.length > 1) {
+    const styleDescriptions = artPresets.map((p, i) => {
+      return `STYLE ${i + 1}: "${p.id}" — ${p.name}
+  Description: ${p.description}
+  Style Marker: ${p.styleMarkerPrefix || p.name}
+  Camera Hints: ${p.cameraMotionHints || 'standard cinematic'}
+  Global Notes: ${p.globalStyleNotes || ''}
+  Negative: ${p.negativePromptAdditions.join(', ')}`;
+    }).join('\n\n');
+    artStyleBlock = `MULTI-STYLE MODE — You have ${artPresets.length} art styles available. For EACH scene, choose the single best-fitting style based on the narration content and emotional beat.
+
+AVAILABLE STYLES:
+${styleDescriptions}
+
+STYLE ASSIGNMENT RULES:
+- Each scene MUST include "assignedStyleId" in the JSON output with the chosen style's id (e.g. "${artPresets[0].id}")
+- The chosen style's marker MUST appear in every visual direction prompt for that scene
+- Match scientific/medical content to scientific-medical style, emotional/human content to cinematic-realism, abstract/process content to 3d-illustration, etc.
+- Ensure visual variety — don't assign all scenes the same style unless the content truly demands it
+- Micro-scenes inherit their parent scene's assigned style`;
+  } else {
+    artStyleBlock = buildArtStyleBlock(artPreset);
+  }
 
   const systemPrompt = `You are a world-class AI video director and prompt engineer with deep expertise in generative AI video models (Kling, Runway, Sora, Veo). You write visual direction prompts that produce stunning, cinematic, emotionally resonant AI video output. You understand that AI video models respond to specific cinematic language — shot type, camera movement, lighting mood, color palette, depth of field, texture, and art style instruction. You never write generic stock footage descriptions. Every prompt you write is designed to produce a 'wow' reaction from the viewer.
 
@@ -616,7 +646,7 @@ CRITICAL RULES:
 5. Add motion elements — floating particles, gentle sway, slow breathing, subtle camera drift, atmospheric haze
 6. NEVER include text, words, signs, labels, brand names, or typography in visual descriptions — AI cannot render readable text
 7. Describe products by PHYSICAL APPEARANCE only (shape, color, container type) — never describe label text
-8. ${isStylized ? `EVERY visual direction MUST include the style marker "${artPreset!.styleMarkerPrefix || artPreset!.name}"` : 'Keep descriptions cinematic but grounded in realism'}
+8. ${multiStyleMode ? 'EVERY visual direction MUST include the assigned style marker for that scene' : isStylized ? `EVERY visual direction MUST include the style marker "${artPreset!.styleMarkerPrefix || artPreset!.name}"` : 'Keep descriptions cinematic but grounded in realism'}
 9. Keep each visual direction 40-80 words — detailed but focused
 10. Vary camera movements and shot types across scenes — no two scenes should feel visually identical
 
@@ -658,12 +688,14 @@ For each scene, write:
 2. A brief cinematicNotes explaining your visual approach for this scene
 3. A scene-specific negativePrompt (things to avoid in generation)
 4. Split the narration into 2-4 micro-scenes at natural topic shifts. Each micro-scene gets its own cinematic visual direction that inherits the parent scene's visual world, lighting, and mood. Short scenes (under 5s or 1-2 sentences) should have just 1 micro-scene.
+${multiStyleMode ? '5. An "assignedStyleId" field with the chosen art style id for this scene' : ''}
 
 Return ONLY valid JSON:
 {
   "scenes": [
     {
       "sceneNumber": 1,
+      ${multiStyleMode ? '"assignedStyleId": "style-id-here",' : ''}
       "visualDirection": "full production-grade AI video prompt (40-80 words)",
       "negativePrompt": "scene-specific items to avoid",
       "cinematicNotes": "brief note on why this visual approach serves the narrative",
@@ -679,9 +711,20 @@ Return ONLY valid JSON:
   const parsed = extractJSON(raw);
   const s4Scenes = Array.isArray(parsed.scenes) ? parsed.scenes : [];
 
+  const validStyleIds = multiStyleMode ? new Set(artPresets.map(p => p.id)) : new Set<string>();
+
   const enhanced = stage3Scenes.map((original: any, i: number) => {
     const s4 = s4Scenes.find((s: any) => s.sceneNumber === i + 1) || s4Scenes[i];
     if (!s4 || !s4.visualDirection) return original;
+
+    let assignedArtPresetId: string | undefined;
+    if (multiStyleMode && s4.assignedStyleId && validStyleIds.has(s4.assignedStyleId)) {
+      assignedArtPresetId = s4.assignedStyleId;
+      console.log(`[Pipeline S4] Scene ${i + 1} assigned style: ${assignedArtPresetId}`);
+    } else if (multiStyleMode) {
+      assignedArtPresetId = artPresets[0]?.id;
+      console.log(`[Pipeline S4] Scene ${i + 1} defaulting to first style: ${assignedArtPresetId}`);
+    }
 
     const microScenes = Array.isArray(s4.microScenes) && s4.microScenes.length > 0
       ? s4.microScenes.map((ms: any, idx: number) => ({
@@ -690,6 +733,7 @@ Return ONLY valid JSON:
           visualDirection: ms.visualDirection || '',
           duration: ms.duration || Math.round((original.duration || 10) / s4.microScenes.length),
           pipelineStage: 4,
+          ...(assignedArtPresetId ? { artPresetId: assignedArtPresetId } : {}),
         }))
       : undefined;
 
@@ -698,9 +742,16 @@ Return ONLY valid JSON:
       visualDirection: s4.visualDirection,
       negativePrompt: s4.negativePrompt || undefined,
       cinematicNotes: s4.cinematicNotes || undefined,
+      ...(assignedArtPresetId ? { artPresetId: assignedArtPresetId, assignedStyleId: assignedArtPresetId } : {}),
       ...(microScenes ? { microScenes } : {}),
     };
   });
+
+  if (multiStyleMode) {
+    const styleCounts: Record<string, number> = {};
+    enhanced.forEach(s => { if (s.artPresetId) styleCounts[s.artPresetId] = (styleCounts[s.artPresetId] || 0) + 1; });
+    console.log(`[Pipeline S4] Multi-style assignment summary: ${Object.entries(styleCounts).map(([id, c]) => `${id}(${c})`).join(', ')}`);
+  }
 
   return enhanced;
 }

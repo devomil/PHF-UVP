@@ -3,7 +3,7 @@ import { useLocation, Link } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Sparkles, FileText, Zap, ArrowLeft, Video, Image, Info, Plus, Trash2, ChevronUp, ChevronDown, GripVertical, Palette, Users, UserCheck, Upload, X, ImagePlus, Film, Loader2, AlertCircle, FileUp, BookOpen, TrendingUp } from "lucide-react";
+import { Sparkles, FileText, Zap, ArrowLeft, Video, Image, Info, Plus, Trash2, ChevronUp, ChevronDown, GripVertical, Palette, Users, UserCheck, Upload, X, ImagePlus, Film, Loader2, AlertCircle, FileUp, BookOpen, TrendingUp, CheckCircle2 } from "lucide-react";
 import { ProviderCatalogSelector } from "@/components/video/provider-catalog-selector";
 import { CharacterProfilesPanel } from "@/components/video/character-profiles-panel";
 import { AssetSuzzieChat } from "@/components/video/AssetSuzzieChat";
@@ -42,26 +42,57 @@ const ART_PRESET_IMAGES: Record<string, string> = {
   'scientific-medical': '/art-presets/scientific-medical.png',
 };
 
-function ArtStyleSelector({ value, onChange }: { value: string; onChange: (id: string) => void }) {
+function ArtStyleSelector({ value, onChange, multiSelect = false, selectedIds = [], onMultiChange }: { value: string; onChange: (id: string) => void; multiSelect?: boolean; selectedIds?: string[]; onMultiChange?: (ids: string[]) => void }) {
   const presets = getAllVisualArtPresets();
+  const MAX_STYLES = 3;
+
+  const handleClick = (id: string) => {
+    if (!multiSelect || !onMultiChange) {
+      onChange(id);
+      return;
+    }
+    if (id === "auto") {
+      onMultiChange([]);
+      onChange("auto");
+      return;
+    }
+    const isSelected = selectedIds.includes(id);
+    let next: string[];
+    if (isSelected) {
+      next = selectedIds.filter(s => s !== id);
+    } else {
+      if (selectedIds.length >= MAX_STYLES) return;
+      next = [...selectedIds, id];
+    }
+    onMultiChange(next);
+    onChange(next.length > 0 ? next[0] : "auto");
+  };
+
+  const isAutoActive = multiSelect ? selectedIds.length === 0 : value === "auto";
+  const isPresetActive = (id: string) => multiSelect ? selectedIds.includes(id) : value === id;
 
   return (
     <div>
       <div className="flex items-center gap-2 mb-1">
         <Palette className="w-4 h-4 text-purple-400" />
         <Label style={{ color: "var(--text-secondary)" }}>Art Style</Label>
+        {multiSelect && selectedIds.length > 0 && (
+          <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ backgroundColor: "rgba(139,92,246,0.2)", color: "rgb(167,139,250)" }}>
+            {selectedIds.length}/{MAX_STYLES} selected
+          </span>
+        )}
       </div>
       <p className="text-xs mb-3" style={{ color: "var(--text-muted)" }}>
-        Choose a visual art direction that applies consistently across all scenes
+        {multiSelect ? "Select up to 3 styles — AI will assign the best style per scene based on content" : "Choose a visual art direction that applies consistently across all scenes"}
       </p>
       <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1" style={{ scrollbarWidth: "thin" }}>
         <button
           type="button"
-          onClick={() => onChange("auto")}
+          onClick={() => handleClick("auto")}
           className="flex-shrink-0 w-[140px] rounded-xl border-2 p-3 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg"
           style={{
-            backgroundColor: value === "auto" ? "rgba(139, 92, 246, 0.15)" : "var(--surface)",
-            borderColor: value === "auto" ? "rgb(139, 92, 246)" : "var(--border-subtle)",
+            backgroundColor: isAutoActive ? "rgba(139, 92, 246, 0.15)" : "var(--surface)",
+            borderColor: isAutoActive ? "rgb(139, 92, 246)" : "var(--border-subtle)",
             backdropFilter: "blur(12px)",
           }}
         >
@@ -80,18 +111,23 @@ function ArtStyleSelector({ value, onChange }: { value: string; onChange: (id: s
           </span>
         </button>
 
-        {presets.map((preset) => (
+        {presets.map((preset) => {
+          const active = isPresetActive(preset.id);
+          const atLimit = multiSelect && selectedIds.length >= MAX_STYLES && !active;
+          return (
           <button
             key={preset.id}
             type="button"
-            onClick={() => onChange(preset.id)}
-            className="flex-shrink-0 w-[140px] rounded-xl border-2 p-3 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg"
+            onClick={() => handleClick(preset.id)}
+            className={`flex-shrink-0 w-[140px] rounded-xl border-2 p-3 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg ${atLimit ? "opacity-40 cursor-not-allowed" : ""}`}
+            disabled={atLimit}
             style={{
-              backgroundColor: value === preset.id ? "rgba(139, 92, 246, 0.15)" : "var(--surface)",
-              borderColor: value === preset.id ? "rgb(139, 92, 246)" : "var(--border-subtle)",
+              backgroundColor: active ? "rgba(139, 92, 246, 0.15)" : "var(--surface)",
+              borderColor: active ? "rgb(139, 92, 246)" : "var(--border-subtle)",
               backdropFilter: "blur(12px)",
             }}
           >
+            <div className="relative">
             <div
               className="w-full h-16 rounded-lg mb-2 overflow-hidden"
               style={{
@@ -105,12 +141,19 @@ function ArtStyleSelector({ value, onChange }: { value: string; onChange: (id: s
                 loading="lazy"
               />
             </div>
+            {multiSelect && active && (
+              <div className="absolute top-1 right-1 w-5 h-5 rounded-full flex items-center justify-center" style={{ backgroundColor: "rgb(139,92,246)" }}>
+                <CheckCircle2 className="w-3.5 h-3.5 text-white" />
+              </div>
+            )}
+            </div>
             <span className="font-medium text-xs block truncate" style={{ color: "var(--text-primary)" }}>{preset.name}</span>
             <span className="text-[10px] mt-0.5 block leading-snug line-clamp-2" style={{ color: "var(--text-muted)" }}>
               {preset.description}
             </span>
           </button>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
@@ -212,6 +255,7 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
   const [mediaMode, setMediaMode] = useState("video");
   const [videoGenerationMode, setVideoGenerationMode] = useState("auto");
   const [artPresetId, setArtPresetId] = useState("auto");
+  const [artPresetIds, setArtPresetIds] = useState<string[]>([]);
   const [artPresetUserOverride, setArtPresetUserOverride] = useState(false);
   const [characterConsistency, setCharacterConsistency] = useState(false);
   const [characters, setCharacters] = useState<any[]>([]);
@@ -231,7 +275,7 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
   const allProjectTypes = getAllProjectTypes();
 
   const hasLockedCharacters = characters.some((c: any) => c.locked && c.referenceImageUrl);
-  const showCharacterI2V = artPresetId === '3d-illustration' && hasLockedCharacters;
+  const showCharacterI2V = (artPresetId === '3d-illustration' || artPresetIds.includes('3d-illustration')) && hasLockedCharacters;
 
   useEffect(() => {
     if (videoGenerationMode === 'character-i2v' && !showCharacterI2V) {
@@ -240,16 +284,18 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
   }, [artPresetId, characters, showCharacterI2V, videoGenerationMode]);
 
   useEffect(() => {
-    if (isStylizedPreset(artPresetId)) {
+    const anyStylized = artPresetIds.length > 0 ? artPresetIds.some(id => isStylizedPreset(id)) : isStylizedPreset(artPresetId);
+    if (anyStylized) {
       setCharacterConsistency(true);
     }
-  }, [artPresetId]);
+  }, [artPresetId, artPresetIds]);
 
   useEffect(() => {
     if (projectTypeId === 'educational' && contentStructure && !artPresetUserOverride) {
       const cs = CONTENT_STRUCTURES.find(s => s.id === contentStructure);
       if (cs) {
         setArtPresetId(cs.defaultArtPreset);
+        setArtPresetIds([]);
       }
     }
   }, [contentStructure, projectTypeId, artPresetUserOverride]);
@@ -464,6 +510,7 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
       videoGenerationMode: mediaMode === "video" ? videoGenerationMode : undefined,
       qualityTier: ptConfig?.qualityTier || "premium",
       artPresetId,
+      artPresetIds: artPresetIds.length > 0 ? artPresetIds : undefined,
       characterConsistency,
       characters,
       productMediaUrl,
@@ -760,9 +807,9 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
           )}
         </div>
 
-        <ArtStyleSelector value={artPresetId} onChange={(id: string) => { setArtPresetId(id); setArtPresetUserOverride(true); }} />
+        <ArtStyleSelector value={artPresetId} onChange={(id: string) => { setArtPresetId(id); setArtPresetUserOverride(true); }} multiSelect selectedIds={artPresetIds} onMultiChange={(ids) => { setArtPresetIds(ids); setArtPresetUserOverride(true); }} />
 
-        {artPresetId === '3d-illustration' && (
+        {(artPresetId === '3d-illustration' || artPresetIds.includes('3d-illustration')) && (
           <CharacterProfilesPanel
             characters={characters}
             onCharactersChange={setCharacters}

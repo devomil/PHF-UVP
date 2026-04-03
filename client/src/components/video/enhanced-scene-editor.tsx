@@ -552,6 +552,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
   });
   const [contentTag, setContentTag] = useState<string | null>(scene.contentTag || null);
   const [sceneArtPreset, setSceneArtPreset] = useState<string>(scene.artPresetId || 'project');
+  const [pipelineAssignedStyle] = useState<string | null>((scene as any).assignedStyleId || null);
 
   const { data: projectData } = useQuery<{ qualityTier?: string }>({
     queryKey: ["project", projectId],
@@ -1856,7 +1857,9 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
           <label className="text-[11px] font-medium uppercase tracking-wider mb-1.5 flex items-center gap-1.5" style={{ color: "var(--text-secondary)" }}>
             <Palette className="w-3 h-3" />
             Art Style
-            {sceneArtPreset !== 'project' && <span className="text-[10px] normal-case tracking-normal" style={{ color: 'rgb(167,139,250)' }}>(scene override)</span>}
+            {pipelineAssignedStyle && sceneArtPreset === pipelineAssignedStyle && <span className="text-[10px] normal-case tracking-normal px-1.5 py-0.5 rounded-full" style={{ color: 'rgb(129,230,217)', background: 'rgba(129,230,217,0.1)', border: '1px solid rgba(129,230,217,0.2)' }}>Smart Mix</span>}
+            {sceneArtPreset !== 'project' && !pipelineAssignedStyle && <span className="text-[10px] normal-case tracking-normal" style={{ color: 'rgb(167,139,250)' }}>(scene override)</span>}
+            {sceneArtPreset !== 'project' && pipelineAssignedStyle && sceneArtPreset !== pipelineAssignedStyle && <span className="text-[10px] normal-case tracking-normal" style={{ color: 'rgb(167,139,250)' }}>(scene override)</span>}
           </label>
           <div className="flex gap-2 overflow-x-auto pb-1.5 -mx-1 px-1" style={{ scrollbarWidth: "thin" }}>
             <button
@@ -2672,7 +2675,8 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                         <div className="flex items-center gap-1.5 mb-2">
                           <Palette className="w-3 h-3 text-white/50" />
                           <span className="text-[11px] font-medium text-white/50">Art Style</span>
-                          {sceneArtPreset !== 'project' && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/25">Override</span>}
+                          {pipelineAssignedStyle && sceneArtPreset === pipelineAssignedStyle && <span className="text-[9px] px-1.5 py-0.5 rounded-full" style={{ color: 'rgb(129,230,217)', background: 'rgba(129,230,217,0.1)', border: '1px solid rgba(129,230,217,0.2)' }}>Smart Mix</span>}
+                          {sceneArtPreset !== 'project' && (!pipelineAssignedStyle || sceneArtPreset !== pipelineAssignedStyle) && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/25">Override</span>}
                         </div>
                         <div className="flex gap-1.5 overflow-x-auto pb-1.5" style={{ scrollbarWidth: "thin" }}>
                           <button
