@@ -350,6 +350,11 @@ router.post('/api/piapi-tests/submit/:testId', async (req: Request, res: Respons
   try {
     const startTime = Date.now();
 
+    if (test.endpoint === 'openai-direct') {
+      const result = await runOpenAIDirectImageTest(test);
+      return res.json(result);
+    }
+
     if (test.endpoint === 'chat-completions') {
       const result = await runChatCompletionTest(test, apiKey);
       return res.json(result);
@@ -809,6 +814,86 @@ async function runChatCompletionTest(test: any, apiKey: string): Promise<TestRes
   }
 }
 
+async function runOpenAIDirectImageTest(test: any): Promise<TestResult> {
+  const startTime = Date.now();
+  const openaiKey = process.env.OPENAI_API_KEY;
+
+  if (!openaiKey) {
+    return {
+      id: test.id,
+      name: test.name,
+      category: test.category,
+      status: 'fail',
+      responseTime: 0,
+      error: 'OPENAI_API_KEY not configured',
+    };
+  }
+
+  try {
+    const body = {
+      model: test.model || 'gpt-image-1',
+      prompt: test.input.prompt,
+      n: 1,
+      size: '1024x1024',
+      quality: 'high',
+    };
+
+    const imageRes = await fetch('https://api.openai.com/v1/images/generations', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${openaiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+
+    const responseTime = Date.now() - startTime;
+
+    if (!imageRes.ok) {
+      const errorText = await imageRes.text();
+      return {
+        id: test.id,
+        name: test.name,
+        category: test.category,
+        status: 'fail',
+        responseTime,
+        error: `HTTP ${imageRes.status}: ${errorText.substring(0, 500)}`,
+      };
+    }
+
+    const imageData: any = await imageRes.json();
+    const outputUrl = imageData.data?.[0]?.url || imageData.data?.[0]?.b64_json;
+
+    let finalUrl = outputUrl;
+    if (imageData.data?.[0]?.b64_json && !imageData.data?.[0]?.url) {
+      finalUrl = `data:image/png;base64,${imageData.data[0].b64_json.substring(0, 100)}...`;
+    }
+
+    return {
+      id: test.id,
+      name: test.name,
+      category: test.category,
+      status: outputUrl ? 'pass' : 'fail',
+      responseTime,
+      outputUrl: imageData.data?.[0]?.url || undefined,
+      rawResponse: {
+        model: test.model,
+        created: imageData.created,
+        revisedPrompt: imageData.data?.[0]?.revised_prompt,
+      },
+    };
+  } catch (error: any) {
+    return {
+      id: test.id,
+      name: test.name,
+      category: test.category,
+      status: 'fail',
+      responseTime: Date.now() - startTime,
+      error: error.message,
+    };
+  }
+}
+
 async function runLlmServiceTest(test: any): Promise<TestResult> {
   const startTime = Date.now();
   try {
@@ -860,6 +945,10 @@ async function runLlmServiceTest(test: any): Promise<TestResult> {
 
 async function runSingleTest(test: any, apiKey: string, req: Request): Promise<TestResult> {
   const startTime = Date.now();
+
+  if (test.endpoint === 'openai-direct') {
+    return runOpenAIDirectImageTest(test);
+  }
 
   if (test.endpoint === 'chat-completions') {
     return runChatCompletionTest(test, apiKey);
