@@ -1351,6 +1351,10 @@ export async function enhanceChapterScenesWithStage4(
       visualDirection: enhancedScene.visualDirection || s.visualDirection,
       negativePrompt: enhancedScene.negativePrompt || s.negativePrompt,
       cinematicNotes: enhancedScene.cinematicNotes || s.cinematicNotes,
+      ...(enhancedScene.imagePrompt ? { imagePrompt: enhancedScene.imagePrompt } : {}),
+      ...(enhancedScene.motionPrompt ? { motionPrompt: enhancedScene.motionPrompt } : {}),
+      ...(enhancedScene.providerHint ? { providerHint: enhancedScene.providerHint } : {}),
+      ...(enhancedScene.textImageEnabled !== undefined ? { textImageEnabled: enhancedScene.textImageEnabled } : {}),
       ...(enhancedScene.microScenes ? { microScenes: enhancedScene.microScenes } : {}),
       ...(enhancedScene.artPresetId ? { artPresetId: enhancedScene.artPresetId, assignedStyleId: enhancedScene.assignedStyleId } : {}),
     };

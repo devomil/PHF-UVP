@@ -1479,6 +1479,7 @@ function ScenePreview({
   const [bulkRegenerateProgress, setBulkRegenerateProgress] = useState({ current: 0, total: 0 });
   const [cinematicFlowRunning, setCinematicFlowRunning] = useState(false);
   const [cinematicFlowProgress, setCinematicFlowProgress] = useState({ current: 0, total: 0 });
+  const [reenhancingVisuals, setReenhancingVisuals] = useState(false);
   const [overlayPreviewMode, setOverlayPreviewMode] = useState<Record<string, boolean>>({});
   const [previewOverlayConfig, setPreviewOverlayConfig] = useState<Record<string, OverlayConfig>>({});
   const [overlaysExpanded, setOverlaysExpanded] = useState<Record<string, boolean>>({});
@@ -2462,6 +2463,32 @@ function ScenePreview({
     }
   };
 
+  const reenhanceVisualDirections = async () => {
+    if (!projectId || reenhancingVisuals) return;
+    setReenhancingVisuals(true);
+    try {
+      const response = await fetch(`/api/universal-video/projects/${projectId}/rerun-stage4`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+      });
+      const data = await response.json();
+      if (data.success) {
+        toast({
+          title: 'Visual directions enhanced',
+          description: `${data.stats.withImagePrompt}/${data.stats.contentScenes} scenes now have cinematic image prompts`,
+        });
+        onSceneUpdate?.();
+      } else {
+        throw new Error(data.error || 'Enhancement failed');
+      }
+    } catch (err: any) {
+      toast({ title: 'Enhancement failed', description: err.message, variant: 'destructive' });
+    } finally {
+      setReenhancingVisuals(false);
+    }
+  };
+
   const startCinematicFlow = async () => {
     if (!projectId || cinematicFlowRunning || bulkRegeneratingVideos) return;
 
@@ -2798,6 +2825,26 @@ function ScenePreview({
       </Button>
       
       <div className="ml-auto flex items-center gap-2">
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={reenhanceVisualDirections}
+          disabled={reenhancingVisuals || cinematicFlowRunning || bulkRegeneratingVideos || scenes.length === 0}
+          className="border-amber-400 text-amber-700 hover:bg-amber-50"
+          title="Re-run Stage 4 cinematic enhancement to generate optimized image and motion prompts for all scenes"
+        >
+          {reenhancingVisuals ? (
+            <>
+              <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+              Enhancing...
+            </>
+          ) : (
+            <>
+              <Sparkles className="w-3 h-3 mr-1" />
+              Re-enhance Visuals
+            </>
+          )}
+        </Button>
         <Button
           size="sm"
           variant="outline"

@@ -342,6 +342,10 @@ export async function registerRoutes(app: Express) {
             console.warn(`[Routes] Invalid artPresetId "${artPresetId}", ignoring`);
           }
         }
+        if (!progressData.artPresetId && !progressData.artPresetIds) {
+          progressData.artPresetId = 'cinematic-realism';
+          console.log(`[Routes] No art preset selected — defaulting to cinematic-realism`);
+        }
         if (characterConsistency) {
           progressData.characterConsistency = true;
         }

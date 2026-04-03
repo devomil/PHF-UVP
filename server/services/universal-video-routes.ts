@@ -2736,8 +2736,17 @@ router.post('/projects/:projectId/generate-script', isAuthenticated, async (req:
     const numScenes = req.body?.numScenes || undefined;
 
     let productContext = (projectData.progress as any)?.productContext || null;
-    const artPresetIdFromProgress = (projectData.progress as any)?.artPresetId || undefined;
+    let artPresetIdFromProgress = (projectData.progress as any)?.artPresetId || undefined;
     const artPresetIdsFromProgress: string[] | undefined = (projectData.progress as any)?.artPresetIds || undefined;
+    if (!artPresetIdFromProgress && !artPresetIdsFromProgress) {
+      artPresetIdFromProgress = 'cinematic-realism';
+      const progress = (projectData.progress as any) || {};
+      progress.artPresetId = artPresetIdFromProgress;
+      await db.update(universalVideoProjects)
+        .set({ progress, updatedAt: new Date() })
+        .where(eq(universalVideoProjects.projectId, projectId));
+      console.log(`[GenerateScript] No art preset selected — defaulting to cinematic-realism`);
+    }
     const productMediaUrl = (projectData.progress as any)?.productMediaUrl || (projectData.assets as any)?.productMediaUrl || null;
     const scriptPresets = (projectData.progress as any)?.scriptPresets || null;
     const projectType = (projectData.progress as any)?.projectType || null;
@@ -2971,6 +2980,79 @@ router.post('/projects/:projectId/generate-script', isAuthenticated, async (req:
     });
   } catch (error: any) {
     console.error('[GenerateScript] Error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.post('/projects/:projectId/rerun-stage4', isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const userId = (req.user as any)?.id;
+    const { projectId } = req.params;
+
+    const projectData = await getProjectFromDb(projectId);
+    if (!projectData) return res.status(404).json({ success: false, error: 'Project not found' });
+    if (projectData.ownerId !== userId) return res.status(403).json({ success: false, error: 'Access denied' });
+
+    const scenes = projectData.scenes as any[];
+    if (!scenes || scenes.length === 0) return res.status(400).json({ success: false, error: 'No scenes to enhance' });
+
+    let artPresetId = (projectData.progress as any)?.artPresetId || undefined;
+    const artPresetIds: string[] | undefined = (projectData.progress as any)?.artPresetIds || undefined;
+    if (!artPresetId && !artPresetIds) {
+      artPresetId = 'cinematic-realism';
+      const progress = (projectData.progress as any) || {};
+      progress.artPresetId = artPresetId;
+      await db.update(universalVideoProjects)
+        .set({ progress, updatedAt: new Date() })
+        .where(eq(universalVideoProjects.projectId, projectId));
+    }
+
+    const platform = projectData.outputFormat?.platform || 'YouTube';
+    const targetDuration = projectData.totalDuration || 60;
+    const scriptPresets = (projectData.progress as any)?.scriptPresets || null;
+    const projectType = (projectData.progress as any)?.projectType || null;
+    const contentStructure = (projectData.progress as any)?.contentStructure || null;
+    const productContext = (projectData.progress as any)?.productContext || null;
+
+    console.log(`[RerunStage4] Re-running Stage 4 on ${scenes.length} scenes (preset: ${artPresetId || artPresetIds?.join(',') || 'auto'})`);
+
+    const { enhanceChapterScenesWithStage4 } = await import("./script-pipeline-service");
+    const enhanced = await enhanceChapterScenesWithStage4(scenes, {
+      platform,
+      targetDuration,
+      artPresetId,
+      artPresetIds,
+      productContext,
+      scriptPresets,
+      projectType,
+      contentStructure,
+    });
+
+    await db.update(universalVideoProjects)
+      .set({ scenes: enhanced, updatedAt: new Date() })
+      .where(eq(universalVideoProjects.projectId, projectId));
+
+    const contentScenes = enhanced.filter((s: any) => s.type !== 'chapter-title');
+    const withImagePrompt = contentScenes.filter((s: any) => s.imagePrompt);
+    const withMotionPrompt = contentScenes.filter((s: any) => s.motionPrompt);
+    const withProviderHint = contentScenes.filter((s: any) => s.providerHint);
+    const withTextImage = contentScenes.filter((s: any) => s.textImageEnabled);
+
+    console.log(`[RerunStage4] Complete. ${withImagePrompt.length}/${contentScenes.length} have imagePrompt, ${withMotionPrompt.length} motionPrompt, ${withProviderHint.length} providerHint, ${withTextImage.length} textImageEnabled`);
+
+    res.json({
+      success: true,
+      stats: {
+        totalScenes: enhanced.length,
+        contentScenes: contentScenes.length,
+        withImagePrompt: withImagePrompt.length,
+        withMotionPrompt: withMotionPrompt.length,
+        withProviderHint: withProviderHint.length,
+        withTextImage: withTextImage.length,
+      },
+    });
+  } catch (error: any) {
+    console.error('[RerunStage4] Error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
