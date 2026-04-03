@@ -7149,8 +7149,8 @@ router.post('/:projectId/cinematic-flow-regenerate', isAuthenticated, async (req
             const jobStatus = await videoGenerationWorker.getJob(job.jobId);
             if (!jobStatus) break;
 
-            if (jobStatus.status === 'completed' && jobStatus.result?.videoUrl) {
-              completedVideoUrl = jobStatus.result.videoUrl;
+            if (jobStatus.status === 'succeeded' && (jobStatus as any).videoUrl) {
+              completedVideoUrl = (jobStatus as any).videoUrl;
               jobCompleted = true;
               break;
             } else if (jobStatus.status === 'failed') {
@@ -7167,18 +7167,21 @@ router.post('/:projectId/cinematic-flow-regenerate', isAuthenticated, async (req
               try {
                 const { db } = await import("../db");
                 const { universalVideoProjects } = await import("../../shared/schema");
-                const { eq, sql } = await import("drizzle-orm");
-                await db.update(universalVideoProjects)
-                  .set({
-                    data: sql`jsonb_set(
-                      COALESCE(data, '{}'::jsonb),
-                      ${`{scenes,${i},continuityFrameUrl}`}::text[],
-                      ${JSON.stringify(previousLastFrameUrl)}::jsonb,
-                      true
-                    )`,
-                  })
-                  .where(eq(universalVideoProjects.projectId, projectId));
-                console.log(`[CinematicFlow] Scene ${i}: Persisted continuityFrameUrl to scene data`);
+                const { eq } = await import("drizzle-orm");
+                const freshProject = await db.select().from(universalVideoProjects)
+                  .where(eq(universalVideoProjects.projectId, projectId))
+                  .then(rows => rows[0]);
+                if (freshProject) {
+                  const allScenes = (freshProject.scenes as any[]) || [];
+                  const realIdx = allScenes.findIndex((s: any) => s.id === scene.id);
+                  if (realIdx >= 0) {
+                    allScenes[realIdx].continuityFrameUrl = previousLastFrameUrl;
+                    await db.update(universalVideoProjects)
+                      .set({ scenes: allScenes })
+                      .where(eq(universalVideoProjects.projectId, projectId));
+                    console.log(`[CinematicFlow] Scene ${i} (idx ${realIdx}): Persisted continuityFrameUrl`);
+                  }
+                }
               } catch (saveErr: any) {
                 console.warn(`[CinematicFlow] Scene ${i}: Failed to persist continuityFrameUrl: ${saveErr.message}`);
               }
