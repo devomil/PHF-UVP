@@ -5717,8 +5717,11 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, asy
       const sceneArtPresetId = (scene as any).artPresetId || (projectData as any).progress?.artPresetId || (projectData as any).artPresetId;
       const sceneArtPreset = sceneArtPresetId ? getPreset(sceneArtPresetId) : null;
       const isStylizedScene = sceneArtPresetId ? isStylizedCheck(sceneArtPresetId) : false;
+      const sceneTextImageEnabled = (scene as any).textImageEnabled === true;
 
-      if (sceneArtPreset && sceneArtPreset.generationStrategy === 'i2v') {
+      if (sceneTextImageEnabled) {
+        console.log(`[Phase9B-Async] Scene has textImageEnabled=true — skipping Flux, will use GPT-Image-1 in worker`);
+      } else if (sceneArtPreset && sceneArtPreset.generationStrategy === 'i2v') {
         console.log(`[Phase9B-Async] Art preset "${sceneArtPreset.name}" requires image-first I2V (universal pipeline)`);
 
         const existingImage = scene.assets?.imageUrl;
@@ -5909,10 +5912,13 @@ router.post('/:projectId/scenes/:sceneId/micro-scene/:microSceneIndex/regenerate
     const isStylizedArt = projectArtPresetId ? isStylizedPreset(projectArtPresetId) : false;
     console.log(`[MicroScene-Regen] Art preset: ${projectArtPresetId || 'none'} (${artPreset?.name || 'N/A'}), stylized: ${isStylizedArt}, strategy: ${artPreset?.generationStrategy || 'N/A'}, generationMode: ${generationMode || 'auto'}`);
     const msData = (scene as any).microScenes?.[msIdx];
+    const msTextImageEnabled = msData?.textImageEnabled === true || (scene as any).textImageEnabled === true;
     const needsImageFirst = artPreset && artPreset.generationStrategy === 'i2v'
-      && !finalSourceImageUrl && generationMode !== 't2v';
+      && !finalSourceImageUrl && generationMode !== 't2v' && !msTextImageEnabled;
 
-    if (needsImageFirst) {
+    if (msTextImageEnabled) {
+      console.log(`[MicroScene-Regen] textImageEnabled=true — skipping Flux, will use GPT-Image-1 in worker`);
+    } else if (needsImageFirst) {
       console.log(`[MicroScene-Regen] Art preset "${artPreset!.name}" requires image-first I2V — generating FRESH intermediate image`);
 
       let stylizedImageUrl: string | undefined = undefined;
@@ -6060,11 +6066,12 @@ router.post('/:projectId/scenes/:sceneId/regenerate-all-micro-scene-videos', isA
     const projectArtPresetId = (scene as any).artPresetId || (projectData as any).progress?.artPresetId || (projectData as any).artPresetId;
     const artPreset = projectArtPresetId ? getVisualArtPreset(projectArtPresetId) : null;
     const isStylizedArt = projectArtPresetId ? isStylizedPreset(projectArtPresetId) : false;
+    const sceneTextImageEnabled = (scene as any).textImageEnabled === true;
     const needsImageFirst = artPreset && artPreset.generationStrategy === 'i2v'
       && generationMode !== 't2v';
 
     console.log(`[BatchMicroRegen] Regenerating ALL ${microScenes.length} micro-scenes for scene ${sceneId}`);
-    console.log(`[BatchMicroRegen] Art preset: ${artPreset?.name || 'none'} (stylized=${isStylizedArt}, needsImageFirst=${needsImageFirst})`);
+    console.log(`[BatchMicroRegen] Art preset: ${artPreset?.name || 'none'} (stylized=${isStylizedArt}, needsImageFirst=${needsImageFirst}, sceneTextImage=${sceneTextImageEnabled})`);
 
     const projectAspectRatio = (projectData as any).outputFormat?.aspectRatio || (projectData as any).settings?.aspectRatio || '16:9';
 
@@ -6086,6 +6093,11 @@ router.post('/:projectId/scenes/:sceneId/regenerate-all-micro-scene-videos', isA
 
         for (let i = 0; i < microScenes.length; i++) {
           const ms = microScenes[i];
+
+          if (ms.textImageEnabled === true || sceneTextImageEnabled) {
+            console.log(`[BatchMicroRegen] MS ${i}: textImageEnabled — skipping Flux, will use GPT-Image-1 in worker`);
+            continue;
+          }
 
           const msImagePromptFromPipeline = ms.imagePrompt;
           const msPrompt = ms.visualDirection || scene.visualDirection || 'Professional video';
@@ -7162,10 +7174,14 @@ router.post('/:projectId/cinematic-flow-regenerate', isAuthenticated, async (req
 
           const sceneImagePrompt = scene.imagePrompt || scene.visualDirection || 'Professional cinematic scene';
           const sceneMotionPrompt = scene.motionPrompt;
+          const sceneTextImageEnabled = scene.textImageEnabled === true;
 
           let sourceImageUrl: string | undefined = undefined;
 
-          if (previousLastFrameUrl) {
+          if (sceneTextImageEnabled) {
+            console.log(`[CinematicFlow] Scene ${i}: textImageEnabled=true — skipping Flux, will use GPT-Image-1 in worker`);
+            previousLastFrameUrl = undefined;
+          } else if (previousLastFrameUrl) {
             sourceImageUrl = previousLastFrameUrl;
             console.log(`[CinematicFlow] Scene ${i}: Using previous scene's last frame as I2V source`);
           } else if (artPreset && artPreset.generationStrategy === 'i2v') {
