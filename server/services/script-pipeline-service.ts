@@ -990,11 +990,12 @@ Return ONLY valid JSON:
 {"assignments": [{"scene": 1, "styleId": "style-id"}, ...]}`;
 
   try {
-    const raw = await llmClient.chat(
-      'You are a visual style assignment expert. Return only valid JSON.',
-      prompt,
-      2000,
-    );
+    const result = await llmClient.createChatCompletion({
+      systemPrompt: 'You are a visual style assignment expert. Return only valid JSON.',
+      messages: [{ role: 'user', content: prompt }],
+      maxTokens: 2000,
+    });
+    const raw = result.text;
     const parsed = extractJSON(raw);
     const assignments = Array.isArray(parsed.assignments) ? parsed.assignments : [];
     const validIds = new Set(presets.map(p => p.id));
@@ -1083,7 +1084,12 @@ Return ONLY valid JSON:
 }`;
 
   try {
-    const raw = await llmClient.chat(systemPrompt, userPrompt, { maxTokens: 3000 });
+    const llmResult = await llmClient.createChatCompletion({
+      systemPrompt,
+      messages: [{ role: 'user', content: userPrompt }],
+      maxTokens: 3000,
+    });
+    const raw = llmResult.text;
     const parsed = extractJSON(raw);
     const chapters = Array.isArray(parsed.chapters) ? parsed.chapters : [];
 
