@@ -588,10 +588,12 @@ async function stageFourVisualDirections(
     ? ctx.artPresetIds!.map(id => getVisualArtPreset(id)).filter(Boolean) as VisualArtPreset[]
     : [];
   const singlePreset = !multiStyleMode && ctx.artPresetId ? getVisualArtPreset(ctx.artPresetId) : null;
-  const artPreset = multiStyleMode ? artPresets[0] : singlePreset;
-  const isStylized = artPreset && isStylizedPreset(artPreset.id);
-  const primaryProvider = artPreset?.providerHierarchy?.primary || 'kling-2.6-pro';
-  const providerHints = buildProviderHints(primaryProvider);
+  const artPreset = multiStyleMode ? null : singlePreset;
+  const isStylized = !multiStyleMode && singlePreset && isStylizedPreset(singlePreset.id);
+  const primaryProvider = multiStyleMode ? 'kling-2.6-pro' : (singlePreset?.providerHierarchy?.primary || 'kling-2.6-pro');
+  const providerHints = multiStyleMode
+    ? 'Provider selection will be determined per-scene based on assigned art style. Write visual prompts that work well across multiple AI video models.'
+    : buildProviderHints(primaryProvider);
 
   let artStyleBlock: string;
   if (multiStyleMode && artPresets.length > 1) {
@@ -726,21 +728,63 @@ Return ONLY valid JSON:
       console.log(`[Pipeline S4] Scene ${i + 1} defaulting to first style: ${assignedArtPresetId}`);
     }
 
+    let enforcedVisualDirection = s4.visualDirection;
+    let enforcedNegativePrompt = s4.negativePrompt || undefined;
+    if (multiStyleMode && assignedArtPresetId) {
+      const assignedPreset = getVisualArtPreset(assignedArtPresetId);
+      if (assignedPreset) {
+        const styleMarker = assignedPreset.styleMarkerPrefix || assignedPreset.name;
+        if (!enforcedVisualDirection.toLowerCase().includes(styleMarker.toLowerCase())) {
+          enforcedVisualDirection = `${styleMarker}. ${enforcedVisualDirection}`;
+          console.log(`[Pipeline S4] Scene ${i + 1}: patched missing style marker "${styleMarker}"`);
+        }
+        const styleSuffix = [
+          assignedPreset.imagePromptPrefix,
+          assignedPreset.imagePromptSuffix,
+        ].filter(Boolean).join(' ');
+        if (styleSuffix && !enforcedVisualDirection.includes(styleSuffix.substring(0, 20))) {
+          enforcedVisualDirection = `${enforcedVisualDirection} ${styleSuffix}`;
+        }
+        const presetNegatives = assignedPreset.negativePromptAdditions.join(', ');
+        if (enforcedNegativePrompt) {
+          const existingLower = enforcedNegativePrompt.toLowerCase();
+          const missing = assignedPreset.negativePromptAdditions.filter(n => !existingLower.includes(n.toLowerCase()));
+          if (missing.length > 0) {
+            enforcedNegativePrompt = `${enforcedNegativePrompt}, ${missing.join(', ')}`;
+          }
+        } else {
+          enforcedNegativePrompt = `${presetNegatives}, text, watermark, logo, words, labels`;
+        }
+      }
+    }
+
     const microScenes = Array.isArray(s4.microScenes) && s4.microScenes.length > 0
-      ? s4.microScenes.map((ms: any, idx: number) => ({
-          id: `${original.id || `scene-${i + 1}`}-micro-${idx + 1}`,
-          narration: ms.narration || '',
-          visualDirection: ms.visualDirection || '',
-          duration: ms.duration || Math.round((original.duration || 10) / s4.microScenes.length),
-          pipelineStage: 4,
-          ...(assignedArtPresetId ? { artPresetId: assignedArtPresetId } : {}),
-        }))
+      ? s4.microScenes.map((ms: any, idx: number) => {
+          let msVisualDirection = ms.visualDirection || '';
+          if (multiStyleMode && assignedArtPresetId) {
+            const assignedPreset = getVisualArtPreset(assignedArtPresetId);
+            if (assignedPreset) {
+              const styleMarker = assignedPreset.styleMarkerPrefix || assignedPreset.name;
+              if (!msVisualDirection.toLowerCase().includes(styleMarker.toLowerCase())) {
+                msVisualDirection = `${styleMarker}. ${msVisualDirection}`;
+              }
+            }
+          }
+          return {
+            id: `${original.id || `scene-${i + 1}`}-micro-${idx + 1}`,
+            narration: ms.narration || '',
+            visualDirection: msVisualDirection,
+            duration: ms.duration || Math.round((original.duration || 10) / s4.microScenes.length),
+            pipelineStage: 4,
+            ...(assignedArtPresetId ? { artPresetId: assignedArtPresetId } : {}),
+          };
+        })
       : undefined;
 
     return {
       ...original,
-      visualDirection: s4.visualDirection,
-      negativePrompt: s4.negativePrompt || undefined,
+      visualDirection: enforcedVisualDirection,
+      negativePrompt: enforcedNegativePrompt,
       cinematicNotes: s4.cinematicNotes || undefined,
       ...(assignedArtPresetId ? { artPresetId: assignedArtPresetId, assignedStyleId: assignedArtPresetId } : {}),
       ...(microScenes ? { microScenes } : {}),
