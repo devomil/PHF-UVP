@@ -1111,3 +1111,114 @@ Return ONLY valid JSON:
     });
   }
 }
+
+const TEXT_HEAVY_NARRATION_KEYWORDS = [
+  'fda-approved', 'fda approved', 'clinically proven', 'clinically tested',
+  'clinical trial', 'clinical study', 'peer-reviewed', 'peer reviewed',
+  'published in', 'journal of', 'certified', 'patented', 'patent-pending',
+  'study shows', 'studies show', 'research shows', 'research proves',
+  'according to', 'data shows', 'data suggests', 'evidence-based',
+  'statistically', 'statistics show', 'percent', '%',
+  'billion', 'million', 'thousand-fold',
+  'approved by', 'endorsed by', 'recommended by',
+  'double-blind', 'placebo-controlled', 'randomized',
+  'gmp certified', 'usda organic', 'non-gmo verified',
+  'iso certified', 'iso 9001', 'ce marked',
+];
+
+export function detectTextHeavyNarration(narration: string): boolean {
+  if (!narration) return false;
+  const lower = narration.toLowerCase();
+  return TEXT_HEAVY_NARRATION_KEYWORDS.some(kw => lower.includes(kw));
+}
+
+export function autoFlagTextHeavyScenes(scenes: any[]): number {
+  let flagged = 0;
+  for (const scene of scenes) {
+    if (scene.type === 'chapter-title') continue;
+    if (scene.textImageEnabled === true) continue;
+    if (detectTextHeavyNarration(scene.narration || '')) {
+      scene.textImageEnabled = true;
+      flagged++;
+      console.log(`[TextDetect] Auto-flagged scene "${scene.id}" for text-image pipeline (narration contains text-heavy keywords)`);
+    }
+  }
+  return flagged;
+}
+
+export async function enhanceChapterScenesWithStage4(
+  scenes: any[],
+  options: {
+    platform: string;
+    targetDuration: number;
+    artPresetId?: string;
+    artPresetIds?: string[];
+    productContext?: PipelineContext['productContext'];
+    scriptPresets?: PipelineContext['scriptPresets'];
+    projectType?: string | null;
+    contentStructure?: string | null;
+  },
+): Promise<any[]> {
+  const contentScenes = scenes.filter((s: any) => s.type !== 'chapter-title');
+  if (contentScenes.length === 0) return scenes;
+
+  const chapterTitleIndices = new Set<number>();
+  scenes.forEach((s: any, i: number) => {
+    if (s.type === 'chapter-title') chapterTitleIndices.add(i);
+  });
+
+  const ctx: PipelineContext = {
+    description: '',
+    platform: options.platform,
+    targetDuration: options.targetDuration,
+    artPresetId: options.artPresetId,
+    artPresetIds: options.artPresetIds,
+    productContext: options.productContext,
+    scriptPresets: options.scriptPresets,
+    projectType: options.projectType,
+    contentStructure: options.contentStructure,
+  };
+
+  const strategy = buildFallbackStrategy(ctx);
+  strategy.primaryEmotion = 'trust';
+  strategy.toneGuidance = ctx.scriptPresets?.scriptTone || 'educational';
+
+  const narrativeScenes: NarrativeScene[] = contentScenes.map((s: any, i: number) => ({
+    order: i + 1,
+    type: s.type || 'content',
+    purpose: '',
+    duration: s.duration || 8,
+    emotionalBeat: s.type === 'hook' ? 'curiosity' : s.type === 'cta' ? 'urgency' : 'engagement',
+    keyMessage: '',
+  }));
+  const narrative: NarrativeArchitecture = {
+    scenes: narrativeScenes,
+    totalDuration: contentScenes.reduce((sum: number, s: any) => sum + (s.duration || 8), 0),
+    pacing: 'steady educational pacing with emotional peaks',
+  };
+
+  const brand = await loadBrandInfo();
+  console.log(`[ChapterStage4] Running Stage 4 visual direction enhancement on ${contentScenes.length} content scenes (skipping ${chapterTitleIndices.size} chapter-title scenes)`);
+
+  const enhanced = await stageFourVisualDirections(contentScenes, strategy, narrative, ctx, brand);
+
+  let contentIdx = 0;
+  const result = scenes.map((s: any, i: number) => {
+    if (chapterTitleIndices.has(i)) return s;
+    const enhancedScene = enhanced[contentIdx] || s;
+    contentIdx++;
+    return {
+      ...s,
+      visualDirection: enhancedScene.visualDirection || s.visualDirection,
+      negativePrompt: enhancedScene.negativePrompt || s.negativePrompt,
+      cinematicNotes: enhancedScene.cinematicNotes || s.cinematicNotes,
+      ...(enhancedScene.microScenes ? { microScenes: enhancedScene.microScenes } : {}),
+      ...(enhancedScene.artPresetId ? { artPresetId: enhancedScene.artPresetId, assignedStyleId: enhancedScene.assignedStyleId } : {}),
+    };
+  });
+
+  const textFlagged = autoFlagTextHeavyScenes(result);
+  console.log(`[ChapterStage4] Stage 4 complete. ${textFlagged} scenes auto-flagged for text-image pipeline`);
+
+  return result;
+}

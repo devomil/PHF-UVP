@@ -2911,6 +2911,24 @@ router.post('/projects/:projectId/generate-script', isAuthenticated, async (req:
       } catch (chapterErr: any) {
         console.warn(`[GenerateScript] Chapter title enhancement failed, using defaults: ${chapterErr.message}`);
       }
+
+      try {
+        const { enhanceChapterScenesWithStage4 } = await import("./script-pipeline-service");
+        console.log(`[GenerateScript] Running Stage 4 cinematic enhancement on chapter content scenes...`);
+        scenes = await enhanceChapterScenesWithStage4(scenes, {
+          platform: platform as string,
+          targetDuration,
+          artPresetId: artPresetIdFromProgress,
+          artPresetIds: artPresetIdsFromProgress,
+          productContext,
+          scriptPresets,
+          projectType,
+          contentStructure,
+        });
+        console.log(`[GenerateScript] Chapter Stage 4 cinematic enhancement complete`);
+      } catch (stage4Err: any) {
+        console.warn(`[GenerateScript] Chapter Stage 4 enhancement failed, using original visual directions: ${stage4Err.message}`);
+      }
     }
 
     projectData.scenes = scenes;

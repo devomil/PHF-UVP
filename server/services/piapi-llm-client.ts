@@ -27,6 +27,7 @@ export interface LLMCompletionOptions {
   messages: LLMMessage[];
   maxTokens: number;
   temperature?: number;
+  timeoutMs?: number;
 }
 
 export interface LLMCompletionResult {
@@ -118,7 +119,8 @@ class PiAPILLMClient {
     };
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 30000);
+    const timeoutMs = options.timeoutMs ?? 60000;
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
       const response = await fetch(PIAPI_LLM_ENDPOINT, {
