@@ -2737,15 +2737,37 @@ router.post('/projects/:projectId/generate-script', isAuthenticated, async (req:
 
     let productContext = (projectData.progress as any)?.productContext || null;
     let artPresetIdFromProgress = (projectData.progress as any)?.artPresetId || undefined;
-    const artPresetIdsFromProgress: string[] | undefined = (projectData.progress as any)?.artPresetIds || undefined;
+    let artPresetIdsFromProgress: string[] | undefined = (projectData.progress as any)?.artPresetIds || undefined;
     if (!artPresetIdFromProgress && !artPresetIdsFromProgress) {
-      artPresetIdFromProgress = 'cinematic-realism';
+      const projectType = (projectData.progress as any)?.projectType || null;
+      const contentStructure = (projectData.progress as any)?.contentStructure || null;
+      const { LONG_STORY_DEFAULT_ART_PRESET_IDS, CONTENT_STRUCTURES: CS_LIST } = await import("../../shared/config/project-types");
+      if (projectType === 'long-story') {
+        artPresetIdsFromProgress = LONG_STORY_DEFAULT_ART_PRESET_IDS;
+        artPresetIdFromProgress = LONG_STORY_DEFAULT_ART_PRESET_IDS[0];
+        console.log(`[GenerateScript] Long Story project — defaulting to multi-style: ${LONG_STORY_DEFAULT_ART_PRESET_IDS.join(', ')}`);
+      } else if (projectType === 'educational' && contentStructure) {
+        const cs = CS_LIST.find((s: any) => s.id === contentStructure);
+        if (cs?.defaultArtPresetIds && cs.defaultArtPresetIds.length > 1) {
+          artPresetIdsFromProgress = cs.defaultArtPresetIds;
+          artPresetIdFromProgress = cs.defaultArtPresetIds[0];
+          console.log(`[GenerateScript] Educational/${contentStructure} — defaulting to multi-style: ${cs.defaultArtPresetIds.join(', ')}`);
+        } else {
+          artPresetIdFromProgress = cs?.defaultArtPreset || 'cinematic-realism';
+          console.log(`[GenerateScript] Educational/${contentStructure} — defaulting to ${artPresetIdFromProgress}`);
+        }
+      } else {
+        artPresetIdFromProgress = 'cinematic-realism';
+        console.log(`[GenerateScript] No art preset selected — defaulting to cinematic-realism`);
+      }
       const progress = (projectData.progress as any) || {};
       progress.artPresetId = artPresetIdFromProgress;
+      if (artPresetIdsFromProgress) {
+        progress.artPresetIds = artPresetIdsFromProgress;
+      }
       await db.update(universalVideoProjects)
         .set({ progress, updatedAt: new Date() })
         .where(eq(universalVideoProjects.projectId, projectId));
-      console.log(`[GenerateScript] No art preset selected — defaulting to cinematic-realism`);
     }
     const productMediaUrl = (projectData.progress as any)?.productMediaUrl || (projectData.assets as any)?.productMediaUrl || null;
     const scriptPresets = (projectData.progress as any)?.scriptPresets || null;
@@ -2997,14 +3019,32 @@ router.post('/projects/:projectId/rerun-stage4', isAuthenticated, async (req: Re
     if (!scenes || scenes.length === 0) return res.status(400).json({ success: false, error: 'No scenes to enhance' });
 
     let artPresetId = (projectData.progress as any)?.artPresetId || undefined;
-    const artPresetIds: string[] | undefined = (projectData.progress as any)?.artPresetIds || undefined;
+    let artPresetIds: string[] | undefined = (projectData.progress as any)?.artPresetIds || undefined;
     if (!artPresetId && !artPresetIds) {
-      artPresetId = 'cinematic-realism';
+      const progressProjectType = (projectData.progress as any)?.projectType || null;
+      const progressContentStructure = (projectData.progress as any)?.contentStructure || null;
+      const { LONG_STORY_DEFAULT_ART_PRESET_IDS, CONTENT_STRUCTURES: CS_LIST } = await import("../../shared/config/project-types");
+      if (progressProjectType === 'long-story') {
+        artPresetIds = LONG_STORY_DEFAULT_ART_PRESET_IDS;
+        artPresetId = LONG_STORY_DEFAULT_ART_PRESET_IDS[0];
+      } else if (progressProjectType === 'educational' && progressContentStructure) {
+        const cs = CS_LIST.find((s: any) => s.id === progressContentStructure);
+        if (cs?.defaultArtPresetIds && cs.defaultArtPresetIds.length > 1) {
+          artPresetIds = cs.defaultArtPresetIds;
+          artPresetId = cs.defaultArtPresetIds[0];
+        } else {
+          artPresetId = cs?.defaultArtPreset || 'cinematic-realism';
+        }
+      } else {
+        artPresetId = 'cinematic-realism';
+      }
       const progress = (projectData.progress as any) || {};
       progress.artPresetId = artPresetId;
+      if (artPresetIds) progress.artPresetIds = artPresetIds;
       await db.update(universalVideoProjects)
         .set({ progress, updatedAt: new Date() })
         .where(eq(universalVideoProjects.projectId, projectId));
+      console.log(`[RerunStage4] No art preset — defaulting to ${artPresetIds ? 'multi-style: ' + artPresetIds.join(', ') : artPresetId}`);
     }
 
     const platform = projectData.outputFormat?.platform || 'YouTube';

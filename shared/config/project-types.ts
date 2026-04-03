@@ -112,15 +112,18 @@ export interface ContentStructureConfig {
   id: string;
   label: string;
   defaultArtPreset: string;
+  defaultArtPresetIds?: string[];
 }
 
 export const CONTENT_STRUCTURES: ContentStructureConfig[] = [
-  { id: 'tutorial', label: 'Tutorial', defaultArtPreset: '3d-illustration' },
-  { id: 'explainer', label: 'Explainer', defaultArtPreset: '2d-line-art' },
-  { id: 'how-to', label: 'How-To', defaultArtPreset: '3d-illustration' },
-  { id: 'product-education', label: 'Product Education', defaultArtPreset: '3d-illustration' },
-  { id: 'health-wellness', label: 'Health & Wellness', defaultArtPreset: 'scientific-medical' },
+  { id: 'tutorial', label: 'Tutorial', defaultArtPreset: '3d-illustration', defaultArtPresetIds: ['3d-illustration', 'cinematic-realism'] },
+  { id: 'explainer', label: 'Explainer', defaultArtPreset: '2d-line-art', defaultArtPresetIds: ['2d-line-art', 'cinematic-realism'] },
+  { id: 'how-to', label: 'How-To', defaultArtPreset: '3d-illustration', defaultArtPresetIds: ['3d-illustration', 'cinematic-realism'] },
+  { id: 'product-education', label: 'Product Education', defaultArtPreset: '3d-illustration', defaultArtPresetIds: ['3d-illustration', 'cinematic-realism', 'scientific-medical'] },
+  { id: 'health-wellness', label: 'Health & Wellness', defaultArtPreset: 'scientific-medical', defaultArtPresetIds: ['cinematic-realism', 'scientific-medical'] },
 ];
+
+export const LONG_STORY_DEFAULT_ART_PRESET_IDS = ['cinematic-realism', '3d-illustration'];
 
 export function getProjectType(id: string): ProjectTypeConfig | null {
   return PROJECT_TYPES[id] || null;

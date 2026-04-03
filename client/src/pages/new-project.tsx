@@ -9,7 +9,7 @@ import { CharacterProfilesPanel } from "@/components/video/character-profiles-pa
 import { AssetSuzzieChat } from "@/components/video/AssetSuzzieChat";
 import { getAvailableStyles } from "@shared/visual-style-config";
 import { getAllVisualArtPresets, isStylizedPreset, type VisualArtPreset } from "@shared/config/visual-art-presets";
-import { getAllProjectTypes, getProjectType, CONTENT_STRUCTURES } from "@shared/config/project-types";
+import { getAllProjectTypes, getProjectType, CONTENT_STRUCTURES, LONG_STORY_DEFAULT_ART_PRESET_IDS } from "@shared/config/project-types";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -291,12 +291,24 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
   }, [artPresetId, artPresetIds]);
 
   useEffect(() => {
-    if (projectTypeId === 'educational' && contentStructure && !artPresetUserOverride) {
+    if (artPresetUserOverride) return;
+    if (projectTypeId === 'educational' && contentStructure) {
       const cs = CONTENT_STRUCTURES.find(s => s.id === contentStructure);
       if (cs) {
-        setArtPresetId(cs.defaultArtPreset);
-        setArtPresetIds([]);
+        if (cs.defaultArtPresetIds && cs.defaultArtPresetIds.length > 1) {
+          setArtPresetId(cs.defaultArtPresetIds[0]);
+          setArtPresetIds(cs.defaultArtPresetIds);
+        } else {
+          setArtPresetId(cs.defaultArtPreset);
+          setArtPresetIds([]);
+        }
       }
+    } else if (projectTypeId === 'long-story') {
+      setArtPresetId(LONG_STORY_DEFAULT_ART_PRESET_IDS[0]);
+      setArtPresetIds(LONG_STORY_DEFAULT_ART_PRESET_IDS);
+    } else {
+      setArtPresetId('auto');
+      setArtPresetIds([]);
     }
   }, [contentStructure, projectTypeId, artPresetUserOverride]);
 
