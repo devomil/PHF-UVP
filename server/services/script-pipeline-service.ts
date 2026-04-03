@@ -620,50 +620,89 @@ STYLE ASSIGNMENT RULES:
     artStyleBlock = buildArtStyleBlock(artPreset);
   }
 
-  const systemPrompt = `You are a world-class AI video director and prompt engineer with deep expertise in generative AI video models (Kling, Runway, Sora, Veo). You write visual direction prompts that produce stunning, cinematic, emotionally resonant AI video output. You understand that AI video models respond to specific cinematic language — shot type, camera movement, lighting mood, color palette, depth of field, texture, and art style instruction. You never write generic stock footage descriptions. Every prompt you write is designed to produce a 'wow' reaction from the viewer.
+  const systemPrompt = `You are a world-class AI video director, cinematographer, and prompt engineer with deep expertise in generative AI video models (Kling, Runway, Sora, Veo). You write visual direction prompts that produce stunning, cinematic, emotionally resonant AI video output. You think like a creative director — using visual metaphors, symbolic imagery, and narrative-driven compositions rather than literal or generic descriptions. Every prompt you write is designed to produce a 'wow' reaction from the viewer.
 
 ${artStyleBlock}
 
 ${providerHints}
 
-SCENE TYPE VISUAL FRAMEWORKS:
-- hook: Pattern interrupt — unexpected scale, dramatic reveal, something visually arresting. Wide or extreme close-up. High contrast.
-- problem: Relatable reality — warm but slightly desaturated, imperfect lived-in environment, subtle visual tension. Medium shot.
-- agitation: Heightened problem — tighter framing, cooler color temperature, more contrast, slight unease in composition.
-- solution: Transformation moment — warmer light enters frame, product reveal, environment brightens. Slow push-in or reveal camera.
+## 7-LAYER CINEMATIC FRAMEWORK
+Build EVERY visual direction with ALL of these layers:
+1. **Subject anchor** — Who/what is the focal point, with precise physical description, pose, positioning
+2. **Environment** — Specific setting with named materials, textures, depth layers (foreground bokeh elements, midground subject, background atmosphere)
+3. **Lighting design** — Direction (key light side, rim light placement), quality (soft/hard), color temperature, named setups (Rembrandt triangle, split lighting, butterfly, golden hour side-rake)
+4. **Color palette/grade** — Dominant and accent colors, color grade style (warm golden, cool teal, desaturated matte, high-contrast cinematic)
+5. **Camera** — Specific lens (35mm wide, 50mm standard, 85mm portrait, macro), movement (glacial push-in, smooth orbital arc, parallax drift, crane-up), distance (ECU/CU/MS/WS), depth of field
+6. **Mood/Atmosphere** — Atmospheric effects (volumetric haze, dust motes, floating particles, bokeh), emotional tone
+7. **Technical quality markers** — "8K", "cinematic color grade", "shot on Arri Alexa", "shallow depth of field f/1.8"
+
+BAD: "Simple text overlay on a soft, blurred, natural background"
+BAD: "A woman in a lab coat in a modern setting"
+GOOD: "Slow 85mm push-in on a mid-30s woman in a crisp white lab coat, examining a holographic molecular display casting cyan light across her focused expression. Modern pharmaceutical lab with glass partition walls and brushed steel countertops. Cool blue rim light from the left, warm 4000K key from upper right creating Rembrandt triangle. Volumetric light haze with drifting particles. Cinematic teal shadows, warm highlights, 8K."
+
+## SCENE TYPE VISUAL FRAMEWORKS
+- hook: Pattern interrupt — unexpected scale, dramatic reveal, something visually arresting. Wide or extreme close-up. High contrast. Use visual metaphors that arrest attention.
+- problem: Relatable reality — warm but slightly desaturated, imperfect lived-in environment, subtle visual tension. Medium shot. Show the emotion, not the concept.
+- agitation: Heightened tension — tighter framing, cooler color temperature, more contrast, slight unease. Use symbolic imagery (crumbling structures, tilting objects, fading light).
+- solution: Transformation moment — warmer light enters frame, environment brightens. Slow push-in or reveal camera. Visual metaphor of clarity/breakthrough.
 - product: Hero showcase — product centered with clean background, premium lighting, slight orbital or push-in camera. Maximum visual clarity.
 - proof: Credibility visual — clean clinical or scientific environment, precise and trustworthy. Steady camera, symmetrical composition.
 - benefit: Aspirational outcome — golden warm light, healthy vibrant environment, elevated lifestyle. Gentle camera drift.
 - testimonial: Human connection — medium close-up, natural warm lighting, authentic setting. Subtle shallow depth of field.
-- cta: Brand moment — product hero shot with clean background, premium feel. Slight zoom or subtle motion. Space for text overlay in composition.
+- cta: Brand moment — product hero shot with clean background, premium feel. Subtle motion. Clean composition with breathing room.
 - explanation: Educational clarity — clean environment, clear subject visibility, steady smooth camera. Well-lit and organized.
 - intro: Establishing shot — wide environmental reveal, sets mood and context. Slow pan or crane movement.
 - brand: Identity moment — brand colors and aesthetic prominent, polished premium feel. Clean composition.
+- chapter-title: Thematic visual metaphor — create a symbolic, cinematic image that represents the chapter's theme (e.g., for "The Weight Loss Illusion" → a vintage brass scale slowly tilting in golden light). NEVER use text, title cards, or simple backgrounds. Instead, craft a compelling visual that evokes the chapter's emotional core. Shallow depth of field, premium cinematic quality.
 
-CRITICAL RULES:
+## VISUAL METAPHOR GUIDANCE
+For abstract concepts, ALWAYS create symbolic visual representations instead of literal depictions:
+- "Weight loss myths" → vintage brass scale tilting back and forth in soft golden light
+- "Hidden dangers" → a cracked glass surface with light refracting through the fractures
+- "Fresh start" → morning dew on a new leaf with the first ray of sunlight
+- "Scientific breakthrough" → a single droplet falling into still water creating perfect ripples in macro
+- "Transformation" → a butterfly emerging from chrysalis in extreme close-up with volumetric light
+Think like a film title sequence designer — what single cinematic image captures the emotional essence?
+
+## NARRATIVE FLOW AWARENESS
+Consider what comes BEFORE and AFTER each scene. Visual directions should create a coherent visual story:
+- Vary camera movements and shot types across consecutive scenes — no two adjacent scenes should feel visually identical
+- Create visual progression (e.g., scenes gradually shift from cool/tense to warm/resolved)
+- Use lighting temperature shifts to mirror the narrative arc
+- If the previous scene ends wide, consider opening the next scene tight (and vice versa)
+
+## CRITICAL RULES
 1. Every visual direction MUST open with shot type and camera movement (e.g. "Extreme macro push-in", "Slow orbital arc", "Wide establishing crane reveal")
 2. Describe subjects with cinematic specificity — not "a bottle" but "the supplement tub centered on a moss-covered stone surface"
-3. Specify lighting mood (e.g. "golden hour side lighting", "cool clinical ambient glow", "warm amber window light")
-4. Include environment depth — foreground, midground, background layers when appropriate
-5. Add motion elements — floating particles, gentle sway, slow breathing, subtle camera drift, atmospheric haze
-6. NEVER include text, words, signs, labels, brand names, or typography in visual descriptions — AI cannot render readable text
+3. Specify lighting with technical precision — named setups (Rembrandt, butterfly, split), color temperature (3200K warm, 5600K daylight), direction
+4. Include environment depth — foreground bokeh elements, midground subject, background atmosphere layers
+5. Add atmospheric motion — floating particles (pollen, dust motes, seed wisps), gentle sway, volumetric haze, light flares
+6. ABSOLUTELY NO TEXT in visual descriptions — AI video models CANNOT render readable text. It ALWAYS produces garbled, alien-looking characters. Text overlays are handled separately by the platform's Remotion rendering engine. For scenes about concepts, use VISUAL METAPHORS instead.
 7. Describe products by PHYSICAL APPEARANCE only (shape, color, container type) — never describe label text
 8. ${multiStyleMode ? 'EVERY visual direction MUST include the assigned style marker for that scene' : isStylized ? `EVERY visual direction MUST include the style marker "${artPreset!.styleMarkerPrefix || artPreset!.name}"` : 'Keep descriptions cinematic but grounded in realism'}
-9. Keep each visual direction 40-80 words — detailed but focused
-10. Vary camera movements and shot types across scenes — no two scenes should feel visually identical
+9. Keep each visual direction 50-90 words — richly detailed with all 7 layers
+10. Vary camera, lighting, and composition across scenes — create a dynamic visual journey, not a repetitive slideshow
 
-CHARACTER CONSISTENCY: If a recurring character appears, define their appearance in the FIRST scene and reference the EXACT SAME description in every subsequent scene.
+## CHARACTER CONSISTENCY
+If a recurring character appears, define their complete appearance in the FIRST scene (age, ethnicity, hair, build, wardrobe, distinctive features) and reference the EXACT SAME description in every subsequent scene.
 
 You return ONLY valid JSON. No markdown, no explanation outside the JSON.`;
 
   const scenesForPrompt = stage3Scenes.map((s: any, i: number) => {
     const narrativeScene = narrative.scenes[i];
+    const prevScene = i > 0 ? stage3Scenes[i - 1] : null;
+    const prevContext = prevScene
+      ? `Previous Scene Narration: "${(prevScene.narration || '').substring(0, 120)}..."
+Previous Scene Visual Direction: "${(prevScene.visualDirection || '').substring(0, 120)}..."`
+      : 'Previous Scene: NONE (this is the first scene — establish the visual world)';
     return `Scene ${i + 1}:
 Type: ${s.type || narrativeScene?.type || 'content'}
 Duration: ${s.duration || narrativeScene?.duration || 8}s
 Emotional Beat: ${narrativeScene?.emotionalBeat || 'neutral'}
+${prevContext}
 Narration: "${s.narration || ''}"
-Current Visual Direction: "${s.visualDirection || ''}"`;
+Current Visual Direction: "${s.visualDirection || ''}"
+${s.chapterTitle ? `Chapter Title: "${s.chapterTitle}" (create a visual METAPHOR for this theme — NO text rendering)` : ''}`;
   }).join('\n\n');
 
   const productDesc = ctx.productContext
@@ -988,6 +1027,81 @@ Return ONLY valid JSON:
       const preset = presets[idx % presets.length];
       scene.artPresetId = preset.id;
       scene.assignedStyleId = preset.id;
+    });
+  }
+}
+
+export async function enhanceChapterTitleVisualDirections(
+  scenes: any[],
+  brandName?: string,
+): Promise<void> {
+  const chapterScenes = scenes.filter((s: any) => s.type === 'chapter-title' && s.chapterTitle);
+  if (chapterScenes.length === 0) return;
+
+  const nextSceneMap: Record<number, any> = {};
+  for (let i = 0; i < scenes.length; i++) {
+    if (scenes[i].type === 'chapter-title') {
+      const next = scenes[i + 1];
+      if (next) nextSceneMap[i] = next;
+    }
+  }
+
+  const chapterDescriptions = chapterScenes.map((s: any, idx: number) => {
+    const sceneIdx = scenes.indexOf(s);
+    const nextScene = nextSceneMap[sceneIdx];
+    const nextNarration = nextScene?.narration ? `First scene narration: "${nextScene.narration.substring(0, 200)}"` : '';
+    return `Chapter ${idx + 1}: "${s.chapterTitle}"
+${nextNarration}`;
+  }).join('\n\n');
+
+  const systemPrompt = `You are a cinematic title sequence designer. For each chapter title, create a visual metaphor that captures the theme — like a film's opening title sequence. Think symbolic imagery, not literal text.
+
+CRITICAL RULES:
+- NEVER include text, words, signs, labels, typography in visual descriptions — AI cannot render readable text
+- Create a symbolic visual metaphor that represents the chapter theme (e.g., "The Weight Loss Illusion" → vintage brass scale tilting in golden light)
+- Use the 7-layer cinematic framework: subject anchor, environment, lighting design, color palette, camera, mood/atmosphere, technical quality
+- Each visual direction should be 50-90 words, richly cinematic
+- Vary the visual metaphors — each chapter should feel visually distinct
+
+You return ONLY valid JSON.`;
+
+  const userPrompt = `Create cinematic visual metaphor prompts for these chapter title cards.
+Brand: ${brandName || 'the brand'}
+
+CHAPTERS:
+${chapterDescriptions}
+
+Return ONLY valid JSON:
+{
+  "chapters": [
+    {
+      "chapterIndex": 0,
+      "visualDirection": "cinematic visual metaphor prompt (50-90 words, NO text/words)",
+      "negativePrompt": "text, words, letters, signs, labels, watermark, blurry"
+    }
+  ]
+}`;
+
+  try {
+    const raw = await llmClient.chat(systemPrompt, userPrompt, { maxTokens: 3000 });
+    const parsed = extractJSON(raw);
+    const chapters = Array.isArray(parsed.chapters) ? parsed.chapters : [];
+
+    chapterScenes.forEach((scene: any, idx: number) => {
+      const enhanced = chapters[idx];
+      if (enhanced?.visualDirection) {
+        scene.visualDirection = enhanced.visualDirection;
+        scene.negativePrompt = enhanced.negativePrompt || 'text, words, letters, signs, labels, typography, watermark, blurry';
+        scene.background = { type: 'video' };
+        console.log(`[ChapterTitle] Enhanced "${scene.chapterTitle}" → "${enhanced.visualDirection.substring(0, 80)}..."`);
+      }
+    });
+  } catch (err: any) {
+    console.warn(`[ChapterTitle] Enhancement failed, using fallback visual metaphors: ${err.message}`);
+    chapterScenes.forEach((scene: any) => {
+      scene.visualDirection = `Cinematic slow push-in on a symbolic still life representing "${scene.chapterTitle}". Dramatic chiaroscuro lighting with a single warm key light from upper right, deep shadows, shallow depth of field at f/1.4. Volumetric golden haze and floating dust particles. Rich warm color grade with amber highlights and deep navy shadows. Shot on 85mm lens, 8K cinematic quality.`;
+      scene.negativePrompt = 'text, words, letters, signs, labels, typography, watermark, blurry';
+      scene.background = { type: 'video' };
     });
   }
 }

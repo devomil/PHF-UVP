@@ -1268,6 +1268,20 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                 </p>
               </div>
             )}
+            {(scene.type === 'chapter-title' || scene.type === 'infographic' || scene.type === 'infographic_diagram' || (scene as any).textImageEnabled) && (
+              <div className="flex items-center gap-2 mt-1">
+                <span className="text-[9px] px-2 py-0.5 rounded-full font-medium border"
+                  style={{ backgroundColor: "rgba(59,130,246,0.12)", color: "rgb(96,165,250)", borderColor: "rgba(59,130,246,0.25)" }}>
+                  Text Image Pipeline
+                </span>
+                {(scene as any).textImageUrl && (
+                  <a href={(scene as any).textImageUrl} target="_blank" rel="noopener noreferrer"
+                    className="text-[9px] underline" style={{ color: "rgb(96,165,250)" }}>
+                    View Generated Image
+                  </a>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Use Own Media */}
@@ -1808,7 +1822,36 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
           </div>
         </div>
 
-
+        {isEditing && (
+          <div className="flex items-center justify-between px-1">
+            <div>
+              <label className="text-[11px] font-medium uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
+                Text Image Pipeline (GPT-Image-1 → I2V)
+              </label>
+              <p className="text-[9px] mt-0.5" style={{ color: "var(--text-muted)" }}>
+                Generates a text-accurate image first, then animates it
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                const newVal = !(scene as any).textImageEnabled;
+                updateSceneMutation.mutate({ textImageEnabled: newVal });
+              }}
+              className="relative w-9 h-5 rounded-full transition-colors"
+              style={{
+                backgroundColor: (scene as any).textImageEnabled ? "rgb(59,130,246)" : "var(--border-subtle)",
+              }}
+            >
+              <span
+                className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform"
+                style={{
+                  left: (scene as any).textImageEnabled ? "18px" : "2px",
+                }}
+              />
+            </button>
+          </div>
+        )}
 
         {/* Content Tag */}
         <div>

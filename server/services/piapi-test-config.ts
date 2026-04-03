@@ -752,7 +752,7 @@ export const PIAPI_TEST_DEFINITIONS: PiAPITestDefinition[] = [
     estimatedTime: '~15s',
     notes: 'Ideogram V2 via PiAPI - excellent at rendering readable text in images',
     disabled: true,
-    disabledReason: 'Ideogram V2 not available on PiAPI - both Qubico/ideogram-v2 and ideogram-v2 model IDs return HTTP 400. Use GPT-Image-1 (OpenAI Direct) for text rendering instead.',
+    disabledReason: 'Ideogram V2 not available on PiAPI - both Qubico/ideogram-v2 and ideogram-v2 model IDs return HTTP 400. TODO: Get API key directly from Ideogram (ideogram.ai) for direct integration. Use GPT-Image-1 (OpenAI Direct) for text rendering in the meantime.',
   },
   {
     id: 'gpt-image-1',

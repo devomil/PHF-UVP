@@ -2888,6 +2888,7 @@ router.post('/projects/:projectId/generate-script', isAuthenticated, async (req:
             transitionOut: { type: 'fade', duration: 0.5 },
             chapterIndex: s.chapterIndex,
             chapterTitle: s.chapterTitle,
+            textImageEnabled: true,
           });
           lastChapterIdx = s.chapterIndex;
         }
@@ -2896,6 +2897,20 @@ router.post('/projects/:projectId/generate-script', isAuthenticated, async (req:
       }
       scenes = scenesWithTitleCards;
       console.log(`[GenerateScript] Tagged ${scenes.length} scenes (incl. ${approvedOutline.length} title cards) across ${approvedOutline.length} chapters`);
+
+      try {
+        const { enhanceChapterTitleVisualDirections } = await import("./script-pipeline-service");
+        let chapterBrandName: string | undefined;
+        try {
+          const ctx = await brandContextService.getVisualDirectionGenerationContext();
+          const nameMatch = ctx?.match(/Brand:\s*(.+)/i);
+          chapterBrandName = nameMatch?.[1]?.trim() || projectData.title;
+        } catch { chapterBrandName = projectData.title; }
+        await enhanceChapterTitleVisualDirections(scenes, chapterBrandName);
+        console.log(`[GenerateScript] Enhanced chapter title visual directions with cinematic metaphors`);
+      } catch (chapterErr: any) {
+        console.warn(`[GenerateScript] Chapter title enhancement failed, using defaults: ${chapterErr.message}`);
+      }
     }
 
     projectData.scenes = scenes;
@@ -2964,7 +2979,7 @@ router.patch('/projects/:projectId/scenes/:sceneId', isAuthenticated, async (req
       return res.status(404).json({ success: false, error: 'Scene not found' });
     }
 
-    const allowedFields = ['narration', 'visualDirection', 'duration', 'type', 'name', 'title', 'searchQuery', 'keyPoints', 'overlayItems', 'microScenes', 'contentTag', 'artPresetId'];
+    const allowedFields = ['narration', 'visualDirection', 'duration', 'type', 'name', 'title', 'searchQuery', 'keyPoints', 'overlayItems', 'microScenes', 'contentTag', 'artPresetId', 'textImageEnabled'];
     for (const field of allowedFields) {
       if (updates[field] !== undefined) {
         (scenes[sceneIndex] as any)[field] = updates[field];

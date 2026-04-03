@@ -592,16 +592,79 @@ class VideoGenerationWorker {
           log.debug(` Job ${job.jobId} could not resolve art preset/content tag: ${(e as any).message}`);
         }
 
-        const finalImageUrl = job.sourceImageUrl || charRefImageUrl || undefined;
+        let textImageUrl: string | undefined;
+        let textImagePromptOverride: string | undefined;
+
+        const hasExplicitSources = !!(job.i2vSettings as any)?.sourceImageUrls?.length;
+        if (!hasSourceImage && !charRefImageUrl && !hasExplicitSources) {
+          try {
+            const { isTextHeavyScene, imageGenerationService } = await import('./image-generation-service');
+            const { getProjectFromDb } = await import('./video-project-db');
+            const projectForTextCheck = await getProjectFromDb(job.projectId);
+            if (projectForTextCheck) {
+              const baseId = job.sceneId.includes('__micro_') ? job.sceneId.split('__micro_')[0] : job.sceneId;
+              const sceneForTextCheck = projectForTextCheck.scenes?.find((s: any) => s.id === baseId);
+              if (sceneForTextCheck && isTextHeavyScene(sceneForTextCheck)) {
+                log.info(`[TextImage] Job ${job.jobId}: Scene ${job.sceneId} detected as text-heavy, generating image via GPT-Image-1 first`);
+
+                const progressTextImg = await storage.updateVideoGenerationJob(job.jobId, {
+                  progress: 40,
+                });
+                this.notifyJobUpdate(progressTextImg);
+
+                const chapterTitleText = sceneForTextCheck.chapterTitle || sceneForTextCheck.textOverlays?.[0]?.text || '';
+                const textContent = chapterTitleText
+                  ? `Display the text "${chapterTitleText}" prominently.`
+                  : '';
+                const textImgPrompt = `Create a cinematic title card image. ${textContent} ${job.prompt || charEnhancedPrompt}. The text must be perfectly legible, sharp, and professionally typeset. Use cinematic lighting with subtle depth of field. High-end motion graphics style.`;
+
+                const textImage = await imageGenerationService.generateWithOpenAI({
+                  prompt: textImgPrompt,
+                  width: 1536,
+                  height: 1024,
+                });
+
+                textImageUrl = textImage.url;
+                textImagePromptOverride = "Subtle cinematic motion: gentle camera push-in with soft parallax depth layers, atmospheric particles drifting slowly. The text and design elements remain sharp and legible throughout. Smooth, professional broadcast-quality motion.";
+
+                log.info(`[TextImage] Job ${job.jobId}: GPT-Image-1 generated text image: ${textImageUrl.substring(0, 80)}...`);
+
+                try {
+                  const found = await findSceneIndex(job.projectId, baseId);
+                  if (found) {
+                    const idx = found.sceneIndex.toString();
+                    await db.update(universalVideoProjects)
+                      .set({
+                        scenes: sql`jsonb_set(
+                          ${universalVideoProjects.scenes},
+                          ${`{${idx},textImageUrl}`}::text[],
+                          ${JSON.stringify(textImageUrl)}::jsonb,
+                          true
+                        )`,
+                      })
+                      .where(eq(universalVideoProjects.projectId, job.projectId));
+                    log.info(`[TextImage] Saved text image URL to scene ${baseId}`);
+                  }
+                } catch (saveErr: any) {
+                  log.warn(`[TextImage] Could not save text image to scene data: ${saveErr.message}`);
+                }
+              }
+            }
+          } catch (textImgErr: any) {
+            log.warn(`[TextImage] Text-image pre-step failed for job ${job.jobId}, falling back to normal generation: ${textImgErr.message}`);
+          }
+        }
+
+        const finalImageUrl = textImageUrl || job.sourceImageUrl || charRefImageUrl || undefined;
         const finalImageUrls = (job.i2vSettings as any)?.sourceImageUrls || (charRefImageUrls && charRefImageUrls.length > 1 ? charRefImageUrls : undefined);
 
         const result = await aiVideoService.generateVideo({
-          prompt: charEnhancedPrompt,
+          prompt: textImagePromptOverride || charEnhancedPrompt,
           duration: job.duration || 6,
           aspectRatio,
           sceneType: job.sceneType || "hook",
           preferredProvider: provider,
-          negativePrompt: enhancedNegativePrompt,
+          negativePrompt: textImageUrl ? (job.negativePrompt || "") : enhancedNegativePrompt,
           visualStyle: job.style || "professional",
           imageUrl: finalImageUrl,
           imageUrls: finalImageUrls,

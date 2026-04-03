@@ -896,6 +896,119 @@ class ImageGenerationService {
     console.warn(`[ImageGen] PiAPI task ${taskId} timed out`);
     return null;
   }
+
+  async generateWithOpenAI(options: ImageGenerationOptions): Promise<GeneratedImage> {
+    const openaiKey = process.env.OPENAI_API_KEY;
+    if (!openaiKey) {
+      throw new Error('OPENAI_API_KEY not configured for GPT-Image-1 generation');
+    }
+
+    const width = options.width || 1024;
+    const height = options.height || 1024;
+    const size = width === height ? '1024x1024' : (width > height ? '1536x1024' : '1024x1536');
+
+    console.log(`[ImageGen] GPT-Image-1: Generating text-capable image (${size})`);
+
+    try {
+      const body: Record<string, any> = {
+        model: 'gpt-image-1',
+        prompt: options.prompt,
+        n: 1,
+        size,
+        quality: 'high',
+        output_format: 'png',
+      };
+
+      const response = await fetch('https://api.openai.com/v1/images/generations', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${openaiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`OpenAI Image API error: ${response.status} - ${errorText.substring(0, 300)}`);
+      }
+
+      const data: any = await response.json();
+      const imageEntry = data.data?.[0];
+      let imageUrl = imageEntry?.url;
+
+      if (!imageUrl && imageEntry?.b64_json) {
+        const { S3Client, PutObjectCommand } = await import('@aws-sdk/client-s3');
+        const s3Client = new S3Client({
+          region: process.env.AWS_REGION || 'us-east-2',
+          credentials: {
+            accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
+            secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
+          },
+        });
+        const buffer = Buffer.from(imageEntry.b64_json, 'base64');
+        const key = `text-images/gpt-image-${Date.now()}-${Math.random().toString(36).substring(7)}.png`;
+        const bucket = process.env.AWS_S3_BUCKET || 'remotionlambda-useast2-1vc2l6a56o';
+
+        await s3Client.send(new PutObjectCommand({
+          Bucket: bucket,
+          Key: key,
+          Body: buffer,
+          ContentType: 'image/png',
+          ACL: 'public-read',
+        }));
+
+        imageUrl = `https://${bucket}.s3.amazonaws.com/${key}`;
+        console.log(`[ImageGen] GPT-Image-1: Uploaded base64 image to S3: ${imageUrl}`);
+      }
+
+      if (!imageUrl) {
+        throw new Error('OpenAI returned no image URL or base64 data');
+      }
+
+      console.log(`[ImageGen] GPT-Image-1: Generated successfully: ${imageUrl.substring(0, 80)}...`);
+
+      return {
+        url: imageUrl,
+        provider: 'gpt-image-1',
+        prompt: options.prompt,
+        width,
+        height,
+        cost: 0.04,
+        generationType: 'txt2img',
+      };
+    } catch (error: any) {
+      console.error(`[ImageGen] GPT-Image-1 failed:`, error.message);
+      throw error;
+    }
+  }
+}
+
+export function isTextHeavyScene(scene: any): boolean {
+  if (scene.type === 'chapter-title') return true;
+  if (scene.type === 'infographic' || scene.type === 'infographic_diagram') return true;
+
+  if (scene.textImageEnabled === true) return true;
+  if (scene.textImageEnabled === false) return false;
+
+  const visualDir = (scene.visualDirection || '').toLowerCase();
+  const textKeywords = [
+    'text overlay', 'title card', 'title screen', 'text on screen',
+    'words appear', 'text reading', 'text saying', 'display text',
+    'show text', 'typography', 'lettering', 'headline',
+    'with the text', 'with text', 'words on',
+    'stat card', 'statistics card', 'data card',
+    'lower third', 'callout', 'label reading',
+  ];
+
+  if (textKeywords.some(kw => visualDir.includes(kw))) return true;
+
+  const overlays = scene.textOverlays || [];
+  if (overlays.length > 0 && overlays.some((o: any) => o.text && o.text.length > 3 && o.style === 'title')) {
+    return true;
+  }
+
+  return false;
 }
 
 export const imageGenerationService = new ImageGenerationService();
