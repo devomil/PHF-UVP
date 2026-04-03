@@ -917,3 +917,77 @@ export async function runScriptPipeline(ctx: PipelineContext): Promise<PipelineR
     }
   }
 }
+
+export async function assignMultiStyleToScenes(
+  scenes: any[],
+  artPresetIds: string[],
+): Promise<void> {
+  const presets = artPresetIds.map(id => getVisualArtPreset(id)).filter(Boolean) as VisualArtPreset[];
+  if (presets.length < 2) return;
+
+  const contentScenes = scenes.filter((s: any) => s.type !== 'chapter-title');
+  if (contentScenes.length === 0) return;
+
+  const styleOptions = presets.map(p => `"${p.id}" (${p.name}: ${p.description})`).join('\n');
+  const sceneDescriptions = contentScenes.map((s: any, i: number) =>
+    `Scene ${i + 1} [type: ${s.type || 'content'}]: "${(s.narration || '').substring(0, 150)}"`
+  ).join('\n');
+
+  const prompt = `Assign the best-fitting art style to each scene based on its narration content and scene type.
+
+AVAILABLE STYLES:
+${styleOptions}
+
+SCENES:
+${sceneDescriptions}
+
+RULES:
+- Match scientific/medical/technical content to scientific or clinical styles
+- Match emotional/human/lifestyle content to cinematic or warm styles
+- Match abstract/conceptual/process content to illustration or animated styles
+- Ensure visual variety — distribute styles meaningfully, don't assign all one style unless content demands it
+
+Return ONLY valid JSON:
+{"assignments": [{"scene": 1, "styleId": "style-id"}, ...]}`;
+
+  try {
+    const raw = await llmClient.chat(
+      'You are a visual style assignment expert. Return only valid JSON.',
+      prompt,
+      2000,
+    );
+    const parsed = extractJSON(raw);
+    const assignments = Array.isArray(parsed.assignments) ? parsed.assignments : [];
+    const validIds = new Set(presets.map(p => p.id));
+
+    for (const assignment of assignments) {
+      const idx = (assignment.scene || 0) - 1;
+      if (idx >= 0 && idx < contentScenes.length && assignment.styleId && validIds.has(assignment.styleId)) {
+        const scene = contentScenes[idx];
+        scene.artPresetId = assignment.styleId;
+        scene.assignedStyleId = assignment.styleId;
+
+        const preset = getVisualArtPreset(assignment.styleId)!;
+        const styleMarker = preset.styleMarkerPrefix || preset.name;
+        if (scene.visualDirection && !scene.visualDirection.toLowerCase().includes(styleMarker.toLowerCase())) {
+          scene.visualDirection = `${styleMarker}. ${scene.visualDirection}`;
+        }
+        const presetNegatives = preset.negativePromptAdditions.join(', ');
+        if (!scene.negativePrompt) {
+          scene.negativePrompt = `${presetNegatives}, text, watermark, logo, words, labels`;
+        }
+      }
+    }
+
+    const styleCounts: Record<string, number> = {};
+    contentScenes.forEach((s: any) => { if (s.artPresetId) styleCounts[s.artPresetId] = (styleCounts[s.artPresetId] || 0) + 1; });
+    console.log(`[MultiStyleAssign] Intelligent assignment: ${Object.entries(styleCounts).map(([id, c]) => `${id}(${c})`).join(', ')}`);
+  } catch (err: any) {
+    console.warn(`[MultiStyleAssign] LLM assignment failed, using round-robin fallback: ${err.message}`);
+    contentScenes.forEach((scene: any, idx: number) => {
+      const preset = presets[idx % presets.length];
+      scene.artPresetId = preset.id;
+      scene.assignedStyleId = preset.id;
+    });
+  }
+}

@@ -1858,8 +1858,8 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
             <Palette className="w-3 h-3" />
             Art Style
             {pipelineAssignedStyle && sceneArtPreset === pipelineAssignedStyle && <span className="text-[10px] normal-case tracking-normal px-1.5 py-0.5 rounded-full" style={{ color: 'rgb(129,230,217)', background: 'rgba(129,230,217,0.1)', border: '1px solid rgba(129,230,217,0.2)' }}>Smart Mix</span>}
-            {sceneArtPreset !== 'project' && !pipelineAssignedStyle && <span className="text-[10px] normal-case tracking-normal" style={{ color: 'rgb(167,139,250)' }}>(scene override)</span>}
-            {sceneArtPreset !== 'project' && pipelineAssignedStyle && sceneArtPreset !== pipelineAssignedStyle && <span className="text-[10px] normal-case tracking-normal" style={{ color: 'rgb(167,139,250)' }}>(scene override)</span>}
+            {pipelineAssignedStyle && sceneArtPreset !== pipelineAssignedStyle && <span className="text-[10px] normal-case tracking-normal" style={{ color: 'rgb(167,139,250)' }}>(overridden)</span>}
+            {!pipelineAssignedStyle && sceneArtPreset !== 'project' && <span className="text-[10px] normal-case tracking-normal" style={{ color: 'rgb(167,139,250)' }}>(scene override)</span>}
           </label>
           <div className="flex gap-2 overflow-x-auto pb-1.5 -mx-1 px-1" style={{ scrollbarWidth: "thin" }}>
             <button
@@ -2676,7 +2676,8 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                           <Palette className="w-3 h-3 text-white/50" />
                           <span className="text-[11px] font-medium text-white/50">Art Style</span>
                           {pipelineAssignedStyle && sceneArtPreset === pipelineAssignedStyle && <span className="text-[9px] px-1.5 py-0.5 rounded-full" style={{ color: 'rgb(129,230,217)', background: 'rgba(129,230,217,0.1)', border: '1px solid rgba(129,230,217,0.2)' }}>Smart Mix</span>}
-                          {sceneArtPreset !== 'project' && (!pipelineAssignedStyle || sceneArtPreset !== pipelineAssignedStyle) && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/25">Override</span>}
+                          {pipelineAssignedStyle && sceneArtPreset !== pipelineAssignedStyle && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/25">Overridden</span>}
+                          {!pipelineAssignedStyle && sceneArtPreset !== 'project' && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/25">Override</span>}
                         </div>
                         <div className="flex gap-1.5 overflow-x-auto pb-1.5" style={{ scrollbarWidth: "thin" }}>
                           <button
