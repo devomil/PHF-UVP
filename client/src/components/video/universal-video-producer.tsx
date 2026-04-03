@@ -48,7 +48,7 @@ import {
   Download, RefreshCw, Settings, ChevronDown, ChevronUp, Upload, X, Star,
   FolderOpen, Plus, Minus, Eye, Layers, Pencil, Save, Music, Mic, VolumeX,
   Undo2, Redo2, GripVertical, ThumbsUp, ThumbsDown, XCircle, ShieldCheck, Copy, Check,
-  Replace, ArrowLeftRight, MapPin, Timer, AlertCircle, Server, SkipForward
+  Replace, ArrowLeftRight, MapPin, Timer, AlertCircle, Server, SkipForward, Film
 } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -1477,6 +1477,8 @@ function ScenePreview({
   const [sceneFilter, setSceneFilter] = useState<'all' | 'needs_review' | 'approved' | 'rejected'>('all');
   const [bulkRegeneratingVideos, setBulkRegeneratingVideos] = useState(false);
   const [bulkRegenerateProgress, setBulkRegenerateProgress] = useState({ current: 0, total: 0 });
+  const [cinematicFlowRunning, setCinematicFlowRunning] = useState(false);
+  const [cinematicFlowProgress, setCinematicFlowProgress] = useState({ current: 0, total: 0 });
   const [overlayPreviewMode, setOverlayPreviewMode] = useState<Record<string, boolean>>({});
   const [previewOverlayConfig, setPreviewOverlayConfig] = useState<Record<string, OverlayConfig>>({});
   const [overlaysExpanded, setOverlaysExpanded] = useState<Record<string, boolean>>({});
@@ -2460,6 +2462,103 @@ function ScenePreview({
     }
   };
 
+  const startCinematicFlow = async () => {
+    if (!projectId || cinematicFlowRunning || bulkRegeneratingVideos) return;
+
+    setCinematicFlowRunning(true);
+    setCinematicFlowProgress({ current: 0, total: scenes.length });
+
+    toast({
+      title: 'Cinematic Flow Mode',
+      description: `Starting sequential scene-chained regeneration for ${scenes.length} scenes. Each scene will use the previous scene's last frame for visual continuity.`
+    });
+
+    try {
+      const res = await fetch(`/api/universal-video/${projectId}/cinematic-flow-regenerate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({})
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        const pollStatus = async () => {
+          let completed = false;
+          let polls = 0;
+          const maxPolls = 720;
+
+          while (!completed && polls < maxPolls) {
+            polls++;
+            await new Promise(resolve => setTimeout(resolve, 5000));
+
+            try {
+              const statusRes = await fetch(
+                `/api/universal-video/${projectId}/cinematic-flow-regenerate/status`,
+                { credentials: 'include' }
+              );
+              const statusData = await statusRes.json();
+
+              if (statusData.success) {
+                setCinematicFlowProgress({
+                  current: (statusData.completed || 0) + (statusData.failed || 0),
+                  total: statusData.total || scenes.length
+                });
+
+                if (statusData.status === 'completed' || statusData.status === 'failed') {
+                  completed = true;
+                  if (statusData.failed > 0 && statusData.completed > 0) {
+                    toast({
+                      title: 'Cinematic Flow completed with issues',
+                      description: `${statusData.completed} scenes generated, ${statusData.failed} failed.`,
+                      variant: 'destructive'
+                    });
+                  } else if (statusData.status === 'failed') {
+                    toast({
+                      title: 'Cinematic Flow failed',
+                      description: statusData.errors?.[0] || 'All scenes failed',
+                      variant: 'destructive'
+                    });
+                  } else {
+                    toast({
+                      title: 'Cinematic Flow complete!',
+                      description: `${statusData.completed} scenes generated with visual continuity. Refreshing...`
+                    });
+                  }
+                  onSceneUpdate?.();
+                  queryClient.invalidateQueries({ queryKey: ['/api/universal-video/projects', projectId] });
+                  setTimeout(() => { window.location.reload(); }, 1500);
+                }
+              }
+            } catch (err) {
+              console.error('[cinematicFlow] Poll error:', err);
+            }
+          }
+
+          setCinematicFlowRunning(false);
+          setCinematicFlowProgress({ current: 0, total: 0 });
+        };
+
+        pollStatus();
+      } else {
+        toast({
+          title: 'Cinematic Flow failed to start',
+          description: data.error || 'Unknown error',
+          variant: 'destructive'
+        });
+        setCinematicFlowRunning(false);
+      }
+    } catch (err: any) {
+      console.error('[cinematicFlow] Error:', err);
+      toast({
+        title: 'Error',
+        description: err.message,
+        variant: 'destructive'
+      });
+      setCinematicFlowRunning(false);
+    }
+  };
+
   const switchBackground = async (sceneId: string, preferVideo: boolean) => {
     if (!projectId) return;
     setRegenerating(`switch-${sceneId}`);
@@ -2698,12 +2797,32 @@ function ScenePreview({
         <XCircle className="w-3 h-3 mr-1" /> Rejected ({statusCounts.rejected})
       </Button>
       
-      <div className="ml-auto">
+      <div className="ml-auto flex items-center gap-2">
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={startCinematicFlow}
+          disabled={cinematicFlowRunning || bulkRegeneratingVideos || scenes.length === 0}
+          className="border-purple-400 text-purple-700 hover:bg-purple-50"
+          title="Regenerate all scenes sequentially, using each scene's last frame as the starting point for the next scene to maintain visual continuity"
+        >
+          {cinematicFlowRunning ? (
+            <>
+              <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+              Flow {cinematicFlowProgress.current}/{cinematicFlowProgress.total}...
+            </>
+          ) : (
+            <>
+              <Film className="w-3 h-3 mr-1" />
+              Cinematic Flow
+            </>
+          )}
+        </Button>
         <Button
           size="sm"
           variant="outline"
           onClick={regenerateAllVideos}
-          disabled={bulkRegeneratingVideos || scenes.length === 0}
+          disabled={bulkRegeneratingVideos || cinematicFlowRunning || scenes.length === 0}
           className="border-blue-400 text-blue-700 hover:bg-blue-50"
           data-testid="button-regenerate-all-videos"
         >

@@ -5636,8 +5636,8 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, asy
       const sceneArtPreset = sceneArtPresetId ? getPreset(sceneArtPresetId) : null;
       const isStylizedScene = sceneArtPresetId ? isStylizedCheck(sceneArtPresetId) : false;
 
-      if (isStylizedScene && sceneArtPreset && sceneArtPreset.generationStrategy === 'i2v') {
-        console.log(`[Phase9B-Async] Stylized art preset "${sceneArtPreset.name}" requires image-first I2V`);
+      if (sceneArtPreset && sceneArtPreset.generationStrategy === 'i2v') {
+        console.log(`[Phase9B-Async] Art preset "${sceneArtPreset.name}" requires image-first I2V (universal pipeline)`);
 
         const existingImage = scene.assets?.imageUrl;
         if (existingImage) {
@@ -5651,8 +5651,10 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, asy
             const { fal } = await import("@fal-ai/client");
             fal.config({ credentials: falKey });
             const { sanitizePromptForAI } = await import('../services/prompt-sanitizer');
-            const sanitized = sanitizePromptForAI(prompt, scene.type || 'content');
-            const imagePrompt = `${sceneArtPreset.imagePromptPrefix} ${sanitized.cleanPrompt}, ${sceneArtPreset.imagePromptSuffix}`;
+            const sceneImagePrompt = (scene as any).imagePrompt;
+            const imagePrompt = sceneImagePrompt
+              ? sceneImagePrompt
+              : `${sceneArtPreset.imagePromptPrefix} ${sanitizePromptForAI(prompt, scene.type || 'content').cleanPrompt}, ${sceneArtPreset.imagePromptSuffix}`;
 
             const projectAR = (projectData as any).outputFormat?.aspectRatio || (projectData as any).settings?.aspectRatio || '16:9';
             const falSize = projectAR === '9:16' ? 'portrait_16_9' as const
@@ -5698,6 +5700,18 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, asy
       console.log(`[Phase9B-Async] ✓ T2V mode - will generate from text prompt only`);
     }
 
+    const sceneMotionPrompt = (scene as any).motionPrompt;
+    const effectivePrompt = (finalSourceImageUrl && sceneMotionPrompt) ? sceneMotionPrompt : prompt;
+    if (finalSourceImageUrl && sceneMotionPrompt) {
+      console.log(`[Phase9B-Async] Using motionPrompt for I2V: "${sceneMotionPrompt.substring(0, 80)}..."`);
+    }
+
+    const sceneProviderHint = (scene as any).providerHint;
+    const effectiveProvider = provider || undefined;
+    if (!provider && sceneProviderHint) {
+      console.log(`[Phase9B-Async] Pipeline providerHint available: ${sceneProviderHint} (passed as preference, not strict lock)`);
+    }
+
     let finalSourceImageUrls: string[] | undefined = undefined;
     const sceneRefImages = (scene as any).assets?.referenceImages as string[] | undefined;
     const allRefImages = (reqImageUrls && Array.isArray(reqImageUrls) && reqImageUrls.length > 0)
@@ -5719,13 +5733,11 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, asy
       }
     }
     
-    // Phase 16: Normalize motion control - 'auto' means no override (use intelligent defaults)
-    // Intensity normalized from UI's 0-100 to backend's 0-1 scale
     let normalizedMotionControl: { camera_movement: string; intensity: number } | undefined = undefined;
     if (motionControl && motionControl.cameraMovement && motionControl.cameraMovement !== 'auto') {
       normalizedMotionControl = {
         camera_movement: motionControl.cameraMovement,
-        intensity: (motionControl.intensity ?? 50) / 100, // Normalize 0-100 to 0-1
+        intensity: (motionControl.intensity ?? 50) / 100,
       };
       console.log(`[Phase16] Motion control override: ${normalizedMotionControl.camera_movement} @ ${normalizedMotionControl.intensity}`);
     } else {
@@ -5735,8 +5747,8 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, asy
     const job = await videoGenerationWorker.createJob({
       projectId,
       sceneId,
-      provider: provider || undefined,
-      prompt,
+      provider: effectiveProvider,
+      prompt: effectivePrompt,
       fallbackPrompt,
       duration: scene.duration || 6,
       aspectRatio: (projectData as any).outputFormat?.aspectRatio || (projectData as any).settings?.aspectRatio || '16:9',
@@ -5809,11 +5821,11 @@ router.post('/:projectId/scenes/:sceneId/micro-scene/:microSceneIndex/regenerate
     const artPreset = projectArtPresetId ? getVisualArtPreset(projectArtPresetId) : null;
     const isStylizedArt = projectArtPresetId ? isStylizedPreset(projectArtPresetId) : false;
     console.log(`[MicroScene-Regen] Art preset: ${projectArtPresetId || 'none'} (${artPreset?.name || 'N/A'}), stylized: ${isStylizedArt}, strategy: ${artPreset?.generationStrategy || 'N/A'}, generationMode: ${generationMode || 'auto'}`);
-    const needsImageFirst = isStylizedArt && artPreset && artPreset.generationStrategy === 'i2v'
+    const needsImageFirst = artPreset && artPreset.generationStrategy === 'i2v'
       && !finalSourceImageUrl && generationMode !== 't2v';
 
     if (needsImageFirst) {
-      console.log(`[MicroScene-Regen] Stylized art preset "${artPreset!.name}" requires image-first I2V — generating FRESH intermediate image`);
+      console.log(`[MicroScene-Regen] Art preset "${artPreset!.name}" requires image-first I2V — generating FRESH intermediate image`);
 
       let stylizedImageUrl: string | undefined = undefined;
 
@@ -5824,8 +5836,11 @@ router.post('/:projectId/scenes/:sceneId/micro-scene/:microSceneIndex/regenerate
         const { fal } = await import("@fal-ai/client");
         fal.config({ credentials: falKey });
         const { sanitizePromptForAI } = await import('../services/prompt-sanitizer');
-        const sanitized = sanitizePromptForAI(prompt, scene.type || 'content');
-        const imagePrompt = `${artPreset!.imagePromptPrefix} ${sanitized.cleanPrompt}, ${artPreset!.imagePromptSuffix}`;
+        const msData = (scene as any).microScenes?.[msIdx];
+        const msImagePrompt = msData?.imagePrompt;
+        const imagePrompt = msImagePrompt
+          ? msImagePrompt
+          : `${artPreset!.imagePromptPrefix} ${sanitizePromptForAI(prompt, scene.type || 'content').cleanPrompt}, ${artPreset!.imagePromptSuffix}`;
 
         const projectAspectRatio = (projectData as any).outputFormat?.aspectRatio || (projectData as any).settings?.aspectRatio || '16:9';
         const falSize = projectAspectRatio === '9:16' ? 'portrait_16_9' as const
@@ -5886,11 +5901,23 @@ router.post('/:projectId/scenes/:sceneId/micro-scene/:microSceneIndex/regenerate
 
     const { videoGenerationWorker } = await import('../services/video-generation-worker');
 
+    const msMotionPrompt = msData?.motionPrompt || (scene as any).motionPrompt;
+    const effectiveMsPrompt = (finalSourceImageUrl && msMotionPrompt) ? msMotionPrompt : prompt;
+    if (finalSourceImageUrl && msMotionPrompt) {
+      console.log(`[MicroScene-Regen] Using motionPrompt for I2V: "${msMotionPrompt.substring(0, 80)}..."`);
+    }
+
+    const msProviderHint = msData?.providerHint || (scene as any).providerHint;
+    const effectiveMsProvider = provider || undefined;
+    if (!provider && msProviderHint) {
+      console.log(`[MicroScene-Regen] Pipeline providerHint: ${msProviderHint} (preference, not strict lock)`);
+    }
+
     const job = await videoGenerationWorker.createJob({
       projectId,
       sceneId: `${sceneId}__micro_${msIdx}`,
-      provider: provider || undefined,
-      prompt,
+      provider: effectiveMsProvider,
+      prompt: effectiveMsPrompt,
       fallbackPrompt: ms.narration || 'professional video',
       duration: ms.duration || 5,
       aspectRatio: (projectData as any).outputFormat?.aspectRatio || (projectData as any).settings?.aspectRatio || '16:9',
@@ -5900,7 +5927,7 @@ router.post('/:projectId/scenes/:sceneId/micro-scene/:microSceneIndex/regenerate
       sceneType: scene.type || 'content',
     });
 
-    console.log(`[MicroScene-Regen] Created job ${job.jobId} for micro-scene ${msIdx}${finalSourceImageUrl ? ' (I2V with stylized image)' : ' (T2V)'}`);
+    console.log(`[MicroScene-Regen] Created job ${job.jobId} for micro-scene ${msIdx}${finalSourceImageUrl ? ' (I2V with image)' : ' (T2V)'}`);
 
     return res.json({
       success: true,
@@ -5943,7 +5970,7 @@ router.post('/:projectId/scenes/:sceneId/regenerate-all-micro-scene-videos', isA
     const projectArtPresetId = (scene as any).artPresetId || (projectData as any).progress?.artPresetId || (projectData as any).artPresetId;
     const artPreset = projectArtPresetId ? getVisualArtPreset(projectArtPresetId) : null;
     const isStylizedArt = projectArtPresetId ? isStylizedPreset(projectArtPresetId) : false;
-    const needsImageFirst = isStylizedArt && artPreset && artPreset.generationStrategy === 'i2v'
+    const needsImageFirst = artPreset && artPreset.generationStrategy === 'i2v'
       && generationMode !== 't2v';
 
     console.log(`[BatchMicroRegen] Regenerating ALL ${microScenes.length} micro-scenes for scene ${sceneId}`);
@@ -5970,9 +5997,11 @@ router.post('/:projectId/scenes/:sceneId/regenerate-all-micro-scene-videos', isA
         for (let i = 0; i < microScenes.length; i++) {
           const ms = microScenes[i];
 
+          const msImagePromptFromPipeline = ms.imagePrompt;
           const msPrompt = ms.visualDirection || scene.visualDirection || 'Professional video';
-          const sanitized = sanitizePromptForAI(msPrompt, scene.type || 'content');
-          const imagePrompt = `${artPreset!.imagePromptPrefix} ${sanitized.cleanPrompt}, ${artPreset!.imagePromptSuffix}`;
+          const imagePrompt = msImagePromptFromPipeline
+            ? msImagePromptFromPipeline
+            : `${artPreset!.imagePromptPrefix} ${sanitizePromptForAI(msPrompt, scene.type || 'content').cleanPrompt}, ${artPreset!.imagePromptSuffix}`;
 
           let generated = false;
           for (let attempt = 0; attempt < 2; attempt++) {
@@ -6032,6 +6061,12 @@ router.post('/:projectId/scenes/:sceneId/regenerate-all-micro-scene-videos', isA
       const ms = microScenes[i];
       const msPrompt = ms.visualDirection || scene.visualDirection || 'Professional video';
 
+      const msMotionPrompt = ms.motionPrompt || (scene as any).motionPrompt;
+      const effectiveBatchPrompt = (msSourceImages[i] && msMotionPrompt) ? msMotionPrompt : msPrompt;
+
+      const msProviderHint = ms.providerHint || (scene as any).providerHint;
+      const effectiveBatchProvider = provider || undefined;
+
       const jobI2vSettings: any = {};
       if (projectArtPresetId) {
         jobI2vSettings.snapshotArtPresetId = projectArtPresetId;
@@ -6040,8 +6075,8 @@ router.post('/:projectId/scenes/:sceneId/regenerate-all-micro-scene-videos', isA
       const job = await videoGenerationWorker.createJob({
         projectId,
         sceneId: `${sceneId}__micro_${i}`,
-        provider: provider || undefined,
-        prompt: msPrompt,
+        provider: effectiveBatchProvider,
+        prompt: effectiveBatchPrompt,
         fallbackPrompt: ms.narration || 'professional video',
         duration: ms.duration || 5,
         aspectRatio: projectAspectRatio,
@@ -6890,6 +6925,284 @@ router.get('/:projectId/regenerate-all-videos/status', isAuthenticated, async (r
     });
   } catch (error: any) {
     console.error('[UniversalVideo] Bulk regeneration status error:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+const cinematicFlowStatus: Map<string, {
+  status: 'running' | 'completed' | 'failed';
+  total: number;
+  completed: number;
+  failed: number;
+  currentScene: string;
+  errors: string[];
+  startedAt: Date;
+}> = new Map();
+
+async function extractLastFrame(videoUrl: string): Promise<string | undefined> {
+  try {
+    const { S3Client, PutObjectCommand } = await import('@aws-sdk/client-s3');
+    const { execFileSync } = await import('child_process');
+    const fs = await import('fs');
+    const path = await import('path');
+    const os = await import('os');
+
+    try {
+      const parsed = new URL(videoUrl);
+      if (!['https:', 'http:'].includes(parsed.protocol)) {
+        throw new Error('Invalid video URL protocol');
+      }
+    } catch {
+      throw new Error('Invalid video URL');
+    }
+
+    const tmpDir = os.tmpdir();
+    const tmpVideo = path.join(tmpDir, `cinflow-${Date.now()}.mp4`);
+    const tmpFrame = path.join(tmpDir, `cinflow-frame-${Date.now()}.jpg`);
+
+    execFileSync('curl', ['-sL', '-o', tmpVideo, videoUrl], { timeout: 30000 });
+
+    const durationStr = execFileSync('ffprobe', [
+      '-v', 'error', '-show_entries', 'format=duration',
+      '-of', 'default=noprint_wrappers=1:nokey=1', tmpVideo
+    ], { timeout: 10000 }).toString().trim();
+    const duration = parseFloat(durationStr);
+    if (isNaN(duration) || duration <= 0) {
+      throw new Error('Could not determine video duration');
+    }
+
+    const lastFrameTime = Math.max(0, duration - 0.1);
+    execFileSync('ffmpeg', [
+      '-y', '-ss', String(lastFrameTime), '-i', tmpVideo,
+      '-vframes', '1', '-q:v', '2', tmpFrame
+    ], { timeout: 15000 });
+
+    if (!fs.existsSync(tmpFrame)) {
+      throw new Error('FFmpeg did not produce output frame');
+    }
+
+    const frameBuffer = fs.readFileSync(tmpFrame);
+    const s3Client = new S3Client({
+      region: process.env.AWS_REGION || 'us-east-2',
+      credentials: {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
+      },
+    });
+    const bucket = process.env.AWS_S3_BUCKET || 'remotionlambda-useast2-1vc2l6a56o';
+    const key = `cinematic-flow/last-frame-${Date.now()}-${Math.random().toString(36).substring(7)}.jpg`;
+
+    await s3Client.send(new PutObjectCommand({
+      Bucket: bucket,
+      Key: key,
+      Body: frameBuffer,
+      ContentType: 'image/jpeg',
+      ACL: 'public-read',
+    }));
+
+    try { fs.unlinkSync(tmpVideo); } catch {}
+    try { fs.unlinkSync(tmpFrame); } catch {}
+
+    const frameUrl = `https://${bucket}.s3.amazonaws.com/${key}`;
+    console.log(`[CinematicFlow] Extracted last frame: ${frameUrl.substring(0, 80)}...`);
+    return frameUrl;
+  } catch (err: any) {
+    console.warn(`[CinematicFlow] Last-frame extraction failed: ${err.message}`);
+    return undefined;
+  }
+}
+
+router.post('/:projectId/cinematic-flow-regenerate', isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const userId = (req.user as any)?.id;
+    const { projectId } = req.params;
+    const { provider } = req.body;
+
+    const projectData = await getProjectFromDb(projectId);
+    if (!projectData) {
+      return res.status(404).json({ success: false, error: 'Project not found' });
+    }
+    if (projectData.ownerId !== userId) {
+      return res.status(403).json({ success: false, error: 'Access denied' });
+    }
+
+    const scenes = (projectData.scenes || []).filter((s: any) => s.type !== 'chapter-title');
+    if (scenes.length === 0) {
+      return res.status(400).json({ success: false, error: 'No content scenes to regenerate' });
+    }
+
+    const existing = cinematicFlowStatus.get(projectId);
+    if (existing && existing.status === 'running') {
+      return res.status(409).json({ success: false, error: 'Cinematic flow regeneration already in progress' });
+    }
+
+    console.log(`[CinematicFlow] Starting cinematic flow regeneration for ${scenes.length} content scenes`);
+
+    cinematicFlowStatus.set(projectId, {
+      status: 'running',
+      total: scenes.length,
+      completed: 0,
+      failed: 0,
+      currentScene: scenes[0]?.id || '',
+      errors: [],
+      startedAt: new Date(),
+    });
+
+    (async () => {
+      const status = cinematicFlowStatus.get(projectId)!;
+      let previousLastFrameUrl: string | undefined = undefined;
+
+      const { getVisualArtPreset } = await import('../../shared/config/visual-art-presets');
+
+      for (let i = 0; i < scenes.length; i++) {
+        const scene = scenes[i];
+        status.currentScene = scene.id;
+
+        try {
+          const sceneArtPresetId = scene.artPresetId || (projectData as any).progress?.artPresetId || (projectData as any).artPresetId;
+          const artPreset = sceneArtPresetId ? getVisualArtPreset(sceneArtPresetId) : null;
+
+          if (i > 0 && scenes[i - 1]?.artPresetId && scene.artPresetId && scenes[i - 1].artPresetId !== scene.artPresetId) {
+            console.log(`[CinematicFlow] Style boundary at scene ${i} (${scenes[i - 1].artPresetId} → ${scene.artPresetId}) — breaking chain`);
+            previousLastFrameUrl = undefined;
+          }
+
+          const sceneImagePrompt = scene.imagePrompt || scene.visualDirection || 'Professional cinematic scene';
+          const sceneMotionPrompt = scene.motionPrompt;
+
+          let sourceImageUrl: string | undefined = undefined;
+
+          if (previousLastFrameUrl) {
+            sourceImageUrl = previousLastFrameUrl;
+            console.log(`[CinematicFlow] Scene ${i}: Using previous scene's last frame as I2V source`);
+          } else if (artPreset && artPreset.generationStrategy === 'i2v') {
+            const falKey = process.env.FAL_KEY;
+            if (falKey) {
+              const { fal } = await import("@fal-ai/client");
+              fal.config({ credentials: falKey });
+              const projectAR = (projectData as any).outputFormat?.aspectRatio || (projectData as any).settings?.aspectRatio || '16:9';
+              const falSize = projectAR === '9:16' ? 'portrait_16_9' as const
+                : projectAR === '1:1' ? 'square' as const
+                : 'landscape_16_9' as const;
+
+              try {
+                const imgResult = await fal.subscribe("fal-ai/flux-pro/v1.1", {
+                  input: { prompt: sceneImagePrompt, image_size: falSize, num_images: 1, safety_tolerance: "2", enable_safety_checker: true },
+                  logs: true,
+                });
+                if (imgResult.data?.images?.[0]?.url) {
+                  sourceImageUrl = imgResult.data.images[0].url;
+                  console.log(`[CinematicFlow] Scene ${i}: Generated fresh Flux image for I2V`);
+                }
+              } catch (imgErr: any) {
+                console.warn(`[CinematicFlow] Scene ${i}: Flux image failed: ${imgErr.message}`);
+              }
+            }
+          }
+
+          const sceneProviderHint = scene.providerHint;
+          const effectiveProvider = provider || undefined;
+          const effectivePrompt = (sourceImageUrl && sceneMotionPrompt) ? sceneMotionPrompt : (scene.visualDirection || 'Professional video');
+
+          const { videoGenerationWorker } = await import('../services/video-generation-worker');
+          const job = await videoGenerationWorker.createJob({
+            projectId,
+            sceneId: scene.id,
+            provider: effectiveProvider,
+            prompt: effectivePrompt,
+            fallbackPrompt: scene.narration || 'professional video',
+            duration: scene.duration || 6,
+            aspectRatio: (projectData as any).outputFormat?.aspectRatio || (projectData as any).settings?.aspectRatio || '16:9',
+            style: (projectData as any).settings?.visualStyle || 'professional',
+            triggeredBy: userId,
+            sourceImageUrl,
+            sceneType: scene.type || 'content',
+          });
+
+          console.log(`[CinematicFlow] Scene ${i}: Created job ${job.jobId}, waiting for completion...`);
+
+          const maxWait = 5 * 60 * 1000;
+          const pollInterval = 5000;
+          const startTime = Date.now();
+          let jobCompleted = false;
+          let completedVideoUrl: string | undefined;
+
+          while (Date.now() - startTime < maxWait) {
+            await new Promise(r => setTimeout(r, pollInterval));
+            const jobStatus = await videoGenerationWorker.getJob(job.jobId);
+            if (!jobStatus) break;
+
+            if (jobStatus.status === 'completed' && jobStatus.result?.videoUrl) {
+              completedVideoUrl = jobStatus.result.videoUrl;
+              jobCompleted = true;
+              break;
+            } else if (jobStatus.status === 'failed') {
+              throw new Error(`Job failed: ${jobStatus.error || 'Unknown'}`);
+            }
+          }
+
+          if (jobCompleted && completedVideoUrl) {
+            console.log(`[CinematicFlow] Scene ${i}: Video completed, extracting last frame for continuity`);
+            previousLastFrameUrl = await extractLastFrame(completedVideoUrl);
+            status.completed++;
+          } else {
+            console.warn(`[CinematicFlow] Scene ${i}: Job did not complete within timeout`);
+            previousLastFrameUrl = undefined;
+            status.failed++;
+            status.errors.push(`Scene ${scene.id}: Timeout waiting for video completion`);
+          }
+
+          console.log(`[CinematicFlow] Progress: ${status.completed + status.failed}/${status.total}`);
+
+        } catch (err: any) {
+          status.failed++;
+          status.errors.push(`Scene ${scene.id}: ${err.message}`);
+          console.error(`[CinematicFlow] Scene ${i} error:`, err.message);
+          previousLastFrameUrl = undefined;
+        }
+      }
+
+      status.status = status.failed === status.total ? 'failed' : 'completed';
+      console.log(`[CinematicFlow] Complete: ${status.completed} success, ${status.failed} failed`);
+
+      setTimeout(() => { cinematicFlowStatus.delete(projectId); }, 30 * 60 * 1000);
+    })();
+
+    return res.json({
+      success: true,
+      message: 'Cinematic flow regeneration started',
+      totalScenes: scenes.length,
+    });
+  } catch (error: any) {
+    console.error('[CinematicFlow] Error:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.get('/:projectId/cinematic-flow-regenerate/status', isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const userId = (req.user as any)?.id;
+    const { projectId } = req.params;
+    const projectData = await getProjectFromDb(projectId);
+    if (!projectData || projectData.ownerId !== userId) {
+      return res.status(404).json({ success: false, error: 'Not found' });
+    }
+
+    const status = cinematicFlowStatus.get(projectId);
+    if (!status) {
+      return res.json({ success: true, status: 'not_started', total: 0, completed: 0 });
+    }
+
+    return res.json({
+      success: true,
+      status: status.status,
+      total: status.total,
+      completed: status.completed,
+      failed: status.failed,
+      currentScene: status.currentScene,
+      errors: status.errors.slice(0, 10),
+    });
+  } catch (error: any) {
     return res.status(500).json({ success: false, error: error.message });
   }
 });

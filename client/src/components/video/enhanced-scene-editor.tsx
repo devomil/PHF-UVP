@@ -1268,20 +1268,34 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                 </p>
               </div>
             )}
-            {(scene.type === 'chapter-title' || scene.type === 'infographic' || scene.type === 'infographic_diagram' || (scene as any).textImageEnabled) && (
-              <div className="flex items-center gap-2 mt-1">
+            <div className="flex flex-wrap items-center gap-1.5 mt-1">
+              {(scene as any).imagePrompt && (
                 <span className="text-[9px] px-2 py-0.5 rounded-full font-medium border"
-                  style={{ backgroundColor: "rgba(59,130,246,0.12)", color: "rgb(96,165,250)", borderColor: "rgba(59,130,246,0.25)" }}>
-                  Text Image Pipeline
+                  style={{ backgroundColor: "rgba(168,85,247,0.12)", color: "rgb(192,132,252)", borderColor: "rgba(168,85,247,0.25)" }}>
+                  I2V Pipeline
                 </span>
-                {(scene as any).textImageUrl && (
-                  <a href={(scene as any).textImageUrl} target="_blank" rel="noopener noreferrer"
-                    className="text-[9px] underline" style={{ color: "rgb(96,165,250)" }}>
-                    View Generated Image
-                  </a>
-                )}
-              </div>
-            )}
+              )}
+              {(scene as any).providerHint && (
+                <span className="text-[9px] px-2 py-0.5 rounded-full font-medium border"
+                  style={{ backgroundColor: "rgba(34,197,94,0.12)", color: "rgb(74,222,128)", borderColor: "rgba(34,197,94,0.25)" }}>
+                  {(() => { const p = PROVIDER_CONFIG[(scene as any).providerHint]; return p ? p.displayName : (scene as any).providerHint; })()}
+                </span>
+              )}
+              {(scene.type === 'chapter-title' || scene.type === 'infographic' || scene.type === 'infographic_diagram' || (scene as any).textImageEnabled) && (
+                <>
+                  <span className="text-[9px] px-2 py-0.5 rounded-full font-medium border"
+                    style={{ backgroundColor: "rgba(59,130,246,0.12)", color: "rgb(96,165,250)", borderColor: "rgba(59,130,246,0.25)" }}>
+                    Text Image Pipeline
+                  </span>
+                  {(scene as any).textImageUrl && (
+                    <a href={(scene as any).textImageUrl} target="_blank" rel="noopener noreferrer"
+                      className="text-[9px] underline" style={{ color: "rgb(96,165,250)" }}>
+                      View Generated Image
+                    </a>
+                  )}
+                </>
+              )}
+            </div>
           </div>
 
           {/* Use Own Media */}

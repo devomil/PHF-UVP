@@ -671,17 +671,40 @@ Consider what comes BEFORE and AFTER each scene. Visual directions should create
 - Use lighting temperature shifts to mirror the narrative arc
 - If the previous scene ends wide, consider opening the next scene tight (and vice versa)
 
+## DUAL PROMPT SYSTEM (IMAGE-FIRST PIPELINE)
+Every scene goes through a two-step generation process:
+1. FIRST: A still image is generated from the "imagePrompt" using Flux Pro (a text-to-image model)
+2. THEN: That image is animated into video using the "motionPrompt" with an image-to-video model
+
+Therefore you MUST write TWO separate prompts for each scene:
+- **imagePrompt**: A rich, detailed STILL IMAGE description. Focus on composition, lighting, color, subject detail, environment, and atmosphere. This prompt drives the Flux image generator — think of it as describing a single perfect frame/photograph. NO motion words (no "slowly pans", "drifts", "moves"). 50-80 words.
+- **motionPrompt**: A SHORT motion-only description that tells the I2V model how to animate the still image. Focus ONLY on: camera movement (push-in, orbital, crane up), subject motion (hair sways, particles drift, light shifts), and atmospheric motion (fog rolls, leaves flutter). 15-30 words. Do NOT re-describe the scene — the model already has the image.
+
+GOOD imagePrompt: "Extreme close-up of a brass vintage scale on a marble surface, one side tipping downward. Warm golden sidelight casting long shadows. Soft bokeh background with amber glass bottles. Dust motes suspended in volumetric light beam. Rich teal and amber color grade, 8K, shallow depth of field f/1.4."
+GOOD motionPrompt: "Slow push-in, scale gently tips and oscillates, dust motes drift through light beam, subtle light flicker."
+
+BAD imagePrompt: "A scale slowly tipping over as camera pushes in" (contains motion — wrong for still image generation)
+BAD motionPrompt: "A brass vintage scale on a marble surface with golden sidelight and bokeh background" (re-describes scene — wrong for motion prompt)
+
 ## CRITICAL RULES
-1. Every visual direction MUST open with shot type and camera movement (e.g. "Extreme macro push-in", "Slow orbital arc", "Wide establishing crane reveal")
-2. Describe subjects with cinematic specificity — not "a bottle" but "the supplement tub centered on a moss-covered stone surface"
-3. Specify lighting with technical precision — named setups (Rembrandt, butterfly, split), color temperature (3200K warm, 5600K daylight), direction
-4. Include environment depth — foreground bokeh elements, midground subject, background atmosphere layers
-5. Add atmospheric motion — floating particles (pollen, dust motes, seed wisps), gentle sway, volumetric haze, light flares
+1. Every imagePrompt MUST describe a single perfect still frame with all 7 cinematic layers (subject, environment, lighting, color, camera angle, mood, quality markers)
+2. Every motionPrompt MUST describe ONLY motion/animation — camera movement + subject motion + atmospheric motion
+3. Describe subjects with cinematic specificity — not "a bottle" but "the supplement tub centered on a moss-covered stone surface"
+4. Specify lighting with technical precision — named setups (Rembrandt, butterfly, split), color temperature (3200K warm, 5600K daylight), direction
+5. Include environment depth — foreground bokeh elements, midground subject, background atmosphere layers
 6. ABSOLUTELY NO TEXT in visual descriptions — AI video models CANNOT render readable text. It ALWAYS produces garbled, alien-looking characters. Text overlays are handled separately by the platform's Remotion rendering engine. For scenes about concepts, use VISUAL METAPHORS instead.
 7. Describe products by PHYSICAL APPEARANCE only (shape, color, container type) — never describe label text
 8. ${multiStyleMode ? 'EVERY visual direction MUST include the assigned style marker for that scene' : isStylized ? `EVERY visual direction MUST include the style marker "${artPreset!.styleMarkerPrefix || artPreset!.name}"` : 'Keep descriptions cinematic but grounded in realism'}
-9. Keep each visual direction 50-90 words — richly detailed with all 7 layers
-10. Vary camera, lighting, and composition across scenes — create a dynamic visual journey, not a repetitive slideshow
+9. Keep each imagePrompt 50-80 words — richly detailed with all 7 layers but NO motion
+10. Keep each motionPrompt 15-30 words — motion ONLY
+11. Vary camera, lighting, and composition across scenes — create a dynamic visual journey, not a repetitive slideshow
+
+## TEXT-HEAVY SCENE DETECTION
+Some scenes contain narration that references on-screen text, statistics, data, lists, or typography-heavy content. For these scenes, set "textImageEnabled": true so the platform routes them to a text-capable image generator (GPT-Image-1) instead of Flux. Examples of text-heavy narration:
+- "Here are the top 5 benefits..." → textImageEnabled: true
+- "Studies show a 73% improvement..." → textImageEnabled: true (stat card)
+- "Step 1: Prepare the ingredients..." → textImageEnabled: true (numbered steps)
+- "A serene mountain landscape at dawn..." → textImageEnabled: false (pure visual)
 
 ## CHARACTER CONSISTENCY
 If a recurring character appears, define their complete appearance in the FIRST scene (age, ethnicity, hair, build, wardrobe, distinctive features) and reference the EXACT SAME description in every subsequent scene.
@@ -737,12 +760,15 @@ Return ONLY valid JSON:
     {
       "sceneNumber": 1,
       ${multiStyleMode ? '"assignedStyleId": "style-id-here",' : ''}
-      "visualDirection": "full production-grade AI video prompt (40-80 words)",
+      "imagePrompt": "rich still-image description for Flux generation — NO motion words (50-80 words)",
+      "motionPrompt": "motion-only description for I2V animation — camera + subject + atmosphere motion (15-30 words)",
+      "visualDirection": "combined full production-grade AI video prompt as fallback (40-80 words)",
       "negativePrompt": "scene-specific items to avoid",
       "cinematicNotes": "brief note on why this visual approach serves the narrative",
+      "textImageEnabled": false,
       "microScenes": [
-        { "narration": "exact text from narration for this segment", "visualDirection": "cinematic prompt inheriting parent mood (30-60 words)", "duration": 4 },
-        { "narration": "next segment", "visualDirection": "different angle/moment same visual world", "duration": 3 }
+        { "narration": "exact text from narration for this segment", "visualDirection": "cinematic prompt inheriting parent mood (30-60 words)", "imagePrompt": "still image prompt for this micro-scene", "motionPrompt": "motion prompt for this micro-scene", "duration": 4 },
+        { "narration": "next segment", "visualDirection": "different angle/moment same visual world", "imagePrompt": "still image prompt", "motionPrompt": "motion prompt", "duration": 3 }
       ]
     }
   ]
@@ -797,9 +823,56 @@ Return ONLY valid JSON:
       }
     }
 
+    const scenePreset = assignedArtPresetId
+      ? getVisualArtPreset(assignedArtPresetId)
+      : singlePreset;
+    const sceneType = original.type || 'standard';
+    const providerHint = scenePreset?.sceneTypeProviderMap?.[sceneType]?.[0]
+      || scenePreset?.providerHierarchy?.primary
+      || undefined;
+
+    let imagePrompt = s4.imagePrompt || '';
+    let motionPrompt = s4.motionPrompt || '';
+
+    if (scenePreset && imagePrompt) {
+      const styleMarker = scenePreset.styleMarkerPrefix || scenePreset.name;
+      if (!imagePrompt.toLowerCase().includes(styleMarker.toLowerCase())) {
+        imagePrompt = `${styleMarker}. ${imagePrompt}`;
+      }
+      if (scenePreset.imagePromptSuffix) {
+        const suffixSnippet = scenePreset.imagePromptSuffix.substring(0, 20);
+        if (!imagePrompt.includes(suffixSnippet)) {
+          imagePrompt = `${imagePrompt} ${scenePreset.imagePromptSuffix}`;
+        }
+      }
+    }
+
+    if (scenePreset && motionPrompt && scenePreset.cameraMotionHints) {
+      const hasMotionHint = scenePreset.cameraMotionHints.split(',').some(
+        (hint: string) => motionPrompt.toLowerCase().includes(hint.trim().toLowerCase())
+      );
+      if (!hasMotionHint) {
+        const defaultHint = scenePreset.cameraMotionHints.split(',')[0]?.trim();
+        if (defaultHint && !motionPrompt.toLowerCase().includes(defaultHint.toLowerCase())) {
+          motionPrompt = `${motionPrompt}, ${defaultHint}`;
+        }
+      }
+    }
+
+    if (!imagePrompt && enforcedVisualDirection) {
+      imagePrompt = enforcedVisualDirection;
+    }
+    if (!motionPrompt) {
+      motionPrompt = scenePreset?.cameraMotionHints?.split(',')[0]?.trim() || 'slow cinematic push-in, subtle atmospheric motion';
+    }
+
+    const textImageEnabled = s4.textImageEnabled === true;
+
     const microScenes = Array.isArray(s4.microScenes) && s4.microScenes.length > 0
       ? s4.microScenes.map((ms: any, idx: number) => {
           let msVisualDirection = ms.visualDirection || '';
+          let msImagePrompt = ms.imagePrompt || '';
+          let msMotionPrompt = ms.motionPrompt || '';
           if (multiStyleMode && assignedArtPresetId) {
             const assignedPreset = getVisualArtPreset(assignedArtPresetId);
             if (assignedPreset) {
@@ -807,15 +880,23 @@ Return ONLY valid JSON:
               if (!msVisualDirection.toLowerCase().includes(styleMarker.toLowerCase())) {
                 msVisualDirection = `${styleMarker}. ${msVisualDirection}`;
               }
+              if (msImagePrompt && !msImagePrompt.toLowerCase().includes(styleMarker.toLowerCase())) {
+                msImagePrompt = `${styleMarker}. ${msImagePrompt}`;
+              }
             }
           }
+          if (!msImagePrompt) msImagePrompt = msVisualDirection;
+          if (!msMotionPrompt) msMotionPrompt = motionPrompt;
           return {
             id: `${original.id || `scene-${i + 1}`}-micro-${idx + 1}`,
             narration: ms.narration || '',
             visualDirection: msVisualDirection,
+            imagePrompt: msImagePrompt,
+            motionPrompt: msMotionPrompt,
             duration: ms.duration || Math.round((original.duration || 10) / s4.microScenes.length),
             pipelineStage: 4,
             ...(assignedArtPresetId ? { artPresetId: assignedArtPresetId } : {}),
+            ...(providerHint ? { providerHint } : {}),
           };
         })
       : undefined;
@@ -823,8 +904,12 @@ Return ONLY valid JSON:
     return {
       ...original,
       visualDirection: enforcedVisualDirection,
+      imagePrompt,
+      motionPrompt,
       negativePrompt: enforcedNegativePrompt,
       cinematicNotes: s4.cinematicNotes || undefined,
+      ...(providerHint ? { providerHint } : {}),
+      ...(textImageEnabled ? { textImageEnabled } : {}),
       ...(assignedArtPresetId ? { artPresetId: assignedArtPresetId, assignedStyleId: assignedArtPresetId } : {}),
       ...(microScenes ? { microScenes } : {}),
     };
