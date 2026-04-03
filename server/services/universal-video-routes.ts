@@ -7162,6 +7162,27 @@ router.post('/:projectId/cinematic-flow-regenerate', isAuthenticated, async (req
             console.log(`[CinematicFlow] Scene ${i}: Video completed, extracting last frame for continuity`);
             previousLastFrameUrl = await extractLastFrame(completedVideoUrl);
             status.completed++;
+
+            if (previousLastFrameUrl) {
+              try {
+                const { db } = await import("../db");
+                const { universalVideoProjects } = await import("../../shared/schema");
+                const { eq, sql } = await import("drizzle-orm");
+                await db.update(universalVideoProjects)
+                  .set({
+                    data: sql`jsonb_set(
+                      COALESCE(data, '{}'::jsonb),
+                      ${`{scenes,${i},continuityFrameUrl}`}::text[],
+                      ${JSON.stringify(previousLastFrameUrl)}::jsonb,
+                      true
+                    )`,
+                  })
+                  .where(eq(universalVideoProjects.projectId, projectId));
+                console.log(`[CinematicFlow] Scene ${i}: Persisted continuityFrameUrl to scene data`);
+              } catch (saveErr: any) {
+                console.warn(`[CinematicFlow] Scene ${i}: Failed to persist continuityFrameUrl: ${saveErr.message}`);
+              }
+            }
           } else {
             console.warn(`[CinematicFlow] Scene ${i}: Job did not complete within timeout`);
             previousLastFrameUrl = undefined;
