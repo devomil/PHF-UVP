@@ -2,18 +2,25 @@ import { Router, Request, Response } from 'express';
 import { isAuthenticated } from '../auth';
 import { db } from '../db';
 import { brandMediaLibrary } from '../../shared/schema';
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, and, or, isNull } from 'drizzle-orm';
 import { brandBibleService } from './brand-bible-service';
 
 const router = Router();
 
 router.use(isAuthenticated);
 
-router.get('/', async (_req: Request, res: Response) => {
+router.get('/', async (req: Request, res: Response) => {
   try {
+    const userId = (req.user as any)?.id || null;
     const items = await db
       .select()
       .from(brandMediaLibrary)
+      .where(
+        or(
+          eq(brandMediaLibrary.uploadedBy, userId),
+          isNull(brandMediaLibrary.uploadedBy)
+        )
+      )
       .orderBy(desc(brandMediaLibrary.createdAt));
     res.json({ assets: items, total: items.length });
   } catch (error: any) {

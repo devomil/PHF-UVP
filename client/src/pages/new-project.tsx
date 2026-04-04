@@ -3,7 +3,7 @@ import { useLocation, Link } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Sparkles, FileText, Zap, ArrowLeft, Video, Image, Info, Plus, Trash2, ChevronUp, ChevronDown, GripVertical, Palette, Users, UserCheck, Upload, X, ImagePlus, Film, Loader2, AlertCircle, FileUp, BookOpen, TrendingUp, CheckCircle2 } from "lucide-react";
+import { Sparkles, FileText, Zap, ArrowLeft, Video, Image, Info, Plus, Trash2, ChevronUp, ChevronDown, GripVertical, Palette, Users, UserCheck, Upload, X, ImagePlus, Film, Loader2, AlertCircle, FileUp, BookOpen, TrendingUp, CheckCircle2, FolderOpen } from "lucide-react";
 import { ProviderCatalogSelector } from "@/components/video/provider-catalog-selector";
 import { CharacterProfilesPanel } from "@/components/video/character-profiles-panel";
 import { AssetSuzzieChat } from "@/components/video/AssetSuzzieChat";
@@ -20,6 +20,120 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 
 type Mode = null | "ai-script" | "custom-script" | "quick-create";
+
+function AssetLibraryPicker({ onSelect }: { onSelect: (asset: any) => void }) {
+  const [assets, setAssets] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<'brand' | 'library'>('brand');
+
+  useEffect(() => {
+    async function fetchAssets() {
+      setLoading(true);
+      setAssets([]);
+      try {
+        const endpoint = tab === 'brand' ? '/api/brand-media-library' : '/api/asset-library';
+        const res = await fetch(endpoint, { credentials: 'include' });
+        if (res.ok) {
+          const data = await res.json();
+          const items = tab === 'brand' ? (data.assets || []) : (Array.isArray(data) ? data : []);
+          const imageAssets = items.filter((a: any) => {
+            const url = a.url || a.assetUrl || a.outputUrl || '';
+            const type = a.mediaType || a.contentType || a.assetType || '';
+            return type.startsWith('image') || type === 'image' || url.match(/\.(jpg|jpeg|png|webp)$/i);
+          });
+          setAssets(imageAssets);
+        }
+      } catch {
+        setAssets([]);
+      }
+      setLoading(false);
+    }
+    fetchAssets();
+  }, [tab]);
+
+  return (
+    <div className="rounded-lg border overflow-hidden" style={{ borderColor: "var(--border-medium)", backgroundColor: "var(--surface-elevated)" }}>
+      <div className="flex border-b" style={{ borderColor: "var(--border-subtle)" }}>
+        <button
+          type="button"
+          onClick={() => setTab('brand')}
+          className="flex-1 px-3 py-2 text-xs font-medium transition-colors"
+          style={{
+            color: tab === 'brand' ? "rgb(167, 139, 250)" : "var(--text-muted)",
+            backgroundColor: tab === 'brand' ? "rgba(139, 92, 246, 0.1)" : "transparent",
+            borderBottom: tab === 'brand' ? "2px solid rgb(139, 92, 246)" : "2px solid transparent",
+          }}
+        >
+          Brand Media
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab('library')}
+          className="flex-1 px-3 py-2 text-xs font-medium transition-colors"
+          style={{
+            color: tab === 'library' ? "rgb(167, 139, 250)" : "var(--text-muted)",
+            backgroundColor: tab === 'library' ? "rgba(139, 92, 246, 0.1)" : "transparent",
+            borderBottom: tab === 'library' ? "2px solid rgb(139, 92, 246)" : "2px solid transparent",
+          }}
+        >
+          Asset Library
+        </button>
+      </div>
+      <div className="p-2 max-h-[240px] overflow-y-auto" style={{ scrollbarWidth: "thin" }}>
+        {loading ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="w-5 h-5 animate-spin" style={{ color: "var(--text-muted)" }} />
+          </div>
+        ) : assets.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-8 gap-1">
+            <FolderOpen className="w-6 h-6" style={{ color: "var(--text-muted)" }} />
+            <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+              {tab === 'brand' ? 'No brand media assets yet' : 'No images in asset library'}
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-3 gap-2">
+            {assets.map((asset: any) => (
+              <button
+                key={asset.id}
+                type="button"
+                onClick={() => onSelect({
+                  ...asset,
+                  url: asset.url || asset.assetUrl || asset.outputUrl,
+                  thumbnailUrl: asset.thumbnailUrl || asset.url || asset.assetUrl || asset.outputUrl,
+                })}
+                className="group relative rounded-lg overflow-hidden border transition-all hover:border-purple-400/50 hover:shadow-md"
+                style={{ borderColor: "var(--border-subtle)", backgroundColor: "var(--surface)" }}
+              >
+                <div className="aspect-square">
+                  <img
+                    src={asset.thumbnailUrl || asset.url || asset.assetUrl || asset.outputUrl}
+                    alt={asset.name || asset.prompt || 'Asset'}
+                    className="w-full h-full object-cover"
+                    loading="lazy"
+                  />
+                </div>
+                <div className="p-1.5">
+                  <p className="text-[10px] font-medium truncate" style={{ color: "var(--text-primary)" }}>
+                    {asset.name || asset.prompt?.substring(0, 30) || 'Untitled'}
+                  </p>
+                  {(asset.description || asset.assetType) && (
+                    <p className="text-[9px] truncate" style={{ color: "var(--text-muted)" }}>
+                      {asset.description?.substring(0, 40) || asset.assetType}
+                    </p>
+                  )}
+                </div>
+                <div className="absolute inset-0 bg-purple-500/0 group-hover:bg-purple-500/10 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
+                  <span className="text-[10px] font-medium px-2 py-1 rounded-full" style={{ backgroundColor: "rgba(139,92,246,0.9)", color: "white" }}>Select</span>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 const platformAspectMap: Record<string, string> = {
   YouTube: "16:9",
@@ -295,6 +409,8 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
   const [productMediaPreview, setProductMediaPreview] = useState<string | null>(null);
   const [isUploadingMedia, setIsUploadingMedia] = useState(false);
   const productMediaInputRef = useRef<HTMLInputElement>(null);
+  const [selectedLibraryAsset, setSelectedLibraryAsset] = useState<any | null>(null);
+  const [showAssetPicker, setShowAssetPicker] = useState(false);
   const [productName, setProductName] = useState("");
   const [productProblem, setProductProblem] = useState("");
   const [scriptTone, setScriptTone] = useState("educational");
@@ -456,6 +572,7 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
   const removeProductMedia = () => {
     setProductMediaFile(null);
     setProductMediaPreview(null);
+    setSelectedLibraryAsset(null);
     setImageAnalyzed(false);
     if (productMediaInputRef.current) {
       productMediaInputRef.current.value = '';
@@ -517,7 +634,9 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
 
     let productMediaUrl: string | undefined;
 
-    if (productMediaFile) {
+    if (selectedLibraryAsset) {
+      productMediaUrl = selectedLibraryAsset.url;
+    } else if (productMediaFile) {
       setIsUploadingMedia(true);
       try {
         const formData = new FormData();
@@ -560,8 +679,8 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
       productMediaUrl,
       projectType: projectTypeId,
       contentStructure: projectTypeId === 'educational' ? contentStructure : undefined,
-      scriptPresets: productMediaUrl ? {
-        productName: productName || undefined,
+      scriptPresets: (productMediaUrl || selectedLibraryAsset) ? {
+        productName: productName || selectedLibraryAsset?.name || undefined,
         productProblem: productProblem || undefined,
         scriptTone,
         callToAction,
@@ -733,7 +852,7 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
         <div>
           <Label style={{ color: "var(--text-secondary)" }}>Product or Brand Media <span className="text-xs font-normal" style={{ color: "var(--text-muted)" }}>(optional)</span></Label>
           <p className="text-xs mt-0.5 mb-2" style={{ color: "var(--text-muted)" }}>
-            Upload a product photo or brand asset — AI will analyze it to inform your script
+            Upload a product photo or choose from your Asset Library — AI will analyze it to inform your script
           </p>
           <input
             ref={productMediaInputRef}
@@ -742,17 +861,64 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
             onChange={handleProductMediaSelect}
             className="hidden"
           />
-          {!productMediaFile ? (
-            <button
-              type="button"
-              onClick={() => productMediaInputRef.current?.click()}
-              className="w-full flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed py-8 transition-colors hover:border-purple-400/50"
-              style={{ borderColor: "var(--border-medium)", backgroundColor: "var(--surface-elevated)" }}
-            >
-              <ImagePlus className="w-8 h-8" style={{ color: "var(--text-muted)" }} />
-              <span className="text-sm" style={{ color: "var(--text-muted)" }}>Click to upload image or video</span>
-              <span className="text-xs" style={{ color: "var(--text-muted)" }}>JPG, PNG, WEBP, MP4, MOV</span>
-            </button>
+          {!productMediaFile && !selectedLibraryAsset ? (
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => productMediaInputRef.current?.click()}
+                  className="flex-1 flex flex-col items-center justify-center gap-1.5 rounded-lg border-2 border-dashed py-6 transition-colors hover:border-purple-400/50"
+                  style={{ borderColor: "var(--border-medium)", backgroundColor: "var(--surface-elevated)" }}
+                >
+                  <Upload className="w-6 h-6" style={{ color: "var(--text-muted)" }} />
+                  <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>Upload File</span>
+                  <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>JPG, PNG, MP4</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowAssetPicker(!showAssetPicker)}
+                  className="flex-1 flex flex-col items-center justify-center gap-1.5 rounded-lg border-2 py-6 transition-colors hover:border-purple-400/50"
+                  style={{
+                    borderColor: showAssetPicker ? "rgb(139, 92, 246)" : "var(--border-medium)",
+                    backgroundColor: showAssetPicker ? "rgba(139, 92, 246, 0.1)" : "var(--surface-elevated)",
+                    borderStyle: "solid",
+                  }}
+                >
+                  <ImagePlus className="w-6 h-6" style={{ color: showAssetPicker ? "rgb(167, 139, 250)" : "var(--text-muted)" }} />
+                  <span className="text-xs font-medium" style={{ color: showAssetPicker ? "rgb(167, 139, 250)" : "var(--text-muted)" }}>Asset Library</span>
+                  <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>Brand media & assets</span>
+                </button>
+              </div>
+              {showAssetPicker && <AssetLibraryPicker onSelect={(asset: any) => {
+                setSelectedLibraryAsset(asset);
+                setProductMediaPreview(asset.thumbnailUrl || asset.url);
+                setProductMediaFile(null);
+                setShowAssetPicker(false);
+                if (asset.entityName || asset.name) {
+                  setProductName(asset.entityName || asset.name);
+                }
+              }} />}
+            </div>
+          ) : selectedLibraryAsset ? (
+            <div className="relative rounded-lg overflow-hidden border" style={{ borderColor: "var(--border-medium)", backgroundColor: "var(--surface-elevated)" }}>
+              <div className="flex items-center gap-3 p-3">
+                <img src={selectedLibraryAsset.thumbnailUrl || selectedLibraryAsset.url} alt={selectedLibraryAsset.name} className="w-16 h-16 rounded object-cover" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm truncate" style={{ color: "var(--text-primary)" }}>{selectedLibraryAsset.name}</p>
+                  <p className="text-xs" style={{ color: "var(--text-muted)" }}>{selectedLibraryAsset.description || selectedLibraryAsset.assetType || 'Brand asset'}</p>
+                  {selectedLibraryAsset.matchKeywords?.length > 0 && (
+                    <div className="flex gap-1 mt-1 flex-wrap">
+                      {selectedLibraryAsset.matchKeywords.slice(0, 4).map((kw: string, i: number) => (
+                        <span key={i} className="text-[10px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "rgba(139,92,246,0.15)", color: "rgb(167,139,250)" }}>#{kw}</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <button type="button" onClick={removeProductMedia} className="p-1.5 rounded-full hover:bg-red-500/10 transition-colors">
+                  <X className="w-4 h-4 text-red-400" />
+                </button>
+              </div>
+            </div>
           ) : (
             <div className="relative rounded-lg overflow-hidden border" style={{ borderColor: "var(--border-medium)", backgroundColor: "var(--surface-elevated)" }}>
               <div className="flex items-center gap-3 p-3">
@@ -764,14 +930,14 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
                   </div>
                 )}
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm truncate" style={{ color: "var(--text-primary)" }}>{productMediaFile.name}</p>
-                  <p className="text-xs" style={{ color: "var(--text-muted)" }}>{(productMediaFile.size / 1024 / 1024).toFixed(1)} MB</p>
+                  <p className="text-sm truncate" style={{ color: "var(--text-primary)" }}>{productMediaFile!.name}</p>
+                  <p className="text-xs" style={{ color: "var(--text-muted)" }}>{(productMediaFile!.size / 1024 / 1024).toFixed(1)} MB</p>
                 </div>
                 <button type="button" onClick={removeProductMedia} className="p-1.5 rounded-full hover:bg-red-500/10 transition-colors">
                   <X className="w-4 h-4 text-red-400" />
                 </button>
               </div>
-              {productMediaFile.type.startsWith("image/") && !imageAnalyzed && (
+              {productMediaFile!.type.startsWith("image/") && !imageAnalyzed && (
                 <div className="px-3 pb-3">
                   <button
                     type="button"
@@ -801,7 +967,7 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
             </div>
           )}
 
-          {productMediaFile && (
+          {(productMediaFile || selectedLibraryAsset) && (
             <div className="mt-3 space-y-3 p-4 rounded-lg border" style={{ borderColor: "var(--border-subtle)", backgroundColor: "var(--surface-elevated)" }}>
               <p className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>Help AI write a better script for your product</p>
               <div>
