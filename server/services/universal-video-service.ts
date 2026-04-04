@@ -918,7 +918,54 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
     return sanitized;
   }
 
-  async generateImage(prompt: string, sceneId: string, isProductVideo: boolean = false, sceneType: string = 'content', aspectRatio: string = '16:9'): Promise<ImageGenerationResult> {
+  async generateImage(prompt: string, sceneId: string, isProductVideo: boolean = false, sceneType: string = 'content', aspectRatio: string = '16:9', scene?: any): Promise<ImageGenerationResult> {
+    const { isTextHeavyScene, imageGenerationService } = await import('./image-generation-service');
+    
+    if (scene && isTextHeavyScene(scene)) {
+      try {
+        console.log(`[GenerateImage] Text-heavy scene ${sceneId} — routing to GPT-Image-1 with brand context`);
+        
+        let brandContext = '';
+        try {
+          const brandBible = await brandBibleService.getBrandBible();
+          if (brandBible?.brandName) {
+            const colors = [brandBible.primaryColor, brandBible.secondaryColor, brandBible.accentColor].filter(Boolean);
+            brandContext = `Brand: "${brandBible.brandName}". ${colors.length > 0 ? `Brand color palette: ${colors.join(', ')}. ` : ''}Use the brand name and colors in the design where contextually appropriate.`;
+          }
+        } catch (e: any) {
+          console.warn(`[GenerateImage] Could not load brand context: ${e.message}`);
+        }
+        
+        const sceneArtPreset = scene.artPresetId ? getVisualArtPreset(scene.artPresetId) : null;
+        const artStyle = sceneArtPreset ? `${sceneArtPreset.name} style. ` : '';
+        const imagePrompt = scene.imagePrompt || scene.visualDirection || prompt;
+        const narration = scene.narration || '';
+        
+        const textImgPrompt = `${artStyle}${imagePrompt}. ${brandContext} The scene narration is: "${narration}". All text in the image must be perfectly legible, sharp, and professionally typeset. ${sceneArtPreset?.imagePromptSuffix || 'High quality render.'}`;
+        
+        console.log(`[GenerateImage] GPT-Image-1 prompt: ${textImgPrompt.substring(0, 150)}...`);
+        
+        const gptWidth = aspectRatio === '9:16' ? 1024 : aspectRatio === '1:1' ? 1024 : 1536;
+        const gptHeight = aspectRatio === '9:16' ? 1536 : aspectRatio === '1:1' ? 1024 : 1024;
+        const textImage = await imageGenerationService.generateWithOpenAI({
+          prompt: textImgPrompt,
+          width: gptWidth,
+          height: gptHeight,
+        });
+        
+        if (textImage.url) {
+          console.log(`[GenerateImage] GPT-Image-1 success for scene ${sceneId}: ${textImage.url.substring(0, 80)}...`);
+          return {
+            url: textImage.url,
+            source: 'gpt-image-1 (text-heavy)',
+            success: true,
+          };
+        }
+      } catch (textErr: any) {
+        console.warn(`[GenerateImage] GPT-Image-1 failed for scene ${sceneId}: ${textErr.message} — falling back to Flux/PiAPI`);
+      }
+    }
+
     const falKey = process.env.FAL_KEY;
     
     // Phase 11A: Sanitize prompt to remove text/logo requests before AI generation
@@ -4179,7 +4226,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
         // This is in createProductVideoProject context - always sanitize product terms
         const projAR2 = project.outputFormat?.aspectRatio || '16:9';
         const bgPrompt = scene.visualDirection || scene.background?.source || '';
-        const imageResult = await this.generateImage(bgPrompt, scene.id, true, 'content', projAR2);
+        const imageResult = await this.generateImage(bgPrompt, scene.id, true, 'content', projAR2, scene);
 
         if (imageResult.success) {
           updatedProject.assets.images.push({
@@ -4435,7 +4482,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
             const imgPrompt = scene.visualDirection || scene.narration || 'Professional illustration';
             const projAR = (updatedProject as any).outputFormat?.aspectRatio || '16:9';
             try {
-              const imageResult = await this.generateImage(imgPrompt, scene.id, false, scene.type || 'content', projAR);
+              const imageResult = await this.generateImage(imgPrompt, scene.id, false, scene.type || 'content', projAR, scene);
               if (imageResult.success && imageResult.url) {
                 updatedProject.scenes[imgSceneIndex].background = {
                   type: 'image' as any,
