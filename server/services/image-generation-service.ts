@@ -992,6 +992,8 @@ export function isTextHeavyScene(scene: any): boolean {
   if (scene.textImageEnabled === false) return false;
 
   const visualDir = (scene.visualDirection || '').toLowerCase();
+  const imagePrompt = ((scene as any).imagePrompt || '').toLowerCase();
+  const combinedText = `${visualDir} ${imagePrompt}`;
   const textKeywords = [
     'text overlay', 'title card', 'title screen', 'text on screen',
     'words appear', 'text reading', 'text saying', 'display text',
@@ -999,9 +1001,11 @@ export function isTextHeavyScene(scene: any): boolean {
     'with the text', 'with text', 'words on',
     'stat card', 'statistics card', 'data card',
     'lower third', 'callout', 'label reading',
+    'digital readout', 'screen showing', 'interface display',
+    'biometric', 'scanning device', 'device screen',
   ];
 
-  if (textKeywords.some(kw => visualDir.includes(kw))) return true;
+  if (textKeywords.some(kw => combinedText.includes(kw))) return true;
 
   const overlays = scene.textOverlays || [];
   if (overlays.length > 0 && overlays.some((o: any) => o.text && o.text.length > 3 && o.style === 'title')) {

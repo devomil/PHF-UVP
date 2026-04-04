@@ -1554,6 +1554,55 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
     aspectRatio: string = '16:9',
     artPresetId?: string
   ): Promise<{ imageUrl: string | null; source: string; extractedText?: string[]; extractedLogos?: string[] }> {
+    const { isTextHeavyScene, imageGenerationService } = await import('./image-generation-service');
+    
+    if (isTextHeavyScene(scene)) {
+      try {
+        console.log(`[UniversalVideoService] Text-heavy scene ${scene.id} — routing to GPT-Image-1 with brand context`);
+        
+        let brandContext = '';
+        try {
+          const brandBible = await brandBibleService.getBrandBible();
+          if (brandBible?.brandName) {
+            const colors = [brandBible.primaryColor, brandBible.secondaryColor, brandBible.accentColor].filter(Boolean);
+            brandContext = `Brand: "${brandBible.brandName}". ${colors.length > 0 ? `Brand color palette: ${colors.join(', ')}. ` : ''}Use the brand name and colors in the design where contextually appropriate.`;
+            console.log(`[TextImage] Brand context: ${brandContext}`);
+          }
+        } catch (e: any) {
+          console.warn(`[TextImage] Could not load brand context: ${e.message}`);
+        }
+        
+        const sceneArtPreset = artPresetId ? getVisualArtPreset(artPresetId) : null;
+        const artStyle = sceneArtPreset ? `${sceneArtPreset.name} style. ` : '';
+        const imagePrompt = (scene as any).imagePrompt || scene.visualDirection || '';
+        const narration = scene.narration || '';
+        
+        const textImgPrompt = `${artStyle}${imagePrompt}. ${brandContext} The scene narration is: "${narration}". All text in the image must be perfectly legible, sharp, and professionally typeset. ${sceneArtPreset?.imagePromptSuffix || 'High quality render.'}`;
+        
+        console.log(`[TextImage] GPT-Image-1 prompt: ${textImgPrompt.substring(0, 150)}...`);
+        
+        const gptWidth = aspectRatio === '9:16' ? 1024 : aspectRatio === '1:1' ? 1024 : 1536;
+        const gptHeight = aspectRatio === '9:16' ? 1536 : aspectRatio === '1:1' ? 1024 : 1024;
+        const textImage = await imageGenerationService.generateWithOpenAI({
+          prompt: textImgPrompt,
+          width: gptWidth,
+          height: gptHeight,
+        });
+        
+        if (textImage.url) {
+          console.log(`[TextImage] GPT-Image-1 success for scene ${scene.id}: ${textImage.url.substring(0, 80)}...`);
+          return {
+            imageUrl: textImage.url,
+            source: 'gpt-image-1 (text-heavy)',
+            extractedText: [],
+            extractedLogos: [],
+          };
+        }
+      } catch (textErr: any) {
+        console.warn(`[TextImage] GPT-Image-1 failed for scene ${scene.id}: ${textErr.message} — falling back to Flux`);
+      }
+    }
+
     const falKey = process.env.FAL_KEY;
     if (!falKey) {
       console.log('[UniversalVideoService] FAL_KEY not available - trying stock images');
@@ -3977,6 +4026,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
                 ...scene,
                 id: ms.id || `${scene.id}_ms${msIdx}`,
                 visualDirection: msVisualDir,
+                imagePrompt: ms.imagePrompt || (scene as any).imagePrompt || msVisualDir,
                 narration: ms.narration || scene.narration,
                 background: scene.background,
               };
@@ -4023,7 +4073,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
               sceneId: scene.id,
               url: contentResult.imageUrl,
               prompt: scene.visualDirection || scene.background?.source || '',
-              source: contentResult.source.includes('fal.ai') ? 'ai' : 'stock',
+              source: (contentResult.source.includes('fal.ai') || contentResult.source.includes('gpt-image')) ? 'ai' : 'stock',
             });
             
             updatedProject.scenes[i].assets!.imageUrl = contentResult.imageUrl;
@@ -4136,7 +4186,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
             sceneId: scene.id,
             url: imageResult.url,
             prompt: bgPrompt,
-            source: imageResult.source.includes('fal.ai') ? 'ai' : 'stock',
+            source: (imageResult.source.includes('fal.ai') || imageResult.source.includes('gpt-image')) ? 'ai' : 'stock',
           });
           updatedProject.scenes[i].assets!.imageUrl = imageResult.url;
         } else {
