@@ -28,6 +28,7 @@ export interface LLMCompletionOptions {
   maxTokens: number;
   temperature?: number;
   timeoutMs?: number;
+  preferDirect?: boolean;
 }
 
 export interface LLMCompletionResult {
@@ -61,6 +62,11 @@ class PiAPILLMClient {
   async createChatCompletion(options: LLMCompletionOptions): Promise<LLMCompletionResult> {
     if (!this.isAvailable()) {
       throw new Error("No LLM API configured — set PIAPI_API_KEY or ANTHROPIC_API_KEY");
+    }
+
+    if (options.preferDirect && this.anthropic) {
+      console.log(`[LLMClient] Using Anthropic direct (preferDirect=true, maxTokens=${options.maxTokens})`);
+      return await this.callAnthropic(options);
     }
 
     if (this.piapiKey) {

@@ -93,6 +93,7 @@ class ScriptParserService {
         systemPrompt,
         messages: [{ role: "user", content: userPrompt }],
         maxTokens: 8000,
+        preferDirect: true,
       });
 
       console.log(`[ScriptParser] LLM response via ${result.provider} (${result.model})`);

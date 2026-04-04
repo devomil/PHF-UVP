@@ -208,7 +208,8 @@ async function callLLMWithRetry(
   userPrompt: string,
   maxTokens: number,
   stageName: string,
-  retries: number = 2
+  retries: number = 2,
+  preferDirect: boolean = false
 ): Promise<string> {
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
@@ -217,6 +218,7 @@ async function callLLMWithRetry(
         messages: [{ role: "user", content: userPrompt }],
         maxTokens,
         temperature: 0.7,
+        preferDirect,
       });
       console.log(`[ScriptPipeline] ${stageName} completed via ${result.provider} (attempt ${attempt + 1})`);
       return result.text;
@@ -814,7 +816,7 @@ ${s.chapterTitle ? `Chapter Title: "${s.chapterTitle}" (create a visual METAPHOR
       const chunkTokens = Math.min(10000, Math.max(6000, chunk.length * tokensPerScene));
 
       try {
-        const chunkRaw = await callLLMWithRetry(systemPrompt, chunkUserPrompt, chunkTokens, `Stage 4: Visual Directions (chunk ${ci + 1}/${chunks.length})`);
+        const chunkRaw = await callLLMWithRetry(systemPrompt, chunkUserPrompt, chunkTokens, `Stage 4: Visual Directions (chunk ${ci + 1}/${chunks.length})`, 2, true);
         const chunkParsed = extractJSON(chunkRaw);
         const chunkScenes = Array.isArray(chunkParsed.scenes) ? chunkParsed.scenes : [];
         chunkScenes.forEach((s: any, i: number) => {
@@ -827,7 +829,7 @@ ${s.chapterTitle ? `Chapter Title: "${s.chapterTitle}" (create a visual METAPHOR
       }
     }
   } else {
-    const raw = await callLLMWithRetry(systemPrompt, userPrompt, estimatedTokens, "Stage 4: Visual Directions");
+    const raw = await callLLMWithRetry(systemPrompt, userPrompt, estimatedTokens, "Stage 4: Visual Directions", 2, estimatedTokens >= 6000);
     const parsed = extractJSON(raw);
     s4Scenes = Array.isArray(parsed.scenes) ? parsed.scenes : [];
   }
