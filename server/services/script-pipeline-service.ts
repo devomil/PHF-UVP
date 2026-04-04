@@ -240,6 +240,47 @@ function extractJSON(text: string): any {
   return JSON.parse(cleaned);
 }
 
+function extractPartialScenesJSON(text: string): { scenes: any[] } {
+  let cleaned = text.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+  const scenesMatch = cleaned.match(/"scenes"\s*:\s*\[/);
+  if (!scenesMatch || scenesMatch.index === undefined) return { scenes: [] };
+
+  const arrayStart = scenesMatch.index + scenesMatch[0].length - 1;
+  let substr = cleaned.substring(arrayStart);
+
+  let braceDepth = 0;
+  let inString = false;
+  let escape = false;
+  const scenes: any[] = [];
+  let lastObjEnd = 0;
+
+  for (let i = 0; i < substr.length; i++) {
+    const ch = substr[i];
+    if (escape) { escape = false; continue; }
+    if (ch === '\\') { escape = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+
+    if (ch === '{') {
+      if (braceDepth === 0) lastObjEnd = i;
+      braceDepth++;
+    } else if (ch === '}') {
+      braceDepth--;
+      if (braceDepth === 0) {
+        const objStr = substr.substring(lastObjEnd, i + 1);
+        try {
+          scenes.push(JSON.parse(objStr));
+        } catch {}
+      }
+    } else if (ch === ']' && braceDepth === 0) {
+      break;
+    }
+  }
+
+  console.log(`[Pipeline S4] Partial JSON recovery: extracted ${scenes.length} complete scene objects`);
+  return { scenes };
+}
+
 async function stageOneStrategy(ctx: PipelineContext, brand: BrandInfo, trends: TrendResult | null): Promise<CreativeStrategy> {
   const brandDesc = brand.brandName
     ? `${brand.brandName}${brand.tagline ? ` — ${brand.tagline}` : ""}`
@@ -813,11 +854,17 @@ ${s.chapterTitle ? `Chapter Title: "${s.chapterTitle}" (create a visual METAPHOR
       }).join('\n\n');
 
       const chunkUserPrompt = userPrompt.replace(scenesForPrompt, chunkScenesForPrompt);
-      const chunkTokens = Math.min(10000, Math.max(6000, chunk.length * tokensPerScene));
+      const chunkTokens = Math.min(16000, Math.max(8000, chunk.length * tokensPerScene));
 
       try {
         const chunkRaw = await callLLMWithRetry(systemPrompt, chunkUserPrompt, chunkTokens, `Stage 4: Visual Directions (chunk ${ci + 1}/${chunks.length})`, 2, true);
-        const chunkParsed = extractJSON(chunkRaw);
+        let chunkParsed: any;
+        try {
+          chunkParsed = extractJSON(chunkRaw);
+        } catch (parseErr: any) {
+          console.warn(`[Pipeline S4] Chunk ${ci + 1} JSON parse failed, attempting partial recovery...`);
+          chunkParsed = extractPartialScenesJSON(chunkRaw);
+        }
         const chunkScenes = Array.isArray(chunkParsed.scenes) ? chunkParsed.scenes : [];
         chunkScenes.forEach((s: any, i: number) => {
           if (!s.sceneNumber) s.sceneNumber = offset + i + 1;
@@ -1170,6 +1217,20 @@ Return ONLY valid JSON:
       scene.artPresetId = preset.id;
       scene.assignedStyleId = preset.id;
     });
+  }
+
+  const primaryPreset = presets[0];
+  if (primaryPreset) {
+    const titleScenes = scenes.filter((s: any) => s.type === 'chapter-title');
+    for (const scene of titleScenes) {
+      if (!scene.artPresetId) {
+        scene.artPresetId = primaryPreset.id;
+        scene.assignedStyleId = primaryPreset.id;
+      }
+    }
+    if (titleScenes.length > 0) {
+      console.log(`[MultiStyleAssign] Assigned ${primaryPreset.id} to ${titleScenes.length} chapter-title scenes`);
+    }
   }
 }
 
