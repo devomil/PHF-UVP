@@ -2856,6 +2856,14 @@ router.post('/projects/:projectId/generate-script', isAuthenticated, async (req:
     }
 
     if (productMediaUrl && scenes.length > 0) {
+      let resolvedProductUrl = productMediaUrl;
+      if (productMediaUrl.startsWith('/uploads/')) {
+        const baseUrl = process.env.REPLIT_DEV_DOMAIN
+          ? `https://${process.env.REPLIT_DEV_DOMAIN}`
+          : (process.env.REPLIT_DOMAINS ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}` : 'http://localhost:5000');
+        resolvedProductUrl = `${baseUrl}${productMediaUrl}`;
+      }
+
       const productSceneTypes = ['product', 'solution', 'hero', 'benefit', 'proof'];
       let targetScene = scenes.find((s: any) => productSceneTypes.includes(s.type));
       if (!targetScene) {
@@ -2863,15 +2871,17 @@ router.post('/projects/:projectId/generate-script', isAuthenticated, async (req:
         targetScene = scenes[midIndex];
       }
       if (targetScene) {
-        let resolvedProductUrl = productMediaUrl;
-        if (productMediaUrl.startsWith('/uploads/')) {
-          const baseUrl = process.env.REPLIT_DEV_DOMAIN
-            ? `https://${process.env.REPLIT_DEV_DOMAIN}`
-            : (process.env.REPLIT_DOMAINS ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}` : 'http://localhost:5000');
-          resolvedProductUrl = `${baseUrl}${productMediaUrl}`;
-        }
         targetScene.brandAssetUrl = resolvedProductUrl;
         console.log(`[GenerateScript] Assigned product image to scene "${targetScene.id}" (type: ${targetScene.type}) for I2V generation: ${resolvedProductUrl.substring(0, 80)}`);
+      }
+
+      const existingRefs: string[] = (projectData as any).referenceImages || (projectData.assets as any)?.referenceImages || [];
+      if (!existingRefs.includes(resolvedProductUrl) && !existingRefs.includes(productMediaUrl)) {
+        const updatedRefs = [resolvedProductUrl, ...existingRefs];
+        (projectData as any).referenceImages = updatedRefs;
+        if (!projectData.assets) projectData.assets = {} as any;
+        (projectData.assets as any).referenceImages = updatedRefs;
+        console.log(`[GenerateScript] Auto-added product media to project reference images (${updatedRefs.length} total)`);
       }
     }
 
@@ -3260,6 +3270,38 @@ router.delete('/projects/:projectId/scenes/:sceneId', isAuthenticated, async (re
     res.json({ success: true, scenes });
   } catch (error: any) {
     console.error('[DeleteScene] Error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.patch('/projects/:projectId/reference-images', isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const userId = (req.user as any)?.id;
+    const { projectId } = req.params;
+    const { referenceImages } = req.body || {};
+
+    if (!Array.isArray(referenceImages)) {
+      return res.status(400).json({ success: false, error: 'referenceImages must be an array' });
+    }
+
+    const projectData = await getProjectFromDb(projectId);
+    if (!projectData) {
+      return res.status(404).json({ success: false, error: 'Project not found' });
+    }
+    if (projectData.ownerId !== userId) {
+      return res.status(403).json({ success: false, error: 'Access denied' });
+    }
+
+    (projectData as any).referenceImages = referenceImages;
+    if (!projectData.assets) projectData.assets = {} as any;
+    (projectData.assets as any).referenceImages = referenceImages;
+
+    await saveProjectToDb(projectData, userId);
+    console.log(`[UniversalVideo] Saved ${referenceImages.length} project-level reference images for project ${projectId}`);
+
+    res.json({ success: true, referenceImages });
+  } catch (error: any) {
+    console.error('[ReferenceImages] Error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });

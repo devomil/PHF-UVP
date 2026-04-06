@@ -75,7 +75,14 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
   const [uploadingSceneId, setUploadingSceneId] = useState<string | null>(null);
   const [librarySceneId, setLibrarySceneId] = useState<string | null>(null);
   const [selectedVoice, setSelectedVoice] = useState(project.voiceoverSettings?.voiceId || project.voiceId || "");
-  const [referenceImages, setReferenceImages] = useState<string[]>((project as any).referenceImages || (project as any).assets?.referenceImages || []);
+  const [referenceImages, setReferenceImages] = useState<string[]>(() => {
+    const existing = (project as any).referenceImages || (project as any).assets?.referenceImages || [];
+    const productMedia = (project as any).assets?.productMediaUrl;
+    if (productMedia && !existing.includes(productMedia)) {
+      return [productMedia, ...existing];
+    }
+    return existing;
+  });
   const [showRefLibrary, setShowRefLibrary] = useState(false);
   const [uploadingRef, setUploadingRef] = useState(false);
   const [editingSceneId, setEditingSceneId] = useState<string | null>(null);
@@ -128,6 +135,19 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
     enabled: !!librarySceneId,
   });
 
+  const persistProjectReferenceImages = async (images: string[]) => {
+    try {
+      await fetch(`/api/universal-video/projects/${projectId}/reference-images`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ referenceImages: images }),
+      });
+    } catch (err) {
+      console.error("[RefImages] Failed to persist project reference images:", err);
+    }
+  };
+
   const handleRefUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -143,7 +163,13 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
       if (!uploadRes.ok) throw new Error("Upload failed");
       const data = await uploadRes.json();
       const url = data.url || data.fileUrl;
-      if (url) setReferenceImages((prev) => [...prev, url]);
+      if (url) {
+        setReferenceImages((prev) => {
+          const updated = [...prev, url];
+          persistProjectReferenceImages(updated);
+          return updated;
+        });
+      }
     } catch (err: any) {
       toast({ title: "Upload Error", description: err.message, variant: "destructive" });
     }
@@ -969,7 +995,13 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
                     <div key={i} className="relative w-14 h-14 rounded-lg overflow-hidden border group" style={{ borderColor: "var(--border-subtle)" }}>
                       <img src={url} alt="" className="w-full h-full object-cover" />
                       <button
-                        onClick={() => setReferenceImages((prev) => prev.filter((_, idx) => idx !== i))}
+                        onClick={() => {
+                          setReferenceImages((prev) => {
+                            const updated = prev.filter((_, idx) => idx !== i);
+                            persistProjectReferenceImages(updated);
+                            return updated;
+                          });
+                        }}
                         className="absolute top-0 right-0 bg-red-500 text-white w-4 h-4 text-[10px] rounded-bl opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
                       >
                         x
@@ -1011,7 +1043,11 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
                             onClick={() => {
                               const url = asset.url || asset.thumbnailUrl;
                               if (url && !referenceImages.includes(url)) {
-                                setReferenceImages((prev) => [...prev, url]);
+                                setReferenceImages((prev) => {
+                                  const updated = [...prev, url];
+                                  persistProjectReferenceImages(updated);
+                                  return updated;
+                                });
                               }
                               setShowRefLibrary(false);
                             }}
