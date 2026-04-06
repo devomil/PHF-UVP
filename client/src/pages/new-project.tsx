@@ -1102,7 +1102,7 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
           </p>
           <div className="grid grid-cols-2 gap-2">
             {allPurposes.map((pp) => {
-              const iconMap: Record<string, any> = {
+              const iconMap: Record<string, typeof Target> = {
                 'book-open': BookOpen,
                 'shield': ShieldCheck,
                 'megaphone': Megaphone,
