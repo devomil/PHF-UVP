@@ -3,13 +3,13 @@ import { useLocation, Link } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Sparkles, FileText, Zap, ArrowLeft, Video, Image, Info, Plus, Trash2, ChevronUp, ChevronDown, GripVertical, Palette, Users, UserCheck, Upload, X, ImagePlus, Film, Loader2, AlertCircle, FileUp, BookOpen, TrendingUp, CheckCircle2, FolderOpen } from "lucide-react";
+import { Sparkles, FileText, Zap, ArrowLeft, Video, Image, Info, Plus, Trash2, ChevronUp, ChevronDown, GripVertical, Palette, Users, UserCheck, Upload, X, ImagePlus, Film, Loader2, AlertCircle, FileUp, BookOpen, TrendingUp, CheckCircle2, FolderOpen, Target, ShieldCheck, Megaphone, CalendarCheck, Share2, ShoppingBag } from "lucide-react";
 import { ProviderCatalogSelector } from "@/components/video/provider-catalog-selector";
 import { CharacterProfilesPanel } from "@/components/video/character-profiles-panel";
 import { AssetSuzzieChat } from "@/components/video/AssetSuzzieChat";
 import { getAvailableStyles } from "@shared/visual-style-config";
 import { getAllVisualArtPresets, isStylizedPreset, type VisualArtPreset } from "@shared/config/visual-art-presets";
-import { getAllProjectTypes, getProjectType, CONTENT_STRUCTURES, LONG_STORY_DEFAULT_ART_PRESET_IDS } from "@shared/config/project-types";
+import { getAllProjectTypes, getProjectType, CONTENT_STRUCTURES, LONG_STORY_DEFAULT_ART_PRESET_IDS, getAllProjectPurposes } from "@shared/config/project-types";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -419,8 +419,10 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
   const [isExtractingDocument, setIsExtractingDocument] = useState(false);
   const [documentWordCount, setDocumentWordCount] = useState(0);
   const documentInputRef = useRef<HTMLInputElement>(null);
+  const [projectPurpose, setProjectPurpose] = useState("");
 
   const allProjectTypes = getAllProjectTypes();
+  const allPurposes = getAllProjectPurposes();
 
   const hasLockedCharacters = characters.some((c: any) => c.locked && c.referenceImageUrl);
   const showCharacterI2V = (artPresetId === '3d-illustration' || artPresetIds.includes('3d-illustration')) && hasLockedCharacters;
@@ -685,6 +687,7 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
         scriptTone,
         callToAction,
       } : undefined,
+      projectPurpose: projectPurpose || undefined,
     });
   };
 
@@ -1044,6 +1047,53 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
         <div>
           <Label style={{ color: "var(--text-secondary)" }}>Target Audience</Label>
           <Input value={targetAudience} onChange={(e) => setTargetAudience(e.target.value)} placeholder="e.g., Young professionals, Tech enthusiasts" className="mt-1.5" style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }} />
+        </div>
+
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <Target className="w-4 h-4 text-purple-400" />
+            <Label style={{ color: "var(--text-secondary)" }}>Project Purpose</Label>
+            {projectPurpose && (
+              <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ backgroundColor: "rgba(139,92,246,0.2)", color: "rgb(167,139,250)" }}>
+                Auto content tags enabled
+              </span>
+            )}
+          </div>
+          <p className="text-xs mb-3" style={{ color: "var(--text-muted)" }}>
+            Tell Suzzie what this video is for — she'll auto-assign the best content style per scene
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            {allPurposes.map((pp) => {
+              const iconMap: Record<string, any> = {
+                'book-open': BookOpen,
+                'shield': ShieldCheck,
+                'megaphone': Megaphone,
+                'calendar': CalendarCheck,
+                'share': Share2,
+                'shopping-bag': ShoppingBag,
+              };
+              const PIcon = iconMap[pp.icon] || Target;
+              const active = projectPurpose === pp.id;
+              return (
+                <button
+                  key={pp.id}
+                  type="button"
+                  onClick={() => setProjectPurpose(active ? "" : pp.id)}
+                  className="text-left rounded-lg border-2 p-3 transition-all duration-200 hover:border-purple-400/50"
+                  style={{
+                    backgroundColor: active ? "rgba(139, 92, 246, 0.12)" : "var(--surface)",
+                    borderColor: active ? "rgb(139, 92, 246)" : "var(--border-subtle)",
+                  }}
+                >
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <PIcon className="w-3.5 h-3.5" style={{ color: active ? "rgb(167,139,250)" : "var(--text-muted)" }} />
+                    <span className="font-medium text-sm" style={{ color: "var(--text-primary)" }}>{pp.label}</span>
+                  </div>
+                  <span className="text-[10px] block" style={{ color: "var(--text-muted)" }}>{pp.description}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         <div>

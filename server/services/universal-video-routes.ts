@@ -2834,6 +2834,7 @@ router.post('/projects/:projectId/generate-script', isAuthenticated, async (req:
       }
     } else {
       const trendHooks = (projectData.progress as any)?.selectedTrendHooks || null;
+      const projectPurpose = (projectData.progress as any)?.projectPurpose || null;
       const pipelineResult = await runScriptPipeline({
         description: script,
         platform,
@@ -2846,6 +2847,7 @@ router.post('/projects/:projectId/generate-script', isAuthenticated, async (req:
         projectType,
         contentStructure,
         trendHooks,
+        projectPurpose,
       });
       scenes = pipelineResult.scenes;
       summary = pipelineResult.summary;
@@ -2946,6 +2948,7 @@ router.post('/projects/:projectId/generate-script', isAuthenticated, async (req:
       try {
         const { enhanceChapterScenesWithStage4 } = await import("./script-pipeline-service");
         console.log(`[GenerateScript] Running Stage 4 cinematic enhancement on chapter content scenes...`);
+        const chapterPurpose = (projectData.progress as any)?.projectPurpose || null;
         scenes = await enhanceChapterScenesWithStage4(scenes, {
           platform: platform as string,
           targetDuration,
@@ -2955,6 +2958,7 @@ router.post('/projects/:projectId/generate-script', isAuthenticated, async (req:
           scriptPresets,
           projectType,
           contentStructure,
+          projectPurpose: chapterPurpose,
         });
         console.log(`[GenerateScript] Chapter Stage 4 cinematic enhancement complete`);
       } catch (stage4Err: any) {
@@ -3056,6 +3060,7 @@ router.post('/projects/:projectId/rerun-stage4', isAuthenticated, async (req: Re
 
     console.log(`[RerunStage4] Re-running Stage 4 on ${scenes.length} scenes (preset: ${artPresetId || artPresetIds?.join(',') || 'auto'})`);
 
+    const rerunPurpose = (projectData.progress as any)?.projectPurpose || null;
     const { enhanceChapterScenesWithStage4 } = await import("./script-pipeline-service");
     const enhanced = await enhanceChapterScenesWithStage4(scenes, {
       platform,
@@ -3066,6 +3071,7 @@ router.post('/projects/:projectId/rerun-stage4', isAuthenticated, async (req: Re
       scriptPresets,
       projectType,
       contentStructure,
+      projectPurpose: rerunPurpose,
     });
 
     await db.update(universalVideoProjects)

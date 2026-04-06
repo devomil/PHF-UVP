@@ -285,7 +285,7 @@ export async function registerRoutes(app: Express) {
         return res.status(401).json({ error: "Not authenticated" });
       }
 
-      const { mode, title, description, targetAudience, duration, platform, aspectRatio, mediaMode, videoGenerationMode, qualityTier, script, numScenes, visualStyle, voiceStyle, outputType, prompt, imageStyle, provider, saveToLibrary, customScenes, artPresetId, artPresetIds, characterConsistency, characters, characterReferenceUrl, characterName, characterDescription, generationMode, negativePrompt, sourceImageUrl, referenceVideoUrl, imageFidelity, productMediaUrl, scriptPresets, projectType, contentStructure } = req.body;
+      const { mode, title, description, targetAudience, duration, platform, aspectRatio, mediaMode, videoGenerationMode, qualityTier, script, numScenes, visualStyle, voiceStyle, outputType, prompt, imageStyle, provider, saveToLibrary, customScenes, artPresetId, artPresetIds, characterConsistency, characters, characterReferenceUrl, characterName, characterDescription, generationMode, negativePrompt, sourceImageUrl, referenceVideoUrl, imageFidelity, productMediaUrl, scriptPresets, projectType, contentStructure, projectPurpose } = req.body;
 
       const projectId = crypto.randomUUID();
 
@@ -366,6 +366,15 @@ export async function registerRoutes(app: Express) {
             progressData.contentStructure = contentStructure;
           } else {
             console.warn(`[Routes] Invalid contentStructure "${contentStructure}" for educational project, ignoring`);
+          }
+        }
+        if (projectPurpose) {
+          const { getProjectPurpose } = await import("../shared/config/project-types");
+          if (getProjectPurpose(projectPurpose)) {
+            progressData.projectPurpose = projectPurpose;
+            console.log(`[Routes] Project purpose: ${projectPurpose}`);
+          } else {
+            console.warn(`[Routes] Invalid projectPurpose "${projectPurpose}", ignoring`);
           }
         }
 

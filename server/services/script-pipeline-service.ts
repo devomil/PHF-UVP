@@ -3,6 +3,8 @@ import { brandSettings } from "../../shared/schema";
 import { llmClient } from "./piapi-llm-client";
 import { getVisualArtPreset, isStylizedPreset, type VisualArtPreset } from "../../shared/config/visual-art-presets";
 import { getTrendingHooks, type TrendResult } from "./trend-intelligence-service";
+import { getProjectPurpose, getContentTagForSceneType } from "../../shared/config/project-types";
+import { getSceneContentTagIds } from "../../shared/config/scene-content-tags";
 
 export interface PipelineContext {
   description: string;
@@ -29,6 +31,7 @@ export interface PipelineContext {
   projectType?: string | null;
   contentStructure?: string | null;
   trendHooks?: string[] | null;
+  projectPurpose?: string | null;
 }
 
 export interface CreativeStrategy {
@@ -749,6 +752,15 @@ Some scenes contain narration that references on-screen text, statistics, data, 
 - "Step 1: Prepare the ingredients..." → textImageEnabled: true (numbered steps)
 - "A serene mountain landscape at dawn..." → textImageEnabled: false (pure visual)
 
+${ctx.projectPurpose ? `## CONTENT TAG AUTO-ASSIGNMENT
+The project purpose is "${ctx.projectPurpose}". Based on each scene's type and content, assign an "assignedContentTag" from these options: ${getSceneContentTagIds().join(', ')}.
+Content tags control visual treatment — they route scenes to specialized prompt prefixes/suffixes and provider boosting:
+- "scientific-medical": cellular structures, molecular diagrams, medical visualizations, scientific processes
+- "lifestyle": natural authentic scenes, wellness, everyday life, warm tones
+- "testimonial": human-focused, interviews, personal stories, portrait-quality
+- "product-showcase": clean product shots, hero displays, branded presentations
+Choose the tag that best matches the VISUAL CONTENT of each scene (not just the scene type).` : ''}
+
 ## CHARACTER CONSISTENCY
 If a recurring character appears, define their complete appearance in the FIRST scene (age, ethnicity, hair, build, wardrobe, distinctive features) and reference the EXACT SAME description in every subsequent scene.
 
@@ -796,6 +808,7 @@ For each scene, write:
 3. A scene-specific negativePrompt (things to avoid in generation)
 4. Split the narration into 2-4 micro-scenes at natural topic shifts. Each micro-scene gets its own cinematic visual direction that inherits the parent scene's visual world, lighting, and mood. Short scenes (under 5s or 1-2 sentences) should have just 1 micro-scene.
 ${multiStyleMode ? '5. An "assignedStyleId" field with the chosen art style id for this scene' : ''}
+${ctx.projectPurpose ? `${multiStyleMode ? '6' : '5'}. An "assignedContentTag" field with the best content tag for this scene's visual content` : ''}
 
 Return ONLY valid JSON:
 {
@@ -803,6 +816,7 @@ Return ONLY valid JSON:
     {
       "sceneNumber": 1,
       ${multiStyleMode ? '"assignedStyleId": "style-id-here",' : ''}
+      ${ctx.projectPurpose ? '"assignedContentTag": "lifestyle",' : ''}
       "imagePrompt": "rich still-image description for Flux generation — NO motion words (50-80 words)",
       "motionPrompt": "motion-only description for I2V animation — camera + subject + atmosphere motion (15-30 words)",
       "visualDirection": "combined full production-grade AI video prompt as fallback (40-80 words)",
@@ -885,7 +899,16 @@ ${s.chapterTitle ? `Chapter Title: "${s.chapterTitle}" (create a visual METAPHOR
 
   const enhanced = stage3Scenes.map((original: any, i: number) => {
     const s4 = s4Scenes.find((s: any) => s.sceneNumber === i + 1) || s4Scenes[i];
-    if (!s4 || !s4.visualDirection) return original;
+    if (!s4 || !s4.visualDirection) {
+      if (ctx.projectPurpose) {
+        const fallbackTag = getContentTagForSceneType(ctx.projectPurpose, original.type || 'standard') || undefined;
+        if (fallbackTag) {
+          console.log(`[Pipeline S4] Scene ${i + 1} no S4 output — applying fallback content tag: ${fallbackTag}`);
+          return { ...original, contentTag: fallbackTag };
+        }
+      }
+      return original;
+    }
 
     let assignedArtPresetId: string | undefined;
     if (multiStyleMode && s4.assignedStyleId && validStyleIds.has(s4.assignedStyleId)) {
@@ -971,6 +994,18 @@ ${s.chapterTitle ? `Chapter Title: "${s.chapterTitle}" (create a visual METAPHOR
 
     const textImageEnabled = s4.textImageEnabled === true;
 
+    const validContentTagIds = new Set(getSceneContentTagIds());
+    let assignedContentTag: string | undefined;
+    if (s4.assignedContentTag && validContentTagIds.has(s4.assignedContentTag)) {
+      assignedContentTag = s4.assignedContentTag;
+      console.log(`[Pipeline S4] Scene ${i + 1} auto-assigned content tag: ${assignedContentTag}`);
+    } else if (ctx.projectPurpose) {
+      assignedContentTag = getContentTagForSceneType(ctx.projectPurpose, original.type || 'standard') || undefined;
+      if (assignedContentTag) {
+        console.log(`[Pipeline S4] Scene ${i + 1} fallback content tag from purpose map: ${assignedContentTag}`);
+      }
+    }
+
     const microScenes = Array.isArray(s4.microScenes) && s4.microScenes.length > 0
       ? s4.microScenes.map((ms: any, idx: number) => {
           let msVisualDirection = ms.visualDirection || '';
@@ -999,6 +1034,7 @@ ${s.chapterTitle ? `Chapter Title: "${s.chapterTitle}" (create a visual METAPHOR
             duration: ms.duration || Math.round((original.duration || 10) / s4.microScenes.length),
             pipelineStage: 4,
             ...(assignedArtPresetId ? { artPresetId: assignedArtPresetId } : {}),
+            ...(assignedContentTag ? { contentTag: assignedContentTag } : {}),
             ...(providerHint ? { providerHint } : {}),
           };
         })
@@ -1014,6 +1050,7 @@ ${s.chapterTitle ? `Chapter Title: "${s.chapterTitle}" (create a visual METAPHOR
       ...(providerHint ? { providerHint } : {}),
       ...(textImageEnabled ? { textImageEnabled } : {}),
       ...(assignedArtPresetId ? { artPresetId: assignedArtPresetId, assignedStyleId: assignedArtPresetId } : {}),
+      ...(assignedContentTag ? { contentTag: assignedContentTag } : {}),
       ...(microScenes ? { microScenes } : {}),
     };
   });
@@ -1022,6 +1059,12 @@ ${s.chapterTitle ? `Chapter Title: "${s.chapterTitle}" (create a visual METAPHOR
     const styleCounts: Record<string, number> = {};
     enhanced.forEach(s => { if (s.artPresetId) styleCounts[s.artPresetId] = (styleCounts[s.artPresetId] || 0) + 1; });
     console.log(`[Pipeline S4] Multi-style assignment summary: ${Object.entries(styleCounts).map(([id, c]) => `${id}(${c})`).join(', ')}`);
+  }
+
+  if (ctx.projectPurpose) {
+    const tagCounts: Record<string, number> = {};
+    enhanced.forEach(s => { if (s.contentTag) tagCounts[s.contentTag] = (tagCounts[s.contentTag] || 0) + 1; });
+    console.log(`[Pipeline S4] Content tag assignment summary: ${Object.entries(tagCounts).map(([id, c]) => `${id}(${c})`).join(', ')}`);
   }
 
   return enhanced;
@@ -1359,6 +1402,7 @@ export async function enhanceChapterScenesWithStage4(
     scriptPresets?: PipelineContext['scriptPresets'];
     projectType?: string | null;
     contentStructure?: string | null;
+    projectPurpose?: string | null;
   },
 ): Promise<any[]> {
   const contentScenes = scenes.filter((s: any) => s.type !== 'chapter-title');
@@ -1379,6 +1423,7 @@ export async function enhanceChapterScenesWithStage4(
     scriptPresets: options.scriptPresets,
     projectType: options.projectType,
     contentStructure: options.contentStructure,
+    projectPurpose: options.projectPurpose,
   };
 
   const strategy = buildFallbackStrategy(ctx);
@@ -1420,6 +1465,7 @@ export async function enhanceChapterScenesWithStage4(
       ...(enhancedScene.textImageEnabled !== undefined ? { textImageEnabled: enhancedScene.textImageEnabled } : {}),
       ...(enhancedScene.microScenes ? { microScenes: enhancedScene.microScenes } : {}),
       ...(enhancedScene.artPresetId ? { artPresetId: enhancedScene.artPresetId, assignedStyleId: enhancedScene.assignedStyleId } : {}),
+      ...(enhancedScene.contentTag ? { contentTag: enhancedScene.contentTag } : {}),
     };
   });
 

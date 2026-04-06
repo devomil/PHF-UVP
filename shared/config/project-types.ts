@@ -141,3 +141,132 @@ export function getAllProjectTypes(): ProjectTypeConfig[] {
 export function getContentStructure(id: string): ContentStructureConfig | null {
   return CONTENT_STRUCTURES.find(cs => cs.id === id) || null;
 }
+
+export interface ProjectPurposeConfig {
+  id: string;
+  label: string;
+  icon: string;
+  description: string;
+  defaultContentTag: string;
+  contentTagHints: Record<string, string>;
+}
+
+export const PROJECT_PURPOSES: Record<string, ProjectPurposeConfig> = {
+  'educate-patient': {
+    id: 'educate-patient',
+    label: 'Educate a Patient',
+    icon: 'book-open',
+    description: 'Health education, condition explainers, treatment guides',
+    defaultContentTag: 'scientific-medical',
+    contentTagHints: {
+      'hook': 'lifestyle',
+      'problem': 'lifestyle',
+      'agitation': 'lifestyle',
+      'solution': 'scientific-medical',
+      'explanation': 'scientific-medical',
+      'proof': 'scientific-medical',
+      'benefit': 'lifestyle',
+      'testimonial': 'testimonial',
+      'cta': 'product-showcase',
+    },
+  },
+  'build-trust': {
+    id: 'build-trust',
+    label: 'Build Trust / Credibility',
+    icon: 'shield',
+    description: 'Authority content, expert positioning, social proof',
+    defaultContentTag: 'testimonial',
+    contentTagHints: {
+      'hook': 'lifestyle',
+      'testimonial': 'testimonial',
+      'proof': 'testimonial',
+      'solution': 'testimonial',
+      'benefit': 'lifestyle',
+      'product': 'product-showcase',
+      'cta': 'product-showcase',
+    },
+  },
+  'promote-service': {
+    id: 'promote-service',
+    label: 'Promote a Service',
+    icon: 'megaphone',
+    description: 'Service highlights, treatment showcases, procedure walkthroughs',
+    defaultContentTag: 'product-showcase',
+    contentTagHints: {
+      'hook': 'lifestyle',
+      'problem': 'lifestyle',
+      'solution': 'product-showcase',
+      'product': 'product-showcase',
+      'feature': 'product-showcase',
+      'benefit': 'lifestyle',
+      'testimonial': 'testimonial',
+      'cta': 'product-showcase',
+    },
+  },
+  'drive-bookings': {
+    id: 'drive-bookings',
+    label: 'Drive Bookings',
+    icon: 'calendar',
+    description: 'Appointment-focused, consultation invites, urgency-driven',
+    defaultContentTag: 'product-showcase',
+    contentTagHints: {
+      'hook': 'lifestyle',
+      'problem': 'lifestyle',
+      'solution': 'product-showcase',
+      'product': 'product-showcase',
+      'benefit': 'lifestyle',
+      'testimonial': 'testimonial',
+      'cta': 'product-showcase',
+    },
+  },
+  'social-awareness': {
+    id: 'social-awareness',
+    label: 'Social Media Awareness',
+    icon: 'share',
+    description: 'Brand awareness, viral content, community building',
+    defaultContentTag: 'lifestyle',
+    contentTagHints: {
+      'hook': 'lifestyle',
+      'story': 'lifestyle',
+      'problem': 'lifestyle',
+      'solution': 'lifestyle',
+      'benefit': 'lifestyle',
+      'testimonial': 'testimonial',
+      'cta': 'lifestyle',
+    },
+  },
+  'product-selling': {
+    id: 'product-selling',
+    label: 'Product Awareness / Selling',
+    icon: 'shopping-bag',
+    description: 'Product launches, e-commerce, supplement or device sales',
+    defaultContentTag: 'product-showcase',
+    contentTagHints: {
+      'hook': 'lifestyle',
+      'problem': 'lifestyle',
+      'solution': 'product-showcase',
+      'product': 'product-showcase',
+      'feature': 'product-showcase',
+      'benefit': 'lifestyle',
+      'proof': 'scientific-medical',
+      'testimonial': 'testimonial',
+      'cta': 'product-showcase',
+    },
+  },
+};
+
+export type ProjectPurposeId = keyof typeof PROJECT_PURPOSES;
+
+export function getProjectPurpose(id: string): ProjectPurposeConfig | null {
+  return PROJECT_PURPOSES[id] || null;
+}
+
+export function getAllProjectPurposes(): ProjectPurposeConfig[] {
+  return Object.values(PROJECT_PURPOSES);
+}
+
+export function getContentTagForSceneType(purposeId: string, sceneType: string): string | null {
+  const purpose = PROJECT_PURPOSES[purposeId];
+  if (!purpose) return null;
+  return purpose.contentTagHints[sceneType] || purpose.defaultContentTag;
+}
