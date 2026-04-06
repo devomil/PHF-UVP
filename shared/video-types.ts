@@ -357,6 +357,7 @@ export interface Scene {
   generationMethod?: 'T2I' | 'I2I' | 'T2V' | 'I2V' | 'V2V' | 'stock';
   visualFormat?: VisualFormat;
   contentTag?: string;
+  assignedContentTag?: string;
   artPresetId?: string;
   assignedStyleId?: string;
   chapterIndex?: number;

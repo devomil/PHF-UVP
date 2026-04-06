@@ -1050,6 +1050,44 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
         </div>
 
         <div>
+          <Label style={{ color: "var(--text-secondary)" }}>Project Type</Label>
+          <p className="text-xs mt-0.5 mb-3" style={{ color: "var(--text-muted)" }}>
+            Choose a format — aspect ratio, duration, and quality are set automatically
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            {allProjectTypes.map((pt) => (
+              <button
+                key={pt.id}
+                type="button"
+                onClick={() => { setProjectTypeId(pt.id); setArtPresetUserOverride(false); }}
+                className="text-left rounded-lg border-2 p-3 transition-all duration-200 hover:border-purple-400/50"
+                style={{
+                  backgroundColor: projectTypeId === pt.id ? "rgba(139, 92, 246, 0.12)" : "var(--surface)",
+                  borderColor: projectTypeId === pt.id ? "rgb(139, 92, 246)" : "var(--border-subtle)",
+                }}
+              >
+                <span className="font-medium text-sm block" style={{ color: "var(--text-primary)" }}>{pt.label}</span>
+                <span className="text-[11px] block mt-0.5" style={{ color: "var(--text-muted)" }}>{pt.subtitle}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {projectTypeId === 'educational' && (
+          <div>
+            <Label style={{ color: "var(--text-secondary)" }}>Content Structure</Label>
+            <Select value={contentStructure} onValueChange={setContentStructure}>
+              <SelectTrigger className="mt-1.5" style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }}><SelectValue /></SelectTrigger>
+              <SelectContent style={{ backgroundColor: "var(--menu-bg)", borderColor: "var(--border-medium)" }}>
+                {CONTENT_STRUCTURES.map((cs) => (
+                  <SelectItem key={cs.id} value={cs.id} style={{ color: "var(--text-primary)" }}>{cs.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+
+        <div>
           <div className="flex items-center gap-2 mb-1">
             <Target className="w-4 h-4 text-purple-400" />
             <Label style={{ color: "var(--text-secondary)" }}>Project Purpose</Label>
@@ -1095,44 +1133,6 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
             })}
           </div>
         </div>
-
-        <div>
-          <Label style={{ color: "var(--text-secondary)" }}>Project Type</Label>
-          <p className="text-xs mt-0.5 mb-3" style={{ color: "var(--text-muted)" }}>
-            Choose a format — aspect ratio, duration, and quality are set automatically
-          </p>
-          <div className="grid grid-cols-2 gap-2">
-            {allProjectTypes.map((pt) => (
-              <button
-                key={pt.id}
-                type="button"
-                onClick={() => { setProjectTypeId(pt.id); setArtPresetUserOverride(false); }}
-                className="text-left rounded-lg border-2 p-3 transition-all duration-200 hover:border-purple-400/50"
-                style={{
-                  backgroundColor: projectTypeId === pt.id ? "rgba(139, 92, 246, 0.12)" : "var(--surface)",
-                  borderColor: projectTypeId === pt.id ? "rgb(139, 92, 246)" : "var(--border-subtle)",
-                }}
-              >
-                <span className="font-medium text-sm block" style={{ color: "var(--text-primary)" }}>{pt.label}</span>
-                <span className="text-[11px] block mt-0.5" style={{ color: "var(--text-muted)" }}>{pt.subtitle}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {projectTypeId === 'educational' && (
-          <div>
-            <Label style={{ color: "var(--text-secondary)" }}>Content Structure</Label>
-            <Select value={contentStructure} onValueChange={setContentStructure}>
-              <SelectTrigger className="mt-1.5" style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }}><SelectValue /></SelectTrigger>
-              <SelectContent style={{ backgroundColor: "var(--menu-bg)", borderColor: "var(--border-medium)" }}>
-                {CONTENT_STRUCTURES.map((cs) => (
-                  <SelectItem key={cs.id} value={cs.id} style={{ color: "var(--text-primary)" }}>{cs.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
 
         <div>
           <Label style={{ color: "var(--text-secondary)" }}>Media Mode</Label>

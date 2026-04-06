@@ -661,7 +661,13 @@ STYLE ASSIGNMENT RULES:
 - The chosen style's marker MUST appear in every visual direction prompt for that scene
 - Match scientific/medical content to scientific-medical style, emotional/human content to cinematic-realism, abstract/process content to 3d-illustration, etc.
 - Ensure visual variety — don't assign all scenes the same style unless the content truly demands it
-- Micro-scenes inherit their parent scene's assigned style`;
+- Micro-scenes inherit their parent scene's assigned style
+${ctx.projectPurpose ? `\nPROJECT PURPOSE STYLE BIAS: The project purpose is "${ctx.projectPurpose}". Use this to bias style selection:
+- "educate-patient": Prefer scientific-medical for explanation/proof scenes, cinematic-realism for testimonials, lifestyle for hooks/benefits
+- "build-trust": Prefer cinematic-realism for testimonials/proof, lifestyle for hooks/benefits
+- "promote-service" / "drive-bookings": Prefer cinematic-realism for product/solution scenes, lifestyle for hooks
+- "social-awareness": Prefer lifestyle and collage styles for authentic feel
+- "product-selling": Prefer cinematic-realism for product scenes, 3d-illustration for features` : ''}`;
   } else {
     artStyleBlock = buildArtStyleBlock(artPreset);
   }
@@ -904,7 +910,7 @@ ${s.chapterTitle ? `Chapter Title: "${s.chapterTitle}" (create a visual METAPHOR
         const fallbackTag = getContentTagForSceneType(ctx.projectPurpose, original.type || 'standard') || undefined;
         if (fallbackTag) {
           console.log(`[Pipeline S4] Scene ${i + 1} no S4 output — applying fallback content tag: ${fallbackTag}`);
-          return { ...original, contentTag: fallbackTag };
+          return { ...original, contentTag: fallbackTag, assignedContentTag: fallbackTag };
         }
       }
       return original;
@@ -1050,7 +1056,7 @@ ${s.chapterTitle ? `Chapter Title: "${s.chapterTitle}" (create a visual METAPHOR
       ...(providerHint ? { providerHint } : {}),
       ...(textImageEnabled ? { textImageEnabled } : {}),
       ...(assignedArtPresetId ? { artPresetId: assignedArtPresetId, assignedStyleId: assignedArtPresetId } : {}),
-      ...(assignedContentTag ? { contentTag: assignedContentTag } : {}),
+      ...(assignedContentTag ? { contentTag: assignedContentTag, assignedContentTag: assignedContentTag } : {}),
       ...(microScenes ? { microScenes } : {}),
     };
   });
@@ -1466,6 +1472,7 @@ export async function enhanceChapterScenesWithStage4(
       ...(enhancedScene.microScenes ? { microScenes: enhancedScene.microScenes } : {}),
       ...(enhancedScene.artPresetId ? { artPresetId: enhancedScene.artPresetId, assignedStyleId: enhancedScene.assignedStyleId } : {}),
       ...(enhancedScene.contentTag ? { contentTag: enhancedScene.contentTag } : {}),
+      ...(enhancedScene.assignedContentTag ? { assignedContentTag: enhancedScene.assignedContentTag } : {}),
     };
   });
 

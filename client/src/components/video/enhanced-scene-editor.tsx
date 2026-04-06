@@ -551,6 +551,8 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
     visualDirection: scene.visualDirection || "",
   });
   const [contentTag, setContentTag] = useState<string | null>(scene.contentTag || null);
+  const [autoAssignedContentTag] = useState<string | null>((scene as any).assignedContentTag || null);
+  const isContentTagAutoAssigned = autoAssignedContentTag !== null && contentTag === autoAssignedContentTag;
   const [sceneArtPreset, setSceneArtPreset] = useState<string>(scene.artPresetId || 'project');
   const [pipelineAssignedStyle] = useState<string | null>(scene.assignedStyleId || null);
 
@@ -1869,9 +1871,11 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
 
         {/* Content Tag */}
         <div>
-          <label className="text-[11px] font-medium uppercase tracking-wider mb-1.5 block" style={{ color: "var(--text-secondary)" }}>
+          <label className="text-[11px] font-medium uppercase tracking-wider mb-1.5 flex items-center gap-1.5" style={{ color: "var(--text-secondary)" }}>
             Content Tag
-            {contentTag && <span className="ml-1 text-[10px] normal-case tracking-normal" style={{ color: activeTag?.color || 'var(--text-muted)' }}>(overrides art style)</span>}
+            {isContentTagAutoAssigned && <span className="text-[9px] normal-case tracking-normal px-1.5 py-0.5 rounded-full" style={{ color: 'rgb(52,211,153)', background: 'rgba(52,211,153,0.1)', border: '1px solid rgba(52,211,153,0.2)' }}>Auto</span>}
+            {contentTag && !isContentTagAutoAssigned && <span className="ml-1 text-[10px] normal-case tracking-normal" style={{ color: activeTag?.color || 'var(--text-muted)' }}>(manual override)</span>}
+            {contentTag && isContentTagAutoAssigned && <span className="ml-1 text-[10px] normal-case tracking-normal" style={{ color: activeTag?.color || 'var(--text-muted)' }}>(overrides art style)</span>}
           </label>
           <div className="flex flex-wrap gap-1.5">
             <button
