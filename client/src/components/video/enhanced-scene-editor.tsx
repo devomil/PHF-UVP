@@ -551,7 +551,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
     visualDirection: scene.visualDirection || "",
   });
   const [contentTag, setContentTag] = useState<string | null>(scene.contentTag || null);
-  const [autoAssignedContentTag] = useState<string | null>((scene as any).assignedContentTag || null);
+  const [autoAssignedContentTag] = useState<string | null>(scene.assignedContentTag || null);
   const isContentTagAutoAssigned = autoAssignedContentTag !== null && contentTag === autoAssignedContentTag;
   const [sceneArtPreset, setSceneArtPreset] = useState<string>(scene.artPresetId || 'project');
   const [pipelineAssignedStyle] = useState<string | null>(scene.assignedStyleId || null);
