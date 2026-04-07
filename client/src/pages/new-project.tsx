@@ -21,7 +21,11 @@ import { Badge } from "@/components/ui/badge";
 
 type Mode = null | "ai-script" | "custom-script" | "quick-create" | "studio-polish";
 
-function AssetLibraryPicker({ onSelect, allowedTypes = ['image'] }: { onSelect: (asset: any) => void; allowedTypes?: ('video' | 'image')[] }) {
+const DEFAULT_ALLOWED_TYPES: readonly ('video' | 'image')[] = ['image'] as const;
+
+function AssetLibraryPicker({ onSelect, allowedTypes }: { onSelect: (asset: any) => void; allowedTypes?: ('video' | 'image')[] }) {
+  const types = allowedTypes || DEFAULT_ALLOWED_TYPES;
+  const typesKey = types.join(',');
   const [assets, setAssets] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<'brand' | 'library'>('brand');
@@ -41,7 +45,7 @@ function AssetLibraryPicker({ onSelect, allowedTypes = ['image'] }: { onSelect: 
             const type = a.mediaType || a.contentType || a.assetType || '';
             const isImage = type.startsWith('image') || type === 'image' || /\.(jpg|jpeg|png|webp)$/i.test(url);
             const isVideo = type.startsWith('video') || type === 'video' || /\.(mp4|mov|avi|mkv|webm)$/i.test(url);
-            return (allowedTypes.includes('image') && isImage) || (allowedTypes.includes('video') && isVideo);
+            return (types.includes('image') && isImage) || (types.includes('video') && isVideo);
           });
           setAssets(filteredAssets);
         }
@@ -51,7 +55,7 @@ function AssetLibraryPicker({ onSelect, allowedTypes = ['image'] }: { onSelect: 
       setLoading(false);
     }
     fetchAssets();
-  }, [tab, allowedTypes]);
+  }, [tab, typesKey]);
 
   return (
     <div className="rounded-lg border overflow-hidden" style={{ borderColor: "var(--border-medium)", backgroundColor: "var(--surface-elevated)" }}>

@@ -1327,13 +1327,15 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                     headers: { 'Content-Type': 'application/json' },
                     credentials: 'include',
                     body: JSON.stringify({
-                      microScenes: scene.microScenes.map((m: any, i: number) =>
+                      microScenes: scene.microScenes.map((m, i) =>
                         i === 0 ? { ...m, originalAudioVolume: newVol } : m
                       ),
                     }),
                   });
                   queryClient.invalidateQueries({ queryKey: ["project", projectId] });
-                } catch {}
+                } catch (err) {
+                  toast({ title: "Failed to update audio setting", variant: "destructive" });
+                }
               }}
               className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${(scene.microScenes?.[0]?.originalAudioVolume ?? 1) > 0 ? 'bg-amber-500' : 'bg-gray-600'}`}
             >
