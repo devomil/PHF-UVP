@@ -44,6 +44,17 @@ const SAFE_EXTENSIONS: Record<string, string> = {
   'image/webp': '.webp',
 };
 
+const MIME_TO_CONTENT_TYPE: Record<string, string> = {
+  'video/mp4': 'video/mp4',
+  'video/quicktime': 'video/mp4',
+  'video/x-msvideo': 'video/x-msvideo',
+  'video/x-matroska': 'video/x-matroska',
+  'video/webm': 'video/webm',
+  'image/jpeg': 'image/jpeg',
+  'image/png': 'image/png',
+  'image/webp': 'image/webp',
+};
+
 const tmpDir = path.resolve('/tmp/studio-polish-uploads');
 if (!fs.existsSync(tmpDir)) {
   fs.mkdirSync(tmpDir, { recursive: true });
@@ -103,29 +114,6 @@ async function extractThumbnail(videoPath: string, outputPath: string): Promise<
       return false;
     }
   }
-}
-
-async function normalizeForRemotionWithAudio(
-  inputPath: string,
-  outputPath: string,
-  targetWidth: number,
-  targetHeight: number
-): Promise<void> {
-  await execFileAsync(
-    'ffmpeg',
-    [
-      '-y',
-      '-i', inputPath,
-      '-vf', `scale=${targetWidth}:${targetHeight}:force_original_aspect_ratio=decrease,pad=${targetWidth}:${targetHeight}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1`,
-      '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23',
-      '-r', '30',
-      '-pix_fmt', 'yuv420p',
-      '-c:a', 'aac', '-b:a', '192k', '-ac', '2', '-ar', '48000',
-      '-movflags', '+faststart',
-      outputPath,
-    ],
-    { timeout: 600000 }
-  );
 }
 
 async function uploadToS3(filePath: string, s3Key: string, contentType: string): Promise<string> {
@@ -188,14 +176,6 @@ router.post('/upload', async (req: Request, res: Response) => {
     const isVideo = ALLOWED_VIDEO_MIMES.includes(req.file.mimetype);
     const isImage = ALLOWED_IMAGE_MIMES.includes(req.file.mimetype);
     const fileId = crypto.randomUUID();
-    const aspectRatio = (req.body.aspectRatio as string) || '16:9';
-
-    const resolutionMap: Record<string, { width: number; height: number }> = {
-      '16:9': { width: 1920, height: 1080 },
-      '9:16': { width: 1080, height: 1920 },
-      '1:1': { width: 1080, height: 1080 },
-    };
-    const target = resolutionMap[aspectRatio] || resolutionMap['16:9'];
 
     let duration = 0;
     let thumbnailUrl: string | null = null;
@@ -212,24 +192,17 @@ router.post('/upload', async (req: Request, res: Response) => {
         });
       }
 
-      const normalizedPath = path.join(tmpDir, `${fileId}_normalized.mp4`);
-      tempFiles.push(normalizedPath);
+      console.log(`[StudioPolish] Uploading video directly: ${req.file.originalname} (${duration.toFixed(1)}s, ${(req.file.size / 1024 / 1024).toFixed(1)}MB)`);
 
-      console.log(`[StudioPolish] Normalizing video: ${req.file.originalname} (${duration.toFixed(1)}s, ${(req.file.size / 1024 / 1024).toFixed(1)}MB)`);
-      await normalizeForRemotionWithAudio(uploadedPath, normalizedPath, target.width, target.height);
-
-      const normalizedDuration = await probeDuration(normalizedPath);
-      if (normalizedDuration > 0) {
-        duration = normalizedDuration;
-      }
-
-      const s3Key = `studio-polish/${userId}/${fileId}/source.mp4`;
-      s3Url = await uploadToS3(normalizedPath, s3Key, 'video/mp4');
-      console.log(`[StudioPolish] Uploaded normalized video to S3: ${s3Key}`);
+      const safeExt = SAFE_EXTENSIONS[req.file.mimetype] || '.mp4';
+      const s3Key = `studio-polish/${userId}/${fileId}/source${safeExt}`;
+      const contentType = MIME_TO_CONTENT_TYPE[req.file.mimetype] || 'video/mp4';
+      s3Url = await uploadToS3(uploadedPath, s3Key, contentType);
+      console.log(`[StudioPolish] Uploaded video to S3: ${s3Key}`);
 
       const thumbPath = path.join(tmpDir, `${fileId}_thumb.jpg`);
       tempFiles.push(thumbPath);
-      const thumbOk = await extractThumbnail(normalizedPath, thumbPath);
+      const thumbOk = await extractThumbnail(uploadedPath, thumbPath);
       if (thumbOk) {
         const thumbKey = `studio-polish/${userId}/${fileId}/thumbnail.jpg`;
         thumbnailUrl = await uploadToS3(thumbPath, thumbKey, 'image/jpeg');
