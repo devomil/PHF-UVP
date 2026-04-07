@@ -117,7 +117,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
 
   const sceneId = scene.id || `scene-${sceneIndex}`;
   const rawVideoUrl = scene.assets?.videoUrl;
-  const imageUrl = scene.assets?.imageUrl || scene.background?.url || (scene as any).textImageUrl;
+  const imageUrl = scene.assets?.imageUrl || scene.background?.url || scene.textImageUrl;
   const hasRawVideo = !!rawVideoUrl;
   const brandAssetUrl = scene.brandAssetUrl as string | undefined;
   const isProductScene = ['product', 'solution', 'hero', 'benefit', 'proof'].includes(scene.type);
