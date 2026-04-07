@@ -1277,6 +1277,23 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                 </p>
               </div>
             </div>
+          ) : scene.background?.type === 'motion-graphic' ? (
+            <div className="relative flex items-center justify-center bg-gradient-to-br from-purple-900/30 via-indigo-900/20 to-blue-900/30" style={{ aspectRatio: aspectRatio === '9:16' ? '9/16' : aspectRatio === '1:1' ? '1/1' : '16/9' }}>
+              <div className="text-center px-4">
+                <Sparkles className="w-8 h-8 mx-auto mb-2 text-purple-400" />
+                <p className="text-xs font-medium mb-1" style={{ color: "var(--text-secondary)" }}>
+                  {scene.type === 'chapter-title' ? (scene.chapterTitle || 'Chapter Title') : 'Motion Graphic'}
+                </p>
+                <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+                  Rendered during final assembly
+                </p>
+              </div>
+              <div className="absolute top-2 right-2">
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                  Motion Graphic
+                </span>
+              </div>
+            </div>
           ) : (
             <div className="flex items-center justify-center" style={{ aspectRatio: aspectRatio === '9:16' ? '9/16' : aspectRatio === '1:1' ? '1/1' : '16/9' }}>
               <div className="text-center">

@@ -5807,8 +5807,9 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, asy
       const isStylizedScene = sceneArtPresetId ? isStylizedCheck(sceneArtPresetId) : false;
       const sceneTextImageEnabled = (scene as any).textImageEnabled === true;
 
-      if (sceneTextImageEnabled) {
-        console.log(`[Phase9B-Async] Scene has textImageEnabled=true — skipping Flux, will use GPT-Image-1 in worker`);
+      const isChapterTitleScene = scene.type === 'chapter-title';
+      if (sceneTextImageEnabled || isChapterTitleScene) {
+        console.log(`[Phase9B-Async] Scene has ${sceneTextImageEnabled ? 'textImageEnabled=true' : `type='${scene.type}'`} — skipping Flux, will use GPT-Image-1 in worker for text rendering`);
       } else if (sceneArtPreset && sceneArtPreset.generationStrategy === 'i2v') {
         console.log(`[Phase9B-Async] Art preset "${sceneArtPreset.name}" requires image-first I2V (universal pipeline)`);
 
