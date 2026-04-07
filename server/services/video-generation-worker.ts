@@ -169,7 +169,10 @@ async function updateSceneMedia(projectId: string, sceneId: string, videoUrl: st
       }
     }
 
-    if (providerHint && videoProvider && providerHint !== videoProvider) {
+    const hintBase = providerHint?.split('-')[0];
+    const resolvedBase = videoProvider?.split('-')[0];
+    const isCrossFamilyMismatch = providerHint && videoProvider && hintBase !== resolvedBase;
+    if (isCrossFamilyMismatch) {
       try {
         const mismatchData = JSON.stringify({ intended: providerHint, resolved: videoProvider });
         let mismatchUpdate;
