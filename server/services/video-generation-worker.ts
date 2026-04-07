@@ -24,7 +24,7 @@ async function findSceneIndex(projectId: string, sceneId: string): Promise<{ sce
   return { sceneIndex, scenes };
 }
 
-async function updateSceneMedia(projectId: string, sceneId: string, videoUrl: string): Promise<boolean> {
+async function updateSceneMedia(projectId: string, sceneId: string, videoUrl: string, videoProvider?: string): Promise<boolean> {
   const timestamp = new Date().toISOString();
   log.info(`[SCENE_UPDATE ${timestamp}] Starting atomic scene media update for project=${projectId}, scene=${sceneId}`);
   log.info(`[SCENE_UPDATE ${timestamp}] New video URL: ${videoUrl}`);
@@ -146,6 +146,27 @@ async function updateSceneMedia(projectId: string, sceneId: string, videoUrl: st
           updatedAt: new Date(),
         })
         .where(eq(universalVideoProjects.projectId, projectId));
+    }
+
+    if (videoProvider) {
+      try {
+        let providerUpdate;
+        if (microIndex >= 0 && microIndex === 0) {
+          providerUpdate = sql`jsonb_set(jsonb_set(${universalVideoProjects.scenes}, ${`{${idx},microScenes,${microIndex},videoProvider}`}::text[], ${JSON.stringify(videoProvider)}::jsonb, true), ${`{${idx},assets,videoProvider}`}::text[], ${JSON.stringify(videoProvider)}::jsonb, true)`;
+        } else if (microIndex >= 0) {
+          providerUpdate = sql`jsonb_set(${universalVideoProjects.scenes}, ${`{${idx},microScenes,${microIndex},videoProvider}`}::text[], ${JSON.stringify(videoProvider)}::jsonb, true)`;
+        } else {
+          providerUpdate = sql`jsonb_set(${universalVideoProjects.scenes}, ${`{${idx},assets,videoProvider}`}::text[], ${JSON.stringify(videoProvider)}::jsonb, true)`;
+        }
+        await db.update(universalVideoProjects)
+          .set({
+            scenes: providerUpdate as any,
+          })
+          .where(eq(universalVideoProjects.projectId, projectId));
+        log.info(`[SCENE_UPDATE ${timestamp}] Video provider "${videoProvider}" stored on scene ${realSceneId}${microIndex >= 0 ? ` (micro ${microIndex})` : ''}`);
+      } catch (provErr: any) {
+        log.warn(`[SCENE_UPDATE ${timestamp}] Failed to store video provider: ${provErr.message}`);
+      }
     }
 
     log.info(`[SCENE_UPDATE ${timestamp}] SUCCESS - Scene ${realSceneId} updated atomically (no read-modify-write).`);
@@ -378,6 +399,7 @@ class VideoGenerationWorker {
       const isProviderHint = job.provider === "auto" && !!i2vProviderHint;
 
       let videoUrl: string | null = null;
+      let resolvedProvider: string = job.provider || 'auto';
 
       try {
         const progressJob1 = await storage.updateVideoGenerationJob(job.jobId, {
@@ -692,6 +714,7 @@ class VideoGenerationWorker {
 
 // Log which provider actually fulfilled the request
         const actualProvider = result.provider || provider || 'auto';
+        resolvedProvider = actualProvider;
         log.debug(` Job ${job.jobId} fulfilled by provider: ${actualProvider}`);
 
         if (result.success && result.videoUrl) {
@@ -755,7 +778,7 @@ class VideoGenerationWorker {
         const completionTimestamp = new Date().toISOString();
         log.info(`[JOB_COMPLETE ${completionTimestamp}] Job ${job.jobId} completed with videoUrl: ${videoUrl}`);
         
-        const sceneUpdated = await updateSceneMedia(job.projectId, job.sceneId, videoUrl);
+        const sceneUpdated = await updateSceneMedia(job.projectId, job.sceneId, videoUrl, resolvedProvider !== 'auto' ? resolvedProvider : undefined);
         if (sceneUpdated) {
           log.info(`[JOB_COMPLETE ${completionTimestamp}] Scene ${job.sceneId} database record updated with new video from job ${job.jobId}`);
         } else {

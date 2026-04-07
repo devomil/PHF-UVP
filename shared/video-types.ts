@@ -509,6 +509,8 @@ export interface SceneAssets {
   preferImage?: boolean;
   logoUrl?: string;
   logoPosition?: { position: string; size: number; opacity: number };
+  imageProvider?: string;
+  videoProvider?: string;
 }
 
 export interface RegenerationRecord {

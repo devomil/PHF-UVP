@@ -3843,6 +3843,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
           });
           updatedProject.scenes[i].assets!.imageUrl = i2iResult.url;
           updatedProject.scenes[i].assets!.backgroundUrl = i2iResult.url;
+          updatedProject.scenes[i].assets!.imageProvider = i2iResult.provider || 'i2i';
           
           // Set up product overlay if applicable (don't skip overlay setup for I2I scenes)
           const productImages = project.assets.productImages || [];
@@ -4126,6 +4127,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
             updatedProject.scenes[i].assets!.imageUrl = contentResult.imageUrl;
             updatedProject.scenes[i].assets!.backgroundUrl = contentResult.imageUrl;
             updatedProject.scenes[i].assets!.useProductOverlay = false;
+            updatedProject.scenes[i].assets!.imageProvider = contentResult.source || 'ai';
             
             if (contentResult.extractedText && contentResult.extractedText.length > 0) {
               updatedProject.scenes[i].extractedOverlayText = contentResult.extractedText;
@@ -4146,6 +4148,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
               updatedProject.scenes[i].assets!.imageUrl = stockResult.imageUrl;
               updatedProject.scenes[i].assets!.backgroundUrl = stockResult.imageUrl;
               updatedProject.scenes[i].assets!.useProductOverlay = false;
+              updatedProject.scenes[i].assets!.imageProvider = stockResult.source || 'stock';
               console.log(`[UniversalVideoService] Stock content image used for ${scene.type}: ${stockResult.source}`);
             }
           }
@@ -4179,6 +4182,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
               updatedProject.scenes[i].assets!.imageUrl = backgroundResult.backgroundUrl;
               updatedProject.scenes[i].assets!.backgroundUrl = backgroundResult.backgroundUrl;
               updatedProject.scenes[i].assets!.useProductOverlay = useProductOverlay;
+              updatedProject.scenes[i].assets!.imageProvider = backgroundResult.provider || 'ai-background';
               
               // Phase 11A: Store extracted overlay data in scene
               if (backgroundResult.extractedText && backgroundResult.extractedText.length > 0) {
@@ -4236,6 +4240,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
             source: (imageResult.source.includes('fal.ai') || imageResult.source.includes('gpt-image')) ? 'ai' : 'stock',
           });
           updatedProject.scenes[i].assets!.imageUrl = imageResult.url;
+          updatedProject.scenes[i].assets!.imageProvider = imageResult.source || 'ai';
         } else {
           if (imageResult.source === 'fal.ai') {
             updatedProject.progress.serviceFailures.push({

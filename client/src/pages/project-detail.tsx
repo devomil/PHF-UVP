@@ -59,6 +59,31 @@ function formatDate(dateStr: string | null | undefined) {
   return new Date(dateStr).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
+function formatProviderName(raw: string): string {
+  if (!raw) return raw;
+  const mappings: [string, string][] = [
+    ['fal.ai flux-pro/v1.1', 'Flux Pro'],
+    ['fal.ai/flux-pro (content)', 'Flux Pro'],
+    ['fal.ai/flux-pro', 'Flux Pro'],
+    ['fal.ai flux/dev', 'Flux Dev'],
+    ['fal.ai flux/schnell', 'Flux Schnell'],
+    ['gpt-image-1 (text-heavy)', 'GPT-Image-1'],
+    ['gpt-image-1', 'GPT-Image-1'],
+    ['piapi-flux', 'Flux (PiAPI)'],
+    ['huggingface', 'HuggingFace'],
+    ['ai-background', 'AI Background'],
+    ['stock', 'Stock'],
+    ['i2i', 'Image-to-Image'],
+    ['midjourney', 'Midjourney'],
+    ['fal.ai', 'Flux (fal.ai)'],
+  ];
+  const lower = raw.toLowerCase();
+  for (const [key, label] of mappings) {
+    if (lower === key.toLowerCase() || lower.startsWith(key.toLowerCase())) return label;
+  }
+  return raw.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
 const PIPELINE_STEPS = [
   { key: "script", label: "Script", icon: FileText },
   { key: "voiceover", label: "Voiceover", icon: Mic },
@@ -883,6 +908,16 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
                               </span>
                             );
                           })()}
+                          {scene.assets?.imageProvider && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full border flex items-center gap-0.5" style={{ borderColor: 'rgba(59,130,246,0.3)', backgroundColor: 'rgba(59,130,246,0.1)', color: 'rgb(96,165,250)' }}>
+                              <ImagePlus className="w-2.5 h-2.5" /> {formatProviderName(scene.assets.imageProvider)}
+                            </span>
+                          )}
+                          {scene.assets?.videoProvider && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full border flex items-center gap-0.5" style={{ borderColor: 'rgba(16,185,129,0.3)', backgroundColor: 'rgba(16,185,129,0.1)', color: 'rgb(52,211,153)' }}>
+                              <Video className="w-2.5 h-2.5" /> {formatProviderName(scene.assets.videoProvider)}
+                            </span>
+                          )}
                         </div>
                         <p className="text-xs truncate mt-0.5" style={{ color: "var(--text-muted)" }}>
                           {narration.substring(0, 80)}{narration.length > 80 ? "..." : ""}

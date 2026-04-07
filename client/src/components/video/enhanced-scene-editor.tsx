@@ -23,6 +23,40 @@ const sceneTypes = [
   "process", "intro", "brand"
 ];
 
+function formatEditorProviderName(raw: string): string {
+  if (!raw) return raw;
+  const mappings: [string, string][] = [
+    ['fal.ai flux-pro/v1.1', 'Flux Pro'],
+    ['fal.ai/flux-pro (content)', 'Flux Pro'],
+    ['fal.ai/flux-pro', 'Flux Pro'],
+    ['fal.ai flux/dev', 'Flux Dev'],
+    ['fal.ai flux/schnell', 'Flux Schnell'],
+    ['gpt-image-1 (text-heavy)', 'GPT-Image-1'],
+    ['gpt-image-1', 'GPT-Image-1'],
+    ['piapi-flux', 'Flux (PiAPI)'],
+    ['huggingface', 'HuggingFace'],
+    ['ai-background', 'AI Background'],
+    ['stock', 'Stock'],
+    ['i2i', 'Image-to-Image'],
+    ['fal.ai', 'Flux (fal.ai)'],
+    ['kling-2.6-pro', 'Kling 2.6 Pro'],
+    ['kling-2.6', 'Kling 2.6'],
+    ['hailuo', 'Hailuo'],
+    ['wan-2.6', 'Wan 2.6'],
+    ['wan-2.1', 'Wan 2.1'],
+    ['veo-3.1', 'Veo 3.1'],
+    ['veo-3', 'Veo 3'],
+    ['sora-2-pro', 'Sora 2 Pro'],
+    ['sora-2', 'Sora 2'],
+    ['hunyuan', 'Hunyuan'],
+  ];
+  const lower = raw.toLowerCase();
+  for (const [key, label] of mappings) {
+    if (lower === key.toLowerCase() || lower.startsWith(key.toLowerCase())) return label;
+  }
+  return raw.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
 const VIDEO_PROVIDERS = [
   { id: "auto", label: "Auto-select (recommended)" },
   { id: "kling-2.6", label: "Kling 2.6" },
@@ -1281,6 +1315,18 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                 <span className="text-[9px] px-2 py-0.5 rounded-full font-medium border"
                   style={{ backgroundColor: "rgba(34,197,94,0.12)", color: "rgb(74,222,128)", borderColor: "rgba(34,197,94,0.25)" }}>
                   {(() => { const p = PROVIDER_CONFIG[(scene as any).providerHint]; return p ? p.displayName : (scene as any).providerHint; })()}
+                </span>
+              )}
+              {scene.assets?.imageProvider && (
+                <span className="text-[9px] px-2 py-0.5 rounded-full font-medium border"
+                  style={{ backgroundColor: "rgba(59,130,246,0.12)", color: "rgb(96,165,250)", borderColor: "rgba(59,130,246,0.25)" }}>
+                  T2I: {formatEditorProviderName(scene.assets.imageProvider)}
+                </span>
+              )}
+              {scene.assets?.videoProvider && (
+                <span className="text-[9px] px-2 py-0.5 rounded-full font-medium border"
+                  style={{ backgroundColor: "rgba(16,185,129,0.12)", color: "rgb(52,211,153)", borderColor: "rgba(16,185,129,0.25)" }}>
+                  Video: {formatEditorProviderName(scene.assets.videoProvider)}
                 </span>
               )}
               {(scene.type === 'chapter-title' || scene.type === 'infographic' || scene.type === 'infographic_diagram' || (scene as any).textImageEnabled) && (
