@@ -582,6 +582,40 @@ export async function registerRoutes(app: Express) {
     }
   });
 
+  app.patch("/api/projects/:projectId", async (req, res) => {
+    try {
+      if (!req.isAuthenticated() || !req.user) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+      const { projectId } = req.params;
+      const userId = (req.user as any).id;
+
+      const [project] = await db
+        .select()
+        .from(universalVideoProjects)
+        .where(eq(universalVideoProjects.projectId, projectId))
+        .limit(1);
+
+      if (!project || project.ownerId !== userId) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+
+      const { scenes } = req.body;
+      if (!scenes || !Array.isArray(scenes)) {
+        return res.status(400).json({ error: "scenes array is required" });
+      }
+
+      await db.update(universalVideoProjects)
+        .set({ scenes, updatedAt: new Date() })
+        .where(eq(universalVideoProjects.projectId, projectId));
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Failed to update project:", error);
+      res.status(500).json({ error: "Failed to update project" });
+    }
+  });
+
   app.delete("/api/projects/:projectId", async (req, res) => {
     try {
       if (!req.isAuthenticated() || !req.user) {

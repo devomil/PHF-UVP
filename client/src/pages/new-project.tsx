@@ -1874,7 +1874,7 @@ function StudioPolishForm({ onBack, onSubmit, isLoading }: { onBack: () => void;
                     fileId: asset.id || crypto.randomUUID(),
                     s3Url: url,
                     thumbnailUrl: asset.thumbnailUrl || url,
-                    duration: asset.duration || (isVideo ? 10 : 5),
+                    duration: asset.duration && asset.duration > 0 ? asset.duration : (isVideo ? 5 : 5),
                     fileType: isVideo ? 'video' : 'image',
                     fileName: asset.name || asset.originalFilename || 'Asset',
                     fileSize: asset.fileSize || 0,

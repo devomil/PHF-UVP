@@ -368,6 +368,29 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
     },
   });
 
+  const moveSceneMutation = useMutation({
+    mutationFn: async ({ fromIndex, toIndex }: { fromIndex: number; toIndex: number }) => {
+      const reordered = [...scenes];
+      const [moved] = reordered.splice(fromIndex, 1);
+      reordered.splice(toIndex, 0, moved);
+      const withOrder = reordered.map((s: any, i: number) => ({ ...s, order: i }));
+      const res = await fetch(`/api/projects/${projectId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ scenes: withOrder }),
+      });
+      if (!res.ok) throw new Error("Failed to reorder scenes");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
   const generateAllMutation = useMutation({
     mutationFn: async () => {
       const body: any = {};
@@ -807,46 +830,66 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
                     <input type="file" accept=".mp4,.mov,.avi,.mkv,.webm,.jpg,.jpeg,.png,.webp" multiple className="hidden"
                       onChange={async (e) => {
                         if (!e.target.files?.length) return;
+                        let currentScenes = [...scenes];
                         for (const file of Array.from(e.target.files)) {
-                          if (file.size > 500 * 1024 * 1024) continue;
+                          if (file.size > 500 * 1024 * 1024) {
+                            toast({ title: "File too large", description: `${file.name} exceeds 500MB limit`, variant: "destructive" });
+                            continue;
+                          }
                           const formData = new FormData();
                           formData.append('file', file);
                           formData.append('aspectRatio', project.outputFormat?.aspectRatio || '16:9');
                           try {
-                            const res = await fetch('/api/studio-polish/upload', { method: 'POST', credentials: 'include', body: formData });
-                            if (res.ok) {
-                              const data = await res.json();
-                              const isVideo = data.fileType === 'video';
-                              const newScene = {
-                                id: crypto.randomUUID(),
-                                type: "content",
-                                title: data.fileName || `Scene ${scenes.length + 1}`,
-                                narration: "",
-                                visualDirection: "",
-                                duration: data.duration || 5,
-                                order: scenes.length,
-                                sourceType: "upload",
-                                microScenes: [{
-                                  id: crypto.randomUUID(),
-                                  videoUrl: data.s3Url,
-                                  imageUrl: isVideo ? (data.thumbnailUrl || null) : data.s3Url,
-                                  status: "ready",
-                                  duration: data.duration || 5,
-                                  originalAudioVolume: isVideo ? 1.0 : 0,
-                                  prompt: "",
-                                  sourceType: "upload",
-                                }],
-                              };
-                              const updatedScenes = [...scenes, newScene];
-                              await fetch(`/api/projects/${project.projectId}`, {
-                                method: 'PATCH',
-                                headers: { 'Content-Type': 'application/json' },
-                                credentials: 'include',
-                                body: JSON.stringify({ scenes: updatedScenes }),
-                              });
-                              queryClient.invalidateQueries({ queryKey: ["/api/projects", project.projectId] });
+                            const uploadRes = await fetch('/api/studio-polish/upload', { method: 'POST', credentials: 'include', body: formData });
+                            if (!uploadRes.ok) {
+                              const err = await uploadRes.json().catch(() => ({ error: 'Upload failed' }));
+                              toast({ title: "Upload failed", description: err.error || 'Unknown error', variant: "destructive" });
+                              continue;
                             }
-                          } catch {}
+                            const data = await uploadRes.json();
+                            const isVideo = data.fileType === 'video';
+                            const newScene = {
+                              id: crypto.randomUUID(),
+                              type: "content" as const,
+                              title: data.fileName || `Scene ${currentScenes.length + 1}`,
+                              narration: "",
+                              visualDirection: "",
+                              duration: data.duration || 5,
+                              order: currentScenes.length,
+                              sourceType: "upload" as const,
+                              microScenes: [{
+                                id: crypto.randomUUID(),
+                                videoUrl: data.s3Url,
+                                imageUrl: isVideo ? (data.thumbnailUrl || null) : data.s3Url,
+                                status: "ready" as const,
+                                duration: data.duration || 5,
+                                originalAudioVolume: isVideo ? 1.0 : 0,
+                                prompt: "",
+                                sourceType: "upload" as const,
+                              }],
+                            };
+                            currentScenes = [...currentScenes, newScene];
+                          } catch (err) {
+                            toast({ title: "Upload error", description: `Failed to upload ${file.name}`, variant: "destructive" });
+                          }
+                        }
+                        if (currentScenes.length > scenes.length) {
+                          try {
+                            const patchRes = await fetch(`/api/projects/${project.projectId}`, {
+                              method: 'PATCH',
+                              headers: { 'Content-Type': 'application/json' },
+                              credentials: 'include',
+                              body: JSON.stringify({ scenes: currentScenes }),
+                            });
+                            if (patchRes.ok) {
+                              queryClient.invalidateQueries({ queryKey: ["project", project.projectId] });
+                              toast({ title: "Clips added", description: `${currentScenes.length - scenes.length} clip(s) added successfully` });
+                            } else {
+                              toast({ title: "Save failed", description: "Clips uploaded but could not save to project", variant: "destructive" });
+                            }
+                          } catch (err) {
+                            toast({ title: "Save error", description: "Failed to save clips to project", variant: "destructive" });
+                          }
                         }
                         e.target.value = '';
                       }}
@@ -991,7 +1034,29 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
                             {isEditing ? <Save className="w-3.5 h-3.5" /> : <Edit2 className="w-3.5 h-3.5" />}
                           </button>
                         )}
-                        {scriptReady && (
+                        {isStudioPolish && scenes.length > 1 && (
+                          <>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); if (index > 0) moveSceneMutation.mutate({ fromIndex: index, toIndex: index - 1 }); }}
+                              disabled={index === 0 || moveSceneMutation.isPending}
+                              className="p-1.5 rounded-lg border transition-colors hover:border-amber-500/30 disabled:opacity-30"
+                              style={{ borderColor: "var(--border-subtle)", color: "var(--text-muted)" }}
+                              title="Move up"
+                            >
+                              <ChevronUp className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); if (index < scenes.length - 1) moveSceneMutation.mutate({ fromIndex: index, toIndex: index + 1 }); }}
+                              disabled={index === scenes.length - 1 || moveSceneMutation.isPending}
+                              className="p-1.5 rounded-lg border transition-colors hover:border-amber-500/30 disabled:opacity-30"
+                              style={{ borderColor: "var(--border-subtle)", color: "var(--text-muted)" }}
+                              title="Move down"
+                            >
+                              <ChevronDown className="w-3.5 h-3.5" />
+                            </button>
+                          </>
+                        )}
+                        {(scriptReady || isStudioPolish) && (
                           <button
                             onClick={(e) => { e.stopPropagation(); deleteSceneMutation.mutate(sceneId); }}
                             className="p-1.5 rounded-lg border transition-colors hover:border-red-500/30"
