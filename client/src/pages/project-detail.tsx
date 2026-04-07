@@ -95,9 +95,23 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
   const fileInputRef = useRef<HTMLInputElement>(null);
   const refFileInputRef = useRef<HTMLInputElement>(null);
   const activeSceneRef = useRef<string | null>(null);
+  const [generationTriggered, setGenerationTriggered] = useState(false);
 
   const progress = project.progress || {};
-  const isGenerating = ["generating", "queued", "processing"].includes(project.status);
+  const serverIsGenerating = ["generating", "queued", "processing"].includes(project.status);
+  const isGenerating = serverIsGenerating || generationTriggered;
+
+  useEffect(() => {
+    if (serverIsGenerating) {
+      setGenerationTriggered(false);
+    }
+  }, [serverIsGenerating]);
+
+  useEffect(() => {
+    if (!generationTriggered) return;
+    const timeout = setTimeout(() => setGenerationTriggered(false), 15000);
+    return () => clearTimeout(timeout);
+  }, [generationTriggered]);
   const currentStep = progress.currentStep || null;
   const hasScenes = scenes.length > 0;
   const scriptReady = hasScenes && (project.status === "draft" || progress.phase === "script_ready");
@@ -344,8 +358,9 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
       return res.json();
     },
     onSuccess: () => {
+      setGenerationTriggered(true);
       queryClient.invalidateQueries({ queryKey: ["project", projectId] });
-      toast({ title: "Generation Started", description: "All assets are being generated." });
+      toast({ title: "Generation Started", description: "All assets are being generated. Suzzie is working on your project." });
     },
     onError: (err: Error) => {
       toast({ title: "Error", description: err.message, variant: "destructive" });
