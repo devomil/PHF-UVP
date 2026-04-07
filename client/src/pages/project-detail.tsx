@@ -831,7 +831,7 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
                 const sceneId = scene.id || `scene-${index}`;
                 const isEditing = editingSceneId === sceneId;
                 const isExpanded = expandedSceneId === sceneId;
-                const thumbCandidate = scene.assets?.imageUrl || scene.background?.imageUrl || scene.background?.url || null;
+                const thumbCandidate = scene.assets?.imageUrl || scene.background?.imageUrl || scene.background?.url || scene.textImageUrl || null;
                 const thumb = thumbCandidate && !thumbCandidate.endsWith('.mp4') ? thumbCandidate : null;
                 const narration = scene.narration || scene.voiceover?.text || "";
                 const isUploading = uploadingSceneId === sceneId;

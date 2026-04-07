@@ -117,7 +117,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
 
   const sceneId = scene.id || `scene-${sceneIndex}`;
   const rawVideoUrl = scene.assets?.videoUrl;
-  const imageUrl = scene.assets?.imageUrl || scene.background?.url;
+  const imageUrl = scene.assets?.imageUrl || scene.background?.url || (scene as any).textImageUrl;
   const hasRawVideo = !!rawVideoUrl;
   const brandAssetUrl = scene.brandAssetUrl as string | undefined;
   const isProductScene = ['product', 'solution', 'hero', 'benefit', 'proof'].includes(scene.type);
@@ -1258,9 +1258,15 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
             <div className="relative">
               <img src={imageUrl} alt={`Scene ${sceneIndex + 1}`} className="w-full object-cover bg-black mx-auto" style={{ aspectRatio: aspectRatio === '9:16' ? '9/16' : aspectRatio === '1:1' ? '1/1' : '16/9', maxHeight: aspectRatio === '9:16' ? '500px' : undefined }} />
               <div className="absolute top-2 right-2">
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-black/60 text-white/70 border border-white/10">
-                  Image Only
-                </span>
+                {scene.background?.type === 'motion-graphic' ? (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                    Motion Graphic
+                  </span>
+                ) : (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-black/60 text-white/70 border border-white/10">
+                    Image Only
+                  </span>
+                )}
               </div>
             </div>
           ) : scene.microScenes && scene.microScenes.length > 0 ? (
