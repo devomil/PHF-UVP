@@ -117,7 +117,7 @@ async function normalizeForRemotionWithAudio(
       '-y',
       '-i', inputPath,
       '-vf', `scale=${targetWidth}:${targetHeight}:force_original_aspect_ratio=decrease,pad=${targetWidth}:${targetHeight}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1`,
-      '-c:v', 'libx264', '-preset', 'fast', '-crf', '18',
+      '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23',
       '-r', '30',
       '-pix_fmt', 'yuv420p',
       '-c:a', 'aac', '-b:a', '192k', '-ac', '2', '-ar', '48000',
