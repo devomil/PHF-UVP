@@ -382,14 +382,21 @@ export default function Dashboard() {
                             {project.title}
                           </h3>
                           <p className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>
-                            {project.type} · {formatRelativeTime(project.updatedAt || project.createdAt)}
+                            {(project.progress as any)?.projectMode === 'studio-polish' ? 'Studio Polish' : project.type} · {formatRelativeTime(project.updatedAt || project.createdAt)}
                           </p>
                         </div>
-                        <Badge
-                          className={`w-fit ${status.bg} ${status.text} hover:opacity-90`}
-                        >
-                          {status.label}
-                        </Badge>
+                        <div className="flex items-center gap-1.5">
+                          {(project.progress as any)?.projectMode === 'studio-polish' && (
+                            <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/30 hover:opacity-90">
+                              Studio Polish
+                            </Badge>
+                          )}
+                          <Badge
+                            className={`w-fit ${status.bg} ${status.text} hover:opacity-90`}
+                          >
+                            {status.label}
+                          </Badge>
+                        </div>
                       </div>
                     </div>
                   </Link>

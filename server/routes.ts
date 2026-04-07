@@ -24,6 +24,7 @@ import { getBrandContext } from "./services/brand-settings-service";
 import { analyzeProductImage } from "./services/product-analysis-service";
 import { assetLibrary } from "../shared/schema";
 import { getProjectType, getContentStructure } from "../shared/config/project-types";
+import studioPolishUploadRouter from "./services/studio-polish-upload";
 
 async function analyzeAndStoreProductMedia(projectId: string, mediaUrl: string, brief: string, userId: string, scriptPresets?: any) {
   console.log(`[Routes] Starting product media analysis for project ${projectId}`);
@@ -97,6 +98,7 @@ export async function registerRoutes(app: Express) {
   app.use("/api/asset-library", assetLibraryRouter);
   app.use("/api/videos", uploadRouter);
   app.use("/api/brand-settings", brandSettingsRouter);
+  app.use("/api/studio-polish", studioPolishUploadRouter);
   app.use("/api/trend-intelligence", trendIntelligenceRouter);
   app.use("/api/social", socialPublishingRouter);
   app.use('/uploads', express.static('uploads'));
@@ -506,6 +508,71 @@ export async function registerRoutes(app: Express) {
         });
 
         return res.json({ projectId: project.projectId, id: project.id, jobId, status: "pending" });
+      }
+
+      if (mode === "studio-polish") {
+        const spUserId = (req.user as any).id;
+        const spBrandData = await getBrandContext(spUserId);
+        const { uploadedFiles, notes } = req.body;
+
+        if (!uploadedFiles || !Array.isArray(uploadedFiles) || uploadedFiles.length === 0) {
+          return res.status(400).json({ error: "At least one file must be uploaded" });
+        }
+
+        const spScenes = uploadedFiles.map((file: any, index: number) => {
+          const isVideo = file.fileType === 'video';
+          return {
+            id: crypto.randomUUID(),
+            type: "content",
+            title: file.fileName || `Scene ${index + 1}`,
+            narration: "",
+            visualDirection: "",
+            duration: file.duration || 5,
+            order: index,
+            sourceType: "upload",
+            microScenes: [{
+              id: crypto.randomUUID(),
+              videoUrl: file.s3Url,
+              imageUrl: isVideo ? (file.thumbnailUrl || null) : file.s3Url,
+              status: "ready",
+              duration: file.duration || 5,
+              originalAudioVolume: isVideo ? 1.0 : 0,
+              originalAudioFadeIn: 0.3,
+              originalAudioFadeOut: 0.5,
+              prompt: "",
+              sourceType: "upload",
+            }],
+          };
+        });
+
+        const totalDuration = spScenes.reduce((sum: number, s: any) => sum + (s.duration || 0), 0);
+        const spProgressData: any = {
+          phase: "scenes-ready",
+          percentage: 50,
+          currentStep: "Media uploaded — ready for polish",
+          projectMode: "studio-polish",
+        };
+
+        const [project] = await db.insert(universalVideoProjects).values({
+          projectId,
+          ownerId: spUserId,
+          type: "script-based",
+          title: title || "Untitled Studio Polish",
+          description: notes || description || "",
+          totalDuration,
+          fps: 30,
+          outputFormat: { aspectRatio: derivedAspectRatio, resolution, platform: derivedPlatform },
+          brand: spBrandData.brandName ? { name: spBrandData.brandName, tagline: spBrandData.tagline, website: spBrandData.website, colors: { primary: spBrandData.primaryColor, secondary: spBrandData.secondaryColor, accent: spBrandData.accentColor }, logoUrl: spBrandData.logoUrl, guidelines: spBrandData.guidelines } : {},
+          scenes: spScenes,
+          assets: {},
+          progress: spProgressData,
+          status: "draft",
+          qualityTier: derivedQualityTier,
+          mediaMode: "video",
+        }).returning();
+
+        console.log(`[Routes] Studio Polish project created: ${projectId} with ${spScenes.length} scenes, total ${totalDuration.toFixed(1)}s`);
+        return res.json({ projectId: project.projectId, id: project.id, status: "draft" });
       }
 
       return res.status(400).json({ error: "Invalid mode" });

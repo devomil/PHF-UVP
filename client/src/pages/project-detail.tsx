@@ -140,6 +140,7 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
   const currentStep = progress.currentStep || null;
   const hasScenes = scenes.length > 0;
   const scriptReady = hasScenes && (project.status === "draft" || progress.phase === "script_ready");
+  const isStudioPolish = (project.progress as any)?.projectMode === 'studio-polish';
 
   const voicesQuery = useQuery({
     queryKey: ["voices"],
@@ -647,7 +648,7 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
         </div>
 
         {/* PHASE 1: Generate Script (no scenes yet) */}
-        {!hasScenes && !isGenerating && (
+        {!hasScenes && !isGenerating && !isStudioPolish && (
           <div className="space-y-4">
             {/* Long Story: Outline Review Flow */}
             {isLongStory && outlinePhase === 'outline_review' && editableChapters.length > 0 ? (
@@ -795,9 +796,64 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
 
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-medium" style={{ color: "var(--text-secondary)" }}>
-                Scenes ({scenes.length})
+                {isStudioPolish ? 'Clips' : 'Scenes'} ({scenes.length})
               </h3>
               <div className="flex items-center gap-2">
+                {isStudioPolish && (
+                  <label className="text-xs px-3 py-1.5 rounded-lg border flex items-center gap-1.5 transition-colors hover:border-amber-500/30 cursor-pointer"
+                    style={{ borderColor: "var(--border-subtle)", color: "var(--text-secondary)" }}>
+                    <Upload className="w-3 h-3" />
+                    Add More Clips
+                    <input type="file" accept=".mp4,.mov,.avi,.mkv,.webm,.jpg,.jpeg,.png,.webp" multiple className="hidden"
+                      onChange={async (e) => {
+                        if (!e.target.files?.length) return;
+                        for (const file of Array.from(e.target.files)) {
+                          if (file.size > 500 * 1024 * 1024) continue;
+                          const formData = new FormData();
+                          formData.append('file', file);
+                          formData.append('aspectRatio', project.outputFormat?.aspectRatio || '16:9');
+                          try {
+                            const res = await fetch('/api/studio-polish/upload', { method: 'POST', credentials: 'include', body: formData });
+                            if (res.ok) {
+                              const data = await res.json();
+                              const isVideo = data.fileType === 'video';
+                              const newScene = {
+                                id: crypto.randomUUID(),
+                                type: "content",
+                                title: data.fileName || `Scene ${scenes.length + 1}`,
+                                narration: "",
+                                visualDirection: "",
+                                duration: data.duration || 5,
+                                order: scenes.length,
+                                sourceType: "upload",
+                                microScenes: [{
+                                  id: crypto.randomUUID(),
+                                  videoUrl: data.s3Url,
+                                  imageUrl: isVideo ? (data.thumbnailUrl || null) : data.s3Url,
+                                  status: "ready",
+                                  duration: data.duration || 5,
+                                  originalAudioVolume: isVideo ? 1.0 : 0,
+                                  prompt: "",
+                                  sourceType: "upload",
+                                }],
+                              };
+                              const updatedScenes = [...scenes, newScene];
+                              await fetch(`/api/projects/${project.projectId}`, {
+                                method: 'PATCH',
+                                headers: { 'Content-Type': 'application/json' },
+                                credentials: 'include',
+                                body: JSON.stringify({ scenes: updatedScenes }),
+                              });
+                              queryClient.invalidateQueries({ queryKey: ["/api/projects", project.projectId] });
+                            }
+                          } catch {}
+                        }
+                        e.target.value = '';
+                      }}
+                    />
+                  </label>
+                )}
+                {!isStudioPolish && (
                 <button
                   onClick={() => regenerateAllVideosMutation.mutate()}
                   disabled={regenerateAllVideosMutation.isPending || isGenerating}
@@ -811,7 +867,8 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
                   )}
                   {regenerateAllVideosMutation.isPending ? "Regenerating..." : "Regenerate All Scenes"}
                 </button>
-                {scriptReady && (
+                )}
+                {!isStudioPolish && scriptReady && (
                   <button
                     onClick={() => generateScriptMutation.mutate()}
                     disabled={generateScriptMutation.isPending}
@@ -959,6 +1016,7 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
                         artPresetId={project?.progress?.artPresetId || (project as any)?.artPresetId}
                         characters={projectCharacters}
                         onCharactersChange={setProjectCharacters}
+                        projectMode={(project?.progress as any)?.projectMode}
                         brandColors={(() => {
                           const bc = project?.brand?.colors;
                           if (bc && typeof bc === 'object' && !Array.isArray(bc)) {
@@ -1113,6 +1171,7 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
                 )}
               </div>
 
+              {!isStudioPolish && (
               <div className="border rounded-xl p-4 space-y-2" style={{ backgroundColor: "rgba(0,0,0,0.15)", borderColor: "var(--border-subtle)" }}>
                 <div className="flex items-center gap-2 mb-1">
                   <Video className="w-4 h-4 text-purple-400" />
@@ -1131,8 +1190,11 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
                     : "T2V mode: Videos generated from visual direction prompts"}
                 </p>
               </div>
+              )}
             </div>
 
+            {!isStudioPolish && (
+            <>
             <button
               onClick={() => generateAllMutation.mutate()}
               disabled={isGenerating || generateAllMutation.isPending}
@@ -1185,6 +1247,8 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
                 );
               })}
             </div>
+            </>
+            )}
           </div>
         )}
       </div>
@@ -1505,6 +1569,7 @@ export default function ProjectDetail({ params }: { params?: { id: string } }) {
   const jobs = Array.isArray(project.jobs) ? project.jobs : [];
   const isQuickCreate = outputFormat.platform === "quick-create";
   const isLongStory = (project.progress as any)?.projectType === 'long-story';
+  const isStudioPolish = (project.progress as any)?.projectMode === 'studio-polish';
   const projectStatus = getStatusInfo(project.status);
 
   return (
@@ -1523,7 +1588,11 @@ export default function ProjectDetail({ params }: { params?: { id: string } }) {
             <div>
               <h1 className="text-2xl font-bold tracking-tight">{project.title}</h1>
               <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
-                {project.type} · Created {formatDate(project.createdAt)}
+                {isStudioPolish ? (
+                  <span className="inline-flex items-center gap-1 text-amber-400 font-medium mr-1">
+                    Studio Polish
+                  </span>
+                ) : project.type} · Created {formatDate(project.createdAt)}
                 {(() => {
                   const artPresetId = project.progress?.artPresetId || (project as any).artPresetId;
                   const artPreset = artPresetId ? getVisualArtPreset(artPresetId) : null;

@@ -19,9 +19,9 @@ import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 
-type Mode = null | "ai-script" | "custom-script" | "quick-create";
+type Mode = null | "ai-script" | "custom-script" | "quick-create" | "studio-polish";
 
-function AssetLibraryPicker({ onSelect }: { onSelect: (asset: any) => void }) {
+function AssetLibraryPicker({ onSelect, allowedTypes = ['image'] }: { onSelect: (asset: any) => void; allowedTypes?: ('video' | 'image')[] }) {
   const [assets, setAssets] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<'brand' | 'library'>('brand');
@@ -36,12 +36,14 @@ function AssetLibraryPicker({ onSelect }: { onSelect: (asset: any) => void }) {
         if (res.ok) {
           const data = await res.json();
           const items = tab === 'brand' ? (data.assets || []) : (Array.isArray(data) ? data : []);
-          const imageAssets = items.filter((a: any) => {
+          const filteredAssets = items.filter((a: any) => {
             const url = a.url || a.assetUrl || a.outputUrl || '';
             const type = a.mediaType || a.contentType || a.assetType || '';
-            return type.startsWith('image') || type === 'image' || url.match(/\.(jpg|jpeg|png|webp)$/i);
+            const isImage = type.startsWith('image') || type === 'image' || /\.(jpg|jpeg|png|webp)$/i.test(url);
+            const isVideo = type.startsWith('video') || type === 'video' || /\.(mp4|mov|avi|mkv|webm)$/i.test(url);
+            return (allowedTypes.includes('image') && isImage) || (allowedTypes.includes('video') && isVideo);
           });
-          setAssets(imageAssets);
+          setAssets(filteredAssets);
         }
       } catch {
         setAssets([]);
@@ -49,7 +51,7 @@ function AssetLibraryPicker({ onSelect }: { onSelect: (asset: any) => void }) {
       setLoading(false);
     }
     fetchAssets();
-  }, [tab]);
+  }, [tab, allowedTypes]);
 
   return (
     <div className="rounded-lg border overflow-hidden" style={{ borderColor: "var(--border-medium)", backgroundColor: "var(--surface-elevated)" }}>
@@ -340,13 +342,24 @@ function ModeSelection({ onSelect }: { onSelect: (mode: Mode) => void }) {
       glow: "hover:shadow-cyan-500/10",
       iconColor: "text-cyan-400",
     },
+    {
+      id: "studio-polish" as const,
+      icon: Film,
+      title: "Studio Polish",
+      description: "Upload your existing videos or images and apply professional finishing — intros, outros, captions, voiceover, music, and cinematic treatments",
+      bestFor: "Manufacturer videos, raw footage, brand content, multi-clip productions",
+      gradient: "from-amber-500/20 to-yellow-600/5",
+      border: "hover:border-amber-500/50",
+      glow: "hover:shadow-amber-500/10",
+      iconColor: "text-amber-400",
+    },
   ];
 
   return (
     <div>
       <h1 className="text-3xl font-bold mb-2" style={{ color: "var(--text-primary)" }}>Create New Project</h1>
       <p className="mb-8" style={{ color: "var(--text-secondary)" }}>Choose how you want to create your video or image</p>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {modes.map((mode) => {
           const Icon = mode.icon;
           return (
@@ -1554,6 +1567,434 @@ const QC_VIDEO_PROVIDERS = [
   { id: 'runway-gen4', name: 'Runway Gen-4' },
 ];
 
+interface UploadedFile {
+  fileId: string;
+  s3Url: string;
+  thumbnailUrl: string | null;
+  duration: number;
+  fileType: 'video' | 'image';
+  fileName: string;
+  fileSize: number;
+}
+
+function StudioPolishForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onSubmit: (data: any) => void; isLoading: boolean }) {
+  const { toast } = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [step, setStep] = useState(1);
+  const [title, setTitle] = useState("");
+  const [notes, setNotes] = useState("");
+  const [platform, setPlatform] = useState("youtube");
+  const [aspectRatio, setAspectRatio] = useState("16:9");
+  const [qualityTier, setQualityTier] = useState("premium");
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [showAssetPicker, setShowAssetPicker] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+
+  const MAX_FILE_SIZE = 500 * 1024 * 1024;
+  const MAX_DURATION_SEC = 600;
+  const ACCEPTED_TYPES = '.mp4,.mov,.avi,.mkv,.webm,.jpg,.jpeg,.png,.webp';
+  const VIDEO_EXTENSIONS = ['.mp4', '.mov', '.avi', '.mkv', '.webm'];
+
+  async function handleFiles(files: FileList | File[]) {
+    const fileArray = Array.from(files);
+    for (const file of fileArray) {
+      if (file.size > MAX_FILE_SIZE) {
+        toast({ title: "File too large", description: `${file.name} exceeds 500MB limit`, variant: "destructive" });
+        continue;
+      }
+
+      const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
+      const isVideo = VIDEO_EXTENSIONS.includes(ext);
+
+      if (isVideo) {
+        try {
+          const duration = await getVideoDuration(file);
+          if (duration > MAX_DURATION_SEC) {
+            toast({ title: "Video too long", description: `${file.name} is ${Math.ceil(duration / 60)} minutes. Maximum is 10 minutes per clip.`, variant: "destructive" });
+            continue;
+          }
+        } catch {}
+      }
+
+      setUploading(true);
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('aspectRatio', aspectRatio);
+
+        const res = await fetch('/api/studio-polish/upload', {
+          method: 'POST',
+          credentials: 'include',
+          body: formData,
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ error: 'Upload failed' }));
+          toast({ title: "Upload failed", description: err.error || 'Upload failed', variant: "destructive" });
+          continue;
+        }
+
+        const data = await res.json();
+        setUploadedFiles(prev => [...prev, data]);
+        toast({ title: "Uploaded", description: file.name });
+      } catch (err: any) {
+        toast({ title: "Upload error", description: err.message || 'Upload failed', variant: "destructive" });
+      }
+      setUploading(false);
+    }
+  }
+
+  function getVideoDuration(file: File): Promise<number> {
+    return new Promise((resolve, reject) => {
+      const video = document.createElement('video');
+      video.preload = 'metadata';
+      video.onloadedmetadata = () => {
+        URL.revokeObjectURL(video.src);
+        resolve(video.duration);
+      };
+      video.onerror = () => reject(new Error('Could not read video'));
+      video.src = URL.createObjectURL(file);
+    });
+  }
+
+  function removeFile(index: number) {
+    setUploadedFiles(prev => prev.filter((_, i) => i !== index));
+  }
+
+  function moveFile(index: number, direction: 'up' | 'down') {
+    setUploadedFiles(prev => {
+      const next = [...prev];
+      const swap = direction === 'up' ? index - 1 : index + 1;
+      if (swap < 0 || swap >= next.length) return prev;
+      [next[index], next[swap]] = [next[swap], next[index]];
+      return next;
+    });
+  }
+
+  function formatFileSize(bytes: number) {
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  function formatDuration(sec: number) {
+    const m = Math.floor(sec / 60);
+    const s = Math.floor(sec % 60);
+    return m > 0 ? `${m}:${s.toString().padStart(2, '0')}` : `${s}s`;
+  }
+
+  function handleSubmit() {
+    if (!title.trim()) {
+      toast({ title: "Title required", description: "Please enter a project title", variant: "destructive" });
+      return;
+    }
+    if (uploadedFiles.length === 0) {
+      toast({ title: "No files", description: "Please upload at least one video or image", variant: "destructive" });
+      return;
+    }
+    onSubmit({
+      mode: "studio-polish",
+      title,
+      notes,
+      platform,
+      aspectRatio,
+      qualityTier,
+      uploadedFiles: uploadedFiles.map(f => ({
+        fileId: f.fileId,
+        s3Url: f.s3Url,
+        thumbnailUrl: f.thumbnailUrl,
+        duration: f.duration,
+        fileType: f.fileType,
+        fileName: f.fileName,
+        fileSize: f.fileSize,
+      })),
+    });
+  }
+
+  const totalDuration = uploadedFiles.reduce((sum, f) => sum + f.duration, 0);
+
+  return (
+    <div className="max-w-3xl mx-auto">
+      <button onClick={onBack} className="flex items-center gap-2 mb-6 text-sm transition-colors" style={{ color: "var(--text-muted)" }}>
+        <ArrowLeft className="w-4 h-4" /> Back to project types
+      </button>
+
+      <div className="flex items-center gap-3 mb-6">
+        <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-amber-500/20 to-yellow-600/5 flex items-center justify-center">
+          <Film className="w-5 h-5 text-amber-400" />
+        </div>
+        <div>
+          <h1 className="text-2xl font-bold" style={{ color: "var(--text-primary)" }}>Studio Polish</h1>
+          <p className="text-sm" style={{ color: "var(--text-secondary)" }}>Upload and enhance your existing media</p>
+        </div>
+      </div>
+
+      <div className="flex gap-2 mb-8">
+        {[1, 2, 3].map(s => (
+          <div key={s} className="flex items-center gap-2">
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${step >= s ? 'bg-amber-500/20 text-amber-400' : ''}`}
+              style={step < s ? { backgroundColor: "var(--surface-elevated)", color: "var(--text-muted)" } : {}}>
+              {step > s ? <CheckCircle2 className="w-4 h-4" /> : s}
+            </div>
+            <span className="text-xs hidden sm:inline" style={{ color: step >= s ? "var(--text-primary)" : "var(--text-muted)" }}>
+              {s === 1 ? 'Setup' : s === 2 ? 'Upload' : 'Review'}
+            </span>
+            {s < 3 && <div className="w-8 h-px" style={{ backgroundColor: "var(--border-subtle)" }} />}
+          </div>
+        ))}
+      </div>
+
+      {step === 1 && (
+        <Card style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)" }}>
+          <CardHeader>
+            <CardTitle style={{ color: "var(--text-primary)" }}>Project Setup</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <Label style={{ color: "var(--text-secondary)" }}>Project Title *</Label>
+              <Input
+                value={title}
+                onChange={e => setTitle(e.target.value)}
+                placeholder="e.g. BioScan Manufacturer Feature"
+                style={{ backgroundColor: "var(--surface-elevated)", borderColor: "var(--border-medium)", color: "var(--text-primary)" }}
+              />
+            </div>
+            <div>
+              <Label style={{ color: "var(--text-secondary)" }}>Notes (optional)</Label>
+              <Textarea
+                value={notes}
+                onChange={e => setNotes(e.target.value)}
+                placeholder="Internal reference notes..."
+                rows={3}
+                style={{ backgroundColor: "var(--surface-elevated)", borderColor: "var(--border-medium)", color: "var(--text-primary)" }}
+              />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <Label style={{ color: "var(--text-secondary)" }}>Platform</Label>
+                <Select value={platform} onValueChange={setPlatform}>
+                  <SelectTrigger style={{ backgroundColor: "var(--surface-elevated)", borderColor: "var(--border-medium)", color: "var(--text-primary)" }}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="youtube">YouTube</SelectItem>
+                    <SelectItem value="tiktok">TikTok</SelectItem>
+                    <SelectItem value="instagram-reels">Instagram Reels</SelectItem>
+                    <SelectItem value="facebook">Facebook</SelectItem>
+                    <SelectItem value="website">LinkedIn / Website</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label style={{ color: "var(--text-secondary)" }}>Aspect Ratio</Label>
+                <Select value={aspectRatio} onValueChange={setAspectRatio}>
+                  <SelectTrigger style={{ backgroundColor: "var(--surface-elevated)", borderColor: "var(--border-medium)", color: "var(--text-primary)" }}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="16:9">16:9 (Landscape)</SelectItem>
+                    <SelectItem value="9:16">9:16 (Portrait)</SelectItem>
+                    <SelectItem value="1:1">1:1 (Square)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label style={{ color: "var(--text-secondary)" }}>Quality</Label>
+                <Select value={qualityTier} onValueChange={setQualityTier}>
+                  <SelectTrigger style={{ backgroundColor: "var(--surface-elevated)", borderColor: "var(--border-medium)", color: "var(--text-primary)" }}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="standard">Standard</SelectItem>
+                    <SelectItem value="premium">Premium</SelectItem>
+                    <SelectItem value="ultra">Ultra</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="flex justify-end pt-2">
+              <Button onClick={() => { if (!title.trim()) { toast({ title: "Title required", variant: "destructive" }); return; } setStep(2); }} className="bg-amber-600 hover:bg-amber-700 text-white">
+                Next: Upload Media
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {step === 2 && (
+        <Card style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)" }}>
+          <CardHeader>
+            <CardTitle style={{ color: "var(--text-primary)" }}>Upload Media</CardTitle>
+            <CardDescription style={{ color: "var(--text-secondary)" }}>
+              Add your videos and images. Each file becomes one scene. Drag to reorder.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div
+              className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors cursor-pointer ${dragOver ? 'border-amber-400 bg-amber-500/5' : ''}`}
+              style={!dragOver ? { borderColor: "var(--border-medium)" } : {}}
+              onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={e => { e.preventDefault(); setDragOver(false); if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files); }}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept={ACCEPTED_TYPES}
+                multiple
+                className="hidden"
+                onChange={e => { if (e.target.files?.length) handleFiles(e.target.files); e.target.value = ''; }}
+              />
+              <FileUp className="w-10 h-10 mx-auto mb-3 text-amber-400" />
+              <p className="font-medium" style={{ color: "var(--text-primary)" }}>
+                {uploading ? 'Uploading & normalizing...' : 'Drop files here or click to browse'}
+              </p>
+              <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
+                MP4, MOV, AVI, MKV, WebM, JPG, PNG, WEBP · Max 500MB / 10 min per file
+              </p>
+              {uploading && <Loader2 className="w-5 h-5 animate-spin mx-auto mt-3 text-amber-400" />}
+            </div>
+
+            <div className="flex justify-center">
+              <Button variant="outline" size="sm" onClick={() => setShowAssetPicker(!showAssetPicker)}
+                style={{ borderColor: "var(--border-medium)", color: "var(--text-secondary)" }}>
+                <FolderOpen className="w-4 h-4 mr-2" /> Select from Asset Library
+              </Button>
+            </div>
+
+            {showAssetPicker && (
+              <AssetLibraryPicker
+                allowedTypes={['video', 'image']}
+                onSelect={(asset: any) => {
+                  const url = asset.url || asset.assetUrl || asset.outputUrl || '';
+                  const type = asset.mediaType || asset.contentType || asset.assetType || '';
+                  const isVideo = type.startsWith('video') || /\.(mp4|mov|avi|mkv|webm)$/i.test(url);
+                  setUploadedFiles(prev => [...prev, {
+                    fileId: asset.id || crypto.randomUUID(),
+                    s3Url: url,
+                    thumbnailUrl: asset.thumbnailUrl || url,
+                    duration: asset.duration || (isVideo ? 10 : 5),
+                    fileType: isVideo ? 'video' : 'image',
+                    fileName: asset.name || asset.originalFilename || 'Asset',
+                    fileSize: asset.fileSize || 0,
+                  }]);
+                  setShowAssetPicker(false);
+                  toast({ title: "Added", description: asset.name || 'Asset added' });
+                }}
+              />
+            )}
+
+            {uploadedFiles.length > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                    {uploadedFiles.length} file{uploadedFiles.length > 1 ? 's' : ''} · {formatDuration(totalDuration)} total
+                  </span>
+                </div>
+                {uploadedFiles.map((file, idx) => (
+                  <div key={file.fileId} className="flex items-center gap-3 p-3 rounded-lg border" style={{ backgroundColor: "var(--surface-elevated)", borderColor: "var(--border-subtle)" }}>
+                    <div className="flex flex-col gap-1">
+                      <button onClick={() => moveFile(idx, 'up')} disabled={idx === 0} className="disabled:opacity-30"><ChevronUp className="w-3 h-3" style={{ color: "var(--text-muted)" }} /></button>
+                      <button onClick={() => moveFile(idx, 'down')} disabled={idx === uploadedFiles.length - 1} className="disabled:opacity-30"><ChevronDown className="w-3 h-3" style={{ color: "var(--text-muted)" }} /></button>
+                    </div>
+                    <div className="w-16 h-10 rounded overflow-hidden flex-shrink-0" style={{ backgroundColor: "var(--surface)" }}>
+                      {file.thumbnailUrl ? (
+                        <img src={file.thumbnailUrl} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          {file.fileType === 'video' ? <Video className="w-4 h-4 text-amber-400" /> : <Image className="w-4 h-4 text-amber-400" />}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm truncate" style={{ color: "var(--text-primary)" }}>{file.fileName}</p>
+                      <div className="flex items-center gap-2 text-xs" style={{ color: "var(--text-muted)" }}>
+                        <Badge variant="outline" className="text-[10px] px-1.5 py-0" style={{ borderColor: file.fileType === 'video' ? 'rgb(251, 191, 36)' : 'rgb(168, 162, 158)', color: file.fileType === 'video' ? 'rgb(251, 191, 36)' : 'rgb(168, 162, 158)' }}>
+                          {file.fileType === 'video' ? 'Video' : 'Image'}
+                        </Badge>
+                        <span>{formatDuration(file.duration)}</span>
+                        <span>{formatFileSize(file.fileSize)}</span>
+                      </div>
+                    </div>
+                    <button onClick={() => removeFile(idx)} className="p-1 rounded hover:bg-red-500/10 transition-colors">
+                      <Trash2 className="w-4 h-4 text-red-400" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="flex justify-between pt-2">
+              <Button variant="outline" onClick={() => setStep(1)} style={{ borderColor: "var(--border-medium)", color: "var(--text-secondary)" }}>
+                Back
+              </Button>
+              <Button onClick={() => { if (uploadedFiles.length === 0) { toast({ title: "No files", description: "Upload at least one file", variant: "destructive" }); return; } setStep(3); }}
+                className="bg-amber-600 hover:bg-amber-700 text-white" disabled={uploading}>
+                Next: Review
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {step === 3 && (
+        <Card style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)" }}>
+          <CardHeader>
+            <CardTitle style={{ color: "var(--text-primary)" }}>Review & Create</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <span style={{ color: "var(--text-muted)" }}>Title</span>
+                <p className="font-medium" style={{ color: "var(--text-primary)" }}>{title}</p>
+              </div>
+              <div>
+                <span style={{ color: "var(--text-muted)" }}>Platform</span>
+                <p className="font-medium capitalize" style={{ color: "var(--text-primary)" }}>{platform}</p>
+              </div>
+              <div>
+                <span style={{ color: "var(--text-muted)" }}>Aspect Ratio</span>
+                <p className="font-medium" style={{ color: "var(--text-primary)" }}>{aspectRatio}</p>
+              </div>
+              <div>
+                <span style={{ color: "var(--text-muted)" }}>Quality</span>
+                <p className="font-medium capitalize" style={{ color: "var(--text-primary)" }}>{qualityTier}</p>
+              </div>
+            </div>
+            <div className="p-3 rounded-lg" style={{ backgroundColor: "var(--surface-elevated)" }}>
+              <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                {uploadedFiles.length} scene{uploadedFiles.length > 1 ? 's' : ''} · {formatDuration(totalDuration)} total duration
+              </p>
+              <div className="flex flex-wrap gap-1 mt-2">
+                {uploadedFiles.map((f, i) => (
+                  <Badge key={f.fileId} variant="outline" className="text-xs" style={{ borderColor: "var(--border-medium)", color: "var(--text-secondary)" }}>
+                    {i + 1}. {f.fileName.length > 20 ? f.fileName.substring(0, 20) + '...' : f.fileName}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+            {notes && (
+              <div>
+                <span className="text-sm" style={{ color: "var(--text-muted)" }}>Notes</span>
+                <p className="text-sm" style={{ color: "var(--text-secondary)" }}>{notes}</p>
+              </div>
+            )}
+            <div className="flex justify-between pt-2">
+              <Button variant="outline" onClick={() => setStep(2)} style={{ borderColor: "var(--border-medium)", color: "var(--text-secondary)" }}>
+                Back
+              </Button>
+              <Button onClick={handleSubmit} className="bg-amber-600 hover:bg-amber-700 text-white" disabled={isLoading}>
+                {isLoading ? <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Creating...</> : 'Create Project'}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
 const QC_IMAGE_PROVIDERS = [
   { id: 'auto', name: 'Auto (Best Match)' },
   { id: 'flux', name: 'Flux Schnell' },
@@ -2111,6 +2552,7 @@ export default function NewProject() {
       {mode === "ai-script" && <AIScriptForm onBack={() => setMode(null)} onSubmit={handleSubmit} isLoading={createMutation.isPending} />}
       {mode === "custom-script" && <CustomScriptForm onBack={() => setMode(null)} onSubmit={handleSubmit} isLoading={createMutation.isPending} />}
       {mode === "quick-create" && <QuickCreateForm onBack={() => setMode(null)} onSubmit={handleSubmit} isLoading={createMutation.isPending} />}
+      {mode === "studio-polish" && <StudioPolishForm onBack={() => setMode(null)} onSubmit={handleSubmit} isLoading={createMutation.isPending} />}
     </div>
   );
 }

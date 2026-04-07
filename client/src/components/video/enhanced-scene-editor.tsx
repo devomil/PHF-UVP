@@ -101,9 +101,10 @@ interface EnhancedSceneEditorProps {
   characters?: CharacterProfile[];
   onCharactersChange?: (characters: CharacterProfile[]) => void;
   brandColors?: string[];
+  projectMode?: string;
 }
 
-export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, aspectRatio = "16:9", artPresetId, characters = [], onCharactersChange, brandColors }: EnhancedSceneEditorProps) {
+export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, aspectRatio = "16:9", artPresetId, characters = [], onCharactersChange, brandColors, projectMode }: EnhancedSceneEditorProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -1310,6 +1311,40 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
           )}
         </div>
 
+        {projectMode === 'studio-polish' && hasVideo && (
+          <div className="mt-2 flex items-center gap-3 px-3 py-2 rounded-lg border" style={{ borderColor: "var(--border-subtle)", backgroundColor: "var(--surface-elevated)" }}>
+            <Volume2 className="w-4 h-4 flex-shrink-0" style={{ color: "var(--text-muted)" }} />
+            <span className="text-xs flex-1" style={{ color: "var(--text-secondary)" }}>Original Audio</span>
+            <button
+              onClick={async () => {
+                const ms = scene.microScenes?.[0];
+                if (!ms) return;
+                const currentVol = ms.originalAudioVolume ?? 1.0;
+                const newVol = currentVol > 0 ? 0 : 1.0;
+                try {
+                  await fetch(`/api/universal-video/projects/${projectId}/scenes/${scene.id}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                      microScenes: scene.microScenes.map((m: any, i: number) =>
+                        i === 0 ? { ...m, originalAudioVolume: newVol } : m
+                      ),
+                    }),
+                  });
+                  queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+                } catch {}
+              }}
+              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${(scene.microScenes?.[0]?.originalAudioVolume ?? 1) > 0 ? 'bg-amber-500' : 'bg-gray-600'}`}
+            >
+              <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${(scene.microScenes?.[0]?.originalAudioVolume ?? 1) > 0 ? 'translate-x-4' : 'translate-x-0.5'}`} />
+            </button>
+            <span className="text-[10px] min-w-[80px]" style={{ color: "var(--text-muted)" }}>
+              {(scene.microScenes?.[0]?.originalAudioVolume ?? 1) > 0 ? 'Keep original' : 'Use voiceover'}
+            </span>
+          </div>
+        )}
+
         {/* Provider Info + Reference Images + Regenerate Controls */}
         <div className="mt-3 grid grid-cols-[1fr_auto_auto] gap-3 items-start">
           {/* Provider & Prompt Info */}
@@ -1512,7 +1547,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
             )}
           </div>
 
-          {/* Provider + Mode + Quality Tier Selectors + Regenerate */}
+          {projectMode !== 'studio-polish' && (
           <div className="flex flex-col items-end gap-2">
             <div className="flex gap-2">
               <div>
@@ -1597,9 +1632,10 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
               </button>
             </div>
           </div>
+          )}
         </div>
 
-        {scene.microScenes && scene.microScenes.length > 0 && (
+        {scene.microScenes && scene.microScenes.length > 0 && projectMode !== 'studio-polish' && (
           <div className="mt-3 flex items-end gap-3 p-3 rounded-xl" style={{ backgroundColor: "rgba(124,58,237,0.04)", border: "1px solid rgba(124,58,237,0.12)" }}>
             <div className="flex-1 min-w-0">
               <p className="text-[11px] font-medium mb-2" style={{ color: "var(--text-secondary)" }}>Generate All Micro Scenes</p>
