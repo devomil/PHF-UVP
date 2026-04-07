@@ -532,7 +532,7 @@ export async function registerRoutes(app: Express) {
             sourceType: "upload",
             microScenes: [{
               id: crypto.randomUUID(),
-              videoUrl: file.s3Url,
+              videoUrl: isVideo ? file.s3Url : null,
               imageUrl: isVideo ? (file.thumbnailUrl || null) : file.s3Url,
               status: "ready",
               duration: file.duration || 5,

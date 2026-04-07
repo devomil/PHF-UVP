@@ -859,7 +859,7 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
                               sourceType: "upload" as const,
                               microScenes: [{
                                 id: crypto.randomUUID(),
-                                videoUrl: data.s3Url,
+                                videoUrl: isVideo ? data.s3Url : null,
                                 imageUrl: isVideo ? (data.thumbnailUrl || null) : data.s3Url,
                                 status: "ready" as const,
                                 duration: data.duration || 5,
