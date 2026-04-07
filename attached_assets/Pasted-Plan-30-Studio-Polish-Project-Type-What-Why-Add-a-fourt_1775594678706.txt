@@ -1,0 +1,136 @@
+Plan #30 — Studio Polish Project Type
+What & Why:
+Add a fourth project creation type called "Studio Polish" to the /projects/new page. This type allows users to upload existing videos or images (from their device or from their NeuralCut Asset Library), then apply the full Render Configuration pipeline — intros, outros, captions, voiceover, background music, sound design, film treatment, and transitions — exactly as AI-Generated Script and Custom Script projects do. The primary use case is enhancing manufacturer videos, raw footage, or externally sourced content with professional NeuralCut production finishing.
+
+Task 1 — Add Studio Polish card to /projects/new:
+Add a fourth card to the project type selection grid alongside the existing three. The card should use a distinct icon (suggest: film reel, sparkle wand, or polish/shine icon). Content:
+Icon: [Wand/sparkle icon in gold/amber color scheme to differentiate from existing cards]
+
+Title: Studio Polish
+
+Description: Upload your existing videos or images and apply 
+professional finishing — intros, outros, captions, voiceover, 
+music, and cinematic treatments.
+
+Best for: Manufacturer videos, raw footage, brand content, 
+multi-clip productions
+The grid should reflow to 2x2 on desktop or a 4-column single row — whichever matches the existing responsive layout best.
+
+Task 2 — Studio Polish project creation form:
+When user selects Studio Polish, show a dedicated creation form (same step pattern as AI-Generated Script). Fields:
+Step 1 — Project Setup:
+
+Project Title (text field, required)
+Project Description / Notes (optional — for internal reference only, not used for AI generation)
+Platform (dropdown — same options as existing: YouTube, TikTok, Instagram Reels, Facebook, LinkedIn)
+Aspect Ratio (dropdown — 16:9, 9:16, 1:1)
+Quality Tier (dropdown — Draft, Standard, Premium, Ultra)
+
+Step 2 — Upload Media:
+This is the new step unique to Studio Polish. Show two upload zones:
+┌─ PRIMARY CONTENT ──────────────────────────────────────┐
+│  Upload your main video(s) or image(s)                  │
+│                                                          │
+│  [Drop files here or click to browse]                   │
+│  Accepts: MP4, MOV, AVI, MKV, JPG, PNG, WEBP           │
+│  Max file size: 500MB per file                          │
+│  Multiple files accepted — they will be sequenced       │
+│                                                          │
+│  OR  [Select from Asset Library]                        │
+└──────────────────────────────────────────────────────────┘
+
+┌─ ADDITIONAL CLIPS (optional) ──────────────────────────┐
+│  Add supplementary clips to insert between             │
+│  your primary content                                   │
+│  [Drop files here or click to browse]                   │
+└──────────────────────────────────────────────────────────┘
+After upload, show uploaded files as a reorderable list with drag handles. Each file shows: thumbnail, filename, duration (for video), file size, and a remove button. Users can drag to reorder — this determines the sequence in the final render.
+Asset Library picker: reuse the existing asset library modal/component. Filter to show only video and image type assets. Selected assets are added to the upload list alongside any local uploads.
+Step 3 — Create Project:
+"Create Project" button creates the project and navigates to the project detail page.
+
+Task 3 — Studio Polish project data model:
+Add projectType: 'studio-polish' to the existing project type enum in shared/video-types.ts and shared/schema.ts.
+For Studio Polish projects, the scenes array is built from the uploaded files rather than AI-generated script. Each uploaded file becomes one scene:
+typescript// For each uploaded file, create a scene:
+{
+  sceneId: generateId(),
+  sceneNumber: index + 1,
+  narration: '', // empty — no narration for uploaded content
+  visualDirection: '', // empty — video is the source
+  duration: fileDuration || 5, // extracted from video metadata
+  sourceVideoUrl: uploadedFileS3Url, // the uploaded file URL
+  sourceType: 'upload', // vs 'ai-generated'
+  microScenes: [{
+    id: generateId(),
+    narration: '',
+    visualDirection: '',
+    duration: fileDuration || 5,
+    videoUrl: uploadedFileS3Url, // the source video IS the micro-scene video
+    status: 'ready', // already has video — no generation needed
+    pipelineStage: undefined
+  }]
+}
+This means Studio Polish scenes skip AI video generation entirely — the uploaded files are treated as already-generated micro-scene videos. The FFmpeg assembly and Remotion render pipeline can then apply all the finishing (intro, outro, captions, voiceover, music, film treatment) exactly as it does for AI-generated projects.
+
+Task 4 — File upload infrastructure:
+Create server/services/studio-polish-upload-service.ts:
+
+Accept multipart form upload or S3 asset URL reference
+For video uploads: extract duration and generate thumbnail using FFmpeg (ffprobe for duration, single frame extract for thumbnail)
+Upload source file to S3 under /studio-polish/{userId}/{projectId}/source/ path
+Return: { s3Url, thumbnailUrl, duration, fileType, fileName, fileSize }
+For image uploads: no duration extraction needed, set duration to 5s default (configurable)
+Store uploaded assets in mediaAssets table with type: 'studio-polish-source'
+
+Add upload endpoint: POST /api/studio-polish/upload
+
+Task 5 — Project detail page behavior for Studio Polish:
+When a project has projectType: 'studio-polish', the project detail page should:
+
+Show uploaded source videos as scene cards — same scene card UI as AI-generated projects
+Scene cards show the source video player (the uploaded file) instead of an AI-generated clip
+Hide the "Generate Script" and "Generate All Videos" buttons — these don't apply
+Show a "Reorder Scenes" button — lets users drag scenes to reorder if they uploaded multiple files
+Scene overlays, text overlays, and per-scene overlay editor work identically to AI-generated projects
+The Render Configuration panel appears and functions identically — full access to intro, outro, captions, voiceover, music, sound design, film treatment, transitions
+"Start Render" button triggers the Remotion render pipeline with the uploaded source videos as the scene video inputs
+Show a "Add More Clips" button to upload additional source files and add them as new scenes after project creation
+
+
+Task 6 — Render pipeline compatibility:
+Verify that the existing Remotion render pipeline (remotion/UniversalVideoComposition.tsx) correctly handles scenes where microScenes[0].videoUrl points to an uploaded S3 file rather than an AI-generated clip. This should work without changes since the composition already reads videoUrl from micro-scenes — but explicitly test that:
+
+An uploaded MP4 with different codec/container than Kling-generated clips renders correctly
+The intro/outro/captions/music/voiceover all composite correctly over uploaded source video
+Film treatment (color grade, grain, vignette) applies to uploaded source video
+
+If FFmpeg pre-normalization (codec standardization, resolution normalization) is needed for uploaded files before Remotion receives them, add a normalization step in the FFmpeg assembly service that runs on Studio Polish source videos before assembly.
+
+Task 7 — Surface Studio Polish appropriately in the UI:
+
+In the Projects list/dashboard, show a "Studio Polish" badge on Studio Polish projects (distinct color — suggest amber/gold to match the card icon)
+In the Content Ready queue on the Social Hub (/social), Studio Polish completed renders appear alongside AI-generated projects
+In the Asset Library, uploaded source files are visible under a "Studio Polish Sources" filter
+
+
+New files:
+
+server/services/studio-polish-upload-service.ts
+client/src/pages/studio-polish-create.tsx (or integrated into existing project creation flow)
+
+Modified files:
+
+client/src/pages/projects-new.tsx — add Studio Polish card
+shared/video-types.ts — add studio-polish project type
+shared/schema.ts — add projectType value
+client/src/components/video/enhanced-scene-editor.tsx — hide generate buttons for studio-polish type
+server/services/universal-video-routes.ts — add studio-polish project creation route
+server/routes.ts — mount upload endpoint
+
+Relevant existing files:
+
+server/services/ffmpeg-assembly-service.ts — may need normalization step
+remotion/UniversalVideoComposition.tsx — verify source video compatibility
+client/src/components/video/render-config-panel.tsx — should work as-is
+server/services/asset-url-resolver.ts — used for S3 URL resolution
