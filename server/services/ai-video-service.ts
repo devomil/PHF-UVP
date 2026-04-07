@@ -15,7 +15,7 @@ import { getVisualStyleConfig, VisualStyleConfig } from '@shared/visual-style-co
 import { getMotionControl, MotionControlConfig } from '@shared/config/motion-control';
 import { optimizePrompt, logPromptOptimization, analyzePrompt } from './video-prompt-optimizer';
 import { getAnyBrandContext, getBrandNameOrDefault } from './brand-settings-service';
-import { getVisualArtPreset, VisualArtPreset, isStylizedPreset as isStylizedPresetCheck } from '../../shared/config/visual-art-presets';
+import { getVisualArtPreset, VisualArtPreset, isStylizedPreset as isStylizedPresetCheck, getProviderHierarchy } from '../../shared/config/visual-art-presets';
 import { getSceneContentTag, SceneContentTag } from '../../shared/config/scene-content-tags';
 
 interface AIVideoResult {
@@ -115,12 +115,53 @@ const TIER_PROVIDER_VERSIONS: Record<string, Record<string, string>> = {
   },
 };
 
+const CIRCUIT_BREAKER_THRESHOLD = 3;
+const CIRCUIT_BREAKER_WINDOW_MS = 10 * 60 * 1000;
+
+interface ProviderFailureRecord {
+  count: number;
+  timestamps: number[];
+}
+
 class AIVideoService {
+  private providerFailures: Map<string, ProviderFailureRecord> = new Map();
   
   constructor() {
     console.log('[AIVideoService] Initializing multi-provider service...');
     const providers = getConfiguredProviders();
     console.log(`[AIVideoService] Configured providers: ${providers.join(', ') || 'none'}`);
+  }
+
+  private recordProviderFailure(providerKey: string): void {
+    const now = Date.now();
+    const record = this.providerFailures.get(providerKey) || { count: 0, timestamps: [] };
+    record.timestamps = record.timestamps.filter(t => now - t < CIRCUIT_BREAKER_WINDOW_MS);
+    record.timestamps.push(now);
+    record.count = record.timestamps.length;
+    this.providerFailures.set(providerKey, record);
+    if (record.count >= CIRCUIT_BREAKER_THRESHOLD) {
+      console.warn(`[AIVideo] Circuit breaker: ${providerKey} has ${record.count} failures in last ${CIRCUIT_BREAKER_WINDOW_MS / 60000}min — will be skipped in fallback chains`);
+    }
+  }
+
+  private isProviderCircuitOpen(providerKey: string): boolean {
+    const record = this.providerFailures.get(providerKey);
+    if (!record) return false;
+    const now = Date.now();
+    record.timestamps = record.timestamps.filter(t => now - t < CIRCUIT_BREAKER_WINDOW_MS);
+    record.count = record.timestamps.length;
+    return record.count >= CIRCUIT_BREAKER_THRESHOLD;
+  }
+
+  private filterByCircuitBreaker(providers: string[], primaryProvider?: string): string[] {
+    return providers.filter(p => {
+      if (p === primaryProvider) return true;
+      if (this.isProviderCircuitOpen(p)) {
+        console.log(`[AIVideo] Circuit breaker: skipping ${p} (${this.providerFailures.get(p)?.count} recent failures)`);
+        return false;
+      }
+      return true;
+    });
   }
   
   isAvailable(): boolean {
@@ -350,8 +391,11 @@ class AIVideoService {
       providerOrder = [enhancedOptions.preferredProvider];
       console.log(`[AIVideo] Using STRICT user-selected provider: ${enhancedOptions.preferredProvider} (no fallbacks)`);
     } else if (enhancedOptions.preferredProvider && enhancedOptions.preferredProvider !== 'auto' && options.isProviderHint) {
-      providerOrder = [enhancedOptions.preferredProvider, ...this.selectProvidersForStyle(styleConfig.preferredVideoProviders, enhancedOptions.sceneType, contentType, configuredProviders).filter(p => p !== enhancedOptions.preferredProvider)];
-      console.log(`[AIVideo] Using provider HINT: ${enhancedOptions.preferredProvider} (preferred first, with fallbacks: ${providerOrder.slice(1, 4).join(', ')})`);
+      const hintHierarchy = getProviderHierarchy(options.artPresetId);
+      const hintChain = [hintHierarchy.primary, ...hintHierarchy.fallback];
+      const hintFallbacks = hintChain.filter(p => p !== enhancedOptions.preferredProvider && configuredProviders.some(cp => cp === p || cp.startsWith(p + '-') || cp.startsWith(p)));
+      providerOrder = [enhancedOptions.preferredProvider, ...hintFallbacks];
+      console.log(`[AIVideo] Using provider HINT: ${enhancedOptions.preferredProvider} (art preset "${options.artPresetId || 'auto'}" fallbacks: ${hintFallbacks.slice(0, 3).join(', ')})`);
     } else if (options.narration && options.prompt) {
       const recommendation = await this.getIntelligentProviderRecommendation(options, configuredProviders);
       providerOrder = recommendation.providerOrder;
@@ -457,14 +501,17 @@ class AIVideoService {
       return true;
     });
 
+    const primaryProvider = validOrder[0];
+    const circuitFilteredOrder = this.filterByCircuitBreaker(validOrder, primaryProvider);
+
     console.log(`[AIVideo] Scene: ${enhancedOptions.sceneType}, Quality: ${qualityTier}`);
-    console.log(`[AIVideo] Provider order: ${validOrder.join(' → ')}`);
+    console.log(`[AIVideo] Provider order: ${circuitFilteredOrder.join(' → ')}${circuitFilteredOrder.length < validOrder.length ? ` (${validOrder.length - circuitFilteredOrder.length} skipped by circuit breaker)` : ''}`);
 
     const artPresetName = artPreset?.name || 'Auto';
     const artPresetIdentifier = options.artPresetId || 'auto';
     const failedProviders: Array<{ provider: string; error: string }> = [];
 
-    for (const providerKey of validOrder) {
+    for (const providerKey of circuitFilteredOrder) {
       const provider = AI_VIDEO_PROVIDERS[providerKey];
       
       console.log(`[AIVideo] Trying ${providerKey} (preset: ${artPresetIdentifier})...`);
@@ -486,10 +533,12 @@ class AIVideoService {
         
         const errorMsg = result.error || 'unknown error';
         failedProviders.push({ provider: providerKey, error: errorMsg });
+        this.recordProviderFailure(providerKey);
         console.warn(`[AIVideo] ✗ ${providerKey} failed for preset "${artPresetIdentifier}": ${errorMsg}`);
         
       } catch (error: any) {
         failedProviders.push({ provider: providerKey, error: error.message });
+        this.recordProviderFailure(providerKey);
         console.warn(`[AIVideo] ✗ ${providerKey} error for preset "${artPresetIdentifier}": ${error.message}`);
       }
     }

@@ -24,7 +24,7 @@ async function findSceneIndex(projectId: string, sceneId: string): Promise<{ sce
   return { sceneIndex, scenes };
 }
 
-async function updateSceneMedia(projectId: string, sceneId: string, videoUrl: string, videoProvider?: string): Promise<boolean> {
+async function updateSceneMedia(projectId: string, sceneId: string, videoUrl: string, videoProvider?: string, providerHint?: string): Promise<boolean> {
   const timestamp = new Date().toISOString();
   log.info(`[SCENE_UPDATE ${timestamp}] Starting atomic scene media update for project=${projectId}, scene=${sceneId}`);
   log.info(`[SCENE_UPDATE ${timestamp}] New video URL: ${videoUrl}`);
@@ -166,6 +166,26 @@ async function updateSceneMedia(projectId: string, sceneId: string, videoUrl: st
         log.info(`[SCENE_UPDATE ${timestamp}] Video provider "${videoProvider}" stored on scene ${realSceneId}${microIndex >= 0 ? ` (micro ${microIndex})` : ''}`);
       } catch (provErr: any) {
         log.warn(`[SCENE_UPDATE ${timestamp}] Failed to store video provider: ${provErr.message}`);
+      }
+    }
+
+    if (providerHint && videoProvider && providerHint !== videoProvider) {
+      try {
+        const mismatchData = JSON.stringify({ intended: providerHint, resolved: videoProvider });
+        let mismatchUpdate;
+        if (microIndex >= 0 && microIndex === 0) {
+          mismatchUpdate = sql`jsonb_set(jsonb_set(${universalVideoProjects.scenes}, ${`{${idx},microScenes,${microIndex},providerMismatch}`}::text[], ${mismatchData}::jsonb, true), ${`{${idx},assets,providerMismatch}`}::text[], ${mismatchData}::jsonb, true)`;
+        } else if (microIndex >= 0) {
+          mismatchUpdate = sql`jsonb_set(${universalVideoProjects.scenes}, ${`{${idx},microScenes,${microIndex},providerMismatch}`}::text[], ${mismatchData}::jsonb, true)`;
+        } else {
+          mismatchUpdate = sql`jsonb_set(${universalVideoProjects.scenes}, ${`{${idx},assets,providerMismatch}`}::text[], ${mismatchData}::jsonb, true)`;
+        }
+        await db.update(universalVideoProjects)
+          .set({ scenes: mismatchUpdate as any })
+          .where(eq(universalVideoProjects.projectId, projectId));
+        log.warn(`[SCENE_UPDATE ${timestamp}] Provider mismatch stored on scene ${realSceneId}: intended=${providerHint}, resolved=${videoProvider}`);
+      } catch (mmErr: any) {
+        log.warn(`[SCENE_UPDATE ${timestamp}] Failed to store provider mismatch: ${mmErr.message}`);
       }
     }
 
@@ -777,8 +797,18 @@ class VideoGenerationWorker {
       if (videoUrl) {
         const completionTimestamp = new Date().toISOString();
         log.info(`[JOB_COMPLETE ${completionTimestamp}] Job ${job.jobId} completed with videoUrl: ${videoUrl}`);
+
+        if (i2vProviderHint && resolvedProvider && resolvedProvider !== 'auto') {
+          const hintBase = i2vProviderHint.split('-')[0];
+          const resolvedBase = resolvedProvider.split('-')[0];
+          if (hintBase !== resolvedBase && i2vProviderHint !== resolvedProvider) {
+            log.warn(`[PROVIDER_MISMATCH] Job ${job.jobId} scene=${job.sceneId}: providerHint="${i2vProviderHint}" but resolved="${resolvedProvider}" — pipeline assignment was overridden by fallback`);
+          } else if (i2vProviderHint !== resolvedProvider) {
+            log.info(`[PROVIDER_VARIANT] Job ${job.jobId} scene=${job.sceneId}: providerHint="${i2vProviderHint}" resolved to variant="${resolvedProvider}"`);
+          }
+        }
         
-        const sceneUpdated = await updateSceneMedia(job.projectId, job.sceneId, videoUrl, resolvedProvider !== 'auto' ? resolvedProvider : undefined);
+        const sceneUpdated = await updateSceneMedia(job.projectId, job.sceneId, videoUrl, resolvedProvider !== 'auto' ? resolvedProvider : undefined, i2vProviderHint || undefined);
         if (sceneUpdated) {
           log.info(`[JOB_COMPLETE ${completionTimestamp}] Scene ${job.sceneId} database record updated with new video from job ${job.jobId}`);
         } else {
