@@ -1870,21 +1870,42 @@ function StudioPolishForm({ onBack, onSubmit, isLoading }: { onBack: () => void;
             {showAssetPicker && (
               <AssetLibraryPicker
                 allowedTypes={['video', 'image']}
-                onSelect={(asset: any) => {
+                onSelect={async (asset: any) => {
                   const url = asset.url || asset.assetUrl || asset.outputUrl || '';
                   const type = asset.mediaType || asset.contentType || asset.assetType || '';
                   const isVideo = type.startsWith('video') || /\.(mp4|mov|avi|mkv|webm)$/i.test(url);
-                  setUploadedFiles(prev => [...prev, {
-                    fileId: asset.id || crypto.randomUUID(),
-                    s3Url: url,
-                    thumbnailUrl: asset.thumbnailUrl || url,
-                    duration: asset.duration && asset.duration > 0 ? asset.duration : (isVideo ? 5 : 5),
-                    fileType: isVideo ? 'video' : 'image',
-                    fileName: asset.name || asset.originalFilename || 'Asset',
-                    fileSize: asset.fileSize || 0,
-                  }]);
-                  setShowAssetPicker(false);
-                  toast({ title: "Added", description: asset.name || 'Asset added' });
+                  const assetDuration = asset.duration && asset.duration > 0 ? asset.duration : null;
+                  try {
+                    const valRes = await fetch('/api/studio-polish/validate-asset', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      credentials: 'include',
+                      body: JSON.stringify({
+                        s3Url: url,
+                        fileType: isVideo ? 'video' : 'image',
+                        duration: assetDuration,
+                      }),
+                    });
+                    if (!valRes.ok) {
+                      const err = await valRes.json().catch(() => ({ error: 'Validation failed' }));
+                      toast({ title: "Cannot add asset", description: err.error || 'Validation failed', variant: "destructive" });
+                      return;
+                    }
+                    const valData = await valRes.json();
+                    setUploadedFiles(prev => [...prev, {
+                      fileId: asset.id || crypto.randomUUID(),
+                      s3Url: url,
+                      thumbnailUrl: asset.thumbnailUrl || url,
+                      duration: valData.duration,
+                      fileType: isVideo ? 'video' : 'image',
+                      fileName: asset.name || asset.originalFilename || 'Asset',
+                      fileSize: asset.fileSize || 0,
+                    }]);
+                    setShowAssetPicker(false);
+                    toast({ title: "Added", description: asset.name || 'Asset added' });
+                  } catch {
+                    toast({ title: "Error", description: "Failed to validate asset", variant: "destructive" });
+                  }
                 }}
               />
             )}

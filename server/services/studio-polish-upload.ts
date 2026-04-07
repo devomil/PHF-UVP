@@ -145,7 +145,31 @@ function cleanupFile(filePath: string) {
   try { if (fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch {}
 }
 
-router.post('/upload', diskUpload.single('file'), async (req: Request, res: Response) => {
+function wrappedUpload(req: Request, res: Response): Promise<void> {
+  return new Promise((resolve, reject) => {
+    diskUpload.single('file')(req, res, (err: any) => {
+      if (err) {
+        if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
+          res.status(400).json({ error: 'Maximum file size is 500MB' });
+        } else if (err instanceof multer.MulterError) {
+          res.status(400).json({ error: `Upload error: ${err.message}` });
+        } else {
+          res.status(400).json({ error: err.message || 'Upload failed' });
+        }
+        reject(err);
+      } else {
+        resolve();
+      }
+    });
+  });
+}
+
+router.post('/upload', async (req: Request, res: Response) => {
+  try {
+    await wrappedUpload(req, res);
+  } catch {
+    return;
+  }
   const uploadedPath = (req.file as any)?.path;
   const tempFiles: string[] = [];
 
@@ -233,14 +257,43 @@ router.post('/upload', diskUpload.single('file'), async (req: Request, res: Resp
     });
   } catch (error: any) {
     console.error('[StudioPolish] Upload error:', error.message);
-    if (error.message?.includes('File too large') || error.message?.includes('fileSize')) {
-      return res.status(400).json({ error: 'Maximum file size is 500MB' });
-    }
     res.status(500).json({ error: `Upload failed: ${error.message?.substring(0, 200)}` });
   } finally {
     for (const f of tempFiles) {
       cleanupFile(f);
     }
+  }
+});
+
+router.post('/validate-asset', async (req: Request, res: Response) => {
+  try {
+    const userId = (req.user as any)?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'User not found' });
+    }
+
+    const { s3Url, fileType, duration: clientDuration } = req.body;
+    if (!s3Url || typeof s3Url !== 'string') {
+      return res.status(400).json({ error: 'Missing s3Url' });
+    }
+
+    if (fileType === 'video') {
+      if (!clientDuration || typeof clientDuration !== 'number' || clientDuration <= 0) {
+        return res.status(400).json({ error: 'Video duration is unknown. Please upload the video directly instead of selecting from Asset Library.' });
+      }
+      if (clientDuration > MAX_DURATION_SEC) {
+        return res.status(400).json({
+          error: `Maximum video length is 10 minutes per clip. This video is ${Math.ceil(clientDuration / 60)} minutes.`,
+        });
+      }
+    }
+
+    res.json({
+      valid: true,
+      duration: fileType === 'video' ? clientDuration : 5,
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: `Validation failed: ${error.message?.substring(0, 200)}` });
   }
 });
 
