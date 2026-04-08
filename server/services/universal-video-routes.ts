@@ -2175,6 +2175,7 @@ router.patch('/projects/:projectId/render-settings', isAuthenticated, async (req
     if (transitions !== undefined) {
       const validStyles = ['fade', 'crossfade', 'dissolve', 'wipe-left', 'wipe-right', 'zoom', 'slide-left', 'slide-right', 'none'];
       progressPatch.transitionSettings = {
+        enabled: transitions.enabled ?? true,
         style: validStyles.includes(transitions.style) ? transitions.style : 'crossfade',
         duration: Math.min(2.0, Math.max(0.1, transitions.duration ?? 0.5)),
       };
@@ -2401,6 +2402,7 @@ router.get('/projects/:projectId/render-settings', isAuthenticated, async (req: 
           letterbox: (projectData as any).filmTreatmentSettings?.letterbox || 'none',
         },
         transitions: {
+          enabled: (projectData as any).transitionSettings?.enabled ?? true,
           style: (projectData as any).transitionSettings?.style || 'crossfade',
           duration: (projectData as any).transitionSettings?.duration ?? 0.5,
         },
@@ -4401,49 +4403,62 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
       console.log(`[Render] Cleared stale text overlays: ${clearedInstructionOverlays} from compositionInstructions, ${clearedTraditionalOverlays} from scene.textOverlays`);
     }
 
-    const visualStyle = (projectData as any).visualStyle || (projectData as any).style || 'lifestyle';
-    const scenesForTransitionPlanning = preparedProject.scenes.map((s: any, idx: number) => ({
-      sceneIndex: idx,
-      sceneType: s.type || 'benefit',
-      duration: s.duration || 5,
-      analysisResult: s.analysisResult,
-    }));
-    const transitionPlan = transitionService.planTransitions(scenesForTransitionPlanning, visualStyle);
-    const normalizeTransitionType = (type: string): string => {
-      if (type === 'cut') return 'none';
-      if (type === 'zoom-in' || type === 'zoom-out') return 'zoom';
-      if (type === 'wipe-up' || type === 'wipe-down') return 'wipe-left';
-      if (type === 'blur') return 'dissolve';
-      return type;
-    };
-    const renderTransitions = transitionPlan.transitions.map(t => ({
-      type: normalizeTransitionType(t.config.type),
-      duration: t.config.duration,
-      easing: t.config.easing,
-    }));
+    const transitionsEnabled = (projectData as any).transitionSettings?.enabled ?? true;
+    let renderTransitions: Array<{ type: string; duration: number; easing: string }> = [];
 
-    for (let i = 0; i < transitionPlan.transitions.length; i++) {
-      const t = transitionPlan.transitions[i];
-      const fromScene = preparedProject.scenes[t.fromSceneIndex] as any;
-      const toScene = preparedProject.scenes[t.toSceneIndex] as any;
-      if (fromScene) {
-        if (!fromScene.compositionInstructions) fromScene.compositionInstructions = {};
-        fromScene.compositionInstructions.transitionOut = {
-          type: normalizeTransitionType(t.config.type),
-          duration: t.config.duration,
-          easing: t.config.easing,
-        };
+    if (transitionsEnabled) {
+      const visualStyle = (projectData as any).visualStyle || (projectData as any).style || 'lifestyle';
+      const scenesForTransitionPlanning = preparedProject.scenes.map((s: any, idx: number) => ({
+        sceneIndex: idx,
+        sceneType: s.type || 'benefit',
+        duration: s.duration || 5,
+        analysisResult: s.analysisResult,
+      }));
+      const transitionPlan = transitionService.planTransitions(scenesForTransitionPlanning, visualStyle);
+      const normalizeTransitionType = (type: string): string => {
+        if (type === 'cut') return 'none';
+        if (type === 'zoom-in' || type === 'zoom-out') return 'zoom';
+        if (type === 'wipe-up' || type === 'wipe-down') return 'wipe-left';
+        if (type === 'blur') return 'dissolve';
+        return type;
+      };
+      renderTransitions = transitionPlan.transitions.map(t => ({
+        type: normalizeTransitionType(t.config.type),
+        duration: t.config.duration,
+        easing: t.config.easing,
+      }));
+
+      for (let i = 0; i < transitionPlan.transitions.length; i++) {
+        const t = transitionPlan.transitions[i];
+        const fromScene = preparedProject.scenes[t.fromSceneIndex] as any;
+        const toScene = preparedProject.scenes[t.toSceneIndex] as any;
+        if (fromScene) {
+          if (!fromScene.compositionInstructions) fromScene.compositionInstructions = {};
+          fromScene.compositionInstructions.transitionOut = {
+            type: normalizeTransitionType(t.config.type),
+            duration: t.config.duration,
+            easing: t.config.easing,
+          };
+        }
+        if (toScene) {
+          if (!toScene.compositionInstructions) toScene.compositionInstructions = {};
+          toScene.compositionInstructions.transitionIn = {
+            type: normalizeTransitionType(t.config.type),
+            duration: t.config.duration,
+            easing: t.config.easing,
+          };
+        }
       }
-      if (toScene) {
-        if (!toScene.compositionInstructions) toScene.compositionInstructions = {};
-        toScene.compositionInstructions.transitionIn = {
-          type: normalizeTransitionType(t.config.type),
-          duration: t.config.duration,
-          easing: t.config.easing,
-        };
+      console.log(`[Render] Planned ${transitionPlan.transitions.length} mood-matched transitions:`, transitionPlan.summary);
+    } else {
+      console.log(`[Render] Transitions disabled by user settings`);
+      const noTransition = { type: 'none', duration: 0, easing: 'linear' };
+      for (const scene of preparedProject.scenes) {
+        if (!(scene as any).compositionInstructions) (scene as any).compositionInstructions = {};
+        (scene as any).compositionInstructions.transitionIn = noTransition;
+        (scene as any).compositionInstructions.transitionOut = noTransition;
       }
     }
-    console.log(`[Render] Planned ${transitionPlan.transitions.length} mood-matched transitions:`, transitionPlan.summary);
 
     const inputProps = {
       scenes: preparedProject.scenes,

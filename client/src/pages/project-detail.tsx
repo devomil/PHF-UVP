@@ -2363,7 +2363,7 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
     nativeVideoAudio: { enabled: false, volume: 0.8 },
     soundDesign: { enabled: true, transitionSounds: true, impactSounds: true, ambientLayer: true, ambientType: "nature", masterVolume: 1.0 },
     filmTreatment: { enabled: true, colorGrade: "warm-cinematic", grainIntensity: 0.03, vignetteIntensity: 0.2, letterbox: "none" },
-    transitions: { style: "crossfade", duration: 0.5 },
+    transitions: { enabled: true, style: "crossfade", duration: 0.5 },
     captions: { enabled: false, style: { preset: "capcut", fontSize: 52, position: "bottom" } },
     introEnabled: true,
     introTemplate: "classic-glow",
@@ -2817,43 +2817,54 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
             </div>
 
             <div className="border rounded-lg p-4 space-y-3" style={{ backgroundColor: "var(--app-bg)", borderColor: "var(--border-subtle)" }}>
-              <div className="flex items-center gap-2">
-                <Shuffle className="w-4 h-4 text-green-400" />
-                <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>Transitions</span>
-              </div>
-              <div>
-                <span className="text-xs block mb-1" style={{ color: "var(--text-secondary)" }}>Style</span>
-                <select
-                  value={settings.transitions.style}
-                  onChange={(e) => saveMutation.mutate({ transitions: { ...settings.transitions, style: e.target.value } })}
-                  className="w-full text-xs rounded-md border p-1.5 appearance-none"
-                  style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)", color: "var(--text-primary)" }}
-                >
-                  {transitionOptions.map((o) => (
-                    <option key={o.value} value={o.value}>{o.label}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs" style={{ color: "var(--text-secondary)" }}>Duration</span>
-                  <span className="text-xs font-mono" style={{ color: "var(--text-muted)" }}>
-                    {(settings.transitions.duration || 0.5).toFixed(1)}s
-                  </span>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Shuffle className="w-4 h-4 text-green-400" />
+                  <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>Transitions</span>
                 </div>
-                <input
-                  type="range"
-                  min="1"
-                  max="20"
-                  value={Math.round((settings.transitions.duration || 0.5) * 10)}
-                  onChange={(e) => saveMutation.mutate({ transitions: { ...settings.transitions, duration: parseInt(e.target.value) / 10 } })}
-                  className="w-full h-1.5 rounded-full appearance-none cursor-pointer"
-                  style={{ background: `linear-gradient(to right, rgb(34 197 94) ${Math.round((settings.transitions.duration || 0.5) * 50)}%, var(--border-subtle) ${Math.round((settings.transitions.duration || 0.5) * 50)}%)` }}
+                <ToggleSwitch
+                  enabled={settings.transitions.enabled ?? true}
+                  onChange={(v) => saveMutation.mutate({ transitions: { ...settings.transitions, enabled: v } })}
+                  label=""
                 />
               </div>
-              <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                Applied between scenes during final render composition.
-              </p>
+              {(settings.transitions.enabled ?? true) && (
+                <>
+                  <div>
+                    <span className="text-xs block mb-1" style={{ color: "var(--text-secondary)" }}>Style</span>
+                    <select
+                      value={settings.transitions.style}
+                      onChange={(e) => saveMutation.mutate({ transitions: { ...settings.transitions, style: e.target.value } })}
+                      className="w-full text-xs rounded-md border p-1.5 appearance-none"
+                      style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)", color: "var(--text-primary)" }}
+                    >
+                      {transitionOptions.map((o) => (
+                        <option key={o.value} value={o.value}>{o.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs" style={{ color: "var(--text-secondary)" }}>Duration</span>
+                      <span className="text-xs font-mono" style={{ color: "var(--text-muted)" }}>
+                        {(settings.transitions.duration || 0.5).toFixed(1)}s
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min="1"
+                      max="20"
+                      value={Math.round((settings.transitions.duration || 0.5) * 10)}
+                      onChange={(e) => saveMutation.mutate({ transitions: { ...settings.transitions, duration: parseInt(e.target.value) / 10 } })}
+                      className="w-full h-1.5 rounded-full appearance-none cursor-pointer"
+                      style={{ background: `linear-gradient(to right, rgb(34 197 94) ${Math.round((settings.transitions.duration || 0.5) * 50)}%, var(--border-subtle) ${Math.round((settings.transitions.duration || 0.5) * 50)}%)` }}
+                    />
+                  </div>
+                  <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                    Applied between scenes during final render composition.
+                  </p>
+                </>
+              )}
             </div>
           </div>
 
