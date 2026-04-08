@@ -5844,6 +5844,34 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
     }
     // ========== END S3 CACHING ==========
 
+    // ========== STUDIO POLISH: MAP microScenes video/image to scene background ==========
+    const isStudioPolish = (preparedProject as any).progress?.projectMode === 'studio-polish';
+    if (isStudioPolish) {
+      for (let i = 0; i < (preparedProject.scenes || []).length; i++) {
+        const scene = preparedProject.scenes[i] as any;
+        if (scene.type === 'intro') continue;
+        const ms = scene.microScenes?.[0];
+        if (ms) {
+          if (ms.videoUrl && !scene.background?.videoUrl && !scene.assets?.videoUrl) {
+            if (!scene.background) scene.background = {};
+            scene.background.type = 'video';
+            scene.background.videoUrl = ms.videoUrl;
+            if (!scene.assets) scene.assets = {};
+            scene.assets.videoUrl = ms.videoUrl;
+            console.log(`[PrepareAssets] Studio Polish scene ${i}: mapped microScene videoUrl to background/assets`, ms.videoUrl.substring(0, 80));
+          } else if (ms.imageUrl && !scene.background?.imageUrl && !scene.assets?.imageUrl) {
+            if (!scene.background) scene.background = {};
+            scene.background.type = 'image';
+            scene.background.imageUrl = ms.imageUrl;
+            if (!scene.assets) scene.assets = {};
+            scene.assets.imageUrl = ms.imageUrl;
+            console.log(`[PrepareAssets] Studio Polish scene ${i}: mapped microScene imageUrl to background/assets`, ms.imageUrl.substring(0, 80));
+          }
+        }
+      }
+    }
+    // ========== END STUDIO POLISH MAPPING ==========
+
     // Resolve and validate brand logo - convert relative URLs to absolute HTTPS
     if (preparedProject.brand?.logoUrl) {
       const resolvedLogoUrl = this.resolveToAbsoluteUrl(preparedProject.brand.logoUrl);
