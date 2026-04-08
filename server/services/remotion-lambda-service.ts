@@ -419,6 +419,11 @@ class RemotionLambdaService {
         }
 
         const rl = await getRemotionLambda();
+        const calcScenes = params.inputProps?.scenes || [];
+        const calcTotalDur = calcScenes.reduce((sum: number, s: any) => sum + (s.duration || 5), 0);
+        const calcFrames = Math.ceil(calcTotalDur * (params.inputProps?.fps || 30)) + 300;
+        const calcFPL = Math.max(Math.ceil(calcFrames / 180), 20);
+        console.log(`[Remotion Lambda] Dynamic framesPerLambda: ${calcFPL} (${calcTotalDur.toFixed(1)}s, ~${calcFrames} frames, ~${Math.ceil(calcFrames / calcFPL)} functions)`);
         const result = await rl.renderMediaOnLambda({
           region: this.region,
           functionName: this.functionName,
@@ -429,7 +434,15 @@ class RemotionLambdaService {
           imageFormat: params.imageFormat || "jpeg",
           maxRetries: 3,
           privacy: "public",
-          framesPerLambda: 20,
+          framesPerLambda: (() => {
+            const scenes = params.inputProps?.scenes || [];
+            const totalDuration = scenes.reduce((sum: number, s: any) => sum + (s.duration || 5), 0);
+            const fps = params.inputProps?.fps || 30;
+            const estimatedFrames = Math.ceil(totalDuration * fps) + 300;
+            const maxFunctions = 180;
+            const calculated = Math.ceil(estimatedFrames / maxFunctions);
+            return Math.max(calculated, 20);
+          })(),
           timeoutInMilliseconds: 840000, // 14 min - leave buffer before 15min Lambda timeout
           chromiumOptions: {
             gl: 'angle',
