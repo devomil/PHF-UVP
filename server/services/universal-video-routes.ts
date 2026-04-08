@@ -4475,6 +4475,9 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
       filmTreatmentConfig,
       captionStyle: captionStyle || null,
       transitions: renderTransitions,
+      _projectMode: (projectData as any).progress?.projectMode || (projectData as any).projectMode || null,
+      _transitionsEnabled: transitionsEnabled,
+      _filmTreatmentEnabled: filmTreatmentConfig?.enabled ?? true,
     };
     
     // Helper: resolve a single overlay item URL to Lambda-accessible public URL

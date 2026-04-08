@@ -23,6 +23,10 @@ export interface ChunkConfig {
   startTimeSeconds: number;
   endTimeSeconds: number;
   frameRange?: [number, number];
+  passthrough?: boolean;
+  passthroughVideoUrl?: string;
+  passthroughStartSec?: number;
+  passthroughEndSec?: number;
 }
 
 export interface ChunkResult {
@@ -219,6 +223,118 @@ class ChunkedRenderService {
     });
 
     return chunks;
+  }
+
+  markPassthroughChunks(
+    chunks: ChunkConfig[],
+    inputProps: Record<string, any>,
+    opts: { projectMode?: string; transitionsEnabled?: boolean; filmTreatmentEnabled?: boolean }
+  ): void {
+    if (opts.projectMode !== 'studio-polish') return;
+    if (opts.transitionsEnabled) return;
+    if (opts.filmTreatmentEnabled) return;
+
+    const fps = inputProps.fps || 30;
+    let passthroughCount = 0;
+
+    for (const chunk of chunks) {
+      if (chunk.scenes.length !== 1) continue;
+      const scene = chunk.scenes[0];
+
+      if (scene.id === 'intro-scene-auto' || scene.type === 'intro' || scene.type === 'outro') continue;
+
+      const hasCaptions = scene.captions && scene.captions.words && scene.captions.words.length > 0;
+      if (hasCaptions) continue;
+
+      const hasTextOverlays = (scene.textOverlays && scene.textOverlays.length > 0) ||
+        (scene.compositionInstructions?.textOverlays && scene.compositionInstructions.textOverlays.length > 0);
+      if (hasTextOverlays) continue;
+
+      const overlayConfig = inputProps.sceneOverlayConfigs?.[scene.id];
+      const hasSceneOverlays = overlayConfig?.items && overlayConfig.items.length > 0;
+      if (hasSceneOverlays) continue;
+
+      const videoUrl = scene.microScenes?.[0]?.videoUrl || scene.assets?.videoUrl || scene.background?.url;
+      if (!videoUrl || !/^https?:\/\//i.test(videoUrl)) continue;
+
+      const isS3Url = videoUrl.includes('.amazonaws.com/') || videoUrl.includes('.s3.');
+      if (!isS3Url) continue;
+
+      const sceneDuration = scene.duration || 0;
+      if (chunk.frameRange) {
+        const [rangeStart, rangeEnd] = chunk.frameRange;
+        const startSec = rangeStart / fps;
+        const endSec = (rangeEnd + 1) / fps;
+        chunk.passthrough = true;
+        chunk.passthroughVideoUrl = videoUrl;
+        chunk.passthroughStartSec = startSec;
+        chunk.passthroughEndSec = Math.min(endSec, sceneDuration);
+      } else {
+        chunk.passthrough = true;
+        chunk.passthroughVideoUrl = videoUrl;
+      }
+
+      passthroughCount++;
+    }
+
+    if (passthroughCount > 0) {
+      console.log(`[ChunkedRender] Studio Polish passthrough: ${passthroughCount}/${chunks.length} chunks will skip Lambda (no overlays/captions/effects)`);
+    }
+  }
+
+  private async downloadPassthroughVideo(chunk: ChunkConfig, chunkIndex: number, hasLambdaChunks: boolean): Promise<string> {
+    const videoUrl = chunk.passthroughVideoUrl!;
+
+    if (!videoUrl.includes('.amazonaws.com/') && !videoUrl.includes('.s3.')) {
+      throw new Error(`Passthrough video URL must be from S3: ${videoUrl.substring(0, 60)}`);
+    }
+
+    const rawPath = path.join(TEMP_DIR, `passthrough_raw_${chunkIndex}_${Date.now()}.mp4`);
+
+    console.log(`[ChunkedRender] Passthrough chunk ${chunkIndex}: downloading original video from ${videoUrl.substring(0, 80)}...`);
+
+    const response = await fetch(videoUrl);
+    if (!response.ok) {
+      throw new Error(`Failed to download passthrough video: HTTP ${response.status}`);
+    }
+    const buffer = await response.arrayBuffer();
+    fs.writeFileSync(rawPath, Buffer.from(buffer));
+
+    const stats = fs.statSync(rawPath);
+    console.log(`[ChunkedRender] Passthrough downloaded: ${(stats.size / 1024 / 1024).toFixed(2)} MB`);
+
+    const outputPath = path.join(TEMP_DIR, `passthrough_${chunkIndex}_${Date.now()}.mp4`);
+    const ffmpegArgs: string[] = ['-y', '-i', rawPath];
+
+    if (chunk.passthroughStartSec !== undefined && chunk.passthroughEndSec !== undefined) {
+      const startSec = chunk.passthroughStartSec;
+      const duration = chunk.passthroughEndSec - startSec;
+      console.log(`[ChunkedRender] Passthrough chunk ${chunkIndex}: trimming ${startSec.toFixed(2)}s - ${chunk.passthroughEndSec.toFixed(2)}s (${duration.toFixed(2)}s)`);
+      ffmpegArgs.push('-ss', startSec.toFixed(4), '-t', duration.toFixed(4));
+    }
+
+    if (hasLambdaChunks) {
+      ffmpegArgs.push(
+        '-c:v', 'libx264', '-preset', 'fast', '-crf', '18',
+        '-c:a', 'aac', '-b:a', '192k',
+        '-pix_fmt', 'yuv420p',
+        '-r', '30',
+        '-movflags', '+faststart',
+        outputPath
+      );
+      console.log(`[ChunkedRender] Passthrough chunk ${chunkIndex}: re-encoding to match Lambda output (H.264/AAC/30fps)`);
+    } else {
+      ffmpegArgs.push('-c', 'copy', '-avoid_negative_ts', 'make_zero', outputPath);
+    }
+
+    await execFileAsync('ffmpeg', ffmpegArgs, { maxBuffer: 50 * 1024 * 1024 });
+
+    try { fs.unlinkSync(rawPath); } catch {}
+
+    const outputStats = fs.statSync(outputPath);
+    console.log(`[ChunkedRender] Passthrough chunk ${chunkIndex} ready: ${(outputStats.size / 1024 / 1024).toFixed(2)} MB`);
+
+    return outputPath;
   }
 
   buildChunkInputProps(chunk: ChunkConfig, inputProps: Record<string, any>): Record<string, any> {
@@ -720,9 +836,15 @@ class ChunkedRenderService {
       });
 
       const chunks = this.calculateChunks(scenes, fps);
+
+      this.markPassthroughChunks(chunks, inputProps, {
+        projectMode: inputProps._projectMode || undefined,
+        transitionsEnabled: inputProps._transitionsEnabled ?? true,
+        filmTreatmentEnabled: inputProps._filmTreatmentEnabled ?? true,
+      });
+
       const totalChunks = chunks.length;
 
-      // Pass total chunks count so buildChunkInputProps knows which is the last chunk
       inputProps._totalChunks = totalChunks;
 
       await updateProgress({
@@ -736,23 +858,57 @@ class ChunkedRenderService {
       const chunkResults: ChunkResult[] = [];
       const INTER_CHUNK_COOLDOWN_MS = 15000;
       const MAX_CHUNK_RETRIES = 3;
+      const hasLambdaChunks = chunks.some(c => !c.passthrough);
+      const passthroughCount = chunks.filter(c => c.passthrough).length;
+      if (passthroughCount > 0) {
+        console.log(`[ChunkedRender] Render plan: ${passthroughCount} passthrough + ${chunks.length - passthroughCount} Lambda chunks`);
+      }
 
       for (let i = 0; i < chunks.length; i++) {
         const chunk = chunks[i];
 
-        if (i > 0) {
-          console.log(`[ChunkedRender] Waiting ${INTER_CHUNK_COOLDOWN_MS / 1000}s between chunks to avoid rate limits...`);
-          await new Promise(resolve => setTimeout(resolve, INTER_CHUNK_COOLDOWN_MS));
-        }
-        
         await updateProgress({
           phase: 'rendering',
           totalChunks,
           completedChunks: i,
           currentChunk: i,
           overallPercent: 10 + Math.round((i / totalChunks) * 50),
-          message: `Rendering chunk ${i + 1} of ${totalChunks}...`,
+          message: chunk.passthrough
+            ? `Passthrough chunk ${i + 1} of ${totalChunks} (using original video)...`
+            : `Rendering chunk ${i + 1} of ${totalChunks}...`,
         });
+
+        if (chunk.passthrough) {
+          const chunkStartTime = Date.now();
+          try {
+            const localPath = await this.downloadPassthroughVideo(chunk, i, hasLambdaChunks);
+            tempFiles.push(localPath);
+
+            const result: ChunkResult = {
+              chunkIndex: i,
+              s3Url: chunk.passthroughVideoUrl!,
+              localPath,
+              success: true,
+              renderTimeMs: Date.now() - chunkStartTime,
+            };
+            chunkResults.push(result);
+
+            if (onChunkComplete) {
+              await onChunkComplete(result);
+            }
+
+            console.log(`[ChunkedRender] Passthrough chunk ${i} complete in ${((Date.now() - chunkStartTime) / 1000).toFixed(1)}s (skipped Lambda)`);
+          } catch (err: any) {
+            console.error(`[ChunkedRender] Passthrough chunk ${i} failed: ${err.message}`);
+            throw new Error(`Passthrough chunk ${i + 1}/${totalChunks} failed: ${err.message}`);
+          }
+          continue;
+        }
+
+        if (i > 0 && !chunks[i - 1]?.passthrough) {
+          console.log(`[ChunkedRender] Waiting ${INTER_CHUNK_COOLDOWN_MS / 1000}s between chunks to avoid rate limits...`);
+          await new Promise(resolve => setTimeout(resolve, INTER_CHUNK_COOLDOWN_MS));
+        }
 
         let chunkSucceeded = false;
 
@@ -872,6 +1028,12 @@ class ChunkedRenderService {
       const chunkPaths: string[] = [];
       for (let i = 0; i < chunkResults.length; i++) {
         const result = chunkResults[i];
+
+        if (result.localPath && fs.existsSync(result.localPath)) {
+          console.log(`[ChunkedRender] Chunk ${i} already local (passthrough): ${result.localPath}`);
+          chunkPaths.push(result.localPath);
+          continue;
+        }
         
         await updateProgress({
           phase: 'downloading',
