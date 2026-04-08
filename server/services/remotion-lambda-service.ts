@@ -424,9 +424,22 @@ class RemotionLambdaService {
         const calcFps = params.inputProps?.fps || 30;
         const calcFrames = Math.ceil(calcTotalDur * calcFps) + 300;
         const hasHeavyVideo = calcScenes.some((s: any) => (s.duration || 0) > 30 && (s.background?.type === 'video' || s.assets?.videoUrl || (s.microScenes && s.microScenes.some((ms: any) => ms.videoUrl))));
-        const targetFunctions = hasHeavyVideo ? 60 : 180;
+        const maxVideoSceneDur = calcScenes.reduce((max: number, s: any) => {
+          const hasVideo = s.background?.type === 'video' || s.assets?.videoUrl || (s.microScenes && s.microScenes.some((ms: any) => ms.videoUrl));
+          return hasVideo ? Math.max(max, s.duration || 0) : max;
+        }, 0);
+        let targetFunctions = 180;
+        if (hasHeavyVideo) {
+          if (maxVideoSceneDur > 120) {
+            targetFunctions = 8;
+          } else if (maxVideoSceneDur > 60) {
+            targetFunctions = 15;
+          } else {
+            targetFunctions = 30;
+          }
+        }
         const calcFPL = Math.max(Math.ceil(calcFrames / targetFunctions), 20);
-        console.log(`[Remotion Lambda] Dynamic framesPerLambda: ${calcFPL} (${calcTotalDur.toFixed(1)}s, ~${calcFrames} frames, ~${Math.ceil(calcFrames / calcFPL)} functions, heavyVideo: ${hasHeavyVideo})`);
+        console.log(`[Remotion Lambda] Dynamic framesPerLambda: ${calcFPL} (${calcTotalDur.toFixed(1)}s, ~${calcFrames} frames, ~${Math.ceil(calcFrames / calcFPL)} functions, heavyVideo: ${hasHeavyVideo}, maxVideoDur: ${maxVideoSceneDur.toFixed(1)}s)`);
         const result = await rl.renderMediaOnLambda({
           region: this.region,
           functionName: this.functionName,

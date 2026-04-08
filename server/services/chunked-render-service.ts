@@ -764,16 +764,24 @@ class ChunkedRenderService {
               errorMessage.includes('TooManyRequestsException') ||
               errorMessage.includes('ConcurrentInvocationLimitExceeded');
 
-            if (isRateLimitError && chunkAttempt < MAX_CHUNK_RETRIES) {
-              const cooldown = 60000 * chunkAttempt;
-              console.warn(`[ChunkedRender] Chunk ${i} hit rate limit (attempt ${chunkAttempt}/${MAX_CHUNK_RETRIES}), cooling down ${cooldown / 1000}s before retry...`);
+            const isTimeoutError =
+              errorMessage.includes('timed out') ||
+              errorMessage.includes('TimeoutError') ||
+              errorMessage.includes('timeout');
+
+            const isRetryableError = isRateLimitError || isTimeoutError;
+
+            if (isRetryableError && chunkAttempt < MAX_CHUNK_RETRIES) {
+              const cooldown = isRateLimitError ? 60000 * chunkAttempt : 30000;
+              const reason = isRateLimitError ? 'rate limited' : 'timed out';
+              console.warn(`[ChunkedRender] Chunk ${i} ${reason} (attempt ${chunkAttempt}/${MAX_CHUNK_RETRIES}), cooling down ${cooldown / 1000}s before retry...`);
               await updateProgress({
                 phase: 'rendering',
                 totalChunks,
                 completedChunks: i,
                 currentChunk: i,
                 overallPercent: 10 + Math.round((i / totalChunks) * 50),
-                message: `Chunk ${i + 1} rate limited, retrying in ${cooldown / 1000}s (attempt ${chunkAttempt + 1}/${MAX_CHUNK_RETRIES})...`,
+                message: `Chunk ${i + 1} ${reason}, retrying in ${cooldown / 1000}s (attempt ${chunkAttempt + 1}/${MAX_CHUNK_RETRIES})...`,
               });
               await new Promise(resolve => setTimeout(resolve, cooldown));
               continue;
