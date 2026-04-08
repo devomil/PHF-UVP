@@ -22,6 +22,7 @@ export interface ChunkConfig {
   scenes: any[];
   startTimeSeconds: number;
   endTimeSeconds: number;
+  frameRange?: [number, number];
 }
 
 export interface ChunkResult {
@@ -110,6 +111,7 @@ class ChunkedRenderService {
   }
 
   calculateChunks(scenes: any[], fps: number = 30, maxChunkDurationSec: number = MAX_CHUNK_DURATION_SEC): ChunkConfig[] {
+    const MAX_VIDEO_CHUNK_SEC = 30;
     const chunks: ChunkConfig[] = [];
     let currentChunk: ChunkConfig = {
       chunkIndex: 0,
@@ -126,6 +128,54 @@ class ChunkedRenderService {
     for (const scene of scenes) {
       const sceneDuration = scene.duration || 0;
       const sceneFrames = Math.round(sceneDuration * fps);
+      const sceneHasVideo = scene.background?.type === 'video' || scene.assets?.videoUrl || 
+        (scene.microScenes && scene.microScenes.some((ms: any) => ms.videoUrl));
+
+      if (sceneHasVideo && sceneDuration > MAX_VIDEO_CHUNK_SEC) {
+        if (currentChunk.scenes.length > 0) {
+          currentChunk.endFrame = globalFrame - 1;
+          currentChunk.endTimeSeconds = globalTime;
+          chunks.push({ ...currentChunk });
+        }
+
+        const numSubChunks = Math.ceil(sceneDuration / MAX_VIDEO_CHUNK_SEC);
+        const framesPerSubChunk = Math.ceil(sceneFrames / numSubChunks);
+        console.log(`[ChunkedRender] Splitting ${sceneDuration.toFixed(1)}s video scene into ${numSubChunks} frame-range sub-chunks (~${(sceneDuration / numSubChunks).toFixed(1)}s each)`);
+
+        for (let sc = 0; sc < numSubChunks; sc++) {
+          const rangeStart = sc * framesPerSubChunk;
+          const rangeEnd = Math.min((sc + 1) * framesPerSubChunk - 1, sceneFrames - 1);
+          const subChunkDur = (rangeEnd - rangeStart + 1) / fps;
+
+          const sceneWithAdjustedTiming = {
+            ...scene,
+            chunkStartFrame: 0,
+          };
+
+          chunks.push({
+            chunkIndex: chunks.length,
+            startFrame: globalFrame + rangeStart,
+            endFrame: globalFrame + rangeEnd,
+            scenes: [sceneWithAdjustedTiming],
+            startTimeSeconds: globalTime + (rangeStart / fps),
+            endTimeSeconds: globalTime + ((rangeEnd + 1) / fps),
+            frameRange: [rangeStart, rangeEnd],
+          });
+        }
+
+        globalFrame += sceneFrames;
+        globalTime += sceneDuration;
+        currentChunk = {
+          chunkIndex: chunks.length,
+          startFrame: globalFrame,
+          endFrame: 0,
+          scenes: [],
+          startTimeSeconds: globalTime,
+          endTimeSeconds: 0,
+        };
+        chunkDuration = 0;
+        continue;
+      }
 
       if (chunkDuration + sceneDuration > maxChunkDurationSec && currentChunk.scenes.length > 0) {
         currentChunk.endFrame = globalFrame - 1;
@@ -164,7 +214,8 @@ class ChunkedRenderService {
     console.log(`[ChunkedRender] Calculated ${chunks.length} chunks from ${scenes.length} scenes`);
     chunks.forEach((chunk, idx) => {
       const chunkDur = chunk.scenes.reduce((acc: number, s: any) => acc + (s.duration || 0), 0);
-      console.log(`[ChunkedRender] Chunk ${idx}: ${chunk.scenes.length} scenes, ${chunkDur.toFixed(1)}s, frames ${chunk.startFrame}-${chunk.endFrame}, time ${chunk.startTimeSeconds.toFixed(1)}s-${chunk.endTimeSeconds.toFixed(1)}s`);
+      const rangeInfo = chunk.frameRange ? ` [frameRange: ${chunk.frameRange[0]}-${chunk.frameRange[1]}]` : '';
+      console.log(`[ChunkedRender] Chunk ${idx}: ${chunk.scenes.length} scenes, ${chunkDur.toFixed(1)}s, frames ${chunk.startFrame}-${chunk.endFrame}${rangeInfo}, time ${chunk.startTimeSeconds.toFixed(1)}s-${chunk.endTimeSeconds.toFixed(1)}s`);
     });
 
     return chunks;
@@ -239,7 +290,8 @@ class ChunkedRenderService {
     compositionId: string,
     serveUrlOverride?: string
   ): Promise<{ renderId: string; bucketName: string }> {
-    console.log(`[ChunkedRender] Starting Lambda render for chunk ${chunk.chunkIndex} with ${chunk.scenes.length} scenes...`);
+    const rangeInfo = chunk.frameRange ? ` [frameRange: ${chunk.frameRange[0]}-${chunk.frameRange[1]}]` : '';
+    console.log(`[ChunkedRender] Starting Lambda render for chunk ${chunk.chunkIndex} with ${chunk.scenes.length} scenes${rangeInfo}...`);
 
     const chunkInputProps = this.buildChunkInputProps(chunk, inputProps);
 
@@ -247,6 +299,7 @@ class ChunkedRenderService {
       compositionId,
       inputProps: chunkInputProps,
       serveUrlOverride,
+      frameRange: chunk.frameRange,
     });
 
     console.log(`[ChunkedRender] Chunk ${chunk.chunkIndex} render started: renderId=${result.renderId}`);

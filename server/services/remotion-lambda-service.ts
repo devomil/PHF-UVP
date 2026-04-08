@@ -387,6 +387,7 @@ class RemotionLambdaService {
     codec?: "h264" | "h265" | "vp8" | "vp9";
     imageFormat?: "jpeg" | "png";
     serveUrlOverride?: string;
+    frameRange?: [number, number];
   }): Promise<RenderResult> {
     this.getAwsCredentials();
 
@@ -422,25 +423,17 @@ class RemotionLambdaService {
         const calcScenes = params.inputProps?.scenes || [];
         const calcTotalDur = calcScenes.reduce((sum: number, s: any) => sum + (s.duration || 5), 0);
         const calcFps = params.inputProps?.fps || 30;
-        const calcFrames = Math.ceil(calcTotalDur * calcFps) + 300;
+        const totalCompositionFrames = Math.ceil(calcTotalDur * calcFps) + 300;
+        const frameRangeFrames = params.frameRange 
+          ? (params.frameRange[1] - params.frameRange[0] + 1) 
+          : totalCompositionFrames;
         const hasHeavyVideo = calcScenes.some((s: any) => (s.duration || 0) > 30 && (s.background?.type === 'video' || s.assets?.videoUrl || (s.microScenes && s.microScenes.some((ms: any) => ms.videoUrl))));
-        const maxVideoSceneDur = calcScenes.reduce((max: number, s: any) => {
-          const hasVideo = s.background?.type === 'video' || s.assets?.videoUrl || (s.microScenes && s.microScenes.some((ms: any) => ms.videoUrl));
-          return hasVideo ? Math.max(max, s.duration || 0) : max;
-        }, 0);
-        let targetFunctions = 180;
-        if (hasHeavyVideo) {
-          if (maxVideoSceneDur > 120) {
-            targetFunctions = 8;
-          } else if (maxVideoSceneDur > 60) {
-            targetFunctions = 15;
-          } else {
-            targetFunctions = 30;
-          }
-        }
-        const calcFPL = Math.max(Math.ceil(calcFrames / targetFunctions), 20);
-        console.log(`[Remotion Lambda] Dynamic framesPerLambda: ${calcFPL} (${calcTotalDur.toFixed(1)}s, ~${calcFrames} frames, ~${Math.ceil(calcFrames / calcFPL)} functions, heavyVideo: ${hasHeavyVideo}, maxVideoDur: ${maxVideoSceneDur.toFixed(1)}s)`);
-        const result = await rl.renderMediaOnLambda({
+        let targetFunctions = hasHeavyVideo ? 40 : 180;
+        const calcFPL = Math.max(Math.ceil(frameRangeFrames / targetFunctions), 20);
+        const actualFunctions = Math.ceil(frameRangeFrames / calcFPL);
+        const frameRangeInfo = params.frameRange ? `, frameRange: ${params.frameRange[0]}-${params.frameRange[1]}` : '';
+        console.log(`[Remotion Lambda] Dynamic framesPerLambda: ${calcFPL} (${calcTotalDur.toFixed(1)}s, ~${frameRangeFrames} render frames, ~${actualFunctions} functions, heavyVideo: ${hasHeavyVideo}${frameRangeInfo})`);
+        const renderOptions: any = {
           region: this.region,
           functionName: this.functionName,
           serveUrl: effectiveServeUrl,
@@ -451,7 +444,7 @@ class RemotionLambdaService {
           maxRetries: 3,
           privacy: "public",
           framesPerLambda: calcFPL,
-          timeoutInMilliseconds: 840000, // 14 min - leave buffer before 15min Lambda timeout
+          timeoutInMilliseconds: 840000,
           chromiumOptions: {
             gl: 'angle',
           },
@@ -459,7 +452,11 @@ class RemotionLambdaService {
             type: "download",
             fileName: `${params.compositionId}-${Date.now()}.mp4`,
           },
-        });
+        };
+        if (params.frameRange) {
+          renderOptions.frameRange = params.frameRange;
+        }
+        const result = await rl.renderMediaOnLambda(renderOptions);
 
         console.log(`[Remotion Lambda] Render started: ${result.renderId}`);
 
