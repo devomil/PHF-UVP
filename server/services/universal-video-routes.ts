@@ -4130,6 +4130,96 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
       }
     }
 
+    const isStudioPolishProject = (projectData as any).progress?.projectMode === 'studio-polish';
+    if (isStudioPolishProject && !hasPerSceneVoiceover && captionStyle) {
+      console.log('[UniversalVideo] Studio Polish captions: transcribing video audio with Whisper...');
+      try {
+        for (const scene of preparedProject.scenes as any[]) {
+          if (scene.type === 'intro') continue;
+          const videoUrl = scene.microScenes?.[0]?.videoUrl || scene.assets?.videoUrl || scene.background?.videoUrl;
+          if (!videoUrl) {
+            console.log(`[UniversalVideo] Studio Polish captions: scene ${scene.id} has no video URL, skipping`);
+            continue;
+          }
+
+          const { execFileSync } = await import('child_process');
+          const fs = await import('fs');
+          const tmpAudioPath = `/tmp/caption-audio-${Date.now()}.mp3`;
+          try {
+            if (!/^https?:\/\/.+\.(mp4|webm|mov|avi|mkv)(\?.*)?$/i.test(videoUrl)) {
+              console.log(`[UniversalVideo] Studio Polish captions: invalid video URL format, skipping`);
+              continue;
+            }
+            console.log(`[UniversalVideo] Extracting audio from: ${videoUrl.substring(0, 80)}...`);
+            execFileSync('ffmpeg', ['-y', '-i', videoUrl, '-vn', '-acodec', 'libmp3lame', '-ar', '16000', '-ac', '1', '-q:a', '6', tmpAudioPath], { timeout: 120000, stdio: 'pipe' });
+            const audioBuffer = fs.readFileSync(tmpAudioPath);
+            const audioSizeMB = (audioBuffer.length / (1024 * 1024)).toFixed(1);
+            console.log(`[UniversalVideo] Audio extracted: ${audioSizeMB} MB`);
+
+            if (audioBuffer.length < 1000) {
+              console.log('[UniversalVideo] Studio Polish captions: audio too small, likely silent video');
+              continue;
+            }
+
+            const MAX_WHISPER_SIZE = 25 * 1024 * 1024;
+            if (audioBuffer.length > MAX_WHISPER_SIZE) {
+              console.log(`[UniversalVideo] Studio Polish captions: audio ${audioSizeMB} MB exceeds Whisper 25MB limit, skipping`);
+              continue;
+            }
+
+            const openaiKey = process.env.OPENAI_API_KEY;
+            if (!openaiKey) {
+              console.log('[UniversalVideo] Studio Polish captions: OPENAI_API_KEY not set, skipping Whisper');
+              continue;
+            }
+
+            const FormData = (await import('form-data')).default;
+            const formData = new FormData();
+            formData.append('file', audioBuffer, { filename: 'audio.mp3', contentType: 'audio/mpeg' });
+            formData.append('model', 'whisper-1');
+            formData.append('response_format', 'verbose_json');
+            formData.append('timestamp_granularities[]', 'word');
+
+            const whisperResponse = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${openaiKey}`,
+                ...formData.getHeaders(),
+              },
+              body: formData as any,
+            });
+
+            if (!whisperResponse.ok) {
+              console.error(`[UniversalVideo] Studio Polish Whisper failed: ${whisperResponse.status}`);
+              continue;
+            }
+
+            const whisperData = await whisperResponse.json() as any;
+            const words = (whisperData.words || []).map((w: any) => ({
+              word: w.word,
+              start: w.start,
+              end: w.end,
+            }));
+
+            if (words.length > 0) {
+              scene.captions = {
+                words,
+                style: captionStyle,
+                enabled: true,
+              };
+              console.log(`[UniversalVideo] Studio Polish captions: ${words.length} words transcribed for scene ${scene.id} (style: ${captionStyle.preset})`);
+            } else {
+              console.log(`[UniversalVideo] Studio Polish captions: Whisper returned no words for scene ${scene.id}`);
+            }
+          } finally {
+            try { fs.unlinkSync(tmpAudioPath); } catch {}
+          }
+        }
+      } catch (captionError: any) {
+        console.error(`[UniversalVideo] Studio Polish caption transcription failed: ${captionError.message}`);
+      }
+    }
+
     // Inject intro scene if enabled
     const introEnabled = (projectData as any).introEnabled !== false;
     const introTemplate = (projectData as any).introTemplate || 'classic-glow';
