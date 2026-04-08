@@ -2353,7 +2353,7 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
 
   const scenesFromProps = Array.isArray(projectScenes) ? projectScenes : [];
   const perSceneVoiceoverReady = scenesFromProps.length > 0 && scenesFromProps.some((s: any) => s.voiceoverUrl);
-  const scenesHaveVideoFromProps = scenesFromProps.some((s: any) => s.assets?.videoUrl || s.background?.videoUrl);
+  const scenesHaveVideoFromProps = scenesFromProps.some((s: any) => s.assets?.videoUrl || s.background?.videoUrl || (s.microScenes && s.microScenes.some((ms: any) => ms.videoUrl || ms.imageUrl)));
   const scenesHaveVideoFromSettings = settingsQuery.data?.hasSceneVideos === true;
   const scenesHaveVideo = scenesHaveVideoFromProps || scenesHaveVideoFromSettings;
 

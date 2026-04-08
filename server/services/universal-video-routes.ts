@@ -2366,7 +2366,7 @@ router.get('/projects/:projectId/render-settings', isAuthenticated, async (req: 
     const hasVoiceover = !!(projectData.assets?.voiceover?.fullTrackUrl);
     const hasMusic = !!(projectData.assets?.music?.url);
     const scenes = projectData.scenes || [];
-    const hasSceneVideos = scenes.some((s: any) => s.assets?.videoUrl || s.background?.videoUrl);
+    const hasSceneVideos = scenes.some((s: any) => s.assets?.videoUrl || s.background?.videoUrl || (s.microScenes && s.microScenes.some((ms: any) => ms.videoUrl || ms.imageUrl)));
     
     res.json({ 
       success: true,
