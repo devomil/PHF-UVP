@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Loader2, CheckCircle2, AlertCircle, RefreshCw, ExternalLink } from "lucide-react";
+import { Loader2, RefreshCw, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 
@@ -32,7 +32,7 @@ export function CanvaSyncCard({ projectId, hasOutput }: CanvaSyncCardProps) {
     enabled: hasOutput,
     refetchInterval: (query) => {
       const d = query.state.data;
-      if (d && (d.status === "in_progress" || d.status === "not_started")) return 5000;
+      if (d && d.status === "in_progress") return 5000;
       return false;
     },
   });
