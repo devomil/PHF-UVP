@@ -777,3 +777,45 @@ export const insertScheduledPostSchema = createInsertSchema(scheduledPosts).omit
 
 export type ScheduledPost = typeof scheduledPosts.$inferSelect;
 export type InsertScheduledPost = z.infer<typeof insertScheduledPostSchema>;
+
+export const canvaTokens = pgTable('canva_tokens', {
+  id: serial('id').primaryKey(),
+  userId: varchar('user_id').notNull().unique().references(() => users.id),
+  accessToken: text('access_token').notNull(),
+  refreshToken: text('refresh_token').notNull(),
+  tokenType: text('token_type').notNull().default('Bearer'),
+  expiresAt: timestamp('expires_at').notNull(),
+  scope: text('scope').notNull(),
+  canvaUserId: text('canva_user_id'),
+  canvaTeamId: text('canva_team_id'),
+  displayName: text('display_name'),
+  connectedAt: timestamp('connected_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+export type CanvaToken = typeof canvaTokens.$inferSelect;
+export type NewCanvaToken = typeof canvaTokens.$inferInsert;
+
+export const canvaSyncJobs = pgTable('canva_sync_jobs', {
+  id: serial('id').primaryKey(),
+  projectId: varchar('project_id', { length: 100 }).notNull(),
+  userId: varchar('user_id').notNull().references(() => users.id),
+  assetType: text('asset_type').notNull(),
+  assetLabel: text('asset_label'),
+  s3Key: text('s3_key'),
+  s3Url: text('s3_url').notNull(),
+  canvaJobId: text('canva_job_id'),
+  canvaAssetId: text('canva_asset_id'),
+  status: text('status').notNull().default('pending'),
+  errorMessage: text('error_message'),
+  attempts: integer('attempts').notNull().default(0),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  completedAt: timestamp('completed_at'),
+}, (table) => ({
+  projectIdIdx: index('idx_canva_sync_jobs_project_id').on(table.projectId),
+  userIdIdx: index('idx_canva_sync_jobs_user_id').on(table.userId),
+  statusIdx: index('idx_canva_sync_jobs_status').on(table.status),
+}));
+
+export type CanvaSyncJob = typeof canvaSyncJobs.$inferSelect;
+export type NewCanvaSyncJob = typeof canvaSyncJobs.$inferInsert;

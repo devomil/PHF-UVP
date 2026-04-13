@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Palette, Type, Droplets, Image, FileText, Save, Loader2, Check, Upload, Trash2, TrendingUp, Users, Building2 } from "lucide-react";
+import { Palette, Type, Droplets, Image, FileText, Save, Loader2, Check, Upload, Trash2, TrendingUp, Users, Building2, Link2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { CanvaConnect } from "@/components/settings/CanvaConnect";
 
 interface BrandSettingsData {
   brandName: string;
@@ -538,6 +539,16 @@ export default function BrandSettings() {
                 </button>
               </div>
             </div>
+          </div>
+
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <Link2 className="w-4 h-4" style={{ color: "var(--text-secondary)" }} />
+              <h2 className="text-sm font-medium uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
+                Integrations
+              </h2>
+            </div>
+            <CanvaConnect />
           </div>
         </div>
       </div>

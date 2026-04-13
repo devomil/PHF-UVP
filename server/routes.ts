@@ -25,6 +25,7 @@ import { analyzeProductImage } from "./services/product-analysis-service";
 import { assetLibrary } from "../shared/schema";
 import { getProjectType, getContentStructure } from "../shared/config/project-types";
 import studioPolishUploadRouter from "./services/studio-polish-upload";
+import { canvaAuthRouter } from "./services/canva-auth-routes";
 
 async function analyzeAndStoreProductMedia(projectId: string, mediaUrl: string, brief: string, userId: string, scriptPresets?: any) {
   console.log(`[Routes] Starting product media analysis for project ${projectId}`);
@@ -101,6 +102,7 @@ export async function registerRoutes(app: Express) {
   app.use("/api/studio-polish", studioPolishUploadRouter);
   app.use("/api/trend-intelligence", trendIntelligenceRouter);
   app.use("/api/social", socialPublishingRouter);
+  app.use("/api/canva", canvaAuthRouter);
   app.use('/uploads', express.static('uploads'));
   app.use('/test-images', express.static('public/test-images'));
   app.use('/test-videos', express.static('public/test-videos'));
