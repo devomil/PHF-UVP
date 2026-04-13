@@ -810,6 +810,7 @@ export const canvaSyncJobs = pgTable('canva_sync_jobs', {
   errorMessage: text('error_message'),
   attempts: integer('attempts').notNull().default(0),
   createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
   completedAt: timestamp('completed_at'),
 }, (table) => ({
   projectIdIdx: index('idx_canva_sync_jobs_project_id').on(table.projectId),
