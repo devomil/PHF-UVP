@@ -12,6 +12,7 @@ import { SceneOverlayEditor, SceneOverlayItem } from "@/components/video/scene-o
 import { S3BackgroundPicker } from "@/components/video/S3BackgroundPicker";
 import { EndCardPreview } from "@/components/video/EndCardPreview";
 import { AskSuzziePanel } from "@/components/video/ask-suzzie-panel";
+import { CanvaSyncCard } from "@/components/canva/CanvaSyncCard";
 
 const statusDot: Record<string, string> = {
   pending: "bg-gray-500",
@@ -1810,6 +1811,9 @@ export default function ProjectDetail({ params }: { params?: { id: string } }) {
               <ChevronDown className="w-4 h-4 absolute right-0 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: "var(--text-muted)" }} />
             </div>
           </div>
+          {project.outputUrl && (
+            <CanvaSyncCard projectId={project.projectId} hasOutput={!!project.outputUrl} />
+          )}
         </div>
 
         {project.description && (

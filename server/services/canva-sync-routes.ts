@@ -85,6 +85,51 @@ canvaSyncRouter.post('/sync/:projectId', isAuthenticated, async (req: Request, r
   }
 });
 
+if (process.env.NODE_ENV !== 'production') {
+  canvaSyncRouter.get('/test/full-sync', isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = (req.user as any)?.id;
+      if (!userId) return res.status(401).json({ error: 'Authentication required' });
+
+      const projectId = req.query.projectId as string;
+      if (!projectId) return res.status(400).json({ error: 'projectId query param required' });
+
+      const connected = await canvaAuthService.isConnected(userId);
+      if (!connected) return res.status(400).json({ error: 'Canva not connected' });
+
+      const [project] = await db
+        .select()
+        .from(universalVideoProjects)
+        .where(and(
+          eq(universalVideoProjects.projectId, projectId),
+          eq(universalVideoProjects.ownerId, userId)
+        ))
+        .limit(1);
+
+      if (!project) return res.status(404).json({ error: 'Project not found or not owned by you' });
+      if (!project.outputUrl) return res.status(400).json({ error: 'Project has no rendered output' });
+
+      const s3Key = extractS3KeyFromUrl(project.outputUrl);
+      if (!s3Key) return res.status(400).json({ error: 'Cannot extract S3 key from output URL' });
+
+      const brandTags = await getBrandTags(userId);
+
+      const result = await canvaAssetService.syncRenderToCanva({
+        userId,
+        projectId,
+        projectTitle: project.title ?? `Project ${projectId}`,
+        renderS3Key: s3Key,
+        brandTags,
+      });
+
+      res.json({ success: true, result });
+    } catch (err: any) {
+      console.error('[CanvaSync] Test full-sync error:', err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
+}
+
 function extractS3KeyFromUrl(url: string): string | null {
   try {
     const parsed = new URL(url);

@@ -1,5 +1,5 @@
 import { db } from '../db';
-import { universalVideoProjects } from '../../shared/schema';
+import { universalVideoProjects, brandSettings } from '../../shared/schema';
 import { eq, and, lt, ne, inArray, sql } from 'drizzle-orm';
 import { universalVideoService } from './universal-video-service';
 import { sceneAnalysisService } from './scene-analysis-service';
@@ -12,6 +12,8 @@ import {
   getProjectFromDb,
   type VideoProjectWithMeta,
 } from './video-project-db';
+import { canvaAuthService } from './canva-auth-service';
+import { canvaAssetService } from './canva-asset-service';
 
 const POLL_INTERVAL_MS = 5000;
 const STALL_THRESHOLD_MS = 2 * 60 * 1000;
@@ -316,6 +318,9 @@ async function finishChunkedRender(
 
       await saveProjectToDb(latestProject, projectData.ownerId, 'chunked', 'chunked', outputUrl);
       log(`Finished render for ${projectId}: ${outputUrl}`);
+
+      triggerCanvaSync(projectData.ownerId, projectId, latestProject.title || `Project ${projectId}`, outputUrl)
+        .catch(err => log(`Canva sync trigger skipped/failed: ${err.message}`));
     }
   } catch (error: any) {
     logError(`Failed to finish chunked render for ${projectId}: ${error.message}`);
@@ -672,6 +677,9 @@ async function processChunkedRender(projectData: VideoProjectWithMeta) {
 
       await saveProjectToDb(latestProject, projectData.ownerId, 'chunked', 'chunked', outputUrl);
       log(`Final state saved to DB with output URL`);
+
+      triggerCanvaSync(projectData.ownerId, projectId, latestProject.title || `Project ${projectId}`, outputUrl)
+        .catch(err => log(`Canva sync trigger skipped/failed: ${err.message}`));
     } else {
       logError(`CRITICAL: Could not reload project ${projectId} from DB after render`);
     }
@@ -818,4 +826,63 @@ if (isForkedProcess || isDirectRun) {
     logError('Failed to start worker:', err);
     process.exit(1);
   });
+}
+
+async function triggerCanvaSync(ownerId: string, projectId: string, projectTitle: string, outputUrl: string): Promise<void> {
+  const connected = await canvaAuthService.isConnected(ownerId);
+  if (!connected) return;
+
+  const s3Key = extractS3KeyFromOutputUrl(outputUrl);
+  if (!s3Key) {
+    log(`Cannot extract S3 key from outputUrl for Canva sync: ${outputUrl}`);
+    return;
+  }
+
+  let brandTags: string[] = ['neuralcut'];
+  try {
+    const [brand] = await db
+      .select({ brandName: brandSettings.brandName, industry: brandSettings.industry })
+      .from(brandSettings)
+      .where(eq(brandSettings.userId, ownerId))
+      .limit(1);
+    if (brand?.brandName) brandTags.push(brand.brandName.toLowerCase().replace(/\s+/g, '-'));
+    if (brand?.industry) brandTags.push(brand.industry.toLowerCase().replace(/\s+/g, '-'));
+  } catch {}
+
+  log(`Triggering Canva sync for project ${projectId}`);
+
+  canvaAssetService.syncRenderToCanva({
+    userId: ownerId,
+    projectId,
+    projectTitle,
+    renderS3Key: s3Key,
+    brandTags,
+  }).then(result => {
+    log(`Canva sync completed for ${projectId}: video=${result.videoAssetId ?? 'failed'}, frames=${result.frameAssetIds.length}, errors=${result.errors.length}`);
+  }).catch(err => {
+    logError(`Canva sync failed for ${projectId}: ${err.message}`);
+  });
+}
+
+function extractS3KeyFromOutputUrl(url: string): string | null {
+  try {
+    const parsed = new URL(url);
+    const hostname = parsed.hostname;
+    if (hostname.includes('.s3.') && hostname.includes('.amazonaws.com')) {
+      return decodeURIComponent(parsed.pathname.replace(/^\//, ''));
+    }
+    if (hostname.endsWith('.s3.amazonaws.com')) {
+      return decodeURIComponent(parsed.pathname.replace(/^\//, ''));
+    }
+    if (hostname === 's3.amazonaws.com') {
+      return decodeURIComponent(parsed.pathname.replace(/^\/[^/]+\//, ''));
+    }
+    if (parsed.pathname.startsWith('/renders/') || parsed.pathname.startsWith('/out/')) {
+      return decodeURIComponent(parsed.pathname.replace(/^\//, ''));
+    }
+    return decodeURIComponent(parsed.pathname.replace(/^\//, ''));
+  } catch {
+    if (url.startsWith('renders/') || url.startsWith('out/')) return url;
+    return null;
+  }
 }

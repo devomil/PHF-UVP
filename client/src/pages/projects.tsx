@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Plus, Search, Grid3x3, List, Loader2, Video, Image } from "lucide-react";
+import { CanvaSyncBadge } from "@/components/canva/CanvaSyncCard";
 
 const statusDotColor: Record<string, string> = {
   draft: "bg-gray-500",
@@ -265,6 +266,9 @@ export default function Projects() {
                           {project.type}
                         </Badge>
                         <div className="flex items-center gap-2">
+                          {project.status === "complete" && project.outputUrl && (
+                            <CanvaSyncBadge projectId={project.projectId} />
+                          )}
                           <div className={`w-2 h-2 rounded-full ${statusDotColor[project.status] || "bg-gray-500"}`} />
                           <span className="text-xs" style={{ color: "var(--text-secondary)" }}>
                             {(project.status || "draft").charAt(0).toUpperCase() + (project.status || "draft").slice(1)}
@@ -310,6 +314,9 @@ export default function Projects() {
                         <Badge className="text-xs flex-shrink-0" style={{ backgroundColor: "var(--surface-active)", color: "var(--text-secondary)" }}>
                           {project.type}
                         </Badge>
+                        {project.status === "complete" && project.outputUrl && (
+                          <CanvaSyncBadge projectId={project.projectId} />
+                        )}
                         <div className="flex items-center gap-2 flex-shrink-0">
                           <div className={`w-2 h-2 rounded-full ${statusDotColor[project.status] || "bg-gray-500"}`} />
                           <span className="text-sm w-20 text-right" style={{ color: "var(--text-secondary)" }}>
