@@ -3,7 +3,7 @@ import { useLocation, Link } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Sparkles, FileText, Zap, ArrowLeft, Video, Image, Info, Plus, Trash2, ChevronUp, ChevronDown, GripVertical, Palette, Users, UserCheck, Upload, X, ImagePlus, Film, Loader2, AlertCircle, FileUp, BookOpen, TrendingUp, CheckCircle2, FolderOpen, Target, ShieldCheck, Megaphone, CalendarCheck, Share2, ShoppingBag } from "lucide-react";
+import { Sparkles, FileText, Zap, ArrowLeft, Video, Image, Info, Plus, Trash2, ChevronUp, ChevronDown, GripVertical, Palette, Users, UserCheck, Upload, X, ImagePlus, Film, Loader2, AlertCircle, FileUp, BookOpen, TrendingUp, CheckCircle2, FolderOpen, Target, ShieldCheck, Megaphone, CalendarCheck, Share2, ShoppingBag, RefreshCw } from "lucide-react";
 import { ProviderCatalogSelector } from "@/components/video/provider-catalog-selector";
 import { CharacterProfilesPanel } from "@/components/video/character-profiles-panel";
 import { AssetSuzzieChat } from "@/components/video/AssetSuzzieChat";
@@ -1546,11 +1546,12 @@ function CustomScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void;
   );
 }
 
-type QuickCreateMode = 't2i' | 't2v' | 'i2v' | 'v2v';
+type QuickCreateMode = 't2i' | 't2v' | 'i2i' | 'i2v' | 'v2v';
 
 const QC_MODE_CONFIG: Record<QuickCreateMode, { label: string; shortLabel: string; icon: any; description: string; outputType: 'image' | 'video'; needsRefImage: boolean; needsRefVideo: boolean }> = {
   't2i': { label: 'Text to Image', shortLabel: 'T2I', icon: Image, description: 'Generate an image from text', outputType: 'image', needsRefImage: false, needsRefVideo: false },
   't2v': { label: 'Text to Video', shortLabel: 'T2V', icon: Video, description: 'Generate a video from text', outputType: 'video', needsRefImage: false, needsRefVideo: false },
+  'i2i': { label: 'Image to Image', shortLabel: 'I2I', icon: RefreshCw, description: 'Transform a reference image', outputType: 'image', needsRefImage: true, needsRefVideo: false },
   'i2v': { label: 'Image to Video', shortLabel: 'I2V', icon: ImagePlus, description: 'Animate a reference image', outputType: 'video', needsRefImage: true, needsRefVideo: false },
   'v2v': { label: 'Video to Video', shortLabel: 'V2V', icon: Film, description: 'Transform an existing video', outputType: 'video', needsRefImage: false, needsRefVideo: true },
 };
@@ -2027,6 +2028,14 @@ const QC_IMAGE_PROVIDERS = [
   { id: 'ideogram', name: 'Ideogram' },
 ];
 
+const QC_I2I_PROVIDERS = [
+  { id: 'auto', name: 'Auto (Best Match)' },
+  { id: 'nano-banana-pro', name: 'Nano Banana Pro' },
+  { id: 'flux-kontext', name: 'Flux Kontext' },
+  { id: 'flux-1.1-pro', name: 'Flux 1.1 Pro' },
+  { id: 'ideogram', name: 'Ideogram' },
+];
+
 const QC_V2V_PROVIDERS = [
   { id: 'auto', name: 'Auto (Kling Object Replace)' },
   { id: 'kling-2.6', name: 'Kling 2.6 (Object Replace)' },
@@ -2056,6 +2065,8 @@ function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () => void; 
   const [referenceVideoUrl, setReferenceVideoUrl] = useState("");
   const [isUploadingVideo, setIsUploadingVideo] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [i2iTransformType, setI2iTransformType] = useState<string>("scene-integration");
+  const [i2iStrength, setI2iStrength] = useState(0.65);
   const refImageSectionRef = useRef<HTMLDivElement>(null);
   const refVideoSectionRef = useRef<HTMLDivElement>(null);
 
@@ -2083,6 +2094,7 @@ function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () => void; 
   const getProviders = () => {
     if (genMode === 'v2v') return QC_V2V_PROVIDERS;
     if (genMode === 't2i') return QC_IMAGE_PROVIDERS;
+    if (genMode === 'i2i') return QC_I2I_PROVIDERS;
     return QC_VIDEO_PROVIDERS;
   };
   const validProviderIds = getProviders().map(p => p.id);
@@ -2091,6 +2103,7 @@ function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () => void; 
     const newValidIds = (() => {
       if (genMode === 'v2v') return QC_V2V_PROVIDERS.map(p => p.id);
       if (genMode === 't2i') return QC_IMAGE_PROVIDERS.map(p => p.id);
+      if (genMode === 'i2i') return QC_I2I_PROVIDERS.map(p => p.id);
       return QC_VIDEO_PROVIDERS.map(p => p.id);
     })();
     if (provider !== "auto" && !newValidIds.includes(provider)) {
@@ -2134,7 +2147,7 @@ function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () => void; 
     e.preventDefault();
     setValidationError(null);
     if (cfg.needsRefImage && !referenceImageUrl) {
-      const msg = "Please upload a reference image for I2V mode.";
+      const msg = `Please upload a reference image for ${genMode === 'i2i' ? 'I2I' : 'I2V'} mode.`;
       setValidationError(msg);
       toast({ title: "Reference image required", description: msg, variant: "destructive" });
       refImageSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -2162,6 +2175,8 @@ function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () => void; 
       sourceImageUrl: cfg.needsRefImage ? referenceImageUrl : undefined,
       referenceVideoUrl: cfg.needsRefVideo ? referenceVideoUrl : undefined,
       imageFidelity: genMode === "i2v" ? imageFidelity : undefined,
+      i2iTransformType: genMode === "i2i" ? i2iTransformType : undefined,
+      i2iStrength: genMode === "i2i" ? i2iStrength : undefined,
     };
     if (selectedCharacter && selectedCharacter.referenceImageUrl) {
       payload.characterReferenceUrl = selectedCharacter.referenceImageUrl;
@@ -2184,7 +2199,7 @@ function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () => void; 
       <div className="space-y-5">
         <div>
           <Label style={{ color: "var(--text-secondary)" }}>Generation Mode</Label>
-          <div className="grid grid-cols-4 gap-2 mt-1.5">
+          <div className="grid grid-cols-5 gap-2 mt-1.5">
             {(Object.entries(QC_MODE_CONFIG) as [QuickCreateMode, typeof QC_MODE_CONFIG[QuickCreateMode]][]).map(([key, mc]) => {
               const Icon = mc.icon;
               const isActive = genMode === key;
@@ -2310,10 +2325,10 @@ function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () => void; 
               onApplyCfgScale={setImageFidelity}
             />
           </div>
-          <Textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="Describe the video clip or image you want to create..." rows={4} required className="mt-1.5" style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }} />
+          <Textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder={genMode === 'i2i' ? "Describe the transformation you want (e.g. 'Place this person in a modern office holding a laptop' or 'Show this product on a marble countertop with warm lighting')..." : "Describe the video clip or image you want to create..."} rows={4} required className="mt-1.5" style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }} />
         </div>
 
-        {(genMode === 't2v' || genMode === 'i2v' || genMode === 'v2v') && (
+        {(genMode === 't2v' || genMode === 'i2v' || genMode === 'v2v' || genMode === 'i2i') && (
           <div>
             <Label style={{ color: "var(--text-secondary)" }}>Negative Prompt (Optional)</Label>
             <Textarea
@@ -2324,6 +2339,48 @@ function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () => void; 
               className="mt-1.5"
               style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }}
             />
+          </div>
+        )}
+
+        {genMode === 'i2i' && (
+          <div>
+            <Label style={{ color: "var(--text-secondary)" }}>Transformation Type</Label>
+            <Select value={i2iTransformType} onValueChange={setI2iTransformType}>
+              <SelectTrigger className="mt-1.5" style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }}><SelectValue /></SelectTrigger>
+              <SelectContent style={{ backgroundColor: "var(--menu-bg)", borderColor: "var(--border-medium)" }}>
+                <SelectItem value="scene-integration" style={{ color: "var(--text-primary)" }}>Scene Integration — Place subject in a new environment</SelectItem>
+                <SelectItem value="background-generation" style={{ color: "var(--text-primary)" }}>Background Swap — Change the background only</SelectItem>
+                <SelectItem value="style-transfer" style={{ color: "var(--text-primary)" }}>Style Transfer — Apply a new artistic style</SelectItem>
+                <SelectItem value="product-placement" style={{ color: "var(--text-primary)" }}>Product Placement — Create marketing visuals</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-[11px] mt-1" style={{ color: "var(--text-tertiary)" }}>
+              {i2iTransformType === 'scene-integration' && "Place your subject (person/product) into a completely new scene or environment."}
+              {i2iTransformType === 'background-generation' && "Keep the subject intact and replace only the background."}
+              {i2iTransformType === 'style-transfer' && "Transform the image into a different artistic style while preserving the composition."}
+              {i2iTransformType === 'product-placement' && "Create polished marketing visuals featuring your product."}
+            </p>
+          </div>
+        )}
+
+        {genMode === 'i2i' && (
+          <div>
+            <div className="flex items-center justify-between">
+              <Label style={{ color: "var(--text-secondary)" }}>Transformation Strength</Label>
+              <span className="text-xs font-medium" style={{ color: "var(--text-tertiary)" }}>{Math.round(i2iStrength * 100)}%</span>
+            </div>
+            <Slider
+              value={[i2iStrength]}
+              onValueChange={([v]) => setI2iStrength(v)}
+              min={0.1}
+              max={1.0}
+              step={0.05}
+              className="mt-2"
+            />
+            <div className="flex justify-between mt-1">
+              <span className="text-[10px]" style={{ color: "var(--text-tertiary)" }}>Subtle changes</span>
+              <span className="text-[10px]" style={{ color: "var(--text-tertiary)" }}>Full transformation</span>
+            </div>
           </div>
         )}
 

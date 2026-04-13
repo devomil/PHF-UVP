@@ -287,7 +287,7 @@ export async function registerRoutes(app: Express) {
         return res.status(401).json({ error: "Not authenticated" });
       }
 
-      const { mode, title, description, targetAudience, duration, platform, aspectRatio, mediaMode, videoGenerationMode, qualityTier, script, numScenes, visualStyle, voiceStyle, outputType, prompt, imageStyle, provider, saveToLibrary, customScenes, artPresetId, artPresetIds, characterConsistency, characters, characterReferenceUrl, characterName, characterDescription, generationMode, negativePrompt, sourceImageUrl, referenceVideoUrl, imageFidelity, productMediaUrl, scriptPresets, projectType, contentStructure, projectPurpose } = req.body;
+      const { mode, title, description, targetAudience, duration, platform, aspectRatio, mediaMode, videoGenerationMode, qualityTier, script, numScenes, visualStyle, voiceStyle, outputType, prompt, imageStyle, provider, saveToLibrary, customScenes, artPresetId, artPresetIds, characterConsistency, characters, characterReferenceUrl, characterName, characterDescription, generationMode, negativePrompt, sourceImageUrl, referenceVideoUrl, imageFidelity, productMediaUrl, scriptPresets, projectType, contentStructure, projectPurpose, i2iTransformType, i2iStrength } = req.body;
 
       const projectId = crypto.randomUUID();
 
@@ -447,8 +447,8 @@ export async function registerRoutes(app: Express) {
           console.log(`[Routes] Quick Create with character reference: ${charName}, image: ${characterReferenceUrl.substring(0, 60)}...`);
         }
 
-        const qcEffectiveOutputType = outputType || (generationMode === 't2i' ? 'image' : 'video');
-        const qcModeLabel = generationMode === 't2i' ? 'Image' : generationMode === 'i2v' ? 'I2V' : generationMode === 'v2v' ? 'V2V' : 'Video';
+        const qcEffectiveOutputType = outputType || (generationMode === 't2i' || generationMode === 'i2i' ? 'image' : 'video');
+        const qcModeLabel = generationMode === 't2i' ? 'Image' : generationMode === 'i2i' ? 'I2I' : generationMode === 'i2v' ? 'I2V' : generationMode === 'v2v' ? 'V2V' : 'Video';
 
         const [project] = await db.insert(universalVideoProjects).values({
           projectId,
@@ -469,10 +469,24 @@ export async function registerRoutes(app: Express) {
         }).returning();
 
         const qcSourceImage = sourceImageUrl || characterReferenceUrl || undefined;
+
+        if (generationMode === 'i2i' && !qcSourceImage) {
+          return res.status(400).json({ error: "A source image is required for I2I mode." });
+        }
+        if (generationMode === 'i2i' && i2iStrength !== undefined && (i2iStrength < 0.1 || i2iStrength > 1.0)) {
+          return res.status(400).json({ error: "Transformation strength must be between 0.1 and 1.0." });
+        }
+        const validI2ITransformTypes = ['scene-integration', 'background-generation', 'style-transfer', 'product-placement'];
+        if (generationMode === 'i2i' && i2iTransformType && !validI2ITransformTypes.includes(i2iTransformType)) {
+          return res.status(400).json({ error: `Invalid transformation type. Must be one of: ${validI2ITransformTypes.join(', ')}` });
+        }
+
+        const isI2I = generationMode === 'i2i' && qcSourceImage;
         const isI2V = generationMode === 'i2v' && qcSourceImage;
         const isV2V = generationMode === 'v2v' && referenceVideoUrl;
 
         let qcSceneType: string = qcEffectiveOutputType === "image" ? "image" : "video";
+        if (isI2I) qcSceneType = "i2i";
         if (isI2V) qcSceneType = "i2v";
         if (isV2V) qcSceneType = "v2v";
 
@@ -499,6 +513,7 @@ export async function registerRoutes(app: Express) {
             ...(characterReferenceUrl && !sourceImageUrl ? { isCharacterReference: true } : {}),
             ...(isI2V && imageFidelity !== undefined ? { imageControlStrength: imageFidelity } : {}),
             ...(isV2V ? { referenceVideoUrl, generationMode: 'v2v' } : {}),
+            ...(isI2I ? { generationMode: 'i2i', i2iTransformType: i2iTransformType || 'scene-integration', i2iStrength: i2iStrength !== undefined ? i2iStrength : 0.65 } : {}),
           },
           triggeredBy: (req.user as any).id,
         });

@@ -2,6 +2,7 @@ import { db } from "../db";
 import { videoGenerationJobs, universalVideoProjects } from "../../shared/schema";
 import { eq } from "drizzle-orm";
 import { aiVideoService } from "./ai-video-service";
+import { imageGenerationService } from "./image-generation-service";
 import { assetUrlResolver } from "./asset-url-resolver";
 
 export async function recoverStuckJobs() {
@@ -105,18 +106,66 @@ export async function processVideoJob(jobId: string) {
       }
     }
 
-    const result = await aiVideoService.generateVideo({
-      prompt: job.prompt || "",
-      duration: job.duration || 6,
-      aspectRatio: (job.aspectRatio as "16:9" | "9:16" | "1:1") || "16:9",
-      sceneType: job.sceneType || "general",
-      preferredProvider: job.provider || "auto",
-      negativePrompt: job.negativePrompt || undefined,
-      imageUrl: resolvedImageUrl,
-      ...(jobI2vSettings.isCharacterReference ? { isCharacterReference: true } : {}),
-      ...(jobI2vSettings.artPresetId ? { artPresetId: jobI2vSettings.artPresetId } : {}),
-      ...(Object.keys(i2vSettingsForProvider).length > 0 ? { i2vSettings: i2vSettingsForProvider } : {}),
-    });
+    const isI2IJob = job.sceneType === 'i2i' && resolvedImageUrl;
+
+    let result: any;
+
+    if (isI2IJob) {
+      const i2iUseCase = jobI2vSettings.i2iTransformType || 'scene-integration';
+      const i2iStrength = jobI2vSettings.i2iStrength !== undefined ? jobI2vSettings.i2iStrength : 0.65;
+
+      const aspectRatioMap: Record<string, { w: number; h: number }> = {
+        '16:9': { w: 1920, h: 1080 },
+        '9:16': { w: 1080, h: 1920 },
+        '1:1': { w: 1024, h: 1024 },
+      };
+      const dims = aspectRatioMap[(job.aspectRatio as string) || '16:9'] || { w: 1920, h: 1080 };
+
+      const transformPrefixes: Record<string, string> = {
+        'scene-integration': 'Place the subject from the reference image into this scene, preserving their appearance and identity:',
+        'background-generation': 'Keep the subject from the reference image exactly as they are, but replace the background with:',
+        'style-transfer': 'Transform the reference image into this artistic style while preserving the composition and subject:',
+        'product-placement': 'Create a professional marketing visual featuring the product from the reference image:',
+      };
+      const prefix = transformPrefixes[i2iUseCase] || transformPrefixes['scene-integration'];
+      const enhancedPrompt = `${prefix} ${job.prompt || ""}`;
+
+      console.log(`[JobProcessor] I2I job ${job.jobId}: useCase=${i2iUseCase}, strength=${i2iStrength}, provider=${job.provider}, aspect=${job.aspectRatio}`);
+
+      const i2iResult = await imageGenerationService.generateImageToImage({
+        referenceImageUrl: resolvedImageUrl!,
+        prompt: enhancedPrompt,
+        strength: i2iStrength,
+        provider: job.provider === 'auto' ? undefined : job.provider || undefined,
+        useCase: i2iUseCase as any,
+        width: dims.w,
+        height: dims.h,
+        aspectRatio: (job.aspectRatio as string) || '16:9',
+      });
+
+      result = {
+        success: true,
+        videoUrl: i2iResult.url,
+        s3Url: i2iResult.url,
+        provider: i2iResult.provider,
+        cost: i2iResult.cost,
+        generationTimeMs: undefined,
+      };
+      console.log(`[JobProcessor] I2I job ${job.jobId} completed. Image: ${i2iResult.url.substring(0, 60)}...`);
+    } else {
+      result = await aiVideoService.generateVideo({
+        prompt: job.prompt || "",
+        duration: job.duration || 6,
+        aspectRatio: (job.aspectRatio as "16:9" | "9:16" | "1:1") || "16:9",
+        sceneType: job.sceneType || "general",
+        preferredProvider: job.provider || "auto",
+        negativePrompt: job.negativePrompt || undefined,
+        imageUrl: resolvedImageUrl,
+        ...(jobI2vSettings.isCharacterReference ? { isCharacterReference: true } : {}),
+        ...(jobI2vSettings.artPresetId ? { artPresetId: jobI2vSettings.artPresetId } : {}),
+        ...(Object.keys(i2vSettingsForProvider).length > 0 ? { i2vSettings: i2vSettingsForProvider } : {}),
+      });
+    }
 
     const [projectAfterGen] = await db
       .select()
