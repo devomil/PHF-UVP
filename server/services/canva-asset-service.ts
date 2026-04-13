@@ -1,4 +1,5 @@
 import { S3Client, GetObjectCommand, HeadObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
@@ -344,10 +345,15 @@ export class CanvaAssetService {
       Key: s3Key,
       Body: fileBuffer,
       ContentType: 'image/jpeg',
-      ACL: 'public-read',
     }));
 
-    return `https://${BUCKET}.s3.${REGION}.amazonaws.com/${s3Key}`;
+    const presignedUrl = await getSignedUrl(
+      s3Client,
+      new GetObjectCommand({ Bucket: BUCKET, Key: s3Key }),
+      { expiresIn: 3600 }
+    );
+
+    return presignedUrl;
   }
 
   async getProjectSyncStatus(projectId: string, userId: string): Promise<{
