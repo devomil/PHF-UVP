@@ -65,7 +65,16 @@ class CanvaAuthService {
 
   buildAuthorizationUrl(codeVerifier: string, state: string): string {
     const codeChallenge = this.generateCodeChallenge(codeVerifier);
-    const scopes = ['asset:read', 'asset:write', 'design:meta:read', 'profile:read'].join(' ');
+    const scopes = [
+      'asset:read', 'asset:write',
+      'design:meta:read', 'design:content:read', 'design:content:write',
+      'design:permission:read', 'design:permission:write',
+      'folder:read', 'folder:write', 'folder:permission:read', 'folder:permission:write',
+      'brandtemplate:meta:read', 'brandtemplate:content:read', 'brandtemplate:content:write',
+      'comment:read', 'comment:write',
+      'profile:read',
+      'app:read', 'app:write',
+    ].join(' ');
 
     const params = new URLSearchParams({
       code_challenge: codeChallenge,
