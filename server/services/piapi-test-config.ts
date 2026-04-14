@@ -179,7 +179,7 @@ export const PIAPI_TEST_DEFINITIONS: PiAPITestDefinition[] = [
     model: 'seedance',
     taskType: 'seedance-2',
     input: {
-      prompt: 'A woman sings and strums her guitar on a sunlit rooftop',
+      prompt: 'A golden retriever runs through a sunlit meadow with wildflowers',
       mode: 'text_to_video',
       duration: 5,
       aspect_ratio: '16:9',
