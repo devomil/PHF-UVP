@@ -2,12 +2,14 @@
 
 export type ImageStyle = 'default' | 'lifestyle' | 'hero-shot' | 'product-photo' | 'artistic' | 'nature' | 'person';
 
+export type ImageApiProvider = 'piapi' | 'fal' | 'stability' | 'legnext' | 'openai' | 'recraft' | 'nano-banana-2';
+
 export interface ImageProvider {
   id: string;
   name: string;
   modelId: string;
   costPerImage: number;
-  apiProvider: 'piapi' | 'fal' | 'stability' | 'legnext' | 'openai' | 'recraft';
+  apiProvider: ImageApiProvider;
   maxWidth?: number;
   maxHeight?: number;
   defaultParams?: Record<string, any>;
@@ -85,6 +87,14 @@ export const IMAGE_PROVIDERS: Record<string, ImageProvider> = {
     costPerImage: 0.105,
     apiProvider: 'piapi',
     defaultParams: { taskType: 'nano-banana-pro', output_format: 'png' },
+  },
+  'nano-banana-2': {
+    id: 'nano-banana-2',
+    name: 'Nano Banana 2 (Gemini 3.1 Flash)',
+    modelId: 'gemini',
+    costPerImage: 0.03,
+    apiProvider: 'nano-banana-2',
+    defaultParams: { taskType: 'gemini-2.5-flash-image', output_format: 'jpeg' },
   },
   'recraft-v4': {
     id: 'recraft-v4',

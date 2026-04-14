@@ -10,6 +10,7 @@ import {
 import { QualityTier } from '../config/quality-tiers';
 import { resolvePlacementRules, I2IConfig } from './placement-resolver-service';
 import { recraftService, RecraftModel } from './recraft.service';
+import { nanoBanana2Service } from './nano-banana2.service';
 import sharp from 'sharp';
 
 const I2I_MAX_WIDTH = 1024;
@@ -160,6 +161,10 @@ class ImageGenerationService {
 
     if (provider.apiProvider === 'recraft') {
       return this.generateWithRecraft(options, provider);
+    }
+
+    if (provider.apiProvider === 'nano-banana-2') {
+      return this.generateWithNanoBanana2(options);
     }
     
     if (provider.apiProvider === 'piapi') {
@@ -357,7 +362,7 @@ class ImageGenerationService {
       outputFormat: options.outputFormat,
       aspectRatio: options.aspectRatio,
       resolution: options.resolution,
-      numImages: options.numImages || 1,
+      numImages: 1,
       sourceImageCount: allImageUrls.length,
     }));
 
@@ -634,6 +639,31 @@ class ImageGenerationService {
       };
     } catch (error: any) {
       console.error(`[ImageGen] Recraft error: ${error.message}`);
+      console.log('[ImageGen] Falling back to Flux...');
+      return this.generateWithFlux(options);
+    }
+  }
+
+  private async generateWithNanoBanana2(
+    options: ImageGenerationOptions
+  ): Promise<GeneratedImage> {
+    try {
+      const aspectRatio = options.aspectRatio || this.calculateAspectRatio(options.width || 1280, options.height || 720);
+
+      const result = await nanoBanana2Service.generateImage({
+        prompt: options.prompt,
+        aspectRatio: aspectRatio as any,
+        format: 'jpeg',
+      });
+
+      return {
+        url: result.imageUrl,
+        width: options.width || 1280,
+        height: options.height || 720,
+        provider: 'nano-banana-2',
+      };
+    } catch (error: any) {
+      console.error(`[ImageGen] Nano Banana 2 error: ${error.message}`);
       console.log('[ImageGen] Falling back to Flux...');
       return this.generateWithFlux(options);
     }

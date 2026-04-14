@@ -60,7 +60,7 @@ The AI Video Production Studio is a full-stack platform designed to streamline v
 -   **Database**: PostgreSQL (Neon).
 -   **Object Storage**: S3 for render assets and character references.
 -   **Rendering**: Remotion (Remotion Lambda).
--   **Image Generation**: Recraft V4/V4 Pro/V3 (direct API via `RECRAFT_API_KEY` — text-accurate scene generation, branded text placement via V3 text_layout, 4MP hero images via V4 Pro), PiAPI Flux Schnell (fallback), Nano Banana Pro (PiAPI Gemini model).
+-   **Image Generation**: Nano Banana 2 (Gemini 3.1 Flash via PiAPI — `model: "gemini"`, `task_type: "gemini-2.5-flash-image"`, $0.03/image, supports `num_images` up to 4 per request and `reference_images` up to 14 for I2I/editing, `generateCandidates()` for batch generation), Recraft V4/V4 Pro/V3 (direct API via `RECRAFT_API_KEY` — text-accurate scene generation, branded text placement via V3 text_layout, 4MP hero images via V4 Pro), PiAPI Flux Schnell (fallback), Nano Banana Pro (PiAPI Gemini model, legacy I2I). Provider routing: `server/utils/image-generation-policy.ts` selects providers based on visual style and scene content type — Recraft preferred for text-heavy/product scenes, NB2 preferred for photorealistic/lifestyle scenes.
 -   **Authentication**: Passport.js.
 -   **AI Tools**: ElevenLabs (for voiceover), Claude via PiAPI LLM proxy (claude-sonnet-4-6 primary, Anthropic direct claude-sonnet-4 fallback) for script generation, micro-scene splitting, text label extraction, prompt optimization, scene analysis, quality evaluation, and intelligent provider selection. All LLM calls go through `server/services/piapi-llm-client.ts` which handles PiAPI→Anthropic automatic failover.
 -   **Image/Video Toolkit**: Qubic Image Toolkit (via PiAPI).
