@@ -521,12 +521,13 @@ class PiAPIVideoService {
         if (isPeakHours) {
           console.warn(`[PiAPI T2V] ⚠ Seedance 2 GA request during peak hours (09:00-15:00 GMT) — expect longer queue times`);
         }
-        console.log(`[PiAPI T2V] Using Seedance 2 GA`);
+        console.log(`[PiAPI T2V] Using Seedance 2 GA (std mode)`);
         return {
           model: 'seedance',
           task_type: 'seedance-2',
           input: {
             prompt: safePrompt,
+            mode: 'std',
             duration: Math.min(options.duration, 15),
             aspect_ratio: options.aspectRatio || '16:9',
             resolution: '1080p',
@@ -540,12 +541,13 @@ class PiAPIVideoService {
         if (isPeakHours) {
           console.warn(`[PiAPI T2V] ⚠ Seedance 2 Fast GA request during peak hours (09:00-15:00 GMT) — expect longer queue times`);
         }
-        console.log(`[PiAPI T2V] Using Seedance 2 Fast GA`);
+        console.log(`[PiAPI T2V] Using Seedance 2 Fast GA (fast mode)`);
         return {
           model: 'seedance',
           task_type: 'seedance-2-fast',
           input: {
             prompt: safePrompt,
+            mode: 'fast',
             duration: Math.min(options.duration, 15),
             aspect_ratio: options.aspectRatio || '16:9',
             resolution: '1080p',
@@ -1215,12 +1217,14 @@ class PiAPIVideoService {
       if (isPeakHours) {
         console.warn(`[PiAPI I2V] ⚠ Seedance 2 GA request during peak hours (09:00-15:00 GMT) — expect longer queue times`);
       }
-      console.log(`[PiAPI I2V] Seedance 2 GA (${taskType}): ${allImageUrls.length} image(s), prompt with @imageN refs`);
+      const seedanceMode = options.model === 'seedance-2.0' ? 'std' : 'fast';
+      console.log(`[PiAPI I2V] Seedance 2 GA (${taskType}, ${seedanceMode} mode): ${allImageUrls.length} image(s), prompt with @imageN refs`);
       return {
         model: 'seedance',
         task_type: taskType,
         input: {
           prompt: promptWithRefs,
+          mode: seedanceMode,
           image_urls: allImageUrls,
           duration: Math.min(options.duration, 15),
           aspect_ratio: options.aspectRatio || '16:9',

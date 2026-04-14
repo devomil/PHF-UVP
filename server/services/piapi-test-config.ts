@@ -180,6 +180,7 @@ export const PIAPI_TEST_DEFINITIONS: PiAPITestDefinition[] = [
     taskType: 'seedance-2',
     input: {
       prompt: 'A woman sings and strums her guitar on a sunlit rooftop',
+      mode: 'std',
       duration: 5,
       aspect_ratio: '16:9',
       resolution: '1080p',
@@ -198,6 +199,7 @@ export const PIAPI_TEST_DEFINITIONS: PiAPITestDefinition[] = [
     taskType: 'seedance-2-fast',
     input: {
       prompt: 'Snow falling gently on pine trees in a winter forest',
+      mode: 'fast',
       duration: 5,
       aspect_ratio: '16:9',
       resolution: '1080p',
@@ -575,6 +577,7 @@ export const PIAPI_TEST_DEFINITIONS: PiAPITestDefinition[] = [
     taskType: 'seedance-2',
     input: {
       prompt: 'The cat in @image1 walks through a garden',
+      mode: 'std',
       duration: 5,
       aspect_ratio: '16:9',
       resolution: '1080p',
@@ -595,6 +598,7 @@ export const PIAPI_TEST_DEFINITIONS: PiAPITestDefinition[] = [
     taskType: 'seedance-2-fast',
     input: {
       prompt: 'The subject in @image1 moves with gentle flowing motion',
+      mode: 'fast',
       duration: 5,
       aspect_ratio: '16:9',
       resolution: '1080p',
