@@ -406,7 +406,7 @@ class AIVideoService {
     
     let sceneTypeMappedProviders: Set<string> = new Set();
     if (!enhancedOptions.preferredProvider || enhancedOptions.preferredProvider === 'auto') {
-      const hierarchy = artPreset?.providerHierarchy || { primary: 'kling-2.6-pro', fallback: ['runway-gen4', 'sora-2', 'veo-3'] };
+      const hierarchy = artPreset?.providerHierarchy || { primary: 'seedance-2.0', fallback: ['runway-gen4', 'kling-2.6-pro', 'veo-3'] };
       const hierarchyChain = [hierarchy.primary, ...hierarchy.fallback];
       const availableHierarchy = hierarchyChain.filter(p => configuredProviders.some(cp => cp === p || cp.startsWith(p + '-') || cp.startsWith(p)));
       
@@ -839,8 +839,8 @@ class AIVideoService {
     } catch (error: any) {
       console.warn('[AIVideo] Intelligent selection failed, using default order:', error.message);
       return {
-        providerOrder: ['kling-2.6', ...configuredProviders.filter(p => p !== 'kling-2.6')],
-        reasoning: 'Fallback to Kling (intelligent selection unavailable)',
+        providerOrder: ['seedance-2.0', ...configuredProviders.filter(p => p !== 'seedance-2.0')],
+        reasoning: 'Fallback to Seedance 2 GA (intelligent selection unavailable)',
       };
     }
   }
