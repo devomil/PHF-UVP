@@ -308,7 +308,7 @@ class AIVideoService {
       
       console.log(`[AIVideo] Enhanced prompt for ${options.sceneType} scene`);
       
-      const rawProvider = options.preferredProvider && options.preferredProvider !== 'auto' ? options.preferredProvider : 'kling';
+      const rawProvider = options.preferredProvider && options.preferredProvider !== 'auto' ? options.preferredProvider : 'seedance';
       const normalizedProvider = rawProvider.split('-')[0];
       
       const includeProduct = ['product', 'solution', 'cta', 'feature'].includes(options.sceneType?.toLowerCase() || '');
@@ -811,12 +811,12 @@ class AIVideoService {
         primaryProvider = recommendedProvider;
         console.log(`[AIVideo] Specific provider "${specificProvider}" not tested, using base "${recommendedProvider}"`);
       } else {
-        primaryProvider = configuredProviders[0] || 'kling-2.6';
+        primaryProvider = configuredProviders[0] || 'seedance-2.0';
         console.log(`[AIVideo] Recommended provider "${recommendedProvider}" not in tested providers, using first available`);
       }
       
       if (fallbackProvider && !isProviderAvailable(fallbackProvider)) {
-        fallbackProvider = configuredProviders[1]?.split('-')[0] || configuredProviders[0]?.split('-')[0] || 'kling';
+        fallbackProvider = configuredProviders[1]?.split('-')[0] || configuredProviders[0]?.split('-')[0] || 'seedance';
       }
       
       const providerOrder: string[] = [primaryProvider];

@@ -81,6 +81,7 @@ Scene ${idx + 1} (ID: ${scene.sceneId}):
     return `You are an expert video production AI assistant. Analyze each scene and recommend the optimal AI video generation provider based on the content.
 
 PROVIDER SPECIALIZATIONS:
+- SEEDANCE: PRIMARY provider for most content types. Seedance 2 GA with 1080p output, up to 15s duration, multi-image references, and morphing effects. Excellent general-purpose quality for cinematic, lifestyle, product, educational, and social content. Default choice when no specialized provider is clearly better.
 - RUNWAY: Best for cinematic, dramatic, emotional content. High-quality film-like visuals. Epic shots, dramatic lighting, emotional storytelling. Multiple specialized models available:
   * Runway 4.5: Top-tier creative control, photorealistic motion, advanced camera manipulation. Best for premium cinematic and hero shots.
   * Runway Gen-4: Advanced creative control with superior motion manipulation. Best for dramatic storytelling and scene composition.
@@ -114,16 +115,17 @@ For each scene, analyze the narration and visual direction to determine:
 4. Brief reasoning
 
 IMPORTANT PROVIDER PREFERENCE ORDER:
-1. Kling (default for most content, especially human subjects and general scenes)
-2. Runway 4.5 (cinematic, dramatic, emotional content)
-3. Veo (premium B-roll, nature, establishing shots)
-4. Sora (creative, artistic content)
-5. Luma (product reveals)
-6. Wan (text rendering, conceptual)
-7. Remotion (infographics, motion graphics)
-8. Hailuo (ONLY as absolute last resort — avoid recommending this provider)
+1. Seedance (PRIMARY default for most content — general scenes, lifestyle, product, educational, social)
+2. Runway 4.5 (cinematic, dramatic, emotional content when premium quality needed)
+3. Kling (human subjects, people, faces, talking heads, testimonials)
+4. Veo (premium B-roll, nature, establishing shots)
+5. Sora (creative, artistic content)
+6. Luma (product reveals)
+7. Wan (text rendering, conceptual)
+8. Remotion (infographics, motion graphics)
+9. Hailuo (ONLY as absolute last resort — avoid recommending this provider)
 
-When in doubt, default to Kling. For fallbacks, prefer Runway 4.5, Sora, or Veo over Hailuo.
+When in doubt, default to Seedance. For fallbacks, prefer Runway 4.5, Kling, or Veo over Hailuo.
 
 Respond with ONLY a JSON array (no markdown, no code blocks):
 [
@@ -131,8 +133,8 @@ Respond with ONLY a JSON array (no markdown, no code blocks):
     "sceneIndex": 0,
     "sceneId": "scene_id",
     "contentClassification": "cinematic|human_subjects|product_reveal|broll|conceptual_explanatory|infographic_diagram|motion_graphics|mixed",
-    "recommendedProvider": "runway|kling|luma|veo|sora|wan|remotion",
-    "fallbackProvider": "runway|kling|luma|veo|sora|wan|remotion",
+    "recommendedProvider": "seedance|runway|kling|luma|veo|sora|wan|remotion",
+    "fallbackProvider": "seedance|runway|kling|luma|veo|sora|wan|remotion",
     "confidence": 85,
     "reasoning": "Brief explanation of why this provider is best"
   }
@@ -168,9 +170,9 @@ Respond with ONLY a JSON array (no markdown, no code blocks):
   }
 
   private validateProvider(provider: string): string {
-    const valid = ['runway', 'kling', 'luma', 'hailuo', 'wan', 'remotion', 'veo', 'sora'];
+    const valid = ['seedance', 'runway', 'kling', 'luma', 'hailuo', 'wan', 'remotion', 'veo', 'sora'];
     const normalized = (provider || '').toLowerCase().trim();
-    return valid.includes(normalized) ? normalized : 'kling';
+    return valid.includes(normalized) ? normalized : 'seedance';
   }
 
   resolveRunwayModel(classification: ContentClassification, sceneType: string): string {
@@ -189,6 +191,9 @@ Respond with ONLY a JSON array (no markdown, no code blocks):
   resolveSpecificProvider(baseProvider: string, classification: ContentClassification, sceneType: string): string {
     if (baseProvider === 'runway') {
       return this.resolveRunwayModel(classification, sceneType);
+    }
+    if (baseProvider === 'seedance') {
+      return 'seedance-2.0';
     }
     return baseProvider;
   }
@@ -300,7 +305,7 @@ Respond with ONLY a JSON array (no markdown, no code blocks):
         reasoning,
         contentClassification: classification,
         visualFormat,
-        fallbackProvider: provider === 'runway' ? 'kling' : 'runway',
+        fallbackProvider: provider === 'seedance' ? 'runway' : 'seedance',
       };
     });
 
@@ -341,15 +346,15 @@ Respond with ONLY a JSON array (no markdown, no code blocks):
     const motionGraphicsScore = motionGraphicsKeywords.filter(k => text.includes(k)).length;
 
     if (sceneType === 'hook' || sceneType === 'cta') {
-      return { provider: 'runway', classification: 'cinematic', confidence: 80, reasoning: 'Hook/CTA scenes benefit from cinematic impact' };
+      return { provider: 'seedance', classification: 'cinematic', confidence: 80, reasoning: 'Hook/CTA scenes — Seedance 2 GA primary provider with cinematic quality' };
     }
 
     if (sceneType === 'testimonial') {
-      return { provider: 'kling', classification: 'human_subjects', confidence: 90, reasoning: 'Testimonial requires natural human expressions' };
+      return { provider: 'seedance', classification: 'human_subjects', confidence: 85, reasoning: 'Testimonial — Seedance 2 GA handles human subjects well' };
     }
 
     if (sceneType === 'product') {
-      return { provider: 'luma', classification: 'product_reveal', confidence: 85, reasoning: 'Product scene needs detailed product showcase' };
+      return { provider: 'seedance', classification: 'product_reveal', confidence: 85, reasoning: 'Product scene — Seedance 2 GA primary provider' };
     }
 
     if (infographicScore >= 2 || sceneType === 'infographic') {
@@ -368,14 +373,14 @@ Respond with ONLY a JSON array (no markdown, no code blocks):
       if (conceptualScore >= 1) {
         return { provider: 'wan', classification: 'conceptual_explanatory', confidence: 75, reasoning: 'Explanation scene with conceptual content' };
       }
-      return { provider: 'kling', classification: 'broll', confidence: 75, reasoning: 'B-roll content with Kling for high quality' };
+      return { provider: 'seedance', classification: 'broll', confidence: 75, reasoning: 'B-roll content — Seedance 2 GA primary provider' };
     }
 
     const scores = [
-      { type: 'cinematic' as const, provider: 'runway' as const, score: cinematicScore * 2 },
-      { type: 'human_subjects' as const, provider: 'kling' as const, score: humanScore * 1.5 },
-      { type: 'product_reveal' as const, provider: 'luma' as const, score: productScore * 1.8 },
-      { type: 'broll' as const, provider: 'kling' as const, score: brollScore * 1.3 },
+      { type: 'cinematic' as const, provider: 'seedance' as const, score: cinematicScore * 2 },
+      { type: 'human_subjects' as const, provider: 'seedance' as const, score: humanScore * 1.5 },
+      { type: 'product_reveal' as const, provider: 'seedance' as const, score: productScore * 1.8 },
+      { type: 'broll' as const, provider: 'seedance' as const, score: brollScore * 1.3 },
       { type: 'conceptual_explanatory' as const, provider: 'wan' as const, score: conceptualScore * 2.0 },
       { type: 'infographic_diagram' as const, provider: 'remotion' as const, score: infographicScore * 2.5 },
       { type: 'motion_graphics' as const, provider: 'remotion' as const, score: motionGraphicsScore * 2.5 },
@@ -390,7 +395,7 @@ Respond with ONLY a JSON array (no markdown, no code blocks):
       };
     }
 
-    return { provider: 'kling', classification: 'mixed', confidence: 60, reasoning: 'Default to Kling 2.6 for high-quality results' };
+    return { provider: 'seedance', classification: 'mixed', confidence: 60, reasoning: 'Default to Seedance 2 GA as primary provider' };
   }
 
   async recommendProviderForScene(scene: SceneContent): Promise<ProviderRecommendation> {
