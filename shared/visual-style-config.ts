@@ -56,7 +56,7 @@ export const VISUAL_STYLES: Record<string, VisualStyleConfig> = {
     name: 'Hero (Cinematic)',
     description: 'Dramatic, film-quality visuals for brand anthems and emotional storytelling',
     
-    preferredVideoProviders: ['runway', 'kling', 'luma'],
+    preferredVideoProviders: ['seedance-2.0', 'runway', 'kling', 'luma'],
     preferredImageProviders: ['flux', 'ideogram'],
     
     promptModifiers: {
@@ -99,7 +99,7 @@ export const VISUAL_STYLES: Record<string, VisualStyleConfig> = {
     name: 'Lifestyle',
     description: 'Warm, relatable visuals for customer-facing content and testimonials',
     
-    preferredVideoProviders: ['kling', 'runway', 'hailuo'],
+    preferredVideoProviders: ['seedance-2.0', 'kling', 'runway', 'hailuo'],
     preferredImageProviders: ['flux', 'ideogram'],
     
     promptModifiers: {
@@ -142,7 +142,7 @@ export const VISUAL_STYLES: Record<string, VisualStyleConfig> = {
     name: 'Product Showcase',
     description: 'Clean, focused visuals for product reveals and feature highlights',
     
-    preferredVideoProviders: ['luma', 'runway', 'kling'],
+    preferredVideoProviders: ['seedance-2.0', 'luma', 'runway', 'kling'],
     preferredImageProviders: ['flux', 'ideogram'],
     
     promptModifiers: {
@@ -185,7 +185,7 @@ export const VISUAL_STYLES: Record<string, VisualStyleConfig> = {
     name: 'Educational',
     description: 'Clear, informative visuals for tutorials and health benefit content',
     
-    preferredVideoProviders: ['kling', 'hailuo', 'runway'],
+    preferredVideoProviders: ['seedance-2.0', 'kling', 'hailuo', 'runway'],
     preferredImageProviders: ['flux', 'ideogram'],
     
     promptModifiers: {
@@ -228,7 +228,7 @@ export const VISUAL_STYLES: Record<string, VisualStyleConfig> = {
     name: 'Social (Energetic)',
     description: 'Fast-paced, attention-grabbing visuals for social media and promos',
     
-    preferredVideoProviders: ['hailuo', 'kling', 'runway'],
+    preferredVideoProviders: ['seedance-2.0-fast', 'hailuo', 'kling', 'runway'],
     preferredImageProviders: ['ideogram', 'flux'],
     
     promptModifiers: {
@@ -271,7 +271,7 @@ export const VISUAL_STYLES: Record<string, VisualStyleConfig> = {
     name: 'Premium',
     description: 'Luxurious, sophisticated visuals for high-end positioning',
     
-    preferredVideoProviders: ['runway', 'luma', 'kling'],
+    preferredVideoProviders: ['seedance-2.0', 'runway', 'luma', 'kling'],
     preferredImageProviders: ['flux', 'midjourney'],
     
     promptModifiers: {

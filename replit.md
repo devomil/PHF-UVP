@@ -56,7 +56,7 @@ The AI Video Production Studio is a full-stack platform designed to streamline v
 -   **Static Serving**: Production serves pre-built Vite output from `dist/public/`
 
 ## External Dependencies
--   **AI Video Providers**: Kling, RunwayML (4.5, Gen-4, Gen-4 Aleph, Act Two), Luma, Pika, Veo, Hailuo, Wan, Sora, Seedance (1.0, 2.0 Preview, 2.0 Fast), Hunyuan (via PiAPI). Seedance 2 uses `model: "seedance"` with task types `seedance-2-preview` / `seedance-2-fast-preview`, supports `@imageN` multi-image references in prompts and morphing effects between images.
+-   **AI Video Providers**: Kling, RunwayML (4.5, Gen-4, Gen-4 Aleph, Act Two), Luma, Pika, Veo, Hailuo, Wan, Sora, Seedance (1.0, 2.0 GA, 2.0 Fast GA), Hunyuan (via PiAPI). Seedance 2 uses `model: "seedance"` with task types `seedance-2` / `seedance-2-fast` (promoted from preview), 1080p resolution, 15s max duration, generate_audio: false, supports `@imageN` multi-image references in prompts and morphing effects between images.
 -   **Database**: PostgreSQL (Neon).
 -   **Object Storage**: S3 for render assets and character references.
 -   **Rendering**: Remotion (Remotion Lambda).

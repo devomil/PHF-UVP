@@ -93,6 +93,12 @@ class PiAPIVideoService {
     return this.apiKey.length > 0;
   }
 
+  private isSeedancePeakHours(): boolean {
+    const now = new Date();
+    const gmtHour = now.getUTCHours();
+    return gmtHour >= 9 && gmtHour < 15;
+  }
+
   async generateVideo(options: PiAPIGenerationOptions): Promise<PiAPIGenerationResult> {
     if (!this.isAvailable()) {
       return { success: false, error: 'PiAPI key not configured' };
@@ -510,29 +516,43 @@ class PiAPIVideoService {
           },
         };
       
-      case 'seedance-2.0':
-        console.log(`[PiAPI T2V] Using Seedance 2 Preview`);
+      case 'seedance-2.0': {
+        const isPeakHours = this.isSeedancePeakHours();
+        if (isPeakHours) {
+          console.warn(`[PiAPI T2V] ⚠ Seedance 2 GA request during peak hours (09:00-15:00 GMT) — expect longer queue times`);
+        }
+        console.log(`[PiAPI T2V] Using Seedance 2 GA`);
         return {
           model: 'seedance',
-          task_type: 'seedance-2-preview',
+          task_type: 'seedance-2',
           input: {
             prompt: safePrompt,
-            duration: Math.min(options.duration, 10),
+            duration: Math.min(options.duration, 15),
             aspect_ratio: options.aspectRatio || '16:9',
+            resolution: '1080p',
+            generate_audio: false,
           },
         };
+      }
       
-      case 'seedance-2.0-fast':
-        console.log(`[PiAPI T2V] Using Seedance 2 Fast Preview`);
+      case 'seedance-2.0-fast': {
+        const isPeakHours = this.isSeedancePeakHours();
+        if (isPeakHours) {
+          console.warn(`[PiAPI T2V] ⚠ Seedance 2 Fast GA request during peak hours (09:00-15:00 GMT) — expect longer queue times`);
+        }
+        console.log(`[PiAPI T2V] Using Seedance 2 Fast GA`);
         return {
           model: 'seedance',
-          task_type: 'seedance-2-fast-preview',
+          task_type: 'seedance-2-fast',
           input: {
             prompt: safePrompt,
-            duration: Math.min(options.duration, 10),
+            duration: Math.min(options.duration, 15),
             aspect_ratio: options.aspectRatio || '16:9',
+            resolution: '1080p',
+            generate_audio: false,
           },
         };
+      }
       
       // Wan Family (Alibaba - via Hailuo API)
       case 'wan-2.1':
@@ -809,8 +829,8 @@ class PiAPIVideoService {
       'hailuo': { modelId: 'hailuo', maxDuration: 6 },
       'hailuo-minimax': { modelId: 'hailuo', maxDuration: 6 },
       'seedance-1.0': { modelId: 'hailuo', maxDuration: 6 },
-      'seedance-2.0': { modelId: 'seedance', maxDuration: 10 },
-      'seedance-2.0-fast': { modelId: 'seedance', maxDuration: 10 },
+      'seedance-2.0': { modelId: 'seedance', maxDuration: 15 },
+      'seedance-2.0-fast': { modelId: 'seedance', maxDuration: 15 },
       // Wan Family (Alibaba via PiAPI)
       'wan-2.1': { modelId: 'Qubico/wanx', maxDuration: 10 },
       'wan-2.6': { modelId: 'Wan', maxDuration: 5 },
@@ -1180,7 +1200,7 @@ class PiAPIVideoService {
     
     // Seedance 2 - uses @imageN syntax in prompts with image_urls array
     if (options.model === 'seedance-2.0' || options.model === 'seedance-2.0-fast') {
-      const taskType = options.model === 'seedance-2.0' ? 'seedance-2-preview' : 'seedance-2-fast-preview';
+      const taskType = options.model === 'seedance-2.0' ? 'seedance-2' : 'seedance-2-fast';
       const allImageUrls = options.imageUrls && options.imageUrls.length > 0 
         ? options.imageUrls 
         : [options.imageUrl];
@@ -1191,15 +1211,21 @@ class PiAPIVideoService {
         promptWithRefs = `The subject in @image1 ${promptWithRefs}`;
       }
       
-      console.log(`[PiAPI I2V] Seedance 2 (${taskType}): ${allImageUrls.length} image(s), prompt with @imageN refs`);
+      const isPeakHours = this.isSeedancePeakHours();
+      if (isPeakHours) {
+        console.warn(`[PiAPI I2V] ⚠ Seedance 2 GA request during peak hours (09:00-15:00 GMT) — expect longer queue times`);
+      }
+      console.log(`[PiAPI I2V] Seedance 2 GA (${taskType}): ${allImageUrls.length} image(s), prompt with @imageN refs`);
       return {
         model: 'seedance',
         task_type: taskType,
         input: {
           prompt: promptWithRefs,
           image_urls: allImageUrls,
-          duration: Math.min(options.duration, 10),
+          duration: Math.min(options.duration, 15),
           aspect_ratio: options.aspectRatio || '16:9',
+          resolution: '1080p',
+          generate_audio: false,
         },
       };
     }

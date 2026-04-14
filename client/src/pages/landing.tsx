@@ -60,7 +60,7 @@ const capabilities: Capability[] = [
       { name: "Wan 2.6", provider: "Wan", status: "active" },
       { name: "Wan 2.2", provider: "Wan", status: "active" },
       { name: "Wan 2.1", provider: "Wan", status: "active" },
-      { name: "Seedance 2 Preview", provider: "Seedance", status: "active" },
+      { name: "Seedance 2", provider: "Seedance", status: "active" },
       { name: "Seedance 2 Fast", provider: "Seedance", status: "active" },
       { name: "Veo 3", provider: "Google", status: "active" },
       { name: "Veo 3.1", provider: "Google", status: "active" },
