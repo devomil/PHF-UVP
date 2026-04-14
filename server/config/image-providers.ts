@@ -7,7 +7,7 @@ export interface ImageProvider {
   name: string;
   modelId: string;
   costPerImage: number;
-  apiProvider: 'piapi' | 'fal' | 'stability' | 'legnext' | 'openai';
+  apiProvider: 'piapi' | 'fal' | 'stability' | 'legnext' | 'openai' | 'recraft';
   maxWidth?: number;
   maxHeight?: number;
   defaultParams?: Record<string, any>;
@@ -85,6 +85,33 @@ export const IMAGE_PROVIDERS: Record<string, ImageProvider> = {
     costPerImage: 0.105,
     apiProvider: 'piapi',
     defaultParams: { taskType: 'nano-banana-pro', output_format: 'png' },
+  },
+  'recraft-v4': {
+    id: 'recraft-v4',
+    name: 'Recraft V4',
+    modelId: 'recraftv4',
+    costPerImage: 0.04,
+    apiProvider: 'recraft',
+    maxWidth: 1344,
+    maxHeight: 768,
+  },
+  'recraft-v4-pro': {
+    id: 'recraft-v4-pro',
+    name: 'Recraft V4 Pro (4MP)',
+    modelId: 'recraftv4_pro',
+    costPerImage: 0.08,
+    apiProvider: 'recraft',
+    maxWidth: 2688,
+    maxHeight: 1536,
+  },
+  'recraft-v3-text': {
+    id: 'recraft-v3-text',
+    name: 'Recraft V3 (Branded Text)',
+    modelId: 'recraftv3',
+    costPerImage: 0.04,
+    apiProvider: 'recraft',
+    maxWidth: 1820,
+    maxHeight: 1024,
   },
 };
 

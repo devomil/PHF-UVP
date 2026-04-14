@@ -57,7 +57,7 @@ export const VISUAL_STYLES: Record<string, VisualStyleConfig> = {
     description: 'Dramatic, film-quality visuals for brand anthems and emotional storytelling',
     
     preferredVideoProviders: ['seedance-2.0', 'runway', 'kling', 'luma'],
-    preferredImageProviders: ['flux', 'ideogram'],
+    preferredImageProviders: ['recraft-v4-pro', 'flux', 'ideogram'],
     
     promptModifiers: {
       mood: 'dramatic, emotional, inspiring, epic',
@@ -100,7 +100,7 @@ export const VISUAL_STYLES: Record<string, VisualStyleConfig> = {
     description: 'Warm, relatable visuals for customer-facing content and testimonials',
     
     preferredVideoProviders: ['seedance-2.0', 'kling', 'runway', 'hailuo'],
-    preferredImageProviders: ['flux', 'ideogram'],
+    preferredImageProviders: ['recraft-v4', 'flux', 'ideogram'],
     
     promptModifiers: {
       mood: 'warm, authentic, relatable, inviting',
@@ -143,7 +143,7 @@ export const VISUAL_STYLES: Record<string, VisualStyleConfig> = {
     description: 'Clean, focused visuals for product reveals and feature highlights',
     
     preferredVideoProviders: ['seedance-2.0', 'luma', 'runway', 'kling'],
-    preferredImageProviders: ['flux', 'ideogram'],
+    preferredImageProviders: ['recraft-v3-text', 'recraft-v4', 'flux', 'ideogram'],
     
     promptModifiers: {
       mood: 'clean, premium, focused, confident',
@@ -186,7 +186,7 @@ export const VISUAL_STYLES: Record<string, VisualStyleConfig> = {
     description: 'Clear, informative visuals for tutorials and health benefit content',
     
     preferredVideoProviders: ['seedance-2.0', 'kling', 'hailuo', 'runway'],
-    preferredImageProviders: ['flux', 'ideogram'],
+    preferredImageProviders: ['recraft-v3-text', 'recraft-v4', 'flux', 'ideogram'],
     
     promptModifiers: {
       mood: 'clear, trustworthy, informative, helpful',
@@ -229,7 +229,7 @@ export const VISUAL_STYLES: Record<string, VisualStyleConfig> = {
     description: 'Fast-paced, attention-grabbing visuals for social media and promos',
     
     preferredVideoProviders: ['seedance-2.0-fast', 'hailuo', 'kling', 'runway'],
-    preferredImageProviders: ['ideogram', 'flux'],
+    preferredImageProviders: ['recraft-v4', 'ideogram', 'flux'],
     
     promptModifiers: {
       mood: 'energetic, exciting, bold, attention-grabbing',
@@ -272,7 +272,7 @@ export const VISUAL_STYLES: Record<string, VisualStyleConfig> = {
     description: 'Luxurious, sophisticated visuals for high-end positioning',
     
     preferredVideoProviders: ['seedance-2.0', 'runway', 'luma', 'kling'],
-    preferredImageProviders: ['flux', 'midjourney'],
+    preferredImageProviders: ['recraft-v4-pro', 'flux', 'midjourney'],
     
     promptModifiers: {
       mood: 'luxurious, sophisticated, elegant, exclusive',

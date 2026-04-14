@@ -372,6 +372,12 @@ export interface Scene {
     composedImage?: string;
     preLogoVideo?: string;
   };
+  brandTextElements?: Array<{
+    text: string;
+    x: number;
+    y: number;
+    width?: number;
+  }>;
 }
 
 // Phase 8A: Scene analysis types

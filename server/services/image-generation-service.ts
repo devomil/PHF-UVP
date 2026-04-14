@@ -9,6 +9,7 @@ import {
 } from '../config/image-providers';
 import { QualityTier } from '../config/quality-tiers';
 import { resolvePlacementRules, I2IConfig } from './placement-resolver-service';
+import { recraftService, RecraftModel } from './recraft.service';
 import sharp from 'sharp';
 
 const I2I_MAX_WIDTH = 1024;
@@ -155,6 +156,10 @@ class ImageGenerationService {
     
     if (isLegNextProvider(provider.id)) {
       return this.generateWithLegNext(options, provider);
+    }
+
+    if (provider.apiProvider === 'recraft') {
+      return this.generateWithRecraft(options, provider);
     }
     
     if (provider.apiProvider === 'piapi') {
@@ -601,6 +606,39 @@ class ImageGenerationService {
     return '16:9';
   }
   
+  private async generateWithRecraft(
+    options: ImageGenerationOptions,
+    provider: ImageProvider
+  ): Promise<GeneratedImage> {
+    if (!recraftService.isAvailable()) {
+      console.warn('[ImageGen] Recraft not available, falling back to Flux');
+      return this.generateWithFlux(options);
+    }
+
+    const aspectRatio = options.aspectRatio || this.calculateAspectRatio(options.width || 1280, options.height || 720);
+
+    try {
+      const result = await recraftService.generateImage({
+        prompt: options.prompt,
+        model: provider.modelId as RecraftModel,
+        aspectRatio: aspectRatio as any,
+      }, `images/recraft/${Date.now()}`);
+
+      return {
+        url: result.imageUrl,
+        provider: provider.name,
+        prompt: options.prompt,
+        width: provider.maxWidth || 1344,
+        height: provider.maxHeight || 768,
+        cost: provider.costPerImage,
+      };
+    } catch (error: any) {
+      console.error(`[ImageGen] Recraft error: ${error.message}`);
+      console.log('[ImageGen] Falling back to Flux...');
+      return this.generateWithFlux(options);
+    }
+  }
+
   private async generateWithFlux(
     options: ImageGenerationOptions,
     provider?: ImageProvider

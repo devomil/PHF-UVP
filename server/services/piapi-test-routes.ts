@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { PIAPI_TEST_DEFINITIONS, getTestById, getTestsByCategory } from './piapi-test-config';
 import { runwayVideoService } from './runway-video-service';
+import { recraftService } from './recraft.service';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
@@ -264,6 +265,15 @@ router.post('/api/piapi-tests/run/:testId', async (req: Request, res: Response) 
     }
   }
 
+  if (test.endpoint === 'recraft-direct' || test.endpoint === 'openai-direct') {
+    try {
+      const result = await runSingleTest(test, '', req);
+      return res.json(result);
+    } catch (error: any) {
+      return res.json({ id: test.id, name: test.name, category: test.category, status: 'fail', responseTime: 0, error: error.message } as TestResult);
+    }
+  }
+
   const apiKey = getPiAPIKey();
   if (!apiKey) {
     return res.status(400).json({ error: 'PIAPI_API_KEY not configured' });
@@ -294,17 +304,19 @@ router.post('/api/piapi-tests/run-category/:category', async (req: Request, res:
   }
 
   const isLlmServiceCategory = category === 'llm-service';
+  const hasDirectApiTests = tests.some(t => t.endpoint === 'recraft-direct' || t.endpoint === 'openai-direct');
   const apiKey = isLlmServiceCategory ? null : getPiAPIKey();
-  if (!isLlmServiceCategory && !apiKey) {
+  if (!isLlmServiceCategory && !hasDirectApiTests && !apiKey) {
     return res.status(400).json({ error: 'PIAPI_API_KEY not configured' });
   }
 
   const results: TestResult[] = [];
   for (const test of tests) {
     try {
+      const isDirectApi = test.endpoint === 'llm-service' || test.endpoint === 'recraft-direct' || test.endpoint === 'openai-direct';
       const result = test.endpoint === 'llm-service'
         ? await runLlmServiceTest(test)
-        : await runSingleTest(test, apiKey!, req);
+        : await runSingleTest(test, isDirectApi ? '' : (apiKey || ''), req);
       results.push(result);
     } catch (error: any) {
       results.push({
@@ -342,8 +354,9 @@ router.post('/api/piapi-tests/submit/:testId', async (req: Request, res: Respons
     }
   }
 
-  const apiKey = getPiAPIKey();
-  if (!apiKey) {
+  const isDirectApiTest = test.endpoint === 'recraft-direct' || test.endpoint === 'openai-direct';
+  const apiKey = isDirectApiTest ? '' : getPiAPIKey();
+  if (!isDirectApiTest && !apiKey) {
     return res.status(400).json({ error: 'PIAPI_API_KEY not configured' });
   }
 
@@ -429,6 +442,40 @@ router.post('/api/piapi-tests/submit/:testId', async (req: Request, res: Respons
         outputUrl: result.videoUrl,
         error: result.error,
       } as TestResult);
+    }
+
+    if (test.endpoint === 'recraft-direct') {
+      if (!recraftService.isAvailable()) {
+        return res.json({
+          id: test.id, name: test.name, category: test.category,
+          status: 'fail', responseTime: 0,
+          error: 'RECRAFT_API_KEY not configured',
+        } as TestResult);
+      }
+
+      try {
+        const recraftResult = await recraftService.generateImage({
+          prompt: test.input.prompt,
+          model: test.input.model || 'recraftv4',
+          aspectRatio: test.input.aspect_ratio || '16:9',
+          style: test.input.style,
+          textLayout: test.input.text_layout,
+        }, `test/recraft/${test.id}`);
+
+        return res.json({
+          id: test.id, name: test.name, category: test.category,
+          status: 'pass',
+          responseTime: Date.now() - startTime,
+          outputUrl: recraftResult.imageUrl,
+        } as TestResult);
+      } catch (err: any) {
+        return res.json({
+          id: test.id, name: test.name, category: test.category,
+          status: 'fail',
+          responseTime: Date.now() - startTime,
+          error: err.message?.substring(0, 300) || 'Unknown Recraft error',
+        } as TestResult);
+      }
     }
 
     const inputData = { ...test.input };
@@ -961,6 +1008,24 @@ async function runSingleTest(test: any, apiKey: string, req: Request): Promise<T
 
   if (test.endpoint === 'llm-service') {
     return runLlmServiceTest(test);
+  }
+
+  if (test.endpoint === 'recraft-direct') {
+    if (!recraftService.isAvailable()) {
+      return { id: test.id, name: test.name, category: test.category, status: 'fail', responseTime: 0, error: 'RECRAFT_API_KEY not configured' };
+    }
+    try {
+      const recraftResult = await recraftService.generateImage({
+        prompt: test.input.prompt,
+        model: test.input.model || 'recraftv4',
+        aspectRatio: test.input.aspect_ratio || '16:9',
+        style: test.input.style,
+        textLayout: test.input.text_layout,
+      }, `test/recraft/${test.id}`);
+      return { id: test.id, name: test.name, category: test.category, status: 'pass', responseTime: Date.now() - startTime, outputUrl: recraftResult.imageUrl };
+    } catch (err: any) {
+      return { id: test.id, name: test.name, category: test.category, status: 'fail', responseTime: Date.now() - startTime, error: err.message?.substring(0, 300) || 'Unknown Recraft error' };
+    }
   }
 
   if (test.taskType === 'runway-direct' || test.taskType === 'runway-direct-v2v' || test.taskType === 'runway-direct-cp') {

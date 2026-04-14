@@ -60,7 +60,7 @@ The AI Video Production Studio is a full-stack platform designed to streamline v
 -   **Database**: PostgreSQL (Neon).
 -   **Object Storage**: S3 for render assets and character references.
 -   **Rendering**: Remotion (Remotion Lambda).
--   **Image Generation**: PiAPI Flux Schnell (fallback), Nano Banana Pro (PiAPI Gemini model).
+-   **Image Generation**: Recraft V4/V4 Pro/V3 (direct API via `RECRAFT_API_KEY` — text-accurate scene generation, branded text placement via V3 text_layout, 4MP hero images via V4 Pro), PiAPI Flux Schnell (fallback), Nano Banana Pro (PiAPI Gemini model).
 -   **Authentication**: Passport.js.
 -   **AI Tools**: ElevenLabs (for voiceover), Claude via PiAPI LLM proxy (claude-sonnet-4-6 primary, Anthropic direct claude-sonnet-4 fallback) for script generation, micro-scene splitting, text label extraction, prompt optimization, scene analysis, quality evaluation, and intelligent provider selection. All LLM calls go through `server/services/piapi-llm-client.ts` which handles PiAPI→Anthropic automatic failover.
 -   **Image/Video Toolkit**: Qubic Image Toolkit (via PiAPI).

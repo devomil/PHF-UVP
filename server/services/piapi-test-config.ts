@@ -885,6 +885,57 @@ export const PIAPI_TEST_DEFINITIONS: PiAPITestDefinition[] = [
     estimatedTime: '~3s',
   },
 
+  // ==================== RECRAFT IMAGE GENERATION (Direct API) ====================
+  {
+    id: 'recraft-v4',
+    name: 'Recraft V4',
+    category: 'image',
+    model: 'recraftv4',
+    taskType: 'txt2img',
+    endpoint: 'recraft-direct',
+    input: {
+      prompt: 'A warm sunlit modern kitchen with marble countertops, fresh vegetables in a wooden bowl, natural light through large windows',
+      model: 'recraftv4',
+      aspect_ratio: '16:9',
+    },
+    pollForResult: false,
+    estimatedCost: '$0.04',
+    estimatedTime: '~10s',
+  },
+  {
+    id: 'recraft-v4-pro',
+    name: 'Recraft V4 Pro (4MP)',
+    category: 'image',
+    model: 'recraftv4_pro',
+    taskType: 'txt2img',
+    endpoint: 'recraft-direct',
+    input: {
+      prompt: 'Cinematic wide shot of a mountain valley at golden hour, mist rising from the river, dramatic clouds',
+      model: 'recraftv4_pro',
+      aspect_ratio: '16:9',
+    },
+    pollForResult: false,
+    estimatedCost: '$0.08',
+    estimatedTime: '~15s',
+  },
+  {
+    id: 'recraft-v3-text',
+    name: 'Recraft V3 (Branded Text)',
+    category: 'image',
+    model: 'recraftv3',
+    taskType: 'txt2img',
+    endpoint: 'recraft-direct',
+    input: {
+      prompt: 'A rustic wooden building with a porch, rolling green hills in the background, warm afternoon light. The text "PINE HILL FARM" appears on a sign above the entrance.',
+      model: 'recraftv3',
+      style: 'realistic_image',
+      aspect_ratio: '16:9',
+    },
+    pollForResult: false,
+    estimatedCost: '$0.04',
+    estimatedTime: '~10s',
+  },
+
   // ==================== AUDIO GENERATION ====================
   {
     id: 'diffrhythm',
