@@ -521,17 +521,15 @@ class PiAPIVideoService {
         if (isPeakHours) {
           console.warn(`[PiAPI T2V] ⚠ Seedance 2 GA request during peak hours (09:00-15:00 GMT) — expect longer queue times`);
         }
-        console.log(`[PiAPI T2V] Using Seedance 2 GA (std mode)`);
+        console.log(`[PiAPI T2V] Using Seedance 2 GA (text_to_video mode)`);
         return {
           model: 'seedance',
           task_type: 'seedance-2',
           input: {
             prompt: safePrompt,
-            mode: 'std',
+            mode: 'text_to_video',
             duration: Math.min(options.duration, 15),
             aspect_ratio: options.aspectRatio || '16:9',
-            resolution: '1080p',
-            generate_audio: false,
           },
         };
       }
@@ -541,17 +539,15 @@ class PiAPIVideoService {
         if (isPeakHours) {
           console.warn(`[PiAPI T2V] ⚠ Seedance 2 Fast GA request during peak hours (09:00-15:00 GMT) — expect longer queue times`);
         }
-        console.log(`[PiAPI T2V] Using Seedance 2 Fast GA (fast mode)`);
+        console.log(`[PiAPI T2V] Using Seedance 2 Fast GA (text_to_video mode)`);
         return {
           model: 'seedance',
           task_type: 'seedance-2-fast',
           input: {
             prompt: safePrompt,
-            mode: 'fast',
+            mode: 'text_to_video',
             duration: Math.min(options.duration, 15),
             aspect_ratio: options.aspectRatio || '16:9',
-            resolution: '1080p',
-            generate_audio: false,
           },
         };
       }
@@ -1217,19 +1213,16 @@ class PiAPIVideoService {
       if (isPeakHours) {
         console.warn(`[PiAPI I2V] ⚠ Seedance 2 GA request during peak hours (09:00-15:00 GMT) — expect longer queue times`);
       }
-      const seedanceMode = options.model === 'seedance-2.0' ? 'std' : 'fast';
-      console.log(`[PiAPI I2V] Seedance 2 GA (${taskType}, ${seedanceMode} mode): ${allImageUrls.length} image(s), prompt with @imageN refs`);
+      console.log(`[PiAPI I2V] Seedance 2 GA (${taskType}, image_to_video mode): ${allImageUrls.length} image(s), prompt with @imageN refs`);
       return {
         model: 'seedance',
         task_type: taskType,
         input: {
           prompt: promptWithRefs,
-          mode: seedanceMode,
+          mode: 'image_to_video',
           image_urls: allImageUrls,
           duration: Math.min(options.duration, 15),
           aspect_ratio: options.aspectRatio || '16:9',
-          resolution: '1080p',
-          generate_audio: false,
         },
       };
     }
