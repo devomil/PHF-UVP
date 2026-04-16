@@ -3312,7 +3312,7 @@ router.post('/projects/:projectId/generate-assets', isAuthenticated, async (req:
   try {
     const userId = (req.user as any)?.id;
     const { projectId } = req.params;
-    const { skipMusic, skipAnalysis, voiceId, referenceImages, videoProvider } = req.body || {};
+    const { skipMusic, skipAnalysis, voiceId, referenceImages, videoProvider, seamlessTransitions } = req.body || {};
     
     const projectData = await getProjectFromDb(projectId);
     if (!projectData) {
@@ -3339,8 +3339,11 @@ router.post('/projects/:projectId/generate-assets', isAuthenticated, async (req:
     if (videoProvider) {
       (projectData as any).preferredVideoProvider = videoProvider;
     }
-    
-    console.log('[UniversalVideo] Queuing asset generation for project:', projectId, skipMusic ? '(music disabled)' : '', voiceId ? `voice: ${voiceId}` : '');
+    if (typeof seamlessTransitions === 'boolean') {
+      (projectData as any).seamlessTransitions = seamlessTransitions;
+    }
+
+    console.log('[UniversalVideo] Queuing asset generation for project:', projectId, skipMusic ? '(music disabled)' : '', voiceId ? `voice: ${voiceId}` : '', (projectData as any).seamlessTransitions ? '✨seamlessTransitions=ON' : '');
     
     projectData.status = 'queued';
     if (!projectData.progress) {

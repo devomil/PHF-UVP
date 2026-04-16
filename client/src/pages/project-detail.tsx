@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
-import { ArrowLeft, Settings, Play, RefreshCw, Clock, Target, Monitor, BarChart3, Loader2, AlertCircle, Zap, Video, Image, Download, RotateCcw, Save, Trash2, ExternalLink, CheckCircle2, XCircle, X, Type, Film, ChevronDown, ChevronUp, CloudUpload, Mic, Music, Volume2, Palette, Shuffle, Sliders, Wand2, Sparkles, ImagePlus, Upload, Edit2, FileText, Plus, GripVertical, Eye, EyeOff, Layers, Maximize2, BookOpen, GripHorizontal, Star } from "lucide-react";
+import { ArrowLeft, Settings, Play, RefreshCw, Clock, Target, Monitor, BarChart3, Loader2, AlertCircle, AlertTriangle, Zap, Video, Image, Download, RotateCcw, Save, Trash2, ExternalLink, CheckCircle2, XCircle, X, Type, Film, ChevronDown, ChevronUp, CloudUpload, Mic, Music, Volume2, Palette, Shuffle, Sliders, Wand2, Sparkles, ImagePlus, Upload, Edit2, FileText, Plus, GripVertical, Eye, EyeOff, Layers, Maximize2, BookOpen, GripHorizontal, Star } from "lucide-react";
 import { getVisualArtPreset, getAllVisualArtPresets } from "@shared/config/visual-art-presets";
 import { SCENE_CONTENT_TAGS } from "@shared/config/scene-content-tags";
 import { Button } from "@/components/ui/button";
@@ -111,6 +111,13 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
   });
   const [showRefLibrary, setShowRefLibrary] = useState(false);
   const [uploadingRef, setUploadingRef] = useState(false);
+  const [seamlessTransitions, setSeamlessTransitions] = useState<boolean>(
+    Boolean((project as any).seamlessTransitions)
+  );
+  // Sync from server when project payload refreshes
+  useEffect(() => {
+    setSeamlessTransitions(Boolean((project as any).seamlessTransitions));
+  }, [(project as any).seamlessTransitions]);
   const [editingSceneId, setEditingSceneId] = useState<string | null>(null);
   const [editValues, setEditValues] = useState<Record<string, any>>({});
   const [expandedSceneId, setExpandedSceneId] = useState<string | null>(null);
@@ -138,6 +145,54 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
     const timeout = setTimeout(() => setGenerationTriggered(false), 15000);
     return () => clearTimeout(timeout);
   }, [generationTriggered]);
+
+  // ──────────────────────────────────────────────────────────────
+  // Seamless Transitions auto-trigger
+  // When parallel generation finishes AND the user enabled the toggle,
+  // automatically fire cinematic-flow-regenerate to chain scenes together.
+  // Idempotency: we set seamlessAutoFiredRef so a single generation run
+  // only triggers continuity once (resets when generation restarts).
+  // ──────────────────────────────────────────────────────────────
+  const prevIsGeneratingRef = useRef<boolean>(false);
+  const seamlessAutoFiredRef = useRef<boolean>(false);
+  useEffect(() => {
+    if (serverIsGenerating) {
+      // New generation cycle started — re-arm the auto-trigger
+      seamlessAutoFiredRef.current = false;
+      prevIsGeneratingRef.current = true;
+      return;
+    }
+    const justFinished = prevIsGeneratingRef.current && !serverIsGenerating;
+    prevIsGeneratingRef.current = false;
+    if (!justFinished) return;
+    if (!seamlessTransitions) return;
+    if (seamlessAutoFiredRef.current) return;
+
+    const contentScenes = (scenes || []).filter((s: any) => s.type !== 'chapter-title');
+    const allHaveVideo = contentScenes.length > 0 && contentScenes.every((s: any) => s.videoUrl);
+    if (!allHaveVideo) return;
+
+    seamlessAutoFiredRef.current = true;
+    (async () => {
+      try {
+        const res = await fetch(`/api/universal-video/${projectId}/cinematic-flow-regenerate`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({}),
+        });
+        if (res.ok) {
+          toast({
+            title: "✨ Applying seamless transitions",
+            description: `Chaining ${contentScenes.length} scenes for continuity. This runs sequentially and may take a while.`,
+          });
+        }
+      } catch (err) {
+        console.error("[SeamlessTransitions] Auto-trigger failed:", err);
+      }
+    })();
+  }, [serverIsGenerating, seamlessTransitions, scenes, projectId, toast]);
+
   const currentStep = progress.currentStep || null;
   const hasScenes = scenes.length > 0;
   const scriptReady = hasScenes && (project.status === "draft" || progress.phase === "script_ready");
@@ -398,6 +453,7 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
       if (selectedVoice) body.voiceId = selectedVoice;
       if (referenceImages.length > 0) body.referenceImages = referenceImages;
       if (selectedProvider && selectedProvider !== "auto") body.videoProvider = selectedProvider;
+      body.seamlessTransitions = seamlessTransitions;
       const res = await fetch(`/api/universal-video/projects/${projectId}/generate-assets`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1258,6 +1314,51 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
               </div>
               )}
             </div>
+
+            {!isStudioPolish && (
+            <div
+              className="flex items-start gap-3 p-3 rounded-xl border"
+              style={{ backgroundColor: "rgba(124, 58, 237, 0.06)", borderColor: "rgba(124, 58, 237, 0.25)" }}
+              data-testid="seamless-transitions-toggle"
+            >
+              <Film className="w-4 h-4 text-purple-400 mt-0.5 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                    Seamless transitions
+                  </p>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={seamlessTransitions}
+                    onClick={() => setSeamlessTransitions((v) => !v)}
+                    disabled={isGenerating || generateAllMutation.isPending}
+                    className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border transition-colors cursor-pointer disabled:opacity-50 ${
+                      seamlessTransitions
+                        ? "bg-purple-500 border-purple-500"
+                        : "bg-muted border-border"
+                    }`}
+                    data-testid="switch-seamless-transitions"
+                  >
+                    <span
+                      className={`pointer-events-none block h-4 w-4 rounded-full bg-white shadow transition-transform mt-0.5 ${
+                        seamlessTransitions ? "translate-x-4" : "translate-x-0.5"
+                      }`}
+                    />
+                  </button>
+                </div>
+                <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>
+                  Each scene starts where the last one ended — same subject, lighting, and environment carry over for cinematic continuity. Seedance 2 scenes use native first/last-frame anchoring.
+                </p>
+                {seamlessTransitions && (
+                  <p className="text-[11px] mt-1 flex items-center gap-1 text-amber-500">
+                    <AlertTriangle className="w-3 h-3" />
+                    Continuity is applied sequentially after parallel generation — adds roughly 1× generation time per scene ({scenes.length} scenes ≈ +{scenes.length}× wait).
+                  </p>
+                )}
+              </div>
+            </div>
+            )}
 
             {!isStudioPolish && (
             <>
