@@ -1,0 +1,31 @@
+var myHeaders = new Headers();
+myHeaders.append("X-API-Key", "");
+myHeaders.append("Content-Type", "application/json");
+
+var raw = JSON.stringify({
+   "model": "gemini",
+   "task_type": "gemini-2.5-flash-image",
+   "input": {
+      "prompt": "An action shot of a black lab swimming in an inground suburban swimming pool. The camera is placed meticulously on the water line, dividing the image in half, revealing both the dogs head above water holding a tennis ball in it's mouth, and it's paws paddling underwater.",
+      "output_format": "png",
+      "aspect_ratio": "16:9"
+   },
+   "config": {
+      "webhook_config": {
+         "endpoint": "https://webhook.site/2f771461-14e0-4e15-b060-9ab7884cbc4f",
+         "secret": ""
+      }
+   }
+});
+
+var requestOptions = {
+   method: 'POST',
+   headers: myHeaders,
+   body: raw,
+   redirect: 'follow'
+};
+
+fetch("https://api.piapi.ai/api/v1/task", requestOptions)
+   .then(response => response.text())
+   .then(result => console.log(result))
+   .catch(error => console.log('error', error));

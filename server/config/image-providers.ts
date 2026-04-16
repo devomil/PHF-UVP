@@ -90,11 +90,11 @@ export const IMAGE_PROVIDERS: Record<string, ImageProvider> = {
   },
   'nano-banana-2': {
     id: 'nano-banana-2',
-    name: 'Nano Banana 2 (Gemini 3.1 Flash)',
+    name: 'Nano Banana 2',
     modelId: 'gemini',
     costPerImage: 0.03,
     apiProvider: 'nano-banana-2',
-    defaultParams: { taskType: 'gemini-2.5-flash-image', output_format: 'jpeg' },
+    defaultParams: { taskType: 'nano-banana-2', output_format: 'jpeg' },
   },
   'recraft-v4': {
     id: 'recraft-v4',

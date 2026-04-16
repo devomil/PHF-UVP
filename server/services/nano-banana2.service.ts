@@ -67,7 +67,7 @@ export class NanoBanana2Service {
       },
       body: JSON.stringify({
         model: 'gemini',
-        task_type: 'gemini-2.5-flash-image',
+        task_type: 'nano-banana-2',
         input: inputPayload,
       }),
     });
@@ -157,7 +157,7 @@ export class NanoBanana2Service {
       },
       body: JSON.stringify({
         model: 'gemini',
-        task_type: 'gemini-2.5-flash-image',
+        task_type: 'nano-banana-2',
         input: inputPayload,
       }),
     });
