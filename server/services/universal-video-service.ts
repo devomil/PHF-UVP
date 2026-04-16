@@ -1013,7 +1013,8 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
       let brandAware = false;
       try {
         const brand = await brandBibleService.getBrandBible();
-        brandAware = !!(brand?.brandName && (brand.primaryColor || brand.secondaryColor));
+        const c = (brand as any)?.colors || {};
+        brandAware = !!(brand?.brandName && (c.primary || c.secondary || c.accent));
       } catch {}
 
       const candidatePool = ['nano-banana-2', 'recraft-v4-pro', 'recraft-v3-text', 'flux-1.1-pro'];
