@@ -864,6 +864,11 @@ class PiAPIVideoService {
       imageControlStrength?: number;
       animationStyle?: 'product-hero' | 'product-static' | 'subtle-motion' | 'dynamic';
       motionStrength?: number;
+      // Seedance 2 native first_last_frames mode (for seamless scene continuity).
+      // When true and model is seedance-2.0/seedance-2.0-fast, the request uses
+      // `mode: "first_last_frames"` with image_urls=[first, last?] and aspect_ratio:"auto".
+      useFirstLastFrames?: boolean;
+      endFrameUrl?: string; // optional second image (locks the END state)
     };
     motionControl?: MotionControlConfig;
     isCharacterReference?: boolean;
@@ -999,6 +1004,8 @@ class PiAPIVideoService {
       imageControlStrength?: number;
       animationStyle?: 'product-hero' | 'product-static' | 'subtle-motion' | 'dynamic';
       motionStrength?: number;
+      useFirstLastFrames?: boolean;
+      endFrameUrl?: string;
     };
     motionControl?: MotionControlConfig;
     isCharacterReference?: boolean;
@@ -1199,6 +1206,40 @@ class PiAPIVideoService {
     // Seedance 2 - uses @imageN syntax in prompts with image_urls array
     if (options.model === 'seedance-2.0' || options.model === 'seedance-2.0-fast') {
       const taskType = options.model === 'seedance-2.0' ? 'seedance-2' : 'seedance-2-fast';
+      const useFirstLastFrames = options.i2vSettings?.useFirstLastFrames === true;
+      const endFrameUrl = options.i2vSettings?.endFrameUrl;
+
+      // ──────────────────────────────────────────────────────────────
+      // Seedance 2 native `first_last_frames` mode
+      // Used by Seamless Transitions (Cinematic Flow) for continuity.
+      // - image_urls: [firstFrame] or [firstFrame, lastFrame]
+      // - aspect_ratio: "auto" (inherits from reference image)
+      // - No @image refs injected — the prompt describes ACTION, not the subject
+      // ──────────────────────────────────────────────────────────────
+      if (useFirstLastFrames) {
+        const firstFrameUrl = (options.imageUrls && options.imageUrls[0]) || options.imageUrl;
+        const flfImageUrls: string[] = [firstFrameUrl];
+        if (endFrameUrl) flfImageUrls.push(endFrameUrl);
+
+        const isPeakHours = this.isSeedancePeakHours();
+        if (isPeakHours) {
+          console.warn(`[PiAPI I2V] ⚠ Seedance 2 first_last_frames request during peak hours (09:00-15:00 GMT)`);
+        }
+        console.log(`[PiAPI I2V] Seedance 2 FIRST_LAST_FRAMES (${taskType}): ${flfImageUrls.length} anchor frame(s), aspect_ratio=auto`);
+
+        return {
+          model: 'seedance',
+          task_type: taskType,
+          input: {
+            prompt: sanitizedPrompt, // describe motion/action only — subject is locked by the anchor frame
+            mode: 'first_last_frames',
+            image_urls: flfImageUrls,
+            duration: Math.max(4, Math.min(options.duration, 15)),
+            aspect_ratio: 'auto',
+          },
+        };
+      }
+
       const allImageUrls = options.imageUrls && options.imageUrls.length > 0 
         ? options.imageUrls 
         : [options.imageUrl];

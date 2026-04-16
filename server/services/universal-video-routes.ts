@@ -7415,6 +7415,21 @@ router.post('/:projectId/cinematic-flow-regenerate', isAuthenticated, async (req
             cinFlowI2v.providerHint = sceneProviderHint;
           }
 
+          // ──────────────────────────────────────────────────────────────
+          // Seamless Transitions — Seedance 2 native `first_last_frames` mode
+          // Whenever the source image is a continuity frame (i.e. the last frame
+          // of the previous scene), request the native first_last_frames payload.
+          // This flag is ONLY consumed by the Seedance 2 branch of
+          // piapi-video-service.buildI2VRequestBody — all other providers ignore
+          // it safely. Setting it unconditionally (rather than gating on the
+          // initially-specified provider) makes continuity mode robust even when
+          // provider='auto' and the resolver lands on Seedance 2 downstream.
+          // ──────────────────────────────────────────────────────────────
+          if (sourceImageUrl && previousLastFrameUrl) {
+            cinFlowI2v.useFirstLastFrames = true;
+            console.log(`[CinematicFlow] Scene ${i}: continuity frame present — requesting Seedance 2 first_last_frames mode (ignored by non-Seedance-2 providers)`);
+          }
+
           const { videoGenerationWorker } = await import('../services/video-generation-worker');
           const job = await videoGenerationWorker.createJob({
             projectId,

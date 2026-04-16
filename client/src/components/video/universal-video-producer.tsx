@@ -2851,17 +2851,18 @@ function ScenePreview({
           onClick={startCinematicFlow}
           disabled={cinematicFlowRunning || bulkRegeneratingVideos || scenes.length === 0}
           className="border-purple-400 text-purple-700 hover:bg-purple-50"
-          title="Regenerate all scenes sequentially, using each scene's last frame as the starting point for the next scene to maintain visual continuity"
+          data-testid="button-seamless-transitions"
+          title={`Seamless Transitions — regenerate all ${scenes.length} scenes sequentially, passing each scene's last frame into the next scene as its start frame. Seedance 2 scenes use native first_last_frames mode for cleanest continuity. ⚠ Takes ~${scenes.length}× longer than parallel regeneration.`}
         >
           {cinematicFlowRunning ? (
             <>
               <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-              Flow {cinematicFlowProgress.current}/{cinematicFlowProgress.total}...
+              Seamless {cinematicFlowProgress.current}/{cinematicFlowProgress.total}...
             </>
           ) : (
             <>
               <Film className="w-3 h-3 mr-1" />
-              Cinematic Flow
+              Seamless Transitions
             </>
           )}
         </Button>
