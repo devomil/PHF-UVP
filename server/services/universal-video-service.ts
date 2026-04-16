@@ -4286,6 +4286,16 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
     const projectQualityTier = (project as any).qualityTier || 'standard';
     const projectMediaMode = (project as any).mediaMode as 'image' | 'video' | undefined;
     const projectArtPresetIdForVideo = (project as any).artPresetId || project.artPresetId;
+    // User-selected video provider from Step 2 config — when set (non-'auto'),
+    // ai-video-service uses STRICT mode (no fallbacks) and skips the
+    // intelligent Claude routing that would otherwise pick e.g. Runway/Kling.
+    const userPreferredVideoProvider = (project as any).preferredVideoProvider as string | undefined;
+    const projectPreferredProvider = userPreferredVideoProvider && userPreferredVideoProvider !== 'auto'
+      ? userPreferredVideoProvider
+      : undefined;
+    if (projectPreferredProvider) {
+      console.log(`[Assets] Project has user-selected video provider: ${projectPreferredProvider} → STRICT mode (overrides intelligent routing)`);
+    }
     
     const getSceneQualityTier = (scene: any): 'ultra' | 'premium' | 'standard' => {
       return scene.qualityTier || projectQualityTier;
@@ -4618,6 +4628,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
               narration: ms.narration,
               qualityTier: sceneQualityTier,
               artPresetId: msArtPresetId,
+              ...(projectPreferredProvider ? { preferredProvider: projectPreferredProvider } : {}),
               ...(msImageUrl ? { imageUrl: msImageUrl } : {}),
               ...(charRefImageUrls.length > 1 ? { imageUrls: charRefImageUrls } : {}),
               ...(msContentTag ? { contentTag: msContentTag } : {}),
@@ -4757,6 +4768,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
               contentType: (scene as any).analysis?.contentType as 'person' | 'product' | 'nature' | 'abstract' | 'lifestyle' | undefined,
               qualityTier: sceneQualityTier,
               artPresetId: scene.artPresetId || projectArtPresetIdForVideo,
+              ...(projectPreferredProvider ? { preferredProvider: projectPreferredProvider } : {}),
               ...(sceneImageUrl ? { imageUrl: sceneImageUrl } : {}),
               ...(sceneCharRefUrls.length > 1 ? { imageUrls: sceneCharRefUrls } : {}),
               ...(scene.contentTag ? { contentTag: scene.contentTag } : {}),
@@ -4787,6 +4799,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
               contentType: (scene as any).analysis?.contentType as 'person' | 'product' | 'nature' | 'abstract' | 'lifestyle' | undefined,
               qualityTier: sceneQualityTier,
               artPresetId: scene.artPresetId || projectArtPresetIdForVideo,
+              ...(projectPreferredProvider ? { preferredProvider: projectPreferredProvider } : {}),
               ...(sceneImageUrl ? { imageUrl: sceneImageUrl } : {}),
               ...(sceneCharRefUrls.length > 1 ? { imageUrls: sceneCharRefUrls } : {}),
               ...(scene.contentTag ? { contentTag: scene.contentTag } : {}),
@@ -4853,6 +4866,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
                 qualityTier: sceneQualityTier,
                 artPresetId: scene.artPresetId || projectArtPresetIdForVideo,
                 imageUrl: sourceImageUrl,
+                ...(projectPreferredProvider ? { preferredProvider: projectPreferredProvider } : {}),
                 ...(scene.negativePrompt ? { negativePrompt: scene.negativePrompt } : {}),
               });
               
@@ -4880,6 +4894,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
                   qualityTier: sceneQualityTier,
                   artPresetId: scene.artPresetId || projectArtPresetIdForVideo,
                   imageUrl: aiGeneratedImage,
+                  ...(projectPreferredProvider ? { preferredProvider: projectPreferredProvider } : {}),
                   ...(scene.negativePrompt ? { negativePrompt: scene.negativePrompt } : {}),
                 });
                 

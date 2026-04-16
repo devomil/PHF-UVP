@@ -7410,7 +7410,13 @@ router.post('/:projectId/cinematic-flow-regenerate', isAuthenticated, async (req
           }
 
           const sceneProviderHint = scene.providerHint;
-          const effectiveProvider = provider || undefined;
+          // Honor the project's user-selected provider (Step 2 config) when no
+          // explicit provider was sent in the request body. This keeps the
+          // continuity pass on the same model the user picked for the
+          // initial parallel generation (e.g. seedance-2.0).
+          const projectPreferredProvider = (projectData as any).preferredVideoProvider;
+          const effectiveProvider = provider
+            || (projectPreferredProvider && projectPreferredProvider !== 'auto' ? projectPreferredProvider : undefined);
           const effectivePrompt = (sourceImageUrl && sceneMotionPrompt) ? sceneMotionPrompt : (scene.visualDirection || 'Professional video');
 
           const cinFlowI2v: any = {};
