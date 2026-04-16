@@ -983,7 +983,70 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
 
     const imgDims = getImageDimensionsForAspectRatio(aspectRatio);
     console.log(`[GenerateImage] Aspect ratio: ${aspectRatio} → ${imgDims.width}x${imgDims.height}`);
-    
+
+    // ──────────────────────────────────────────────────────────────
+    // Smart provider routing — Nano Banana 2 / Recraft / Flux
+    // The image-generation-policy module knows which model is best for
+    // a given visual style + scene content type. Previously this whole
+    // flow went straight to Flux, ignoring NB2 (great for photoreal +
+    // brand-aware scenes) and Recraft (great for typography / product
+    // shots). We now consult the policy and dispatch to the right
+    // service via imageGenerationService — falling back to the existing
+    // Flux paths on any failure so reliability is unchanged.
+    // ──────────────────────────────────────────────────────────────
+    try {
+      const { selectImageProvider } = await import('../utils/image-generation-policy');
+      const { imageGenerationService } = await import('./image-generation-service');
+
+      const tagLower = (scene?.contentTag || '').toString().toLowerCase();
+      const policyVisualStyle = tagLower.includes('lifestyle') ? 'lifestyle'
+        : tagLower.includes('product') ? 'product'
+        : tagLower.includes('social') ? 'social'
+        : tagLower.includes('education') ? 'educational'
+        : 'default';
+      const policySceneType = (scene?.type || sceneType || '').toString().toLowerCase();
+
+      // Brand-test bias: if a brand bible exists with name + colors, prefer
+      // Nano Banana 2 (its Gemini-backed conditioning produces cleaner
+      // brand-aware photoreal scenes than raw Flux). Recraft still wins
+      // for text-heavy / product / CTA scenes via the policy below.
+      let brandAware = false;
+      try {
+        const brand = await brandBibleService.getBrandBible();
+        brandAware = !!(brand?.brandName && (brand.primaryColor || brand.secondaryColor));
+      } catch {}
+
+      const candidatePool = ['nano-banana-2', 'recraft-v4-pro', 'recraft-v3-text', 'flux-1.1-pro'];
+      let selected = selectImageProvider(policyVisualStyle, policySceneType, candidatePool);
+      if (selected === 'flux-1.1-pro' && brandAware) {
+        // Brand context present and policy didn't pick a typography model →
+        // upgrade Flux to Nano Banana 2 for better brand fidelity.
+        selected = 'nano-banana-2';
+      }
+
+      if (selected && selected !== 'flux-1.1-pro' && selected !== 'flux') {
+        console.log(`[GenerateImage] Smart routing for scene ${sceneId}: ${selected} (style=${policyVisualStyle}, type=${policySceneType}, brandAware=${brandAware})`);
+        const smartResult = await imageGenerationService.generateImage({
+          prompt: enhancedPrompt,
+          provider: selected,
+          aspectRatio,
+          width: imgDims.width,
+          height: imgDims.height,
+        });
+        if (smartResult?.url) {
+          return {
+            url: smartResult.url,
+            source: smartResult.provider || selected,
+            success: true,
+          };
+        }
+      } else {
+        console.log(`[GenerateImage] Policy chose Flux for scene ${sceneId} (style=${policyVisualStyle}, type=${policySceneType}, brandAware=${brandAware})`);
+      }
+    } catch (smartErr: any) {
+      console.warn(`[GenerateImage] Smart routing failed for scene ${sceneId}: ${smartErr.message} — falling back to Flux`);
+    }
+
     if (falKey) {
       const falResult = await this.generateImageWithFalPrimary(enhancedPrompt, falKey, aspectRatio);
       if (falResult.success) {
