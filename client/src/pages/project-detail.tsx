@@ -1140,6 +1140,23 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
             <div className="space-y-3">
               {scenes.map((scene: any, index: number) => {
                 const sceneId = scene.id || `scene-${index}`;
+                const activeJobStatuses = new Set([
+                  "pending",
+                  "running",
+                  "queued",
+                  "processing",
+                  "rendering",
+                  "generating",
+                  "render_queued",
+                  "lambda_pending",
+                ]);
+                const activeJobsForScene = Array.isArray(project?.jobs)
+                  ? project.jobs.filter((j: any) =>
+                      j.sceneId === sceneId && activeJobStatuses.has(j.status)
+                    )
+                  : [];
+                const activeImageJob = activeJobsForScene.find((j: any) => j.sceneType === "image");
+                const activeVideoJob = activeJobsForScene.find((j: any) => j.sceneType === "video");
                 const isEditing = editingSceneId === sceneId;
                 const isExpanded = expandedSceneId === sceneId;
                 const thumbCandidate = scene.assets?.imageUrl || scene.background?.imageUrl || scene.background?.url || scene.textImageUrl || null;
@@ -1225,12 +1242,30 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
                               </span>
                             );
                           })()}
-                          {scene.assets?.imageProvider && (
+                          {activeImageJob ? (
+                            <span
+                              className="text-[10px] px-1.5 py-0.5 rounded-full border flex items-center gap-1 animate-pulse"
+                              style={{ borderColor: 'rgba(59,130,246,0.4)', backgroundColor: 'rgba(59,130,246,0.15)', color: 'rgb(96,165,250)' }}
+                              data-testid={`scene-regen-image-${sceneId}`}
+                              title={`Regenerating image with ${formatProviderName(activeImageJob.provider)}`}
+                            >
+                              <Loader2 className="w-2.5 h-2.5 animate-spin" /> Regenerating image with {formatProviderName(activeImageJob.provider)}
+                            </span>
+                          ) : scene.assets?.imageProvider && (
                             <span className="text-[10px] px-1.5 py-0.5 rounded-full border flex items-center gap-0.5" style={{ borderColor: 'rgba(59,130,246,0.3)', backgroundColor: 'rgba(59,130,246,0.1)', color: 'rgb(96,165,250)' }}>
                               <ImagePlus className="w-2.5 h-2.5" /> {formatProviderName(scene.assets.imageProvider)}
                             </span>
                           )}
-                          {scene.assets?.videoProvider && (
+                          {activeVideoJob ? (
+                            <span
+                              className="text-[10px] px-1.5 py-0.5 rounded-full border flex items-center gap-1 animate-pulse"
+                              style={{ borderColor: 'rgba(16,185,129,0.4)', backgroundColor: 'rgba(16,185,129,0.15)', color: 'rgb(52,211,153)' }}
+                              data-testid={`scene-regen-video-${sceneId}`}
+                              title={`Regenerating video with ${formatProviderName(activeVideoJob.provider)}`}
+                            >
+                              <Loader2 className="w-2.5 h-2.5 animate-spin" /> Regenerating video with {formatProviderName(activeVideoJob.provider)}
+                            </span>
+                          ) : scene.assets?.videoProvider && (
                             <span className="text-[10px] px-1.5 py-0.5 rounded-full border flex items-center gap-0.5" style={{ borderColor: 'rgba(16,185,129,0.3)', backgroundColor: 'rgba(16,185,129,0.1)', color: 'rgb(52,211,153)' }}>
                               <Video className="w-2.5 h-2.5" /> {formatProviderName(scene.assets.videoProvider)}
                             </span>
