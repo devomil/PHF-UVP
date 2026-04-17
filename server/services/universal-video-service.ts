@@ -4313,7 +4313,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
                 background: scene.background,
               };
               try {
-                const result = await this.generateContentImage(tempScene, project.title, undefined, imageGenArtPresetId);
+                const result = await this.generateContentImage(tempScene, project.title, undefined, (tempScene as any).artPresetId || imageGenArtPresetId);
                 return { msIdx, imageUrl: result.imageUrl, success: !!result.imageUrl };
               } catch (err: any) {
                 console.warn(`[Assets] Micro-scene ${msIdx} image generation failed: ${err.message}`);
@@ -4348,7 +4348,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
           } else {
           // CONTENT SCENE: Generate imagery that matches the script content
           console.log(`[UniversalVideoService] Generating CONTENT image for ${scene.type} scene: ${scene.id}`);
-          const contentResult = await this.generateContentImage(scene, project.title, undefined, imageGenArtPresetId);
+          const contentResult = await this.generateContentImage(scene, project.title, undefined, (scene as any).artPresetId || imageGenArtPresetId);
           
           if (contentResult.imageUrl) {
             updatedProject.assets.images.push({
@@ -6496,7 +6496,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
     // Try content image generation first (for non-person prompts)
     if (this.isContentScene(scene.type)) {
       try {
-        const result = await this.generateContentImage(scene, project.title, imgAspectRatio, (project as any).artPresetId || project.artPresetId);
+        const result = await this.generateContentImage(scene, project.title, imgAspectRatio, (scene as any).artPresetId || (project as any).artPresetId || project.artPresetId);
         if (result.imageUrl) {
           return { success: true, newImageUrl: result.imageUrl, source: result.source };
         }
