@@ -495,6 +495,8 @@ export const universalVideoProjects = pgTable("universal_video_projects", {
   characters: jsonb("characters").default([]),
   scriptStrategy: jsonb("script_strategy"),
   scriptNarrative: jsonb("script_narrative"),
+  preferredVideoProvider: varchar("preferred_video_provider", { length: 50 }),
+  seamlessTransitions: boolean("seamless_transitions").default(false),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => ({
