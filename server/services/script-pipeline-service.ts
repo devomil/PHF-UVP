@@ -605,7 +605,7 @@ function buildProviderHints(primary: string): string {
 function buildArtStyleBlock(artPreset: VisualArtPreset | null): string {
   if (!artPreset) {
     return `ART STYLE: Cinematic Realism
-STYLE SUFFIX TO APPEND: Cinematic quality, natural lighting, shallow depth of field, warm color grading, 4K. No text in scene.
+STYLE SUFFIX TO APPEND: natural lighting, shallow depth of field, photorealistic. No text in scene.
 NEGATIVE PROMPT GUIDANCE: blurry, low quality, text, watermark, logo, words, labels`;
   }
   const suffix = [
@@ -965,6 +965,31 @@ ${s.chapterTitle ? `Chapter Title: "${s.chapterTitle}" (create a visual METAPHOR
 
     let imagePrompt = s4.imagePrompt || '';
     let motionPrompt = s4.motionPrompt || '';
+
+    // ===== LITERAL NARRATION ENFORCEMENT =====
+    // If the narration mentions concrete subjects (nouns ≥5 chars) that are
+    // entirely missing from the imagePrompt / visualDirection, prepend a
+    // literal anchor so the visual stays grounded in the spoken content.
+    const narrationText = (original.narration || '').toString();
+    if (narrationText && imagePrompt) {
+      const STOPWORDS = new Set([
+        'about','above','across','after','against','along','among','around','because','before','behind','below','beneath','beside','between','beyond','during','either','every','everyone','everything','except','further','having','herself','himself','itself','myself','others','please','really','should','simply','someone','something','therefore','through','toward','towards','within','without','would','could','their','these','those','there','where','which','while','whose','being','doing','going','great','still','always','never','often','sometimes','today','tomorrow','really','actually','probably','maybe','people','things','stuff'
+      ]);
+      const narrationNouns = Array.from(new Set(
+        narrationText.toLowerCase()
+          .replace(/[^a-z0-9\s'-]/g, ' ')
+          .split(/\s+/)
+          .filter((w: string) => w.length >= 5 && !STOPWORDS.has(w))
+      ));
+      const promptHaystack = (imagePrompt + ' ' + (s4.visualDirection || '')).toLowerCase();
+      const missingNouns = narrationNouns.filter((n: string) => !promptHaystack.includes(n));
+      // Only fire if MOST significant nouns are missing (drift signal)
+      if (narrationNouns.length >= 2 && missingNouns.length >= Math.ceil(narrationNouns.length * 0.6)) {
+        const anchorTerms = missingNouns.slice(0, 4).join(', ');
+        console.warn(`[Pipeline S4] Scene ${i + 1} drift detected — narration mentions [${anchorTerms}] but imagePrompt does not. Anchoring.`);
+        imagePrompt = `Literal subject from narration: ${anchorTerms}. ${imagePrompt}`;
+      }
+    }
 
     if (scenePreset && imagePrompt) {
       const styleMarker = scenePreset.styleMarkerPrefix || scenePreset.name;

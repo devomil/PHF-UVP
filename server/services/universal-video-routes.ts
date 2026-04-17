@@ -2804,6 +2804,27 @@ router.post('/projects/:projectId/generate-script', isAuthenticated, async (req:
       }
     }
 
+    // ===== Phase 43: Fall back to user-provided productVisualDescription =====
+    // If no photo was uploaded but the user typed a literal description,
+    // synthesize a minimal productContext so Stage 4 still grounds visuals.
+    if (!productContext) {
+      const projectVisualDesc = (projectData as any).productVisualDescription
+        || (projectData.progress as any)?.productVisualDescription;
+      if (projectVisualDesc && typeof projectVisualDesc === 'string' && projectVisualDesc.trim().length > 0) {
+        const presetProductName = scriptPresets?.productName || projectData.title || 'Product';
+        productContext = {
+          productName: presetProductName,
+          category: 'generic',
+          keyFeatures: [],
+          brandTone: 'authentic',
+          targetDemographic: 'general',
+          colorPalette: [],
+          visualDescription: projectVisualDesc.trim(),
+        } as any;
+        console.log(`[GenerateScript] Phase 43: synthesized productContext from user description (${projectVisualDesc.length} chars)`);
+      }
+    }
+
     console.log(`[GenerateScript] Generating script for project ${projectId} - ${targetDuration}s, ${platform}, style: ${visualStyle}${productContext ? `, product: ${productContext.productName}` : ''}`);
 
     const isChapterBased = approvedOutline && Array.isArray(approvedOutline) && approvedOutline.length > 0;

@@ -649,11 +649,13 @@ class ImageGenerationService {
   ): Promise<GeneratedImage> {
     try {
       const aspectRatio = options.aspectRatio || this.calculateAspectRatio(options.width || 1280, options.height || 720);
+      const refs = (options as any).referenceImages as string[] | undefined;
 
       const result = await nanoBanana2Service.generateImage({
         prompt: options.prompt,
         aspectRatio: aspectRatio as any,
         format: 'jpeg',
+        ...(Array.isArray(refs) && refs.length > 0 ? { referenceImages: refs.slice(0, 14) } : {}),
       });
 
       return {

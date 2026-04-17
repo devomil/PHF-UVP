@@ -437,6 +437,15 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
   const [documentWordCount, setDocumentWordCount] = useState(0);
   const documentInputRef = useRef<HTMLInputElement>(null);
   const [projectPurpose, setProjectPurpose] = useState("");
+  const [productVisualDescription, setProductVisualDescription] = useState("");
+
+  const PRODUCT_NOUNS = /\b(collagen|peptides?|supplements?|serums?|cream|lotion|powder|capsules?|tablets?|pills?|drops?|shampoo|conditioner|skincare|moisturizer|cleanser|toner|sunscreen|vitamins?|protein|gummies|tinctures?|oils?|balm|spray|gel|stick|bottle|jar|tube|sachet|stick\s+pack|pouch|formula|complex|blend|stack|product)\b/i;
+  const productDetectedInDescription = PRODUCT_NOUNS.test(description || "");
+  const needsProductGrounding =
+    productDetectedInDescription &&
+    !productMediaFile &&
+    !selectedLibraryAsset &&
+    productVisualDescription.trim().length < 10;
 
   const allProjectTypes = getAllProjectTypes();
   const allPurposes = getAllProjectPurposes();
@@ -705,6 +714,7 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
         callToAction,
       } : undefined,
       projectPurpose: projectPurpose || undefined,
+      productVisualDescription: productVisualDescription.trim() || undefined,
     });
   };
 
@@ -866,6 +876,27 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
           <div>
             <Label style={{ color: "var(--text-secondary)" }}>Description / Brief</Label>
             <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Describe what you want your video to be about..." rows={4} className="mt-1.5" style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }} />
+          </div>
+        )}
+
+        {(productDetectedInDescription || productMediaFile || selectedLibraryAsset) && (
+          <div>
+            <Label style={{ color: "var(--text-secondary)" }}>
+              How does the product physically look?
+              {needsProductGrounding && <span className="text-amber-400 ml-1">*</span>}
+            </Label>
+            <p className="text-xs mt-0.5 mb-2" style={{ color: "var(--text-muted)" }}>
+              Color, container shape, size — what the AI should depict literally. {needsProductGrounding ? "Required because no product photo is uploaded." : "Optional but improves accuracy."}
+            </p>
+            <Textarea
+              value={productVisualDescription}
+              onChange={(e) => setProductVisualDescription(e.target.value)}
+              placeholder="e.g., White matte stick pack with a teal stripe, single-serve sachet about the size of a sugar packet"
+              rows={2}
+              className="mt-1"
+              style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }}
+              data-testid="textarea-product-visual-description"
+            />
           </div>
         )}
 
@@ -1194,7 +1225,12 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
           <Button type="button" variant="outline" onClick={onBack} style={{ borderColor: "var(--border-medium)", color: "var(--text-secondary)" }}>
             <ArrowLeft className="w-4 h-4 mr-2" /> Back
           </Button>
-          <Button type="submit" className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500" disabled={isLoading || isUploadingMedia || !title}>
+          {needsProductGrounding && (
+            <p className="text-xs text-amber-300/90 mt-2" data-testid="text-product-grounding-warning">
+              Your description mentions a product. Either upload a product photo or describe what it physically looks like (color, container, label) below so the AI can render the actual item.
+            </p>
+          )}
+          <Button type="submit" className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500" disabled={isLoading || isUploadingMedia || !title || needsProductGrounding} title={needsProductGrounding ? "Add a product photo or visual description first" : undefined} data-testid="button-generate-script">
             {isUploadingMedia ? (<><Loader2 className="w-4 h-4 mr-2 animate-spin" />Uploading Media...</>) : isLoading ? "Creating..." : "Create Project"}
           </Button>
         </div>

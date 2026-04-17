@@ -36,6 +36,8 @@ export function dbRowToVideoProject(row: any): VideoProject {
     mediaMode: row.mediaMode,
     videoGenerationMode: row.videoGenerationMode,
     referenceImages: row.referenceImages || (row.assets as any)?.referenceImages || [],
+    productVisualDescription: row.productVisualDescription || null,
+    characterReferenceImageUrl: row.characterReferenceImageUrl || null,
     renderId: row.renderId,
     bucketName: row.bucketName,
     outputUrl: row.outputUrl,
@@ -112,6 +114,8 @@ export async function saveProjectToDb(
   if (outputUrl !== undefined) updateData.outputUrl = outputUrl;
   if (project.preferredVideoProvider !== undefined) updateData.preferredVideoProvider = project.preferredVideoProvider;
   if (project.seamlessTransitions !== undefined) updateData.seamlessTransitions = project.seamlessTransitions;
+  if (project.productVisualDescription !== undefined) updateData.productVisualDescription = project.productVisualDescription;
+  if (project.characterReferenceImageUrl !== undefined) updateData.characterReferenceImageUrl = project.characterReferenceImageUrl;
 
   if (existing.length > 0) {
     await db.update(universalVideoProjects)
@@ -129,6 +133,8 @@ export async function saveProjectToDb(
       type: project.type || 'product',
       preferredVideoProvider: project.preferredVideoProvider,
       seamlessTransitions: project.seamlessTransitions,
+      productVisualDescription: project.productVisualDescription,
+      characterReferenceImageUrl: project.characterReferenceImageUrl,
     });
   }
 }

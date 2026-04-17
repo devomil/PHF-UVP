@@ -89,7 +89,7 @@ export const VISUAL_ART_PRESETS: Record<string, VisualArtPreset> = {
     description: 'Photorealistic film-grade imagery with natural lighting and cinematic color grading',
     thumbnailColors: ['#1e3a5f', '#d4a373', '#f5e6cc'],
     imagePromptPrefix: 'Photorealistic cinematic shot, film-grade quality, natural lighting,',
-    imagePromptSuffix: 'anamorphic lens, shallow depth of field, cinematic color grading, teal and orange tones, 35mm film look, high dynamic range, professional cinematography',
+    imagePromptSuffix: 'natural lighting, shallow depth of field, photorealistic',
     negativePromptAdditions: ['cartoon', 'illustration', 'anime', '3D render', 'flat', 'oversaturated', 'digital art'],
     recommendedProviders: {
       image: ['flux', 'ideogram'],

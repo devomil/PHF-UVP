@@ -1025,14 +1025,43 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
         selected = 'nano-banana-2';
       }
 
+      // ===== Phase 43: FORCE NB2 when reference images exist =====
+      // Other providers (Recraft, Flux) silently drop referenceImages, which
+      // defeats product grounding and character continuity. If the scene has
+      // a brand asset OR character reference, route to NB2 unconditionally.
+      const sceneProductRef = (scene as any)?.brandAssetUrl;
+      const sceneCharRef = (scene as any)?.characterRefImageUrl;
+      if ((sceneProductRef || sceneCharRef) && selected !== 'nano-banana-2') {
+        console.log(`[GenerateImage] Phase 43: forcing nano-banana-2 (was ${selected}) — scene has reference images that other providers cannot consume`);
+        selected = 'nano-banana-2';
+      }
+
       if (selected && selected !== 'flux-1.1-pro' && selected !== 'flux') {
         console.log(`[GenerateImage] Smart routing for scene ${sceneId}: ${selected} (style=${policyVisualStyle}, type=${policySceneType}, brandAware=${brandAware})`);
+
+        // ===== Phase 43: Reference image attachment =====
+        // For NB2 (Gemini-conditioned), pass scene-level reference images so
+        // the model can ground generation in the user's actual product photo
+        // and maintain character consistency across scenes.
+        const refImageList: string[] = [];
+        const productRef = (scene as any)?.brandAssetUrl;
+        const charRef = (scene as any)?.characterRefImageUrl;
+        if (productRef && typeof productRef === 'string') {
+          refImageList.push(productRef);
+          console.log(`[GenerateImage] Scene ${sceneId} attaching product reference: ${productRef.substring(0, 80)}`);
+        }
+        if (charRef && typeof charRef === 'string' && charRef !== productRef) {
+          refImageList.push(charRef);
+          console.log(`[GenerateImage] Scene ${sceneId} attaching character reference: ${charRef.substring(0, 80)}`);
+        }
+
         const smartResult = await imageGenerationService.generateImage({
           prompt: enhancedPrompt,
           provider: selected,
           aspectRatio,
           width: imgDims.width,
           height: imgDims.height,
+          ...(refImageList.length > 0 ? { referenceImages: refImageList } as any : {}),
         });
         if (smartResult?.url) {
           return {
@@ -3862,6 +3891,29 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
         }
       }
 
+      // ===== Phase 43: CHARACTER CONTINUITY REFERENCE =====
+      // If the project has a captured character reference image, assign it
+      // to scenes whose visualDirection mentions a recurring person (so NB2
+      // can lock the same face across the video). Detection covers:
+      //   • generic re-mentions: "same woman", "the man", pronouns
+      //   • named characters from the project's characters array
+      //   • any scene that already references a character by id
+      const projCharRef: string | undefined = (updatedProject as any).characterReferenceImageUrl
+        || (project as any).characterReferenceImageUrl;
+      if (projCharRef && !(scene as any).characterRefImageUrl) {
+        const text = `${scene.visualDirection || ''} ${scene.narration || ''} ${(scene as any).description || ''}`.toLowerCase();
+        const mentionsGenericPerson = /\b(same\s+(woman|man|person|character|guy|girl|host|narrator|protagonist)|her\b|his\b|she\b|he\b|the\s+(woman|man|person|character|protagonist|narrator|host|guy|girl))\b/.test(text);
+        const projectCharNames: string[] = Array.isArray((project as any).characters)
+          ? ((project as any).characters || []).map((c: any) => (c?.name || '').toString().toLowerCase()).filter((n: string) => n.length >= 2)
+          : [];
+        const mentionsNamedCharacter = projectCharNames.some((name: string) => text.includes(name));
+        const sceneHasCharRef = !!(scene as any).characterId || !!(scene as any).characterRef;
+        if (mentionsGenericPerson || mentionsNamedCharacter || sceneHasCharRef) {
+          (updatedProject.scenes[i] as any).characterRefImageUrl = projCharRef;
+          console.log(`[Assets] Scene ${scene.id} attaching character ref for continuity (generic=${mentionsGenericPerson}, named=${mentionsNamedCharacter}): ${projCharRef.substring(0, 80)}`);
+        }
+      }
+
       // ===== SCENE-LEVEL REFERENCE IMAGES: Assign as brandAssetUrl for I2V =====
       if (sceneRefImages.length > 0 && !(scene as any).brandAssetUrl) {
         const baseUrl = process.env.REPLIT_DEV_DOMAIN
@@ -4305,6 +4357,11 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
           });
           updatedProject.scenes[i].assets!.imageUrl = imageResult.url;
           updatedProject.scenes[i].assets!.imageProvider = imageResult.source || 'ai';
+          // Phase 43: capture first scene's image as character reference for downstream scenes
+          if (i === 0 && !(updatedProject as any).characterReferenceImageUrl) {
+            (updatedProject as any).characterReferenceImageUrl = imageResult.url;
+            console.log(`[Assets] Phase 43: captured scene 0 image as character reference: ${imageResult.url.substring(0, 80)}`);
+          }
         } else {
           if (imageResult.source === 'fal.ai') {
             updatedProject.progress.serviceFailures.push({
@@ -4571,6 +4628,11 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
                   type: 'image' as any,
                   source: imageResult.url,
                 };
+                // Phase 43: capture first scene's image as character reference for downstream scenes
+                if (i === 0 && !(updatedProject as any).characterReferenceImageUrl) {
+                  (updatedProject as any).characterReferenceImageUrl = imageResult.url;
+                  console.log(`[Assets] Phase 43: captured scene 0 image as character reference: ${imageResult.url.substring(0, 80)}`);
+                }
                 console.log(`[Assets] AI image generated for scene ${scene.id}: ${imageResult.url.substring(0, 80)}...`);
               } else {
                 console.warn(`[Assets] AI image generation failed for scene ${scene.id}: ${imageResult.error} — falling back to AI video`);
