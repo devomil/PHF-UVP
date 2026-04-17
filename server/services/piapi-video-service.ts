@@ -960,7 +960,7 @@ class PiAPIVideoService {
       // Log full request body for debugging I2V issues
       console.log(`[PiAPI:${options.model}] I2V Request body:`, JSON.stringify(requestBody, null, 2).substring(0, 1500));
       
-      const response = await fetch(`${this.baseUrl}/task`, {
+      let response = await fetch(`${this.baseUrl}/task`, {
         method: 'POST',
         headers: {
           'X-API-Key': this.apiKey,
@@ -971,8 +971,38 @@ class PiAPIVideoService {
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error(`[PiAPI:${options.model}] I2V API error: ${response.status} - ${errorText}`);
-        return { success: false, error: `API error: ${response.status}`, generationTimeMs: Date.now() - startTime };
+        // Mirror the T2V maintenance auto-fallback: when Seedance 2 GA returns 503
+        // with the maintenance message, retry the same I2V request against the
+        // preview backend (task_type=seedance-2-preview / seedance-2-fast-preview).
+        const i2vTaskType = (requestBody as any)?.task_type;
+        const isMaintenance503 =
+          response.status === 503 && /maintenance|preview model/i.test(errorText);
+        const isSeedanceGA =
+          i2vTaskType === 'seedance-2' || i2vTaskType === 'seedance-2-fast';
+        if (isMaintenance503 && isSeedanceGA) {
+          const previewTaskType =
+            i2vTaskType === 'seedance-2' ? 'seedance-2-preview' : 'seedance-2-fast-preview';
+          console.warn(
+            `[PiAPI:${options.model}] I2V Seedance under maintenance — auto-retrying with preview backend (task_type=${previewTaskType})`
+          );
+          const previewBody = { ...(requestBody as any), task_type: previewTaskType };
+          response = await fetch(`${this.baseUrl}/task`, {
+            method: 'POST',
+            headers: {
+              'X-API-Key': this.apiKey,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(previewBody),
+          });
+          if (!response.ok) {
+            const previewErr = await response.text();
+            console.error(`[PiAPI:${options.model}] I2V preview-backend retry also failed: ${response.status} - ${previewErr}`);
+            return { success: false, error: `API error: ${response.status}`, generationTimeMs: Date.now() - startTime };
+          }
+        } else {
+          console.error(`[PiAPI:${options.model}] I2V API error: ${response.status} - ${errorText}`);
+          return { success: false, error: `API error: ${response.status}`, generationTimeMs: Date.now() - startTime };
+        }
       }
 
       const data = await response.json();
