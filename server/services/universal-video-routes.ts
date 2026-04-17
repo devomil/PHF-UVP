@@ -17,6 +17,7 @@ import { regenerationStrategyEngine } from '../services/regeneration-strategy-en
 import { promptComplexityAnalyzer } from '../services/prompt-complexity-analyzer';
 import { brandContextService } from '../services/brand-context-service';
 import { runScriptPipeline } from '../services/script-pipeline-service';
+import type { ProductContext } from '../services/product-analysis-service';
 import { videoProviderSelector, SceneForSelection } from '../services/video-provider-selector';
 import { imageProviderSelector } from '../services/image-provider-selector';
 import { motionGraphicsRouter } from '../services/motion-graphics-router';
@@ -2811,8 +2812,8 @@ router.post('/projects/:projectId/generate-script', isAuthenticated, async (req:
       const projectVisualDesc = (projectData as any).productVisualDescription
         || (projectData.progress as any)?.productVisualDescription;
       if (projectVisualDesc && typeof projectVisualDesc === 'string' && projectVisualDesc.trim().length > 0) {
-        const presetProductName = scriptPresets?.productName || projectData.title || 'Product';
-        productContext = {
+        const presetProductName: string = scriptPresets?.productName || projectData.title || 'Product';
+        const synthesizedContext: ProductContext = {
           productName: presetProductName,
           category: 'generic',
           keyFeatures: [],
@@ -2820,7 +2821,8 @@ router.post('/projects/:projectId/generate-script', isAuthenticated, async (req:
           targetDemographic: 'general',
           colorPalette: [],
           visualDescription: projectVisualDesc.trim(),
-        } as any;
+        };
+        productContext = synthesizedContext;
         console.log(`[GenerateScript] Phase 43: synthesized productContext from user description (${projectVisualDesc.length} chars)`);
       }
     }

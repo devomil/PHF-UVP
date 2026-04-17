@@ -107,6 +107,9 @@ interface ImageGenerationOptions {
   style?: ImageStyle;
   qualityTier?: QualityTier;
   aspectRatio?: string;
+  /** Optional URLs of reference images. Currently only consumed by
+   *  Nano Banana 2 (Gemini-conditioned). Capped at 14 images. */
+  referenceImages?: string[];
 }
 
 interface I2IRequest {
@@ -649,7 +652,7 @@ class ImageGenerationService {
   ): Promise<GeneratedImage> {
     try {
       const aspectRatio = options.aspectRatio || this.calculateAspectRatio(options.width || 1280, options.height || 720);
-      const refs = (options as any).referenceImages as string[] | undefined;
+      const refs = options.referenceImages;
 
       const result = await nanoBanana2Service.generateImage({
         prompt: options.prompt,

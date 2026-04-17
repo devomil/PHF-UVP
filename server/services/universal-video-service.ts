@@ -1061,7 +1061,7 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
           aspectRatio,
           width: imgDims.width,
           height: imgDims.height,
-          ...(refImageList.length > 0 ? { referenceImages: refImageList } as any : {}),
+          ...(refImageList.length > 0 ? { referenceImages: refImageList } : {}),
         });
         if (smartResult?.url) {
           return {
@@ -3902,15 +3902,28 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
         || (project as any).characterReferenceImageUrl;
       if (projCharRef && !(scene as any).characterRefImageUrl) {
         const text = `${scene.visualDirection || ''} ${scene.narration || ''} ${(scene as any).description || ''}`.toLowerCase();
-        const mentionsGenericPerson = /\b(same\s+(woman|man|person|character|guy|girl|host|narrator|protagonist)|her\b|his\b|she\b|he\b|the\s+(woman|man|person|character|protagonist|narrator|host|guy|girl))\b/.test(text);
-        const projectCharNames: string[] = Array.isArray((project as any).characters)
-          ? ((project as any).characters || []).map((c: any) => (c?.name || '').toString().toLowerCase()).filter((n: string) => n.length >= 2)
-          : [];
-        const mentionsNamedCharacter = projectCharNames.some((name: string) => text.includes(name));
-        const sceneHasCharRef = !!(scene as any).characterId || !!(scene as any).characterRef;
-        if (mentionsGenericPerson || mentionsNamedCharacter || sceneHasCharRef) {
-          (updatedProject.scenes[i] as any).characterRefImageUrl = projCharRef;
-          console.log(`[Assets] Scene ${scene.id} attaching character ref for continuity (generic=${mentionsGenericPerson}, named=${mentionsNamedCharacter}): ${projCharRef.substring(0, 80)}`);
+
+        // SUBJECT CHANGE SKIP: don't attach the locked character if the
+        // scene direction explicitly switches to a different subject.
+        // Examples: "switch to", "now we see a different woman", "another
+        // person", "cut to a child", or no human subject at all (product
+        // hero, abstract macro, environment-only shot).
+        const subjectChangeSignals = /\b(switch to|cut to|now we see|new (woman|man|person|character)|different (woman|man|person|character)|another (woman|man|person|character|child|kid)|second (woman|man|person|character))\b/.test(text);
+        const sceneTypeIsProductOrAbstract = ['product', 'cta', 'chapter-title', 'brand'].includes((scene.type || '').toLowerCase());
+        const explicitSubjectOverride = (scene as any).subjectOverride === true;
+        if (subjectChangeSignals || sceneTypeIsProductOrAbstract || explicitSubjectOverride) {
+          console.log(`[Assets] Scene ${scene.id} subject-change skip — not attaching character ref (signals=${subjectChangeSignals}, productType=${sceneTypeIsProductOrAbstract})`);
+        } else {
+          const mentionsGenericPerson = /\b(same\s+(woman|man|person|character|guy|girl|host|narrator|protagonist)|her\b|his\b|she\b|he\b|the\s+(woman|man|person|character|protagonist|narrator|host|guy|girl))\b/.test(text);
+          const projectCharNames: string[] = Array.isArray((project as any).characters)
+            ? ((project as any).characters || []).map((c: any) => (c?.name || '').toString().toLowerCase()).filter((n: string) => n.length >= 2)
+            : [];
+          const mentionsNamedCharacter = projectCharNames.some((name: string) => text.includes(name));
+          const sceneHasCharRef = !!(scene as any).characterId || !!(scene as any).characterRef;
+          if (mentionsGenericPerson || mentionsNamedCharacter || sceneHasCharRef) {
+            (updatedProject.scenes[i] as any).characterRefImageUrl = projCharRef;
+            console.log(`[Assets] Scene ${scene.id} attaching character ref for continuity (generic=${mentionsGenericPerson}, named=${mentionsNamedCharacter}): ${projCharRef.substring(0, 80)}`);
+          }
         }
       }
 

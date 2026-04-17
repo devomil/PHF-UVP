@@ -441,10 +441,16 @@ function AIScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onS
 
   const PRODUCT_NOUNS = /\b(collagen|peptides?|supplements?|serums?|cream|lotion|powder|capsules?|tablets?|pills?|drops?|shampoo|conditioner|skincare|moisturizer|cleanser|toner|sunscreen|vitamins?|protein|gummies|tinctures?|oils?|balm|spray|gel|stick|bottle|jar|tube|sachet|stick\s+pack|pouch|formula|complex|blend|stack|product)\b/i;
   const productDetectedInDescription = PRODUCT_NOUNS.test(description || "");
+  const PRODUCT_ASSET_TYPES = new Set(["product", "product-image", "product-photo", "product-media", "package", "packaging"]);
+  const productMediaFileIsImage = !!productMediaFile && productMediaFile.type?.startsWith("image/");
+  const libraryAssetIsProduct = !!selectedLibraryAsset && (
+    PRODUCT_ASSET_TYPES.has((selectedLibraryAsset.assetType || selectedLibraryAsset.type || "").toString().toLowerCase()) ||
+    selectedLibraryAsset.category === "product"
+  );
+  const hasUsableProductReference = productMediaFileIsImage || libraryAssetIsProduct;
   const needsProductGrounding =
     productDetectedInDescription &&
-    !productMediaFile &&
-    !selectedLibraryAsset &&
+    !hasUsableProductReference &&
     productVisualDescription.trim().length < 10;
 
   const allProjectTypes = getAllProjectTypes();

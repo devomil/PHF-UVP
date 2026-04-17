@@ -233,6 +233,35 @@ async function callLLMWithRetry(
   throw new Error(`${stageName} failed after all retries`);
 }
 
+/**
+ * Phase 43: Detect when a generated imagePrompt drifts away from the literal
+ * subjects mentioned in the narration. Returns the list of significant nouns
+ * from the narration that are absent from the prompt+visualDirection.
+ */
+const NARRATION_NOUN_STOPWORDS = new Set([
+  'about','above','across','after','against','along','among','around','because','before','behind','below','beneath','beside','between','beyond','during','either','every','everyone','everything','except','further','having','herself','himself','itself','myself','others','please','really','should','simply','someone','something','therefore','through','toward','towards','within','without','would','could','their','these','those','there','where','which','while','whose','being','doing','going','great','still','always','never','often','sometimes','today','tomorrow','really','actually','probably','maybe','people','things','stuff'
+]);
+
+function extractNarrationNouns(narration: string): string[] {
+  return Array.from(new Set(
+    (narration || '').toLowerCase()
+      .replace(/[^a-z0-9\s'-]/g, ' ')
+      .split(/\s+/)
+      .filter((w: string) => w.length >= 5 && !NARRATION_NOUN_STOPWORDS.has(w))
+  ));
+}
+
+function detectNarrationDrift(narration: string, imagePrompt: string, visualDirection: string): { drift: boolean; missing: string[]; nouns: string[] } {
+  const nouns = extractNarrationNouns(narration);
+  if (nouns.length < 2 || !imagePrompt) {
+    return { drift: false, missing: [], nouns };
+  }
+  const haystack = `${imagePrompt} ${visualDirection || ''}`.toLowerCase();
+  const missing = nouns.filter((n) => !haystack.includes(n));
+  const drift = missing.length >= Math.ceil(nouns.length * 0.6);
+  return { drift, missing, nouns };
+}
+
 function extractJSON(text: string): any {
   let cleaned = text.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
   const jsonStart = cleaned.indexOf("{");
@@ -903,7 +932,7 @@ ${s.chapterTitle ? `Chapter Title: "${s.chapterTitle}" (create a visual METAPHOR
 
   const validStyleIds = multiStyleMode ? new Set(artPresets.map(p => p.id)) : new Set<string>();
 
-  const enhanced = stage3Scenes.map((original: any, i: number) => {
+  const enhanced = await Promise.all(stage3Scenes.map(async (original: any, i: number) => {
     const s4 = s4Scenes.find((s: any) => s.sceneNumber === i + 1) || s4Scenes[i];
     if (!s4 || !s4.visualDirection) {
       if (ctx.projectPurpose) {
@@ -967,27 +996,57 @@ ${s.chapterTitle ? `Chapter Title: "${s.chapterTitle}" (create a visual METAPHOR
     let motionPrompt = s4.motionPrompt || '';
 
     // ===== LITERAL NARRATION ENFORCEMENT =====
-    // If the narration mentions concrete subjects (nouns ≥5 chars) that are
-    // entirely missing from the imagePrompt / visualDirection, prepend a
-    // literal anchor so the visual stays grounded in the spoken content.
+    // If the narration mentions concrete subjects that are missing from the
+    // imagePrompt / visualDirection, ask the LLM to rewrite both for this
+    // single scene with the literal subjects required. Bounded to one retry;
+    // falls back to a literal-anchor prefix if the retry still drifts or fails.
     const narrationText = (original.narration || '').toString();
     if (narrationText && imagePrompt) {
-      const STOPWORDS = new Set([
-        'about','above','across','after','against','along','among','around','because','before','behind','below','beneath','beside','between','beyond','during','either','every','everyone','everything','except','further','having','herself','himself','itself','myself','others','please','really','should','simply','someone','something','therefore','through','toward','towards','within','without','would','could','their','these','those','there','where','which','while','whose','being','doing','going','great','still','always','never','often','sometimes','today','tomorrow','really','actually','probably','maybe','people','things','stuff'
-      ]);
-      const narrationNouns = Array.from(new Set(
-        narrationText.toLowerCase()
-          .replace(/[^a-z0-9\s'-]/g, ' ')
-          .split(/\s+/)
-          .filter((w: string) => w.length >= 5 && !STOPWORDS.has(w))
-      ));
-      const promptHaystack = (imagePrompt + ' ' + (s4.visualDirection || '')).toLowerCase();
-      const missingNouns = narrationNouns.filter((n: string) => !promptHaystack.includes(n));
-      // Only fire if MOST significant nouns are missing (drift signal)
-      if (narrationNouns.length >= 2 && missingNouns.length >= Math.ceil(narrationNouns.length * 0.6)) {
-        const anchorTerms = missingNouns.slice(0, 4).join(', ');
-        console.warn(`[Pipeline S4] Scene ${i + 1} drift detected — narration mentions [${anchorTerms}] but imagePrompt does not. Anchoring.`);
-        imagePrompt = `Literal subject from narration: ${anchorTerms}. ${imagePrompt}`;
+      const driftCheck = detectNarrationDrift(narrationText, imagePrompt, s4.visualDirection || '');
+      if (driftCheck.drift) {
+        const anchorTerms = driftCheck.missing.slice(0, 6).join(', ');
+        console.warn(`[Pipeline S4] Scene ${i + 1} drift detected — narration mentions [${anchorTerms}] but imagePrompt does not. Re-prompting LLM…`);
+
+        const retrySystem = `You are a precise visual prompt rewriter. The previous imagePrompt drifted away from what the narration literally describes. Rewrite the imagePrompt and visualDirection so the LITERAL subjects from the narration are visible in the frame. Keep cinematic language tight. Output strict JSON: {"imagePrompt": "...", "visualDirection": "..."} — no commentary.`;
+        const retryUser = `NARRATION (must be depicted literally):
+"""${narrationText}"""
+
+REQUIRED LITERAL SUBJECTS (must appear in the imagePrompt): ${anchorTerms}
+
+CURRENT (drifted) imagePrompt:
+"""${imagePrompt}"""
+
+CURRENT visualDirection:
+"""${s4.visualDirection || ''}"""
+
+Rewrite both so the listed required literal subjects are clearly visible in the frame. Do NOT add unrelated symbolic imagery. Maintain photographic / cinematic realism. Return JSON only.`;
+
+        let retried = false;
+        try {
+          const retryRaw = await callLLMWithRetry(retrySystem, retryUser, 600, `Stage 4 drift retry scene ${i + 1}`, 0, false);
+          const retryJson = extractJSON(retryRaw);
+          const newImagePrompt = (retryJson?.imagePrompt || '').toString().trim();
+          const newVisualDirection = (retryJson?.visualDirection || '').toString().trim();
+          if (newImagePrompt) {
+            const recheck = detectNarrationDrift(narrationText, newImagePrompt, newVisualDirection);
+            if (!recheck.drift) {
+              console.log(`[Pipeline S4] Scene ${i + 1} drift retry succeeded (missing nouns now: ${recheck.missing.length}/${recheck.nouns.length})`);
+              imagePrompt = newImagePrompt;
+              if (newVisualDirection) {
+                s4.visualDirection = newVisualDirection;
+              }
+              retried = true;
+            } else {
+              console.warn(`[Pipeline S4] Scene ${i + 1} retry still drifted (${recheck.missing.length}/${recheck.nouns.length} missing). Falling back to anchor prefix.`);
+            }
+          }
+        } catch (err: any) {
+          console.warn(`[Pipeline S4] Scene ${i + 1} drift retry LLM call failed: ${err?.message?.substring(0, 120)} — falling back to anchor prefix.`);
+        }
+
+        if (!retried) {
+          imagePrompt = `Literal subject from narration: ${anchorTerms}. ${imagePrompt}`;
+        }
       }
     }
 
@@ -1084,7 +1143,7 @@ ${s.chapterTitle ? `Chapter Title: "${s.chapterTitle}" (create a visual METAPHOR
       ...(assignedContentTag ? { contentTag: assignedContentTag, assignedContentTag: assignedContentTag } : {}),
       ...(microScenes ? { microScenes } : {}),
     };
-  });
+  }));
 
   if (multiStyleMode) {
     const styleCounts: Record<string, number> = {};
