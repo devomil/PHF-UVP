@@ -678,9 +678,22 @@ class ImageGenerationService {
     options: ImageGenerationOptions,
     provider?: ImageProvider
   ): Promise<GeneratedImage> {
-    const width = options.width || 1280;
-    const height = options.height || 720;
+    let width = options.width || 1280;
+    let height = options.height || 720;
     const usedProvider = provider || IMAGE_PROVIDERS['flux'];
+
+    // Flux Schnell on PiAPI maxes at 1024x1024. Clamp while preserving aspect ratio
+    // so a 1920x1080 fallback request doesn't 500 with "output image size too large".
+    const modelId = usedProvider.modelId || 'Qubico/flux1-schnell';
+    const fluxMax = modelId.includes('schnell') ? 1024 : 1280;
+    if (width > fluxMax || height > fluxMax) {
+      const scale = fluxMax / Math.max(width, height);
+      const newW = Math.max(64, Math.round((width * scale) / 8) * 8);
+      const newH = Math.max(64, Math.round((height * scale) / 8) * 8);
+      console.warn(`[ImageGen] Flux fallback: clamping ${width}x${height} → ${newW}x${newH} (max ${fluxMax} for ${modelId})`);
+      width = newW;
+      height = newH;
+    }
     
     try {
       const apiKey = process.env.PIAPI_API_KEY;

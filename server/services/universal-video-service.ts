@@ -1477,7 +1477,8 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
     }
 
     const dims = getImageDimensionsForAspectRatio(aspectRatio);
-    const maxDim = 1280;
+    // Flux Schnell on PiAPI rejects anything over 1024x1024.
+    const maxDim = 1024;
     let piapiWidth: number, piapiHeight: number;
     if (dims.width >= dims.height) {
       piapiWidth = Math.min(dims.width, maxDim);
@@ -1486,6 +1487,9 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
       piapiHeight = Math.min(dims.height, maxDim);
       piapiWidth = Math.round(piapiHeight * (dims.width / dims.height));
     }
+    // Round to nearest multiple of 8 for diffusion-model compatibility
+    piapiWidth = Math.round(piapiWidth / 8) * 8;
+    piapiHeight = Math.round(piapiHeight / 8) * 8;
     console.log(`[PiAPI Flux] Using dimensions ${piapiWidth}x${piapiHeight} for aspect ratio ${aspectRatio}`);
 
     try {
