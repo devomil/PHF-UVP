@@ -1,7 +1,7 @@
 import { db } from "../db";
 import { brandSettings } from "../../shared/schema";
 import { llmClient } from "./piapi-llm-client";
-import { getVisualArtPreset, isStylizedPreset, type VisualArtPreset } from "../../shared/config/visual-art-presets";
+import { getVisualArtPreset, isStylizedPreset, getAllVisualArtPresets, type VisualArtPreset } from "../../shared/config/visual-art-presets";
 import { getTrendingHooks, type TrendResult } from "./trend-intelligence-service";
 import { getProjectPurpose, getContentTagForSceneType } from "../../shared/config/project-types";
 import { getSceneContentTagIds } from "../../shared/config/scene-content-tags";
@@ -845,7 +845,7 @@ For each scene, write:
 5. A "shotType" — one of: ECU (extreme close-up), CU (close-up), MS (medium shot), WS (wide shot), EWS (extreme wide), POV, OTS (over-the-shoulder), aerial, macro.
 6. An "onScreenText" — short on-screen text/caption to display over this scene (3-8 words max). Empty string if none needed.
 7. A "lowerThird" — short lower-third tag for this scene (e.g. speaker name, location, or stat). Empty string if none needed.
-${multiStyleMode ? '8. An "assignedStyleId" field with the chosen art style id for this scene (must come from the available styles listed above)' : ''}
+${multiStyleMode ? '8. An "assignedStyleId" field with the chosen art style id for this scene (must come from the available styles listed above)' : '8. An optional "assignedStyleId" — if a different visual treatment fits this specific scene better, set it to a known preset id from the catalog (e.g. cinematic-realism, scientific-medical, 3d-illustration, anime, watercolor, pixel-art). Omit or leave empty to inherit the project default.'}
 ${ctx.projectPurpose ? `${multiStyleMode ? '9' : '8'}. An "assignedContentTag" field with the best content tag for this scene's visual content` : ''}
 
 ALSO produce a top-level "styleRationale": a single concise paragraph (3-5 sentences) explaining the overall visual treatment — what visual style(s) you chose, why they fit the brand and narrative, how lighting/color/pacing serve the message, and any per-scene mixing decisions you made. Write it for a human creative reviewer, not for the model.
@@ -946,7 +946,9 @@ ${s.chapterTitle ? `Chapter Title: "${s.chapterTitle}" (create a visual METAPHOR
     }
   }
 
-  const validStyleIds = multiStyleMode ? new Set(artPresets.map(p => p.id)) : new Set<string>();
+  const validStyleIds = multiStyleMode
+    ? new Set(artPresets.map(p => p.id))
+    : new Set(getAllVisualArtPresets().map(p => p.id));
 
   const enhanced = await Promise.all(stage3Scenes.map(async (original: any, i: number) => {
     const s4 = s4Scenes.find((s: any) => s.sceneNumber === i + 1) || s4Scenes[i];
@@ -968,6 +970,10 @@ ${s.chapterTitle ? `Chapter Title: "${s.chapterTitle}" (create a visual METAPHOR
     } else if (multiStyleMode) {
       assignedArtPresetId = artPresets[0]?.id;
       console.log(`[Pipeline S4] Scene ${i + 1} defaulting to first style: ${assignedArtPresetId}`);
+    } else if (!multiStyleMode && s4.assignedStyleId && validStyleIds.has(s4.assignedStyleId) && s4.assignedStyleId !== ctx.artPresetId) {
+      // Single-preset mode: LLM may suggest a different per-scene style from the catalog.
+      assignedArtPresetId = s4.assignedStyleId;
+      console.log(`[Pipeline S4] Scene ${i + 1} single-mode per-scene override → ${assignedArtPresetId} (project default: ${ctx.artPresetId || 'auto'})`);
     }
 
     let enforcedVisualDirection = s4.visualDirection;
