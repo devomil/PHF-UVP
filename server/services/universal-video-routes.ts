@@ -3389,7 +3389,21 @@ router.post('/projects/:projectId/generate-assets', isAuthenticated, async (req:
     if (projectData.ownerId !== userId) {
       return res.status(403).json({ success: false, error: 'Access denied' });
     }
-    
+
+    const activeStatuses = new Set(['queued', 'processing', 'rendering', 'render_queued', 'lambda_pending']);
+    const inFlightPhase = (projectData as any)?.progress?.phase;
+    const isInFlight = activeStatuses.has(String(projectData.status || '')) ||
+      (inFlightPhase && inFlightPhase !== 'script_ready' && inFlightPhase !== 'complete' && inFlightPhase !== 'failed');
+    if (isInFlight) {
+      console.log(`[UniversalVideo] Rejecting duplicate generate-assets for project ${projectId} (status=${projectData.status}, phase=${inFlightPhase})`);
+      return res.status(409).json({
+        success: false,
+        error: 'Generation already in progress for this project.',
+        status: projectData.status,
+        phase: inFlightPhase,
+      });
+    }
+
     if (voiceId) {
       (projectData as any).voiceId = voiceId;
       (projectData as any).voiceoverSettings = {

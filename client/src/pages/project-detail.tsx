@@ -486,16 +486,27 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
         credentials: "include",
         body: JSON.stringify(body),
       });
-      if (!res.ok) throw new Error("Failed to start asset generation");
-      return res.json();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const err: any = new Error(data?.error || "Failed to start asset generation");
+        err.status = res.status;
+        throw err;
+      }
+      return data;
     },
     onSuccess: () => {
       setGenerationTriggered(true);
       queryClient.invalidateQueries({ queryKey: ["project", projectId] });
       toast({ title: "Generation Started", description: "All assets are being generated. Suzzie is working on your project." });
     },
-    onError: (err: Error) => {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+    onError: (err: any) => {
+      if (err?.status === 409) {
+        setGenerationTriggered(true);
+        queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+        toast({ title: "Already in progress", description: "This project is already generating assets." });
+      } else {
+        toast({ title: "Error", description: err.message, variant: "destructive" });
+      }
     },
   });
 
