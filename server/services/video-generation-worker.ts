@@ -172,6 +172,24 @@ async function updateSceneMedia(projectId: string, sceneId: string, videoUrl: st
     const hintBase = providerHint?.split('-')[0];
     const resolvedBase = videoProvider?.split('-')[0];
     const isCrossFamilyMismatch = providerHint && videoProvider && hintBase !== resolvedBase;
+    if (!isCrossFamilyMismatch) {
+      // Task 45: Clear any prior providerMismatch so old chips don't persist after a clean regen.
+      try {
+        let clearMismatch;
+        if (microIndex >= 0 && microIndex === 0) {
+          clearMismatch = sql`(${universalVideoProjects.scenes} #- ${`{${idx},microScenes,${microIndex},providerMismatch}`}::text[]) #- ${`{${idx},assets,providerMismatch}`}::text[]`;
+        } else if (microIndex >= 0) {
+          clearMismatch = sql`${universalVideoProjects.scenes} #- ${`{${idx},microScenes,${microIndex},providerMismatch}`}::text[]`;
+        } else {
+          clearMismatch = sql`${universalVideoProjects.scenes} #- ${`{${idx},assets,providerMismatch}`}::text[]`;
+        }
+        await db.update(universalVideoProjects)
+          .set({ scenes: clearMismatch as any })
+          .where(eq(universalVideoProjects.projectId, projectId));
+      } catch (clearErr: any) {
+        log.warn(`[SCENE_UPDATE ${timestamp}] Failed to clear stale providerMismatch: ${clearErr.message}`);
+      }
+    }
     if (isCrossFamilyMismatch) {
       try {
         const mismatchData = JSON.stringify({ intended: providerHint, resolved: videoProvider });
@@ -190,6 +208,25 @@ async function updateSceneMedia(projectId: string, sceneId: string, videoUrl: st
       } catch (mmErr: any) {
         log.warn(`[SCENE_UPDATE ${timestamp}] Failed to store provider mismatch: ${mmErr.message}`);
       }
+    }
+
+    // Task 45: stamp lastRegenAt so the client cache-busts the (possibly reused) video URL
+    // and the preview reflects the new render without a hard refresh.
+    try {
+      const stampValue = JSON.stringify(new Date().toISOString());
+      let stampUpdate;
+      if (microIndex >= 0 && microIndex === 0) {
+        stampUpdate = sql`jsonb_set(jsonb_set(${universalVideoProjects.scenes}, ${`{${idx},microScenes,${microIndex},lastRegenAt}`}::text[], ${stampValue}::jsonb, true), ${`{${idx},assets,lastRegenAt}`}::text[], ${stampValue}::jsonb, true)`;
+      } else if (microIndex >= 0) {
+        stampUpdate = sql`jsonb_set(${universalVideoProjects.scenes}, ${`{${idx},microScenes,${microIndex},lastRegenAt}`}::text[], ${stampValue}::jsonb, true)`;
+      } else {
+        stampUpdate = sql`jsonb_set(${universalVideoProjects.scenes}, ${`{${idx},assets,lastRegenAt}`}::text[], ${stampValue}::jsonb, true)`;
+      }
+      await db.update(universalVideoProjects)
+        .set({ scenes: stampUpdate as any })
+        .where(eq(universalVideoProjects.projectId, projectId));
+    } catch (stampErr: any) {
+      log.warn(`[SCENE_UPDATE ${timestamp}] Failed to stamp lastRegenAt: ${stampErr.message}`);
     }
 
     log.info(`[SCENE_UPDATE ${timestamp}] SUCCESS - Scene ${realSceneId} updated atomically (no read-modify-write).`);

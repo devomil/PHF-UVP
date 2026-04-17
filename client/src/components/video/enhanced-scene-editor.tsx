@@ -119,6 +119,11 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
   const sceneId = scene.id || `scene-${sceneIndex}`;
   const rawVideoUrl = scene.assets?.videoUrl;
   const imageUrl = scene.assets?.imageUrl || scene.background?.url || scene.textImageUrl;
+  // Task 45: cache-bust marker so the browser refetches media after a regen even
+  // if the asset URL is reused. The server stamps lastRegenAt on regen.
+  const assetCacheKey = scene.assets?.lastRegenAt || scene.assets?.videoProvider || scene.assets?.imageProvider || '';
+  const withCacheBust = (url?: string | null) =>
+    url ? (assetCacheKey ? `${url}${url.includes('?') ? '&' : '?'}cb=${encodeURIComponent(assetCacheKey)}` : url) : url;
   const hasRawVideo = !!rawVideoUrl;
   const brandAssetUrl = scene.brandAssetUrl as string | undefined;
   const isProductScene = ['product', 'solution', 'hero', 'benefit', 'proof'].includes(scene.type);
@@ -1211,8 +1216,9 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
           {hasVideo ? (
             <div className="relative">
               <video
+                key={withCacheBust(videoUrl) || videoUrl}
                 ref={videoRef}
-                src={videoUrl}
+                src={withCacheBust(videoUrl) || undefined}
                 className="w-full object-cover bg-black mx-auto"
                 style={{ aspectRatio: aspectRatio === '9:16' ? '9/16' : aspectRatio === '1:1' ? '1/1' : '16/9', maxHeight: aspectRatio === '9:16' ? '500px' : undefined }}
                 playsInline
@@ -1257,7 +1263,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
             </div>
           ) : hasImage ? (
             <div className="relative">
-              <img src={imageUrl} alt={`Scene ${sceneIndex + 1}`} className="w-full object-cover bg-black mx-auto" style={{ aspectRatio: aspectRatio === '9:16' ? '9/16' : aspectRatio === '1:1' ? '1/1' : '16/9', maxHeight: aspectRatio === '9:16' ? '500px' : undefined }} />
+              <img key={withCacheBust(imageUrl) || imageUrl} src={withCacheBust(imageUrl) || undefined} alt={`Scene ${sceneIndex + 1}`} className="w-full object-cover bg-black mx-auto" style={{ aspectRatio: aspectRatio === '9:16' ? '9/16' : aspectRatio === '1:1' ? '1/1' : '16/9', maxHeight: aspectRatio === '9:16' ? '500px' : undefined }} />
               <div className="absolute top-2 right-2">
                 {scene.background?.type === 'motion-graphic' ? (
                   <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">

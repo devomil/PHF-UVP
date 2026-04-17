@@ -1092,7 +1092,13 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
                 const isEditing = editingSceneId === sceneId;
                 const isExpanded = expandedSceneId === sceneId;
                 const thumbCandidate = scene.assets?.imageUrl || scene.background?.imageUrl || scene.background?.url || scene.textImageUrl || null;
-                const thumb = thumbCandidate && !thumbCandidate.endsWith('.mp4') ? thumbCandidate : null;
+                // Task 45: cache-bust thumbnail when a regen has happened so the browser
+                // doesn't keep showing the previous image at the same URL.
+                const thumbCacheKey = scene.assets?.lastRegenAt || scene.assets?.imageProvider || '';
+                const thumbBase = thumbCandidate && !thumbCandidate.endsWith('.mp4') ? thumbCandidate : null;
+                const thumb = thumbBase
+                  ? (thumbCacheKey ? `${thumbBase}${thumbBase.includes('?') ? '&' : '?'}cb=${encodeURIComponent(thumbCacheKey)}` : thumbBase)
+                  : null;
                 const narration = scene.narration || scene.voiceover?.text || "";
                 const isUploading = uploadingSceneId === sceneId;
                 const showLibrary = librarySceneId === sceneId;
@@ -1124,7 +1130,7 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
                     >
                       <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${sceneGradients[index % sceneGradients.length]} flex items-center justify-center flex-shrink-0`}>
                         {thumb ? (
-                          <img src={thumb} alt="" className="w-full h-full object-cover rounded-lg" />
+                          <img key={thumb} src={thumb} alt="" className="w-full h-full object-cover rounded-lg" />
                         ) : (
                           <span className="text-xs font-bold text-white/70">{index + 1}</span>
                         )}
@@ -2173,7 +2179,12 @@ export default function ProjectDetail({ params }: { params?: { id: string } }) {
                   <div className={`h-24 bg-gradient-to-br ${sceneGradients[index % sceneGradients.length]} relative flex items-center justify-center`}>
                     <span className="text-2xl font-bold text-white/20">{index + 1}</span>
                     {scene.thumbnailUrl && (
-                      <img src={scene.thumbnailUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
+                      <img
+                        key={scene.thumbnailUrl}
+                        src={`${scene.thumbnailUrl}${scene.thumbnailUrl.includes('?') ? '&' : '?'}cb=${encodeURIComponent(scene.assets?.lastRegenAt || '')}`}
+                        alt=""
+                        className="absolute inset-0 w-full h-full object-cover"
+                      />
                     )}
                     <Button
                       size="sm"

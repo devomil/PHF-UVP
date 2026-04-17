@@ -5839,6 +5839,11 @@ router.post('/:projectId/scenes/:sceneId/regenerate-image', isAuthenticated, asy
         projectData.scenes[sceneIndex].assets = projectData.scenes[sceneIndex].assets || {};
         projectData.scenes[sceneIndex].assets!.imageUrl = result.newImageUrl;
         projectData.scenes[sceneIndex].assets!.backgroundUrl = result.newImageUrl;
+        // Task 45: Update provider metadata so chips don't show stale source after regen
+        const resolvedImageProvider = (result as any).source || (result as any).provider || provider || 'ai';
+        (projectData.scenes[sceneIndex].assets as any).imageProvider = resolvedImageProvider;
+        // Cache-busting marker so clients can force-refresh the <img> even if URL is reused
+        (projectData.scenes[sceneIndex].assets as any).lastRegenAt = new Date().toISOString();
         projectData.scenes[sceneIndex].background!.type = 'image';
         
         // Track generation method based on source type
@@ -6175,7 +6180,32 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, asy
     });
     
     console.log(`[Phase9B-Async] Created job ${job.jobId} for scene ${sceneId}`);
-    
+
+    // Task 45: Clear stale provider/mismatch chips on the scene so the UI doesn't keep
+    // showing an old badge (e.g. Runway) while the new render (e.g. Seedance) is queued.
+    // The worker will repopulate videoProvider on completion via updateSceneMedia.
+    try {
+      const sceneIdx = projectData.scenes.findIndex((s: Scene) => s.id === sceneId);
+      if (sceneIdx >= 0) {
+        const idxStr = sceneIdx.toString();
+        await db.update(universalVideoProjects)
+          .set({
+            scenes: sql`
+              jsonb_set(
+                ${universalVideoProjects.scenes} #- ${`{${idxStr},assets,providerMismatch}`}::text[],
+                ${`{${idxStr},assets,videoProvider}`}::text[],
+                'null'::jsonb,
+                true
+              )
+            ` as any,
+            updatedAt: new Date(),
+          })
+          .where(eq(universalVideoProjects.projectId, projectId));
+      }
+    } catch (clearErr: any) {
+      console.warn('[Phase9B-Async] Failed to clear stale provider chip:', clearErr.message);
+    }
+
     return res.json({ 
       success: true, 
       jobId: job.jobId,
