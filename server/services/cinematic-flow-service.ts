@@ -57,24 +57,34 @@ export async function extractLastFrame(videoUrl: string): Promise<string | undef
     }
 
     const lastFrameTime = Math.max(0, duration - 0.1);
+    // -update 1 + -frames:v 1 tells ffmpeg to write a single image to a fixed
+    // filename (without it ffmpeg expects an image-sequence pattern like %03d
+    // and silently writes nothing).
     execFileSync('ffmpeg', [
       '-y', '-ss', String(lastFrameTime), '-i', tmpVideo,
-      '-vframes', '1', '-q:v', '2', tmpFrame
+      '-frames:v', '1', '-update', '1', '-q:v', '2', tmpFrame
     ], { timeout: 15000 });
 
-    if (!fs.existsSync(tmpFrame)) {
+    if (!fs.existsSync(tmpFrame) || fs.statSync(tmpFrame).size === 0) {
       throw new Error('FFmpeg did not produce output frame');
     }
 
     const frameBuffer = fs.readFileSync(tmpFrame);
+    // This project provisions credentials under the REMOTION_AWS_* names (used by
+    // Remotion Lambda); fall back to plain AWS_* for portability.
+    const accessKeyId = process.env.REMOTION_AWS_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID || '';
+    const secretAccessKey = process.env.REMOTION_AWS_SECRET_ACCESS_KEY || process.env.AWS_SECRET_ACCESS_KEY || '';
+    const region = process.env.REMOTION_AWS_REGION || process.env.AWS_REGION || 'us-east-2';
+    const bucket = process.env.REMOTION_S3_BUCKET || process.env.AWS_S3_BUCKET || 'remotionlambda-useast2-1vc2l6a56o';
+
+    if (!accessKeyId || !secretAccessKey) {
+      throw new Error('AWS credentials not configured (REMOTION_AWS_ACCESS_KEY_ID / REMOTION_AWS_SECRET_ACCESS_KEY missing)');
+    }
+
     const s3Client = new S3Client({
-      region: process.env.AWS_REGION || 'us-east-2',
-      credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
-      },
+      region,
+      credentials: { accessKeyId, secretAccessKey },
     });
-    const bucket = process.env.AWS_S3_BUCKET || 'remotionlambda-useast2-1vc2l6a56o';
     const key = `cinematic-flow/last-frame-${Date.now()}-${Math.random().toString(36).substring(7)}.jpg`;
 
     await s3Client.send(new PutObjectCommand({
@@ -88,7 +98,7 @@ export async function extractLastFrame(videoUrl: string): Promise<string | undef
     try { fs.unlinkSync(tmpVideo); } catch {}
     try { fs.unlinkSync(tmpFrame); } catch {}
 
-    const frameUrl = `https://${bucket}.s3.amazonaws.com/${key}`;
+    const frameUrl = `https://${bucket}.s3.${region}.amazonaws.com/${key}`;
     console.log(`[CinematicFlow] Extracted last frame: ${frameUrl.substring(0, 80)}...`);
     return frameUrl;
   } catch (err: any) {
