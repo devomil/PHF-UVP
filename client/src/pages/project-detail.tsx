@@ -181,6 +181,56 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
   // ──────────────────────────────────────────────────────────────
   const prevIsGeneratingRef = useRef<boolean>(false);
   const seamlessAutoFiredRef = useRef<boolean>(false);
+
+  // Cinematic-flow status polling — drives the cancel UI
+  const cinematicFlowQuery = useQuery({
+    queryKey: ["cinematic-flow-status", projectId],
+    queryFn: async () => {
+      const res = await fetch(`/api/universal-video/${projectId}/cinematic-flow-regenerate/status`, {
+        credentials: "include",
+      });
+      if (!res.ok) return null;
+      return res.json();
+    },
+    refetchInterval: (q) => {
+      const data: any = q.state.data;
+      return data?.status === "running" ? 3000 : false;
+    },
+    refetchIntervalInBackground: false,
+  });
+  const cinematicFlowStatus = cinematicFlowQuery.data as any;
+  const cinematicFlowRunning = cinematicFlowStatus?.status === "running";
+  const cinematicFlowCancelPending = cinematicFlowRunning && !!cinematicFlowStatus?.cancelRequested;
+
+  const cancelCinematicFlowMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/universal-video/${projectId}/cinematic-flow-regenerate/cancel`, {
+        method: "POST",
+        credentials: "include",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "Failed to cancel");
+      return data;
+    },
+    onSuccess: () => {
+      toast({
+        title: "Cancellation requested",
+        description: "The seamless transitions flow will stop after the current step.",
+      });
+      cinematicFlowQuery.refetch();
+    },
+    onError: (err: Error) => {
+      toast({ title: "Could not cancel", description: err.message, variant: "destructive" });
+    },
+  });
+
+  // Kick the status query when seamless transitions auto-fires so polling starts
+  useEffect(() => {
+    if (cinematicFlowRunning) return;
+    const t = setTimeout(() => cinematicFlowQuery.refetch(), 2000);
+    return () => clearTimeout(t);
+  }, [seamlessTransitions, serverIsGenerating]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     if (serverIsGenerating) {
       // New generation cycle started — re-arm the auto-trigger
@@ -212,6 +262,7 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
             title: "✨ Applying seamless transitions",
             description: `Chaining ${contentScenes.length} scenes for continuity. This runs sequentially and may take a while.`,
           });
+          cinematicFlowQuery.refetch();
         }
       } catch (err) {
         console.error("[SeamlessTransitions] Auto-trigger failed:", err);
@@ -1559,6 +1610,54 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
                 )}
               </div>
             </div>
+            )}
+
+            {cinematicFlowRunning && (
+              <div
+                className="flex items-start gap-3 p-3 rounded-xl border"
+                style={{ backgroundColor: "rgba(124, 58, 237, 0.08)", borderColor: "rgba(124, 58, 237, 0.35)" }}
+                data-testid="cinematic-flow-status"
+              >
+                <Loader2 className="w-4 h-4 text-purple-400 mt-0.5 shrink-0 animate-spin" />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                      Seamless transitions in progress
+                    </p>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => cancelCinematicFlowMutation.mutate()}
+                      disabled={cinematicFlowCancelPending || cancelCinematicFlowMutation.isPending}
+                      data-testid="button-cancel-cinematic-flow"
+                      className="h-7 px-3 text-xs"
+                    >
+                      {cinematicFlowCancelPending || cancelCinematicFlowMutation.isPending ? (
+                        <>
+                          <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                          Cancelling…
+                        </>
+                      ) : (
+                        <>
+                          <X className="w-3 h-3 mr-1" />
+                          Cancel
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                  <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>
+                    Scene {Math.min((cinematicFlowStatus?.completed ?? 0) + (cinematicFlowStatus?.failed ?? 0) + 1, cinematicFlowStatus?.total ?? 0)} of {cinematicFlowStatus?.total ?? 0}
+                    {cinematicFlowStatus?.completed ? ` · ${cinematicFlowStatus.completed} done` : ""}
+                    {cinematicFlowStatus?.failed ? ` · ${cinematicFlowStatus.failed} failed` : ""}
+                  </p>
+                  {cinematicFlowCancelPending && (
+                    <p className="text-[11px] mt-1 text-amber-500">
+                      Stopping after the current scene finishes or its provider task is aborted.
+                    </p>
+                  )}
+                </div>
+              </div>
             )}
 
             {!isStudioPolish && (

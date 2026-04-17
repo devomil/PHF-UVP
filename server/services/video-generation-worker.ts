@@ -836,6 +836,16 @@ class VideoGenerationWorker {
 
       if (videoUrl) {
         const completionTimestamp = new Date().toISOString();
+
+        // Cancellation checkpoint: re-read persisted job state. If the user
+        // (or cinematic-flow) cancelled this job while the provider was still
+        // working, do NOT overwrite the scene with the late result.
+        const latest = await storage.getVideoGenerationJob(job.jobId);
+        if (latest?.status === "cancelled") {
+          log.info(`[JOB_COMPLETE ${completionTimestamp}] Job ${job.jobId} was cancelled before completion — discarding late provider result, scene NOT overwritten`);
+          return;
+        }
+
         log.info(`[JOB_COMPLETE ${completionTimestamp}] Job ${job.jobId} completed with videoUrl: ${videoUrl}`);
 
         if (i2vProviderHint && resolvedProvider && resolvedProvider !== 'auto') {
@@ -931,12 +941,14 @@ class VideoGenerationWorker {
       return undefined;
     }
 
-    if (job.status === "pending") {
+    if (job.status === "pending" || job.status === "running") {
       const cancelledJob = await storage.updateVideoGenerationJob(jobId, {
         status: "cancelled",
         completedAt: new Date(),
+        errorMessage: job.status === "running" ? "Cancelled by user while running" : null,
       });
       this.notifyJobUpdate(cancelledJob);
+      log.info(`[CancelJob] Job ${jobId} marked cancelled (was ${job.status})`);
       return cancelledJob;
     }
 

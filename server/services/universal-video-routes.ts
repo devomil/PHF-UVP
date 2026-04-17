@@ -7388,7 +7388,7 @@ router.get('/:projectId/regenerate-all-videos/status', isAuthenticated, async (r
 });
 
 // cinematicFlowStatus + extractLastFrame + runCinematicFlow live in cinematic-flow-service.ts
-import { runCinematicFlow, getCinematicFlowStatus } from './cinematic-flow-service';
+import { runCinematicFlow, getCinematicFlowStatus, cancelCinematicFlow } from './cinematic-flow-service';
 
 router.post('/:projectId/cinematic-flow-regenerate', isAuthenticated, async (req: Request, res: Response) => {
   try {
@@ -7420,6 +7420,34 @@ router.post('/:projectId/cinematic-flow-regenerate', isAuthenticated, async (req
   }
 });
 
+router.post('/:projectId/cinematic-flow-regenerate/cancel', isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const userId = (req.user as any)?.id;
+    const { projectId } = req.params;
+
+    const projectData = await getProjectFromDb(projectId);
+    if (!projectData) {
+      return res.status(404).json({ success: false, error: 'Project not found' });
+    }
+    if (projectData.ownerId !== userId) {
+      return res.status(403).json({ success: false, error: 'Access denied' });
+    }
+
+    const result = await cancelCinematicFlow(projectId);
+    if (!result.cancelled) {
+      return res.status(409).json({ success: false, error: result.reason || 'Could not cancel cinematic flow' });
+    }
+    return res.json({
+      success: true,
+      message: 'Cancellation requested. The flow will stop after the current step.',
+      cancelledJobId: result.jobId,
+    });
+  } catch (error: any) {
+    console.error('[CinematicFlow] Cancel error:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 router.get('/:projectId/cinematic-flow-regenerate/status', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
@@ -7442,6 +7470,8 @@ router.get('/:projectId/cinematic-flow-regenerate/status', isAuthenticated, asyn
       failed: status.failed,
       currentScene: status.currentScene,
       errors: status.errors.slice(0, 10),
+      cancelRequested: !!status.cancelRequested,
+      currentJobId: status.currentJobId || null,
     });
   } catch (error: any) {
     return res.status(500).json({ success: false, error: error.message });

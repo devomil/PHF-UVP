@@ -11,13 +11,15 @@ import { videoGenerationWorker } from './video-generation-worker';
 import { getVisualArtPreset } from '../../shared/config/visual-art-presets';
 
 export interface CinematicFlowStatus {
-  status: 'running' | 'completed' | 'failed';
+  status: 'running' | 'completed' | 'failed' | 'cancelled';
   total: number;
   completed: number;
   failed: number;
   currentScene: string;
   errors: string[];
   startedAt: Date;
+  cancelRequested?: boolean;
+  currentJobId?: string;
 }
 
 const cinematicFlowStatus: Map<string, CinematicFlowStatus> = new Map();
@@ -28,6 +30,35 @@ export function getCinematicFlowStatus(projectId: string): CinematicFlowStatus |
 
 export function clearCinematicFlowStatus(projectId: string): void {
   cinematicFlowStatus.delete(projectId);
+}
+
+export async function cancelCinematicFlow(
+  projectId: string
+): Promise<{ cancelled: boolean; reason?: string; jobId?: string }> {
+  const status = cinematicFlowStatus.get(projectId);
+  if (!status) {
+    return { cancelled: false, reason: 'No active cinematic flow' };
+  }
+  if (status.status !== 'running') {
+    return { cancelled: false, reason: `Flow is already ${status.status}` };
+  }
+
+  status.cancelRequested = true;
+  console.log(`[CinematicFlow] Cancellation requested for project ${projectId} (currentJob=${status.currentJobId || 'none'})`);
+
+  let cancelledJobId: string | undefined;
+  if (status.currentJobId) {
+    try {
+      const cancelled = await videoGenerationWorker.cancelJob(status.currentJobId);
+      if (cancelled?.status === 'cancelled') {
+        cancelledJobId = status.currentJobId;
+      }
+    } catch (err: any) {
+      console.warn(`[CinematicFlow] Failed to cancel in-flight job ${status.currentJobId}: ${err.message}`);
+    }
+  }
+
+  return { cancelled: true, jobId: cancelledJobId };
 }
 
 export async function extractLastFrame(videoUrl: string): Promise<string | undefined> {
@@ -148,16 +179,12 @@ export async function runCinematicFlow(
 
   console.log(`[CinematicFlow] Starting cinematic flow regeneration for ${scenes.length} content scenes (project ${projectId})`);
 
-  // Now that we have the real scene count, refresh the claimed status entry.
-  cinematicFlowStatus.set(projectId, {
-    status: 'running',
-    total: scenes.length,
-    completed: 0,
-    failed: 0,
-    currentScene: scenes[0]?.id || '',
-    errors: [],
-    startedAt: new Date(),
-  });
+  // Now that we have the real scene count, mutate the existing status entry
+  // in-place so a cancellation request that arrived during getProjectFromDb()
+  // (i.e. cancelRequested=true on the original object) is preserved.
+  const claimed = cinematicFlowStatus.get(projectId)!;
+  claimed.total = scenes.length;
+  claimed.currentScene = scenes[0]?.id || '';
 
   const flowPromise = (async () => {
     const status = cinematicFlowStatus.get(projectId)!;
@@ -166,10 +193,14 @@ export async function runCinematicFlow(
     const triggeredBy = opts.triggeredBy || (projectData as any).ownerId;
 
     for (let i = 0; i < scenes.length; i++) {
+      if (status.cancelRequested) {
+        console.log(`[CinematicFlow] Cancellation detected before scene ${i} — stopping flow`);
+        break;
+      }
       const scene = scenes[i];
       status.currentScene = scene.id;
 
-      try {
+      try { try {
         const sceneArtPresetId = scene.artPresetId || (projectData as any).progress?.artPresetId || (projectData as any).artPresetId;
         const artPreset = sceneArtPresetId ? getVisualArtPreset(sceneArtPresetId) : null;
 
@@ -246,6 +277,7 @@ export async function runCinematicFlow(
           i2vSettings: Object.keys(cinFlowI2v).length > 0 ? cinFlowI2v : undefined,
         });
 
+        status.currentJobId = job.jobId;
         console.log(`[CinematicFlow] Scene ${i}: Created job ${job.jobId}, waiting for completion...`);
 
         const maxWait = 12 * 60 * 1000;
@@ -253,9 +285,22 @@ export async function runCinematicFlow(
         const startTime = Date.now();
         let jobCompleted = false;
         let completedVideoUrl: string | undefined;
+        let jobCancelled = false;
 
         while (Date.now() - startTime < maxWait) {
           await new Promise(r => setTimeout(r, pollInterval));
+
+          if (status.cancelRequested) {
+            console.log(`[CinematicFlow] Cancellation detected while polling scene ${i} (job ${job.jobId})`);
+            try {
+              await videoGenerationWorker.cancelJob(job.jobId);
+            } catch (cancelErr: any) {
+              console.warn(`[CinematicFlow] Failed to cancel job ${job.jobId}: ${cancelErr.message}`);
+            }
+            jobCancelled = true;
+            break;
+          }
+
           const jobStatus = await videoGenerationWorker.getJob(job.jobId);
           if (!jobStatus) break;
 
@@ -265,7 +310,16 @@ export async function runCinematicFlow(
             break;
           } else if (jobStatus.status === 'failed') {
             throw new Error(`Job failed: ${jobStatus.error || 'Unknown'}`);
+          } else if (jobStatus.status === 'cancelled') {
+            jobCancelled = true;
+            break;
           }
+        }
+
+        status.currentJobId = undefined;
+        if (jobCancelled) {
+          console.log(`[CinematicFlow] Scene ${i}: Job cancelled — exiting flow`);
+          break;
         }
 
         if (jobCompleted && completedVideoUrl) {
@@ -301,6 +355,12 @@ export async function runCinematicFlow(
         }
 
         console.log(`[CinematicFlow] Progress: ${status.completed + status.failed}/${status.total}`);
+      } finally {
+        // Always clear currentJobId after a scene attempt — without this, an
+        // exception thrown mid-poll could leave a stale job id that a later
+        // cancel call would target.
+        status.currentJobId = undefined;
+      }
       } catch (err: any) {
         status.failed++;
         status.errors.push(`Scene ${scene.id}: ${err.message}`);
@@ -309,8 +369,13 @@ export async function runCinematicFlow(
       }
     }
 
-    status.status = status.failed === status.total ? 'failed' : 'completed';
-    console.log(`[CinematicFlow] Complete: ${status.completed} success, ${status.failed} failed`);
+    if (status.cancelRequested) {
+      status.status = 'cancelled';
+      console.log(`[CinematicFlow] Cancelled: ${status.completed} success, ${status.failed} failed before stopping`);
+    } else {
+      status.status = status.failed === status.total ? 'failed' : 'completed';
+      console.log(`[CinematicFlow] Complete: ${status.completed} success, ${status.failed} failed`);
+    }
 
     setTimeout(() => { cinematicFlowStatus.delete(projectId); }, 30 * 60 * 1000);
   })();
