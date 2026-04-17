@@ -180,6 +180,56 @@ class PiAPIVideoService {
       if (!response.ok) {
         const errorText = await response.text();
         console.error(`[PiAPI] API error: ${response.status} - ${errorText}`);
+
+        // ===== Auto-fallback for Seedance maintenance windows =====
+        // PiAPI's documented fallback: when seedance-2 / seedance-2-fast return
+        // 503 with the maintenance message, retry the same request with the
+        // preview task_type (seedance-2-preview / seedance-2-fast-preview) which
+        // points to the still-online preview backend.
+        const isMaintenance503 =
+          response.status === 503 &&
+          /maintenance|preview model/i.test(errorText);
+        const seedanceTaskType = (requestBody as any)?.task_type;
+        const isSeedanceGA =
+          seedanceTaskType === 'seedance-2' || seedanceTaskType === 'seedance-2-fast';
+        if (isMaintenance503 && isSeedanceGA) {
+          const previewTaskType =
+            seedanceTaskType === 'seedance-2'
+              ? 'seedance-2-preview'
+              : 'seedance-2-fast-preview';
+          console.warn(
+            `[PiAPI] Seedance under maintenance — auto-retrying with preview backend (task_type=${previewTaskType})`
+          );
+          const previewBody = { ...(requestBody as any), task_type: previewTaskType };
+          const retry = await fetch(`${this.baseUrl}/task`, {
+            method: 'POST',
+            headers: {
+              'X-API-Key': this.apiKey,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(previewBody),
+          });
+          if (retry.ok) {
+            const retryData = await retry.json();
+            const retryTaskId = retryData.data?.task_id || retryData.task_id;
+            if (retryTaskId) {
+              console.log(
+                `[PiAPI] Preview-backend retry succeeded — task ${retryTaskId} (provider variant: ${previewTaskType})`
+              );
+              return { success: true, taskId: retryTaskId };
+            }
+            return { success: false, error: 'Preview retry: no task ID in response' };
+          }
+          const retryText = await retry.text();
+          console.error(
+            `[PiAPI] Preview-backend retry also failed: ${retry.status} - ${retryText}`
+          );
+          return {
+            success: false,
+            error: `Seedance maintenance and preview fallback failed (HTTP ${retry.status})`,
+          };
+        }
+
         return { success: false, error: `API error: ${response.status}` };
       }
 
