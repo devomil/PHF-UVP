@@ -110,6 +110,8 @@ export async function saveProjectToDb(
   if (renderId !== undefined) updateData.renderId = renderId;
   if (bucketName !== undefined) updateData.bucketName = bucketName;
   if (outputUrl !== undefined) updateData.outputUrl = outputUrl;
+  if (project.preferredVideoProvider !== undefined) updateData.preferredVideoProvider = project.preferredVideoProvider;
+  if (project.seamlessTransitions !== undefined) updateData.seamlessTransitions = project.seamlessTransitions;
 
   if (existing.length > 0) {
     await db.update(universalVideoProjects)
@@ -125,6 +127,8 @@ export async function saveProjectToDb(
       scenes: project.scenes || [],
       brand: project.brand || {},
       type: project.type || 'product',
+      preferredVideoProvider: project.preferredVideoProvider,
+      seamlessTransitions: project.seamlessTransitions,
     });
   }
 }
