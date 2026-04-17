@@ -447,6 +447,32 @@ async function processProject(projectData: VideoProjectWithMeta) {
 
     await saveProjectToDb(updatedProject, projectData.ownerId);
 
+    // ===== Seamless Transitions auto-trigger =====
+    // If the user enabled seamlessTransitions on the project, automatically
+    // run a sequential first-/last-frame continuity pass over content scenes
+    // after parallel generation completes. This regenerates each scene's
+    // video using the previous scene's last frame as the I2V source so that
+    // lighting/subject/environment carry over between cuts. The pass is
+    // idempotent — re-running it just replaces the videos with newer
+    // continuity-anchored versions.
+    if ((updatedProject as any).seamlessTransitions === true) {
+      try {
+        const userPreferred = (updatedProject as any).preferredVideoProvider;
+        const cfProvider = userPreferred && userPreferred !== 'auto' ? userPreferred : undefined;
+        log(`Seamless transitions enabled — starting cinematic flow pass for ${projectId}${cfProvider ? ` (provider=${cfProvider})` : ''}`);
+        const { runCinematicFlow } = await import('./cinematic-flow-service');
+        const result = await runCinematicFlow(projectId, {
+          provider: cfProvider,
+          triggeredBy: projectData.ownerId,
+        });
+        if (!result.started) {
+          log(`Seamless transitions: cinematic flow not started — ${result.reason || 'unknown reason'}`);
+        }
+      } catch (cfErr: any) {
+        log(`Seamless transitions: cinematic flow failed to start — ${cfErr.message}`);
+      }
+    }
+
     if (sceneAnalysisService.isAvailable()) {
       log(`Triggering scene analysis for ${projectId}`);
       try {

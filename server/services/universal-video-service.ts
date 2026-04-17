@@ -3780,24 +3780,80 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
       const refTargetSceneTypes = ['solution', 'cta', 'product', 'feature', 'benefit', 'hook'];
       const primaryRefImage = resolvedRefImages[0];
       let assignedCount = 0;
-      
+
+      // ===== Smart distribution gating =====
+      // Only attach the project's product reference image to a scene when the
+      // scene's own visual direction / narration is genuinely about the
+      // product (or is silent on subject). If the scene clearly describes a
+      // different subject (e.g. "athletic woman drinking water"), force-attaching
+      // the product image hijacks I2V mode and produces a zoomed product clip
+      // that ignores the visual direction. Heuristics:
+      //   - skip when visualDirection mentions a clear human/lifestyle subject
+      //     and does NOT mention any product keyword
+      //   - skip when scene has explicit `useReferenceImage === false`
+      const productDescription: string = String(
+        (project as any).productVisualDescription
+        || (project as any).productDescription
+        || (project as any).brandBible?.product
+        || ''
+      ).toLowerCase();
+      const productKeywords = new Set<string>();
+      for (const word of productDescription.split(/[^a-z0-9]+/i)) {
+        if (word.length >= 4) productKeywords.add(word.toLowerCase());
+      }
+      // common explicit product terms
+      ['product', 'bottle', 'jar', 'package', 'label', 'powder', 'capsule', 'pill', 'box', 'pouch', 'tin', 'can'].forEach(w => productKeywords.add(w));
+      const subjectKeywords = [
+        'woman', 'women', 'man', 'men', 'person', 'people', 'guy', 'girl', 'boy',
+        'athlete', 'runner', 'mother', 'father', 'family', 'couple', 'child', 'kid',
+        'drinking', 'eating', 'walking', 'running', 'jogging', 'cooking', 'sitting',
+        'smiling', 'face', 'portrait', 'lifestyle',
+      ];
+      const sceneMentionsProduct = (text: string): boolean => {
+        if (!text) return false;
+        const lower = text.toLowerCase();
+        for (const k of productKeywords) {
+          if (k && lower.includes(k)) return true;
+        }
+        return false;
+      };
+      const sceneMentionsHumanSubject = (text: string): boolean => {
+        if (!text) return false;
+        const lower = text.toLowerCase();
+        return subjectKeywords.some(k => new RegExp(`\\b${k}\\b`).test(lower));
+      };
+
       for (let i = 0; i < updatedProject.scenes.length; i++) {
         const scene = updatedProject.scenes[i];
         const sceneType = (scene.type || '').toLowerCase();
         const alreadyHasRef = (scene as any).brandAssetUrl || 
                                ((scene as any).referenceConfig?.imageUrl) ||
                                scene.assets?.assignedProductImageId;
-        
-        if (refTargetSceneTypes.includes(sceneType) && !alreadyHasRef) {
-          const refImageToUse = resolvedRefImages[assignedCount % resolvedRefImages.length] || primaryRefImage;
-          (updatedProject.scenes[i] as any).brandAssetUrl = refImageToUse;
-          if (!updatedProject.scenes[i].assets) {
-            updatedProject.scenes[i].assets = {};
-          }
-          updatedProject.scenes[i].assets!.useAIImage = false;
-          assignedCount++;
-          console.log(`[Assets] Assigned reference image to scene ${scene.id} (type=${sceneType}): ${refImageToUse}`);
+
+        if (!refTargetSceneTypes.includes(sceneType) || alreadyHasRef) continue;
+
+        if ((scene as any).useReferenceImage === false) {
+          console.log(`[Assets] Scene ${scene.id} (type=${sceneType}): explicit useReferenceImage=false — skipping product ref distribution`);
+          continue;
         }
+
+        const sceneText = `${scene.visualDirection || ''} ${scene.narration || ''}`;
+        const mentionsHuman = sceneMentionsHumanSubject(sceneText);
+        const mentionsProduct = productKeywords.size > 0 ? sceneMentionsProduct(sceneText) : false;
+
+        if (mentionsHuman && !mentionsProduct) {
+          console.log(`[Assets] Scene ${scene.id} (type=${sceneType}): visual direction describes a human subject without product mentions — skipping product ref distribution to preserve scene intent ("${(scene.visualDirection || '').substring(0, 80)}…")`);
+          continue;
+        }
+
+        const refImageToUse = resolvedRefImages[assignedCount % resolvedRefImages.length] || primaryRefImage;
+        (updatedProject.scenes[i] as any).brandAssetUrl = refImageToUse;
+        if (!updatedProject.scenes[i].assets) {
+          updatedProject.scenes[i].assets = {};
+        }
+        updatedProject.scenes[i].assets!.useAIImage = false;
+        assignedCount++;
+        console.log(`[Assets] Assigned reference image to scene ${scene.id} (type=${sceneType}, productMatch=${mentionsProduct}): ${refImageToUse}`);
       }
       
       if (assignedCount > 0) {

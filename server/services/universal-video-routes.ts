@@ -7357,88 +7357,8 @@ router.get('/:projectId/regenerate-all-videos/status', isAuthenticated, async (r
   }
 });
 
-const cinematicFlowStatus: Map<string, {
-  status: 'running' | 'completed' | 'failed';
-  total: number;
-  completed: number;
-  failed: number;
-  currentScene: string;
-  errors: string[];
-  startedAt: Date;
-}> = new Map();
-
-async function extractLastFrame(videoUrl: string): Promise<string | undefined> {
-  try {
-    const { S3Client, PutObjectCommand } = await import('@aws-sdk/client-s3');
-    const { execFileSync } = await import('child_process');
-    const fs = await import('fs');
-    const path = await import('path');
-    const os = await import('os');
-
-    try {
-      const parsed = new URL(videoUrl);
-      if (!['https:', 'http:'].includes(parsed.protocol)) {
-        throw new Error('Invalid video URL protocol');
-      }
-    } catch {
-      throw new Error('Invalid video URL');
-    }
-
-    const tmpDir = os.tmpdir();
-    const tmpVideo = path.join(tmpDir, `cinflow-${Date.now()}.mp4`);
-    const tmpFrame = path.join(tmpDir, `cinflow-frame-${Date.now()}.jpg`);
-
-    execFileSync('curl', ['-sL', '-o', tmpVideo, videoUrl], { timeout: 30000 });
-
-    const durationStr = execFileSync('ffprobe', [
-      '-v', 'error', '-show_entries', 'format=duration',
-      '-of', 'default=noprint_wrappers=1:nokey=1', tmpVideo
-    ], { timeout: 10000 }).toString().trim();
-    const duration = parseFloat(durationStr);
-    if (isNaN(duration) || duration <= 0) {
-      throw new Error('Could not determine video duration');
-    }
-
-    const lastFrameTime = Math.max(0, duration - 0.1);
-    execFileSync('ffmpeg', [
-      '-y', '-ss', String(lastFrameTime), '-i', tmpVideo,
-      '-vframes', '1', '-q:v', '2', tmpFrame
-    ], { timeout: 15000 });
-
-    if (!fs.existsSync(tmpFrame)) {
-      throw new Error('FFmpeg did not produce output frame');
-    }
-
-    const frameBuffer = fs.readFileSync(tmpFrame);
-    const s3Client = new S3Client({
-      region: process.env.AWS_REGION || 'us-east-2',
-      credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
-      },
-    });
-    const bucket = process.env.AWS_S3_BUCKET || 'remotionlambda-useast2-1vc2l6a56o';
-    const key = `cinematic-flow/last-frame-${Date.now()}-${Math.random().toString(36).substring(7)}.jpg`;
-
-    await s3Client.send(new PutObjectCommand({
-      Bucket: bucket,
-      Key: key,
-      Body: frameBuffer,
-      ContentType: 'image/jpeg',
-      ACL: 'public-read',
-    }));
-
-    try { fs.unlinkSync(tmpVideo); } catch {}
-    try { fs.unlinkSync(tmpFrame); } catch {}
-
-    const frameUrl = `https://${bucket}.s3.amazonaws.com/${key}`;
-    console.log(`[CinematicFlow] Extracted last frame: ${frameUrl.substring(0, 80)}...`);
-    return frameUrl;
-  } catch (err: any) {
-    console.warn(`[CinematicFlow] Last-frame extraction failed: ${err.message}`);
-    return undefined;
-  }
-}
+// cinematicFlowStatus + extractLastFrame + runCinematicFlow live in cinematic-flow-service.ts
+import { runCinematicFlow, getCinematicFlowStatus } from './cinematic-flow-service';
 
 router.post('/:projectId/cinematic-flow-regenerate', isAuthenticated, async (req: Request, res: Response) => {
   try {
@@ -7454,207 +7374,15 @@ router.post('/:projectId/cinematic-flow-regenerate', isAuthenticated, async (req
       return res.status(403).json({ success: false, error: 'Access denied' });
     }
 
-    const scenes = (projectData.scenes || []).filter((s: any) => s.type !== 'chapter-title');
-    if (scenes.length === 0) {
-      return res.status(400).json({ success: false, error: 'No content scenes to regenerate' });
+    const result = await runCinematicFlow(projectId, { provider, triggeredBy: userId });
+    if (!result.started) {
+      const code = result.reason === 'Already running' ? 409 : 400;
+      return res.status(code).json({ success: false, error: result.reason || 'Could not start cinematic flow' });
     }
-
-    const existing = cinematicFlowStatus.get(projectId);
-    if (existing && existing.status === 'running') {
-      return res.status(409).json({ success: false, error: 'Cinematic flow regeneration already in progress' });
-    }
-
-    console.log(`[CinematicFlow] Starting cinematic flow regeneration for ${scenes.length} content scenes`);
-
-    cinematicFlowStatus.set(projectId, {
-      status: 'running',
-      total: scenes.length,
-      completed: 0,
-      failed: 0,
-      currentScene: scenes[0]?.id || '',
-      errors: [],
-      startedAt: new Date(),
-    });
-
-    (async () => {
-      const status = cinematicFlowStatus.get(projectId)!;
-      let previousLastFrameUrl: string | undefined = undefined;
-
-      const { getVisualArtPreset } = await import('../../shared/config/visual-art-presets');
-
-      for (let i = 0; i < scenes.length; i++) {
-        const scene = scenes[i];
-        status.currentScene = scene.id;
-
-        try {
-          const sceneArtPresetId = scene.artPresetId || (projectData as any).progress?.artPresetId || (projectData as any).artPresetId;
-          const artPreset = sceneArtPresetId ? getVisualArtPreset(sceneArtPresetId) : null;
-
-          if (i > 0 && scenes[i - 1]?.artPresetId && scene.artPresetId && scenes[i - 1].artPresetId !== scene.artPresetId) {
-            console.log(`[CinematicFlow] Style boundary at scene ${i} (${scenes[i - 1].artPresetId} → ${scene.artPresetId}) — breaking chain`);
-            previousLastFrameUrl = undefined;
-          }
-
-          const sceneImagePrompt = scene.imagePrompt || scene.visualDirection || 'Professional cinematic scene';
-          const sceneMotionPrompt = scene.motionPrompt;
-          const sceneTextImageEnabled = scene.textImageEnabled === true;
-
-          let sourceImageUrl: string | undefined = undefined;
-
-          if (sceneTextImageEnabled) {
-            console.log(`[CinematicFlow] Scene ${i}: textImageEnabled=true — skipping Flux, will use GPT-Image-1 in worker`);
-            previousLastFrameUrl = undefined;
-          } else if (previousLastFrameUrl) {
-            sourceImageUrl = previousLastFrameUrl;
-            console.log(`[CinematicFlow] Scene ${i}: Using previous scene's last frame as I2V source`);
-          } else if (artPreset && artPreset.generationStrategy === 'i2v') {
-            const falKey = process.env.FAL_KEY;
-            if (falKey) {
-              const { fal } = await import("@fal-ai/client");
-              fal.config({ credentials: falKey });
-              const projectAR = (projectData as any).outputFormat?.aspectRatio || (projectData as any).settings?.aspectRatio || '16:9';
-              const falSize = projectAR === '9:16' ? 'portrait_16_9' as const
-                : projectAR === '1:1' ? 'square' as const
-                : 'landscape_16_9' as const;
-
-              try {
-                const imgResult = await fal.subscribe("fal-ai/flux-pro/v1.1", {
-                  input: { prompt: sceneImagePrompt, image_size: falSize, num_images: 1, safety_tolerance: "2", enable_safety_checker: true },
-                  logs: true,
-                });
-                if (imgResult.data?.images?.[0]?.url) {
-                  sourceImageUrl = imgResult.data.images[0].url;
-                  console.log(`[CinematicFlow] Scene ${i}: Generated fresh Flux image for I2V`);
-                }
-              } catch (imgErr: any) {
-                console.warn(`[CinematicFlow] Scene ${i}: Flux image failed: ${imgErr.message}`);
-              }
-            }
-          }
-
-          const sceneProviderHint = scene.providerHint;
-          // Honor the project's user-selected provider (Step 2 config) when no
-          // explicit provider was sent in the request body. This keeps the
-          // continuity pass on the same model the user picked for the
-          // initial parallel generation (e.g. seedance-2.0).
-          const projectPreferredProvider = (projectData as any).preferredVideoProvider;
-          const effectiveProvider = provider
-            || (projectPreferredProvider && projectPreferredProvider !== 'auto' ? projectPreferredProvider : undefined);
-          const effectivePrompt = (sourceImageUrl && sceneMotionPrompt) ? sceneMotionPrompt : (scene.visualDirection || 'Professional video');
-
-          const cinFlowI2v: any = {};
-          if (!provider && sceneProviderHint) {
-            cinFlowI2v.providerHint = sceneProviderHint;
-          }
-
-          // ──────────────────────────────────────────────────────────────
-          // Seamless Transitions — Seedance 2 native `first_last_frames` mode
-          // Whenever the source image is a continuity frame (i.e. the last frame
-          // of the previous scene), request the native first_last_frames payload.
-          // This flag is ONLY consumed by the Seedance 2 branch of
-          // piapi-video-service.buildI2VRequestBody — all other providers ignore
-          // it safely. Setting it unconditionally (rather than gating on the
-          // initially-specified provider) makes continuity mode robust even when
-          // provider='auto' and the resolver lands on Seedance 2 downstream.
-          // ──────────────────────────────────────────────────────────────
-          if (sourceImageUrl && previousLastFrameUrl) {
-            cinFlowI2v.useFirstLastFrames = true;
-            console.log(`[CinematicFlow] Scene ${i}: continuity frame present — requesting Seedance 2 first_last_frames mode (ignored by non-Seedance-2 providers)`);
-          }
-
-          const { videoGenerationWorker } = await import('../services/video-generation-worker');
-          const job = await videoGenerationWorker.createJob({
-            projectId,
-            sceneId: scene.id,
-            provider: effectiveProvider,
-            prompt: effectivePrompt,
-            fallbackPrompt: scene.narration || 'professional video',
-            duration: scene.duration || 6,
-            aspectRatio: (projectData as any).outputFormat?.aspectRatio || (projectData as any).settings?.aspectRatio || '16:9',
-            style: (projectData as any).settings?.visualStyle || 'professional',
-            triggeredBy: userId,
-            sourceImageUrl,
-            sceneType: scene.type || 'content',
-            i2vSettings: Object.keys(cinFlowI2v).length > 0 ? cinFlowI2v : undefined,
-          });
-
-          console.log(`[CinematicFlow] Scene ${i}: Created job ${job.jobId}, waiting for completion...`);
-
-          const maxWait = 5 * 60 * 1000;
-          const pollInterval = 5000;
-          const startTime = Date.now();
-          let jobCompleted = false;
-          let completedVideoUrl: string | undefined;
-
-          while (Date.now() - startTime < maxWait) {
-            await new Promise(r => setTimeout(r, pollInterval));
-            const jobStatus = await videoGenerationWorker.getJob(job.jobId);
-            if (!jobStatus) break;
-
-            if (jobStatus.status === 'succeeded' && (jobStatus as any).videoUrl) {
-              completedVideoUrl = (jobStatus as any).videoUrl;
-              jobCompleted = true;
-              break;
-            } else if (jobStatus.status === 'failed') {
-              throw new Error(`Job failed: ${jobStatus.error || 'Unknown'}`);
-            }
-          }
-
-          if (jobCompleted && completedVideoUrl) {
-            console.log(`[CinematicFlow] Scene ${i}: Video completed, extracting last frame for continuity`);
-            previousLastFrameUrl = await extractLastFrame(completedVideoUrl);
-            status.completed++;
-
-            if (previousLastFrameUrl) {
-              try {
-                const { db } = await import("../db");
-                const { universalVideoProjects } = await import("../../shared/schema");
-                const { eq } = await import("drizzle-orm");
-                const freshProject = await db.select().from(universalVideoProjects)
-                  .where(eq(universalVideoProjects.projectId, projectId))
-                  .then(rows => rows[0]);
-                if (freshProject) {
-                  const allScenes = (freshProject.scenes as any[]) || [];
-                  const realIdx = allScenes.findIndex((s: any) => s.id === scene.id);
-                  if (realIdx >= 0) {
-                    allScenes[realIdx].continuityFrameUrl = previousLastFrameUrl;
-                    await db.update(universalVideoProjects)
-                      .set({ scenes: allScenes })
-                      .where(eq(universalVideoProjects.projectId, projectId));
-                    console.log(`[CinematicFlow] Scene ${i} (idx ${realIdx}): Persisted continuityFrameUrl`);
-                  }
-                }
-              } catch (saveErr: any) {
-                console.warn(`[CinematicFlow] Scene ${i}: Failed to persist continuityFrameUrl: ${saveErr.message}`);
-              }
-            }
-          } else {
-            console.warn(`[CinematicFlow] Scene ${i}: Job did not complete within timeout`);
-            previousLastFrameUrl = undefined;
-            status.failed++;
-            status.errors.push(`Scene ${scene.id}: Timeout waiting for video completion`);
-          }
-
-          console.log(`[CinematicFlow] Progress: ${status.completed + status.failed}/${status.total}`);
-
-        } catch (err: any) {
-          status.failed++;
-          status.errors.push(`Scene ${scene.id}: ${err.message}`);
-          console.error(`[CinematicFlow] Scene ${i} error:`, err.message);
-          previousLastFrameUrl = undefined;
-        }
-      }
-
-      status.status = status.failed === status.total ? 'failed' : 'completed';
-      console.log(`[CinematicFlow] Complete: ${status.completed} success, ${status.failed} failed`);
-
-      setTimeout(() => { cinematicFlowStatus.delete(projectId); }, 30 * 60 * 1000);
-    })();
-
     return res.json({
       success: true,
       message: 'Cinematic flow regeneration started',
-      totalScenes: scenes.length,
+      totalScenes: result.totalScenes,
     });
   } catch (error: any) {
     console.error('[CinematicFlow] Error:', error);
@@ -7671,7 +7399,7 @@ router.get('/:projectId/cinematic-flow-regenerate/status', isAuthenticated, asyn
       return res.status(404).json({ success: false, error: 'Not found' });
     }
 
-    const status = cinematicFlowStatus.get(projectId);
+    const status = getCinematicFlowStatus(projectId);
     if (!status) {
       return res.json({ success: true, status: 'not_started', total: 0, completed: 0 });
     }
@@ -7689,6 +7417,7 @@ router.get('/:projectId/cinematic-flow-regenerate/status', isAuthenticated, asyn
     return res.status(500).json({ success: false, error: error.message });
   }
 });
+
 
 // Phase 2: Update Music Volume
 router.patch('/:projectId/music-volume', isAuthenticated, async (req: Request, res: Response) => {
