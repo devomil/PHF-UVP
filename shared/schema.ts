@@ -499,6 +499,7 @@ export const universalVideoProjects = pgTable("universal_video_projects", {
   seamlessTransitions: boolean("seamless_transitions").default(false),
   productVisualDescription: text("product_visual_description"),
   characterReferenceImageUrl: text("character_reference_image_url"),
+  visualStyleRationale: text("visual_style_rationale"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => ({

@@ -39,6 +39,7 @@ export interface VideoProject {
   videoGenerationMode?: 'direct-t2v' | 'image-first-i2v' | 'character-i2v' | 'auto';
   artPresetId?: string;
   characters?: CharacterProfile[];
+  visualStyleRationale?: string;
 }
 
 export type VideoProjectStatus = 'draft' | 'queued' | 'generating' | 'ready' | 'render_queued' | 'rendering' | 'lambda_pending' | 'complete' | 'error';
@@ -360,6 +361,10 @@ export interface Scene {
   assignedContentTag?: string;
   artPresetId?: string;
   assignedStyleId?: string;
+  // Phase 44: Creative brief fields surfaced in pre-generation review
+  onScreenText?: string;
+  lowerThird?: string;
+  shotType?: string;
   chapterIndex?: number;
   chapterTitle?: string;
   voiceoverUrl?: string;

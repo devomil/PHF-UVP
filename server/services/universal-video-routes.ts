@@ -2835,6 +2835,7 @@ router.post('/projects/:projectId/generate-script', isAuthenticated, async (req:
     let summary: any;
     let pipelineStrategy: any = null;
     let pipelineNarrative: any = null;
+    let pipelineStyleRationale: string | undefined;
 
     if (isChapterBased) {
       const parsed = await universalVideoService.parseScriptWithBrandMatches({
@@ -2878,6 +2879,7 @@ router.post('/projects/:projectId/generate-script', isAuthenticated, async (req:
       summary = pipelineResult.summary;
       pipelineStrategy = pipelineResult.strategy;
       pipelineNarrative = pipelineResult.narrative;
+      pipelineStyleRationale = (pipelineResult as any).styleRationale;
     }
 
     if (productMediaUrl && scenes.length > 0) {
@@ -2984,7 +2986,7 @@ router.post('/projects/:projectId/generate-script', isAuthenticated, async (req:
         const { enhanceChapterScenesWithStage4 } = await import("./script-pipeline-service");
         console.log(`[GenerateScript] Running Stage 4 cinematic enhancement on chapter content scenes...`);
         const chapterPurpose = (projectData.progress as any)?.projectPurpose || null;
-        scenes = await enhanceChapterScenesWithStage4(scenes, {
+        const chapterStage4Result = await enhanceChapterScenesWithStage4(scenes, {
           platform: platform as string,
           targetDuration,
           artPresetId: artPresetIdFromProgress,
@@ -2995,6 +2997,10 @@ router.post('/projects/:projectId/generate-script', isAuthenticated, async (req:
           contentStructure,
           projectPurpose: chapterPurpose,
         });
+        scenes = chapterStage4Result.scenes;
+        if (chapterStage4Result.styleRationale) {
+          pipelineStyleRationale = chapterStage4Result.styleRationale;
+        }
         console.log(`[GenerateScript] Chapter Stage 4 cinematic enhancement complete`);
       } catch (stage4Err: any) {
         console.warn(`[GenerateScript] Chapter Stage 4 enhancement failed, using original visual directions: ${stage4Err.message}`);
@@ -3026,6 +3032,7 @@ router.post('/projects/:projectId/generate-script', isAuthenticated, async (req:
     };
     if (pipelineStrategy) dbUpdate.scriptStrategy = pipelineStrategy;
     if (pipelineNarrative) dbUpdate.scriptNarrative = pipelineNarrative;
+    if (pipelineStyleRationale) dbUpdate.visualStyleRationale = pipelineStyleRationale;
 
     await db.update(universalVideoProjects)
       .set(dbUpdate)
@@ -3097,7 +3104,7 @@ router.post('/projects/:projectId/rerun-stage4', isAuthenticated, async (req: Re
 
     const rerunPurpose = (projectData.progress as any)?.projectPurpose || null;
     const { enhanceChapterScenesWithStage4 } = await import("./script-pipeline-service");
-    const enhanced = await enhanceChapterScenesWithStage4(scenes, {
+    const rerunResult = await enhanceChapterScenesWithStage4(scenes, {
       platform,
       targetDuration,
       artPresetId,
@@ -3108,9 +3115,12 @@ router.post('/projects/:projectId/rerun-stage4', isAuthenticated, async (req: Re
       contentStructure,
       projectPurpose: rerunPurpose,
     });
+    const enhanced = rerunResult.scenes;
 
+    const rerunDbUpdate: any = { scenes: enhanced, updatedAt: new Date() };
+    if (rerunResult.styleRationale) rerunDbUpdate.visualStyleRationale = rerunResult.styleRationale;
     await db.update(universalVideoProjects)
-      .set({ scenes: enhanced, updatedAt: new Date() })
+      .set(rerunDbUpdate)
       .where(eq(universalVideoProjects.projectId, projectId));
 
     const contentScenes = enhanced.filter((s: any) => s.type !== 'chapter-title');
@@ -3160,8 +3170,13 @@ router.patch('/projects/:projectId/scenes/:sceneId', isAuthenticated, async (req
       return res.status(404).json({ success: false, error: 'Scene not found' });
     }
 
-    const allowedFields = ['narration', 'visualDirection', 'duration', 'type', 'name', 'title', 'searchQuery', 'keyPoints', 'overlayItems', 'microScenes', 'contentTag', 'artPresetId', 'textImageEnabled'];
+    const allowedFields = ['narration', 'visualDirection', 'duration', 'type', 'name', 'title', 'searchQuery', 'keyPoints', 'overlayItems', 'microScenes', 'contentTag', 'artPresetId', 'assignedStyleId', 'textImageEnabled', 'onScreenText', 'lowerThird', 'shotType', 'cinematicNotes'];
+    const clearableFields = new Set(['artPresetId', 'assignedStyleId', 'onScreenText', 'lowerThird', 'shotType', 'cinematicNotes', 'contentTag']);
     for (const field of allowedFields) {
+      if (Object.prototype.hasOwnProperty.call(updates, field) && updates[field] === null && clearableFields.has(field)) {
+        delete (scenes[sceneIndex] as any)[field];
+        continue;
+      }
       if (updates[field] !== undefined) {
         (scenes[sceneIndex] as any)[field] = updates[field];
       }
@@ -3327,6 +3342,35 @@ router.patch('/projects/:projectId/reference-images', isAuthenticated, async (re
     res.json({ success: true, referenceImages });
   } catch (error: any) {
     console.error('[ReferenceImages] Error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.patch('/projects/:projectId/visual-style-rationale', isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const userId = (req.user as any)?.id;
+    const { projectId } = req.params;
+    const { visualStyleRationale } = req.body || {};
+
+    if (typeof visualStyleRationale !== 'string') {
+      return res.status(400).json({ success: false, error: 'visualStyleRationale must be a string' });
+    }
+
+    const projectData = await getProjectFromDb(projectId);
+    if (!projectData) {
+      return res.status(404).json({ success: false, error: 'Project not found' });
+    }
+    if (projectData.ownerId !== userId) {
+      return res.status(403).json({ success: false, error: 'Access denied' });
+    }
+
+    await db.update(universalVideoProjects)
+      .set({ visualStyleRationale, updatedAt: new Date() })
+      .where(eq(universalVideoProjects.projectId, projectId));
+
+    res.json({ success: true, visualStyleRationale });
+  } catch (error: any) {
+    console.error('[VisualStyleRationale] Error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });

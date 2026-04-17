@@ -657,7 +657,7 @@ async function stageFourVisualDirections(
   narrative: NarrativeArchitecture,
   ctx: PipelineContext,
   brand: BrandInfo,
-): Promise<any[]> {
+): Promise<{ scenes: any[]; styleRationale?: string }> {
   const multiStyleMode = ctx.artPresetIds && ctx.artPresetIds.length > 1;
   const artPresets = multiStyleMode
     ? ctx.artPresetIds!.map(id => getVisualArtPreset(id)).filter(Boolean) as VisualArtPreset[]
@@ -842,16 +842,25 @@ For each scene, write:
 2. A brief cinematicNotes explaining your visual approach for this scene
 3. A scene-specific negativePrompt (things to avoid in generation)
 4. Split the narration into 2-4 micro-scenes at natural topic shifts. Each micro-scene gets its own cinematic visual direction that inherits the parent scene's visual world, lighting, and mood. Short scenes (under 5s or 1-2 sentences) should have just 1 micro-scene.
-${multiStyleMode ? '5. An "assignedStyleId" field with the chosen art style id for this scene' : ''}
-${ctx.projectPurpose ? `${multiStyleMode ? '6' : '5'}. An "assignedContentTag" field with the best content tag for this scene's visual content` : ''}
+5. A "shotType" — one of: ECU (extreme close-up), CU (close-up), MS (medium shot), WS (wide shot), EWS (extreme wide), POV, OTS (over-the-shoulder), aerial, macro.
+6. An "onScreenText" — short on-screen text/caption to display over this scene (3-8 words max). Empty string if none needed.
+7. A "lowerThird" — short lower-third tag for this scene (e.g. speaker name, location, or stat). Empty string if none needed.
+${multiStyleMode ? '8. An "assignedStyleId" field with the chosen art style id for this scene (must come from the available styles listed above)' : ''}
+${ctx.projectPurpose ? `${multiStyleMode ? '9' : '8'}. An "assignedContentTag" field with the best content tag for this scene's visual content` : ''}
+
+ALSO produce a top-level "styleRationale": a single concise paragraph (3-5 sentences) explaining the overall visual treatment — what visual style(s) you chose, why they fit the brand and narrative, how lighting/color/pacing serve the message, and any per-scene mixing decisions you made. Write it for a human creative reviewer, not for the model.
 
 Return ONLY valid JSON:
 {
+  "styleRationale": "3-5 sentence paragraph for the human reviewer",
   "scenes": [
     {
       "sceneNumber": 1,
       ${multiStyleMode ? '"assignedStyleId": "style-id-here",' : ''}
       ${ctx.projectPurpose ? '"assignedContentTag": "lifestyle",' : ''}
+      "shotType": "MS",
+      "onScreenText": "",
+      "lowerThird": "",
       "imagePrompt": "rich still-image description for Flux generation — NO motion words (50-80 words)",
       "motionPrompt": "motion-only description for I2V animation — camera + subject + atmosphere motion (15-30 words)",
       "visualDirection": "combined full production-grade AI video prompt as fallback (40-80 words)",
@@ -872,6 +881,7 @@ Return ONLY valid JSON:
   console.log(`[Pipeline S4] ${sceneCount} scenes, requesting ${estimatedTokens} max tokens`);
 
   let s4Scenes: any[] = [];
+  let styleRationale: string | undefined;
 
   if (sceneCount > 12) {
     const chunkSize = Math.ceil(sceneCount / 2);
@@ -918,6 +928,9 @@ ${s.chapterTitle ? `Chapter Title: "${s.chapterTitle}" (create a visual METAPHOR
         chunkScenes.forEach((s: any, i: number) => {
           if (!s.sceneNumber) s.sceneNumber = offset + i + 1;
         });
+        if (!styleRationale && typeof chunkParsed.styleRationale === 'string' && chunkParsed.styleRationale.trim()) {
+          styleRationale = chunkParsed.styleRationale.trim();
+        }
         s4Scenes.push(...chunkScenes);
         console.log(`[Pipeline S4] Chunk ${ci + 1}: got ${chunkScenes.length} scenes`);
       } catch (chunkErr: any) {
@@ -928,6 +941,9 @@ ${s.chapterTitle ? `Chapter Title: "${s.chapterTitle}" (create a visual METAPHOR
     const raw = await callLLMWithRetry(systemPrompt, userPrompt, estimatedTokens, "Stage 4: Visual Directions", 2, estimatedTokens >= 6000);
     const parsed = extractJSON(raw);
     s4Scenes = Array.isArray(parsed.scenes) ? parsed.scenes : [];
+    if (typeof parsed.styleRationale === 'string' && parsed.styleRationale.trim()) {
+      styleRationale = parsed.styleRationale.trim();
+    }
   }
 
   const validStyleIds = multiStyleMode ? new Set(artPresets.map(p => p.id)) : new Set<string>();
@@ -1145,6 +1161,10 @@ Rewrite both so the listed required literal subjects are clearly visible in the 
         })
       : undefined;
 
+    const onScreenText = typeof s4.onScreenText === 'string' ? s4.onScreenText.trim() : '';
+    const lowerThird = typeof s4.lowerThird === 'string' ? s4.lowerThird.trim() : '';
+    const shotType = typeof s4.shotType === 'string' ? s4.shotType.trim() : '';
+
     return {
       ...original,
       visualDirection: enforcedVisualDirection,
@@ -1157,6 +1177,9 @@ Rewrite both so the listed required literal subjects are clearly visible in the 
       ...(assignedArtPresetId ? { artPresetId: assignedArtPresetId, assignedStyleId: assignedArtPresetId } : {}),
       ...(assignedContentTag ? { contentTag: assignedContentTag, assignedContentTag: assignedContentTag } : {}),
       ...(microScenes ? { microScenes } : {}),
+      ...(onScreenText ? { onScreenText } : {}),
+      ...(lowerThird ? { lowerThird } : {}),
+      ...(shotType ? { shotType } : {}),
     };
   }));
 
@@ -1172,7 +1195,11 @@ Rewrite both so the listed required literal subjects are clearly visible in the 
     console.log(`[Pipeline S4] Content tag assignment summary: ${Object.entries(tagCounts).map(([id, c]) => `${id}(${c})`).join(', ')}`);
   }
 
-  return enhanced;
+  if (styleRationale) {
+    console.log(`[Pipeline S4] Style rationale captured (${styleRationale.length} chars)`);
+  }
+
+  return { scenes: enhanced, styleRationale };
 }
 
 function buildFallbackStrategy(ctx: PipelineContext): CreativeStrategy {
@@ -1247,10 +1274,13 @@ export async function runScriptPipeline(ctx: PipelineContext): Promise<PipelineR
     console.log(`[ScriptPipeline] Written ${stage3Scenes.length} scenes with narration and visual directions`);
 
     let scenes = stage3Scenes;
+    let styleRationale: string | undefined;
     console.log("[ScriptPipeline] === Stage 4: Visual Direction Enhancement ===");
     const s4Start = Date.now();
     try {
-      scenes = await stageFourVisualDirections(stage3Scenes, strategy, narrative, ctx, brand);
+      const s4Result = await stageFourVisualDirections(stage3Scenes, strategy, narrative, ctx, brand);
+      scenes = s4Result.scenes;
+      styleRationale = s4Result.styleRationale;
       const s4Ms = Date.now() - s4Start;
       const microSceneCount = scenes.reduce((sum: number, s: any) => sum + (s.microScenes?.length || 0), 0);
       console.log(`[ScriptPipeline] Stage 4 enhanced ${scenes.length} scenes with ${microSceneCount} micro-scenes in ${s4Ms}ms`);
@@ -1258,7 +1288,7 @@ export async function runScriptPipeline(ctx: PipelineContext): Promise<PipelineR
       console.warn(`[ScriptPipeline] Stage 4 failed, using Stage 3 visual directions: ${s4Err.message}`);
     }
 
-    return { strategy, narrative, scenes, summary };
+    return { strategy, narrative, scenes, summary, styleRationale };
   } catch (err: any) {
     console.warn(`[ScriptPipeline] Stage 3 failed, falling back to single-pass parser: ${err.message}`);
     try {
@@ -1509,9 +1539,9 @@ export async function enhanceChapterScenesWithStage4(
     contentStructure?: string | null;
     projectPurpose?: string | null;
   },
-): Promise<any[]> {
+): Promise<{ scenes: any[]; styleRationale: string }> {
   const contentScenes = scenes.filter((s: any) => s.type !== 'chapter-title');
-  if (contentScenes.length === 0) return scenes;
+  if (contentScenes.length === 0) return { scenes, styleRationale: '' };
 
   const chapterTitleIndices = new Set<number>();
   scenes.forEach((s: any, i: number) => {
@@ -1552,7 +1582,9 @@ export async function enhanceChapterScenesWithStage4(
   const brand = await loadBrandInfo();
   console.log(`[ChapterStage4] Running Stage 4 visual direction enhancement on ${contentScenes.length} content scenes (skipping ${chapterTitleIndices.size} chapter-title scenes)`);
 
-  const enhanced = await stageFourVisualDirections(contentScenes, strategy, narrative, ctx, brand);
+  const enhancedResult = await stageFourVisualDirections(contentScenes, strategy, narrative, ctx, brand);
+  const enhanced = enhancedResult.scenes;
+  const styleRationale = enhancedResult.styleRationale || '';
 
   let contentIdx = 0;
   const result = scenes.map((s: any, i: number) => {
@@ -1572,11 +1604,14 @@ export async function enhanceChapterScenesWithStage4(
       ...(enhancedScene.artPresetId ? { artPresetId: enhancedScene.artPresetId, assignedStyleId: enhancedScene.assignedStyleId } : {}),
       ...(enhancedScene.contentTag ? { contentTag: enhancedScene.contentTag } : {}),
       ...(enhancedScene.assignedContentTag ? { assignedContentTag: enhancedScene.assignedContentTag } : {}),
+      shotType: enhancedScene.shotType || '',
+      onScreenText: enhancedScene.onScreenText ?? '',
+      lowerThird: enhancedScene.lowerThird ?? '',
     };
   });
 
   const textFlagged = autoFlagTextHeavyScenes(result);
   console.log(`[ChapterStage4] Stage 4 complete. ${textFlagged} scenes auto-flagged for text-image pipeline`);
 
-  return result;
+  return { scenes: result, styleRationale };
 }

@@ -121,6 +121,32 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
   const [editingSceneId, setEditingSceneId] = useState<string | null>(null);
   const [editValues, setEditValues] = useState<Record<string, any>>({});
   const [expandedSceneId, setExpandedSceneId] = useState<string | null>(null);
+  // Phase 44: Creative brief — visual style rationale
+  const [briefRationale, setBriefRationale] = useState<string>(((project as any).visualStyleRationale) || "");
+  const [editingRationale, setEditingRationale] = useState(false);
+  useEffect(() => {
+    setBriefRationale(((project as any).visualStyleRationale) || "");
+  }, [(project as any).visualStyleRationale]);
+  const saveRationaleMutation = useMutation({
+    mutationFn: async (value: string) => {
+      const res = await fetch(`/api/universal-video/projects/${projectId}/visual-style-rationale`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ visualStyleRationale: value }),
+      });
+      if (!res.ok) throw new Error("Failed to save style rationale");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+      setEditingRationale(false);
+      toast({ title: "Brief saved" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
   const [projectCharacters, setProjectCharacters] = useState<any[]>(project.characters || []);
   useEffect(() => {
     if (project.characters) setProjectCharacters(project.characters);
@@ -874,6 +900,72 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
               </div>
             )}
 
+            {scriptReady && !isStudioPolish && (
+              <div
+                className="rounded-xl border p-4 space-y-3"
+                style={{ backgroundColor: "rgba(124,58,237,0.06)", borderColor: "rgba(124,58,237,0.25)" }}
+                data-testid="creative-brief-panel"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-purple-400" />
+                    <h3 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>Creative Brief</h3>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-500/15 border border-purple-500/30 text-purple-300 uppercase tracking-wider">
+                      Director's note
+                    </span>
+                  </div>
+                  {!editingRationale ? (
+                    <button
+                      onClick={() => setEditingRationale(true)}
+                      className="text-xs px-2.5 py-1 rounded-lg border flex items-center gap-1.5 transition-colors hover:border-purple-500/40"
+                      style={{ borderColor: "var(--border-subtle)", color: "var(--text-secondary)" }}
+                    >
+                      <Edit2 className="w-3 h-3" /> Edit
+                    </button>
+                  ) : (
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={() => { setBriefRationale(((project as any).visualStyleRationale) || ""); setEditingRationale(false); }}
+                        className="text-xs px-2.5 py-1 rounded-lg border" style={{ borderColor: "var(--border-subtle)", color: "var(--text-muted)" }}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={() => saveRationaleMutation.mutate(briefRationale)}
+                        disabled={saveRationaleMutation.isPending}
+                        className="text-xs px-2.5 py-1 rounded-lg text-white flex items-center gap-1.5 disabled:opacity-50"
+                        style={{ background: "linear-gradient(135deg, #7c3aed, #4f46e5)" }}
+                      >
+                        {saveRationaleMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                        Save
+                      </button>
+                    </div>
+                  )}
+                </div>
+                {editingRationale ? (
+                  <textarea
+                    value={briefRationale}
+                    onChange={(e) => setBriefRationale(e.target.value)}
+                    rows={4}
+                    placeholder="Why this visual treatment fits the brand and narrative — chosen styles, lighting, color, pacing, per-scene mixing decisions."
+                    className="w-full text-sm rounded-lg border px-3 py-2 bg-transparent outline-none resize-y"
+                    style={{ borderColor: "var(--border-subtle)", color: "var(--text-primary)" }}
+                  />
+                ) : briefRationale ? (
+                  <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: "var(--text-secondary)" }}>
+                    {briefRationale}
+                  </p>
+                ) : (
+                  <p className="text-xs italic" style={{ color: "var(--text-muted)" }}>
+                    No style rationale yet. Generate or regenerate the script to produce one — or click Edit to write your own.
+                  </p>
+                )}
+                <div className="text-[11px] flex items-center gap-3 pt-1" style={{ color: "var(--text-muted)" }}>
+                  <span className="flex items-center gap-1"><Palette className="w-3 h-3" /> Per-scene styles, shot types, on-screen text & lower-thirds are editable inside each scene below.</span>
+                </div>
+              </div>
+            )}
+
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-medium" style={{ color: "var(--text-secondary)" }}>
                 {isStudioPolish ? 'Clips' : 'Scenes'} ({scenes.length})
@@ -1126,6 +1218,98 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
                         {isExpanded ? <ChevronUp className="w-4 h-4" style={{ color: "var(--text-muted)" }} /> : <ChevronDown className="w-4 h-4" style={{ color: "var(--text-muted)" }} />}
                       </div>
                     </div>
+
+                    {/* Phase 44: Creative Brief — per-scene editable summary */}
+                    {isExpanded && scriptReady && !isStudioPolish && (
+                      <div
+                        className="px-4 py-3 border-t space-y-3"
+                        style={{ borderColor: "var(--border-subtle)", backgroundColor: "rgba(124,58,237,0.04)" }}
+                        data-testid={`scene-brief-${sceneId}`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                          <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>Scene Brief</span>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-[11px] font-medium mb-1" style={{ color: "var(--text-muted)" }}>Visual Style</label>
+                            <select
+                              value={scene.artPresetId || ""}
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                if (!v) {
+                                  updateSceneMutation.mutate({ sceneId, updates: { artPresetId: null, assignedStyleId: null } });
+                                } else {
+                                  updateSceneMutation.mutate({ sceneId, updates: { artPresetId: v, assignedStyleId: v } });
+                                }
+                              }}
+                              className="w-full text-sm rounded-lg border px-2.5 py-1.5 bg-transparent outline-none"
+                              style={{ borderColor: "var(--border-subtle)", color: "var(--text-primary)" }}
+                              data-testid={`scene-style-${sceneId}`}
+                            >
+                              <option value="">Auto / inherit project</option>
+                              {getAllVisualArtPresets().map((p: any) => (
+                                <option key={p.id} value={p.id}>{p.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-medium mb-1" style={{ color: "var(--text-muted)" }}>Shot Type</label>
+                            <select
+                              value={scene.shotType || ""}
+                              onChange={(e) => updateSceneMutation.mutate({ sceneId, updates: { shotType: e.target.value } })}
+                              className="w-full text-sm rounded-lg border px-2.5 py-1.5 bg-transparent outline-none"
+                              style={{ borderColor: "var(--border-subtle)", color: "var(--text-primary)" }}
+                              data-testid={`scene-shot-${sceneId}`}
+                            >
+                              <option value="">— pick shot —</option>
+                              {["ECU","CU","MS","WS","EWS","POV","OTS","aerial","macro"].map(st => (
+                                <option key={st} value={st}>{st}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-medium mb-1" style={{ color: "var(--text-muted)" }}>On-screen Text</label>
+                            <input
+                              type="text"
+                              defaultValue={scene.onScreenText || ""}
+                              placeholder="Short caption (3–8 words)"
+                              onBlur={(e) => {
+                                const v = e.target.value.trim();
+                                if (v !== (scene.onScreenText || "")) {
+                                  updateSceneMutation.mutate({ sceneId, updates: { onScreenText: v } });
+                                }
+                              }}
+                              className="w-full text-sm rounded-lg border px-2.5 py-1.5 bg-transparent outline-none"
+                              style={{ borderColor: "var(--border-subtle)", color: "var(--text-primary)" }}
+                              data-testid={`scene-onscreen-${sceneId}`}
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-medium mb-1" style={{ color: "var(--text-muted)" }}>Lower-third</label>
+                            <input
+                              type="text"
+                              defaultValue={scene.lowerThird || ""}
+                              placeholder="Speaker / location / stat"
+                              onBlur={(e) => {
+                                const v = e.target.value.trim();
+                                if (v !== (scene.lowerThird || "")) {
+                                  updateSceneMutation.mutate({ sceneId, updates: { lowerThird: v } });
+                                }
+                              }}
+                              className="w-full text-sm rounded-lg border px-2.5 py-1.5 bg-transparent outline-none"
+                              style={{ borderColor: "var(--border-subtle)", color: "var(--text-primary)" }}
+                              data-testid={`scene-lowerthird-${sceneId}`}
+                            />
+                          </div>
+                        </div>
+                        {scene.cinematicNotes && (
+                          <p className="text-[11px] italic leading-relaxed" style={{ color: "var(--text-muted)" }}>
+                            <span className="font-semibold">Director's note:</span> {scene.cinematicNotes}
+                          </p>
+                        )}
+                      </div>
+                    )}
 
                     {/* Expanded Scene Content - Enhanced Editor */}
                     {isExpanded && (

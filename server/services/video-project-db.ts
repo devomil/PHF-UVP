@@ -38,6 +38,7 @@ export function dbRowToVideoProject(row: any): VideoProject {
     referenceImages: row.referenceImages || (row.assets as any)?.referenceImages || [],
     productVisualDescription: row.productVisualDescription || null,
     characterReferenceImageUrl: row.characterReferenceImageUrl || null,
+    visualStyleRationale: row.visualStyleRationale || null,
     renderId: row.renderId,
     bucketName: row.bucketName,
     outputUrl: row.outputUrl,
@@ -116,6 +117,7 @@ export async function saveProjectToDb(
   if (project.seamlessTransitions !== undefined) updateData.seamlessTransitions = project.seamlessTransitions;
   if (project.productVisualDescription !== undefined) updateData.productVisualDescription = project.productVisualDescription;
   if (project.characterReferenceImageUrl !== undefined) updateData.characterReferenceImageUrl = project.characterReferenceImageUrl;
+  if (project.visualStyleRationale !== undefined) updateData.visualStyleRationale = project.visualStyleRationale;
 
   if (existing.length > 0) {
     await db.update(universalVideoProjects)
