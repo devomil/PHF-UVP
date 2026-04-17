@@ -4573,6 +4573,48 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
       return { ...item, url: resolvedUrl };
     };
 
+    // Phase 44: Synthesize text overlays from scene.onScreenText / scene.lowerThird
+    // so creative-brief fields render at composition time. Idempotent — guarded by id prefix.
+    for (const scene of inputProps.scenes as any[]) {
+      if (!Array.isArray(scene.overlayItems)) scene.overlayItems = [];
+      const hasBriefOverlay = (kind: 'onscreen' | 'lowerthird') =>
+        scene.overlayItems.some((o: any) => typeof o?.id === 'string' && o.id.startsWith(`brief-${kind}-`));
+      const baseTextOverlay = (id: string, name: string, text: string, opts: any) => ({
+        type: 'text',
+        id,
+        name,
+        text,
+        opacity: 1,
+        locked: false,
+        fontFamily: 'Inter, system-ui, sans-serif',
+        textAlign: 'center',
+        textShadow: true,
+        enterAnimation: 'fade',
+        exitAnimation: 'fade',
+        animationDuration: 0.4,
+        layerOrder: 50,
+        autoBackground: true,
+        autoBackgroundOpacity: 0.55,
+        ...opts,
+      });
+      if (typeof scene.onScreenText === 'string' && scene.onScreenText.trim() && !hasBriefOverlay('onscreen')) {
+        scene.overlayItems.push(baseTextOverlay(
+          `brief-onscreen-${scene.id}`,
+          'On-screen text',
+          scene.onScreenText.trim(),
+          { x: 8, y: 12, width: 84, height: 14, fontSize: 64, fontWeight: '700', color: '#ffffff', textPreset: 'title' }
+        ));
+      }
+      if (typeof scene.lowerThird === 'string' && scene.lowerThird.trim() && !hasBriefOverlay('lowerthird')) {
+        scene.overlayItems.push(baseTextOverlay(
+          `brief-lowerthird-${scene.id}`,
+          'Lower-third',
+          scene.lowerThird.trim(),
+          { x: 6, y: 78, width: 50, height: 8, fontSize: 32, fontWeight: '600', color: '#ffffff', textAlign: 'left', textPreset: 'lower-third' }
+        ));
+      }
+    }
+
     // Resolve overlay item URLs to Lambda-accessible public URLs
     for (const scene of inputProps.scenes as any[]) {
       // 1. Resolve scene-level overlayItems
