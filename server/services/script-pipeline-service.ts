@@ -64,6 +64,7 @@ export interface PipelineResult {
   strategy: CreativeStrategy;
   narrative: NarrativeArchitecture;
   scenes: any[];
+  styleRationale?: string;
   summary: {
     totalDuration: number;
     sceneCount: number;

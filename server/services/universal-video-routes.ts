@@ -2879,7 +2879,7 @@ router.post('/projects/:projectId/generate-script', isAuthenticated, async (req:
       summary = pipelineResult.summary;
       pipelineStrategy = pipelineResult.strategy;
       pipelineNarrative = pipelineResult.narrative;
-      pipelineStyleRationale = (pipelineResult as any).styleRationale;
+      pipelineStyleRationale = pipelineResult.styleRationale;
     }
 
     if (productMediaUrl && scenes.length > 0) {
