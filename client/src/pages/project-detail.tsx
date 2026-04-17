@@ -1242,30 +1242,64 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
                               </span>
                             );
                           })()}
-                          {activeImageJob ? (
-                            <span
-                              className="text-[10px] px-1.5 py-0.5 rounded-full border flex items-center gap-1 animate-pulse"
-                              style={{ borderColor: 'rgba(59,130,246,0.4)', backgroundColor: 'rgba(59,130,246,0.15)', color: 'rgb(96,165,250)' }}
-                              data-testid={`scene-regen-image-${sceneId}`}
-                              title={`Regenerating image with ${formatProviderName(activeImageJob.provider)}`}
-                            >
-                              <Loader2 className="w-2.5 h-2.5 animate-spin" /> Regenerating image with {formatProviderName(activeImageJob.provider)}
-                            </span>
-                          ) : scene.assets?.imageProvider && (
+                          {activeImageJob ? (() => {
+                            const rawProgress = Number.isFinite(activeImageJob.progress) ? activeImageJob.progress : null;
+                            const pct = rawProgress != null ? Math.max(0, Math.min(100, Math.round(rawProgress))) : null;
+                            const label = `Regenerating image with ${formatProviderName(activeImageJob.provider)}${pct != null ? ` - ${pct}%` : ''}`;
+                            return (
+                              <span
+                                className="text-[10px] px-1.5 py-0.5 rounded-full border flex items-center gap-1 animate-pulse"
+                                style={{ borderColor: 'rgba(59,130,246,0.4)', backgroundColor: 'rgba(59,130,246,0.15)', color: 'rgb(96,165,250)' }}
+                                data-testid={`scene-regen-image-${sceneId}`}
+                                title={label}
+                              >
+                                <Loader2 className="w-2.5 h-2.5 animate-spin" /> {label}
+                                {pct != null && (
+                                  <span
+                                    className="ml-1 inline-block h-1 w-8 rounded-full overflow-hidden"
+                                    style={{ backgroundColor: 'rgba(59,130,246,0.2)' }}
+                                    data-testid={`scene-regen-image-progress-${sceneId}`}
+                                  >
+                                    <span
+                                      className="block h-full transition-all"
+                                      style={{ width: `${pct}%`, backgroundColor: 'rgb(96,165,250)' }}
+                                    />
+                                  </span>
+                                )}
+                              </span>
+                            );
+                          })() : scene.assets?.imageProvider && (
                             <span className="text-[10px] px-1.5 py-0.5 rounded-full border flex items-center gap-0.5" style={{ borderColor: 'rgba(59,130,246,0.3)', backgroundColor: 'rgba(59,130,246,0.1)', color: 'rgb(96,165,250)' }}>
                               <ImagePlus className="w-2.5 h-2.5" /> {formatProviderName(scene.assets.imageProvider)}
                             </span>
                           )}
-                          {activeVideoJob ? (
-                            <span
-                              className="text-[10px] px-1.5 py-0.5 rounded-full border flex items-center gap-1 animate-pulse"
-                              style={{ borderColor: 'rgba(16,185,129,0.4)', backgroundColor: 'rgba(16,185,129,0.15)', color: 'rgb(52,211,153)' }}
-                              data-testid={`scene-regen-video-${sceneId}`}
-                              title={`Regenerating video with ${formatProviderName(activeVideoJob.provider)}`}
-                            >
-                              <Loader2 className="w-2.5 h-2.5 animate-spin" /> Regenerating video with {formatProviderName(activeVideoJob.provider)}
-                            </span>
-                          ) : scene.assets?.videoProvider && (
+                          {activeVideoJob ? (() => {
+                            const rawProgress = Number.isFinite(activeVideoJob.progress) ? activeVideoJob.progress : null;
+                            const pct = rawProgress != null ? Math.max(0, Math.min(100, Math.round(rawProgress))) : null;
+                            const label = `Regenerating video with ${formatProviderName(activeVideoJob.provider)}${pct != null ? ` - ${pct}%` : ''}`;
+                            return (
+                              <span
+                                className="text-[10px] px-1.5 py-0.5 rounded-full border flex items-center gap-1 animate-pulse"
+                                style={{ borderColor: 'rgba(16,185,129,0.4)', backgroundColor: 'rgba(16,185,129,0.15)', color: 'rgb(52,211,153)' }}
+                                data-testid={`scene-regen-video-${sceneId}`}
+                                title={label}
+                              >
+                                <Loader2 className="w-2.5 h-2.5 animate-spin" /> {label}
+                                {pct != null && (
+                                  <span
+                                    className="ml-1 inline-block h-1 w-8 rounded-full overflow-hidden"
+                                    style={{ backgroundColor: 'rgba(16,185,129,0.2)' }}
+                                    data-testid={`scene-regen-video-progress-${sceneId}`}
+                                  >
+                                    <span
+                                      className="block h-full transition-all"
+                                      style={{ width: `${pct}%`, backgroundColor: 'rgb(52,211,153)' }}
+                                    />
+                                  </span>
+                                )}
+                              </span>
+                            );
+                          })() : scene.assets?.videoProvider && (
                             <span className="text-[10px] px-1.5 py-0.5 rounded-full border flex items-center gap-0.5" style={{ borderColor: 'rgba(16,185,129,0.3)', backgroundColor: 'rgba(16,185,129,0.1)', color: 'rgb(52,211,153)' }}>
                               <Video className="w-2.5 h-2.5" /> {formatProviderName(scene.assets.videoProvider)}
                             </span>
