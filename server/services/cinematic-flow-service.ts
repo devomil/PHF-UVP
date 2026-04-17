@@ -223,7 +223,7 @@ export async function runCinematicFlow(
 
         console.log(`[CinematicFlow] Scene ${i}: Created job ${job.jobId}, waiting for completion...`);
 
-        const maxWait = 5 * 60 * 1000;
+        const maxWait = 12 * 60 * 1000;
         const pollInterval = 5000;
         const startTime = Date.now();
         let jobCompleted = false;
