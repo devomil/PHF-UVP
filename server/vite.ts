@@ -2,6 +2,7 @@ import type { Express } from "express";
 import express from "express";
 import fs from "fs";
 import path from "path";
+import type { Server as HttpServer } from "http";
 import { fileURLToPath } from "url";
 import { createServer as createViteServer, type ViteDevServer } from "vite";
 
@@ -9,12 +10,12 @@ const expressStatic = express.static;
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-export async function setupVite(app: Express) {
+export async function setupVite(app: Express, httpServer?: HttpServer) {
   const vite = await createViteServer({
     configFile: path.resolve(__dirname, "..", "vite.config.ts"),
     server: {
       middlewareMode: true,
-      hmr: false,
+      hmr: httpServer ? { server: httpServer, clientPort: 443, protocol: "wss" } : false,
       allowedHosts: true,
     },
     appType: "spa",

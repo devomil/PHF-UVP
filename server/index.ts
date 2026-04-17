@@ -1,4 +1,5 @@
 import express from "express";
+import { createServer } from "http";
 import { setupAuth } from "./auth";
 import { registerRoutes } from "./routes";
 
@@ -18,16 +19,18 @@ setupAuth(app);
 (async () => {
   await registerRoutes(app);
 
+  const httpServer = createServer(app);
+
   if (process.env.NODE_ENV === "production") {
     const { serveStatic } = await import("./vite");
     serveStatic(app);
   } else {
     const { setupVite } = await import("./vite");
-    await setupVite(app);
+    await setupVite(app, httpServer);
   }
 
   const port = 5000;
-  app.listen(port, "0.0.0.0", () => {
+  httpServer.listen(port, "0.0.0.0", () => {
     console.log(`Server running on http://0.0.0.0:${port}`);
   });
 })();
