@@ -481,9 +481,12 @@ async function processProject(projectData: VideoProjectWithMeta) {
         const result = await runCinematicFlow(projectId, {
           provider: cfProvider,
           triggeredBy: projectData.ownerId,
+          awaitCompletion: true,
         });
         if (!result.started) {
           log(`Seamless transitions: cinematic flow not started — ${result.reason || 'unknown reason'}`);
+        } else {
+          log(`Seamless transitions: cinematic flow finished (completed=${result.completed ?? 0}, failed=${result.failed ?? 0})`);
         }
       } catch (cfErr: any) {
         log(`Seamless transitions: cinematic flow failed to start — ${cfErr.message}`);

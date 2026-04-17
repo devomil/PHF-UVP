@@ -100,12 +100,13 @@ export async function extractLastFrame(videoUrl: string): Promise<string | undef
 export interface RunCinematicFlowOptions {
   provider?: string;
   triggeredBy?: string;
+  awaitCompletion?: boolean;
 }
 
 export async function runCinematicFlow(
   projectId: string,
   opts: RunCinematicFlowOptions = {}
-): Promise<{ started: boolean; reason?: string; totalScenes?: number }> {
+): Promise<{ started: boolean; reason?: string; totalScenes?: number; completed?: number; failed?: number }> {
   const projectData = await getProjectFromDb(projectId);
   if (!projectData) {
     return { started: false, reason: 'Project not found' };
@@ -133,7 +134,7 @@ export async function runCinematicFlow(
     startedAt: new Date(),
   });
 
-  (async () => {
+  const flowPromise = (async () => {
     const status = cinematicFlowStatus.get(projectId)!;
     let previousLastFrameUrl: string | undefined = undefined;
     const provider = opts.provider;
@@ -288,6 +289,22 @@ export async function runCinematicFlow(
 
     setTimeout(() => { cinematicFlowStatus.delete(projectId); }, 30 * 60 * 1000);
   })();
+
+  if (opts.awaitCompletion) {
+    await flowPromise;
+    const finalStatus = cinematicFlowStatus.get(projectId);
+    return {
+      started: true,
+      totalScenes: scenes.length,
+      completed: finalStatus?.completed ?? 0,
+      failed: finalStatus?.failed ?? 0,
+    };
+  }
+
+  // Prevent unhandled-rejection crashes when fire-and-forget
+  flowPromise.catch((err) => {
+    console.error(`[CinematicFlow] Background flow crashed for ${projectId}:`, err?.message || err);
+  });
 
   return { started: true, totalScenes: scenes.length };
 }
