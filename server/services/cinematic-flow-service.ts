@@ -117,23 +117,38 @@ export async function runCinematicFlow(
   projectId: string,
   opts: RunCinematicFlowOptions = {}
 ): Promise<{ started: boolean; reason?: string; totalScenes?: number; completed?: number; failed?: number }> {
+  // Atomic check-and-claim BEFORE any await — prevents two concurrent callers
+  // (e.g. the worker auto-trigger + a manual route call) from both passing the
+  // duplicate check and spawning two competing background flows.
+  const existing = cinematicFlowStatus.get(projectId);
+  if (existing && existing.status === 'running') {
+    return { started: false, reason: 'Already running' };
+  }
+  cinematicFlowStatus.set(projectId, {
+    status: 'running',
+    total: 0,
+    completed: 0,
+    failed: 0,
+    currentScene: '',
+    errors: [],
+    startedAt: new Date(),
+  });
+
   const projectData = await getProjectFromDb(projectId);
   if (!projectData) {
+    cinematicFlowStatus.delete(projectId);
     return { started: false, reason: 'Project not found' };
   }
 
   const scenes = (projectData.scenes || []).filter((s: any) => s.type !== 'chapter-title');
   if (scenes.length === 0) {
+    cinematicFlowStatus.delete(projectId);
     return { started: false, reason: 'No content scenes' };
-  }
-
-  const existing = cinematicFlowStatus.get(projectId);
-  if (existing && existing.status === 'running') {
-    return { started: false, reason: 'Already running' };
   }
 
   console.log(`[CinematicFlow] Starting cinematic flow regeneration for ${scenes.length} content scenes (project ${projectId})`);
 
+  // Now that we have the real scene count, refresh the claimed status entry.
   cinematicFlowStatus.set(projectId, {
     status: 'running',
     total: scenes.length,
