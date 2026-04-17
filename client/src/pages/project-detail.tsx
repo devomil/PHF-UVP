@@ -55,6 +55,26 @@ function formatDuration(seconds: number) {
   return secs ? `${mins}m ${secs}s` : `${mins}m`;
 }
 
+function computeJobEtaSeconds(job: any, progressPct: number | null): number | null {
+  if (progressPct == null || progressPct < 5 || progressPct >= 100) return null;
+  const startRaw = job?.startedAt || job?.createdAt;
+  if (!startRaw) return null;
+  const startMs = new Date(startRaw).getTime();
+  if (!Number.isFinite(startMs) || startMs <= 0) return null;
+  const elapsedMs = Date.now() - startMs;
+  if (elapsedMs <= 0) return null;
+  const totalMs = elapsedMs / (progressPct / 100);
+  const remainingMs = totalMs - elapsedMs;
+  if (!Number.isFinite(remainingMs) || remainingMs <= 0) return null;
+  return Math.round(remainingMs / 1000);
+}
+
+function formatEta(seconds: number): string {
+  if (seconds < 60) return `~${seconds}s left`;
+  const mins = Math.round(seconds / 60);
+  return `~${mins}m left`;
+}
+
 function formatDate(dateStr: string | null | undefined) {
   if (!dateStr) return "Unknown";
   return new Date(dateStr).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
@@ -1245,13 +1265,16 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
                           {activeImageJob ? (() => {
                             const rawProgress = Number.isFinite(activeImageJob.progress) ? activeImageJob.progress : null;
                             const pct = rawProgress != null ? Math.max(0, Math.min(100, Math.round(rawProgress))) : null;
+                            const etaSec = computeJobEtaSeconds(activeImageJob, pct);
+                            const etaText = etaSec != null ? formatEta(etaSec) : null;
                             const label = `Regenerating image with ${formatProviderName(activeImageJob.provider)}${pct != null ? ` - ${pct}%` : ''}`;
+                            const titleText = etaText ? `${label} (${etaText})` : label;
                             return (
                               <span
                                 className="text-[10px] px-1.5 py-0.5 rounded-full border flex items-center gap-1 animate-pulse"
                                 style={{ borderColor: 'rgba(59,130,246,0.4)', backgroundColor: 'rgba(59,130,246,0.15)', color: 'rgb(96,165,250)' }}
                                 data-testid={`scene-regen-image-${sceneId}`}
-                                title={label}
+                                title={titleText}
                               >
                                 <Loader2 className="w-2.5 h-2.5 animate-spin" /> {label}
                                 {pct != null && (
@@ -1266,6 +1289,14 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
                                     />
                                   </span>
                                 )}
+                                {etaText && (
+                                  <span
+                                    className="ml-1 opacity-80"
+                                    data-testid={`scene-regen-image-eta-${sceneId}`}
+                                  >
+                                    {etaText}
+                                  </span>
+                                )}
                               </span>
                             );
                           })() : scene.assets?.imageProvider && (
@@ -1276,13 +1307,16 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
                           {activeVideoJob ? (() => {
                             const rawProgress = Number.isFinite(activeVideoJob.progress) ? activeVideoJob.progress : null;
                             const pct = rawProgress != null ? Math.max(0, Math.min(100, Math.round(rawProgress))) : null;
+                            const etaSec = computeJobEtaSeconds(activeVideoJob, pct);
+                            const etaText = etaSec != null ? formatEta(etaSec) : null;
                             const label = `Regenerating video with ${formatProviderName(activeVideoJob.provider)}${pct != null ? ` - ${pct}%` : ''}`;
+                            const titleText = etaText ? `${label} (${etaText})` : label;
                             return (
                               <span
                                 className="text-[10px] px-1.5 py-0.5 rounded-full border flex items-center gap-1 animate-pulse"
                                 style={{ borderColor: 'rgba(16,185,129,0.4)', backgroundColor: 'rgba(16,185,129,0.15)', color: 'rgb(52,211,153)' }}
                                 data-testid={`scene-regen-video-${sceneId}`}
-                                title={label}
+                                title={titleText}
                               >
                                 <Loader2 className="w-2.5 h-2.5 animate-spin" /> {label}
                                 {pct != null && (
@@ -1295,6 +1329,14 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
                                       className="block h-full transition-all"
                                       style={{ width: `${pct}%`, backgroundColor: 'rgb(52,211,153)' }}
                                     />
+                                  </span>
+                                )}
+                                {etaText && (
+                                  <span
+                                    className="ml-1 opacity-80"
+                                    data-testid={`scene-regen-video-eta-${sceneId}`}
+                                  >
+                                    {etaText}
                                   </span>
                                 )}
                               </span>
