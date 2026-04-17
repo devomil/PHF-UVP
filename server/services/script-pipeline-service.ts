@@ -1082,6 +1082,21 @@ Rewrite both so the listed required literal subjects are clearly visible in the 
       motionPrompt = scenePreset?.cameraMotionHints?.split(',')[0]?.trim() || 'slow cinematic push-in, subtle atmospheric motion';
     }
 
+    // ===== DETERMINISTIC PRODUCT GROUNDING =====
+    // For product/CTA scenes, ensure the literal product visual description is
+    // present in the imagePrompt so the model paints the user's actual product
+    // (not a generic stand-in). Idempotent: only appends if not already present.
+    if ((sceneType === 'product' || sceneType === 'cta') && ctx.productContext?.visualDescription) {
+      const productVD = ctx.productContext.visualDescription.toString().trim();
+      if (productVD) {
+        const head = productVD.slice(0, 24).toLowerCase();
+        if (!imagePrompt.toLowerCase().includes(head)) {
+          imagePrompt = `${imagePrompt} Product shown clearly: ${productVD}.`.trim();
+          console.log(`[Pipeline S4] Scene ${i + 1} (${sceneType}): injected product visual description`);
+        }
+      }
+    }
+
     const textImageEnabled = s4.textImageEnabled === true;
 
     const validContentTagIds = new Set(getSceneContentTagIds());
