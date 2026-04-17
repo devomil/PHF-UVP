@@ -810,6 +810,14 @@ export const SOUND_PROVIDERS: Record<string, SoundProvider> = {
     type: 'sfx',
     costPerEffect: 0.01,
   },
+
+  elevenlabs_sfx: {
+    id: 'elevenlabs_sfx',
+    name: 'ElevenLabs SFX',
+    displayName: 'ElevenLabs Sound Effects',
+    type: 'sfx',
+    costPerEffect: 0.02,
+  },
 };
 
 export function getVideoProvider(id: string): VideoProvider | undefined {

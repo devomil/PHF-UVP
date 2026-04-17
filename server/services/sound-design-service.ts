@@ -64,8 +64,8 @@ class SoundDesignService {
   private s3Client: S3Client | null = null;
   private bucket = process.env.REMOTION_S3_BUCKET || process.env.REMOTION_AWS_BUCKET || 'remotionlambda-useast2-1vc2l6a56o';
   private region = process.env.REMOTION_AWS_REGION || 'us-east-2';
-  private apiKey = process.env.PIAPI_API_KEY || '';
-  private baseUrl = 'https://api.piapi.ai/api/v1';
+  private apiKey = process.env.ELEVENLABS_API_KEY || '';
+  private baseUrl = 'https://api.elevenlabs.io/v1';
 
   private soundPrompts = {
     whoosh: {
@@ -123,7 +123,7 @@ class SoundDesignService {
     const soundDesigns = new Map<string, SceneSoundDesign>();
 
     if (!this.isAvailable()) {
-      console.warn('[SoundDesign] PiAPI not configured, skipping sound design');
+      console.warn('[SoundDesign] ElevenLabs API key not configured, skipping sound design');
       return soundDesigns;
     }
 
@@ -288,50 +288,41 @@ class SoundDesignService {
     options: SoundGenerationOptions
   ): Promise<{ url: string; duration: number } | null> {
     try {
-      console.log(`[SoundDesign] Generating ${options.type}: "${options.prompt.substring(0, 50)}..."`);
+      console.log(`[SoundDesign] Generating ${options.type} via ElevenLabs SFX: "${options.prompt.substring(0, 50)}..."`);
 
-      const response = await fetch(`${this.baseUrl}/task`, {
+      const clampedDuration = Math.max(0.5, Math.min(options.duration, 22));
+
+      const response = await fetch(`${this.baseUrl}/sound-generation`, {
         method: 'POST',
         headers: {
-          'X-API-Key': this.apiKey,
+          'xi-api-key': this.apiKey,
           'Content-Type': 'application/json',
+          'Accept': 'audio/mpeg',
         },
         body: JSON.stringify({
-          model: 'kling-sound',
-          task_type: 'text_to_audio',
-          input: {
-            prompt: options.prompt,
-            duration: options.duration,
-            style: options.mood || 'cinematic',
-          },
+          text: options.prompt,
+          duration_seconds: clampedDuration,
+          prompt_influence: 0.5,
         }),
       });
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error(`[SoundDesign] API error: ${response.status} - ${errorText}`);
+        console.error(`[SoundDesign] ElevenLabs SFX API error: ${response.status} - ${errorText}`);
         return null;
       }
 
-      const data = await response.json();
-      const taskId = data.data?.task_id || data.task_id;
-
-      if (!taskId) {
-        console.error('[SoundDesign] No task ID in response');
+      const buffer = Buffer.from(await response.arrayBuffer());
+      if (buffer.length === 0) {
+        console.error('[SoundDesign] ElevenLabs SFX returned empty audio');
         return null;
       }
 
-      const result = await this.pollForCompletion(taskId);
-      
-      if (result.success && result.audioUrl) {
-        const s3Url = await this.uploadToS3(result.audioUrl, options.type);
-        return {
-          url: s3Url,
-          duration: options.duration,
-        };
-      }
-
-      return null;
+      const url = await this.uploadBufferToS3(buffer, options.type);
+      return {
+        url,
+        duration: clampedDuration,
+      };
 
     } catch (error: any) {
       console.error(`[SoundDesign] Generation failed:`, error.message);
@@ -339,55 +330,13 @@ class SoundDesignService {
     }
   }
 
-  private async pollForCompletion(
-    taskId: string
-  ): Promise<{ success: boolean; audioUrl?: string }> {
-    const maxAttempts = 60;
-    const pollInterval = 2000;
-
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      await this.sleep(pollInterval);
-
-      try {
-        const response = await fetch(`${this.baseUrl}/task/${taskId}`, {
-          headers: { 'X-API-Key': this.apiKey },
-        });
-
-        if (!response.ok) continue;
-
-        const data = await response.json();
-        const status = data.data?.status || data.status;
-
-        if (status === 'completed' || status === 'success' || status === 'SUCCESS') {
-          const audioUrl = data.data?.output?.audio_url || 
-                          data.data?.output?.audio ||
-                          data.data?.audio_url;
-          
-          if (audioUrl) {
-            return { success: true, audioUrl };
-          }
-        }
-
-        if (status === 'failed' || status === 'error') {
-          return { success: false };
-        }
-
-      } catch (error) {
-      }
-    }
-
-    return { success: false };
-  }
-
-  private async uploadToS3(audioUrl: string, type: string): Promise<string> {
+  private async uploadBufferToS3(buffer: Buffer, type: string): Promise<string> {
     if (!this.s3Client) {
-      return audioUrl;
+      const base64 = buffer.toString('base64');
+      return `data:audio/mpeg;base64,${base64}`;
     }
 
     try {
-      const response = await fetch(audioUrl);
-      const buffer = Buffer.from(await response.arrayBuffer());
-      
       const key = `sound-design/${type}/${Date.now()}_${Math.random().toString(36).substr(2, 9)}.mp3`;
 
       await this.s3Client.send(new PutObjectCommand({
@@ -404,7 +353,8 @@ class SoundDesignService {
 
     } catch (error: any) {
       console.warn(`[SoundDesign] S3 upload failed:`, error.message);
-      return audioUrl;
+      const base64 = buffer.toString('base64');
+      return `data:audio/mpeg;base64,${base64}`;
     }
   }
 
@@ -483,7 +433,7 @@ class SoundDesignService {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
-  private readonly SFX_PROVIDER = SOUND_PROVIDERS.kling_sound;
+  private readonly SFX_PROVIDER = SOUND_PROVIDERS.elevenlabs_sfx;
   
   designProjectSoundInfo(
     scenes: Array<{

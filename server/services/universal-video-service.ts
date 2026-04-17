@@ -5564,7 +5564,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
         console.error(`[UniversalVideoService] Sound design failed:`, error.message);
       }
     } else {
-      console.log(`[UniversalVideoService] Sound design skipped (PiAPI not configured)`);
+      console.log(`[UniversalVideoService] Sound design skipped (ElevenLabs API key not configured)`);
     }
     updatedProject.progress.steps.assembly.progress = 50;
     updatedProject.progress.steps.assembly.message = 'Sound design complete, analyzing scenes...';
