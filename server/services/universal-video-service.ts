@@ -1068,10 +1068,9 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
       // BUT first apply the product-reference gating heuristic so that scenes
       // describing a non-product subject (e.g. "athletic woman drinking water")
       // do NOT get hijacked by a stale brandAssetUrl into I2I product zoom.
-      const _gateProduct = shouldSkipProductReferenceForScene(
-        scene,
-        String((project as any)?.productVisualDescription || (project as any)?.productDescription || (project as any)?.brandBible?.product || ''),
-      );
+      // Product description isn't in scope here; rely on the built-in fallback
+      // product keyword set (bottle/jar/powder/package/etc.) inside the helper.
+      const _gateProduct = shouldSkipProductReferenceForScene(scene, '');
       const sceneProductRef = _gateProduct.skip ? undefined : (scene as any)?.brandAssetUrl;
       if (_gateProduct.skip && (scene as any)?.brandAssetUrl) {
         console.log(`[GenerateImage] Scene ${sceneId}: ignoring product brandAssetUrl — ${_gateProduct.reason}`);
