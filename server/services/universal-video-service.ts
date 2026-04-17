@@ -58,6 +58,42 @@ interface ImageGenerationResult {
 
 type FalImageSize = "portrait_16_9" | "square" | "landscape_4_3" | "landscape_16_9" | "square_hd" | "portrait_4_3";
 
+// ===== Shared product-reference gating =====
+// Used in two places:
+//   1) Project-level reference-image distribution (~line 3829)
+//   2) Per-scene image-generation attachment (~line 1047) — guards against
+//      stale `brandAssetUrl` from prior runs hijacking a lifestyle scene.
+// Returns true when the scene's visualDirection/narration describes a clear
+// human/lifestyle subject without any product mention, OR when the scene has
+// `useReferenceImage === false` set explicitly. In those cases the product
+// reference must NOT be force-attached as an I2I source.
+const _PRODUCT_FALLBACK_KEYWORDS = ['product','bottle','jar','package','label','powder','capsule','pill','box','pouch','tin','can'];
+const _SUBJECT_KEYWORDS = ['woman','women','man','men','person','people','guy','girl','boy','athlete','runner','mother','father','family','couple','child','kid','drinking','eating','walking','running','jogging','cooking','sitting','smiling','face','portrait','lifestyle'];
+function shouldSkipProductReferenceForScene(
+  scene: any,
+  productDescription: string,
+): { skip: boolean; reason?: string } {
+  if (!scene) return { skip: false };
+  if (scene.useReferenceImage === false) {
+    return { skip: true, reason: 'scene has useReferenceImage=false' };
+  }
+  const text = `${scene.visualDirection || ''} ${scene.narration || ''}`.toLowerCase();
+  if (!text.trim()) return { skip: false };
+  const productKeywords = new Set<string>(_PRODUCT_FALLBACK_KEYWORDS);
+  for (const w of String(productDescription || '').toLowerCase().split(/[^a-z0-9]+/i)) {
+    if (w.length >= 4) productKeywords.add(w);
+  }
+  let mentionsProduct = false;
+  for (const k of productKeywords) {
+    if (k && text.includes(k)) { mentionsProduct = true; break; }
+  }
+  const mentionsHuman = _SUBJECT_KEYWORDS.some(k => new RegExp(`\\b${k}\\b`).test(text));
+  if (mentionsHuman && !mentionsProduct) {
+    return { skip: true, reason: 'visual direction describes a human subject without product mention' };
+  }
+  return { skip: false };
+}
+
 function getImageDimensionsForAspectRatio(aspectRatio: string): { width: number; height: number; falSize: FalImageSize } {
   switch (aspectRatio) {
     case '9:16':
@@ -1029,7 +1065,17 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
       // Other providers (Recraft, Flux) silently drop referenceImages, which
       // defeats product grounding and character continuity. If the scene has
       // a brand asset OR character reference, route to NB2 unconditionally.
-      const sceneProductRef = (scene as any)?.brandAssetUrl;
+      // BUT first apply the product-reference gating heuristic so that scenes
+      // describing a non-product subject (e.g. "athletic woman drinking water")
+      // do NOT get hijacked by a stale brandAssetUrl into I2I product zoom.
+      const _gateProduct = shouldSkipProductReferenceForScene(
+        scene,
+        String((project as any)?.productVisualDescription || (project as any)?.productDescription || (project as any)?.brandBible?.product || ''),
+      );
+      const sceneProductRef = _gateProduct.skip ? undefined : (scene as any)?.brandAssetUrl;
+      if (_gateProduct.skip && (scene as any)?.brandAssetUrl) {
+        console.log(`[GenerateImage] Scene ${sceneId}: ignoring product brandAssetUrl — ${_gateProduct.reason}`);
+      }
       const sceneCharRef = (scene as any)?.characterRefImageUrl;
       if ((sceneProductRef || sceneCharRef) && selected !== 'nano-banana-2') {
         console.log(`[GenerateImage] Phase 43: forcing nano-banana-2 (was ${selected}) — scene has reference images that other providers cannot consume`);

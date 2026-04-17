@@ -455,9 +455,26 @@ async function processProject(projectData: VideoProjectWithMeta) {
     // lighting/subject/environment carry over between cuts. The pass is
     // idempotent — re-running it just replaces the videos with newer
     // continuity-anchored versions.
-    if ((updatedProject as any).seamlessTransitions === true) {
+    // Fetch fresh DB row — `updatedProject` (VideoProject) does not include
+    // the universal-video-projects-only fields like `seamlessTransitions` or
+    // `preferredVideoProvider`.
+    let _flagsRow: any = null;
+    try {
+      const flagsRows = await db
+        .select({
+          seamlessTransitions: universalVideoProjects.seamlessTransitions,
+          preferredVideoProvider: universalVideoProjects.preferredVideoProvider,
+        })
+        .from(universalVideoProjects)
+        .where(eq(universalVideoProjects.projectId, projectId))
+        .limit(1);
+      _flagsRow = flagsRows[0] || null;
+    } catch (flagErr: any) {
+      log(`Could not load seamless flag for ${projectId}: ${flagErr.message}`);
+    }
+    if (_flagsRow?.seamlessTransitions === true) {
       try {
-        const userPreferred = (updatedProject as any).preferredVideoProvider;
+        const userPreferred = _flagsRow.preferredVideoProvider;
         const cfProvider = userPreferred && userPreferred !== 'auto' ? userPreferred : undefined;
         log(`Seamless transitions enabled — starting cinematic flow pass for ${projectId}${cfProvider ? ` (provider=${cfProvider})` : ''}`);
         const { runCinematicFlow } = await import('./cinematic-flow-service');
