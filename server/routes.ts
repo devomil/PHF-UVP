@@ -1041,6 +1041,72 @@ export async function registerRoutes(app: Express) {
     }
   });
 
+  // Generate (or regenerate) the I2V source/reference image only — does NOT
+  // run the full video pipeline. Returns the new image URL so the client can
+  // set it as the override source image and review before regenerating video.
+  app.post("/api/projects/:projectId/quick-create/generate-source-image", async (req, res) => {
+    try {
+      if (!req.isAuthenticated() || !req.user) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+      const { projectId } = req.params;
+      const userId = (req.user as any).id;
+      const { prompt: bodyPrompt, artPresetId, aspectRatio: bodyAspect } = req.body || {};
+
+      const [project] = await db
+        .select()
+        .from(universalVideoProjects)
+        .where(eq(universalVideoProjects.projectId, projectId))
+        .limit(1);
+
+      if (!project || project.ownerId !== userId) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+
+      const outputFormat = (project.outputFormat as any) || {};
+      if (outputFormat.platform !== "quick-create") {
+        return res.status(400).json({ error: "Not a Quick Create project" });
+      }
+
+      const finalPrompt = (bodyPrompt && String(bodyPrompt).trim()) || project.description || "";
+      if (!finalPrompt) {
+        return res.status(400).json({ error: "No prompt available to generate from" });
+      }
+      const finalAspect = bodyAspect || outputFormat.aspectRatio || "16:9";
+
+      let promptWithStyle = finalPrompt;
+      if (artPresetId && artPresetId !== "auto") {
+        const { getVisualArtPreset, isStylizedPreset } = await import("../shared/config/visual-art-presets");
+        const preset = getVisualArtPreset(artPresetId);
+        if (preset && isStylizedPreset(preset.id)) {
+          const prefix = preset.styleMarkerPrefix || preset.name;
+          promptWithStyle = `${prefix} — ${promptWithStyle}`;
+          if (preset.globalStyleNotes) {
+            promptWithStyle = `${promptWithStyle}. Style: ${preset.globalStyleNotes}`;
+          }
+        }
+      }
+
+      const { universalVideoService } = await import("./services/universal-video-service");
+      const result = await universalVideoService.generateImage(
+        promptWithStyle,
+        `quick-create-source-${Date.now()}`,
+        false,
+        "content",
+        finalAspect,
+        { narration: project.description, visualDirection: promptWithStyle, type: "content" } as any,
+      );
+      if (!result?.success || !result.url) {
+        return res.status(500).json({ error: result?.error || "Image generation failed" });
+      }
+
+      res.json({ url: result.url, source: result.source });
+    } catch (error: any) {
+      console.error("Failed to generate source image:", error);
+      res.status(500).json({ error: error?.message || "Failed to generate image" });
+    }
+  });
+
   app.post("/api/projects/:projectId/quick-create/generate-voiceover", async (req, res) => {
     try {
       if (!req.isAuthenticated() || !req.user) {

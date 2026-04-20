@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { EnhancedSceneEditor } from "@/components/video/enhanced-scene-editor";
 import { SceneOverlayEditor, SceneOverlayItem } from "@/components/video/scene-overlay-editor";
 import { S3BackgroundPicker } from "@/components/video/S3BackgroundPicker";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { EndCardPreview } from "@/components/video/EndCardPreview";
 import { AskSuzziePanel } from "@/components/video/ask-suzzie-panel";
 import { CanvaSyncCard } from "@/components/canva/CanvaSyncCard";
@@ -4721,6 +4722,8 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
   const [artPresetId, setArtPresetId] = useState("");
   const [overrideSourceImage, setOverrideSourceImage] = useState<string | null | undefined>(undefined);
   const [uploadingSourceImage, setUploadingSourceImage] = useState(false);
+  const [generatingSourceImage, setGeneratingSourceImage] = useState(false);
+  const [referenceLightboxOpen, setReferenceLightboxOpen] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [selectedVoiceId, setSelectedVoiceId] = useState("21m00Tcm4TlvDq8ikWAM");
   const [voiceFilter, setVoiceFilter] = useState<"all" | "male" | "female">("all");
@@ -5136,6 +5139,38 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
                         )}
                         {effectiveSourceImage ? "Replace" : "Add"}
                       </label>
+                      <button
+                        className="text-[10px] text-purple-400 hover:text-purple-300 flex items-center gap-0.5 disabled:opacity-50"
+                        disabled={generatingSourceImage || uploadingSourceImage}
+                        onClick={async () => {
+                          try {
+                            setGeneratingSourceImage(true);
+                            const res = await fetch(`/api/projects/${projectId}/quick-create/generate-source-image`, {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              credentials: "include",
+                              body: JSON.stringify({ prompt: promptText, artPresetId: artPresetId || undefined }),
+                            });
+                            if (!res.ok) {
+                              const err = await res.json().catch(() => ({}));
+                              throw new Error(err.error || "Generation failed");
+                            }
+                            const data = await res.json();
+                            if (data?.url) {
+                              setOverrideSourceImage(data.url);
+                              toast({ title: "Reference image generated", description: "New AI-generated reference is set. Click Generate to use it." });
+                            }
+                          } catch (e: any) {
+                            toast({ title: "Generation failed", description: e?.message || "Could not generate image", variant: "destructive" });
+                          } finally {
+                            setGeneratingSourceImage(false);
+                          }
+                        }}
+                        title="Generate a new reference image with AI from your prompt"
+                      >
+                        {generatingSourceImage ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                        {effectiveSourceImage ? "AI Regen" : "AI Generate"}
+                      </button>
                       {effectiveSourceImage && (
                         <button
                           className="text-[10px] text-red-400 hover:text-red-300 flex items-center gap-0.5"
@@ -5149,17 +5184,26 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
                   </div>
                   {effectiveSourceImage && (
                     <div className="flex items-start gap-3">
-                      <div className="relative group">
+                      <button
+                        type="button"
+                        onClick={() => setReferenceLightboxOpen(true)}
+                        className="relative group block"
+                        title="Click to expand"
+                        aria-label="Open reference image full size"
+                      >
                         <img
                           src={effectiveSourceImage}
                           alt="Reference"
-                          className="w-16 h-16 object-cover rounded-lg border flex-shrink-0"
+                          className="w-32 h-32 object-cover rounded-lg border flex-shrink-0 transition-transform group-hover:scale-[1.02]"
                           style={{ borderColor: overrideSourceImage ? "rgb(139, 92, 246)" : "var(--border-medium)" }}
                         />
+                        <span className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/40 transition-colors rounded-lg">
+                          <Maximize2 className="w-5 h-5 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                        </span>
                         {overrideSourceImage && overrideSourceImage !== null && (
                           <span className="absolute -top-1 -right-1 bg-purple-600 text-white text-[8px] px-1 rounded">New</span>
                         )}
-                      </div>
+                      </button>
                       {isRemoved && (
                         <p className="text-xs italic" style={{ color: "var(--text-muted)" }}>Image removed — will generate text-to-video</p>
                       )}
@@ -5547,6 +5591,22 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
         </div>
       )}
     </div>
+    <Dialog open={referenceLightboxOpen} onOpenChange={setReferenceLightboxOpen}>
+      <DialogContent className="max-w-4xl p-2 bg-black/95 border-none">
+        {(() => {
+          const genInfo = assetsQuery.data?.generationInfo;
+          const src = overrideSourceImage === null ? null : (overrideSourceImage || genInfo?.sourceImageUrl || null);
+          if (!src) return null;
+          return (
+            <img
+              src={src}
+              alt="Reference (full size)"
+              className="w-full h-auto max-h-[85vh] object-contain rounded"
+            />
+          );
+        })()}
+      </DialogContent>
+    </Dialog>
     </>
   );
 }
