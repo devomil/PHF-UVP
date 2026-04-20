@@ -1221,23 +1221,28 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
       console.log('[EnhancePrompt] Pet/animal subject detected - no gender enforcement');
     } else {
       // Human subject detection - enforce gender only when specified
-      const femaleIndicators = [' she ', ' her ', 'woman', 'female', 'lady', 'mother', 'wife', 'grandmother', 'girl'];
-      const maleIndicators = [' he ', ' his ', ' man ', 'male', 'father', 'husband', 'grandfather', 'boy', 'guy'];
-      const childIndicators = ['child', 'kid', 'baby', 'infant', 'toddler', 'teen', 'teenager'];
-      const coupleIndicators = ['couple', 'pair', 'together', 'family'];
-      
-      const hasFemaleIndicator = femaleIndicators.some(ind => promptLower.includes(ind));
-      const hasMaleIndicator = maleIndicators.some(ind => promptLower.includes(ind));
-      const hasChildIndicator = childIndicators.some(ind => promptLower.includes(ind));
-      const hasCoupleIndicator = coupleIndicators.some(ind => promptLower.includes(ind));
+      const femaleWords = ['she', 'her', 'hers', 'herself', 'woman', 'women', 'female', 'lady', 'mother', 'wife', 'grandmother', 'girl'];
+      const maleWords = ['he', 'his', 'him', 'himself', 'man', 'men', 'male', 'father', 'husband', 'grandfather', 'boy', 'guy'];
+      const childWords = ['child', 'children', 'kid', 'kids', 'baby', 'infant', 'toddler', 'teen', 'teenager'];
+      const coupleWords = ['couple', 'pair', 'together', 'family'];
+      const tokens = new Set(promptLower.split(/\W+/).filter(Boolean));
+      const hasAny = (words: string[]) => words.some(w => tokens.has(w));
+      const hasFemaleIndicator = hasAny(femaleWords);
+      const hasMaleIndicator = hasAny(maleWords);
+      const hasChildIndicator = hasAny(childWords);
+      const hasCoupleIndicator = hasAny(coupleWords);
       
       // Only enforce when clear single-gender is specified
       if (hasFemaleIndicator && !hasMaleIndicator && !hasCoupleIndicator) {
-        subjectEnforcement += 'MUST be a woman/female subject only, NO MEN, ';
-        console.log('[EnhancePrompt] Enforcing female subject');
+        subjectEnforcement += hasChildIndicator
+          ? 'MUST be a female child only, NO MEN, '
+          : 'MUST be an adult woman (age 25-45), fully grown, NO CHILDREN, NO TEENAGERS, NO MEN, ';
+        console.log(`[EnhancePrompt] Enforcing female subject${hasChildIndicator ? ' (child)' : ' (adult)'}`);
       } else if (hasMaleIndicator && !hasFemaleIndicator && !hasCoupleIndicator) {
-        subjectEnforcement += 'MUST be a man/male subject only, NO WOMEN, ';
-        console.log('[EnhancePrompt] Enforcing male subject');
+        subjectEnforcement += hasChildIndicator
+          ? 'MUST be a male child only, NO WOMEN, '
+          : 'MUST be an adult man (age 25-45), fully grown, NO CHILDREN, NO TEENAGERS, NO WOMEN, ';
+        console.log(`[EnhancePrompt] Enforcing male subject${hasChildIndicator ? ' (child)' : ' (adult)'}`);
       } else if (hasCoupleIndicator) {
         console.log('[EnhancePrompt] Couple/family detected - allowing mixed genders');
       }

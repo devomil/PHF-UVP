@@ -475,7 +475,8 @@ Return ONLY valid JSON matching this structure:
           sceneType: scene.type,
         });
         if (routing.needsTextInjection && routing.suggestedTextElement) {
-          scene.visualDirection = `${(scene.visualDirection ?? '').trimEnd()} ${routing.suggestedTextElement}`.trim();
+          // PREPEND so it survives Recraft's 980-char prompt clamp (which truncates from the end).
+          scene.visualDirection = `${routing.suggestedTextElement} ${(scene.visualDirection ?? '').trimStart()}`.trim();
           injected++;
           console.log(`[ScriptParser] Brand text injected into scene ${scene.id}: "${routing.suggestedTextElement}"`);
         }

@@ -1222,7 +1222,8 @@ Rewrite both so the listed required literal subjects are clearly visible in the 
     });
     console.log(`[Pipeline S4] Scene ${scene.id} routing: useRecraft=${routing.useRecraft}, needsInjection=${routing.needsTextInjection}, reason="${routing.reason}"`);
     if (routing.needsTextInjection && routing.suggestedTextElement) {
-      scene.visualDirection = `${(scene.visualDirection ?? '').trimEnd()} ${routing.suggestedTextElement}`.trim();
+      // PREPEND so it survives Recraft's 980-char prompt clamp (which truncates from the end).
+      scene.visualDirection = `${routing.suggestedTextElement} ${(scene.visualDirection ?? '').trimStart()}`.trim();
       injected++;
       console.log(`[Pipeline S4] Brand text injected into scene ${scene.id}: "${routing.suggestedTextElement}"`);
     }
@@ -1302,6 +1303,41 @@ export async function runScriptPipeline(ctx: PipelineContext): Promise<PipelineR
   try {
     const { scenes: stage3Scenes, summary } = await stageThreeSceneWriting(ctx, brand, strategy, narrative);
     console.log(`[ScriptPipeline] Written ${stage3Scenes.length} scenes with narration and visual directions`);
+
+    // Deterministic duration recompute: trust the actual narration text over LLM-estimated durations.
+    // Uses 2.7 wps (typical TTS pacing) with a 2.5s minimum and 1.0s breathing-room buffer for hook/cta scenes.
+    // Then normalizes proportionally to ctx.targetDuration so the total stays on-budget.
+    try {
+      const WPS = 2.7;
+      const MIN_DUR = 2.5;
+      const BUFFER = 1.0;
+      const wordCount = (txt: string) => (txt || '').trim().split(/\s+/).filter(Boolean).length;
+      const rawDurations = stage3Scenes.map((s: any) => {
+        const wc = wordCount(s.narration);
+        const isShort = (s.type === 'hook' || s.type === 'cta');
+        const base = wc / WPS + (isShort ? BUFFER : BUFFER * 1.5);
+        return Math.max(MIN_DUR, base);
+      });
+      const rawTotal = rawDurations.reduce((a: number, b: number) => a + b, 0);
+      const target = ctx.targetDuration || rawTotal;
+      const scale = rawTotal > 0 ? target / rawTotal : 1;
+      const normalized = rawDurations.map((d: number) => Math.round(d * scale * 10) / 10);
+      // Distribute rounding drift onto the longest scene
+      const drift = Math.round((target - normalized.reduce((a: number, b: number) => a + b, 0)) * 10) / 10;
+      if (Math.abs(drift) > 0.05) {
+        const longestIdx = normalized.indexOf(Math.max(...normalized));
+        normalized[longestIdx] = Math.round((normalized[longestIdx] + drift) * 10) / 10;
+      }
+      stage3Scenes.forEach((s: any, i: number) => {
+        const before = s.duration;
+        s.duration = normalized[i];
+        const wc = wordCount(s.narration);
+        console.log(`[ScriptPipeline] Scene ${i + 1} duration recomputed: ${before}s → ${s.duration}s (${wc} words @ ${WPS}wps)`);
+      });
+      console.log(`[ScriptPipeline] Duration normalization: total ${normalized.reduce((a: number, b: number) => a + b, 0).toFixed(1)}s (target ${target}s, raw ${rawTotal.toFixed(1)}s)`);
+    } catch (durErr: any) {
+      console.warn(`[ScriptPipeline] Duration recompute skipped: ${durErr.message}`);
+    }
 
     let scenes = stage3Scenes;
     let styleRationale: string | undefined;
