@@ -1061,6 +1061,29 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
         selected = 'nano-banana-2';
       }
 
+      // Narration-aware Recraft routing: if narration references a known brand
+      // or named location, or the visual direction explicitly mentions a sign,
+      // override whatever the provider policy chose and send to Recraft V3
+      // (typography-accurate) so environmental signage renders legibly.
+      let lockedForText = false;
+      try {
+        const { evaluateSceneTextRouting } = await import('../utils/recraft-scene-policy');
+        const textRouting = evaluateSceneTextRouting({
+          narration: scene?.narration,
+          visualDirection: scene?.visualDirection ?? scene?.imagePrompt ?? enhancedPrompt,
+          sceneType: scene?.type || sceneType,
+        });
+        if (textRouting.useRecraft && selected !== 'recraft-v3-text' && selected !== 'recraft-v4-pro') {
+          console.log(`[SceneImage] Scene ${sceneId} → Recraft | reason: ${textRouting.reason}`);
+          selected = 'recraft-v3-text';
+        }
+        if (textRouting.useRecraft) {
+          lockedForText = true;
+        }
+      } catch (routingErr: any) {
+        console.warn(`[SceneImage] text-routing check failed for scene ${sceneId}: ${routingErr.message}`);
+      }
+
       // ===== Phase 43: FORCE NB2 when reference images exist =====
       // Other providers (Recraft, Flux) silently drop referenceImages, which
       // defeats product grounding and character continuity. If the scene has
@@ -1076,9 +1099,11 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
         console.log(`[GenerateImage] Scene ${sceneId}: ignoring product brandAssetUrl — ${_gateProduct.reason}`);
       }
       const sceneCharRef = (scene as any)?.characterRefImageUrl;
-      if ((sceneProductRef || sceneCharRef) && selected !== 'nano-banana-2') {
+      if ((sceneProductRef || sceneCharRef) && selected !== 'nano-banana-2' && !lockedForText) {
         console.log(`[GenerateImage] Phase 43: forcing nano-banana-2 (was ${selected}) — scene has reference images that other providers cannot consume`);
         selected = 'nano-banana-2';
+      } else if ((sceneProductRef || sceneCharRef) && lockedForText) {
+        console.log(`[GenerateImage] Scene ${sceneId}: keeping ${selected} for text accuracy despite reference images (Phase 43 override suppressed)`);
       }
 
       if (selected && selected !== 'flux-1.1-pro' && selected !== 'flux') {

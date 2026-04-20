@@ -3,6 +3,7 @@ import { brandContextService } from "./brand-context-service";
 import { projectInstructionsService } from "./project-instructions-service";
 import { getAnyBrandContext, getBrandNameOrDefault, type BrandContext } from "./brand-settings-service";
 import { getVisualArtPreset, isStylizedPreset } from "@shared/config/visual-art-presets";
+import { evaluateSceneTextRouting } from "../utils/recraft-scene-policy";
 
 export interface ParsedScene {
   id: string;
@@ -460,6 +461,27 @@ Return ONLY valid JSON matching this structure:
         if (enforced > 0) {
           console.log(`[ScriptParser] Style enforcement: prepended "${prefix}" to ${enforced}/${scenes.length} scenes missing style markers`);
         }
+      }
+
+      // Brand environmental-text injection: when narration references a known
+      // brand/location but the visual direction never mentions a sign or label,
+      // append a concrete signage element so downstream Recraft routing has
+      // real text to render. Keeps existing visual direction intact otherwise.
+      let injected = 0;
+      for (const scene of scenes) {
+        const routing = evaluateSceneTextRouting({
+          narration: scene.narration,
+          visualDirection: scene.visualDirection,
+          sceneType: scene.type,
+        });
+        if (routing.needsTextInjection && routing.suggestedTextElement) {
+          scene.visualDirection = `${(scene.visualDirection ?? '').trimEnd()} ${routing.suggestedTextElement}`.trim();
+          injected++;
+          console.log(`[ScriptParser] Brand text injected into scene ${scene.id}: "${routing.suggestedTextElement}"`);
+        }
+      }
+      if (injected > 0) {
+        console.log(`[ScriptParser] Brand text injection: updated ${injected}/${scenes.length} scenes`);
       }
 
       console.log(`[ScriptParser] Parsed ${scenes.length} scenes with brand awareness`);
