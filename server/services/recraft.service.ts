@@ -77,12 +77,24 @@ export class RecraftService {
     }
 
     const {
-      prompt,
       model = 'recraftv4',
       aspectRatio = '16:9',
       n = 1,
       responseFormat = 'url',
     } = options;
+
+    // Recraft hard-caps prompts at 1000 chars. Our enhanced cinematic prompts
+    // routinely exceed this, so clamp at a safe 980 to leave headroom for any
+    // trailing style suffixes. Truncate at the last space to avoid mid-word cuts.
+    const MAX_RECRAFT_PROMPT = 980;
+    let prompt = options.prompt;
+    if (prompt.length > MAX_RECRAFT_PROMPT) {
+      const hardCut = prompt.slice(0, MAX_RECRAFT_PROMPT);
+      const lastSpace = hardCut.lastIndexOf(' ');
+      const safeCut = lastSpace > MAX_RECRAFT_PROMPT - 80 ? hardCut.slice(0, lastSpace) : hardCut;
+      console.warn(`[Recraft] Prompt ${prompt.length} chars > ${MAX_RECRAFT_PROMPT} limit — truncating to ${safeCut.length}`);
+      prompt = safeCut;
+    }
 
     const isV4 = model.startsWith('recraftv4');
     if (isV4 && options.style) {
