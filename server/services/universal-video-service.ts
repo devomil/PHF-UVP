@@ -1137,13 +1137,35 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
         // actually renders the brand/sign words instead of a blank surface.
         let recraftTextLayout: Array<{ text: string; x: number; y: number; width?: number }> | undefined;
         if (selected === 'recraft-v3-text' && sanitized.extractedText.length > 0) {
-          recraftTextLayout = sanitized.extractedText.slice(0, 3).map((text, idx) => ({
-            text,
-            x: 0.25,
-            y: 0.30 + idx * 0.18,
-            width: 0.5,
-          }));
-          console.log(`[GenerateImage] Recraft text_layout: ${recraftTextLayout.map(t => `"${t.text}"`).join(', ')}`);
+          // Recraft rejects non-ASCII chars (em-dashes, smart quotes, NBSP, etc.)
+          // in text_layout. Normalize, strip to printable ASCII, then dedupe.
+          const cleaned = sanitized.extractedText
+            .map((t) => t
+              .normalize('NFKD')
+              .replace(/[\u2018\u2019\u201A\u201B]/g, "'")
+              .replace(/[\u201C\u201D\u201E\u201F]/g, '"')
+              .replace(/[\u2013\u2014\u2212]/g, '-')
+              .replace(/[^\x20-\x7E]/g, '')
+              .replace(/\s+/g, ' ')
+              .trim()
+            )
+            .filter((t) => t.length > 0);
+          const seen = new Set<string>();
+          const unique = cleaned.filter((t) => {
+            const k = t.toUpperCase();
+            if (seen.has(k)) return false;
+            seen.add(k);
+            return true;
+          });
+          if (unique.length > 0) {
+            recraftTextLayout = unique.slice(0, 3).map((text, idx) => ({
+              text,
+              x: 0.25,
+              y: 0.30 + idx * 0.18,
+              width: 0.5,
+            }));
+            console.log(`[GenerateImage] Recraft text_layout: ${recraftTextLayout.map(t => `"${t.text}"`).join(', ')}`);
+          }
         }
 
         const smartResult = await imageGenerationService.generateImage({
