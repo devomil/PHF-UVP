@@ -1164,7 +1164,7 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
               y: 0.30 + idx * 0.18,
               width: 0.5,
             }));
-            console.log(`[GenerateImage] Recraft text_layout: ${recraftTextLayout.map(t => `"${t.text}"`).join(', ')}`);
+            console.log(`[GenerateImage] Recraft text_layout: ${recraftTextLayout.map(t => `"${t.text}" [hex:${Buffer.from(t.text, 'utf8').toString('hex')}]`).join(', ')}`);
           }
         }
 
