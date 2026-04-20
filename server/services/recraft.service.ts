@@ -115,7 +115,24 @@ export class RecraftService {
     if (!isV4) {
       if (options.style) body.style = options.style;
       if (options.styleId) body.style_id = options.styleId;
-      if (options.textLayout?.length) body.text_layout = options.textLayout;
+      if (options.textLayout?.length) {
+        // Recraft V3 expects each entry in the form
+        //   { text: "...", bbox: [[x1,y1],[x2,y1],[x2,y2],[x1,y2]] }
+        // with all coords in the [0,1] range. Convert from our internal
+        // x/y/width/height representation.
+        body.text_layout = options.textLayout.map((t) => {
+          const x1 = Math.max(0, Math.min(1, t.x));
+          const y1 = Math.max(0, Math.min(1, t.y));
+          const w = Math.max(0.05, Math.min(1 - x1, t.width ?? 0.5));
+          const h = Math.max(0.05, Math.min(1 - y1, t.height ?? 0.12));
+          const x2 = Math.min(1, x1 + w);
+          const y2 = Math.min(1, y1 + h);
+          return {
+            text: t.text,
+            bbox: [[x1, y1], [x2, y1], [x2, y2], [x1, y2]],
+          };
+        });
+      }
     }
 
     console.log(`[Recraft] Generating with ${model} | ${aspectRatio} | ${prompt.substring(0, 80)}`);
