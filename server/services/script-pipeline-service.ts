@@ -1212,6 +1212,7 @@ Rewrite both so the listed required literal subjects are clearly visible in the 
   // or label, append a concrete signage element so downstream Recraft routing
   // has real text to render. Mirrors the logic in script-parser-service.ts so
   // scripts produced by the 4-stage pipeline also benefit.
+  console.log(`[Pipeline S4] Brand-injection scan starting on ${enhanced.length} scenes`);
   let injected = 0;
   for (const scene of enhanced) {
     const routing = evaluateSceneTextRouting({
@@ -1219,15 +1220,14 @@ Rewrite both so the listed required literal subjects are clearly visible in the 
       visualDirection: scene.visualDirection,
       sceneType: (scene as any).type,
     });
+    console.log(`[Pipeline S4] Scene ${scene.id} routing: useRecraft=${routing.useRecraft}, needsInjection=${routing.needsTextInjection}, reason="${routing.reason}"`);
     if (routing.needsTextInjection && routing.suggestedTextElement) {
       scene.visualDirection = `${(scene.visualDirection ?? '').trimEnd()} ${routing.suggestedTextElement}`.trim();
       injected++;
       console.log(`[Pipeline S4] Brand text injected into scene ${scene.id}: "${routing.suggestedTextElement}"`);
     }
   }
-  if (injected > 0) {
-    console.log(`[Pipeline S4] Brand text injection: updated ${injected}/${enhanced.length} scenes`);
-  }
+  console.log(`[Pipeline S4] Brand text injection: updated ${injected}/${enhanced.length} scenes`);
 
   return { scenes: enhanced, styleRationale };
 }
