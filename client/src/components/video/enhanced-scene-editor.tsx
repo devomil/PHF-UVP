@@ -15,6 +15,7 @@ import { VIDEO_PROVIDERS as PROVIDER_CONFIG, getMultiImageSupport, type MultiIma
 import { SCENE_CONTENT_TAGS, getSceneContentTag } from "@shared/config/scene-content-tags";
 import { getVisualArtPreset, getAllVisualArtPresets } from "@shared/config/visual-art-presets";
 import { CharacterProfilesPanel } from "./character-profiles-panel";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import type { CharacterProfile } from "@shared/video-types";
 
 const sceneTypes = [
@@ -113,6 +114,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
   const refVideoInputRef = useRef<HTMLInputElement>(null);
 
   const [regeneratingVisualDirection, setRegeneratingVisualDirection] = useState(false);
+  const [refLightboxUrl, setRefLightboxUrl] = useState<string | null>(null);
   const [rawLlmResponse, setRawLlmResponse] = useState<{visualDirection: string; microScenes: any[]} | null>(null);
   const [showRawResponse, setShowRawResponse] = useState(false);
 
@@ -1456,13 +1458,24 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
             <p className="text-[10px] mb-1.5" style={{ color: "var(--text-muted)" }}>For I2V (image-to-video)</p>
             <div className="flex items-center gap-1.5 flex-wrap">
               {imageUrl && (
-                <div className="relative w-10 h-10 rounded-md overflow-hidden border group" style={{ borderColor: "var(--border-subtle)" }}>
-                  <img src={imageUrl} alt="" className="w-full h-full object-cover" />
+                <div className="relative w-16 h-16 rounded-md overflow-hidden border group" style={{ borderColor: "var(--border-subtle)" }}>
+                  <button
+                    type="button"
+                    onClick={() => setRefLightboxUrl(imageUrl)}
+                    className="block w-full h-full"
+                    title="Click to expand"
+                    aria-label="Open reference image full size"
+                  >
+                    <img src={imageUrl} alt="Reference" className="w-full h-full object-cover transition-transform group-hover:scale-[1.03]" />
+                    <span className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/40 transition-colors">
+                      <Maximize2 className="w-4 h-4 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </span>
+                  </button>
                   <button
                     onClick={() => {
                       updateSceneMutation.mutate({ clearImage: true });
                     }}
-                    className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white flex items-center justify-center text-[8px] opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white flex items-center justify-center text-[8px] opacity-0 group-hover:opacity-100 transition-opacity z-10"
                     title="Remove reference image"
                   >
                     <X className="w-2.5 h-2.5" />
@@ -1470,9 +1483,20 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                 </div>
               )}
               {referenceImageUrls.map((url, i) => (
-                <div key={i} className="relative w-10 h-10 rounded-md overflow-hidden border group" style={{ borderColor: "rgba(124,58,237,0.3)" }}>
-                  <img src={url} alt="" className="w-full h-full object-cover" />
-                  <div className="absolute top-0 left-0 w-3.5 h-3.5 rounded-full bg-purple-600 text-white flex items-center justify-center text-[7px] font-bold">
+                <div key={i} className="relative w-16 h-16 rounded-md overflow-hidden border group" style={{ borderColor: "rgba(124,58,237,0.3)" }}>
+                  <button
+                    type="button"
+                    onClick={() => setRefLightboxUrl(url)}
+                    className="block w-full h-full"
+                    title="Click to expand"
+                    aria-label={`Open reference image ${i + 1} full size`}
+                  >
+                    <img src={url} alt={`Reference ${i + 1}`} className="w-full h-full object-cover transition-transform group-hover:scale-[1.03]" />
+                    <span className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/40 transition-colors">
+                      <Maximize2 className="w-4 h-4 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </span>
+                  </button>
+                  <div className="absolute top-0 left-0 w-3.5 h-3.5 rounded-full bg-purple-600 text-white flex items-center justify-center text-[7px] font-bold pointer-events-none">
                     {i + 1}
                   </div>
                   <button
@@ -1493,7 +1517,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
               <button
                 type="button"
                 onClick={() => refFileInputRef.current?.click()}
-                className="w-10 h-10 rounded-md border border-dashed flex items-center justify-center transition-colors hover:border-purple-500/40"
+                className="w-16 h-16 rounded-md border border-dashed flex items-center justify-center transition-colors hover:border-purple-500/40"
                 style={{ borderColor: "var(--border-subtle)", color: "var(--text-muted)" }}
                 title="Upload from computer"
               >
@@ -1502,11 +1526,26 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
               <button
                 type="button"
                 onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowLibrary(!showLibrary); }}
-                className="w-10 h-10 rounded-md border border-dashed flex items-center justify-center transition-colors hover:border-purple-500/40"
+                className="w-16 h-16 rounded-md border border-dashed flex items-center justify-center transition-colors hover:border-purple-500/40"
                 style={{ borderColor: showLibrary ? "rgba(124,58,237,0.4)" : "var(--border-subtle)", color: showLibrary ? "rgb(124,58,237)" : "var(--text-muted)" }}
                 title="Browse asset library"
               >
                 <FolderOpen className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => regenImageMutation.mutate()}
+                disabled={isRegenerating}
+                className="w-16 h-16 rounded-md border border-dashed flex flex-col items-center justify-center gap-0.5 transition-colors hover:border-purple-500/40 disabled:opacity-50"
+                style={{ borderColor: "rgba(124,58,237,0.3)", color: "rgb(192,132,252)" }}
+                title="Generate a new reference image with AI from the visual direction"
+              >
+                {regenImageMutation.isPending ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Sparkles className="w-3.5 h-3.5" />
+                )}
+                <span className="text-[8px] font-medium leading-none">AI {imageUrl || referenceImageUrls.length > 0 ? "Regen" : "Gen"}</span>
               </button>
             </div>
             {showLibrary && (
@@ -3236,6 +3275,17 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
           silentSaveMutation.mutate({ artPresetId: artStyleId });
         }}
       />
+      <Dialog open={!!refLightboxUrl} onOpenChange={(open) => { if (!open) setRefLightboxUrl(null); }}>
+        <DialogContent className="max-w-4xl p-2 bg-black/95 border-none">
+          {refLightboxUrl && (
+            <img
+              src={refLightboxUrl}
+              alt="Reference (full size)"
+              className="w-full h-auto max-h-[85vh] object-contain rounded"
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
