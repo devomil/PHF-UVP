@@ -48,6 +48,7 @@ interface PiAPIGenerationResult {
   error?: string;
   generationTimeMs?: number;
   taskId?: string;
+  providerUsed?: string;
 }
 
 interface PiAPIGenerationOptions {
@@ -111,7 +112,8 @@ class PiAPIVideoService {
     console.log(`[PiAPI:${options.model}] Prompt: ${options.prompt.substring(0, 80)}...`);
 
     try {
-      const taskResponse = await this.createTask(options, modelConfig);
+      const requestBody = this.buildRequestBody(options, modelConfig);
+      const taskResponse = await this.createTask(options, modelConfig, requestBody);
       
       if (!taskResponse.success || !taskResponse.taskId) {
         return {
@@ -123,7 +125,33 @@ class PiAPIVideoService {
 
       console.log(`[PiAPI:${options.model}] Task created: ${taskResponse.taskId}`);
 
-      const result = await this.pollForCompletion(taskResponse.taskId, options.model);
+      let result = await this.pollForCompletion(taskResponse.taskId, options.model);
+      let providerUsed: string | undefined;
+      let activeTaskId = taskResponse.taskId;
+
+      // ===== Queue-stall auto-fallback for Seedance 2 GA =====
+      // If the GA queue is congested and we bail out after the pending-stall
+      // threshold, transparently resubmit the same payload against the
+      // seedance-2-fast variant. Functionally equivalent to a maintenance
+      // outage from the user's perspective.
+      if (this.shouldFallbackToSeedanceFast(result, requestBody)) {
+        const fastBody = { ...requestBody, task_type: 'seedance-2-fast' };
+        console.warn('[CinematicFlow] seedance-2 queue stall — auto-falling back to seedance-2-fast');
+        const fastSubmit = await this.createTask(options, modelConfig, fastBody);
+        if (fastSubmit.success && fastSubmit.taskId) {
+          console.log(`[PiAPI:${options.model}] Fast-variant task created: ${fastSubmit.taskId}`);
+          const retryResult = await this.pollForCompletion(fastSubmit.taskId, 'seedance-2.0-fast');
+          if (retryResult.success && retryResult.videoUrl) {
+            result = retryResult;
+            providerUsed = 'seedance-2-fast (fallback)';
+            activeTaskId = fastSubmit.taskId;
+          } else {
+            console.warn(`[PiAPI:${options.model}] Fast-variant fallback also failed: ${retryResult.error}`);
+          }
+        } else {
+          console.warn(`[PiAPI:${options.model}] Fast-variant resubmit failed: ${fastSubmit.error}`);
+        }
+      }
       
       if (!result.success || !result.videoUrl) {
         return {
@@ -139,7 +167,7 @@ class PiAPIVideoService {
       const provider = AI_VIDEO_PROVIDERS[options.model];
       const cost = options.duration * (provider?.costPerSecond || 0.03);
 
-      console.log(`[PiAPI:${options.model}] Complete! Time: ${(generationTimeMs / 1000).toFixed(1)}s, Cost: $${cost.toFixed(3)}`);
+      console.log(`[PiAPI:${options.model}] Complete! Time: ${(generationTimeMs / 1000).toFixed(1)}s, Cost: $${cost.toFixed(3)}${providerUsed ? ` [${providerUsed}]` : ''}`);
 
       return {
         success: true,
@@ -148,7 +176,8 @@ class PiAPIVideoService {
         duration: options.duration,
         cost,
         generationTimeMs,
-        taskId: taskResponse.taskId,
+        taskId: activeTaskId,
+        providerUsed,
       };
 
     } catch (error: any) {
@@ -161,12 +190,28 @@ class PiAPIVideoService {
     }
   }
 
+  private isQueueStallError(err?: string): boolean {
+    return !!err && /stuck in (pending|queued?) queue/i.test(err);
+  }
+
+  private shouldFallbackToSeedanceFast(
+    result: { success: boolean; error?: string },
+    requestBody: any,
+  ): boolean {
+    if (result.success) return false;
+    if (!this.isQueueStallError(result.error)) return false;
+    // Only auto-fallback FROM seedance-2 GA. seedance-2-fast is already the
+    // fast variant (no further fallback). Preview variants are also terminal.
+    return requestBody?.task_type === 'seedance-2';
+  }
+
   private async createTask(
     options: PiAPIGenerationOptions,
-    modelConfig: ModelConfig
+    modelConfig: ModelConfig,
+    bodyOverride?: any
   ): Promise<{ success: boolean; taskId?: string; error?: string }> {
     try {
-      const requestBody = this.buildRequestBody(options, modelConfig);
+      const requestBody = bodyOverride ?? this.buildRequestBody(options, modelConfig);
       
       const response = await fetch(`${this.baseUrl}/task`, {
         method: 'POST',
@@ -1014,7 +1059,38 @@ class PiAPIVideoService {
 
       console.log(`[PiAPI:${options.model}] I2V task created: ${taskId}`);
 
-      const result = await this.pollForCompletion(taskId, options.model);
+      let result = await this.pollForCompletion(taskId, options.model);
+      let providerUsed: string | undefined;
+      let activeTaskId = taskId;
+
+      // ===== Queue-stall auto-fallback for Seedance 2 GA (I2V mirror) =====
+      if (this.shouldFallbackToSeedanceFast(result, requestBody)) {
+        const fastBody = { ...(requestBody as any), task_type: 'seedance-2-fast' };
+        console.warn('[CinematicFlow] seedance-2 queue stall — auto-falling back to seedance-2-fast (I2V)');
+        const fastResp = await fetch(`${this.baseUrl}/task`, {
+          method: 'POST',
+          headers: { 'X-API-Key': this.apiKey, 'Content-Type': 'application/json' },
+          body: JSON.stringify(fastBody),
+        });
+        if (fastResp.ok) {
+          const fastData = await fastResp.json();
+          const fastTaskId = fastData.data?.task_id || fastData.task_id;
+          if (fastTaskId) {
+            console.log(`[PiAPI:${options.model}] I2V Fast-variant task created: ${fastTaskId}`);
+            const retryResult = await this.pollForCompletion(fastTaskId, 'seedance-2.0-fast');
+            if (retryResult.success && retryResult.videoUrl) {
+              result = retryResult;
+              providerUsed = 'seedance-2-fast (fallback)';
+              activeTaskId = fastTaskId;
+            } else {
+              console.warn(`[PiAPI:${options.model}] I2V Fast-variant fallback also failed: ${retryResult.error}`);
+            }
+          }
+        } else {
+          const errText = await fastResp.text();
+          console.warn(`[PiAPI:${options.model}] I2V Fast-variant resubmit HTTP ${fastResp.status}: ${errText.slice(0, 200)}`);
+        }
+      }
       
       if (!result.success || !result.videoUrl) {
         return {
@@ -1030,7 +1106,7 @@ class PiAPIVideoService {
       const provider = AI_VIDEO_PROVIDERS[options.model];
       const cost = options.duration * (provider?.costPerSecond || 0.03);
 
-      console.log(`[PiAPI:${options.model}] I2V complete! Time: ${(generationTimeMs / 1000).toFixed(1)}s, Cost: $${cost.toFixed(3)}`);
+      console.log(`[PiAPI:${options.model}] I2V complete! Time: ${(generationTimeMs / 1000).toFixed(1)}s, Cost: $${cost.toFixed(3)}${providerUsed ? ` [${providerUsed}]` : ''}`);
 
       return {
         success: true,
@@ -1039,7 +1115,8 @@ class PiAPIVideoService {
         duration: options.duration,
         cost,
         generationTimeMs,
-        taskId,
+        taskId: activeTaskId,
+        providerUsed,
       };
 
     } catch (error: any) {
