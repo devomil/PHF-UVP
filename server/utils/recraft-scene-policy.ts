@@ -53,25 +53,31 @@ export function evaluateSceneTextRouting(scene: {
   const visualDir = (scene.visualDirection ?? scene.imagePrompt ?? '').toLowerCase();
   const sceneType = scene.sceneType ?? '';
 
-  // Pre-compute signals so hard-route types can still get brand injection.
+  // Pre-compute signals so we can prioritize narration-brand over generic
+  // visual-text keywords (which fire on common words like "title", "label",
+  // "reading", "brand" that are cinematography vocabulary, not real signage).
   const visualHasTextKeyword = VISUAL_TEXT_KEYWORDS.some(k => visualDir.includes(k));
   const detectedBrand = BRAND_NAMES.find(name => narration.includes(name));
+  const visualMentionsBrand = detectedBrand ? visualDir.includes(detectedBrand) : false;
   const isHardRoute = HARD_ROUTE_SCENE_TYPES.has(sceneType);
 
-  // Hard-route scene types (cta, title_card, etc.) always use Recraft. If the
-  // narration also mentions a known brand and the visual direction has no
-  // existing text keyword, inject environmental signage so Recraft has
-  // something concrete to render — CTAs are the prime place for this.
+  // Strongest signal: narration explicitly names a known brand. Inject a
+  // concrete signage element unless the visual direction already names that
+  // exact brand (in which case Stage 4 has already specified what to render).
+  if (detectedBrand && !visualMentionsBrand) {
+    const brandLabel = resolveBrandLabel(detectedBrand);
+    const reasonPrefix = isHardRoute ? `scene type "${sceneType}" + ` : '';
+    return {
+      useRecraft: true,
+      reason: `${reasonPrefix}narration references brand "${detectedBrand}" — injecting environmental signage`,
+      needsTextInjection: true,
+      suggestedTextElement: `A handcrafted wooden sign reading "${brandLabel}" is visible on the wall.`,
+    };
+  }
+
+  // Hard-route scene types (cta, title_card, etc.) always use Recraft even
+  // without brand injection (e.g. CTAs that don't name the brand by accident).
   if (isHardRoute) {
-    if (detectedBrand && !visualHasTextKeyword) {
-      const brandLabel = resolveBrandLabel(detectedBrand);
-      return {
-        useRecraft: true,
-        reason: `scene type "${sceneType}" + narration brand "${detectedBrand}" — hard route + injecting signage`,
-        needsTextInjection: true,
-        suggestedTextElement: `A handcrafted wooden sign reading "${brandLabel}" is visible on the wall.`,
-      };
-    }
     return {
       useRecraft: true,
       reason: `scene type "${sceneType}" always uses Recraft`,
@@ -84,16 +90,6 @@ export function evaluateSceneTextRouting(scene: {
       useRecraft: true,
       reason: 'visual direction contains text/sign keyword',
       needsTextInjection: false,
-    };
-  }
-
-  if (detectedBrand) {
-    const brandLabel = resolveBrandLabel(detectedBrand);
-    return {
-      useRecraft: true,
-      reason: `narration references brand "${detectedBrand}" — injecting environmental signage`,
-      needsTextInjection: true,
-      suggestedTextElement: `A handcrafted wooden sign reading "${brandLabel}" is visible on the wall.`,
     };
   }
 
