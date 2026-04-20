@@ -66,59 +66,51 @@ export function sanitizePromptForAI(
   const extractedLogos: string[] = [];
   const warnings: string[] = [];
 
-  // === STEP 1: Extract and remove text overlay requests ===
-  // Skipped entirely when preserveText=true so typography-capable models (Recraft V3)
-  // receive the full sign/quote/caption instructions verbatim.
+  // === STEP 1: Extract text overlay / sign / quoted requests ===
+  // Extraction ALWAYS runs (even under preserveText) so the caller still
+  // receives `extractedText` for downstream typography hints (e.g. Recraft V3
+  // text_layout). Stripping the matched fragments from `cleanPrompt` is gated
+  // on !preserveText — Recraft keeps the original sentences verbatim.
   let match: RegExpExecArray | null;
+
+  const extractionPatterns: RegExp[] = [
+    // "text overlay with X" / "overlay showing X"
+    /(?:text\s+)?overlay\s+(?:with|showing|displaying)\s+["']?([^"',.]+)["']?/gi,
+    // "text saying X" / "showing text X" / "text reading X"
+    /(?:showing\s+)?text\s+(?:with|saying|reading|displaying)\s+["']?([^"',.]+)["']?/gi,
+    // 'X' text / "X" title / "X" heading
+    /["']([^"']+)["']\s*(?:text|title|heading|caption|label)/gi,
+    // text: "X" / heading "X"
+    /(?:text|title|heading|caption|label)\s*(?::|of|with|showing|reading)?\s*["']([^"']+)["']/gi,
+    // sign reading "X" / sign saying X — the brand-injection sentence
+    /(?:with\s+)?(?:a\s+)?sign\s+(?:reading|saying|displaying|showing)\s+["']?([^"',.]+)["']?/gi,
+  ];
+
+  for (const pattern of extractionPatterns) {
+    pattern.lastIndex = 0;
+    while ((match = pattern.exec(visualDirection)) !== null) {
+      const text = match[1]?.trim();
+      if (text && text.length > 0) extractedText.push(text);
+      if (!preserveText) removedElements.push(match[0]);
+    }
+    if (!preserveText) {
+      pattern.lastIndex = 0;
+      cleanPrompt = cleanPrompt.replace(pattern, '');
+    }
+  }
+
+  // Standalone quoted text (likely meant for overlay) — only extract when
+  // it doesn't look like a descriptive fragment.
+  const standaloneQuotedPattern = /["']([^"']{3,50})["']/g;
+  while ((match = standaloneQuotedPattern.exec(visualDirection)) !== null) {
+    const text = match[1].trim();
+    const lower = text.toLowerCase();
+    if (!lower.includes(' of ') && !lower.includes(' with ') && !lower.includes(' in ')) {
+      extractedText.push(text);
+      if (!preserveText) removedElements.push(match[0]);
+    }
+  }
   if (!preserveText) {
-    // Pattern: "text overlay with X" or "text showing X" or "overlay with X"
-    const textOverlayPattern = /(?:text\s+)?overlay\s+(?:with|showing|displaying)\s+["']?([^"',.]+)["']?/gi;
-    while ((match = textOverlayPattern.exec(visualDirection)) !== null) {
-      const text = match[1].trim();
-      if (text.length > 0) extractedText.push(text);
-      removedElements.push(match[0]);
-    }
-    cleanPrompt = cleanPrompt.replace(textOverlayPattern, '');
-
-    // Pattern: "text with X" or "showing text X" or "text saying X"
-    const textWithPattern = /(?:showing\s+)?text\s+(?:with|saying|reading|displaying)\s+["']?([^"',.]+)["']?/gi;
-    while ((match = textWithPattern.exec(visualDirection)) !== null) {
-      const text = match[1].trim();
-      if (text.length > 0) extractedText.push(text);
-      removedElements.push(match[0]);
-    }
-    cleanPrompt = cleanPrompt.replace(textWithPattern, '');
-
-    // Pattern: quoted text that should be displayed (before text/title/heading words)
-    const quotedTextBeforePattern = /["']([^"']+)["']\s*(?:text|title|heading|caption|label)/gi;
-    while ((match = quotedTextBeforePattern.exec(visualDirection)) !== null) {
-      const text = match[1].trim();
-      if (text.length > 0) extractedText.push(text);
-      removedElements.push(match[0]);
-    }
-    cleanPrompt = cleanPrompt.replace(quotedTextBeforePattern, '');
-
-    // Pattern: text/title/heading followed by quoted text
-    const quotedTextAfterPattern = /(?:text|title|heading|caption|label)\s*(?::|of|with|showing|reading)?\s*["']([^"']+)["']/gi;
-    while ((match = quotedTextAfterPattern.exec(visualDirection)) !== null) {
-      const text = match[1].trim();
-      if (text.length > 0) extractedText.push(text);
-      removedElements.push(match[0]);
-    }
-    cleanPrompt = cleanPrompt.replace(quotedTextAfterPattern, '');
-
-    // Pattern: standalone quoted text (likely meant for overlay)
-    const standaloneQuotedPattern = /["']([^"']{3,50})["']/g;
-    while ((match = standaloneQuotedPattern.exec(cleanPrompt)) !== null) {
-      const text = match[1].trim();
-      // Only extract if it looks like display text (not part of a description)
-      if (!text.toLowerCase().includes(' of ') &&
-          !text.toLowerCase().includes(' with ') &&
-          !text.toLowerCase().includes(' in ')) {
-        extractedText.push(text);
-        removedElements.push(match[0]);
-      }
-    }
     cleanPrompt = cleanPrompt.replace(standaloneQuotedPattern, '');
   }
 

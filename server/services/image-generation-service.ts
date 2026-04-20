@@ -110,6 +110,9 @@ interface ImageGenerationOptions {
   /** Optional URLs of reference images. Currently only consumed by
    *  Nano Banana 2 (Gemini-conditioned). Capped at 14 images. */
   referenceImages?: string[];
+  /** Optional explicit text-layout hints forwarded only to Recraft V3
+   *  (typography-accurate). Other providers ignore this field. */
+  textLayout?: Array<{ text: string; x: number; y: number; width?: number; height?: number; font_size?: number }>;
 }
 
 interface I2IRequest {
@@ -630,6 +633,7 @@ class ImageGenerationService {
         prompt: options.prompt,
         model: provider.modelId as RecraftModel,
         aspectRatio: aspectRatio as any,
+        ...(options.textLayout && options.textLayout.length > 0 ? { textLayout: options.textLayout } : {}),
       }, `images/recraft/${Date.now()}`);
 
       return {

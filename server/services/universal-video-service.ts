@@ -1003,10 +1003,27 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
     }
 
     const falKey = process.env.FAL_KEY;
-    
+
+    // Decide text routing FIRST so we can ask the sanitizer to preserve
+    // signage/typography sentences when we're going to a model that can
+    // actually render them (Recraft V3). Otherwise the sanitizer strips
+    // the brand-sign sentence and Recraft receives a prompt with no
+    // signage instruction.
+    let earlyTextRouting: { useRecraft: boolean; reason: string } = { useRecraft: false, reason: '' };
+    try {
+      const { evaluateSceneTextRouting } = await import('../utils/recraft-scene-policy');
+      earlyTextRouting = evaluateSceneTextRouting({
+        narration: scene?.narration,
+        visualDirection: scene?.visualDirection ?? scene?.imagePrompt ?? prompt,
+        sceneType: scene?.type || sceneType,
+      });
+    } catch (routingErr: any) {
+      console.warn(`[GenerateImage] early text-routing check failed for scene ${sceneId}: ${routingErr.message}`);
+    }
+
     // Phase 11A: Sanitize prompt to remove text/logo requests before AI generation
-    const sanitized = sanitizePromptForAI(prompt, sceneType);
-    console.log(`[GenerateImage] Sanitized prompt for scene ${sceneId}`);
+    const sanitized = sanitizePromptForAI(prompt, sceneType, { preserveText: earlyTextRouting.useRecraft });
+    console.log(`[GenerateImage] Sanitized prompt for scene ${sceneId} (preserveText=${earlyTextRouting.useRecraft})`);
     console.log(`[GenerateImage] Removed elements: ${sanitized.removedElements.length}`);
     console.log(`[GenerateImage] Extracted text for overlays: ${sanitized.extractedText.join(', ') || 'none'}`);
     
@@ -1066,22 +1083,12 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
       // override whatever the provider policy chose and send to Recraft V3
       // (typography-accurate) so environmental signage renders legibly.
       let lockedForText = false;
-      try {
-        const { evaluateSceneTextRouting } = await import('../utils/recraft-scene-policy');
-        const textRouting = evaluateSceneTextRouting({
-          narration: scene?.narration,
-          visualDirection: scene?.visualDirection ?? scene?.imagePrompt ?? enhancedPrompt,
-          sceneType: scene?.type || sceneType,
-        });
-        if (textRouting.useRecraft && selected !== 'recraft-v3-text' && selected !== 'recraft-v4-pro') {
-          console.log(`[SceneImage] Scene ${sceneId} → Recraft | reason: ${textRouting.reason}`);
+      if (earlyTextRouting.useRecraft) {
+        if (selected !== 'recraft-v3-text' && selected !== 'recraft-v4-pro') {
+          console.log(`[SceneImage] Scene ${sceneId} → Recraft | reason: ${earlyTextRouting.reason}`);
           selected = 'recraft-v3-text';
         }
-        if (textRouting.useRecraft) {
-          lockedForText = true;
-        }
-      } catch (routingErr: any) {
-        console.warn(`[SceneImage] text-routing check failed for scene ${sceneId}: ${routingErr.message}`);
+        lockedForText = true;
       }
 
       // ===== Phase 43: FORCE NB2 when reference images exist =====
@@ -1125,6 +1132,20 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
           console.log(`[GenerateImage] Scene ${sceneId} attaching character reference: ${charRef.substring(0, 80)}`);
         }
 
+        // When routing to Recraft V3 with extracted text from sanitizer,
+        // forward a coarse default text-layout so the typography model
+        // actually renders the brand/sign words instead of a blank surface.
+        let recraftTextLayout: Array<{ text: string; x: number; y: number; width?: number }> | undefined;
+        if (selected === 'recraft-v3-text' && sanitized.extractedText.length > 0) {
+          recraftTextLayout = sanitized.extractedText.slice(0, 3).map((text, idx) => ({
+            text,
+            x: 0.25,
+            y: 0.30 + idx * 0.18,
+            width: 0.5,
+          }));
+          console.log(`[GenerateImage] Recraft text_layout: ${recraftTextLayout.map(t => `"${t.text}"`).join(', ')}`);
+        }
+
         const smartResult = await imageGenerationService.generateImage({
           prompt: enhancedPrompt,
           provider: selected,
@@ -1132,6 +1153,7 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
           width: imgDims.width,
           height: imgDims.height,
           ...(refImageList.length > 0 ? { referenceImages: refImageList } : {}),
+          ...(recraftTextLayout ? { textLayout: recraftTextLayout } : {}),
         });
         if (smartResult?.url) {
           return {
