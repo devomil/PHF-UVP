@@ -138,6 +138,7 @@ export class RecraftService {
     console.log(`[Recraft] Generating with ${model} | ${aspectRatio} | ${prompt.substring(0, 80)}`);
     if (options.textLayout?.length) {
       console.log(`[Recraft] text_layout: ${options.textLayout.length} text element(s)`);
+      console.log(`[Recraft] FULL BODY text_layout: ${JSON.stringify(body.text_layout)}`);
     }
 
     const startTime = Date.now();
