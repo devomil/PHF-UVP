@@ -81,11 +81,14 @@ export function evaluateSceneTextRouting(scene: {
     };
   }
 
+  // Location words alone are too broad ("growing up on a farm" shouldn't
+  // force Recraft). Only route on location when a brand name is also present
+  // — otherwise the mention is incidental, not environmental signage.
   const narrationHasLocation = LOCATION_WORDS.some(w => narration.includes(w));
   if (narrationHasLocation) {
     return {
-      useRecraft: true,
-      reason: 'narration references a named location — may contain environmental text',
+      useRecraft: false,
+      reason: 'narration has a location word but no brand name — not enough signal',
       needsTextInjection: false,
     };
   }
