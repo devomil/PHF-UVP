@@ -3503,9 +3503,9 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
       const projectVisualStyle = (project as any).visualStyle || 'lifestyle';
       const projectTitle = project.title || '';
       const projectArtPresetId = (project as any).artPresetId || project.artPresetId;
-      const artPreset = projectArtPresetId ? getVisualArtPreset(projectArtPresetId) : null;
-      if (artPreset) {
-        console.log(`[Assets] Art preset active for visual directions: ${artPreset.name}`);
+      const projectArtPreset = projectArtPresetId ? getVisualArtPreset(projectArtPresetId) : null;
+      if (projectArtPreset) {
+        console.log(`[Assets] Project default art preset for visual directions: ${projectArtPreset.name} (per-scene overrides honored)`);
       }
       
       let brandContextStr = '';
@@ -3536,8 +3536,12 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
           }
           
           try {
+            // Per-scene art preset resolution: scene override beats project default,
+            // so mixed-style projects generate prompts in the correct style per scene.
+            const sceneArtPresetId = (scene as any).artPresetId || projectArtPresetId;
+            const artPreset = sceneArtPresetId ? getVisualArtPreset(sceneArtPresetId) : projectArtPreset;
             const isStylizedArtPreset = isStylizedPreset(artPreset?.id);
-            
+
             const lockedCharProfilesForPrompt = ((updatedProject as any).characters || [])
               .filter((c: any) => c.locked && c.referenceImageUrl)
               .sort((a: any, b: any) => (a.sortOrder || 0) - (b.sortOrder || 0));

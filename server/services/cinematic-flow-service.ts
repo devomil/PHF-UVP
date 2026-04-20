@@ -201,12 +201,21 @@ export async function runCinematicFlow(
       status.currentScene = scene.id;
 
       try { try {
-        const sceneArtPresetId = scene.artPresetId || (projectData as any).progress?.artPresetId || (projectData as any).artPresetId;
+        const projectArtPresetId = (projectData as any).progress?.artPresetId || (projectData as any).artPresetId;
+        const sceneArtPresetId = scene.artPresetId || projectArtPresetId;
         const artPreset = sceneArtPresetId ? getVisualArtPreset(sceneArtPresetId) : null;
 
-        if (i > 0 && scenes[i - 1]?.artPresetId && scene.artPresetId && scenes[i - 1].artPresetId !== scene.artPresetId) {
-          console.log(`[CinematicFlow] Style boundary at scene ${i} (${scenes[i - 1].artPresetId} → ${scene.artPresetId}) — breaking chain`);
-          previousLastFrameUrl = undefined;
+        // Compare EFFECTIVE style ids (per-scene override OR project default), so a
+        // scene that overrides the project default still triggers a boundary against
+        // an adjacent scene that inherits.
+        if (i > 0) {
+          const prev = scenes[i - 1];
+          const prevEffective = prev?.artPresetId || projectArtPresetId;
+          const currEffective = scene.artPresetId || projectArtPresetId;
+          if (prevEffective && currEffective && prevEffective !== currEffective) {
+            console.log(`[CinematicFlow] Style boundary at scene ${i} (${prevEffective} → ${currEffective}) — breaking chain`);
+            previousLastFrameUrl = undefined;
+          }
         }
 
         const sceneImagePrompt = scene.imagePrompt || scene.visualDirection || 'Professional cinematic scene';

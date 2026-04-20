@@ -32,9 +32,21 @@ export interface SanitizedPrompt {
  * Sanitize a visual direction prompt before sending to AI providers.
  * Removes text/logo requests and adds explicit "no text" instructions.
  */
+export interface SanitizeOptions {
+  /**
+   * When true, KEEPS sign/signage/lettering/quoted-text instructions in the
+   * prompt instead of stripping them. Use this for typography-capable
+   * generators (Recraft V3, GPT-Image-1) that are *meant* to render legible
+   * text — stripping the instructions for these models defeats the whole
+   * purpose of routing to them.
+   */
+  preserveText?: boolean;
+}
+
 export function sanitizePromptForAI(
   visualDirection: string,
-  sceneType: string
+  sceneType: string,
+  options: SanitizeOptions = {}
 ): SanitizedPrompt {
   if (!visualDirection) {
     return {
@@ -47,6 +59,7 @@ export function sanitizePromptForAI(
     };
   }
 
+  const preserveText = options.preserveText === true;
   let cleanPrompt = visualDirection;
   const removedElements: string[] = [];
   const extractedText: string[] = [];
@@ -54,57 +67,60 @@ export function sanitizePromptForAI(
   const warnings: string[] = [];
 
   // === STEP 1: Extract and remove text overlay requests ===
-  
-  // Pattern: "text overlay with X" or "text showing X" or "overlay with X"
-  const textOverlayPattern = /(?:text\s+)?overlay\s+(?:with|showing|displaying)\s+["']?([^"',.]+)["']?/gi;
-  let match;
-  while ((match = textOverlayPattern.exec(visualDirection)) !== null) {
-    const text = match[1].trim();
-    if (text.length > 0) extractedText.push(text);
-    removedElements.push(match[0]);
-  }
-  cleanPrompt = cleanPrompt.replace(textOverlayPattern, '');
-
-  // Pattern: "text with X" or "showing text X" or "text saying X"
-  const textWithPattern = /(?:showing\s+)?text\s+(?:with|saying|reading|displaying)\s+["']?([^"',.]+)["']?/gi;
-  while ((match = textWithPattern.exec(visualDirection)) !== null) {
-    const text = match[1].trim();
-    if (text.length > 0) extractedText.push(text);
-    removedElements.push(match[0]);
-  }
-  cleanPrompt = cleanPrompt.replace(textWithPattern, '');
-
-  // Pattern: quoted text that should be displayed (before text/title/heading words)
-  const quotedTextBeforePattern = /["']([^"']+)["']\s*(?:text|title|heading|caption|label)/gi;
-  while ((match = quotedTextBeforePattern.exec(visualDirection)) !== null) {
-    const text = match[1].trim();
-    if (text.length > 0) extractedText.push(text);
-    removedElements.push(match[0]);
-  }
-  cleanPrompt = cleanPrompt.replace(quotedTextBeforePattern, '');
-
-  // Pattern: text/title/heading followed by quoted text
-  const quotedTextAfterPattern = /(?:text|title|heading|caption|label)\s*(?::|of|with|showing|reading)?\s*["']([^"']+)["']/gi;
-  while ((match = quotedTextAfterPattern.exec(visualDirection)) !== null) {
-    const text = match[1].trim();
-    if (text.length > 0) extractedText.push(text);
-    removedElements.push(match[0]);
-  }
-  cleanPrompt = cleanPrompt.replace(quotedTextAfterPattern, '');
-
-  // Pattern: standalone quoted text (likely meant for overlay)
-  const standaloneQuotedPattern = /["']([^"']{3,50})["']/g;
-  while ((match = standaloneQuotedPattern.exec(cleanPrompt)) !== null) {
-    const text = match[1].trim();
-    // Only extract if it looks like display text (not part of a description)
-    if (!text.toLowerCase().includes(' of ') && 
-        !text.toLowerCase().includes(' with ') &&
-        !text.toLowerCase().includes(' in ')) {
-      extractedText.push(text);
+  // Skipped entirely when preserveText=true so typography-capable models (Recraft V3)
+  // receive the full sign/quote/caption instructions verbatim.
+  let match: RegExpExecArray | null;
+  if (!preserveText) {
+    // Pattern: "text overlay with X" or "text showing X" or "overlay with X"
+    const textOverlayPattern = /(?:text\s+)?overlay\s+(?:with|showing|displaying)\s+["']?([^"',.]+)["']?/gi;
+    while ((match = textOverlayPattern.exec(visualDirection)) !== null) {
+      const text = match[1].trim();
+      if (text.length > 0) extractedText.push(text);
       removedElements.push(match[0]);
     }
+    cleanPrompt = cleanPrompt.replace(textOverlayPattern, '');
+
+    // Pattern: "text with X" or "showing text X" or "text saying X"
+    const textWithPattern = /(?:showing\s+)?text\s+(?:with|saying|reading|displaying)\s+["']?([^"',.]+)["']?/gi;
+    while ((match = textWithPattern.exec(visualDirection)) !== null) {
+      const text = match[1].trim();
+      if (text.length > 0) extractedText.push(text);
+      removedElements.push(match[0]);
+    }
+    cleanPrompt = cleanPrompt.replace(textWithPattern, '');
+
+    // Pattern: quoted text that should be displayed (before text/title/heading words)
+    const quotedTextBeforePattern = /["']([^"']+)["']\s*(?:text|title|heading|caption|label)/gi;
+    while ((match = quotedTextBeforePattern.exec(visualDirection)) !== null) {
+      const text = match[1].trim();
+      if (text.length > 0) extractedText.push(text);
+      removedElements.push(match[0]);
+    }
+    cleanPrompt = cleanPrompt.replace(quotedTextBeforePattern, '');
+
+    // Pattern: text/title/heading followed by quoted text
+    const quotedTextAfterPattern = /(?:text|title|heading|caption|label)\s*(?::|of|with|showing|reading)?\s*["']([^"']+)["']/gi;
+    while ((match = quotedTextAfterPattern.exec(visualDirection)) !== null) {
+      const text = match[1].trim();
+      if (text.length > 0) extractedText.push(text);
+      removedElements.push(match[0]);
+    }
+    cleanPrompt = cleanPrompt.replace(quotedTextAfterPattern, '');
+
+    // Pattern: standalone quoted text (likely meant for overlay)
+    const standaloneQuotedPattern = /["']([^"']{3,50})["']/g;
+    while ((match = standaloneQuotedPattern.exec(cleanPrompt)) !== null) {
+      const text = match[1].trim();
+      // Only extract if it looks like display text (not part of a description)
+      if (!text.toLowerCase().includes(' of ') &&
+          !text.toLowerCase().includes(' with ') &&
+          !text.toLowerCase().includes(' in ')) {
+        extractedText.push(text);
+        removedElements.push(match[0]);
+      }
+    }
+    cleanPrompt = cleanPrompt.replace(standaloneQuotedPattern, '');
   }
-  cleanPrompt = cleanPrompt.replace(standaloneQuotedPattern, '');
 
   // === STEP 2: Extract and remove logo requests ===
 
@@ -161,50 +177,52 @@ export function sanitizePromptForAI(
   }
 
   // === STEP 4: Remove generic text/title/headline/label requests ===
+  // Also skipped under preserveText so Recraft keeps signage/captions intact.
+  if (!preserveText) {
+    const genericTextPatterns = [
+      /(?:with\s+)?(?:title|headline|heading|subtitle)\s*(?:overlay)?/gi,
+      /(?:with\s+)?(?:caption|badge)\s*(?:overlay)?/gi,
+      /(?:with\s+)?text\s*(?:overlay|element)?s?/gi,
+      /(?:with\s+)?(?:company\s+)?(?:watermark|stamp)s?/gi,
+      /(?:show(?:ing)?|display(?:ing)?)\s+(?:text|words|letters)/gi,
+      /\w+\s+text\s+labels?/gi,
+      /text\s+labels?\s+(?:for|of|with)?\s*\w*/gi,
+      /(?:with\s+)?labels?\s*(?:overlay)?/gi,
+    ];
 
-  const genericTextPatterns = [
-    /(?:with\s+)?(?:title|headline|heading|subtitle)\s*(?:overlay)?/gi,
-    /(?:with\s+)?(?:caption|badge)\s*(?:overlay)?/gi,
-    /(?:with\s+)?text\s*(?:overlay|element)?s?/gi,
-    /(?:with\s+)?(?:company\s+)?(?:watermark|stamp)s?/gi,
-    /(?:show(?:ing)?|display(?:ing)?)\s+(?:text|words|letters)/gi,
-    /\w+\s+text\s+labels?/gi,  // "X text labels"
-    /text\s+labels?\s+(?:for|of|with)?\s*\w*/gi,  // "text labels for/of X"
-    /(?:with\s+)?labels?\s*(?:overlay)?/gi,  // "with labels"
-  ];
-  
-  for (const pattern of genericTextPatterns) {
-    while ((match = pattern.exec(cleanPrompt)) !== null) {
-      removedElements.push(match[0]);
+    for (const pattern of genericTextPatterns) {
+      while ((match = pattern.exec(cleanPrompt)) !== null) {
+        removedElements.push(match[0]);
+      }
+      pattern.lastIndex = 0;
+      cleanPrompt = cleanPrompt.replace(pattern, '');
     }
-    pattern.lastIndex = 0;
-    cleanPrompt = cleanPrompt.replace(pattern, '');
-  }
 
-  // === STEP 4B: Remove text-generating trigger words ===
-  const textTriggerReplacements: [RegExp, string][] = [
-    [/(?:welcoming|branded|informational|decorative|promotional)\s+signage/gi, 'welcoming entrance'],
-    [/(?:with\s+)?signage\b/gi, ''],
-    [/(?:with\s+)?(?:a\s+)?sign\s+(?:reading|saying|displaying|showing)\s+[^,.]+/gi, ''],
-    [/(?:wooden|stone|metal|elegant|rustic)\s+sign\b/gi, 'entrance detail'],
-    [/storefront\s+(?:with|showing|displaying)/gi, 'storefront exterior,'],
-    [/(?:with\s+)?(?:company|business|brand|shop)\s+(?:name|sign)/gi, ''],
-    [/(?:with\s+)?(?:infographic|diagram|chart|graph|flowchart|mind\s*map)/gi, 'abstract visual composition'],
-    [/(?:with\s+)?(?:bullet\s+points?|numbered\s+(?:list|steps?))/gi, ''],
-    [/(?:with\s+)?(?:product\s+)?(?:packaging|label)\s+(?:showing|reading|with)\s+[^,.]+/gi, 'product packaging,'],
-    [/(?:menu|price\s*list|directory)\s+(?:board|sign)/gi, 'decorative display'],
-    [/(?:neon|illuminated|lit)\s+sign/gi, 'ambient lighting'],
-    [/(?:chalkboard|whiteboard|blackboard)\s+(?:with|showing|displaying)/gi, 'rustic wall decor'],
-    [/(?:plaque|nameplate|door\s*sign|wayfinding)/gi, 'entrance detail'],
-    [/(?:certificate|diploma|award)\s+(?:on|hanging|displayed)/gi, 'framed art on'],
-    [/(?:with\s+)?(?:visible\s+)?(?:writing|lettering|inscription|engraving)/gi, ''],
-    [/(?:website|url|web\s*address|email|phone\s*number)\s*(?:display|shown|visible)?/gi, ''],
-  ];
+    // === STEP 4B: Remove text-generating trigger words ===
+    const textTriggerReplacements: [RegExp, string][] = [
+      [/(?:welcoming|branded|informational|decorative|promotional)\s+signage/gi, 'welcoming entrance'],
+      [/(?:with\s+)?signage\b/gi, ''],
+      [/(?:with\s+)?(?:a\s+)?sign\s+(?:reading|saying|displaying|showing)\s+[^,.]+/gi, ''],
+      [/(?:wooden|stone|metal|elegant|rustic)\s+sign\b/gi, 'entrance detail'],
+      [/storefront\s+(?:with|showing|displaying)/gi, 'storefront exterior,'],
+      [/(?:with\s+)?(?:company|business|brand|shop)\s+(?:name|sign)/gi, ''],
+      [/(?:with\s+)?(?:infographic|diagram|chart|graph|flowchart|mind\s*map)/gi, 'abstract visual composition'],
+      [/(?:with\s+)?(?:bullet\s+points?|numbered\s+(?:list|steps?))/gi, ''],
+      [/(?:with\s+)?(?:product\s+)?(?:packaging|label)\s+(?:showing|reading|with)\s+[^,.]+/gi, 'product packaging,'],
+      [/(?:menu|price\s*list|directory)\s+(?:board|sign)/gi, 'decorative display'],
+      [/(?:neon|illuminated|lit)\s+sign/gi, 'ambient lighting'],
+      [/(?:chalkboard|whiteboard|blackboard)\s+(?:with|showing|displaying)/gi, 'rustic wall decor'],
+      [/(?:plaque|nameplate|door\s*sign|wayfinding)/gi, 'entrance detail'],
+      [/(?:certificate|diploma|award)\s+(?:on|hanging|displayed)/gi, 'framed art on'],
+      [/(?:with\s+)?(?:visible\s+)?(?:writing|lettering|inscription|engraving)/gi, ''],
+      [/(?:website|url|web\s*address|email|phone\s*number)\s*(?:display|shown|visible)?/gi, ''],
+    ];
 
-  for (const [pattern, replacement] of textTriggerReplacements) {
-    if (pattern.test(cleanPrompt)) {
-      removedElements.push(`text-trigger: ${cleanPrompt.match(pattern)?.[0]}`);
-      cleanPrompt = cleanPrompt.replace(pattern, replacement);
+    for (const [pattern, replacement] of textTriggerReplacements) {
+      if (pattern.test(cleanPrompt)) {
+        removedElements.push(`text-trigger: ${cleanPrompt.match(pattern)?.[0]}`);
+        cleanPrompt = cleanPrompt.replace(pattern, replacement);
+      }
     }
   }
 
@@ -265,16 +283,17 @@ export function sanitizePromptForAI(
   cleanPrompt = cleanPrompt.replace(/,\s*$/g, '');
 
   // === STEP 7: Add explicit "no text" instruction ===
+  // Skipped under preserveText so typography-capable models (Recraft V3) aren't
+  // told to suppress the very text we want them to render.
+  if (!preserveText) {
+    const noTextSuffix = '. CRITICAL REQUIREMENT: Generate ONLY the visual scene with absolutely NO text, NO words, NO letters, NO numbers, NO logos, NO signs with writing, NO watermarks, NO labels, NO captions, NO UI elements anywhere in the image. Any surfaces that might contain text (signs, screens, papers, packaging) must be blank or blurred. Pure visual imagery only.';
 
-  const noTextSuffix = '. CRITICAL REQUIREMENT: Generate ONLY the visual scene with absolutely NO text, NO words, NO letters, NO numbers, NO logos, NO signs with writing, NO watermarks, NO labels, NO captions, NO UI elements anywhere in the image. Any surfaces that might contain text (signs, screens, papers, packaging) must be blank or blurred. Pure visual imagery only.';
-
-  // Only add if we have a prompt
-  if (cleanPrompt.length > 0) {
-    // Ensure proper sentence ending before adding suffix
-    if (!cleanPrompt.endsWith('.') && !cleanPrompt.endsWith('!') && !cleanPrompt.endsWith('?')) {
-      cleanPrompt = cleanPrompt + '.';
+    if (cleanPrompt.length > 0) {
+      if (!cleanPrompt.endsWith('.') && !cleanPrompt.endsWith('!') && !cleanPrompt.endsWith('?')) {
+        cleanPrompt = cleanPrompt + '.';
+      }
+      cleanPrompt = cleanPrompt + noTextSuffix;
     }
-    cleanPrompt = cleanPrompt + noTextSuffix;
   }
 
   // === STEP 8: Generate warnings ===
