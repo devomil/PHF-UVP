@@ -5,6 +5,7 @@ import { getVisualArtPreset, isStylizedPreset, getAllVisualArtPresets, type Visu
 import { getTrendingHooks, type TrendResult } from "./trend-intelligence-service";
 import { getProjectPurpose, getContentTagForSceneType } from "../../shared/config/project-types";
 import { getSceneContentTagIds } from "../../shared/config/scene-content-tags";
+import { evaluateSceneTextRouting } from "../utils/recraft-scene-policy";
 
 export interface PipelineContext {
   description: string;
@@ -1204,6 +1205,28 @@ Rewrite both so the listed required literal subjects are clearly visible in the 
 
   if (styleRationale) {
     console.log(`[Pipeline S4] Style rationale captured (${styleRationale.length} chars)`);
+  }
+
+  // Brand environmental-text injection: when a scene's narration references a
+  // known brand/location but the final visualDirection never mentions a sign
+  // or label, append a concrete signage element so downstream Recraft routing
+  // has real text to render. Mirrors the logic in script-parser-service.ts so
+  // scripts produced by the 4-stage pipeline also benefit.
+  let injected = 0;
+  for (const scene of enhanced) {
+    const routing = evaluateSceneTextRouting({
+      narration: scene.narration,
+      visualDirection: scene.visualDirection,
+      sceneType: (scene as any).type,
+    });
+    if (routing.needsTextInjection && routing.suggestedTextElement) {
+      scene.visualDirection = `${(scene.visualDirection ?? '').trimEnd()} ${routing.suggestedTextElement}`.trim();
+      injected++;
+      console.log(`[Pipeline S4] Brand text injected into scene ${scene.id}: "${routing.suggestedTextElement}"`);
+    }
+  }
+  if (injected > 0) {
+    console.log(`[Pipeline S4] Brand text injection: updated ${injected}/${enhanced.length} scenes`);
   }
 
   return { scenes: enhanced, styleRationale };
