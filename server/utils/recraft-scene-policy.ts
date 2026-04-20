@@ -53,7 +53,25 @@ export function evaluateSceneTextRouting(scene: {
   const visualDir = (scene.visualDirection ?? scene.imagePrompt ?? '').toLowerCase();
   const sceneType = scene.sceneType ?? '';
 
-  if (HARD_ROUTE_SCENE_TYPES.has(sceneType)) {
+  // Pre-compute signals so hard-route types can still get brand injection.
+  const visualHasTextKeyword = VISUAL_TEXT_KEYWORDS.some(k => visualDir.includes(k));
+  const detectedBrand = BRAND_NAMES.find(name => narration.includes(name));
+  const isHardRoute = HARD_ROUTE_SCENE_TYPES.has(sceneType);
+
+  // Hard-route scene types (cta, title_card, etc.) always use Recraft. If the
+  // narration also mentions a known brand and the visual direction has no
+  // existing text keyword, inject environmental signage so Recraft has
+  // something concrete to render — CTAs are the prime place for this.
+  if (isHardRoute) {
+    if (detectedBrand && !visualHasTextKeyword) {
+      const brandLabel = resolveBrandLabel(detectedBrand);
+      return {
+        useRecraft: true,
+        reason: `scene type "${sceneType}" + narration brand "${detectedBrand}" — hard route + injecting signage`,
+        needsTextInjection: true,
+        suggestedTextElement: `A handcrafted wooden sign reading "${brandLabel}" is visible on the wall.`,
+      };
+    }
     return {
       useRecraft: true,
       reason: `scene type "${sceneType}" always uses Recraft`,
@@ -61,7 +79,6 @@ export function evaluateSceneTextRouting(scene: {
     };
   }
 
-  const visualHasTextKeyword = VISUAL_TEXT_KEYWORDS.some(k => visualDir.includes(k));
   if (visualHasTextKeyword) {
     return {
       useRecraft: true,
@@ -70,7 +87,6 @@ export function evaluateSceneTextRouting(scene: {
     };
   }
 
-  const detectedBrand = BRAND_NAMES.find(name => narration.includes(name));
   if (detectedBrand) {
     const brandLabel = resolveBrandLabel(detectedBrand);
     return {
