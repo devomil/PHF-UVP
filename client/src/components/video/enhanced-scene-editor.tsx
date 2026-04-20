@@ -831,14 +831,27 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
       if (!res.ok) throw new Error("Failed to regenerate image");
       return res.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+    onMutate: () => {
+      // The regenerate-image endpoint is synchronous (awaits Recraft/Flux
+      // and only responds once the new URL is written to DB). Show the
+      // "Generating New Image..." overlay for the duration of the request.
       setRegeneratingType('image');
       setRegenStartedAt(Date.now());
       setRegenElapsed(0);
-      toast({ title: "Image Regenerating", description: "New image is being generated for this scene." });
+    },
+    onSuccess: async () => {
+      // Force-refetch the project so the new imageUrl + lastRegenAt
+      // (cache-bust key) flow into props before we drop the overlay.
+      await queryClient.refetchQueries({ queryKey: ["project", projectId] });
+      setRegeneratingType(null);
+      setRegenStartedAt(null);
+      setRegenElapsed(0);
+      toast({ title: "Image Ready", description: "Your new image is ready." });
     },
     onError: (err: Error) => {
+      setRegeneratingType(null);
+      setRegenStartedAt(null);
+      setRegenElapsed(0);
       toast({ title: "Error", description: err.message, variant: "destructive" });
     },
   });
