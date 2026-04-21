@@ -522,6 +522,12 @@ export interface SceneAssets {
   logoPosition?: { position: string; size: number; opacity: number };
   imageProvider?: string;
   videoProvider?: string;
+  // Task 56: per-scene "pin" for smart-routing. When set, regenerate
+  // endpoints honor this provider instead of the auto-selected one. Null
+  // / undefined means "auto" (default for all existing scenes).
+  imageProviderLock?: string | null;
+  videoProviderLock?: string | null;
+  lastRegenAt?: string;
 }
 
 export interface RegenerationRecord {

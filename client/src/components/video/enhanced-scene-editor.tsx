@@ -4,7 +4,7 @@ import {
   Play, Pause, Volume2, VolumeX, Maximize2, MoreVertical,
   RefreshCw, Upload, Image, Video, Save, X, Loader2,
   CheckCircle2, ImagePlus, ChevronDown, ChevronRight, ChevronUp, Edit2, FolderOpen, Expand, Sparkles, Palette,
-  Layers, AlertTriangle
+  Layers, AlertTriangle, Info
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { SceneOverlayEditor, type SceneOverlayItem } from "./scene-overlay-editor";
@@ -17,6 +17,14 @@ import { getVisualArtPreset, getAllVisualArtPresets } from "@shared/config/visua
 import { CharacterProfilesPanel } from "./character-profiles-panel";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import type { CharacterProfile } from "@shared/video-types";
+import {
+  useRoutingPreview,
+  SceneIntentChips,
+  ProviderPill,
+  LogoGapCard,
+  PromptInspectorDrawer,
+  RoleAwareReferenceSlots,
+} from "./scene-routing-ui";
 
 const sceneTypes = [
   "hook", "problem", "agitation", "solution", "benefit",
@@ -603,6 +611,42 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
     duration: scene.duration || 5,
     narration: scene.narration || "",
     visualDirection: scene.visualDirection || "",
+  });
+
+  // Task 56: smart-routing transparency
+  const { data: routingPreview, refetch: refetchRouting } = useRoutingPreview(
+    projectId,
+    sceneId,
+    editValues.visualDirection,
+  );
+  const [showPromptInspector, setShowPromptInspector] = useState(false);
+  const imageProviderLock = (scene.assets as any)?.imageProviderLock || routingPreview?.providerLock || null;
+  const videoProviderLock = (scene.assets as any)?.videoProviderLock || routingPreview?.videoProviderLock || null;
+
+  const setProviderLockMutation = useMutation({
+    mutationFn: async (payload: { imageProviderLock?: string | null; videoProviderLock?: string | null }) => {
+      const res = await fetch(`/api/universal-video/${projectId}/scenes/${sceneId}/provider-lock`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error("Failed to update provider pin");
+      return res.json();
+    },
+    onSuccess: (_d, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+      refetchRouting();
+      const which = vars.imageProviderLock !== undefined ? "image" : "video";
+      const val = vars.imageProviderLock ?? vars.videoProviderLock;
+      toast({
+        title: val ? `Pinned ${which} provider` : `Cleared ${which} provider pin`,
+        description: val ? `This scene now uses ${val}.` : "Returned to auto-select.",
+      });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
   });
   const [contentTag, setContentTag] = useState<string | null>(scene.contentTag || null);
   const [autoAssignedContentTag] = useState<string | null>(scene.assignedContentTag || null);
@@ -1410,17 +1454,33 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                   {(() => { const p = PROVIDER_CONFIG[(scene as any).providerHint]; return p ? p.displayName : (scene as any).providerHint; })()}
                 </span>
               )}
-              {scene.assets?.imageProvider && (
-                <span className="text-[9px] px-2 py-0.5 rounded-full font-medium border"
-                  style={{ backgroundColor: "rgba(59,130,246,0.12)", color: "rgb(96,165,250)", borderColor: "rgba(59,130,246,0.25)" }}>
-                  T2I: {formatEditorProviderName(scene.assets.imageProvider)}
-                </span>
+              {(scene.assets?.imageProvider || routingPreview?.recommendedProvider) && (
+                <ProviderPill
+                  label="T2I"
+                  providerId={imageProviderLock || scene.assets?.imageProvider || routingPreview?.recommendedProvider || 'auto'}
+                  recommendedReason={routingPreview?.recommendedReason}
+                  isLocked={!!imageProviderLock}
+                  scope="image"
+                  onPin={(p) => setProviderLockMutation.mutate({ imageProviderLock: p })}
+                  onClear={() => setProviderLockMutation.mutate({ imageProviderLock: null })}
+                  styleRecProviders={styleRecProviders}
+                  styleRecLabel={styleRecLabel}
+                  tone="blue"
+                />
               )}
               {scene.assets?.videoProvider && (
-                <span className="text-[9px] px-2 py-0.5 rounded-full font-medium border"
-                  style={{ backgroundColor: "rgba(16,185,129,0.12)", color: "rgb(52,211,153)", borderColor: "rgba(16,185,129,0.25)" }}>
-                  Video: {formatEditorProviderName(scene.assets.videoProvider)}
-                </span>
+                <ProviderPill
+                  label="Video"
+                  providerId={videoProviderLock || scene.assets.videoProvider}
+                  recommendedReason={undefined}
+                  isLocked={!!videoProviderLock}
+                  scope="video"
+                  onPin={(p) => setProviderLockMutation.mutate({ videoProviderLock: p })}
+                  onClear={() => setProviderLockMutation.mutate({ videoProviderLock: null })}
+                  styleRecProviders={styleRecProviders}
+                  styleRecLabel={styleRecLabel}
+                  tone="green"
+                />
               )}
               {(scene.type === 'chapter-title' || scene.type === 'infographic' || scene.type === 'infographic_diagram' || (scene as any).textImageEnabled) && (
                 <>
@@ -1437,6 +1497,23 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                 </>
               )}
             </div>
+
+            {/* Task 56: routing intent chips */}
+            <SceneIntentChips preview={routingPreview} />
+
+            {/* Task 56: prompt inspector trigger */}
+            <button
+              type="button"
+              onClick={() => setShowPromptInspector(true)}
+              className="mt-2 inline-flex items-center gap-1 text-[10px] underline-offset-2 hover:underline"
+              style={{ color: "var(--text-muted)" }}
+              data-testid="open-prompt-inspector"
+            >
+              <Info className="w-3 h-3" /> What gets sent to the model
+            </button>
+
+            {/* Task 56: amber CTA when logo intent detected but no logo */}
+            {routingPreview?.references.hasLogoGap && <LogoGapCard />}
           </div>
 
           {/* Use Own Media */}
@@ -1481,6 +1558,34 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
               </div>
             )}
             <p className="text-[10px] mb-1.5" style={{ color: "var(--text-muted)" }}>For I2V (image-to-video)</p>
+
+            {/* Task 56: role-aware overview row (Product / Character / Logo) */}
+            {routingPreview && (
+              <div className="mb-2 p-2 rounded-lg border" style={{ borderColor: "var(--border-subtle)", backgroundColor: "rgba(255,255,255,0.02)" }}>
+                <RoleAwareReferenceSlots
+                  productUrl={routingPreview.references.product}
+                  characterUrl={routingPreview.references.character}
+                  brandLogoUrl={routingPreview.references.brandLogo}
+                  hasLogoIntent={routingPreview.routing.needsLogoComposition}
+                  hasLogoGap={routingPreview.references.hasLogoGap}
+                  uploads={referenceImageUrls.filter(u => u !== routingPreview.references.product && u !== routingPreview.references.character)}
+                  onPreview={(u) => setRefLightboxUrl(u)}
+                  onRemoveUpload={(url) => {
+                    const newImages = referenceImageUrls.filter(u => u !== url);
+                    setReferenceImageUrls(newImages);
+                    persistReferenceImages(newImages);
+                  }}
+                  onAddUpload={() => refFileInputRef.current?.click()}
+                  onRemoveProduct={() => {
+                    setBrandAssetDismissed(true);
+                    const newImages = referenceImageUrls.filter(u => u !== routingPreview.references.product);
+                    setReferenceImageUrls(newImages);
+                    persistReferenceImages(newImages);
+                  }}
+                />
+              </div>
+            )}
+
             <div className="flex items-center gap-1.5 flex-wrap">
               {imageUrl && (
                 <div className="relative w-16 h-16 rounded-md overflow-hidden border group" style={{ borderColor: "var(--border-subtle)" }}>
@@ -3311,6 +3416,15 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Task 56: prompt inspector drawer */}
+      <PromptInspectorDrawer
+        projectId={projectId}
+        sceneId={sceneId}
+        visualDirection={editValues.visualDirection}
+        open={showPromptInspector}
+        onClose={() => setShowPromptInspector(false)}
+      />
     </div>
   );
 }

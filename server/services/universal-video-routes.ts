@@ -16,6 +16,7 @@ import { intelligentPromptImprover } from '../services/intelligent-prompt-improv
 import { regenerationStrategyEngine } from '../services/regeneration-strategy-engine';
 import { promptComplexityAnalyzer } from '../services/prompt-complexity-analyzer';
 import { brandContextService } from '../services/brand-context-service';
+import { brandBibleService } from '../services/brand-bible-service';
 import { runScriptPipeline } from '../services/script-pipeline-service';
 import type { ProductContext } from '../services/product-analysis-service';
 import { videoProviderSelector, SceneForSelection } from '../services/video-provider-selector';
@@ -5474,6 +5475,176 @@ router.post('/projects/:projectId/apply-generation-settings', isAuthenticated, a
   }
 });
 
+// Task 56: Routing transparency — return what smart-routing currently sees
+// for a scene draft so the editor can render intent chips + provider reason.
+router.get('/:projectId/scenes/:sceneId/routing-preview', isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const userId = (req.user as any)?.id;
+    const { projectId, sceneId } = req.params;
+    const draftVisualDirection = (req.query.visualDirection as string | undefined) || undefined;
+    const draftNarration = (req.query.narration as string | undefined) || undefined;
+
+    const projectData = await getProjectFromDb(projectId);
+    if (!projectData) return res.status(404).json({ success: false, error: 'Project not found' });
+    if (projectData.ownerId !== userId) return res.status(403).json({ success: false, error: 'Access denied' });
+
+    const scene: any = projectData.scenes?.find((s: any) => s.id === sceneId);
+    if (!scene) return res.status(404).json({ success: false, error: 'Scene not found' });
+
+    const { evaluateSceneTextRouting } = await import('../utils/recraft-scene-policy');
+    const routing = evaluateSceneTextRouting({
+      narration: draftNarration ?? scene.narration,
+      visualDirection: draftVisualDirection ?? scene.visualDirection ?? scene.imagePrompt,
+      sceneType: scene.type,
+    });
+
+    let brandLogoUrl: string | null = null;
+    try {
+      const bb = await brandBibleService.getBrandBible();
+      const logo = bb?.logos?.main || bb?.logos?.intro || bb?.logos?.outro || bb?.logos?.watermark;
+      brandLogoUrl = logo?.url || null;
+    } catch {}
+
+    let recommendedProvider: string | null = null;
+    let recommendedReason = routing.reason;
+    if (routing.useRecraft) {
+      recommendedProvider = 'recraft-v3-text';
+    } else if (routing.needsLogoComposition) {
+      recommendedProvider = 'nano-banana-2';
+      recommendedReason = brandLogoUrl
+        ? `${routing.reason} (brand logo will be attached as reference image)`
+        : `${routing.reason} — but no brand logo found in your brand bible`;
+    } else if (scene.brandAssetUrl || scene.characterRefImageUrl) {
+      recommendedProvider = 'nano-banana-2';
+      recommendedReason = 'Reference image attached — routing to image-conditioned model';
+    }
+
+    res.json({
+      success: true,
+      routing: {
+        useRecraft: routing.useRecraft,
+        needsTextInjection: routing.needsTextInjection,
+        needsLogoComposition: !!routing.needsLogoComposition,
+        suggestedTextElement: routing.suggestedTextElement,
+        reason: routing.reason,
+      },
+      recommendedProvider,
+      recommendedReason,
+      providerLock: scene.assets?.imageProviderLock || null,
+      videoProviderLock: scene.assets?.videoProviderLock || null,
+      references: {
+        product: scene.brandAssetUrl || null,
+        character: scene.characterRefImageUrl || null,
+        brandLogo: brandLogoUrl,
+        hasLogoGap: !!routing.needsLogoComposition && !brandLogoUrl,
+      },
+    });
+  } catch (error: any) {
+    console.error('[RoutingPreview] error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Task 56: "What gets sent to the model" inspector data.
+router.get('/:projectId/scenes/:sceneId/prompt-preview', isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const userId = (req.user as any)?.id;
+    const { projectId, sceneId } = req.params;
+    const draftVisualDirection = (req.query.visualDirection as string | undefined) || undefined;
+
+    const projectData = await getProjectFromDb(projectId);
+    if (!projectData) return res.status(404).json({ success: false, error: 'Project not found' });
+    if (projectData.ownerId !== userId) return res.status(403).json({ success: false, error: 'Access denied' });
+
+    const scene: any = projectData.scenes?.find((s: any) => s.id === sceneId);
+    if (!scene) return res.status(404).json({ success: false, error: 'Scene not found' });
+
+    const visualDirection = draftVisualDirection ?? scene.visualDirection ?? scene.imagePrompt ?? '';
+    const sceneType = scene.type || 'content';
+
+    const { evaluateSceneTextRouting } = await import('../utils/recraft-scene-policy');
+    const routing = evaluateSceneTextRouting({
+      narration: scene.narration,
+      visualDirection,
+      sceneType,
+    });
+
+    const { sanitizePromptForAI } = await import('./prompt-sanitizer');
+    const sanitized = sanitizePromptForAI(visualDirection, sceneType, {
+      preserveText: routing.useRecraft,
+      preserveLogos: !!routing.needsLogoComposition,
+    });
+
+    const refs: { url: string; role: string }[] = [];
+    if (scene.brandAssetUrl) refs.push({ url: scene.brandAssetUrl, role: 'product' });
+    if (scene.characterRefImageUrl && scene.characterRefImageUrl !== scene.brandAssetUrl) {
+      refs.push({ url: scene.characterRefImageUrl, role: 'character' });
+    }
+    if (routing.needsLogoComposition) {
+      try {
+        const bb = await brandBibleService.getBrandBible();
+        const logo = bb?.logos?.main || bb?.logos?.intro || bb?.logos?.outro || bb?.logos?.watermark;
+        if (logo?.url) refs.push({ url: logo.url, role: 'logo' });
+      } catch {}
+    }
+    const extraRefs: string[] = scene.assets?.referenceImages || [];
+    for (const u of extraRefs) {
+      if (!refs.some(r => r.url === u)) refs.push({ url: u, role: 'upload' });
+    }
+
+    res.json({
+      success: true,
+      sceneType,
+      originalPrompt: sanitized.originalPrompt,
+      cleanPrompt: sanitized.cleanPrompt,
+      removedElements: sanitized.removedElements,
+      extractedText: sanitized.extractedText,
+      extractedLogos: sanitized.extractedLogos,
+      warnings: sanitized.warnings,
+      routingReason: routing.reason,
+      references: refs,
+    });
+  } catch (error: any) {
+    console.error('[PromptPreview] error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Task 56: persist per-scene provider lock (image / video). Null clears.
+router.patch('/:projectId/scenes/:sceneId/provider-lock', isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const userId = (req.user as any)?.id;
+    const { projectId, sceneId } = req.params;
+    const { imageProviderLock, videoProviderLock } = req.body || {};
+
+    const projectData = await getProjectFromDb(projectId);
+    if (!projectData) return res.status(404).json({ success: false, error: 'Project not found' });
+    if (projectData.ownerId !== userId) return res.status(403).json({ success: false, error: 'Access denied' });
+
+    const idx = projectData.scenes?.findIndex((s: any) => s.id === sceneId);
+    if (idx == null || idx < 0) return res.status(404).json({ success: false, error: 'Scene not found' });
+
+    const scene: any = projectData.scenes[idx];
+    scene.assets = scene.assets || {};
+    if (imageProviderLock !== undefined) {
+      scene.assets.imageProviderLock = imageProviderLock || null;
+    }
+    if (videoProviderLock !== undefined) {
+      scene.assets.videoProviderLock = videoProviderLock || null;
+    }
+
+    await saveProjectToDb(projectData, projectData.ownerId);
+    res.json({
+      success: true,
+      imageProviderLock: scene.assets.imageProviderLock || null,
+      videoProviderLock: scene.assets.videoProviderLock || null,
+    });
+  } catch (error: any) {
+    console.error('[ProviderLock] error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Phase 13D: Apply reference config to a specific scene
 router.post('/projects/:projectId/scenes/:sceneId/reference-config', isAuthenticated, async (req: Request, res: Response) => {
   try {
@@ -5806,20 +5977,30 @@ router.post('/:projectId/scenes/:sceneId/regenerate-image', isAuthenticated, asy
     const userId = (req.user as any)?.id;
     const { projectId, sceneId } = req.params;
     const { prompt, provider, generationMode, sourceImageUrl } = req.body;
-    
-    console.log(`[Phase9B] Regenerating image for scene ${sceneId} with provider: ${provider || 'default'}, mode: ${generationMode || 'auto'}`);
-    
+
     const projectData = await getProjectFromDb(projectId);
     if (!projectData) {
       return res.status(404).json({ success: false, error: 'Project not found' });
     }
-    
+
     if (projectData.ownerId !== userId) {
       return res.status(403).json({ success: false, error: 'Access denied' });
     }
-    
+
+    // Task 56: respect per-scene provider lock when caller didn't override.
+    let effectiveProvider = provider;
+    if (!effectiveProvider) {
+      const lockedScene: any = projectData.scenes?.find((s: any) => s.id === sceneId);
+      const lock = lockedScene?.assets?.imageProviderLock;
+      if (lock) {
+        effectiveProvider = lock;
+        console.log(`[Phase9B] Honoring imageProviderLock for scene ${sceneId}: ${lock}`);
+      }
+    }
+    console.log(`[Phase9B] Regenerating image for scene ${sceneId} with provider: ${effectiveProvider || 'default'}, mode: ${generationMode || 'auto'}`);
+
     const projectAspectRatio = (projectData as any).outputFormat?.aspectRatio || (projectData as any).settings?.aspectRatio || '16:9';
-    const result = await universalVideoService.regenerateSceneImage(projectData, sceneId, prompt, provider, generationMode, sourceImageUrl, projectAspectRatio);
+    const result = await universalVideoService.regenerateSceneImage(projectData, sceneId, prompt, effectiveProvider, generationMode, sourceImageUrl, projectAspectRatio);
     
     if (result.success && result.newImageUrl) {
       const sceneIndex = projectData.scenes.findIndex((s: Scene) => s.id === sceneId);
@@ -5840,7 +6021,7 @@ router.post('/:projectId/scenes/:sceneId/regenerate-image', isAuthenticated, asy
         projectData.scenes[sceneIndex].assets!.imageUrl = result.newImageUrl;
         projectData.scenes[sceneIndex].assets!.backgroundUrl = result.newImageUrl;
         // Task 45: Update provider metadata so chips don't show stale source after regen
-        const resolvedImageProvider = (result as any).source || (result as any).provider || provider || 'ai';
+        const resolvedImageProvider = (result as any).source || (result as any).provider || effectiveProvider || 'ai';
         (projectData.scenes[sceneIndex].assets as any).imageProvider = resolvedImageProvider;
         // Cache-busting marker so clients can force-refresh the <img> even if URL is reused
         (projectData.scenes[sceneIndex].assets as any).lastRegenAt = new Date().toISOString();
@@ -6120,8 +6301,14 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, asy
     }
 
     const sceneProviderHint = (scene as any).providerHint;
-    const effectiveProvider = provider || undefined;
-    if (!provider && sceneProviderHint) {
+    // Task 56: respect per-scene videoProviderLock when caller didn't override.
+    const videoLock = (scene as any)?.assets?.videoProviderLock as string | undefined;
+    let effectiveProvider: string | undefined = provider || undefined;
+    if (!effectiveProvider && videoLock) {
+      effectiveProvider = videoLock;
+      console.log(`[Phase9B-Async] Honoring videoProviderLock for scene ${sceneId}: ${videoLock}`);
+    }
+    if (!provider && !videoLock && sceneProviderHint) {
       console.log(`[Phase9B-Async] Pipeline providerHint: ${sceneProviderHint} (soft preference via i2vSettings)`);
     }
 
