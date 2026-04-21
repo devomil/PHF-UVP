@@ -407,14 +407,26 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
               const freshScene = freshProject?.scenes?.find((s: any) => s.id === sceneId);
               const allHaveVideo = prevIndices.every((idx: number) => freshScene?.microScenes?.[idx]?.videoUrl);
               allJobsDonePolls.current = 0;
-              if (allHaveVideo) {
-                regeneratingRef.current = new Set<number>();
-                setRegeneratingMicroScenes(new Set<number>());
-                setMsRegenStartedAt(null);
-                setMsRegenElapsed(0);
-                if (msRegenTimerRef.current) clearInterval(msRegenTimerRef.current);
-              } else {
-                await queryClient.refetchQueries({ queryKey: ["project", projectId] });
+              // Always clear spinners once all jobs are done — even if some
+              // failed (e.g. provider 502s). Otherwise the UI spins forever
+              // and the user is forced to hard-refresh.
+              regeneratingRef.current = new Set<number>();
+              setRegeneratingMicroScenes(new Set<number>());
+              setMsRegenStartedAt(null);
+              setMsRegenElapsed(0);
+              if (msRegenTimerRef.current) clearInterval(msRegenTimerRef.current);
+              if (!allHaveVideo) {
+                const failedIndices = prevIndices.filter(
+                  (idx: number) => !freshScene?.microScenes?.[idx]?.videoUrl,
+                );
+                const failedLabel = failedIndices.map((i: number) => i + 1).join(', ');
+                toast({
+                  title: failedIndices.length === 1
+                    ? `Micro-scene ${failedLabel} failed to generate`
+                    : `${failedIndices.length} micro-scenes failed (${failedLabel})`,
+                  description: 'The video provider returned an error (often a temporary 502). Try regenerating again or pick a different provider.',
+                  variant: 'destructive',
+                });
               }
               return;
             }
