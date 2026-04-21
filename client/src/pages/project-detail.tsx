@@ -621,6 +621,73 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
     },
   });
 
+  // Task 63: Batch "Generate all thumbnails" — one-click cost-aware preview
+  // for every scene in the brief. Mirrors the per-scene fingerprint logic in
+  // server/services/universal-video-routes.ts so we skip scenes whose
+  // existing thumbnail already matches the current style/prompt.
+  const FLUX_SCHNELL_COST_PER_IMAGE = 0.003;
+  const computeSceneFingerprint = useCallback((scene: any): string => {
+    const presetId = scene.assignedStyleId
+      || scene.artPresetId
+      || (project?.progress as any)?.artPresetId
+      || (project as any)?.artPresetId;
+    const basePrompt = (scene.imagePrompt || scene.visualDirection || scene.narration || '').toString().trim();
+    return `${presetId || 'auto'}::${basePrompt.substring(0, 80)}`;
+  }, [project]);
+  const scenesNeedingThumbnail = scenes.filter((s: any) => {
+    const basePrompt = (s.imagePrompt || s.visualDirection || s.narration || '').toString().trim();
+    if (!basePrompt) return false;
+    if (s.thumbnailStatus === 'generating') return false;
+    const fingerprint = computeSceneFingerprint(s);
+    if (s.thumbnailUrl && s.thumbnailGeneratedFor === fingerprint) return false;
+    return true;
+  });
+  const estimatedBatchCost = scenesNeedingThumbnail.length * FLUX_SCHNELL_COST_PER_IMAGE;
+  const [batchThumbProgress, setBatchThumbProgress] = useState<
+    { total: number; completed: number; failed: number } | null
+  >(null);
+  const isBatchThumbRunning = batchThumbProgress !== null;
+  const handleGenerateAllThumbnails = useCallback(async () => {
+    const targets = scenes.filter((s: any) => {
+      const basePrompt = (s.imagePrompt || s.visualDirection || s.narration || '').toString().trim();
+      if (!basePrompt) return false;
+      if (s.thumbnailStatus === 'generating') return false;
+      const fingerprint = computeSceneFingerprint(s);
+      if (s.thumbnailUrl && s.thumbnailGeneratedFor === fingerprint) return false;
+      return true;
+    });
+    if (targets.length === 0) return;
+    setBatchThumbProgress({ total: targets.length, completed: 0, failed: 0 });
+    let completed = 0;
+    let failed = 0;
+    await Promise.all(targets.map(async (s: any) => {
+      try {
+        const res = await fetch(
+          `/api/universal-video/projects/${projectId}/scenes/${s.id}/generate-thumbnail`,
+          { method: "POST", credentials: "include" }
+        );
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data?.error || `HTTP ${res.status}`);
+        }
+        completed++;
+      } catch (err) {
+        failed++;
+      } finally {
+        setBatchThumbProgress((p) => p ? { ...p, completed, failed } : p);
+      }
+    }));
+    await queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+    toast({
+      title: "Thumbnails generated",
+      description: failed > 0
+        ? `${completed} succeeded, ${failed} failed`
+        : `${completed} scene${completed === 1 ? '' : 's'} ready to preview`,
+      variant: failed > 0 && completed === 0 ? "destructive" : undefined,
+    });
+    setBatchThumbProgress(null);
+  }, [scenes, projectId, computeSceneFingerprint, queryClient, toast]);
+
   // Task 61: when a scene's Creative Brief panel becomes visible (expanded),
   // auto-generate a thumbnail for that scene if it doesn't already have one.
   // Throttled per-scene-per-session via a ref so we never re-fire automatically
@@ -1027,7 +1094,7 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
                 style={{ backgroundColor: "rgba(124,58,237,0.06)", borderColor: "rgba(124,58,237,0.25)" }}
                 data-testid="creative-brief-panel"
               >
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between flex-wrap gap-2">
                   <div className="flex items-center gap-2">
                     <Sparkles className="w-4 h-4 text-purple-400" />
                     <h3 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>Creative Brief</h3>
@@ -1035,6 +1102,48 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
                       Director's note
                     </span>
                   </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {/* Task 63: One-click batch thumbnail generation */}
+                    {scenes.length > 0 && (
+                      isBatchThumbRunning ? (
+                        <div
+                          className="text-xs px-2.5 py-1 rounded-lg border flex items-center gap-1.5"
+                          style={{ borderColor: "var(--border-subtle)", color: "var(--text-secondary)" }}
+                          data-testid="batch-thumbnail-progress"
+                        >
+                          <Loader2 className="w-3 h-3 animate-spin text-purple-400" />
+                          Generating thumbnails… {(batchThumbProgress!.completed + batchThumbProgress!.failed)}/{batchThumbProgress!.total}
+                        </div>
+                      ) : scenesNeedingThumbnail.length > 0 ? (
+                        <div className="flex items-center gap-2">
+                          <span
+                            className="text-[11px]"
+                            style={{ color: "var(--text-muted)" }}
+                            data-testid="batch-thumbnail-estimate"
+                          >
+                            ~${estimatedBatchCost.toFixed(2)} for {scenesNeedingThumbnail.length} scene{scenesNeedingThumbnail.length === 1 ? '' : 's'}
+                          </span>
+                          <button
+                            onClick={handleGenerateAllThumbnails}
+                            className="text-xs px-2.5 py-1 rounded-lg border flex items-center gap-1.5 transition-colors hover:border-purple-500/40"
+                            style={{ borderColor: "var(--border-subtle)", color: "var(--text-secondary)" }}
+                            data-testid="button-generate-all-thumbnails"
+                          >
+                            <ImagePlus className="w-3 h-3" />
+                            Generate all thumbnails
+                          </button>
+                        </div>
+                      ) : (
+                        <span
+                          className="text-[11px] flex items-center gap-1"
+                          style={{ color: "var(--text-muted)" }}
+                          data-testid="batch-thumbnail-uptodate"
+                        >
+                          <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                          Thumbnails up to date
+                        </span>
+                      )
+                    )}
                   {!editingRationale ? (
                     <button
                       onClick={() => setEditingRationale(true)}
@@ -1062,6 +1171,7 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
                       </button>
                     </div>
                   )}
+                  </div>
                 </div>
                 {editingRationale ? (
                   <textarea
