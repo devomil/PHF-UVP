@@ -291,7 +291,7 @@ export async function registerRoutes(app: Express) {
         return res.status(401).json({ error: "Not authenticated" });
       }
 
-      const { mode, title, description, targetAudience, duration, platform, aspectRatio, mediaMode, videoGenerationMode, qualityTier, script, numScenes, visualStyle, voiceStyle, outputType, prompt, imageStyle, provider, saveToLibrary, customScenes, artPresetId, artPresetIds, characterConsistency, characters, characterReferenceUrl, characterName, characterDescription, generationMode, negativePrompt, sourceImageUrl, referenceVideoUrl, imageFidelity, productMediaUrl, scriptPresets, projectType, contentStructure, projectPurpose, productVisualDescription, i2iTransformType, i2iStrength } = req.body;
+      const { mode, title, description, targetAudience, duration, platform, aspectRatio, mediaMode, videoGenerationMode, qualityTier, script, numScenes, visualStyle, voiceStyle, outputType, prompt, imageStyle, provider, saveToLibrary, customScenes, artPresetId, artPresetIds, characterConsistency, characters, characterReferenceUrl, characterName, characterDescription, generationMode, negativePrompt, sourceImageUrl, referenceVideoUrl, imageFidelity, productMediaUrl, scriptPresets, projectType, contentStructure, projectPurpose, productVisualDescription, i2iTransformType, i2iStrength, projectName } = req.body;
 
       const projectId = crypto.randomUUID();
 
@@ -464,7 +464,9 @@ export async function registerRoutes(app: Express) {
           projectId,
           ownerId: qcUserId,
           type: "product",
-          title: `Quick ${qcModeLabel} - ${new Date().toLocaleDateString()}`,
+          title: (typeof projectName === "string" && projectName.trim())
+            ? projectName.trim().slice(0, 120)
+            : `Quick ${qcModeLabel} - ${new Date().toLocaleDateString()}`,
           description: prompt || "",
           totalDuration: qcEffectiveOutputType === "video" ? (duration || 6) : 0,
           fps: 30,

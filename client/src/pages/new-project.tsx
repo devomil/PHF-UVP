@@ -2090,6 +2090,7 @@ function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () => void; 
   const videoInputRef = useRef<HTMLInputElement>(null);
 
   const [genMode, setGenMode] = useState<QuickCreateMode>('t2v');
+  const [projectName, setProjectName] = useState("");
   const [prompt, setPrompt] = useState("");
   const [negativePrompt, setNegativePrompt] = useState("");
   const [duration, setDuration] = useState("6");
@@ -2206,6 +2207,7 @@ function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () => void; 
       mode: "quick-create",
       generationMode: genMode,
       outputType,
+      projectName: projectName.trim() || undefined,
       prompt,
       negativePrompt: negativePrompt.trim() || undefined,
       duration: outputType === "video" ? parseInt(duration) : undefined,
@@ -2239,6 +2241,26 @@ function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () => void; 
       </div>
 
       <div className="space-y-5">
+        <div>
+          <Label htmlFor="qc-project-name" style={{ color: "var(--text-secondary)" }}>
+            Project Name <span style={{ color: "var(--text-tertiary)" }}>(Optional)</span>
+          </Label>
+          <input
+            id="qc-project-name"
+            type="text"
+            value={projectName}
+            onChange={(e) => setProjectName(e.target.value.slice(0, 120))}
+            placeholder="e.g. Spring launch teaser"
+            maxLength={120}
+            data-testid="input-quick-create-project-name"
+            className="mt-1.5 w-full px-3 py-2 rounded-lg border bg-transparent outline-none text-sm focus:border-purple-500 transition-colors"
+            style={{ borderColor: "var(--border-subtle)", color: "var(--text-primary)" }}
+          />
+          <p className="mt-1 text-[11px]" style={{ color: "var(--text-tertiary)" }}>
+            Helps you tell quick-create projects apart in the dashboard. Leave blank to auto-name by date.
+          </p>
+        </div>
+
         <div>
           <Label style={{ color: "var(--text-secondary)" }}>Generation Mode</Label>
           <div className="grid grid-cols-5 gap-2 mt-1.5">
