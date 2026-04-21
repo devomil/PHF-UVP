@@ -35,16 +35,22 @@ export interface PromptPreview {
   references: { url: string; role: string }[];
 }
 
+const IMAGE_PROVIDER_OPTIONS: { id: string; label: string; hint: string }[] = [
+  { id: "nano-banana-2", label: "Nano Banana 2", hint: "Best for brand logos, product refs, reference-grounded" },
+  { id: "recraft-v3-text", label: "Recraft V3 (Text)", hint: "Accurate in-scene text rendering" },
+  { id: "recraft-v4-pro", label: "Recraft V4 Pro", hint: "Photoreal product & lifestyle" },
+  { id: "recraft-v4", label: "Recraft V4", hint: "General purpose Recraft" },
+  { id: "flux-1.1-pro", label: "Flux 1.1 Pro", hint: "Cinematic, photoreal scenes" },
+  { id: "flux", label: "Flux.1", hint: "Clean compositions, product shots" },
+  { id: "midjourney", label: "Midjourney", hint: "Premium artistic / cinematic" },
+  { id: "gpt-image-1", label: "GPT-Image-1", hint: "Text-heavy scenes, chapter cards" },
+];
+
 function fmtProvider(id: string): string {
   const p = PROVIDER_CONFIG[id];
   if (p) return p.displayName;
-  const map: Record<string, string> = {
-    "nano-banana-2": "Nano Banana 2",
-    "recraft-v3-text": "Recraft V3 (Text)",
-    "recraft-v4-pro": "Recraft V4 Pro",
-    "flux-1.1-pro": "Flux 1.1 Pro",
-  };
-  return map[id] || id;
+  const opt = IMAGE_PROVIDER_OPTIONS.find((o) => o.id === id);
+  return opt?.label || id;
 }
 
 /**
@@ -260,20 +266,60 @@ export function ProviderPill({
           <p className="text-[9px] uppercase tracking-wide mt-3 mb-1" style={{ color: "rgba(255,255,255,0.4)" }}>
             Override for this scene
           </p>
-          <ProviderCapabilitySelector
-            selectedProvider={isLocked ? providerId : "auto"}
-            onSelectProvider={(p) => {
-              if (p === "auto") onClear();
-              else onPin(p);
-              setOpen(false);
-            }}
-            recommendedProvider={providerId}
-            recommendationReason={recommendedReason}
-            compact
-            darkMode
-            styleRecommendedProviders={styleRecProviders}
-            styleLabel={styleRecLabel}
-          />
+          {scope === "image" ? (
+            <div className="flex flex-col gap-1">
+              <button
+                type="button"
+                onClick={() => { onClear(); setOpen(false); }}
+                className="text-left text-[11px] px-2 py-1.5 rounded-lg border transition-colors hover:bg-white/5"
+                style={{
+                  borderColor: !isLocked ? "rgba(168,85,247,0.35)" : "rgba(255,255,255,0.12)",
+                  backgroundColor: !isLocked ? "rgba(168,85,247,0.08)" : "transparent",
+                  color: "rgba(255,255,255,0.85)",
+                }}
+                data-testid="image-provider-auto"
+              >
+                <span className="font-medium">Auto (recommended)</span>
+                <span className="block text-[9px] mt-0.5" style={{ color: "rgba(255,255,255,0.45)" }}>
+                  Route based on scene content — currently {fmtProvider(providerId)}
+                </span>
+              </button>
+              {IMAGE_PROVIDER_OPTIONS.map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => { onPin(opt.id); setOpen(false); }}
+                  className="text-left text-[11px] px-2 py-1.5 rounded-lg border transition-colors hover:bg-white/5"
+                  style={{
+                    borderColor: isLocked && providerId === opt.id ? "rgba(168,85,247,0.45)" : "rgba(255,255,255,0.08)",
+                    backgroundColor: isLocked && providerId === opt.id ? "rgba(168,85,247,0.1)" : "transparent",
+                    color: "rgba(255,255,255,0.85)",
+                  }}
+                  data-testid={`image-provider-${opt.id}`}
+                >
+                  <span className="font-medium">{opt.label}</span>
+                  <span className="block text-[9px] mt-0.5" style={{ color: "rgba(255,255,255,0.45)" }}>
+                    {opt.hint}
+                  </span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <ProviderCapabilitySelector
+              selectedProvider={isLocked ? providerId : "auto"}
+              onSelectProvider={(p) => {
+                if (p === "auto") onClear();
+                else onPin(p);
+                setOpen(false);
+              }}
+              recommendedProvider={providerId}
+              recommendationReason={recommendedReason}
+              compact
+              darkMode
+              styleRecommendedProviders={styleRecProviders}
+              styleLabel={styleRecLabel}
+            />
+          )}
           {isLocked && (
             <button
               type="button"

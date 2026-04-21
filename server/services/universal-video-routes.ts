@@ -5611,11 +5611,36 @@ router.get('/:projectId/scenes/:sceneId/prompt-preview', isAuthenticated, async 
 });
 
 // Task 56: persist per-scene provider lock (image / video). Null clears.
+const ALLOWED_IMAGE_LOCK_PROVIDERS = new Set([
+  'nano-banana-2',
+  'recraft-v3-text',
+  'recraft-v4',
+  'recraft-v4-pro',
+  'flux',
+  'flux-1-dev',
+  'flux-1.1-pro',
+  'falai',
+  'stable-diffusion-3',
+  'midjourney',
+  'gpt-image-1',
+]);
 router.patch('/:projectId/scenes/:sceneId/provider-lock', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
     const { projectId, sceneId } = req.params;
     const { imageProviderLock, videoProviderLock } = req.body || {};
+
+    if (imageProviderLock !== undefined && imageProviderLock !== null && imageProviderLock !== '') {
+      if (typeof imageProviderLock !== 'string' || !ALLOWED_IMAGE_LOCK_PROVIDERS.has(imageProviderLock)) {
+        return res.status(400).json({ success: false, error: `Invalid image provider: ${imageProviderLock}` });
+      }
+    }
+    if (videoProviderLock !== undefined && videoProviderLock !== null && videoProviderLock !== '') {
+      const { VIDEO_PROVIDERS } = await import('../../shared/provider-config');
+      if (typeof videoProviderLock !== 'string' || !VIDEO_PROVIDERS[videoProviderLock]) {
+        return res.status(400).json({ success: false, error: `Invalid video provider: ${videoProviderLock}` });
+      }
+    }
 
     const projectData = await getProjectFromDb(projectId);
     if (!projectData) return res.status(404).json({ success: false, error: 'Project not found' });
