@@ -597,7 +597,7 @@ export interface ReferenceSlotsProps {
   onRemoveProduct?: () => void;
 }
 
-function SlotTile({
+export function SlotTile({
   label,
   url,
   empty,

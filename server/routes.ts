@@ -792,6 +792,17 @@ export async function registerRoutes(app: Express) {
         visualStatus = "completed";
       }
 
+      // Pull brand logo (read-only) for the LOGO reference slot in Quick Create.
+      let brandLogoUrl: string | null = null;
+      try {
+        const { brandBibleService } = await import('./services/brand-bible-service');
+        const bb = await brandBibleService.getBrandBible();
+        const logo = bb?.logos?.main || bb?.logos?.intro || bb?.logos?.outro || bb?.logos?.watermark;
+        brandLogoUrl = logo?.url || null;
+      } catch {
+        brandLogoUrl = null;
+      }
+
       res.json({
         visual: {
           status: visualStatus,
@@ -843,6 +854,9 @@ export async function registerRoutes(app: Express) {
           artPresetId: progressData.artPresetId || latestI2vSettings.artPresetId || null,
           imageFidelity: latestI2vSettings.imageControlStrength ?? null,
           referenceVideoUrl: latestI2vSettings.referenceVideoUrl || null,
+          characterRefImageUrl: latestI2vSettings.characterRefImageUrl || null,
+          referenceImages: Array.isArray(latestI2vSettings.referenceImages) ? latestI2vSettings.referenceImages : [],
+          brandLogoUrl,
         },
       });
     } catch (error) {
@@ -902,7 +916,7 @@ export async function registerRoutes(app: Express) {
       }
       const { projectId } = req.params;
       const userId = (req.user as any).id;
-      const { prompt: newPrompt, provider: newProvider, duration: newDuration, aspectRatio: newAspectRatio, negativePrompt: newNegativePrompt, imageFidelity: newImageFidelity, artPresetId: newArtPresetId, sourceImageUrl: newSourceImageUrl, removeSourceImage } = req.body || {};
+      const { prompt: newPrompt, provider: newProvider, duration: newDuration, aspectRatio: newAspectRatio, negativePrompt: newNegativePrompt, imageFidelity: newImageFidelity, artPresetId: newArtPresetId, sourceImageUrl: newSourceImageUrl, removeSourceImage, characterRefImageUrl: newCharacterRefImageUrl, referenceImages: newReferenceImages } = req.body || {};
 
       const [project] = await db
         .select()
@@ -982,6 +996,20 @@ export async function registerRoutes(app: Express) {
       const finalNegativePrompt = newNegativePrompt !== undefined ? (newNegativePrompt || null) : (originalJob?.negativePrompt || undefined);
       const finalImageFidelity = newImageFidelity !== undefined ? newImageFidelity : originalI2vSettings.imageControlStrength;
       const finalArtPresetId = newArtPresetId !== undefined ? (newArtPresetId || undefined) : originalI2vSettings.artPresetId;
+      // Distinguish "client did not touch this slot" (use prior value) from
+      // "client explicitly cleared this slot" (drop prior value).
+      const characterExplicitlyCleared = newCharacterRefImageUrl === "" || newCharacterRefImageUrl === null;
+      const finalCharacterRefImageUrl = characterExplicitlyCleared
+        ? undefined
+        : (newCharacterRefImageUrl !== undefined
+            ? newCharacterRefImageUrl
+            : originalI2vSettings.characterRefImageUrl);
+      const extrasExplicitlyCleared = Array.isArray(newReferenceImages) && newReferenceImages.length === 0;
+      const finalReferenceImages: string[] | undefined = extrasExplicitlyCleared
+        ? undefined
+        : (Array.isArray(newReferenceImages)
+            ? newReferenceImages.filter((u: any) => typeof u === 'string' && u.length > 0)
+            : (Array.isArray(originalI2vSettings.referenceImages) ? originalI2vSettings.referenceImages : undefined));
 
       let finalPromptWithStyle = finalPrompt;
       if (finalArtPresetId && finalArtPresetId !== "auto") {
@@ -1022,13 +1050,43 @@ export async function registerRoutes(app: Express) {
         aspectRatio: finalAspectRatio,
         sceneType: finalSceneType,
         sourceImageUrl: finalSourceImage,
-        i2vSettings: {
-          saveToLibrary: true,
-          outputType: project.mediaMode || "video",
-          ...originalI2vSettings,
-          ...(finalImageFidelity !== undefined ? { imageControlStrength: finalImageFidelity } : {}),
-          ...(finalArtPresetId ? { artPresetId: finalArtPresetId } : {}),
-        },
+        i2vSettings: (() => {
+          // Strip stale typed-slot fields so explicit clears actually take effect.
+          const {
+            characterRefImageUrl: _origChar,
+            isCharacterReference: _origCharFlag,
+            referenceImages: _origRefs,
+            sourceImageUrls: _origUrls,
+            ...cleanedOriginal
+          } = (originalI2vSettings || {}) as any;
+          return {
+            saveToLibrary: true,
+            outputType: project.mediaMode || "video",
+            ...cleanedOriginal,
+            ...(finalImageFidelity !== undefined ? { imageControlStrength: finalImageFidelity } : {}),
+            ...(finalArtPresetId ? { artPresetId: finalArtPresetId } : {}),
+            // Task 69: typed reference slots for Quick Create.
+            ...(finalCharacterRefImageUrl
+              ? { characterRefImageUrl: finalCharacterRefImageUrl, isCharacterReference: true }
+              : {}),
+            ...(finalReferenceImages && finalReferenceImages.length > 0
+              ? { referenceImages: finalReferenceImages }
+              : {}),
+            // Worker reads `sourceImageUrls` for multi-image-aware providers
+            // (Kling 2.x, Veo 3.1, Luma, Hailuo, Runway). Build it whenever any
+            // typed ref exists, not only when extras are present, so character-only
+            // and product+character flows still get the array.
+            ...((finalCharacterRefImageUrl || (finalReferenceImages && finalReferenceImages.length > 0))
+              ? {
+                  sourceImageUrls: [
+                    ...(finalSourceImage ? [finalSourceImage] : []),
+                    ...(finalCharacterRefImageUrl ? [finalCharacterRefImageUrl] : []),
+                    ...((finalReferenceImages && finalReferenceImages.length > 0) ? finalReferenceImages : []),
+                  ].filter((u, i, arr) => arr.indexOf(u) === i),
+                }
+              : {}),
+          };
+        })(),
         triggeredBy: userId,
       });
 

@@ -6,6 +6,8 @@ import { getVisualArtPreset, getAllVisualArtPresets } from "@shared/config/visua
 import { SCENE_CONTENT_TAGS } from "@shared/config/scene-content-tags";
 import { Button } from "@/components/ui/button";
 import { ProviderCatalogSelector } from "@/components/video/provider-catalog-selector";
+import { SlotTile } from "@/components/video/scene-routing-ui";
+import { VIDEO_PROVIDERS as PROVIDER_CONFIG } from "@shared/provider-config";
 import { useToast } from "@/hooks/use-toast";
 import { EnhancedSceneEditor } from "@/components/video/enhanced-scene-editor";
 import { SceneOverlayEditor, SceneOverlayItem } from "@/components/video/scene-overlay-editor";
@@ -4967,9 +4969,14 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
   const [imageFidelity, setImageFidelity] = useState<number | null>(null);
   const [artPresetId, setArtPresetId] = useState("");
   const [overrideSourceImage, setOverrideSourceImage] = useState<string | null | undefined>(undefined);
+  const [overrideCharacter, setOverrideCharacter] = useState<string | null | undefined>(undefined);
+  const [overrideExtras, setOverrideExtras] = useState<string[] | undefined>(undefined);
+  // Routes the next file-picker selection into the correct typed slot.
+  const pendingUploadSlotRef = useRef<"product" | "character" | "extra">("product");
   const [uploadingSourceImage, setUploadingSourceImage] = useState(false);
   const [generatingSourceImage, setGeneratingSourceImage] = useState(false);
   const [referenceLightboxOpen, setReferenceLightboxOpen] = useState(false);
+  const [referenceLightboxUrl, setReferenceLightboxUrl] = useState<string | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [selectedVoiceId, setSelectedVoiceId] = useState("21m00Tcm4TlvDq8ikWAM");
   const [voiceFilter, setVoiceFilter] = useState<"all" | "male" | "female">("all");
@@ -4982,6 +4989,7 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
   const handleSourceImageChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    const slot = pendingUploadSlotRef.current;
     setUploadingSourceImage(true);
     try {
       const formData = new FormData();
@@ -4991,14 +4999,26 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
       const data = await uploadRes.json();
       const url = data.url || data.fileUrl;
       if (url) {
-        setOverrideSourceImage(url);
-        toast({ title: "Reference Image Updated", description: "New reference image set. Click Regenerate to use it." });
+        if (slot === "character") {
+          setOverrideCharacter(url);
+          toast({ title: "Character reference set", description: "Click Regenerate to apply." });
+        } else if (slot === "extra") {
+          setOverrideExtras((prev) => {
+            const base = prev !== undefined ? prev : [];
+            return [...base, url];
+          });
+          toast({ title: "Reference image added", description: "Click Regenerate to apply." });
+        } else {
+          setOverrideSourceImage(url);
+          toast({ title: "Product reference set", description: "Click Regenerate to apply." });
+        }
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Upload failed";
       toast({ title: "Upload Error", description: msg, variant: "destructive" });
     }
     setUploadingSourceImage(false);
+    pendingUploadSlotRef.current = "product";
     e.target.value = "";
   }, [toast]);
   const queryClient = useQueryClient();
@@ -5081,6 +5101,13 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
       } else if (overrideSourceImage) {
         body.sourceImageUrl = overrideSourceImage;
       }
+      // Task 69: typed reference slots.
+      if (overrideCharacter !== undefined) {
+        body.characterRefImageUrl = overrideCharacter || "";
+      }
+      if (overrideExtras !== undefined) {
+        body.referenceImages = overrideExtras;
+      }
       const res = await fetch(`/api/projects/${projectId}/quick-create/generate-visual`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -5094,6 +5121,8 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
       visualGenStartTimeRef.current = Date.now();
       setVisualGenerating(true);
       setOverrideSourceImage(undefined);
+      setOverrideCharacter(undefined);
+      setOverrideExtras(undefined);
       queryClient.invalidateQueries({ queryKey: ["quick-create-assets", projectId] });
       queryClient.invalidateQueries({ queryKey: ["project", projectId] });
       toast({ title: "Visual Generation Started", description: "Your visual asset is being generated." });
@@ -5364,29 +5393,68 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
             {(() => {
               const genInfo = assetsQuery.data?.generationInfo;
               if (!genInfo) return null;
-              const effectiveSourceImage = overrideSourceImage === null ? null : (overrideSourceImage || genInfo.sourceImageUrl || null);
+              // Resolve effective per-slot URLs: override (null = removed) || server value.
+              const effProduct = overrideSourceImage === null ? null : (overrideSourceImage || genInfo.sourceImageUrl || null);
+              const effCharacter = overrideCharacter === null ? null : (overrideCharacter || genInfo.characterRefImageUrl || null);
+              const effLogo = genInfo.brandLogoUrl || null;
+              const serverExtras: string[] = Array.isArray(genInfo.referenceImages) ? genInfo.referenceImages : [];
+              const effExtras: string[] = overrideExtras !== undefined ? overrideExtras : serverExtras;
+
+              // Provider-aware slot enable/disable.
+              // "auto" means the user hasn't pinned a provider yet — fall back to
+              // whatever the most recent job ran on so we don't over-disable.
+              const rawProvider = (selectedProvider && selectedProvider !== "auto") ? selectedProvider : (genInfo.provider || "");
+              const providerKey = String(rawProvider).toLowerCase();
+              const providerCfg = (PROVIDER_CONFIG as any)?.[providerKey] || (PROVIDER_CONFIG as any)?.[providerKey?.split('-')[0]];
+              // Default to false when capability is unknown — safer for new providers
+              // and matches the architectural intent that only explicitly multi-image
+              // providers should accept character/logo/extra slots.
+              const supportsMulti = providerCfg?.multiImageSupport === true;
+              const slotsEnabled = {
+                product: true,
+                character: supportsMulti,
+                logo: supportsMulti,
+                add: supportsMulti,
+              };
+
+              // Stale fingerprint vs last completed job.
+              const lastFingerprint = JSON.stringify({
+                p: genInfo.sourceImageUrl || null,
+                c: genInfo.characterRefImageUrl || null,
+                e: serverExtras.slice().sort(),
+              });
+              const currentFingerprint = JSON.stringify({
+                p: effProduct,
+                c: effCharacter,
+                e: effExtras.slice().sort(),
+              });
+              const isStale = lastFingerprint !== currentFingerprint;
               const isRemoved = overrideSourceImage === null;
-              const hasRefMedia = effectiveSourceImage || genInfo.referenceVideoUrl;
+
+              const removeExtra = (url: string) => {
+                const base = overrideExtras !== undefined ? overrideExtras : serverExtras;
+                setOverrideExtras(base.filter((u) => u !== url));
+              };
+
               return (
                 <div className="mb-3 border rounded-lg p-3 space-y-3" style={{ borderColor: "var(--border-subtle)", backgroundColor: "rgba(0,0,0,0.2)" }}>
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
                     <label className="text-xs font-medium block" style={{ color: "var(--text-muted)" }}>
-                      Reference Image
+                      Reference Images
                     </label>
-                    <div className="flex items-center gap-1.5">
-                      <label
-                        htmlFor="qc-source-image-upload"
-                        className="text-[10px] text-purple-400 hover:text-purple-300 cursor-pointer flex items-center gap-1"
-                      >
-                        {uploadingSourceImage ? (
-                          <Loader2 className="w-3 h-3 animate-spin" />
-                        ) : (
-                          <Upload className="w-3 h-3" />
-                        )}
-                        {effectiveSourceImage ? "Replace" : "Add"}
-                      </label>
+                    <div className="flex items-center gap-2">
+                      {isStale && (
+                        <span
+                          className="text-[10px] font-medium px-2 py-0.5 rounded-full flex items-center gap-1"
+                          style={{ backgroundColor: "rgba(234, 179, 8, 0.15)", color: "rgb(234, 179, 8)", border: "1px solid rgba(234, 179, 8, 0.4)" }}
+                          data-testid="badge-references-stale"
+                        >
+                          <RefreshCw className="w-3 h-3" />
+                          References changed — regenerate to apply
+                        </span>
+                      )}
                       <button
-                        className="text-[10px] text-purple-400 hover:text-purple-300 flex items-center gap-0.5 disabled:opacity-50"
+                        className="text-[10px] text-purple-400 hover:text-purple-300 disabled:opacity-50 flex items-center gap-1"
                         disabled={generatingSourceImage || uploadingSourceImage}
                         onClick={async () => {
                           try {
@@ -5404,7 +5472,7 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
                             const data = await res.json();
                             if (data?.url) {
                               setOverrideSourceImage(data.url);
-                              toast({ title: "Reference image generated", description: "New AI-generated reference is set. Click Generate to use it." });
+                              toast({ title: "Reference image generated", description: "New AI-generated reference is set. Click Regenerate to use it." });
                             }
                           } catch (e: any) {
                             toast({ title: "Generation failed", description: e?.message || "Could not generate image", variant: "destructive" });
@@ -5412,53 +5480,83 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
                             setGeneratingSourceImage(false);
                           }
                         }}
-                        title="Generate a new reference image with AI from your prompt"
+                        title="Generate a new product reference with AI"
                       >
                         {generatingSourceImage ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-                        {effectiveSourceImage ? "AI Regen" : "AI Generate"}
+                        AI {effProduct ? "Regen" : "Generate"} Product
                       </button>
-                      {effectiveSourceImage && (
-                        <button
-                          className="text-[10px] text-red-400 hover:text-red-300 flex items-center gap-0.5"
-                          onClick={() => setOverrideSourceImage(null)}
-                        >
-                          <X className="w-3 h-3" />
-                          Remove
-                        </button>
-                      )}
                     </div>
                   </div>
-                  {effectiveSourceImage && (
-                    <div className="flex items-start gap-3">
-                      <button
-                        type="button"
-                        onClick={() => setReferenceLightboxOpen(true)}
-                        className="relative group block"
-                        title="Click to expand"
-                        aria-label="Open reference image full size"
-                      >
-                        <img
-                          src={effectiveSourceImage}
-                          alt="Reference"
-                          className="w-32 h-32 object-cover rounded-lg border flex-shrink-0 transition-transform group-hover:scale-[1.02]"
-                          style={{ borderColor: overrideSourceImage ? "rgb(139, 92, 246)" : "var(--border-medium)" }}
-                        />
-                        <span className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/40 transition-colors rounded-lg">
-                          <Maximize2 className="w-5 h-5 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-                        </span>
-                        {overrideSourceImage && overrideSourceImage !== null && (
-                          <span className="absolute -top-1 -right-1 bg-purple-600 text-white text-[8px] px-1 rounded">New</span>
-                        )}
-                      </button>
-                      {isRemoved && (
-                        <p className="text-xs italic" style={{ color: "var(--text-muted)" }}>Image removed — will generate text-to-video</p>
-                      )}
-                    </div>
-                  )}
-                  {!effectiveSourceImage && (
-                    <p className="text-xs italic" style={{ color: "var(--text-muted)" }}>
-                      {isRemoved ? "Image removed — will generate text-to-video on next run" : "No reference image set"}
+
+                  <div className="flex flex-wrap items-start gap-3">
+                    <SlotTile
+                      label="Product"
+                      url={effProduct}
+                      emptyAction={() => {
+                        pendingUploadSlotRef.current = "product";
+                        (document.getElementById("qc-source-image-upload") as HTMLInputElement | null)?.click();
+                      }}
+                      emptyHint="Upload a product photo"
+                      badgeColor="rgba(16,185,129,0.4)"
+                      onClick={() => effProduct && (setReferenceLightboxUrl(effProduct), setReferenceLightboxOpen(true))}
+                      onRemove={effProduct ? () => setOverrideSourceImage(null) : undefined}
+                    />
+                    <SlotTile
+                      label="Character"
+                      url={slotsEnabled.character ? effCharacter : null}
+                      emptyAction={() => {
+                        if (!slotsEnabled.character) {
+                          toast({ title: "Single-image provider", description: `${providerCfg?.label || providerKey} only accepts one reference.`, variant: "destructive" });
+                          return;
+                        }
+                        pendingUploadSlotRef.current = "character";
+                        (document.getElementById("qc-source-image-upload") as HTMLInputElement | null)?.click();
+                      }}
+                      emptyHint={slotsEnabled.character ? "Upload a character reference" : "Not supported by this provider"}
+                      badgeColor="rgba(244,114,182,0.4)"
+                      onClick={() => effCharacter && (setReferenceLightboxUrl(effCharacter), setReferenceLightboxOpen(true))}
+                      onRemove={effCharacter ? () => setOverrideCharacter(null) : undefined}
+                    />
+                    <SlotTile
+                      label="Logo"
+                      url={slotsEnabled.logo ? effLogo : null}
+                      emptyAction={() => window.open("/brand-bible#assets", "_blank")}
+                      emptyHint={slotsEnabled.logo ? "Add a logo to your brand bible" : "Not supported by this provider"}
+                      badgeColor="rgba(168,85,247,0.4)"
+                      onClick={() => effLogo && (setReferenceLightboxUrl(effLogo), setReferenceLightboxOpen(true))}
+                    />
+                    {effExtras.map((url, i) => (
+                      <SlotTile
+                        key={`qc-extra-${i}`}
+                        label={`Extra ${i + 1}`}
+                        url={url}
+                        badgeColor="rgba(124,58,237,0.4)"
+                        onClick={() => { setReferenceLightboxUrl(url); setReferenceLightboxOpen(true); }}
+                        onRemove={() => removeExtra(url)}
+                      />
+                    ))}
+                    <SlotTile
+                      label="Add"
+                      empty
+                      emptyAction={() => {
+                        if (!slotsEnabled.add) {
+                          toast({ title: "Single-image provider", description: `${providerCfg?.label || providerKey} only accepts one reference.`, variant: "destructive" });
+                          return;
+                        }
+                        pendingUploadSlotRef.current = "extra";
+                        (document.getElementById("qc-source-image-upload") as HTMLInputElement | null)?.click();
+                      }}
+                      badgeColor="rgba(124,58,237,0.4)"
+                    />
+                  </div>
+
+                  {!supportsMulti && (
+                    <p className="text-[10px] italic" style={{ color: "var(--text-muted)" }}>
+                      {(providerCfg?.label || providerKey || "This provider")} only accepts a single product reference. Character, logo, and extra slots will be ignored.
                     </p>
+                  )}
+                  {isRemoved && (
+                    <p className="text-xs italic" style={{ color: "var(--text-muted)" }}>Product image removed — will generate text-to-video on next run</p>
                   )}
                   {genInfo.referenceVideoUrl && (
                     <div className="flex items-center gap-2 text-xs" style={{ color: "var(--text-secondary)" }}>
@@ -5837,11 +5935,20 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
         </div>
       )}
     </div>
-    <Dialog open={referenceLightboxOpen} onOpenChange={setReferenceLightboxOpen}>
+    <Dialog
+      open={referenceLightboxOpen}
+      onOpenChange={(open) => {
+        setReferenceLightboxOpen(open);
+        if (!open) setReferenceLightboxUrl(null);
+      }}
+    >
       <DialogContent className="max-w-4xl p-2 bg-black/95 border-none">
         {(() => {
+          // Prefer the per-slot URL set by SlotTile clicks; fall back to product
+          // for legacy callers that opened the dialog without setting a URL.
           const genInfo = assetsQuery.data?.generationInfo;
-          const src = overrideSourceImage === null ? null : (overrideSourceImage || genInfo?.sourceImageUrl || null);
+          const fallback = overrideSourceImage === null ? null : (overrideSourceImage || genInfo?.sourceImageUrl || null);
+          const src = referenceLightboxUrl || fallback;
           if (!src) return null;
           return (
             <img
