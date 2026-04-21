@@ -1,6 +1,5 @@
 import { useEffect, useState, useRef } from "react";
 import { Sparkles, Type, Image as ImageIcon, User, BadgeCheck, Lock, X, Info, AlertTriangle, ExternalLink, Plus } from "lucide-react";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { ProviderCapabilitySelector } from "./ProviderCapabilityCard";
 import { VIDEO_PROVIDERS as PROVIDER_CONFIG } from "@shared/provider-config";
 
@@ -363,8 +362,19 @@ export function PromptInspectorDrawer({
   }, [projectId, sceneId, visualDirection, open]);
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent className="max-w-2xl bg-[#0f0f1a] border border-white/10 text-white p-0 overflow-hidden">
+    <>
+      {/* backdrop */}
+      <div
+        onClick={onClose}
+        className={`fixed inset-0 z-[60] bg-black/40 transition-opacity ${open ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
+        aria-hidden="true"
+      />
+      {/* right-side drawer */}
+      <aside
+        role="dialog"
+        aria-label="What gets sent to the model"
+        className={`fixed top-0 right-0 z-[61] h-full w-full max-w-md bg-[#0f0f1a] border-l border-white/10 text-white shadow-2xl transform transition-transform duration-200 ${open ? "translate-x-0" : "translate-x-full"}`}
+      >
         <div className="flex items-center justify-between px-5 py-3 border-b border-white/5">
           <div className="flex items-center gap-2">
             <Info className="w-4 h-4 text-purple-400" />
@@ -375,7 +385,7 @@ export function PromptInspectorDrawer({
           </button>
         </div>
 
-        <div className="px-5 py-4 max-h-[70vh] overflow-y-auto space-y-4">
+        <div className="px-5 py-4 h-[calc(100%-49px)] overflow-y-auto space-y-4">
           {loading && <p className="text-xs text-white/50">Loading…</p>}
           {!loading && data && (
             <>
@@ -446,8 +456,8 @@ export function PromptInspectorDrawer({
             </>
           )}
         </div>
-      </DialogContent>
-    </Dialog>
+      </aside>
+    </>
   );
 }
 

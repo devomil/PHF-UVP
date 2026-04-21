@@ -620,8 +620,8 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
     editValues.visualDirection,
   );
   const [showPromptInspector, setShowPromptInspector] = useState(false);
-  const imageProviderLock = (scene.assets as any)?.imageProviderLock || routingPreview?.providerLock || null;
-  const videoProviderLock = (scene.assets as any)?.videoProviderLock || routingPreview?.videoProviderLock || null;
+  const imageProviderLock = scene.assets?.imageProviderLock || routingPreview?.providerLock || null;
+  const videoProviderLock = scene.assets?.videoProviderLock || routingPreview?.videoProviderLock || null;
 
   const setProviderLockMutation = useMutation({
     mutationFn: async (payload: { imageProviderLock?: string | null; videoProviderLock?: string | null }) => {
@@ -1787,6 +1787,36 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                 return modeInfo?.description || "Select a generation mode";
               })()}
             </p>
+            {(scene.microScenes?.length ?? 0) > 0 && (
+              <button
+                type="button"
+                onClick={async () => {
+                  const updated = (scene.microScenes || []).map((ms: any) => ({
+                    ...ms,
+                    generationMode: generationMode === "auto" ? undefined : generationMode,
+                    provider: provider || undefined,
+                  }));
+                  try {
+                    await fetch(`/api/universal-video/projects/${projectId}/scenes/${sceneId}`, {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      credentials: "include",
+                      body: JSON.stringify({ microScenes: updated }),
+                    });
+                    queryClient.invalidateQueries({ queryKey: [`/api/universal-video/projects/${projectId}`] });
+                    toast({ title: `Applied to ${updated.length} micro-scene${updated.length === 1 ? "" : "s"}` });
+                  } catch {
+                    toast({ title: "Failed to apply to micro-scenes", variant: "destructive" });
+                  }
+                }}
+                className="text-[10px] px-2 py-1 rounded-lg border transition-colors hover:bg-purple-500/10"
+                style={{ borderColor: "var(--border-subtle)", color: "var(--text-muted)" }}
+                data-testid="apply-to-all-microscenes"
+                title="Copy Mode + Provider to every micro-scene"
+              >
+                Apply to all micro-scenes
+              </button>
+            )}
             <div className="flex gap-1.5">
               <button
                 onClick={() => regenImageMutation.mutate()}
