@@ -1753,23 +1753,28 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
 
           {projectMode !== 'studio-polish' && (
           <div className="flex flex-col items-end gap-2">
-            <div className="flex gap-2">
-              <div>
-                <p className="text-[11px] font-medium mb-1 text-right" style={{ color: "var(--text-secondary)" }}>Mode</p>
+            <div
+              className="flex flex-wrap items-center justify-end gap-1.5 rounded-lg border px-2 py-1.5"
+              style={{ borderColor: "var(--border-subtle)", backgroundColor: "rgba(255,255,255,0.02)" }}
+              data-testid="scene-controls-row"
+            >
+              <div className="flex items-center gap-1">
+                <span className="text-[10px] font-medium uppercase tracking-wide" style={{ color: "var(--text-muted)" }}>Mode</span>
                 <select
                   value={generationMode}
                   onChange={(e) => setGenerationMode(e.target.value)}
-                  className="text-xs rounded-lg border px-2 py-1.5 bg-transparent outline-none w-24"
+                  className="text-xs rounded-md border px-1.5 py-1 bg-transparent outline-none w-[72px]"
                   style={{ borderColor: "var(--border-subtle)", color: "var(--text-primary)" }}
+                  data-testid="select-generation-mode"
                 >
                   {GENERATION_MODES.map((m) => (
                     <option key={m.id} value={m.id}>{m.label}</option>
                   ))}
                 </select>
               </div>
-              <div>
-                <p className="text-[11px] font-medium mb-1 text-right" style={{ color: "var(--text-secondary)" }}>Provider</p>
-                <div className="w-48">
+              <div className="flex items-center gap-1">
+                <span className="text-[10px] font-medium uppercase tracking-wide" style={{ color: "var(--text-muted)" }}>Provider</span>
+                <div className="w-44">
                   <ProviderCapabilitySelector
                     selectedProvider={provider}
                     onSelectProvider={setProvider}
@@ -1781,17 +1786,18 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                   />
                 </div>
               </div>
-              <div>
-                <p className="text-[11px] font-medium mb-1 text-right" style={{ color: "var(--text-secondary)" }}>Quality</p>
+              <div className="flex items-center gap-1">
+                <span className="text-[10px] font-medium uppercase tracking-wide" style={{ color: "var(--text-muted)" }}>Quality</span>
                 <select
                   value={qualityTier}
                   onChange={(e) => handleQualityTierChange(e.target.value)}
-                  className="text-xs rounded-lg border px-2 py-1.5 bg-transparent outline-none w-24"
+                  className="text-xs rounded-md border px-1.5 py-1 bg-transparent outline-none w-[88px]"
                   style={{
                     borderColor: qualityTier === 'draft' ? 'rgba(251, 191, 36, 0.4)' : qualityTier === 'premium' ? 'rgba(168, 85, 247, 0.4)' : qualityTier === 'ultra' ? 'rgba(239, 68, 68, 0.4)' : 'var(--border-subtle)',
                     color: qualityTier === 'draft' ? 'rgb(251, 191, 36)' : qualityTier === 'premium' ? 'rgb(168, 85, 247)' : qualityTier === 'ultra' ? 'rgb(239, 68, 68)' : 'var(--text-primary)',
                   }}
                   title={qualityTierDescription}
+                  data-testid="select-quality-tier"
                 >
                   <option value="draft">Draft</option>
                   <option value="standard">Standard</option>
@@ -1799,8 +1805,54 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                   <option value="ultra">Ultra</option>
                 </select>
               </div>
+              {(scene.microScenes?.length ?? 0) > 0 && (
+                <>
+                  <span className="mx-0.5 h-4 w-px" style={{ backgroundColor: "var(--border-subtle)" }} />
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const updated = (scene.microScenes || []).map((ms: any) => ({
+                        ...ms,
+                        generationMode: generationMode === "auto" ? undefined : generationMode,
+                        provider: (!provider || provider === "auto") ? undefined : provider,
+                        qualityTier,
+                      }));
+                      try {
+                        const [sceneRes, qualityRes] = await Promise.all([
+                          fetch(`/api/universal-video/projects/${projectId}/scenes/${sceneId}`, {
+                            method: "PATCH",
+                            headers: { "Content-Type": "application/json" },
+                            credentials: "include",
+                            body: JSON.stringify({ microScenes: updated }),
+                          }),
+                          fetch(`/api/universal-video/projects/${projectId}/quality-tier`, {
+                            method: "PATCH",
+                            headers: { "Content-Type": "application/json" },
+                            credentials: "include",
+                            body: JSON.stringify({ qualityTier }),
+                          }),
+                        ]);
+                        if (!sceneRes.ok || !qualityRes.ok) {
+                          throw new Error(`Server returned ${!sceneRes.ok ? sceneRes.status : qualityRes.status}`);
+                        }
+                        queryClient.invalidateQueries({ queryKey: [`/api/universal-video/projects/${projectId}`] });
+                        queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+                        toast({ title: `Applied Mode, Provider & Quality to ${updated.length} micro-scene${updated.length === 1 ? "" : "s"}` });
+                      } catch (err: any) {
+                        toast({ title: "Failed to apply to micro-scenes", description: err?.message, variant: "destructive" });
+                      }
+                    }}
+                    className="text-[10px] px-2 py-1 rounded-md border transition-colors hover:bg-purple-500/10 whitespace-nowrap"
+                    style={{ borderColor: "var(--border-subtle)", color: "var(--text-secondary)" }}
+                    data-testid="apply-to-all-microscenes"
+                    title="Copy Mode, Provider, and Quality to every micro-scene"
+                  >
+                    Apply to all micro-scenes
+                  </button>
+                </>
+              )}
             </div>
-            <p className="text-[10px] text-right max-w-[280px]" style={{ color: (() => {
+            <p className="text-[10px] text-right max-w-[320px]" style={{ color: (() => {
               const activeMode = generationMode === "auto"
                 ? (referenceImageUrls.length > 0 ? "i2v" : "t2v")
                 : generationMode;
@@ -1814,36 +1866,6 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                 return modeInfo?.description || "Select a generation mode";
               })()}
             </p>
-            {(scene.microScenes?.length ?? 0) > 0 && (
-              <button
-                type="button"
-                onClick={async () => {
-                  const updated = (scene.microScenes || []).map((ms: any) => ({
-                    ...ms,
-                    generationMode: generationMode === "auto" ? undefined : generationMode,
-                    provider: (!provider || provider === "auto") ? undefined : provider,
-                  }));
-                  try {
-                    await fetch(`/api/universal-video/projects/${projectId}/scenes/${sceneId}`, {
-                      method: "PATCH",
-                      headers: { "Content-Type": "application/json" },
-                      credentials: "include",
-                      body: JSON.stringify({ microScenes: updated }),
-                    });
-                    queryClient.invalidateQueries({ queryKey: [`/api/universal-video/projects/${projectId}`] });
-                    toast({ title: `Applied to ${updated.length} micro-scene${updated.length === 1 ? "" : "s"}` });
-                  } catch {
-                    toast({ title: "Failed to apply to micro-scenes", variant: "destructive" });
-                  }
-                }}
-                className="text-[10px] px-2 py-1 rounded-lg border transition-colors hover:bg-purple-500/10"
-                style={{ borderColor: "var(--border-subtle)", color: "var(--text-muted)" }}
-                data-testid="apply-to-all-microscenes"
-                title="Copy Mode + Provider to every micro-scene"
-              >
-                Apply to all micro-scenes
-              </button>
-            )}
             <div className="flex gap-1.5">
               <button
                 onClick={() => regenImageMutation.mutate()}
