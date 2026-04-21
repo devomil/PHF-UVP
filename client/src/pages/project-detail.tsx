@@ -707,6 +707,27 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
     generateThumbnailMutation.mutate(expandedSceneId);
   }, [expandedSceneId, project, isScriptReadyForBrief, isStudioPolishProject, generateThumbnailMutation]);
 
+  // Task 64: auto-refresh thumbnail when narration / visualDirection / imagePrompt
+  // change, mirroring today's style-change behavior. We only fire for scenes that
+  // already have a thumbnail (so first-time generation is still user-initiated)
+  // and dedupe by fingerprint to avoid retry storms when generation fails.
+  const autoRestaleAttemptedRef = useRef<Map<string, string>>(new Map());
+  useEffect(() => {
+    if (!isScriptReadyForBrief || isStudioPolishProject) return;
+    const allScenes: any[] = (project as any)?.scenes || [];
+    for (const s of allScenes) {
+      if (!s?.thumbnailUrl) continue;
+      if (s.thumbnailStatus === 'generating') continue;
+      const fingerprint = computeSceneFingerprint(s);
+      if (s.thumbnailGeneratedFor === fingerprint) continue;
+      if (autoRestaleAttemptedRef.current.get(s.id) === fingerprint) continue;
+      const basePrompt = (s.imagePrompt || s.visualDirection || s.narration || '').toString().trim();
+      if (!basePrompt) continue;
+      autoRestaleAttemptedRef.current.set(s.id, fingerprint);
+      generateThumbnailMutation.mutate(s.id);
+    }
+  }, [project, isScriptReadyForBrief, isStudioPolishProject, computeSceneFingerprint, generateThumbnailMutation]);
+
   const regenImageMutation = useMutation({
     mutationFn: async (sceneId: string) => {
       const res = await fetch(`/api/universal-video/${projectId}/scenes/${sceneId}/regenerate-image`, {
@@ -1565,9 +1586,12 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
                           const thumbStatus = (scene as any).thumbnailStatus as string | undefined;
                           const thumbUrl = (scene as any).thumbnailUrl as string | undefined;
                           const thumbErr = (scene as any).thumbnailError as string | undefined;
+                          const thumbGeneratedFor = (scene as any).thumbnailGeneratedFor as string | undefined;
                           const isGenerating =
                             thumbStatus === 'generating' ||
                             (generateThumbnailMutation.isPending && generateThumbnailMutation.variables === sceneId);
+                          const currentFingerprint = computeSceneFingerprint(scene);
+                          const isStale = !!thumbUrl && !isGenerating && thumbGeneratedFor !== currentFingerprint;
                           const aspectRatio = project?.outputFormat?.aspectRatio || '16:9';
                           const aspectClass = aspectRatio === '9:16' ? 'aspect-[9/16] w-24' : aspectRatio === '1:1' ? 'aspect-square w-32' : 'aspect-video w-44';
                           return (
@@ -1586,24 +1610,40 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
                                 )}
                               </div>
                               <div className="flex-1 min-w-0 flex flex-col gap-1.5">
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); generateThumbnailMutation.mutate(sceneId); }}
-                                  disabled={isGenerating}
-                                  className="self-start text-xs px-2.5 py-1 rounded-md border transition-colors hover:border-purple-400/50 disabled:opacity-50 inline-flex items-center gap-1.5"
-                                  style={{ borderColor: "var(--border-subtle)", color: "var(--text-secondary)" }}
-                                  data-testid={`button-regen-thumbnail-${sceneId}`}
-                                >
-                                  {isGenerating ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
-                                  {thumbUrl ? 'Regenerate thumbnail' : 'Generate thumbnail'}
-                                </button>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); generateThumbnailMutation.mutate(sceneId); }}
+                                    disabled={isGenerating}
+                                    className="self-start text-xs px-2.5 py-1 rounded-md border transition-colors hover:border-purple-400/50 disabled:opacity-50 inline-flex items-center gap-1.5"
+                                    style={{ borderColor: "var(--border-subtle)", color: "var(--text-secondary)" }}
+                                    data-testid={`button-regen-thumbnail-${sceneId}`}
+                                  >
+                                    {isGenerating ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                                    {thumbUrl ? 'Regenerate thumbnail' : 'Generate thumbnail'}
+                                  </button>
+                                  {isStale && (
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); generateThumbnailMutation.mutate(sceneId); }}
+                                      disabled={isGenerating}
+                                      className="text-[10px] px-2 py-0.5 rounded-full border inline-flex items-center gap-1 bg-amber-500/10 border-amber-500/40 text-amber-300 hover:bg-amber-500/20 transition-colors disabled:opacity-50"
+                                      title="The narration or visual prompt changed since this thumbnail was generated."
+                                      data-testid={`badge-thumbnail-stale-${sceneId}`}
+                                    >
+                                      <AlertTriangle className="w-3 h-3" />
+                                      Stale — regenerate
+                                    </button>
+                                  )}
+                                </div>
                                 <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>
                                   {isGenerating
                                     ? 'Rendering preview…'
                                     : thumbErr
                                       ? `Error: ${thumbErr}`
-                                      : thumbUrl
-                                        ? 'Cheap preview — final video may differ.'
-                                        : 'Sanity-check the visual style before generating.'}
+                                      : isStale
+                                        ? 'Preview is out of date — narration or prompt changed.'
+                                        : thumbUrl
+                                          ? 'Cheap preview — final video may differ.'
+                                          : 'Sanity-check the visual style before generating.'}
                                 </span>
                               </div>
                             </div>
