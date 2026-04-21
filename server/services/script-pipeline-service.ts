@@ -980,7 +980,14 @@ ${s.chapterTitle ? `Chapter Title: "${s.chapterTitle}" (create a visual METAPHOR
 
     let enforcedVisualDirection = s4.visualDirection;
     let enforcedNegativePrompt = s4.negativePrompt || undefined;
-    if (multiStyleMode && assignedArtPresetId) {
+    // Apply assigned-preset envelope (style marker + suffix + negatives) whenever
+    // a per-scene preset is set — both in multi-style mode AND in single-mode
+    // when the LLM (or user) overrode the project default for this scene.
+    // Without this, single-mode per-scene overrides got the right provider hint
+    // and image-prompt suffix downstream but never had the preset's negative
+    // additions enforced on the negativePrompt, leaving stylized presets
+    // exposed to drift on overridden scenes.
+    if (assignedArtPresetId) {
       const assignedPreset = getVisualArtPreset(assignedArtPresetId);
       if (assignedPreset) {
         const styleMarker = assignedPreset.styleMarkerPrefix || assignedPreset.name;
