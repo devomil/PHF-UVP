@@ -7,7 +7,7 @@ import { SCENE_CONTENT_TAGS } from "@shared/config/scene-content-tags";
 import { Button } from "@/components/ui/button";
 import { ProviderCatalogSelector } from "@/components/video/provider-catalog-selector";
 import { SlotTile } from "@/components/video/scene-routing-ui";
-import { VIDEO_PROVIDERS as PROVIDER_CONFIG } from "@shared/provider-config";
+import { VIDEO_PROVIDERS as PROVIDER_CONFIG, type VideoProvider } from "@shared/provider-config";
 import { useToast } from "@/hooks/use-toast";
 import { EnhancedSceneEditor } from "@/components/video/enhanced-scene-editor";
 import { SceneOverlayEditor, SceneOverlayItem } from "@/components/video/scene-overlay-editor";
@@ -5403,13 +5403,18 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
               // Provider-aware slot enable/disable.
               // "auto" means the user hasn't pinned a provider yet — fall back to
               // whatever the most recent job ran on so we don't over-disable.
-              const rawProvider = (selectedProvider && selectedProvider !== "auto") ? selectedProvider : (genInfo.provider || "");
+              // visual.provider is the post-resolution provider returned by /assets.
+              const visualProvider = assetsQuery.data?.visual?.provider as string | null | undefined;
+              const rawProvider = (selectedProvider && selectedProvider !== "auto")
+                ? selectedProvider
+                : (genInfo.provider || visualProvider || "");
               const providerKey = String(rawProvider).toLowerCase();
-              const providerCfg = (PROVIDER_CONFIG as any)?.[providerKey] || (PROVIDER_CONFIG as any)?.[providerKey?.split('-')[0]];
-              // Default to false when capability is unknown — safer for new providers
-              // and matches the architectural intent that only explicitly multi-image
-              // providers should accept character/logo/extra slots.
-              const supportsMulti = providerCfg?.multiImageSupport === true;
+              const providers = PROVIDER_CONFIG as Record<string, VideoProvider>;
+              const providerCfg: VideoProvider | undefined =
+                providers[providerKey] || providers[providerKey.split('-')[0]];
+              // multiImageSupport is an OBJECT (max images, syntax, hint) when the
+              // provider supports multi-image, undefined otherwise. Coerce to bool.
+              const supportsMulti = Boolean(providerCfg?.multiImageSupport);
               const slotsEnabled = {
                 product: true,
                 character: supportsMulti,
@@ -5418,14 +5423,18 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
               };
 
               // Stale fingerprint vs last completed job.
+              // Logo is included so changing brand bible logo also surfaces the
+              // "regenerate to apply" hint, even though the slot itself is read-only.
               const lastFingerprint = JSON.stringify({
                 p: genInfo.sourceImageUrl || null,
                 c: genInfo.characterRefImageUrl || null,
+                l: genInfo.brandLogoUrl || null,
                 e: serverExtras.slice().sort(),
               });
               const currentFingerprint = JSON.stringify({
                 p: effProduct,
                 c: effCharacter,
+                l: effLogo,
                 e: effExtras.slice().sort(),
               });
               const isStale = lastFingerprint !== currentFingerprint;

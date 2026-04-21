@@ -857,6 +857,7 @@ export async function registerRoutes(app: Express) {
           characterRefImageUrl: latestI2vSettings.characterRefImageUrl || null,
           referenceImages: Array.isArray(latestI2vSettings.referenceImages) ? latestI2vSettings.referenceImages : [],
           brandLogoUrl,
+          provider: qc.visual?.provider || latestJob?.provider || null,
         },
       });
     } catch (error) {
@@ -1008,7 +1009,7 @@ export async function registerRoutes(app: Express) {
       const finalReferenceImages: string[] | undefined = extrasExplicitlyCleared
         ? undefined
         : (Array.isArray(newReferenceImages)
-            ? newReferenceImages.filter((u: any) => typeof u === 'string' && u.length > 0)
+            ? (newReferenceImages as unknown[]).filter((u): u is string => typeof u === 'string' && u.length > 0)
             : (Array.isArray(originalI2vSettings.referenceImages) ? originalI2vSettings.referenceImages : undefined));
 
       let finalPromptWithStyle = finalPrompt;
