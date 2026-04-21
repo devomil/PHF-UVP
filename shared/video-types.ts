@@ -383,6 +383,14 @@ export interface Scene {
     y: number;
     width?: number;
   }>;
+  // Task 61: Cheap still-image preview thumbnail for Creative Brief screen.
+  // Generated from imagePrompt (or visualDirection) + assigned art preset
+  // before any expensive video generation runs.
+  thumbnailUrl?: string;
+  thumbnailStatus?: 'idle' | 'generating' | 'complete' | 'failed';
+  thumbnailError?: string;
+  thumbnailGeneratedFor?: string;
+  thumbnailUpdatedAt?: string;
 }
 
 // Phase 8A: Scene analysis types

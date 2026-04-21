@@ -3171,8 +3171,8 @@ router.patch('/projects/:projectId/scenes/:sceneId', isAuthenticated, async (req
       return res.status(404).json({ success: false, error: 'Scene not found' });
     }
 
-    const allowedFields = ['narration', 'visualDirection', 'duration', 'type', 'name', 'title', 'searchQuery', 'keyPoints', 'overlayItems', 'microScenes', 'contentTag', 'artPresetId', 'assignedStyleId', 'textImageEnabled', 'onScreenText', 'lowerThird', 'shotType', 'cinematicNotes'];
-    const clearableFields = new Set(['artPresetId', 'assignedStyleId', 'onScreenText', 'lowerThird', 'shotType', 'cinematicNotes', 'contentTag']);
+    const allowedFields = ['narration', 'visualDirection', 'duration', 'type', 'name', 'title', 'searchQuery', 'keyPoints', 'overlayItems', 'microScenes', 'contentTag', 'artPresetId', 'assignedStyleId', 'textImageEnabled', 'onScreenText', 'lowerThird', 'shotType', 'cinematicNotes', 'thumbnailUrl', 'thumbnailStatus', 'thumbnailError', 'thumbnailGeneratedFor', 'thumbnailUpdatedAt'];
+    const clearableFields = new Set(['artPresetId', 'assignedStyleId', 'onScreenText', 'lowerThird', 'shotType', 'cinematicNotes', 'contentTag', 'thumbnailUrl', 'thumbnailStatus', 'thumbnailError', 'thumbnailGeneratedFor', 'thumbnailUpdatedAt']);
     for (const field of allowedFields) {
       if (Object.prototype.hasOwnProperty.call(updates, field) && updates[field] === null && clearableFields.has(field)) {
         delete (scenes[sceneIndex] as any)[field];
@@ -3232,6 +3232,126 @@ router.patch('/projects/:projectId/scenes/:sceneId', isAuthenticated, async (req
     res.json({ success: true, scene: scenes[sceneIndex] });
   } catch (error: any) {
     console.error('[UpdateScene] Error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Task 61: Generate a cheap still-image thumbnail for the Creative Brief preview.
+// Uses Flux Schnell (~$0.003) so users can sanity-check style mix before paying
+// for full asset generation.
+router.post('/projects/:projectId/scenes/:sceneId/generate-thumbnail', isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const userId = (req.user as any)?.id;
+    const { projectId, sceneId } = req.params;
+
+    const projectData = await getProjectFromDb(projectId);
+    if (!projectData) {
+      return res.status(404).json({ success: false, error: 'Project not found' });
+    }
+    if (projectData.ownerId !== userId) {
+      return res.status(403).json({ success: false, error: 'Access denied' });
+    }
+
+    const scenes = projectData.scenes || [];
+    const sceneIndex = scenes.findIndex((s: any) => s.id === sceneId);
+    if (sceneIndex === -1) {
+      return res.status(404).json({ success: false, error: 'Scene not found' });
+    }
+
+    const scene: any = scenes[sceneIndex];
+    const { getVisualArtPreset } = await import('../../shared/config/visual-art-presets');
+    const presetId = scene.assignedStyleId || scene.artPresetId || (projectData.progress as any)?.artPresetId || (projectData as any).artPresetId;
+    const preset = presetId ? getVisualArtPreset(presetId) : null;
+
+    const basePrompt = (scene.imagePrompt || scene.visualDirection || scene.narration || '').toString().trim();
+    if (!basePrompt) {
+      return res.status(400).json({ success: false, error: 'Scene has no prompt to render a thumbnail from' });
+    }
+
+    const fullPrompt = preset
+      ? `${preset.imagePromptPrefix} ${basePrompt}, ${preset.imagePromptSuffix}`.trim()
+      : basePrompt;
+
+    const aspectRatio = projectData.outputFormat?.aspectRatio || '16:9';
+    let width = 512;
+    let height = 288;
+    if (aspectRatio === '9:16') { width = 288; height = 512; }
+    else if (aspectRatio === '1:1') { width = 384; height = 384; }
+
+    // Mark as generating
+    scene.thumbnailStatus = 'generating';
+    delete scene.thumbnailError;
+    await db.update(universalVideoProjects)
+      .set({ scenes, updatedAt: new Date() })
+      .where(eq(universalVideoProjects.projectId, projectId));
+
+    try {
+      const image = await imageGenerationService.generateImage({
+        prompt: fullPrompt,
+        provider: 'flux',
+        qualityTier: 'standard',
+        width,
+        height,
+        aspectRatio,
+      });
+
+      const fresh = await getProjectFromDb(projectId);
+      const freshScenes = fresh?.scenes || scenes;
+      const freshIdx = freshScenes.findIndex((s: any) => s.id === sceneId);
+      if (freshIdx === -1) {
+        return res.status(404).json({ success: false, error: 'Scene not found' });
+      }
+
+      // Stale-write protection: if the scene's style or prompt has changed
+      // since this request started, a newer regeneration is in flight or has
+      // already completed. Discard our (now-outdated) result instead of
+      // overwriting the fresher thumbnail.
+      const freshScene: any = freshScenes[freshIdx];
+      const freshPresetId = freshScene.assignedStyleId || freshScene.artPresetId || (fresh as any)?.progress?.artPresetId || (fresh as any)?.artPresetId;
+      const freshBasePrompt = (freshScene.imagePrompt || freshScene.visualDirection || freshScene.narration || '').toString().trim();
+      const requestFingerprint = `${presetId || 'auto'}::${basePrompt.substring(0, 80)}`;
+      const freshFingerprint = `${freshPresetId || 'auto'}::${freshBasePrompt.substring(0, 80)}`;
+      if (requestFingerprint !== freshFingerprint) {
+        console.log(`[BriefThumbnail] Discarding stale result for scene ${sceneId} — style/prompt changed during generation`);
+        return res.json({
+          success: true,
+          stale: true,
+          thumbnailUrl: freshScene.thumbnailUrl || null,
+        });
+      }
+
+      freshScene.thumbnailUrl = image.url;
+      freshScene.thumbnailStatus = 'complete';
+      freshScene.thumbnailGeneratedFor = requestFingerprint;
+      freshScene.thumbnailUpdatedAt = new Date().toISOString();
+      delete freshScene.thumbnailError;
+
+      await db.update(universalVideoProjects)
+        .set({ scenes: freshScenes, updatedAt: new Date() })
+        .where(eq(universalVideoProjects.projectId, projectId));
+
+      return res.json({
+        success: true,
+        thumbnailUrl: image.url,
+        provider: image.provider,
+        cost: image.cost,
+      });
+    } catch (genError: any) {
+      const fresh = await getProjectFromDb(projectId);
+      const freshScenes = fresh?.scenes || scenes;
+      const freshIdx = freshScenes.findIndex((s: any) => s.id === sceneId);
+      if (freshIdx !== -1) {
+        (freshScenes[freshIdx] as any).thumbnailStatus = 'failed';
+        (freshScenes[freshIdx] as any).thumbnailError = genError.message || String(genError);
+        await db.update(universalVideoProjects)
+          .set({ scenes: freshScenes, updatedAt: new Date() })
+          .where(eq(universalVideoProjects.projectId, projectId));
+      }
+      console.error('[BriefThumbnail] Generation failed:', genError);
+      return res.status(500).json({ success: false, error: genError.message || 'Thumbnail generation failed' });
+    }
+  } catch (error: any) {
+    console.error('[BriefThumbnail] Error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });

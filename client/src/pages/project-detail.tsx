@@ -602,6 +602,44 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
     },
   });
 
+  const generateThumbnailMutation = useMutation({
+    mutationFn: async (sceneId: string) => {
+      const res = await fetch(`/api/universal-video/projects/${projectId}/scenes/${sceneId}/generate-thumbnail`, {
+        method: "POST",
+        credentials: "include",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "Failed to generate thumbnail");
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Thumbnail failed", description: err.message, variant: "destructive" });
+      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+    },
+  });
+
+  // Task 61: when a scene's Creative Brief panel becomes visible (expanded),
+  // auto-generate a thumbnail for that scene if it doesn't already have one.
+  // Throttled per-scene-per-session via a ref so we never re-fire automatically
+  // for a scene we've already attempted; manual Regenerate stays unaffected.
+  const autoThumbnailAttemptedRef = useRef<Set<string>>(new Set());
+  const isStudioPolishProject = (project?.progress as any)?.projectMode === 'studio-polish';
+  const isScriptReadyForBrief = ((project?.progress as any)?.scriptGeneration?.status === 'completed') ||
+    ((project as any)?.scenes?.length ?? 0) > 0;
+  useEffect(() => {
+    if (!expandedSceneId || !isScriptReadyForBrief || isStudioPolishProject) return;
+    const scene: any = (project as any)?.scenes?.find((s: any) => s.id === expandedSceneId);
+    if (!scene) return;
+    if (scene.thumbnailUrl) return;
+    if (scene.thumbnailStatus === 'generating') return;
+    if (autoThumbnailAttemptedRef.current.has(expandedSceneId)) return;
+    autoThumbnailAttemptedRef.current.add(expandedSceneId);
+    generateThumbnailMutation.mutate(expandedSceneId);
+  }, [expandedSceneId, project, isScriptReadyForBrief, isStudioPolishProject, generateThumbnailMutation]);
+
   const regenImageMutation = useMutation({
     mutationFn: async (sceneId: string) => {
       const res = await fetch(`/api/universal-video/${projectId}/scenes/${sceneId}/regenerate-image`, {
@@ -1410,6 +1448,55 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
                           <Sparkles className="w-3.5 h-3.5 text-purple-400" />
                           <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>Scene Brief</span>
                         </div>
+                        {/* Task 61: Storyboard thumbnail preview */}
+                        {(() => {
+                          const thumbStatus = (scene as any).thumbnailStatus as string | undefined;
+                          const thumbUrl = (scene as any).thumbnailUrl as string | undefined;
+                          const thumbErr = (scene as any).thumbnailError as string | undefined;
+                          const isGenerating =
+                            thumbStatus === 'generating' ||
+                            (generateThumbnailMutation.isPending && generateThumbnailMutation.variables === sceneId);
+                          const aspectRatio = project?.outputFormat?.aspectRatio || '16:9';
+                          const aspectClass = aspectRatio === '9:16' ? 'aspect-[9/16] w-24' : aspectRatio === '1:1' ? 'aspect-square w-32' : 'aspect-video w-44';
+                          return (
+                            <div className="flex items-start gap-3">
+                              <div
+                                className={`${aspectClass} rounded-lg border overflow-hidden flex items-center justify-center flex-shrink-0`}
+                                style={{ borderColor: "var(--border-subtle)", backgroundColor: "rgba(124,58,237,0.08)" }}
+                                data-testid={`scene-thumbnail-${sceneId}`}
+                              >
+                                {isGenerating ? (
+                                  <Loader2 className="w-5 h-5 animate-spin text-purple-400" />
+                                ) : thumbUrl ? (
+                                  <img src={thumbUrl} alt="Scene preview" className="w-full h-full object-cover" />
+                                ) : (
+                                  <Sparkles className="w-5 h-5 text-purple-400/40" />
+                                )}
+                              </div>
+                              <div className="flex-1 min-w-0 flex flex-col gap-1.5">
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); generateThumbnailMutation.mutate(sceneId); }}
+                                  disabled={isGenerating}
+                                  className="self-start text-xs px-2.5 py-1 rounded-md border transition-colors hover:border-purple-400/50 disabled:opacity-50 inline-flex items-center gap-1.5"
+                                  style={{ borderColor: "var(--border-subtle)", color: "var(--text-secondary)" }}
+                                  data-testid={`button-regen-thumbnail-${sceneId}`}
+                                >
+                                  {isGenerating ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                                  {thumbUrl ? 'Regenerate thumbnail' : 'Generate thumbnail'}
+                                </button>
+                                <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>
+                                  {isGenerating
+                                    ? 'Rendering preview…'
+                                    : thumbErr
+                                      ? `Error: ${thumbErr}`
+                                      : thumbUrl
+                                        ? 'Cheap preview — final video may differ.'
+                                        : 'Sanity-check the visual style before generating.'}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })()}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                           <div>
                             <label className="block text-[11px] font-medium mb-1" style={{ color: "var(--text-muted)" }}>Visual Style</label>
@@ -1417,11 +1504,18 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
                               value={scene.artPresetId || ""}
                               onChange={(e) => {
                                 const v = e.target.value;
-                                if (!v) {
-                                  updateSceneMutation.mutate({ sceneId, updates: { artPresetId: null, assignedStyleId: null } });
-                                } else {
-                                  updateSceneMutation.mutate({ sceneId, updates: { artPresetId: v, assignedStyleId: v } });
-                                }
+                                const updates = !v
+                                  ? { artPresetId: null, assignedStyleId: null }
+                                  : { artPresetId: v, assignedStyleId: v };
+                                updateSceneMutation.mutate(
+                                  { sceneId, updates },
+                                  {
+                                    onSuccess: () => {
+                                      // Task 61: always refresh thumbnail when assigned style changes
+                                      generateThumbnailMutation.mutate(sceneId);
+                                    },
+                                  }
+                                );
                               }}
                               className="w-full text-sm rounded-lg border px-2.5 py-1.5 bg-transparent outline-none"
                               style={{ borderColor: "var(--border-subtle)", color: "var(--text-primary)" }}
