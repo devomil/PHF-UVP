@@ -432,6 +432,16 @@ export function PromptInspectorDrawer({
     };
   }, [projectId, sceneId, visualDirection, open]);
 
+  // Close on Esc for parity with standard drawer/dialog behavior
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
   return (
     <>
       {/* backdrop */}
