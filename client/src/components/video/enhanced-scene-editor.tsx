@@ -1455,20 +1455,32 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                   {(() => { const p = PROVIDER_CONFIG[(scene as any).providerHint]; return p ? p.displayName : (scene as any).providerHint; })()}
                 </span>
               )}
-              {(scene.assets?.imageProvider || routingPreview?.recommendedProvider) && (
-                <ProviderPill
-                  label="T2I"
-                  providerId={imageProviderLock || scene.assets?.imageProvider || routingPreview?.recommendedProvider || 'auto'}
-                  recommendedReason={routingPreview?.recommendedReason}
-                  isLocked={!!imageProviderLock}
-                  scope="image"
-                  onPin={(p) => setProviderLockMutation.mutate({ imageProviderLock: p })}
-                  onClear={() => setProviderLockMutation.mutate({ imageProviderLock: null })}
-                  styleRecProviders={styleRecProviders}
-                  styleRecLabel={styleRecLabel}
-                  tone="blue"
-                />
-              )}
+              {(scene.assets?.imageProvider || routingPreview?.recommendedProvider) && (() => {
+                const lastUsed = scene.assets?.imageProvider;
+                const recommended = routingPreview?.recommendedProvider;
+                // When not pinned, prefer the live recommendation so the pill, popover header,
+                // and reason all describe the same provider. Surface the previously-used
+                // provider as a small "prev:" hint when it differs.
+                const effective = imageProviderLock || recommended || lastUsed || 'auto';
+                const previous = !imageProviderLock && recommended && lastUsed && recommended !== lastUsed
+                  ? lastUsed
+                  : undefined;
+                return (
+                  <ProviderPill
+                    label="T2I"
+                    providerId={effective}
+                    recommendedReason={routingPreview?.recommendedReason}
+                    isLocked={!!imageProviderLock}
+                    scope="image"
+                    onPin={(p) => setProviderLockMutation.mutate({ imageProviderLock: p })}
+                    onClear={() => setProviderLockMutation.mutate({ imageProviderLock: null })}
+                    styleRecProviders={styleRecProviders}
+                    styleRecLabel={styleRecLabel}
+                    tone="blue"
+                    previousProviderId={previous}
+                  />
+                );
+              })()}
               {scene.assets?.videoProvider && (
                 <ProviderPill
                   label="Video"

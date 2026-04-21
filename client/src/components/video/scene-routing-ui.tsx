@@ -226,6 +226,7 @@ export function ProviderPill({
   styleRecProviders,
   styleRecLabel,
   tone = "blue",
+  previousProviderId,
 }: {
   label: string;
   providerId: string;
@@ -237,6 +238,7 @@ export function ProviderPill({
   styleRecProviders?: string[];
   styleRecLabel?: string;
   tone?: "blue" | "green";
+  previousProviderId?: string;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement | null>(null);
@@ -268,6 +270,14 @@ export function ProviderPill({
       >
         {label}: {fmtProvider(providerId)}
         {isLocked && <Lock className="w-2.5 h-2.5 ml-0.5" />}
+        {!isLocked && previousProviderId && previousProviderId !== providerId && (
+          <span
+            className="ml-1 opacity-70 font-normal"
+            style={{ fontSize: "9px" }}
+          >
+            (prev: {fmtProvider(previousProviderId)})
+          </span>
+        )}
       </button>
       {open && (
         <div
@@ -280,6 +290,11 @@ export function ProviderPill({
               <p className="text-[11px] font-semibold text-white">
                 {isLocked ? "Pinned by you" : "Auto-selected"}: {fmtProvider(providerId)}
               </p>
+              {!isLocked && previousProviderId && previousProviderId !== providerId && (
+                <p className="text-[10px] mt-0.5 leading-relaxed" style={{ color: "rgba(255,255,255,0.45)" }}>
+                  Previously generated with {fmtProvider(previousProviderId)} — re-run will use {fmtProvider(providerId)}.
+                </p>
+              )}
               {recommendedReason && (
                 <p className="text-[10px] mt-0.5 leading-relaxed" style={{ color: "rgba(255,255,255,0.55)" }}>
                   {recommendedReason}
