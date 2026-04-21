@@ -15,7 +15,14 @@ export async function setupVite(app: Express, httpServer?: HttpServer) {
     configFile: path.resolve(__dirname, "..", "vite.config.ts"),
     server: {
       middlewareMode: true,
-      hmr: httpServer ? { server: httpServer, clientPort: 443, protocol: "wss" } : false,
+      hmr: httpServer
+        ? {
+            server: httpServer,
+            clientPort: 443,
+            protocol: "wss",
+            host: process.env.REPLIT_DEV_DOMAIN,
+          }
+        : false,
       allowedHosts: true,
     },
     appType: "spa",
