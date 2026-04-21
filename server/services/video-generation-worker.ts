@@ -769,7 +769,7 @@ class VideoGenerationWorker {
           } : undefined,
           ...(jobArtPresetId ? { artPresetId: jobArtPresetId } : {}),
           ...(jobContentTag ? { contentTag: jobContentTag } : {}),
-          ...(isCharacterRef ? { isCharacterReference: true } : {}),
+          ...((isCharacterRef || (jobI2vSettings as any)?.isCharacterReference) ? { isCharacterReference: true } : {}),
         });
 
 // Log which provider actually fulfilled the request

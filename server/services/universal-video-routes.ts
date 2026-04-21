@@ -6336,17 +6336,26 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, asy
                                    visualDir.includes('hiking') ||
                                    visualDir.includes('activity');
     
-    // Determine source image for I2V - use provided sourceImageUrl or scene's brandAssetUrl
-    // BUT skip brandAssetUrl if the visual direction requires AI-generated people content
-    // If explicit generationMode is "t2v", skip all source images (user chose text-to-video)
+    // Determine source image for I2V - use provided sourceImageUrl or scene's brandAssetUrl.
+    // If the visual direction requires AI-generated people/activity content, we used to drop
+    // the brandAssetUrl entirely. That silently turned the regen into pure T2V and the AI
+    // invented its own product (e.g. a generic mason jar replacing the user's actual tub),
+    // which is exactly the bug the user reported. Instead, keep the brandAssetUrl and flag
+    // it as a reference image (not a first-frame to animate) so providers that support
+    // reference-mode (Kling 2.6/2.6-pro, Veo 3.1, Runway, Luma, Hailuo) can compose a NEW
+    // scene that incorporates the actual product. The downstream `isCharacterReference`
+    // flag (already plumbed through job-processor → ai-video-service → piapi-video-service)
+    // forces those providers into REFERENCE MODE regardless of prompt-keyword detection.
+    // If explicit generationMode is "t2v", skip all source images (user chose text-to-video).
     const explicitMode = generationMode || 'auto';
     const forceT2V = explicitMode === 't2v';
     const forceI2V = explicitMode === 'i2v';
-    const shouldUseBrandAsset = !forceT2V && scene.brandAssetUrl && !requiresPeopleContent;
+    const shouldUseBrandAsset = !forceT2V && !!scene.brandAssetUrl;
+    const useBrandAssetAsReference = shouldUseBrandAsset && requiresPeopleContent && !sourceImageUrl;
     const relativeSourceUrl = forceT2V ? undefined : (sourceImageUrl || (shouldUseBrandAsset ? scene.brandAssetUrl : undefined));
-    console.log(`[Phase9B-Async] Explicit generation mode: ${explicitMode}`);
+    console.log(`[Phase9B-Async] Explicit generation mode: ${explicitMode} (forceI2V=${forceI2V})`);
     console.log(`[Phase9B-Async] Scene brandAssetUrl: ${scene.brandAssetUrl?.substring(0, 80) || 'none'}`);
-    console.log(`[Phase9B-Async] Requires people content: ${requiresPeopleContent}, will use brandAsset: ${shouldUseBrandAsset}`);
+    console.log(`[Phase9B-Async] Requires people content: ${requiresPeopleContent}, will use brandAsset: ${shouldUseBrandAsset}, asReference: ${useBrandAssetAsReference}`);
     console.log(`[Phase9B-Async] Relative source image URL: ${relativeSourceUrl?.substring(0, 80) || 'none (T2V mode)'}`);
     
     // Convert relative URL to signed public URL for external video providers
@@ -6492,7 +6501,18 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, asy
     const jobI2vWithHint = {
       ...(i2vSettings || {}),
       ...(!provider && sceneProviderHint ? { providerHint: sceneProviderHint } : {}),
+      // When the brandAsset is being used in a people/activity scene, force the provider into
+      // reference-image composition mode (vs first-frame animation). Existing flag, repurposed
+      // for product references — semantically it just means "this image is a reference, not a
+      // frame to animate". Without this, prompt-keyword detection can fall through to animate
+      // mode and freeze the first frame on a static product still.
+      ...(useBrandAssetAsReference && finalSourceImageUrl && !(i2vSettings?.isCharacterReference)
+        ? { isCharacterReference: true }
+        : {}),
     };
+    if (useBrandAssetAsReference && finalSourceImageUrl) {
+      console.log(`[Phase9B-Async] ✓ Forcing REFERENCE MODE — product image will steer composition, not animate the first frame`);
+    }
 
     const job = await videoGenerationWorker.createJob({
       projectId,
