@@ -5536,7 +5536,17 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
                     <SlotTile
                       label="Logo"
                       url={slotsEnabled.logo ? effLogo : null}
-                      emptyAction={() => window.open("/brand-bible#assets", "_blank")}
+                      emptyAction={() => {
+                        if (!slotsEnabled.logo) {
+                          toast({
+                            title: "Single-image provider",
+                            description: `${providerCfg?.label || providerKey} can't compose a logo alongside the product. Try Kling 2.x, Veo 3.1, Luma, Hailuo, or Runway.`,
+                            variant: "destructive",
+                          });
+                          return;
+                        }
+                        window.open("/brand-bible#assets", "_blank");
+                      }}
                       emptyHint={slotsEnabled.logo ? "Add a logo to your brand bible" : "Not supported by this provider"}
                       badgeColor="rgba(168,85,247,0.4)"
                       onClick={() => effLogo && (setReferenceLightboxUrl(effLogo), setReferenceLightboxOpen(true))}
@@ -5568,7 +5578,7 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
 
                   {!supportsMulti && (
                     <p className="text-[10px] italic" style={{ color: "var(--text-muted)" }}>
-                      {(providerCfg?.label || providerKey || "This provider")} only accepts a single product reference. Character, logo, and extra slots will be ignored.
+                      {(providerCfg?.label || providerKey || "This provider")} only accepts a single reference image. Use Product OR Character — Logo and Extras are disabled.
                     </p>
                   )}
                   {isRemoved && (
