@@ -1401,14 +1401,15 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
                             {isEditing ? <Save className="w-3.5 h-3.5" /> : <Edit2 className="w-3.5 h-3.5" />}
                           </button>
                         )}
-                        {isStudioPolish && scenes.length > 1 && (
+                        {(scriptReady || isStudioPolish) && scenes.length > 1 && (
                           <>
                             <button
                               onClick={(e) => { e.stopPropagation(); if (index > 0) moveSceneMutation.mutate({ fromIndex: index, toIndex: index - 1 }); }}
                               disabled={index === 0 || moveSceneMutation.isPending}
                               className="p-1.5 rounded-lg border transition-colors hover:border-amber-500/30 disabled:opacity-30"
                               style={{ borderColor: "var(--border-subtle)", color: "var(--text-muted)" }}
-                              title="Move up"
+                              title="Move scene up"
+                              data-testid={`button-move-scene-up-${sceneId}`}
                             >
                               <ChevronUp className="w-3.5 h-3.5" />
                             </button>
@@ -1417,7 +1418,8 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
                               disabled={index === scenes.length - 1 || moveSceneMutation.isPending}
                               className="p-1.5 rounded-lg border transition-colors hover:border-amber-500/30 disabled:opacity-30"
                               style={{ borderColor: "var(--border-subtle)", color: "var(--text-muted)" }}
-                              title="Move down"
+                              title="Move scene down"
+                              data-testid={`button-move-scene-down-${sceneId}`}
                             >
                               <ChevronDown className="w-3.5 h-3.5" />
                             </button>
