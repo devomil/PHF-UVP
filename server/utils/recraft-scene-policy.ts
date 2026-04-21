@@ -3,6 +3,11 @@ export interface SceneTextRoutingResult {
   reason: string;
   needsTextInjection: boolean;
   suggestedTextElement?: string;
+  // True when the prompt asks for a real brand LOGO (image, not typography).
+  // Recraft can't reproduce a PNG logo — these scenes should route to a
+  // reference-image-aware provider (Nano Banana 2) and have the brand's
+  // actual logo PNG attached as a reference.
+  needsLogoComposition?: boolean;
 }
 
 const BRAND_NAMES = [
@@ -15,11 +20,17 @@ const LOCATION_WORDS = [
   'studio', 'spa', 'dispensary', 'apothecary',
 ];
 
+// Words that indicate ENVIRONMENTAL TYPOGRAPHY (Recraft V3 territory).
+// Note: "logo" was intentionally REMOVED — a real brand logo is a PNG image
+// that Recraft cannot reproduce; those go to Nano Banana 2 with the actual
+// logo attached as a reference image.
 const VISUAL_TEXT_KEYWORDS = [
-  'sign', 'logo', 'label', 'text', 'title', 'packaging', 'bottle label',
+  'sign', 'label', 'text', 'title', 'packaging', 'bottle label',
   'banner', 'poster', 'nameplate', 'plaque', 'signage', 'brand',
   'reading', 'written', 'inscribed', 'printed',
 ];
+
+const LOGO_KEYWORDS = ['logo', 'emblem', 'crest', 'wordmark'];
 
 const HARD_ROUTE_SCENE_TYPES = new Set([
   'cta',
@@ -57,9 +68,23 @@ export function evaluateSceneTextRouting(scene: {
   // visual-text keywords (which fire on common words like "title", "label",
   // "reading", "brand" that are cinematography vocabulary, not real signage).
   const visualHasTextKeyword = VISUAL_TEXT_KEYWORDS.some(k => visualDir.includes(k));
+  const visualHasLogoKeyword = LOGO_KEYWORDS.some(k => visualDir.includes(k));
   const detectedBrand = BRAND_NAMES.find(name => narration.includes(name));
   const visualMentionsBrand = detectedBrand ? visualDir.includes(detectedBrand) : false;
   const isHardRoute = HARD_ROUTE_SCENE_TYPES.has(sceneType);
+
+  // Logo-in-scene takes precedence over ALL other routing: a real logo PNG
+  // belongs on Nano Banana 2 (reference-image conditioning), NOT Recraft —
+  // even for CTA / title-card hard-route scenes that normally lock to Recraft.
+  if (visualHasLogoKeyword) {
+    const reasonPrefix = isHardRoute ? `scene type "${sceneType}" + ` : '';
+    return {
+      useRecraft: false,
+      reason: `${reasonPrefix}visual direction asks for a real brand logo — routing to image-conditioned provider (Nano Banana 2) with logo as reference`,
+      needsTextInjection: false,
+      needsLogoComposition: true,
+    };
+  }
 
   // Strongest signal: narration explicitly names a known brand. Inject a
   // concrete signage element unless the visual direction already names that

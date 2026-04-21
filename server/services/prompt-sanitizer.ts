@@ -41,6 +41,14 @@ export interface SanitizeOptions {
    * purpose of routing to them.
    */
   preserveText?: boolean;
+  /**
+   * When true, KEEPS "logo" / brand-mark phrasing in the prompt and skips the
+   * brand-name → "wellness center" rewrite. Use for image-conditioned
+   * providers (Nano Banana 2) that will receive the actual brand logo PNG as
+   * a reference and are *meant* to compose it into the scene. Stripping the
+   * instruction would defeat the purpose of routing there.
+   */
+  preserveLogos?: boolean;
 }
 
 export function sanitizePromptForAI(
@@ -60,6 +68,7 @@ export function sanitizePromptForAI(
   }
 
   const preserveText = options.preserveText === true;
+  const preserveLogos = options.preserveLogos === true;
   let cleanPrompt = visualDirection;
   const removedElements: string[] = [];
   const extractedText: string[] = [];
@@ -122,24 +131,29 @@ export function sanitizePromptForAI(
     const logoName = (match[1] || match[2])?.trim();
     if (logoName && logoName.length > 0) {
       extractedLogos.push(logoName);
-      removedElements.push(match[0]);
+      if (!preserveLogos) removedElements.push(match[0]);
     }
   }
-  cleanPrompt = cleanPrompt.replace(logoPattern, '');
+  if (!preserveLogos) {
+    cleanPrompt = cleanPrompt.replace(logoPattern, '');
+  }
 
-  // Specific brand names that should NEVER be in AI prompts
-  const brandNames = [
-    'pine hill farm',
-    'pinehillfarm',
-    'phf',
-    'pine hill',
-  ];
-  for (const brand of brandNames) {
-    const brandRegex = new RegExp(brand, 'gi');
-    if (brandRegex.test(cleanPrompt)) {
-      extractedLogos.push(brand);
-      cleanPrompt = cleanPrompt.replace(brandRegex, 'wellness center');
-      removedElements.push(brand);
+  // Specific brand names that should NEVER be in AI prompts (unless an
+  // image-conditioned provider is going to consume the brand logo PNG).
+  if (!preserveLogos) {
+    const brandNames = [
+      'pine hill farm',
+      'pinehillfarm',
+      'phf',
+      'pine hill',
+    ];
+    for (const brand of brandNames) {
+      const brandRegex = new RegExp(brand, 'gi');
+      if (brandRegex.test(cleanPrompt)) {
+        extractedLogos.push(brand);
+        cleanPrompt = cleanPrompt.replace(brandRegex, 'wellness center');
+        removedElements.push(brand);
+      }
     }
   }
 
@@ -276,9 +290,13 @@ export function sanitizePromptForAI(
 
   // === STEP 7: Add explicit "no text" instruction ===
   // Skipped under preserveText so typography-capable models (Recraft V3) aren't
-  // told to suppress the very text we want them to render.
+  // told to suppress the very text we want them to render. When preserveLogos
+  // is set (NB2 logo composition), we use a logo-safe variant that still
+  // suppresses incidental text but allows the brand mark to be composed in.
   if (!preserveText) {
-    const noTextSuffix = '. CRITICAL REQUIREMENT: Generate ONLY the visual scene with absolutely NO text, NO words, NO letters, NO numbers, NO logos, NO signs with writing, NO watermarks, NO labels, NO captions, NO UI elements anywhere in the image. Any surfaces that might contain text (signs, screens, papers, packaging) must be blank or blurred. Pure visual imagery only.';
+    const noTextSuffix = preserveLogos
+      ? '. CRITICAL REQUIREMENT: Generate ONLY the visual scene with absolutely NO incidental text, NO words, NO letters, NO numbers, NO unrelated signs with writing, NO watermarks, NO captions, NO UI elements. The brand logo provided as a reference image MAY be composed into the scene where the prompt indicates. Any other surfaces that might contain text must be blank or blurred.'
+      : '. CRITICAL REQUIREMENT: Generate ONLY the visual scene with absolutely NO text, NO words, NO letters, NO numbers, NO logos, NO signs with writing, NO watermarks, NO labels, NO captions, NO UI elements anywhere in the image. Any surfaces that might contain text (signs, screens, papers, packaging) must be blank or blurred. Pure visual imagery only.';
 
     if (cleanPrompt.length > 0) {
       if (!cleanPrompt.endsWith('.') && !cleanPrompt.endsWith('!') && !cleanPrompt.endsWith('?')) {

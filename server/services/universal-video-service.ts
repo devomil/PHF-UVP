@@ -1022,8 +1022,12 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
     }
 
     // Phase 11A: Sanitize prompt to remove text/logo requests before AI generation
-    const sanitized = sanitizePromptForAI(prompt, sceneType, { preserveText: earlyTextRouting.useRecraft });
-    console.log(`[GenerateImage] Sanitized prompt for scene ${sceneId} (preserveText=${earlyTextRouting.useRecraft})`);
+    const _needsLogoComp = !!(earlyTextRouting as any).needsLogoComposition;
+    const sanitized = sanitizePromptForAI(prompt, sceneType, {
+      preserveText: earlyTextRouting.useRecraft,
+      preserveLogos: _needsLogoComp,
+    });
+    console.log(`[GenerateImage] Sanitized prompt for scene ${sceneId} (preserveText=${earlyTextRouting.useRecraft}, preserveLogos=${_needsLogoComp})`);
     console.log(`[GenerateImage] Removed elements: ${sanitized.removedElements.length}`);
     console.log(`[GenerateImage] Extracted text for overlays: ${sanitized.extractedText.join(', ') || 'none'}`);
     
@@ -1091,6 +1095,18 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
         lockedForText = true;
       }
 
+      // Logo composition: prompt asks for a real brand LOGO. Recraft can only
+      // render typography, not reproduce a PNG mark. Force NB2 so we can pass
+      // the brand's actual logo asset as a reference image.
+      let lockedForLogo = false;
+      if ((earlyTextRouting as any).needsLogoComposition && !lockedForText) {
+        if (selected !== 'nano-banana-2') {
+          console.log(`[SceneImage] Scene ${sceneId} → nano-banana-2 (was ${selected}) | reason: ${earlyTextRouting.reason}`);
+          selected = 'nano-banana-2';
+        }
+        lockedForLogo = true;
+      }
+
       // ===== Phase 43: FORCE NB2 when reference images exist =====
       // Other providers (Recraft, Flux) silently drop referenceImages, which
       // defeats product grounding and character continuity. If the scene has
@@ -1130,6 +1146,24 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
         if (charRef && typeof charRef === 'string' && charRef !== productRef) {
           refImageList.push(charRef);
           console.log(`[GenerateImage] Scene ${sceneId} attaching character reference: ${charRef.substring(0, 80)}`);
+        }
+
+        // Logo composition: attach the brand's actual logo PNG so NB2 can
+        // place it accurately into the scene (sign, wall plaque, packaging).
+        if (lockedForLogo && selected === 'nano-banana-2') {
+          try {
+            const bb = await brandBibleService.getBrandBible();
+            const logoAsset = bb?.logos?.main || bb?.logos?.intro || bb?.logos?.outro || bb?.logos?.watermark;
+            const logoUrl = logoAsset?.url;
+            if (logoUrl && typeof logoUrl === 'string' && !refImageList.includes(logoUrl)) {
+              refImageList.push(logoUrl);
+              console.log(`[GenerateImage] Scene ${sceneId} attaching brand LOGO reference: ${logoUrl.substring(0, 80)}`);
+            } else if (!logoUrl) {
+              console.log(`[GenerateImage] Scene ${sceneId} requested logo composition but no brand logo asset found`);
+            }
+          } catch (e) {
+            console.warn(`[GenerateImage] Scene ${sceneId} failed to load brand logo:`, (e as Error).message);
+          }
         }
 
         // When routing to Recraft V3 with extracted text from sanitizer,
