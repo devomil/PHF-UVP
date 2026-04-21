@@ -1012,8 +1012,9 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
 
   const regenAllMicroSceneVideos = async () => {
     if (!scene.microScenes || scene.microScenes.length === 0) return;
-    const selectedProvider = allMsProvider === "auto" ? undefined : allMsProvider;
-    const selectedMode = allMsMode === "auto" ? undefined : allMsMode;
+    // Task 56: use the scene's unified Mode/Provider (no duplicated control block)
+    const selectedProvider = (!provider || provider === "auto") ? undefined : provider;
+    const selectedMode = generationMode === "auto" ? undefined : generationMode;
     const count = scene.microScenes.length;
     toast({ title: `Generating ${count} micro-scene videos...`, description: "All micro-scenes will generate with consistent style." });
 
@@ -1498,8 +1499,21 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
               )}
             </div>
 
-            {/* Task 56: routing intent chips */}
-            <SceneIntentChips preview={routingPreview} />
+            {/* Task 56: routing intent chips — reconcile refs with local dismissal state */}
+            {(() => {
+              const sp = routingPreview?.references.product;
+              const sc = routingPreview?.references.character;
+              const effProd = sp && !brandAssetDismissed && (referenceImageUrls.includes(sp) || sp === scene.brandAssetUrl) ? sp : null;
+              const effChar = sc && (referenceImageUrls.includes(sc) || sc === scene.characterRefImageUrl) ? sc : null;
+              return (
+                <SceneIntentChips
+                  preview={routingPreview}
+                  hasGenericRefs={referenceImageUrls.length > 0}
+                  effectiveProductUrl={effProd}
+                  effectiveCharacterUrl={effChar}
+                />
+              );
+            })()}
 
             {/* Task 56: prompt inspector trigger */}
             <button
@@ -1559,16 +1573,28 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
             )}
             <p className="text-[10px] mb-1.5" style={{ color: "var(--text-muted)" }}>For I2V (image-to-video)</p>
 
-            {/* Task 56: role-aware overview row (Product / Character / Logo) */}
-            {routingPreview && (
+            {/* Task 56: role-aware overview row (Product / Character / Logo) — reconciled with local state */}
+            {routingPreview && (() => {
+              // Hide the product slot when user dismissed it locally OR removed it from referenceImageUrls.
+              const serverProduct = routingPreview.references.product;
+              const productStillLocal = serverProduct
+                ? (!brandAssetDismissed && (referenceImageUrls.includes(serverProduct) || serverProduct === scene.brandAssetUrl))
+                : false;
+              const effectiveProductUrl = productStillLocal ? serverProduct : null;
+              const serverCharacter = routingPreview.references.character;
+              const characterStillLocal = serverCharacter
+                ? (referenceImageUrls.includes(serverCharacter) || serverCharacter === scene.characterRefImageUrl)
+                : false;
+              const effectiveCharacterUrl = characterStillLocal ? serverCharacter : null;
+              return (
               <div className="mb-2 p-2 rounded-lg border" style={{ borderColor: "var(--border-subtle)", backgroundColor: "rgba(255,255,255,0.02)" }}>
                 <RoleAwareReferenceSlots
-                  productUrl={routingPreview.references.product}
-                  characterUrl={routingPreview.references.character}
+                  productUrl={effectiveProductUrl}
+                  characterUrl={effectiveCharacterUrl}
                   brandLogoUrl={routingPreview.references.brandLogo}
                   hasLogoIntent={routingPreview.routing.needsLogoComposition}
                   hasLogoGap={routingPreview.references.hasLogoGap}
-                  uploads={referenceImageUrls.filter(u => u !== routingPreview.references.product && u !== routingPreview.references.character)}
+                  uploads={referenceImageUrls.filter(u => u !== effectiveProductUrl && u !== effectiveCharacterUrl)}
                   onPreview={(u) => setRefLightboxUrl(u)}
                   onRemoveUpload={(url) => {
                     const newImages = referenceImageUrls.filter(u => u !== url);
@@ -1584,7 +1610,8 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                   }}
                 />
               </div>
-            )}
+              );
+            })()}
 
             <div className="flex items-center gap-1.5 flex-wrap">
               {imageUrl && (
@@ -1794,7 +1821,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                   const updated = (scene.microScenes || []).map((ms: any) => ({
                     ...ms,
                     generationMode: generationMode === "auto" ? undefined : generationMode,
-                    provider: provider || undefined,
+                    provider: (!provider || provider === "auto") ? undefined : provider,
                   }));
                   try {
                     await fetch(`/api/universal-video/projects/${projectId}/scenes/${sceneId}`, {
@@ -1843,36 +1870,12 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
         </div>
 
         {scene.microScenes && scene.microScenes.length > 0 && projectMode !== 'studio-polish' && (
-          <div className="mt-3 flex items-end gap-3 p-3 rounded-xl" style={{ backgroundColor: "rgba(124,58,237,0.04)", border: "1px solid rgba(124,58,237,0.12)" }}>
+          <div className="mt-3 flex items-center gap-3 p-3 rounded-xl" style={{ backgroundColor: "rgba(124,58,237,0.04)", border: "1px solid rgba(124,58,237,0.12)" }}>
             <div className="flex-1 min-w-0">
-              <p className="text-[11px] font-medium mb-2" style={{ color: "var(--text-secondary)" }}>Generate All Micro Scenes</p>
-              <div className="flex gap-2">
-                <div>
-                  <p className="text-[10px] mb-0.5" style={{ color: "var(--text-muted)" }}>Mode</p>
-                  <select
-                    value={allMsMode}
-                    onChange={(e) => setAllMsMode(e.target.value)}
-                    className="text-xs rounded-lg border px-2 py-1.5 bg-transparent outline-none w-24"
-                    style={{ borderColor: "var(--border-subtle)", color: "var(--text-primary)" }}
-                  >
-                    {GENERATION_MODES.map((m) => (
-                      <option key={m.id} value={m.id}>{m.label}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <p className="text-[10px] mb-0.5" style={{ color: "var(--text-muted)" }}>Provider</p>
-                  <div className="w-44">
-                    <ProviderCapabilitySelector
-                      selectedProvider={allMsProvider}
-                      onSelectProvider={setAllMsProvider}
-                      compact
-                      styleRecommendedProviders={styleRecProviders}
-                      styleLabel={styleRecLabel}
-                    />
-                  </div>
-                </div>
-              </div>
+              <p className="text-[11px] font-medium" style={{ color: "var(--text-secondary)" }}>Generate All Micro Scenes</p>
+              <p className="text-[10px] mt-1" style={{ color: "var(--text-muted)" }}>
+                Uses the scene&apos;s Mode + Provider above. Use &quot;Apply to all micro-scenes&quot; to also override each micro-scene&apos;s own settings.
+              </p>
             </div>
             <button
               onClick={regenAllMicroSceneVideos}

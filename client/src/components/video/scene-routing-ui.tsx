@@ -105,9 +105,22 @@ interface ChipDef {
   border: string;
 }
 
-export function SceneIntentChips({ preview }: { preview: RoutingPreview | null }) {
+export function SceneIntentChips({
+  preview,
+  hasGenericRefs,
+  effectiveProductUrl,
+  effectiveCharacterUrl,
+}: {
+  preview: RoutingPreview | null;
+  hasGenericRefs?: boolean;
+  effectiveProductUrl?: string | null;
+  effectiveCharacterUrl?: string | null;
+}) {
   if (!preview) return null;
   const chips: ChipDef[] = [];
+  // Prefer caller-provided effective refs (reconciled with local state) over server routing-preview.
+  const productActive = effectiveProductUrl !== undefined ? !!effectiveProductUrl : !!preview.references.product;
+  const characterActive = effectiveCharacterUrl !== undefined ? !!effectiveCharacterUrl : !!preview.references.character;
 
   if (preview.routing.needsLogoComposition) {
     chips.push({
@@ -143,7 +156,7 @@ export function SceneIntentChips({ preview }: { preview: RoutingPreview | null }
       border: "rgba(59,130,246,0.28)",
     });
   }
-  if (preview.references.product) {
+  if (productActive) {
     chips.push({
       key: "product",
       label: "Product ref",
@@ -154,7 +167,7 @@ export function SceneIntentChips({ preview }: { preview: RoutingPreview | null }
       border: "rgba(16,185,129,0.28)",
     });
   }
-  if (preview.references.character) {
+  if (characterActive) {
     chips.push({
       key: "char",
       label: "Character ref",
@@ -163,6 +176,18 @@ export function SceneIntentChips({ preview }: { preview: RoutingPreview | null }
       bg: "rgba(244,114,182,0.12)",
       fg: "rgb(244,114,182)",
       border: "rgba(244,114,182,0.28)",
+    });
+  }
+  // Generic "Reference attached" chip when user has uploaded refs beyond product/character
+  if (!productActive && !characterActive && hasGenericRefs) {
+    chips.push({
+      key: "ref",
+      label: "Reference attached",
+      icon: <ImageIcon className="w-3 h-3" />,
+      tooltip: "User-uploaded reference image attached — model will ground output on it.",
+      bg: "rgba(124,58,237,0.12)",
+      fg: "rgb(167,139,250)",
+      border: "rgba(124,58,237,0.28)",
     });
   }
 
@@ -463,13 +488,29 @@ export function PromptInspectorDrawer({
               )}
               {data.references.length > 0 && (
                 <Section title="Reference images sent">
-                  <div className="grid grid-cols-4 gap-2">
+                  <div className="grid grid-cols-4 gap-2 mb-2">
                     {data.references.map((r, i) => (
                       <div key={i} className="space-y-1">
                         <div className="aspect-square rounded-md overflow-hidden border border-white/10 bg-black/30">
                           <img src={r.url} alt={r.role} className="w-full h-full object-cover" />
                         </div>
                         <p className="text-[9px] text-center text-white/50 uppercase tracking-wide">{r.role}</p>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="space-y-1">
+                    {data.references.map((r, i) => (
+                      <div key={`u-${i}`} className="flex items-start gap-2 text-[10px] font-mono bg-black/30 rounded px-2 py-1 border border-white/5">
+                        <span className="uppercase text-white/40 min-w-[56px] shrink-0 pt-0.5">{r.role}</span>
+                        <span className="flex-1 break-all text-white/70 select-all">{r.url}</span>
+                        <button
+                          type="button"
+                          onClick={() => { try { navigator.clipboard.writeText(r.url); } catch {} }}
+                          className="text-white/40 hover:text-white"
+                          title="Copy URL"
+                        >
+                          Copy
+                        </button>
                       </div>
                     ))}
                   </div>
