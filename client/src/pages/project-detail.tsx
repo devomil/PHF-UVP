@@ -5003,8 +5003,12 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
           setOverrideCharacter(url);
           toast({ title: "Character reference set", description: "Click Regenerate to apply." });
         } else if (slot === "extra") {
+          // First add: seed from current server-side extras so we don't wipe them.
+          const serverExtras: string[] = Array.isArray(assetsQuery.data?.generationInfo?.referenceImages)
+            ? (assetsQuery.data!.generationInfo!.referenceImages as string[])
+            : [];
           setOverrideExtras((prev) => {
-            const base = prev !== undefined ? prev : [];
+            const base = prev !== undefined ? prev : serverExtras;
             return [...base, url];
           });
           toast({ title: "Reference image added", description: "Click Regenerate to apply." });
@@ -5415,9 +5419,12 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
               // multiImageSupport is an OBJECT (max images, syntax, hint) when the
               // provider supports multi-image, undefined otherwise. Coerce to bool.
               const supportsMulti = Boolean(providerCfg?.multiImageSupport);
+              // Character is a single ref (used in place of product when set), so it's
+              // safe even on single-image providers. Only LOGO and ADD compose a
+              // SECOND image alongside product, which truly needs multi-image support.
               const slotsEnabled = {
                 product: true,
-                character: supportsMulti,
+                character: true,
                 logo: supportsMulti,
                 add: supportsMulti,
               };
