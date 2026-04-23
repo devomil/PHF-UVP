@@ -648,7 +648,7 @@ export function SlotTile({
       ) : (
         <button
           type="button"
-          onClick={emptyAction}
+          onClick={disabled ? undefined : emptyAction}
           aria-disabled={disabled || undefined}
           className={`w-16 h-16 rounded-md border border-dashed flex flex-col items-center justify-center gap-0.5 transition-colors ${disabled ? "cursor-not-allowed opacity-40" : "hover:bg-white/5"}`}
           style={{
