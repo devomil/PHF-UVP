@@ -1053,9 +1053,17 @@ export async function registerRoutes(app: Express) {
         brandLogoUrl = null;
       }
       const { VIDEO_PROVIDERS } = await import('../shared/provider-config');
-      const providerKey = String(finalProvider || '');
-      const providerCfg =
-        VIDEO_PROVIDERS[providerKey] || VIDEO_PROVIDERS[providerKey.split('-')[0]];
+      // When provider is "auto" the actual model is picked downstream, so fall
+      // back to the most recently used provider for capability gating. This
+      // mirrors the client-side fallback chain (selected → genInfo → visual).
+      const existingQc = (project.assets as any)?.quickCreate || {};
+      const providerKey =
+        finalProvider && finalProvider !== "auto"
+          ? String(finalProvider)
+          : String(originalJob?.provider || existingQc.visual?.provider || "");
+      const providerCfg = providerKey
+        ? VIDEO_PROVIDERS[providerKey] || VIDEO_PROVIDERS[providerKey.split('-')[0]]
+        : undefined;
       const providerSupportsMulti = Boolean(providerCfg?.multiImageSupport);
       const finalLogoUrl = providerSupportsMulti && brandLogoUrl ? brandLogoUrl : undefined;
 
