@@ -1397,30 +1397,44 @@ class PiAPIVideoService {
         };
       }
 
-      const allImageUrls = options.imageUrls && options.imageUrls.length > 0 
-        ? options.imageUrls 
+      const allImageUrls = options.imageUrls && options.imageUrls.length > 0
+        ? options.imageUrls
         : [options.imageUrl];
-      
+
+      // Seedance 2 GA accepts only mode = text_to_video | first_last_frames |
+      // omni_reference (no "image_to_video"). Map our intent:
+      //   • single image → first_last_frames (animate from this anchor frame)
+      //   • multiple images → omni_reference (use them as composition refs with
+      //     @image_N pointers in the prompt)
+      const isMultiRef = allImageUrls.length > 1;
+      const seedanceMode: 'first_last_frames' | 'omni_reference' = isMultiRef
+        ? 'omni_reference'
+        : 'first_last_frames';
+
       let promptWithRefs = sanitizedPrompt;
-      const hasImageRef = /@image\d/.test(promptWithRefs);
-      if (!hasImageRef) {
-        promptWithRefs = `The subject in @image1 ${promptWithRefs}`;
+      if (isMultiRef) {
+        const hasImageRef = /@image\d/.test(promptWithRefs);
+        if (!hasImageRef) {
+          promptWithRefs = `The subject in @image1 ${promptWithRefs}`;
+        }
       }
-      
+
       const isPeakHours = this.isSeedancePeakHours();
       if (isPeakHours) {
         console.warn(`[PiAPI I2V] ⚠ Seedance 2 GA request during peak hours (09:00-15:00 GMT) — expect longer queue times`);
       }
-      console.log(`[PiAPI I2V] Seedance 2 GA (${taskType}, image_to_video mode): ${allImageUrls.length} image(s), prompt with @imageN refs`);
+      console.log(`[PiAPI I2V] Seedance 2 GA (${taskType}, ${seedanceMode} mode): ${allImageUrls.length} image(s)`);
       return {
         model: 'seedance',
         task_type: taskType,
         input: {
           prompt: promptWithRefs,
-          mode: 'image_to_video',
+          mode: seedanceMode,
           image_urls: allImageUrls,
           duration: Math.min(options.duration, 15),
-          aspect_ratio: options.aspectRatio || '16:9',
+          // first_last_frames inherits aspect from the anchor image; omni_reference
+          // accepts an explicit aspect_ratio.
+          aspect_ratio: seedanceMode === 'first_last_frames' ? 'auto' : (options.aspectRatio || '16:9'),
         },
       };
     }
