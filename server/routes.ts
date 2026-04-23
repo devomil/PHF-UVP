@@ -1038,6 +1038,37 @@ export async function registerRoutes(app: Express) {
             ? (newReferenceImages as unknown[]).filter((u): u is string => typeof u === 'string' && u.length > 0)
             : (Array.isArray(originalI2vSettings.referenceImages) ? originalI2vSettings.referenceImages : undefined));
 
+      // Brand logo: read-only in the Quick Create UI, but the GET /assets route
+      // surfaces it for the LOGO slot. We must also push it into the generation
+      // job, otherwise the worker has no way to know about it. Only attach when
+      // the chosen provider supports multi-image composition (so we don't
+      // overwrite the product on single-ref providers).
+      let brandLogoUrl: string | null = null;
+      try {
+        const { brandBibleService } = await import('./services/brand-bible-service');
+        const bb = await brandBibleService.getBrandBible(userId);
+        const logo = bb?.logos?.main || bb?.logos?.intro || bb?.logos?.outro || bb?.logos?.watermark;
+        brandLogoUrl = logo?.url || null;
+      } catch {
+        brandLogoUrl = null;
+      }
+      let providerSupportsMulti = false;
+      try {
+        const { PROVIDER_REGISTRY } = await import('../shared/provider-config');
+        const providerKey = String(finalProvider || '');
+        const cfg = (PROVIDER_REGISTRY as any)[providerKey] || (PROVIDER_REGISTRY as any)[providerKey.split('-')[0]];
+        providerSupportsMulti = Boolean(cfg?.multiImageSupport);
+      } catch {
+        providerSupportsMulti = false;
+      }
+      const finalLogoUrl = providerSupportsMulti && brandLogoUrl ? brandLogoUrl : undefined;
+
+      // If we have a source image but the prior job ran as plain text-to-video,
+      // upgrade the sceneType so the worker actually feeds it as i2v input.
+      if (finalSourceImage && finalSceneType !== "i2v" && project.mediaMode !== "image") {
+        finalSceneType = "i2v";
+      }
+
       let finalPromptWithStyle = finalPrompt;
       if (finalArtPresetId && finalArtPresetId !== "auto") {
         const { getVisualArtPreset, isStylizedPreset } = await import("../shared/config/visual-art-presets");
@@ -1099,15 +1130,17 @@ export async function registerRoutes(app: Express) {
             ...(finalReferenceImages && finalReferenceImages.length > 0
               ? { referenceImages: finalReferenceImages }
               : {}),
+            ...(finalLogoUrl ? { brandLogoUrl: finalLogoUrl } : {}),
             // Worker reads `sourceImageUrls` for multi-image-aware providers
             // (Kling 2.x, Veo 3.1, Luma, Hailuo, Runway). Build it whenever any
-            // typed ref exists, not only when extras are present, so character-only
-            // and product+character flows still get the array.
-            ...((finalCharacterRefImageUrl || (finalReferenceImages && finalReferenceImages.length > 0))
+            // typed ref exists, not only when extras are present, so character-only,
+            // product+character, and product+logo flows still get the array.
+            ...((finalCharacterRefImageUrl || finalLogoUrl || (finalReferenceImages && finalReferenceImages.length > 0))
               ? {
                   sourceImageUrls: [
                     ...(finalSourceImage ? [finalSourceImage] : []),
                     ...(finalCharacterRefImageUrl ? [finalCharacterRefImageUrl] : []),
+                    ...(finalLogoUrl ? [finalLogoUrl] : []),
                     ...((finalReferenceImages && finalReferenceImages.length > 0) ? finalReferenceImages : []),
                   ].filter((u, i, arr) => arr.indexOf(u) === i),
                 }
