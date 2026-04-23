@@ -127,9 +127,9 @@ export const CustomImageOverlay: React.FC<CustomImageOverlayProps> = ({
   if (dropShadow) {
     filter = 'drop-shadow(0 4px 12px rgba(0,0,0,0.45))';
   }
-  if (enterAnimation === 'blur-in' && localFrame < enterEnd) {
-    const b = interpolate(localFrame, [0, enterEnd], [10, 0], { extrapolateRight: 'clamp' });
-    filter = `${filter ? filter + ' ' : ''}blur(${b}px)`;
+  if (!tooShortForAnimation && enterAnimation === 'blur-in' && localFrame < safeEnterEnd) {
+    const blurAmount = interpolate(localFrame, enterRange, [10, 0], { extrapolateRight: 'clamp' });
+    filter = `${filter ? filter + ' ' : ''}blur(${blurAmount}px)`;
   }
 
   const resolvedUrl = resolveOverlayUrl(url);
