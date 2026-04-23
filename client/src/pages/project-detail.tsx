@@ -5560,18 +5560,14 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
                     <SlotTile
                       label="Logo"
                       url={slotsEnabled.logo ? effLogo : null}
+                      disabled={!slotsEnabled.logo}
                       emptyAction={() => {
-                        if (!slotsEnabled.logo) {
-                          toast({
-                            title: "Single-image provider",
-                            description: `${providerCfg?.label || providerKey} can't compose a logo alongside the product. Try Kling 2.x, Veo 3.1, Luma, Hailuo, or Runway.`,
-                            variant: "destructive",
-                          });
-                          return;
-                        }
+                        if (!slotsEnabled.logo) return;
                         window.open("/brand-bible#assets", "_blank");
                       }}
-                      emptyHint={slotsEnabled.logo ? "Add a logo to your brand bible" : "Not supported by this provider"}
+                      emptyHint={slotsEnabled.logo
+                        ? "Add a logo to your brand bible"
+                        : `${providerCfg?.displayName || providerKey} only accepts one reference image — switch to Kling 2.x, Veo 3.1, Luma, Hailuo, or Runway to use a logo.`}
                       badgeColor="rgba(168,85,247,0.4)"
                       onClick={() => effLogo && (setReferenceLightboxUrl(effLogo), setReferenceLightboxOpen(true))}
                       inherited={slotsEnabled.logo && logoInherited}
@@ -5589,14 +5585,15 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
                     <SlotTile
                       label="Add"
                       empty
+                      disabled={!slotsEnabled.add}
                       emptyAction={() => {
-                        if (!slotsEnabled.add) {
-                          toast({ title: "Single-image provider", description: `${providerCfg?.label || providerKey} only accepts one reference.`, variant: "destructive" });
-                          return;
-                        }
+                        if (!slotsEnabled.add) return;
                         pendingUploadSlotRef.current = "extra";
                         (document.getElementById("qc-source-image-upload") as HTMLInputElement | null)?.click();
                       }}
+                      emptyHint={slotsEnabled.add
+                        ? "Add a reference image"
+                        : `${providerCfg?.displayName || providerKey} only accepts one reference image — switch to Kling 2.x, Veo 3.1, Luma, Hailuo, or Runway to add more.`}
                       badgeColor="rgba(124,58,237,0.4)"
                     />
                   </div>

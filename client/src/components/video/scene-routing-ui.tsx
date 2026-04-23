@@ -608,6 +608,7 @@ export function SlotTile({
   onRemove,
   amber,
   inherited,
+  disabled,
 }: {
   label: string;
   url?: string | null;
@@ -619,6 +620,7 @@ export function SlotTile({
   onRemove?: () => void;
   amber?: boolean;
   inherited?: boolean;
+  disabled?: boolean;
 }) {
   return (
     <div className="flex flex-col items-center gap-1">
@@ -647,7 +649,8 @@ export function SlotTile({
         <button
           type="button"
           onClick={emptyAction}
-          className="w-16 h-16 rounded-md border border-dashed flex flex-col items-center justify-center gap-0.5 transition-colors hover:bg-white/5"
+          aria-disabled={disabled || undefined}
+          className={`w-16 h-16 rounded-md border border-dashed flex flex-col items-center justify-center gap-0.5 transition-colors ${disabled ? "cursor-not-allowed opacity-40" : "hover:bg-white/5"}`}
           style={{
             borderColor: amber ? "rgba(245,158,11,0.45)" : "var(--border-subtle)",
             color: amber ? "rgb(245,158,11)" : "var(--text-muted)",
@@ -660,7 +663,7 @@ export function SlotTile({
       )}
       <span
         className="text-[9px] uppercase tracking-wide font-medium"
-        style={{ color: amber && !url ? "rgb(245,158,11)" : "var(--text-muted)" }}
+        style={{ color: amber && !url ? "rgb(245,158,11)" : "var(--text-muted)", opacity: disabled ? 0.5 : 1 }}
       >
         {label}
       </span>
