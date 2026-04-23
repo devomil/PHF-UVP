@@ -58,10 +58,15 @@ export const CustomImageOverlay: React.FC<CustomImageOverlayProps> = ({
   if (frame < startFrame || frame > endFrame) return null;
 
   const localFrame = frame - startFrame;
-  const localDuration = endFrame - startFrame;
-  const animFrames = Math.max(1, Math.round(animationDuration * fps));
-  const enterEnd = animFrames;
-  const exitStart = Math.max(enterEnd, localDuration - animFrames);
+  const localDuration = Math.max(1, endFrame - startFrame);
+  // Guarantee strictly-monotonic interpolation inputs even for very short
+  // overlay durations or oversized animationDuration values.
+  const requestedAnimFrames = Math.max(1, Math.round(animationDuration * fps));
+  const animFrames = Math.max(1, Math.min(requestedAnimFrames, Math.floor(localDuration / 2)));
+  const enterEnd = Math.min(animFrames, Math.max(1, localDuration - 1));
+  const exitStart = Math.max(enterEnd + 1, localDuration - animFrames);
+  const safeExitStart = Math.min(exitStart, localDuration - 1);
+  const safeEnterEnd = Math.min(enterEnd, safeExitStart - 1);
 
   const baseOpacity = opacity / 100;
   let animatedOpacity = baseOpacity;
@@ -71,7 +76,7 @@ export const CustomImageOverlay: React.FC<CustomImageOverlayProps> = ({
   } else {
     animatedOpacity = interpolate(
       localFrame,
-      [0, enterEnd, exitStart, localDuration],
+      [0, safeEnterEnd, safeExitStart, localDuration],
       [
         enterAnimation === 'none' ? baseOpacity : 0,
         baseOpacity,
@@ -83,17 +88,19 @@ export const CustomImageOverlay: React.FC<CustomImageOverlayProps> = ({
   }
 
   let transform = '';
+  const enterRange: [number, number] = [0, Math.max(1, safeEnterEnd)];
+  const exitRange: [number, number] = [safeExitStart, Math.max(safeExitStart + 1, localDuration)];
   if (enterAnimation === 'rise') {
-    const ty = interpolate(localFrame, [0, enterEnd], [24, 0], { extrapolateRight: 'clamp' });
+    const ty = interpolate(localFrame, enterRange, [24, 0], { extrapolateRight: 'clamp' });
     transform += ` translateY(${ty}px)`;
   } else if (enterAnimation === 'drop') {
-    const ty = interpolate(localFrame, [0, enterEnd], [-24, 0], { extrapolateRight: 'clamp' });
+    const ty = interpolate(localFrame, enterRange, [-24, 0], { extrapolateRight: 'clamp' });
     transform += ` translateY(${ty}px)`;
   } else if (enterAnimation === 'wipe-left') {
-    const tx = interpolate(localFrame, [0, enterEnd], [-60, 0], { extrapolateRight: 'clamp' });
+    const tx = interpolate(localFrame, enterRange, [-60, 0], { extrapolateRight: 'clamp' });
     transform += ` translateX(${tx}px)`;
   } else if (enterAnimation === 'wipe-right') {
-    const tx = interpolate(localFrame, [0, enterEnd], [60, 0], { extrapolateRight: 'clamp' });
+    const tx = interpolate(localFrame, enterRange, [60, 0], { extrapolateRight: 'clamp' });
     transform += ` translateX(${tx}px)`;
   } else if (enterAnimation === 'scale-pop') {
     const s = spring({ frame: localFrame, fps, config: { damping: 14, stiffness: 180 } });
@@ -102,11 +109,11 @@ export const CustomImageOverlay: React.FC<CustomImageOverlayProps> = ({
     // blur handled separately
   }
 
-  if (exitAnimation === 'slide-out' && localFrame >= exitStart) {
-    const tx = interpolate(localFrame, [exitStart, localDuration], [0, 60], { extrapolateRight: 'clamp' });
+  if (exitAnimation === 'slide-out' && localFrame >= safeExitStart) {
+    const tx = interpolate(localFrame, exitRange, [0, 60], { extrapolateRight: 'clamp' });
     transform += ` translateX(${tx}px)`;
-  } else if (exitAnimation === 'scale-down' && localFrame >= exitStart) {
-    const s = interpolate(localFrame, [exitStart, localDuration], [1, 0.7], { extrapolateRight: 'clamp' });
+  } else if (exitAnimation === 'scale-down' && localFrame >= safeExitStart) {
+    const s = interpolate(localFrame, exitRange, [1, 0.7], { extrapolateRight: 'clamp' });
     transform += ` scale(${s})`;
   }
 
