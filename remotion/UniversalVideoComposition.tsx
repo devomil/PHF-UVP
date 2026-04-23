@@ -2186,6 +2186,13 @@ export const UniversalVideoComposition: React.FC<UniversalVideoProps> = ({
                     height={overlay.height}
                     opacity={overlay.opacity}
                     durationInFrames={durationInFrames}
+                    dropShadow={overlay.dropShadow}
+                    cornerRadius={overlay.cornerRadius}
+                    enterAnimation={overlay.enterAnimation}
+                    exitAnimation={overlay.exitAnimation}
+                    animationDuration={overlay.animationDuration}
+                    timingStart={overlay.timingStart}
+                    timingDuration={overlay.timingDuration}
                   />
                 </div>
               );

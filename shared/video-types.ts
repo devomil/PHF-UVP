@@ -181,6 +181,11 @@ export interface MicroSceneOverlayItem {
   locked: boolean;
   zIndex: number;
   entranceAnimation: EntranceAnimation;
+  kind?: 'logo' | 'watermark' | 'decoration' | 'image';
+  snapPosition?: 'top-left' | 'top-center' | 'top-right' | 'middle-left' | 'middle-center' | 'middle-right' | 'bottom-left' | 'bottom-center' | 'bottom-right' | 'custom';
+  dropShadow?: boolean;
+  timingStart?: number;
+  timingDuration?: number;
 }
 
 export type TextOverlayEnterAnimation = 'none' | 'fade' | 'rise' | 'drop' | 'wipe-left' | 'wipe-right' | 'scale-pop' | 'typewriter' | 'blur-in';
@@ -189,6 +194,8 @@ export type TextOverlayAnimation = TextOverlayEnterAnimation | TextOverlayExitAn
 export type TextEmphasisAnimation = 'none' | 'pulse' | 'float' | 'shimmer';
 export type TextPresetType = 'headline' | 'script-accent' | 'body' | 'bullet-list' | 'stat-callout' | 'lower-third' | 'cta-badge' | 'caption-bar';
 export type SnapPosition = 'top-left' | 'top-center' | 'top-right' | 'middle-left' | 'middle-center' | 'middle-right' | 'bottom-left' | 'bottom-center' | 'bottom-right' | 'custom';
+
+export type ImageOverlayKind = 'logo' | 'watermark' | 'decoration' | 'image';
 
 export interface ImageOverlayItem {
   type: 'image';
@@ -202,6 +209,18 @@ export interface ImageOverlayItem {
   opacity: number;
   locked: boolean;
   layerOrder?: number;
+  kind?: ImageOverlayKind;
+  snapPosition?: SnapPosition;
+  enterAnimation?: TextOverlayEnterAnimation;
+  exitAnimation?: TextOverlayExitAnimation;
+  emphasisAnimation?: TextEmphasisAnimation;
+  animationDuration?: number;
+  timingStart?: number;
+  timingDuration?: number;
+  dropShadow?: boolean;
+  cornerRadius?: number;
+  autoBackground?: boolean;
+  autoBackgroundOpacity?: number;
 }
 
 export interface TextOverlayItem {

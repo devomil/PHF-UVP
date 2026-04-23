@@ -1,5 +1,6 @@
 import React from 'react';
-import { Img, useCurrentFrame, useVideoConfig, interpolate } from 'remotion';
+import { Img, useCurrentFrame, useVideoConfig, interpolate, spring } from 'remotion';
+import type { ImageOverlayItem } from '../../shared/video-types';
 
 export interface CustomImageOverlayProps {
   url: string;
@@ -9,6 +10,13 @@ export interface CustomImageOverlayProps {
   height: number;
   opacity: number;
   durationInFrames: number;
+  dropShadow?: boolean;
+  cornerRadius?: number;
+  enterAnimation?: ImageOverlayItem['enterAnimation'];
+  exitAnimation?: ImageOverlayItem['exitAnimation'];
+  animationDuration?: number;
+  timingStart?: number;
+  timingDuration?: number;
 }
 
 function resolveOverlayUrl(url: string): string {
@@ -30,19 +38,86 @@ export const CustomImageOverlay: React.FC<CustomImageOverlayProps> = ({
   height,
   opacity,
   durationInFrames,
+  dropShadow,
+  cornerRadius,
+  enterAnimation = 'fade',
+  exitAnimation = 'fade',
+  animationDuration = 0.4,
+  timingStart,
+  timingDuration,
 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
-  const fadeInDuration = Math.min(Math.round(fps * 0.3), 10);
-  const fadeOutStart = durationInFrames - Math.min(Math.round(fps * 0.3), 10);
+  const startFrame = Math.max(0, Math.round((timingStart ?? 0) * fps));
+  const visibleDuration = timingDuration != null
+    ? Math.max(1, Math.round(timingDuration * fps))
+    : durationInFrames - startFrame;
+  const endFrame = Math.min(durationInFrames, startFrame + visibleDuration);
 
-  const animatedOpacity = interpolate(
-    frame,
-    [0, fadeInDuration, fadeOutStart, durationInFrames],
-    [0, opacity / 100, opacity / 100, 0],
-    { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }
-  );
+  if (frame < startFrame || frame > endFrame) return null;
+
+  const localFrame = frame - startFrame;
+  const localDuration = endFrame - startFrame;
+  const animFrames = Math.max(1, Math.round(animationDuration * fps));
+  const enterEnd = animFrames;
+  const exitStart = Math.max(enterEnd, localDuration - animFrames);
+
+  const baseOpacity = opacity / 100;
+  let animatedOpacity = baseOpacity;
+
+  if (enterAnimation === 'none' && exitAnimation === 'none') {
+    animatedOpacity = baseOpacity;
+  } else {
+    animatedOpacity = interpolate(
+      localFrame,
+      [0, enterEnd, exitStart, localDuration],
+      [
+        enterAnimation === 'none' ? baseOpacity : 0,
+        baseOpacity,
+        baseOpacity,
+        exitAnimation === 'none' ? baseOpacity : 0,
+      ],
+      { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }
+    );
+  }
+
+  let transform = '';
+  if (enterAnimation === 'rise') {
+    const ty = interpolate(localFrame, [0, enterEnd], [24, 0], { extrapolateRight: 'clamp' });
+    transform += ` translateY(${ty}px)`;
+  } else if (enterAnimation === 'drop') {
+    const ty = interpolate(localFrame, [0, enterEnd], [-24, 0], { extrapolateRight: 'clamp' });
+    transform += ` translateY(${ty}px)`;
+  } else if (enterAnimation === 'wipe-left') {
+    const tx = interpolate(localFrame, [0, enterEnd], [-60, 0], { extrapolateRight: 'clamp' });
+    transform += ` translateX(${tx}px)`;
+  } else if (enterAnimation === 'wipe-right') {
+    const tx = interpolate(localFrame, [0, enterEnd], [60, 0], { extrapolateRight: 'clamp' });
+    transform += ` translateX(${tx}px)`;
+  } else if (enterAnimation === 'scale-pop') {
+    const s = spring({ frame: localFrame, fps, config: { damping: 14, stiffness: 180 } });
+    transform += ` scale(${Math.min(1, s)})`;
+  } else if (enterAnimation === 'blur-in') {
+    // blur handled separately
+  }
+
+  if (exitAnimation === 'slide-out' && localFrame >= exitStart) {
+    const tx = interpolate(localFrame, [exitStart, localDuration], [0, 60], { extrapolateRight: 'clamp' });
+    transform += ` translateX(${tx}px)`;
+  } else if (exitAnimation === 'scale-down' && localFrame >= exitStart) {
+    const s = interpolate(localFrame, [exitStart, localDuration], [1, 0.7], { extrapolateRight: 'clamp' });
+    transform += ` scale(${s})`;
+  }
+
+  let filter: string | undefined;
+  if (dropShadow) {
+    filter = 'drop-shadow(0 4px 12px rgba(0,0,0,0.45))';
+  }
+  if (enterAnimation === 'blur-in' && localFrame < enterEnd) {
+    const b = interpolate(localFrame, [0, enterEnd], [10, 0], { extrapolateRight: 'clamp' });
+    filter = `${filter ? filter + ' ' : ''}blur(${b}px)`;
+  }
 
   const resolvedUrl = resolveOverlayUrl(url);
   if (!resolvedUrl) return null;
@@ -58,6 +133,8 @@ export const CustomImageOverlay: React.FC<CustomImageOverlayProps> = ({
         opacity: animatedOpacity,
         zIndex: 50,
         pointerEvents: 'none',
+        transform: transform || undefined,
+        filter,
       }}
     >
       <Img
@@ -66,6 +143,7 @@ export const CustomImageOverlay: React.FC<CustomImageOverlayProps> = ({
           width: '100%',
           height: '100%',
           objectFit: 'contain',
+          borderRadius: cornerRadius ? `${cornerRadius}px` : undefined,
         }}
       />
     </div>

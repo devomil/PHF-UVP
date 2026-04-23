@@ -379,6 +379,91 @@ function isImageOverlay(o: AnyOverlayItem): o is ImageOverlayItem {
   return !isTextOverlay(o);
 }
 
+function inferImageKind(name: string, url: string): 'logo' | 'watermark' | 'image' {
+  const s = `${name} ${url}`.toLowerCase();
+  if (/watermark|wm[-_]/.test(s)) return 'watermark';
+  if (/logo|brand|mark[-_]|emblem/.test(s)) return 'logo';
+  return 'image';
+}
+
+function rectsOverlap(
+  a: { x: number; y: number; width: number; height: number },
+  b: { x: number; y: number; width: number; height: number },
+  pad = 1
+): boolean {
+  return !(
+    a.x + a.width + pad <= b.x ||
+    b.x + b.width + pad <= a.x ||
+    a.y + a.height + pad <= b.y ||
+    b.y + b.height + pad <= a.y
+  );
+}
+
+function findFreeSlot(
+  candidates: { x: number; y: number; snap: 'top-left' | 'top-center' | 'top-right' | 'middle-left' | 'middle-center' | 'middle-right' | 'bottom-left' | 'bottom-center' | 'bottom-right' | 'custom' }[],
+  width: number,
+  height: number,
+  existing: AnyOverlayItem[]
+): { x: number; y: number; snap: 'top-left' | 'top-center' | 'top-right' | 'middle-left' | 'middle-center' | 'middle-right' | 'bottom-left' | 'bottom-center' | 'bottom-right' | 'custom' } {
+  for (const c of candidates) {
+    const candRect = { x: c.x, y: c.y, width, height };
+    if (!existing.some((o) => rectsOverlap(candRect, o))) {
+      return c;
+    }
+  }
+  return candidates[0];
+}
+
+function smartImagePlacement(
+  kind: 'logo' | 'watermark' | 'image',
+  width: number,
+  height: number,
+  existing: AnyOverlayItem[]
+) {
+  const W = width;
+  const H = height;
+  if (kind === 'logo' || kind === 'watermark') {
+    const candidates = [
+      { x: 100 - W - 3, y: 100 - H - 3, snap: 'bottom-right' as const },
+      { x: 3, y: 100 - H - 3, snap: 'bottom-left' as const },
+      { x: 100 - W - 3, y: 3, snap: 'top-right' as const },
+      { x: 3, y: 3, snap: 'top-left' as const },
+    ];
+    return findFreeSlot(candidates, W, H, existing);
+  }
+  const candidates = [
+    { x: 3, y: 3, snap: 'top-left' as const },
+    { x: 100 - W - 3, y: 3, snap: 'top-right' as const },
+    { x: 3, y: 100 - H - 3, snap: 'bottom-left' as const },
+    { x: 100 - W - 3, y: 100 - H - 3, snap: 'bottom-right' as const },
+    { x: 50 - W / 2, y: 50 - H / 2, snap: 'middle-center' as const },
+  ];
+  return findFreeSlot(candidates, W, H, existing);
+}
+
+function smartTextPlacement(
+  preset: TextPreset,
+  existing: AnyOverlayItem[]
+): { x: number; y: number; snapPosition: 'top-left' | 'top-center' | 'top-right' | 'middle-left' | 'middle-center' | 'middle-right' | 'bottom-left' | 'bottom-center' | 'bottom-right' | 'custom' } {
+  const W = preset.width;
+  const H = preset.height;
+  const baseRect = { x: preset.x, y: preset.y, width: W, height: H };
+  if (!existing.some((o) => rectsOverlap(baseRect, o))) {
+    return { x: preset.x, y: preset.y, snapPosition: 'custom' };
+  }
+  // Try shifting vertically by H + 2% in same column
+  const shifts = [
+    { x: preset.x, y: Math.max(2, Math.min(98 - H, preset.y - (H + 2))), snap: 'custom' as const },
+    { x: preset.x, y: Math.max(2, Math.min(98 - H, preset.y + (H + 2))), snap: 'custom' as const },
+    { x: 5, y: 82 - H, snap: 'bottom-left' as const },
+    { x: 100 - W - 5, y: 5, snap: 'top-right' as const },
+    { x: 5, y: 5, snap: 'top-left' as const },
+    { x: 100 - W - 5, y: 100 - H - 5, snap: 'bottom-right' as const },
+  ];
+  const found = findFreeSlot(shifts, W, H, existing);
+  return { x: found.x, y: found.y, snapPosition: found.snap };
+}
+
 export function SceneOverlayEditor({
   overlays,
   onChange,
@@ -489,19 +574,28 @@ export function SceneOverlayEditor({
   }, [currentOverlays]);
 
   const addImageOverlay = useCallback((url: string, name: string) => {
+    const kind = inferImageKind(name, url);
+    const isLogoLike = kind === 'logo' || kind === 'watermark';
+    const width = isLogoLike ? 12 : 15;
+    const height = isLogoLike ? 12 : 15;
+    const placement = smartImagePlacement(kind, width, height, currentOverlays);
+    const opacity = kind === 'watermark' ? 70 : isLogoLike ? 95 : 100;
     if (isMicroSceneMode) {
       const newOverlay: MicroSceneOverlayItem = {
         id: generateId(),
         url,
         name,
-        x: 5,
-        y: 5,
-        width: 15,
-        height: 15,
-        opacity: 100,
+        x: placement.x,
+        y: placement.y,
+        width,
+        height,
+        opacity,
         locked: false,
         zIndex: nextZIndex(),
         entranceAnimation: "fade",
+        kind,
+        snapPosition: placement.snap,
+        dropShadow: isLogoLike,
       };
       handleCurrentChange([...currentOverlays, newOverlay]);
       setSelectedId(newOverlay.id);
@@ -511,13 +605,19 @@ export function SceneOverlayEditor({
         id: generateId(),
         url,
         name,
-        x: 5,
-        y: 5,
-        width: 15,
-        height: 15,
-        opacity: 100,
+        x: placement.x,
+        y: placement.y,
+        width,
+        height,
+        opacity,
         locked: false,
         layerOrder: currentOverlays.length,
+        kind,
+        snapPosition: placement.snap,
+        enterAnimation: 'fade',
+        exitAnimation: 'fade',
+        animationDuration: 0.4,
+        dropShadow: isLogoLike,
       };
       handleCurrentChange([...currentOverlays, newOverlay]);
       setSelectedId(newOverlay.id);
@@ -527,14 +627,16 @@ export function SceneOverlayEditor({
   }, [currentOverlays, handleCurrentChange, isMicroSceneMode, nextZIndex]);
 
   const addTextOverlay = useCallback((preset: TextPreset) => {
+    const placement = smartTextPlacement(preset, currentOverlays);
+    const wantsAutoBg = preset.presetType === 'stat-callout' || preset.presetType === 'lower-third' || preset.presetType === 'caption-bar';
     const newOverlay: TextOverlayItem = {
       type: 'text',
       id: generateId(),
       name: preset.label,
       text: preset.defaultText,
       textPreset: preset.presetType,
-      x: preset.x,
-      y: preset.y,
+      x: placement.x,
+      y: placement.y,
       width: preset.width,
       height: preset.height,
       opacity: 100,
@@ -551,6 +653,9 @@ export function SceneOverlayEditor({
       enterAnimation: preset.enterAnimation,
       exitAnimation: preset.exitAnimation,
       animationDuration: 0.4,
+      snapPosition: placement.snapPosition,
+      autoBackground: wantsAutoBg,
+      autoBackgroundOpacity: preset.presetType === 'stat-callout' ? 65 : 55,
       bulletPoints: preset.presetType === 'bullet-list' ? ['Point 1', 'Point 2', 'Point 3'] : undefined,
       bulletDelay: preset.presetType === 'bullet-list' ? 0.3 : undefined,
       layerOrder: currentOverlays.length,
@@ -1845,21 +1950,21 @@ export function SceneOverlayEditor({
             </button>
           )}
 
-          {/* 9-Point Snap Grid */}
-          {isSelectedText && (
+          {/* 9-Point Snap Grid (text + image overlays) */}
+          {(isSelectedText || (selectedOverlay && isImageOverlay(selectedOverlay))) && (
             <div>
               <label className="text-[10px] block mb-1" style={{ color: "var(--text-muted)" }}>Quick Position</label>
               <div className="grid grid-cols-3 gap-1 w-24">
                 {([
-                  { label: "TL", x: 5, y: 5, snap: 'top-left' as const },
-                  { label: "TC", x: 50 - (selectedOverlay.width / 2), y: 5, snap: 'top-center' as const },
-                  { label: "TR", x: 95 - selectedOverlay.width, y: 5, snap: 'top-right' as const },
-                  { label: "ML", x: 5, y: 50 - (selectedOverlay.height / 2), snap: 'middle-left' as const },
+                  { label: "TL", x: 3, y: 3, snap: 'top-left' as const },
+                  { label: "TC", x: 50 - (selectedOverlay.width / 2), y: 3, snap: 'top-center' as const },
+                  { label: "TR", x: 97 - selectedOverlay.width, y: 3, snap: 'top-right' as const },
+                  { label: "ML", x: 3, y: 50 - (selectedOverlay.height / 2), snap: 'middle-left' as const },
                   { label: "MC", x: 50 - (selectedOverlay.width / 2), y: 50 - (selectedOverlay.height / 2), snap: 'middle-center' as const },
-                  { label: "MR", x: 95 - selectedOverlay.width, y: 50 - (selectedOverlay.height / 2), snap: 'middle-right' as const },
-                  { label: "BL", x: 5, y: 85 - selectedOverlay.height, snap: 'bottom-left' as const },
-                  { label: "BC", x: 50 - (selectedOverlay.width / 2), y: 85 - selectedOverlay.height, snap: 'bottom-center' as const },
-                  { label: "BR", x: 95 - selectedOverlay.width, y: 85 - selectedOverlay.height, snap: 'bottom-right' as const },
+                  { label: "MR", x: 97 - selectedOverlay.width, y: 50 - (selectedOverlay.height / 2), snap: 'middle-right' as const },
+                  { label: "BL", x: 3, y: 97 - selectedOverlay.height, snap: 'bottom-left' as const },
+                  { label: "BC", x: 50 - (selectedOverlay.width / 2), y: 97 - selectedOverlay.height, snap: 'bottom-center' as const },
+                  { label: "BR", x: 97 - selectedOverlay.width, y: 97 - selectedOverlay.height, snap: 'bottom-right' as const },
                 ]).map((pos) => (
                   <button
                     key={pos.label}
@@ -1873,6 +1978,142 @@ export function SceneOverlayEditor({
               </div>
             </div>
           )}
+
+          {/* Image-overlay parity inspector: animations, timing, drop shadow */}
+          {selectedOverlay && isImageOverlay(selectedOverlay) && !isMicroSceneMode && (() => {
+            const img = selectedOverlay as ImageOverlayItem;
+            const sceneTotal = sceneDurationSec ?? 10;
+            return (
+              <>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[10px] block mb-1" style={{ color: "var(--text-muted)" }}>Kind</label>
+                    <select
+                      value={img.kind ?? 'image'}
+                      onChange={(e) => updateOverlay(img.id, { kind: e.target.value as ImageOverlayItem['kind'] })}
+                      className="w-full text-xs rounded border px-2 py-1 bg-transparent outline-none cursor-pointer"
+                      style={{ borderColor: "var(--border-subtle)", color: "var(--text-primary)" }}
+                    >
+                      <option value="image">Image</option>
+                      <option value="logo">Logo</option>
+                      <option value="watermark">Watermark</option>
+                      <option value="decoration">Decoration</option>
+                    </select>
+                  </div>
+                  <div className="flex items-end">
+                    <label className="text-[10px] flex items-center gap-1 cursor-pointer" style={{ color: "var(--text-muted)" }}>
+                      <input
+                        type="checkbox"
+                        checked={img.dropShadow ?? false}
+                        onChange={(e) => updateOverlay(img.id, { dropShadow: e.target.checked })}
+                        className="rounded"
+                      />
+                      Drop Shadow
+                    </label>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[10px] block mb-1" style={{ color: "var(--text-muted)" }}>Enter Animation</label>
+                    <select
+                      value={img.enterAnimation ?? 'fade'}
+                      onChange={(e) => updateOverlay(img.id, { enterAnimation: e.target.value as TextOverlayEnterAnimation })}
+                      className="w-full text-xs rounded border px-2 py-1 bg-transparent outline-none cursor-pointer"
+                      style={{ borderColor: "var(--border-subtle)", color: "var(--text-primary)" }}
+                    >
+                      {ENTER_ANIMATIONS.filter(a => a.id !== 'typewriter').map((a) => (
+                        <option key={a.id} value={a.id}>{a.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] block mb-1" style={{ color: "var(--text-muted)" }}>Exit Animation</label>
+                    <select
+                      value={img.exitAnimation ?? 'fade'}
+                      onChange={(e) => updateOverlay(img.id, { exitAnimation: e.target.value as TextOverlayExitAnimation })}
+                      className="w-full text-xs rounded border px-2 py-1 bg-transparent outline-none cursor-pointer"
+                      style={{ borderColor: "var(--border-subtle)", color: "var(--text-primary)" }}
+                    >
+                      {EXIT_ANIMATIONS.map((a) => (
+                        <option key={a.id} value={a.id}>{a.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[10px] block mb-1" style={{ color: "var(--text-muted)" }}>
+                    Animation Duration: {(img.animationDuration ?? 0.4).toFixed(1)}s
+                  </label>
+                  <input
+                    type="range"
+                    min={0.1}
+                    max={2}
+                    step={0.1}
+                    value={img.animationDuration ?? 0.4}
+                    onChange={(e) => updateOverlay(img.id, { animationDuration: parseFloat(e.target.value) })}
+                    className="w-full styled-slider"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[10px] block mb-1" style={{ color: "var(--text-muted)" }}>
+                      Start Time: {(img.timingStart ?? 0).toFixed(1)}s
+                    </label>
+                    <input
+                      type="range"
+                      min={0}
+                      max={sceneTotal}
+                      step={0.1}
+                      value={img.timingStart ?? 0}
+                      onChange={(e) => updateOverlay(img.id, { timingStart: parseFloat(e.target.value) })}
+                      className="w-full styled-slider"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] block mb-1" style={{ color: "var(--text-muted)" }}>
+                      Duration: {img.timingDuration != null ? `${img.timingDuration.toFixed(1)}s` : "Full Scene"}
+                    </label>
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="range"
+                        min={0.5}
+                        max={sceneTotal}
+                        step={0.1}
+                        value={img.timingDuration ?? sceneTotal}
+                        onChange={(e) => updateOverlay(img.id, { timingDuration: parseFloat(e.target.value) })}
+                        className="flex-1 styled-slider"
+                      />
+                      <button
+                        onClick={() => updateOverlay(img.id, { timingDuration: undefined })}
+                        className="text-[9px] px-1.5 py-0.5 rounded border transition-colors flex-shrink-0 hover:border-purple-500/40 hover:bg-purple-500/10"
+                        style={{ borderColor: "var(--border-subtle)", color: "var(--text-muted)" }}
+                        title="Reset to full scene duration"
+                      >
+                        Full
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[10px] block mb-1" style={{ color: "var(--text-muted)" }}>
+                    Corner Radius: {img.cornerRadius ?? 0}px
+                  </label>
+                  <input
+                    type="range"
+                    min={0}
+                    max={48}
+                    value={img.cornerRadius ?? 0}
+                    onChange={(e) => updateOverlay(img.id, { cornerRadius: parseInt(e.target.value) })}
+                    className="w-full styled-slider"
+                  />
+                </div>
+              </>
+            );
+          })()}
 
           <div>
             <label className="text-[10px] block mb-1" style={{ color: "var(--text-muted)" }}>
