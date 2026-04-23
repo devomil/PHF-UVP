@@ -5398,11 +5398,31 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
               const genInfo = assetsQuery.data?.generationInfo;
               if (!genInfo) return null;
               // Resolve effective per-slot URLs: override (null = removed) || server value.
-              const effProduct = overrideSourceImage === null ? null : (overrideSourceImage || genInfo.sourceImageUrl || null);
+              // Step 3: Project-level Product default flows in as the effective
+              // value when there is no per-scene override and the latest job
+              // has no source image of its own. This mirrors the server-side
+              // regenerate fallback so the panel shows what will actually be
+              // used at generation time.
+              const projectProductUrl: string | null = genInfo.projectProductMediaUrl || null;
+              const effProduct =
+                overrideSourceImage === null
+                  ? null
+                  : (overrideSourceImage || genInfo.sourceImageUrl || projectProductUrl || null);
               const effCharacter = overrideCharacter === null ? null : (overrideCharacter || genInfo.characterRefImageUrl || null);
               const effLogo = genInfo.brandLogoUrl || null;
               const serverExtras: string[] = Array.isArray(genInfo.referenceImages) ? genInfo.referenceImages : [];
               const effExtras: string[] = overrideExtras !== undefined ? overrideExtras : serverExtras;
+
+              // "From project" hint shows when the effective product is the
+              // project default and the user hasn't overridden it for this scene.
+              const productInherited =
+                overrideSourceImage === undefined &&
+                !!effProduct &&
+                !!projectProductUrl &&
+                effProduct === projectProductUrl;
+              // Logo always inherits from the brand bible — it has no per-scene
+              // override path in Quick Create, so flag it as inherited when present.
+              const logoInherited = !!effLogo;
 
               // Provider-aware slot enable/disable.
               // "auto" means the user hasn't pinned a provider yet — fall back to
@@ -5432,8 +5452,11 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
               // Stale fingerprint vs last completed job.
               // Logo is included so changing brand bible logo also surfaces the
               // "regenerate to apply" hint, even though the slot itself is read-only.
+              // The product baseline mirrors the server-side fallback chain
+              // (latest job source image → project default) so the pill clears
+              // correctly after hydration when the slot inherits the default.
               const lastFingerprint = JSON.stringify({
-                p: genInfo.sourceImageUrl || null,
+                p: genInfo.sourceImageUrl || projectProductUrl || null,
                 c: genInfo.characterRefImageUrl || null,
                 l: genInfo.brandLogoUrl || null,
                 e: serverExtras.slice().sort(),
@@ -5516,6 +5539,7 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
                       badgeColor="rgba(16,185,129,0.4)"
                       onClick={() => effProduct && (setReferenceLightboxUrl(effProduct), setReferenceLightboxOpen(true))}
                       onRemove={effProduct ? () => setOverrideSourceImage(null) : undefined}
+                      inherited={productInherited}
                     />
                     <SlotTile
                       label="Character"
@@ -5550,6 +5574,7 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
                       emptyHint={slotsEnabled.logo ? "Add a logo to your brand bible" : "Not supported by this provider"}
                       badgeColor="rgba(168,85,247,0.4)"
                       onClick={() => effLogo && (setReferenceLightboxUrl(effLogo), setReferenceLightboxOpen(true))}
+                      inherited={slotsEnabled.logo && logoInherited}
                     />
                     {effExtras.map((url, i) => (
                       <SlotTile

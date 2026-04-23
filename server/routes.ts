@@ -460,6 +460,11 @@ export async function registerRoutes(app: Express) {
         const qcEffectiveOutputType = outputType || (generationMode === 't2i' || generationMode === 'i2i' ? 'image' : 'video');
         const qcModeLabel = generationMode === 't2i' ? 'Image' : generationMode === 'i2i' ? 'I2I' : generationMode === 'i2v' ? 'I2V' : generationMode === 'v2v' ? 'V2V' : 'Video';
 
+        // Compute the project-level Product reference up front so we can persist it
+        // as the project default. The asset panel surfaces this with an "Inherited
+        // from project" hint and treats subsequent uploads as per-scene overrides.
+        const qcSourceImage = sourceImageUrl || characterReferenceUrl || undefined;
+
         const [project] = await db.insert(universalVideoProjects).values({
           projectId,
           ownerId: qcUserId,
@@ -473,14 +478,12 @@ export async function registerRoutes(app: Express) {
           outputFormat: { aspectRatio: aspectRatio || "16:9", resolution, platform: "quick-create" },
           brand: qcBrandData.brandName ? { name: qcBrandData.brandName, tagline: qcBrandData.tagline, website: qcBrandData.website, colors: { primary: qcBrandData.primaryColor, secondary: qcBrandData.secondaryColor, accent: qcBrandData.accentColor }, logoUrl: qcBrandData.logoUrl, guidelines: qcBrandData.guidelines } : {},
           scenes: [],
-          assets: {},
+          assets: qcSourceImage ? { productMediaUrl: qcSourceImage } : {},
           progress: qcProgressData,
           status: "draft",
           qualityTier: "standard",
           mediaMode: qcEffectiveOutputType === "image" ? "image" : "video",
         }).returning();
-
-        const qcSourceImage = sourceImageUrl || characterReferenceUrl || undefined;
 
         if (generationMode === 'i2i' && !qcSourceImage) {
           return res.status(400).json({ error: "A source image is required for I2I mode." });
@@ -714,6 +717,13 @@ export async function registerRoutes(app: Express) {
       const originalSceneType = originalJob?.sceneType || (project.mediaMode === "image" ? "image" : "video");
       const originalI2vSettings = (originalJob?.i2vSettings as any) || {};
 
+      // Step 3: Fall back to the persisted project-level Product default
+      // (assets.productMediaUrl) when the prior job didn't carry a source
+      // image. This keeps regenerations consistent with the project default
+      // shown in the Quick Create asset panel.
+      const projectAssetsForRegen = (project.assets as any) || {};
+      const projectProductDefault = projectAssetsForRegen?.productMediaUrl || undefined;
+
       const jobId = crypto.randomUUID();
       await db.insert(videoGenerationJobs).values({
         jobId,
@@ -726,7 +736,7 @@ export async function registerRoutes(app: Express) {
         duration: project.totalDuration || 6,
         aspectRatio: outputFormat.aspectRatio || "16:9",
         sceneType: originalSceneType,
-        sourceImageUrl: originalJob?.sourceImageUrl || undefined,
+        sourceImageUrl: originalJob?.sourceImageUrl || projectProductDefault,
         i2vSettings: {
           saveToLibrary: true,
           outputType: project.mediaMode || "video",
@@ -857,6 +867,10 @@ export async function registerRoutes(app: Express) {
           characterRefImageUrl: latestI2vSettings.characterRefImageUrl || null,
           referenceImages: Array.isArray(latestI2vSettings.referenceImages) ? latestI2vSettings.referenceImages : [],
           brandLogoUrl,
+          // Project-level Product default — set at project creation. The asset
+          // panel shows an "Inherited from project" hint when the active source
+          // image matches this and there's no per-scene override.
+          projectProductMediaUrl: assets?.productMediaUrl || null,
           provider: qc.visual?.provider || latestJob?.provider || null,
         },
       });
@@ -959,22 +973,27 @@ export async function registerRoutes(app: Express) {
       }
 
       const existingAssets = (project.assets as any) || {};
+      // Step 3: An explicit "remove source image" request also clears the
+      // persisted project-level Product default, so the slot stays cleared
+      // across future regenerations and on the asset panel after hydration.
+      const updatedProjectAssets = {
+        ...existingAssets,
+        ...(removeSourceImage ? { productMediaUrl: null } : {}),
+        quickCreate: {
+          ...(existingAssets.quickCreate || {}),
+          visual: {
+            status: "queued",
+            url: null,
+            provider: finalProvider,
+            error: null,
+            updatedAt: new Date().toISOString(),
+          },
+        },
+      };
       await db.update(universalVideoProjects).set({
         status: "generating",
         progress: { phase: "generating", percentage: 0, currentStep: "Queued for visual generation" },
-        assets: {
-          ...existingAssets,
-          quickCreate: {
-            ...(existingAssets.quickCreate || {}),
-            visual: {
-              status: "queued",
-              url: null,
-              provider: finalProvider,
-              error: null,
-              updatedAt: new Date().toISOString(),
-            },
-          },
-        },
+        assets: updatedProjectAssets,
         updatedAt: new Date(),
       }).where(eq(universalVideoProjects.projectId, projectId));
 
@@ -987,7 +1006,14 @@ export async function registerRoutes(app: Express) {
       const originalJob = previousJobs[0];
       let finalSceneType = originalJob?.sceneType || (project.mediaMode === "image" ? "image" : "video");
       const originalI2vSettings = (originalJob?.i2vSettings as any) || {};
-      const finalSourceImage = removeSourceImage ? undefined : (newSourceImageUrl || originalJob?.sourceImageUrl || undefined);
+      // Step 3: Project-level Product default acts as fallback when neither a
+      // new upload nor the prior job carries a source image. Reads from the
+      // freshly updated assets so an explicit `removeSourceImage` (which we
+      // already cleared above) doesn't revive the project default.
+      const projectProductDefault = updatedProjectAssets?.productMediaUrl || undefined;
+      const finalSourceImage = removeSourceImage
+        ? undefined
+        : (newSourceImageUrl || originalJob?.sourceImageUrl || projectProductDefault);
       if (removeSourceImage && finalSceneType === "i2v") {
         finalSceneType = project.mediaMode === "image" ? "image" : "video";
       } else if (newSourceImageUrl && !originalJob?.sourceImageUrl) {

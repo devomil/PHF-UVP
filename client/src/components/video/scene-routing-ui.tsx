@@ -607,6 +607,7 @@ export function SlotTile({
   onClick,
   onRemove,
   amber,
+  inherited,
 }: {
   label: string;
   url?: string | null;
@@ -617,6 +618,7 @@ export function SlotTile({
   onClick?: () => void;
   onRemove?: () => void;
   amber?: boolean;
+  inherited?: boolean;
 }) {
   return (
     <div className="flex flex-col items-center gap-1">
@@ -662,6 +664,24 @@ export function SlotTile({
       >
         {label}
       </span>
+      {inherited && url && (
+        <span
+          className="text-[8px] px-1 py-px rounded"
+          style={{
+            color: "rgb(125,211,252)",
+            backgroundColor: "rgba(14,165,233,0.12)",
+            border: "1px solid rgba(14,165,233,0.25)",
+          }}
+          title={
+            label.toLowerCase() === "logo"
+              ? "This logo comes from your Brand Bible. Update it there to change it everywhere."
+              : "This slot is showing the project default. Upload a new file to override it for this scene."
+          }
+          data-testid={`slot-inherited-${label.toLowerCase()}`}
+        >
+          From project
+        </span>
+      )}
     </div>
   );
 }
