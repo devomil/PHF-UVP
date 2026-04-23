@@ -1052,15 +1052,11 @@ export async function registerRoutes(app: Express) {
       } catch {
         brandLogoUrl = null;
       }
-      let providerSupportsMulti = false;
-      try {
-        const { PROVIDER_REGISTRY } = await import('../shared/provider-config');
-        const providerKey = String(finalProvider || '');
-        const cfg = (PROVIDER_REGISTRY as any)[providerKey] || (PROVIDER_REGISTRY as any)[providerKey.split('-')[0]];
-        providerSupportsMulti = Boolean(cfg?.multiImageSupport);
-      } catch {
-        providerSupportsMulti = false;
-      }
+      const { VIDEO_PROVIDERS } = await import('../shared/provider-config');
+      const providerKey = String(finalProvider || '');
+      const providerCfg =
+        VIDEO_PROVIDERS[providerKey] || VIDEO_PROVIDERS[providerKey.split('-')[0]];
+      const providerSupportsMulti = Boolean(providerCfg?.multiImageSupport);
       const finalLogoUrl = providerSupportsMulti && brandLogoUrl ? brandLogoUrl : undefined;
 
       // If we have a source image but the prior job ran as plain text-to-video,
