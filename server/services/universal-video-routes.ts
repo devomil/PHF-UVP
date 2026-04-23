@@ -54,7 +54,7 @@ import {
   getCompositionId,
 } from '../../shared/video-types';
 import { imageCompositionService } from '../services/image-composition-service';
-import { getAnyBrandContext } from '../services/brand-settings-service';
+import { getBrandContext } from '../services/brand-settings-service';
 import { compositionRequestBuilder } from '../services/composition-request-builder';
 import type { CompositionRequest, ProductPlacement } from '../../shared/types/image-composition-types';
 import { imageToVideoService } from '../services/image-to-video-service';
@@ -1200,7 +1200,7 @@ router.post('/projects/script', isAuthenticated, async (req: Request, res: Respo
     
     const scenes = await universalVideoService.parseScript(validatedInput);
     
-    const scriptBrandCtx = await getAnyBrandContext();
+    const scriptBrandCtx = await getBrandContext(userId);
     const scriptBrand = scriptBrandCtx.brandName
       ? { name: scriptBrandCtx.brandName, tagline: scriptBrandCtx.tagline, website: scriptBrandCtx.website, colors: { primary: scriptBrandCtx.primaryColor, secondary: scriptBrandCtx.secondaryColor, accent: scriptBrandCtx.accentColor }, logoUrl: scriptBrandCtx.logoUrl, guidelines: scriptBrandCtx.guidelines }
       : { name: '', tagline: '', website: '', colors: {}, logoUrl: '', guidelines: '' };
@@ -3909,7 +3909,7 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
     };
     
     // Resolve brand context for end card and render
-    const renderBrandCtx = await getAnyBrandContext();
+    const renderBrandCtx = await getBrandContext(userId);
     const brandCtxForEndCard = renderBrandCtx.brandName
       ? { name: renderBrandCtx.brandName, tagline: renderBrandCtx.tagline, website: renderBrandCtx.website, colors: { primary: renderBrandCtx.primaryColor, secondary: renderBrandCtx.secondaryColor, accent: renderBrandCtx.accentColor }, logoUrl: renderBrandCtx.logoUrl }
       : null;
@@ -9117,7 +9117,7 @@ router.get('/projects/:projectId/generation-estimate', isAuthenticated, async (r
         perScene: avgSceneGenTime,
       },
       brandElements,
-      brandName: (await getAnyBrandContext()).brandName || '',
+      brandName: (await getBrandContext()).brandName || '',
       warnings,
       qualityTier,
       tierSummaries,

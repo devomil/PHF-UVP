@@ -1,7 +1,8 @@
 import { db } from '../db';
 import { brandMediaLibrary, brandSettings } from '@shared/schema';
-import { eq } from 'drizzle-orm';
-import { getAnyBrandContext, type BrandContext } from './brand-settings-service';
+import { and, eq } from 'drizzle-orm';
+import { getBrandContext, type BrandContext } from './brand-settings-service';
+import { getCurrentUserId } from './user-context';
 
 export interface BrandAsset {
   id: number;
@@ -139,29 +140,40 @@ function buildBrandDefaults(ctx: BrandContext) {
 }
 
 class BrandBibleService {
-  private cachedBible: BrandBible | null = null;
-  private cacheTimestamp: number = 0;
+  private cache = new Map<string, { bible: BrandBible; ts: number }>();
   private cacheTTL = 5 * 60 * 1000; // 5 minutes
 
-  async getBrandBible(forceRefresh = false): Promise<BrandBible> {
-    const now = Date.now();
-    
-    if (!forceRefresh && this.cachedBible && (now - this.cacheTimestamp) < this.cacheTTL) {
-      console.log('[BrandBible] Using cached brand bible');
-      return this.cachedBible;
+  async getBrandBible(userId?: string, forceRefresh = false): Promise<BrandBible> {
+    const uid = userId ?? getCurrentUserId();
+    if (!uid) {
+      console.warn('[BrandBible] getBrandBible called without userId — returning fallback bible');
+      return {
+        ...FALLBACK_BRAND_SETTINGS,
+        logos: {},
+        assets: [],
+        promptContext: this.buildPromptContext(FALLBACK_BRAND_SETTINGS),
+        negativePrompts: this.buildNegativePrompts(),
+      };
     }
 
-    console.log('[BrandBible] Loading brand bible (settings + media assets)...');
+    const now = Date.now();
+    const cached = this.cache.get(uid);
+    if (!forceRefresh && cached && (now - cached.ts) < this.cacheTTL) {
+      console.log(`[BrandBible] Using cached brand bible for user ${uid}`);
+      return cached.bible;
+    }
+
+    console.log(`[BrandBible] Loading brand bible for user ${uid} (settings + media assets)...`);
 
     try {
-      const brandCtx = await getAnyBrandContext();
+      const brandCtx = await getBrandContext(uid);
       const brandDefaults = buildBrandDefaults(brandCtx);
       console.log(`[BrandBible] Brand Settings loaded: "${brandDefaults.brandName}" (colors: ${brandDefaults.colors.primary}/${brandDefaults.colors.secondary}/${brandDefaults.colors.accent})`);
 
       const dbAssets = await db
         .select()
         .from(brandMediaLibrary)
-        .where(eq(brandMediaLibrary.isActive, true));
+        .where(and(eq(brandMediaLibrary.isActive, true), eq(brandMediaLibrary.uploadedBy, uid)));
 
       const assets: BrandAsset[] = dbAssets.map(asset => ({
         id: asset.id,
@@ -228,8 +240,7 @@ class BrandBibleService {
         negativePrompts: this.buildNegativePrompts(),
       };
 
-      this.cachedBible = bible;
-      this.cacheTimestamp = now;
+      this.cache.set(uid, { bible, ts: now });
 
       console.log('[BrandBible] Brand bible loaded successfully');
       console.log(`[BrandBible] Brand: "${bible.brandName}" | CTA: "${bible.callToAction.text}" | Website: "${bible.website}"`);
@@ -362,8 +373,8 @@ class BrandBibleService {
     ];
   }
 
-  async getAssetsForKeywords(keywords: string[]): Promise<BrandAsset[]> {
-    const bible = await this.getBrandBible();
+  async getAssetsForKeywords(keywords: string[], userId?: string): Promise<BrandAsset[]> {
+    const bible = await this.getBrandBible(userId);
     
     return bible.assets.filter(asset =>
       keywords.some(keyword =>
@@ -381,8 +392,8 @@ class BrandBibleService {
     );
   }
 
-  async getAssetsForContext(context: string): Promise<BrandAsset[]> {
-    const bible = await this.getBrandBible();
+  async getAssetsForContext(context: string, userId?: string): Promise<BrandAsset[]> {
+    const bible = await this.getBrandBible(userId);
     
     return bible.assets
       .filter(asset => 
@@ -393,14 +404,18 @@ class BrandBibleService {
       .sort((a, b) => (b.priority || 0) - (a.priority || 0));
   }
 
-  clearCache(): void {
-    this.cachedBible = null;
-    this.cacheTimestamp = 0;
-    console.log('[BrandBible] Cache cleared');
+  clearCache(userId?: string): void {
+    if (userId) {
+      this.cache.delete(userId);
+      console.log(`[BrandBible] Cache cleared for user ${userId}`);
+    } else {
+      this.cache.clear();
+      console.log('[BrandBible] Cache cleared (all users)');
+    }
   }
 
-  async hasMinimumAssets(): Promise<boolean> {
-    const bible = await this.getBrandBible();
+  async hasMinimumAssets(userId?: string): Promise<boolean> {
+    const bible = await this.getBrandBible(userId);
     return bible.assets.length > 0 && (!!bible.logos.main || !!bible.logos.watermark);
   }
 }

@@ -1,7 +1,7 @@
 import { llmClient } from "./piapi-llm-client";
 import { brandContextService } from "./brand-context-service";
 import { projectInstructionsService } from "./project-instructions-service";
-import { getAnyBrandContext, getBrandNameOrDefault, type BrandContext } from "./brand-settings-service";
+import { getBrandContext, getBrandNameOrDefault, type BrandContext } from "./brand-settings-service";
 import { getVisualArtPreset, isStylizedPreset } from "@shared/config/visual-art-presets";
 import { evaluateSceneTextRouting } from "../utils/recraft-scene-policy";
 
@@ -106,7 +106,7 @@ class ScriptParserService {
   }
 
   private async buildBrandAwareSystemPrompt(brandContext: string, roleContext: string, aestheticContext: string, artPreset?: any, productContext?: ScriptParseOptions['productContext'], scriptPresets?: ScriptParseOptions['scriptPresets'], projectType?: string, contentStructure?: string): Promise<string> {
-    const brand = await getAnyBrandContext();
+    const brand = await getBrandContext();
     const brandName = getBrandNameOrDefault(brand);
     const hasBrand = brand.brandName?.trim();
     const brandDesc = hasBrand
@@ -326,7 +326,7 @@ Return a JSON object with scenes array. Each scene should include:
     serviceMatches: { services: string[]; products: string[]; conditions: string[] },
     artPreset?: any
   ): Promise<string> {
-    const brand = await getAnyBrandContext();
+    const brand = await getBrandContext();
     const brandName = getBrandNameOrDefault(brand);
     const isStylized = artPreset && isStylizedPreset(artPreset.id);
 

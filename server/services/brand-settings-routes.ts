@@ -7,6 +7,7 @@ import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
 import { brandBibleService } from './brand-bible-service';
+import { clearBrandContextCache } from './brand-settings-service';
 
 const router = Router();
 
@@ -114,7 +115,8 @@ router.put('/', async (req, res) => {
         .where(eq(brandSettings.userId, userId))
         .returning();
 
-      brandBibleService.clearCache();
+      brandBibleService.clearCache(userId);
+      clearBrandContextCache(userId);
       return res.json({ success: true, settings: updated });
     }
 
@@ -136,7 +138,8 @@ router.put('/', async (req, res) => {
       })
       .returning();
 
-    brandBibleService.clearCache();
+    brandBibleService.clearCache(userId);
+      clearBrandContextCache(userId);
     res.json({ success: true, settings: created });
   } catch (error: any) {
     console.error('[BrandSettings] PUT error:', error.message);
@@ -182,7 +185,8 @@ router.post('/logo', logoUpload.single('logo'), async (req, res) => {
       await db.insert(brandSettings).values({ userId, logoUrl });
     }
 
-    brandBibleService.clearCache();
+    brandBibleService.clearCache(userId);
+      clearBrandContextCache(userId);
     res.json({ success: true, logoUrl });
   } catch (error: any) {
     console.error('[BrandSettings] Logo upload error:', error.message);
@@ -215,7 +219,8 @@ router.delete('/logo', async (req, res) => {
         .where(eq(brandSettings.userId, userId));
     }
 
-    brandBibleService.clearCache();
+    brandBibleService.clearCache(userId);
+      clearBrandContextCache(userId);
     res.json({ success: true });
   } catch (error: any) {
     console.error('[BrandSettings] Logo delete error:', error.message);

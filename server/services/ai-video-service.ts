@@ -14,7 +14,7 @@ import {
 import { getVisualStyleConfig, VisualStyleConfig } from '@shared/visual-style-config';
 import { getMotionControl, MotionControlConfig } from '@shared/config/motion-control';
 import { optimizePrompt, logPromptOptimization, analyzePrompt } from './video-prompt-optimizer';
-import { getAnyBrandContext, getBrandNameOrDefault } from './brand-settings-service';
+import { getBrandContext, getBrandNameOrDefault } from './brand-settings-service';
 import { getVisualArtPreset, VisualArtPreset, isStylizedPreset as isStylizedPresetCheck, getProviderHierarchy } from '../../shared/config/visual-art-presets';
 import { getSceneContentTag, SceneContentTag } from '../../shared/config/scene-content-tags';
 

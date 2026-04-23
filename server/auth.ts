@@ -3,6 +3,7 @@ import { Strategy as LocalStrategy } from "passport-local";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
 import { type Express, type Request, type Response, type NextFunction } from "express";
+import { runWithUserContext } from "./services/user-context";
 import bcrypt from "bcrypt";
 import { db, pool } from "./db";
 import { users, sessions } from "../shared/schema";
@@ -167,7 +168,13 @@ export function setupAuth(app: Express) {
 }
 
 export function isAuthenticated(req: Request, res: Response, next: NextFunction) {
-  if (req.isAuthenticated()) return next();
+  if (req.isAuthenticated()) {
+    const userId = (req.user as any)?.id;
+    if (userId) {
+      return runWithUserContext(userId, () => next());
+    }
+    return next();
+  }
   res.status(401).json({ message: "Not authenticated" });
 }
 

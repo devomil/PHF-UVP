@@ -4,6 +4,7 @@ import { db } from '../db';
 import { brandMediaLibrary } from '../../shared/schema';
 import { eq, desc, and, or, isNull } from 'drizzle-orm';
 import { brandBibleService } from './brand-bible-service';
+import { clearBrandContextCache } from './brand-settings-service';
 
 const router = Router();
 
@@ -74,7 +75,8 @@ router.post('/', async (req: Request, res: Response) => {
       placementSettings: placementSettings || null,
     }).returning();
 
-    brandBibleService.clearCache();
+    brandBibleService.clearCache(uploadedBy ?? undefined);
+    clearBrandContextCache(uploadedBy ?? undefined);
     res.status(201).json(item);
   } catch (error: any) {
     console.error('[BrandMedia] Create error:', error.message);
@@ -111,17 +113,19 @@ router.put('/:id', async (req: Request, res: Response) => {
 
     updates.updatedAt = new Date();
 
+    const userId = (req.user as any)?.id || null;
     const [updated] = await db
       .update(brandMediaLibrary)
       .set(updates)
-      .where(eq(brandMediaLibrary.id, id))
+      .where(and(eq(brandMediaLibrary.id, id), eq(brandMediaLibrary.uploadedBy, userId)))
       .returning();
 
     if (!updated) {
       return res.status(404).json({ error: 'Brand media asset not found' });
     }
 
-    brandBibleService.clearCache();
+    brandBibleService.clearCache(userId);
+    clearBrandContextCache(userId);
     res.json(updated);
   } catch (error: any) {
     console.error('[BrandMedia] Update error:', error.message);
@@ -136,16 +140,18 @@ router.delete('/:id', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Invalid id' });
     }
 
+    const userId = (req.user as any)?.id || null;
     const [deleted] = await db
       .delete(brandMediaLibrary)
-      .where(eq(brandMediaLibrary.id, id))
+      .where(and(eq(brandMediaLibrary.id, id), eq(brandMediaLibrary.uploadedBy, userId)))
       .returning();
 
     if (!deleted) {
       return res.status(404).json({ error: 'Brand media asset not found' });
     }
 
-    brandBibleService.clearCache();
+    brandBibleService.clearCache(userId);
+    clearBrandContextCache(userId);
     res.json({ success: true, id });
   } catch (error: any) {
     console.error('[BrandMedia] Delete error:', error.message);

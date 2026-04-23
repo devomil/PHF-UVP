@@ -796,7 +796,7 @@ export async function registerRoutes(app: Express) {
       let brandLogoUrl: string | null = null;
       try {
         const { brandBibleService } = await import('./services/brand-bible-service');
-        const bb = await brandBibleService.getBrandBible();
+        const bb = await brandBibleService.getBrandBible(userId);
         const logo = bb?.logos?.main || bb?.logos?.intro || bb?.logos?.outro || bb?.logos?.watermark;
         brandLogoUrl = logo?.url || null;
       } catch {

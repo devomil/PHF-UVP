@@ -420,6 +420,12 @@ async function processProject(projectData: VideoProjectWithMeta) {
 
   log(`Processing project: ${projectId} (${projectData.title})`);
 
+  const { runWithUserContext } = await import('./user-context');
+  return runWithUserContext(projectData.ownerId, () => processProjectInner(projectData));
+}
+
+async function processProjectInner(projectData: VideoProjectWithMeta) {
+  const projectId = projectData.projectId;
   try {
     await db.update(universalVideoProjects)
       .set({
@@ -542,6 +548,11 @@ async function processProject(projectData: VideoProjectWithMeta) {
 }
 
 async function processChunkedRender(projectData: VideoProjectWithMeta) {
+  const { runWithUserContext } = await import('./user-context');
+  return runWithUserContext(projectData.ownerId, () => processChunkedRenderInner(projectData));
+}
+
+async function processChunkedRenderInner(projectData: VideoProjectWithMeta) {
   const projectId = projectData.projectId;
   currentProjectId = projectId;
 
