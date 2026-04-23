@@ -866,7 +866,16 @@ export async function registerRoutes(app: Express) {
           referenceVideoUrl: latestI2vSettings.referenceVideoUrl || null,
           characterRefImageUrl: latestI2vSettings.characterRefImageUrl || null,
           referenceImages: Array.isArray(latestI2vSettings.referenceImages) ? latestI2vSettings.referenceImages : [],
-          brandLogoUrl,
+          // Effective logo URL after applying any per-run override from the
+          // last job (custom upload, exclusion, or fall back to brand bible).
+          brandLogoUrl: latestI2vSettings.logoExcluded === true
+            ? null
+            : (latestI2vSettings.customLogoUrl || brandLogoUrl),
+          // Raw brand-bible logo, so the UI can re-offer it when the user
+          // un-removes / un-replaces.
+          brandBibleLogoUrl: brandLogoUrl,
+          logoExcluded: latestI2vSettings.logoExcluded === true,
+          customLogoUrl: latestI2vSettings.customLogoUrl || null,
           // Project-level Product default — set at project creation. The asset
           // panel shows an "Inherited from project" hint when the active source
           // image matches this and there's no per-scene override.
@@ -931,7 +940,7 @@ export async function registerRoutes(app: Express) {
       }
       const { projectId } = req.params;
       const userId = (req.user as any).id;
-      const { prompt: newPrompt, provider: newProvider, duration: newDuration, aspectRatio: newAspectRatio, negativePrompt: newNegativePrompt, imageFidelity: newImageFidelity, artPresetId: newArtPresetId, sourceImageUrl: newSourceImageUrl, removeSourceImage, characterRefImageUrl: newCharacterRefImageUrl, referenceImages: newReferenceImages } = req.body || {};
+      const { prompt: newPrompt, provider: newProvider, duration: newDuration, aspectRatio: newAspectRatio, negativePrompt: newNegativePrompt, imageFidelity: newImageFidelity, artPresetId: newArtPresetId, sourceImageUrl: newSourceImageUrl, removeSourceImage, characterRefImageUrl: newCharacterRefImageUrl, referenceImages: newReferenceImages, excludeLogo: newExcludeLogo, customLogoUrl: newCustomLogoUrl } = req.body || {};
 
       const [project] = await db
         .select()
@@ -1065,7 +1074,16 @@ export async function registerRoutes(app: Express) {
         ? VIDEO_PROVIDERS[providerKey] || VIDEO_PROVIDERS[providerKey.split('-')[0]]
         : undefined;
       const providerSupportsMulti = Boolean(providerCfg?.multiImageSupport);
-      const finalLogoUrl = providerSupportsMulti && brandLogoUrl ? brandLogoUrl : undefined;
+      // Per-run logo override:
+      //   excludeLogo === true  → omit logo for this run (don't pull brand bible)
+      //   customLogoUrl present → use this URL instead of the brand bible logo
+      //   otherwise             → fall back to brand bible logo (current behavior)
+      const effectiveLogoUrl = newExcludeLogo === true
+        ? null
+        : (typeof newCustomLogoUrl === "string" && newCustomLogoUrl.length > 0
+            ? newCustomLogoUrl
+            : brandLogoUrl);
+      const finalLogoUrl = providerSupportsMulti && effectiveLogoUrl ? effectiveLogoUrl : undefined;
 
       // If we have a source image but the prior job ran as plain text-to-video,
       // upgrade the sceneType so the worker actually feeds it as i2v input.
@@ -1119,6 +1137,13 @@ export async function registerRoutes(app: Express) {
             isCharacterReference: _origCharFlag,
             referenceImages: _origRefs,
             sourceImageUrls: _origUrls,
+            // Always strip prior logo flags so each run reflects the CURRENT
+            // request intent — otherwise a stale `logoExcluded` from a previous
+            // job will keep blanking the logo on later regenerations even when
+            // the user wants to inherit the brand-bible logo again.
+            brandLogoUrl: _origLogo,
+            logoExcluded: _origLogoExcl,
+            customLogoUrl: _origCustomLogo,
             ...cleanedOriginal
           } = (originalI2vSettings || {}) as any;
           return {
@@ -1135,6 +1160,11 @@ export async function registerRoutes(app: Express) {
               ? { referenceImages: finalReferenceImages }
               : {}),
             ...(finalLogoUrl ? { brandLogoUrl: finalLogoUrl } : {}),
+            // Persist logo override intent so /assets can rehydrate the UI on reload.
+            ...(newExcludeLogo === true ? { logoExcluded: true } : {}),
+            ...(typeof newCustomLogoUrl === "string" && newCustomLogoUrl.length > 0
+              ? { customLogoUrl: newCustomLogoUrl }
+              : {}),
             // Worker reads `sourceImageUrls` for multi-image-aware providers
             // (Kling 2.x, Veo 3.1, Luma, Hailuo, Runway). Build it whenever any
             // typed ref exists, not only when extras are present, so character-only,

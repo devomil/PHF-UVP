@@ -606,6 +606,7 @@ export function SlotTile({
   badgeColor,
   onClick,
   onRemove,
+  onReplace,
   amber,
   inherited,
   disabled,
@@ -618,6 +619,7 @@ export function SlotTile({
   badgeColor: string;
   onClick?: () => void;
   onRemove?: () => void;
+  onReplace?: () => void;
   amber?: boolean;
   inherited?: boolean;
   disabled?: boolean;
@@ -642,6 +644,16 @@ export function SlotTile({
               title="Remove"
             >
               <X className="w-2.5 h-2.5" />
+            </button>
+          )}
+          {onReplace && (
+            <button
+              type="button"
+              onClick={onReplace}
+              className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-sky-500 text-white flex items-center justify-center text-[8px] opacity-0 group-hover:opacity-100"
+              title="Replace"
+            >
+              <Plus className="w-2.5 h-2.5" />
             </button>
           )}
         </div>

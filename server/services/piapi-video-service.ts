@@ -964,6 +964,11 @@ class PiAPIVideoService {
       // `mode: "first_last_frames"` with image_urls=[first, last?] and aspect_ratio:"auto".
       useFirstLastFrames?: boolean;
       endFrameUrl?: string; // optional second image (locks the END state)
+      // When the request bundles a brand logo as one of the reference images,
+      // the seedance branch uses this to add an explicit @imageN cue so the
+      // model actually composes the logo into the scene (otherwise it gets
+      // ignored as a generic style reference).
+      brandLogoUrl?: string;
     };
     motionControl?: MotionControlConfig;
     isCharacterReference?: boolean;
@@ -1416,6 +1421,19 @@ class PiAPIVideoService {
         const hasImageRef = /@image\d/.test(promptWithRefs);
         if (!hasImageRef) {
           promptWithRefs = `The subject in @image1 ${promptWithRefs}`;
+        }
+        // If a brand logo is one of the references, point the model at it
+        // explicitly — otherwise omni_reference treats it as a generic style
+        // hint and the logo won't appear.
+        const logoUrl = options.i2vSettings?.brandLogoUrl;
+        if (logoUrl) {
+          const logoIdx = allImageUrls.indexOf(logoUrl);
+          if (logoIdx >= 0) {
+            const logoRef = `@image${logoIdx + 1}`;
+            if (!promptWithRefs.includes(logoRef)) {
+              promptWithRefs = `${promptWithRefs} The brand logo from ${logoRef} should appear naturally on product packaging or as a subtle, in-scene brand mark.`;
+            }
+          }
         }
       }
 

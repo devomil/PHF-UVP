@@ -4971,8 +4971,11 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
   const [overrideSourceImage, setOverrideSourceImage] = useState<string | null | undefined>(undefined);
   const [overrideCharacter, setOverrideCharacter] = useState<string | null | undefined>(undefined);
   const [overrideExtras, setOverrideExtras] = useState<string[] | undefined>(undefined);
+  // Logo override: undefined = inherit brand bible, null = exclude for this run,
+  // string = use this custom URL instead of the brand bible logo.
+  const [overrideLogo, setOverrideLogo] = useState<string | null | undefined>(undefined);
   // Routes the next file-picker selection into the correct typed slot.
-  const pendingUploadSlotRef = useRef<"product" | "character" | "extra">("product");
+  const pendingUploadSlotRef = useRef<"product" | "character" | "extra" | "logo">("product");
   const [uploadingSourceImage, setUploadingSourceImage] = useState(false);
   const [generatingSourceImage, setGeneratingSourceImage] = useState(false);
   const [referenceLightboxOpen, setReferenceLightboxOpen] = useState(false);
@@ -5003,6 +5006,9 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
         if (slot === "character") {
           setOverrideCharacter(url);
           toast({ title: "Character reference set", description: "Click Regenerate to apply." });
+        } else if (slot === "logo") {
+          setOverrideLogo(url);
+          toast({ title: "Logo replaced", description: "Click Regenerate to apply. Brand bible is unchanged." });
         } else if (slot === "extra") {
           // First add: seed from CURRENT server-side extras (read fresh from
           // the query cache, not from a possibly-stale closure) so we never
@@ -5115,6 +5121,12 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
       if (overrideExtras !== undefined) {
         body.referenceImages = overrideExtras;
       }
+      // Logo override: explicit null = exclude for this run, string = custom URL
+      if (overrideLogo === null) {
+        body.excludeLogo = true;
+      } else if (overrideLogo) {
+        body.customLogoUrl = overrideLogo;
+      }
       const res = await fetch(`/api/projects/${projectId}/quick-create/generate-visual`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -5130,6 +5142,7 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
       setOverrideSourceImage(undefined);
       setOverrideCharacter(undefined);
       setOverrideExtras(undefined);
+      setOverrideLogo(undefined);
       queryClient.invalidateQueries({ queryKey: ["quick-create-assets", projectId] });
       queryClient.invalidateQueries({ queryKey: ["project", projectId] });
       toast({ title: "Visual Generation Started", description: "Your visual asset is being generated." });
@@ -5412,7 +5425,12 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
                   ? null
                   : (overrideSourceImage || genInfo.sourceImageUrl || projectProductUrl || null);
               const effCharacter = overrideCharacter === null ? null : (overrideCharacter || genInfo.characterRefImageUrl || null);
-              const effLogo = genInfo.brandLogoUrl || null;
+              // Logo: client-side override wins (null = excluded, string = custom),
+              // otherwise the server-resolved effective logo (which already accounts
+              // for any persisted exclude/custom override from the last job).
+              const effLogo = overrideLogo === null
+                ? null
+                : (overrideLogo || genInfo.brandLogoUrl || null);
               const serverExtras: string[] = Array.isArray(genInfo.referenceImages) ? genInfo.referenceImages : [];
               const effExtras: string[] = overrideExtras !== undefined ? overrideExtras : serverExtras;
 
@@ -5566,13 +5584,21 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
                       disabled={!slotsEnabled.logo}
                       emptyAction={() => {
                         if (!slotsEnabled.logo) return;
-                        window.open("/brand-bible#assets", "_blank");
+                        // Empty state: offer upload of a custom logo for this run.
+                        // Brand bible can still be edited separately.
+                        pendingUploadSlotRef.current = "logo";
+                        (document.getElementById("qc-source-image-upload") as HTMLInputElement | null)?.click();
                       }}
                       emptyHint={slotsEnabled.logo
-                        ? "Add a logo to your brand bible"
+                        ? "Upload a logo for this run (or add one to your brand bible)"
                         : `${providerCfg?.displayName || providerKey} only accepts one reference image — switch to Kling 2.x, Veo 3.1, Luma, Hailuo, or Runway to use a logo.`}
                       badgeColor="rgba(168,85,247,0.4)"
                       onClick={() => effLogo && (setReferenceLightboxUrl(effLogo), setReferenceLightboxOpen(true))}
+                      onRemove={slotsEnabled.logo && effLogo ? () => setOverrideLogo(null) : undefined}
+                      onReplace={slotsEnabled.logo && effLogo ? () => {
+                        pendingUploadSlotRef.current = "logo";
+                        (document.getElementById("qc-source-image-upload") as HTMLInputElement | null)?.click();
+                      } : undefined}
                       inherited={slotsEnabled.logo && logoInherited}
                     />
                     {effExtras.map((url, i) => (
