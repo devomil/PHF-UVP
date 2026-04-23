@@ -1407,17 +1407,17 @@ class PiAPIVideoService {
         : [options.imageUrl];
 
       // Seedance 2 GA accepts only mode = text_to_video | first_last_frames |
-      // omni_reference (no "image_to_video"). Map our intent:
-      //   • single image → first_last_frames (animate from this anchor frame)
-      //   • multiple images → omni_reference (use them as composition refs with
-      //     @image_N pointers in the prompt)
+      // omni_reference (no "image_to_video"). We use omni_reference for both
+      // single- and multi-image runs because it's the only mode that accepts
+      // an explicit aspect_ratio — first_last_frames forces aspect_ratio:"auto"
+      // and inherits the (often portrait) source image's ratio, breaking 16:9
+      // outputs. first_last_frames is reserved for the explicit
+      // useFirstLastFrames path used by Seamless Transitions above.
       const isMultiRef = allImageUrls.length > 1;
-      const seedanceMode: 'first_last_frames' | 'omni_reference' = isMultiRef
-        ? 'omni_reference'
-        : 'first_last_frames';
+      const seedanceMode: 'omni_reference' = 'omni_reference';
 
       let promptWithRefs = sanitizedPrompt;
-      if (isMultiRef) {
+      {
         const hasImageRef = /@image\d/.test(promptWithRefs);
         if (!hasImageRef) {
           promptWithRefs = `The subject in @image1 ${promptWithRefs}`;
