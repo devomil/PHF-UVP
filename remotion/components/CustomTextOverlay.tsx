@@ -273,8 +273,10 @@ export const CustomTextOverlay: React.FC<CustomTextOverlayProps> = ({
           lineHeight: overlay.lineHeight ?? 1.3,
           textShadow: overlay.textShadow !== false ? '1px 2px 6px rgba(0,0,0,0.7), 0 0 20px rgba(0,0,0,0.3)' : undefined,
           width: '100%',
-          wordBreak: 'break-word',
+          wordBreak: 'keep-all',
+          overflowWrap: 'normal',
           whiteSpace: 'pre-wrap',
+          hyphens: 'manual',
         }}
       >
         {displayText}
