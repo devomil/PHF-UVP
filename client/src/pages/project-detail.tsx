@@ -4986,6 +4986,7 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
   const [overlayItems, setOverlayItems] = useState<SceneOverlayItem[]>([]);
   const [overlaysLoaded, setOverlaysLoaded] = useState(false);
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const handleSourceImageChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -5003,9 +5004,12 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
           setOverrideCharacter(url);
           toast({ title: "Character reference set", description: "Click Regenerate to apply." });
         } else if (slot === "extra") {
-          // First add: seed from current server-side extras so we don't wipe them.
-          const serverExtras: string[] = Array.isArray(assetsQuery.data?.generationInfo?.referenceImages)
-            ? (assetsQuery.data!.generationInfo!.referenceImages as string[])
+          // First add: seed from CURRENT server-side extras (read fresh from
+          // the query cache, not from a possibly-stale closure) so we never
+          // drop already-existing extras when the user adds another one.
+          const freshAssets = queryClient.getQueryData<any>(["quick-create-assets", projectId]);
+          const serverExtras: string[] = Array.isArray(freshAssets?.generationInfo?.referenceImages)
+            ? (freshAssets.generationInfo.referenceImages as string[])
             : [];
           setOverrideExtras((prev) => {
             const base = prev !== undefined ? prev : serverExtras;
@@ -5024,8 +5028,7 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
     setUploadingSourceImage(false);
     pendingUploadSlotRef.current = "product";
     e.target.value = "";
-  }, [toast]);
-  const queryClient = useQueryClient();
+  }, [toast, queryClient, projectId]);
 
   const assetsQuery = useQuery({
     queryKey: ["quick-create-assets", projectId],
