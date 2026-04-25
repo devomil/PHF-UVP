@@ -2164,20 +2164,25 @@ export const UniversalVideoComposition: React.FC<UniversalVideoProps> = ({
             const sortedOverlays = [...(scene.overlayItems || [])].sort(
               (a, b) => (a.layerOrder ?? 0) - (b.layerOrder ?? 0)
             );
+            // Unified renderer loop: a single mapper for both text and image
+            // overlays, each receiving the project brand kit so brandBinding
+            // fields can resolve at render time.
             return sortedOverlays.map((overlay: SceneOverlayItem, overlayIdx: number) => {
               const zIndex = 50 + overlayIdx;
+              const wrapperKey = `custom-overlay-${scene.id}-${overlay.id ?? overlayIdx}`;
               if (overlay.type === 'text') {
                 return (
-                  <div key={`custom-text-overlay-${scene.id}-${overlayIdx}`} style={{ position: 'absolute', inset: 0, zIndex }}>
+                  <div key={wrapperKey} style={{ position: 'absolute', inset: 0, zIndex }}>
                     <CustomTextOverlay
                       overlay={overlay}
                       durationInFrames={durationInFrames}
+                      brand={brand}
                     />
                   </div>
                 );
               }
               return (
-                <div key={`custom-overlay-${scene.id}-${overlayIdx}`} style={{ position: 'absolute', inset: 0, zIndex }}>
+                <div key={wrapperKey} style={{ position: 'absolute', inset: 0, zIndex }}>
                   <CustomImageOverlay
                     url={overlay.url}
                     x={overlay.x}
@@ -2193,6 +2198,8 @@ export const UniversalVideoComposition: React.FC<UniversalVideoProps> = ({
                     animationDuration={overlay.animationDuration}
                     timingStart={overlay.timingStart}
                     timingDuration={overlay.timingDuration}
+                    brand={brand}
+                    brandBinding={overlay.brandBinding}
                   />
                 </div>
               );

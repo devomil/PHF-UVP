@@ -8,6 +8,19 @@ import { Button } from "@/components/ui/button";
 import { ProviderCatalogSelector } from "@/components/video/provider-catalog-selector";
 import { SlotTile } from "@/components/video/scene-routing-ui";
 import { VIDEO_PROVIDERS as PROVIDER_CONFIG, type VideoProvider } from "@shared/provider-config";
+import type { BrandSettings } from "@shared/video-types";
+
+// Normalize the loosely-typed `project.brand` blob (the project shape is
+// `any` because it is hydrated from a generic JSON API) into a typed
+// BrandSettings object suitable for the overlay editor and renderers.
+// Returns undefined if the brand kit is missing or malformed.
+function normalizeProjectBrand(project: any): BrandSettings | undefined {
+  const brand = project?.brand;
+  if (!brand || typeof brand !== 'object') return undefined;
+  const colors = brand.colors;
+  if (!colors || typeof colors !== 'object' || Array.isArray(colors)) return undefined;
+  return brand as BrandSettings;
+}
 import { useToast } from "@/hooks/use-toast";
 import { EnhancedSceneEditor } from "@/components/video/enhanced-scene-editor";
 import { SceneOverlayEditor, SceneOverlayItem } from "@/components/video/scene-overlay-editor";
@@ -1759,6 +1772,7 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
                           const vc = project?.brandSettings?.colors;
                           return Array.isArray(vc) ? vc : undefined;
                         })()}
+                        brand={normalizeProjectBrand(project)}
                       />
                     )}
                   </div>
@@ -5275,6 +5289,7 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
           previewHeight={previewSizing.ph}
           backgroundUrl={assets.visual!.url}
           backgroundType={project.mediaMode === "image" ? "image" : "video"}
+          brand={normalizeProjectBrand(project)}
         />
       </div>
     </div>

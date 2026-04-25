@@ -110,10 +110,11 @@ interface EnhancedSceneEditorProps {
   characters?: CharacterProfile[];
   onCharactersChange?: (characters: CharacterProfile[]) => void;
   brandColors?: string[];
+  brand?: import("@shared/video-types").BrandSettings;
   projectMode?: string;
 }
 
-export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, aspectRatio = "16:9", artPresetId, characters = [], onCharactersChange, brandColors, projectMode }: EnhancedSceneEditorProps) {
+export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, aspectRatio = "16:9", artPresetId, characters = [], onCharactersChange, brandColors, brand, projectMode }: EnhancedSceneEditorProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -3369,6 +3370,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
           microSceneOverlays={msOverlayState}
           sceneDurationSec={scene.duration || 5}
           brandColors={brandColors}
+          brand={brand}
           aspectRatio={aspectRatio}
           projectId={projectId}
           sceneId={sceneId}

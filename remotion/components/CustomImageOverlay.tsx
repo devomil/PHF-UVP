@@ -1,6 +1,7 @@
 import React from 'react';
 import { Img, useCurrentFrame, useVideoConfig, interpolate, spring } from 'remotion';
-import type { ImageOverlayItem } from '../../shared/video-types';
+import type { ImageOverlayItem, BrandSettings, OverlayBrandBinding } from '../../shared/video-types';
+import { resolveBrandLogoUrl } from '../../shared/video-types';
 
 export interface CustomImageOverlayProps {
   url: string;
@@ -17,6 +18,8 @@ export interface CustomImageOverlayProps {
   animationDuration?: number;
   timingStart?: number;
   timingDuration?: number;
+  brand?: BrandSettings;
+  brandBinding?: OverlayBrandBinding;
 }
 
 function resolveOverlayUrl(url: string): string {
@@ -45,7 +48,13 @@ export const CustomImageOverlay: React.FC<CustomImageOverlayProps> = ({
   animationDuration = 0.4,
   timingStart,
   timingDuration,
+  brand,
+  brandBinding,
 }) => {
+  // Brand-kit binding: overlays flagged as brand logos always resolve to the
+  // current project logo URL, so swapping the brand kit propagates everywhere.
+  const brandLogoUrl = resolveBrandLogoUrl(brand, brandBinding);
+  const effectiveUrl = brandLogoUrl ?? url;
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
@@ -132,7 +141,7 @@ export const CustomImageOverlay: React.FC<CustomImageOverlayProps> = ({
     filter = `${filter ? filter + ' ' : ''}blur(${blurAmount}px)`;
   }
 
-  const resolvedUrl = resolveOverlayUrl(url);
+  const resolvedUrl = resolveOverlayUrl(effectiveUrl);
   if (!resolvedUrl) return null;
 
   return (

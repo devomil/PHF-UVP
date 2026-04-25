@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { useCurrentFrame, useVideoConfig, interpolate, spring } from 'remotion';
-import type { TextOverlayItem, TextOverlayEnterAnimation, TextOverlayExitAnimation, TextEmphasisAnimation } from '../../shared/video-types';
+import type { TextOverlayItem, TextOverlayEnterAnimation, TextOverlayExitAnimation, TextEmphasisAnimation, BrandSettings } from '../../shared/video-types';
+import { resolveBrandColor, resolveBrandFontFamily } from '../../shared/video-types';
 
 const SYSTEM_FONTS = new Set(["Inter", "Arial", "Georgia", "Courier New", "Impact", "Verdana", "Trebuchet MS", "Palatino", "Open Sans"]);
 
@@ -17,6 +18,7 @@ const GoogleFontLink: React.FC<{ fontFamily?: string }> = ({ fontFamily }) => {
 export interface CustomTextOverlayProps {
   overlay: TextOverlayItem;
   durationInFrames: number;
+  brand?: BrandSettings;
 }
 
 function hexToRgb(hex: string): string {
@@ -144,7 +146,16 @@ function computeEmphasis(
 export const CustomTextOverlay: React.FC<CustomTextOverlayProps> = ({
   overlay,
   durationInFrames,
+  brand,
 }) => {
+  // Brand-kit binding: any property declared on overlay.brandBinding wins
+  // over the literal value, so updates to BrandSettings propagate everywhere.
+  const boundColor = resolveBrandColor(brand, overlay.brandBinding?.color);
+  const boundBg = resolveBrandColor(brand, overlay.brandBinding?.backgroundColor);
+  const boundFontFamily = resolveBrandFontFamily(brand, overlay.brandBinding?.fontFamily);
+  const effectiveColor = boundColor ?? overlay.color;
+  const effectiveBackgroundColor = boundBg ?? overlay.backgroundColor;
+  const effectiveFontFamily = boundFontFamily ?? overlay.fontFamily;
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
@@ -205,13 +216,13 @@ export const CustomTextOverlay: React.FC<CustomTextOverlayProps> = ({
     : text;
 
   const bgOpacity = overlay.backgroundOpacity ?? 0;
-  const hasBg = overlay.backgroundColor && bgOpacity > 0;
+  const hasBg = !!effectiveBackgroundColor && bgOpacity > 0;
   const hasAutoBackground = overlay.autoBackground === true;
   const autoBackgroundOpacity = overlay.autoBackgroundOpacity ?? 50;
 
   const backgroundStyle: React.CSSProperties = hasBg
     ? {
-        backgroundColor: `rgba(${hexToRgb(overlay.backgroundColor!)}, ${bgOpacity / 100})`,
+        backgroundColor: `rgba(${hexToRgb(effectiveBackgroundColor!)}, ${bgOpacity / 100})`,
         backdropFilter: bgOpacity > 30 ? 'blur(4px)' : undefined,
       }
     : {};
@@ -224,7 +235,7 @@ export const CustomTextOverlay: React.FC<CustomTextOverlayProps> = ({
 
   return (
     <>
-    <GoogleFontLink fontFamily={overlay.fontFamily} />
+    <GoogleFontLink fontFamily={effectiveFontFamily} />
     <div
       style={{
         position: 'absolute',
@@ -265,9 +276,9 @@ export const CustomTextOverlay: React.FC<CustomTextOverlayProps> = ({
       <div
         style={{
           fontSize: overlay.fontSize,
-          fontFamily: overlay.fontFamily || 'Inter, sans-serif',
+          fontFamily: effectiveFontFamily || 'Inter, sans-serif',
           fontWeight: overlay.fontWeight || '600',
-          color: overlay.color || '#FFFFFF',
+          color: effectiveColor || '#FFFFFF',
           textAlign: overlay.textAlign || 'center',
           letterSpacing: overlay.letterSpacing != null ? `${overlay.letterSpacing}px` : undefined,
           lineHeight: overlay.lineHeight ?? 1.3,
@@ -306,9 +317,9 @@ export const CustomTextOverlay: React.FC<CustomTextOverlayProps> = ({
             key={idx}
             style={{
               fontSize: Math.round(overlay.fontSize * 0.8),
-              fontFamily: overlay.fontFamily || 'Inter, sans-serif',
+              fontFamily: effectiveFontFamily || 'Inter, sans-serif',
               fontWeight: '500',
-              color: overlay.color || '#FFFFFF',
+              color: effectiveColor || '#FFFFFF',
               textAlign: overlay.textAlign || 'left',
               textShadow: overlay.textShadow !== false ? '1px 1px 4px rgba(0,0,0,0.6)' : undefined,
               opacity: bulletOpacity,

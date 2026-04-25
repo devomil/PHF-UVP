@@ -197,6 +197,45 @@ export type SnapPosition = 'top-left' | 'top-center' | 'top-right' | 'middle-lef
 
 export type ImageOverlayKind = 'logo' | 'watermark' | 'decoration' | 'image';
 
+// Brand-kit binding: an overlay can declare that one or more of its
+// visual properties should inherit from the project's BrandSettings,
+// so updating the brand kit propagates everywhere automatically.
+export type BrandColorKey = 'primary' | 'secondary' | 'accent' | 'text' | 'textLight';
+export type BrandFontKey = 'heading' | 'body';
+
+export interface OverlayBrandBinding {
+  color?: BrandColorKey;
+  backgroundColor?: BrandColorKey;
+  fontFamily?: BrandFontKey;
+  logo?: boolean;
+}
+
+export function resolveBrandColor(
+  brand: BrandSettings | undefined,
+  key: BrandColorKey | undefined
+): string | undefined {
+  if (!brand || !key) return undefined;
+  const v = brand.colors?.[key];
+  return typeof v === 'string' && v.length > 0 ? v : undefined;
+}
+
+export function resolveBrandFontFamily(
+  brand: BrandSettings | undefined,
+  key: BrandFontKey | undefined
+): string | undefined {
+  if (!brand || !key) return undefined;
+  const v = brand.fonts?.[key];
+  return typeof v === 'string' && v.length > 0 ? v : undefined;
+}
+
+export function resolveBrandLogoUrl(
+  brand: BrandSettings | undefined,
+  binding: OverlayBrandBinding | undefined
+): string | undefined {
+  if (!brand || !binding?.logo) return undefined;
+  return brand.logoUrl && brand.logoUrl.length > 0 ? brand.logoUrl : undefined;
+}
+
 export interface ImageOverlayItem {
   type: 'image';
   id: string;
@@ -221,6 +260,7 @@ export interface ImageOverlayItem {
   cornerRadius?: number;
   autoBackground?: boolean;
   autoBackgroundOpacity?: number;
+  brandBinding?: OverlayBrandBinding;
 }
 
 export interface TextOverlayItem {
@@ -258,6 +298,7 @@ export interface TextOverlayItem {
   layerOrder?: number;
   autoBackground?: boolean;
   autoBackgroundOpacity?: number;
+  brandBinding?: OverlayBrandBinding;
 }
 
 export type SceneOverlayItem = ImageOverlayItem | TextOverlayItem;

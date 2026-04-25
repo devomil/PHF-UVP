@@ -5,7 +5,7 @@ import {
   Minus, Move, Maximize2, Eye, EyeOff, GripVertical,
   ChevronUp, ChevronDown, ChevronsUp, ChevronsDown, Layers,
   Type, Image as ImageIcon, Bold, Italic, AlignLeft, AlignCenter, AlignRight,
-  Shield, Sparkles, Check, AlertTriangle
+  Shield, Sparkles, Check, AlertTriangle, LayoutGrid, Link2, Link2Off
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type {
@@ -18,6 +18,11 @@ import type {
   TextOverlayExitAnimation,
   TextEmphasisAnimation,
   TextPresetType,
+  SnapPosition,
+  BrandSettings,
+  BrandColorKey,
+  BrandFontKey,
+  OverlayBrandBinding,
 } from "@shared/video-types";
 
 export type { SceneOverlayItem };
@@ -360,6 +365,7 @@ interface SceneOverlayEditorProps {
   microSceneOverlays?: Record<number, MicroSceneOverlayItem[]>;
   sceneDurationSec?: number;
   brandColors?: string[];
+  brand?: BrandSettings;
   aspectRatio?: string;
   projectId?: string;
   sceneId?: string;
@@ -478,6 +484,7 @@ export function SceneOverlayEditor({
   microSceneOverlays,
   sceneDurationSec,
   brandColors,
+  brand,
   aspectRatio = '16:9',
   projectId,
   sceneId,
@@ -513,6 +520,10 @@ export function SceneOverlayEditor({
     origFontSize?: number;
     handle: 'br' | 'bl' | 'tr' | 'tl' | 'r' | 'l' | 't' | 'b';
   } | null>(null);
+
+  // Active snap guides drawn while the user is dragging an overlay near
+  // another overlay's edge/center or a safe-zone boundary. Cleared on mouseup.
+  const [snapGuides, setSnapGuides] = useState<{ vertical: number[]; horizontal: number[] }>({ vertical: [], horizontal: [] });
 
   const isMicroSceneMode = activeMicroSceneIndex !== null && activeMicroSceneIndex !== undefined && activeMicroSceneIndex >= 0 && microScenes !== undefined && activeMicroSceneIndex < microScenes.length;
   const activeMs = isMicroSceneMode && microScenes ? microScenes[activeMicroSceneIndex!] : null;
@@ -715,6 +726,106 @@ export function SceneOverlayEditor({
     updateOverlay(id, { zIndex: minZ - 1 });
   }, [currentOverlays, updateOverlay]);
 
+  const applySmartLayout = useCallback(() => {
+    if (currentOverlays.length === 0) return;
+    // Snap each overlay into the nearest sensible grid slot:
+    //   - Logos & watermarks → corners (preferring bottom-right, then BL/TR/TL).
+    //   - Other image/decoration overlays → side columns or middle slots.
+    //   - Text overlays → safe-zone-aware row slots (top, middle, bottom),
+    //     with horizontal centering by default and stagger to avoid stacks.
+    // Locked overlays keep their position; everything else is repacked
+    // around them using rectsOverlap to prevent collisions.
+    const safeZones = getSafeZones(aspectRatio);
+    const topSafeBottom = Math.max(0, ...safeZones.filter((z) => z.top === 0).map((z) => z.bottom));
+    const bottomSafeTop = Math.min(100, ...safeZones.filter((z) => z.bottom === 100).map((z) => z.top));
+    const usableTop = topSafeBottom + 1.5;
+    const usableBottom = bottomSafeTop - 1.5;
+
+    const sorted = [...currentOverlays].sort((a, b) => {
+      // Process locked first, then logos/watermarks, then text, then images.
+      const score = (o: AnyOverlayItem) => {
+        if (o.locked) return 0;
+        if (isImageOverlay(o)) {
+          const k = (o as ImageOverlayItem).kind;
+          if (k === 'watermark') return 1;
+          if (k === 'logo') return 2;
+          return 4;
+        }
+        return 3;
+      };
+      return score(a) - score(b);
+    });
+
+    const placed: AnyOverlayItem[] = [];
+    for (const o of sorted) {
+      if (o.locked) {
+        placed.push(o);
+        continue;
+      }
+      const W = o.width;
+      const H = o.height;
+      let candidates: { x: number; y: number; snap: SnapPosition }[] = [];
+      if (isImageOverlay(o)) {
+        const kind = (o as ImageOverlayItem).kind ?? 'image';
+        if (kind === 'logo' || kind === 'watermark') {
+          candidates = [
+            { x: 100 - W - 3, y: 100 - H - 3, snap: 'bottom-right' },
+            { x: 3, y: 100 - H - 3, snap: 'bottom-left' },
+            { x: 100 - W - 3, y: 3, snap: 'top-right' },
+            { x: 3, y: 3, snap: 'top-left' },
+          ];
+        } else {
+          candidates = [
+            { x: 3, y: usableTop, snap: 'top-left' },
+            { x: 100 - W - 3, y: usableTop, snap: 'top-right' },
+            { x: 3, y: usableBottom - H, snap: 'bottom-left' },
+            { x: 100 - W - 3, y: usableBottom - H, snap: 'bottom-right' },
+            { x: 50 - W / 2, y: 50 - H / 2, snap: 'middle-center' },
+          ];
+        }
+      } else {
+        // Text: prefer headline-ish presets up top, lower-third style at the
+        // bottom, otherwise drop into a middle row.
+        const t = o as TextOverlayItem;
+        const preset = t.textPreset;
+        if (preset === 'lower-third' || preset === 'caption-bar' || preset === 'cta-badge') {
+          candidates = [
+            { x: 50 - W / 2, y: usableBottom - H, snap: 'bottom-center' },
+            { x: 5, y: usableBottom - H, snap: 'bottom-left' },
+            { x: 100 - W - 5, y: usableBottom - H, snap: 'bottom-right' },
+          ];
+        } else if (preset === 'headline' || preset === 'stat-callout') {
+          candidates = [
+            { x: 50 - W / 2, y: usableTop, snap: 'top-center' },
+            { x: 50 - W / 2, y: 50 - H / 2, snap: 'middle-center' },
+            { x: 5, y: usableTop, snap: 'top-left' },
+            { x: 100 - W - 5, y: usableTop, snap: 'top-right' },
+          ];
+        } else {
+          candidates = [
+            { x: 5, y: usableTop + 8, snap: 'custom' },
+            { x: 5, y: 50 - H / 2, snap: 'middle-left' },
+            { x: 50 - W / 2, y: 50 - H / 2, snap: 'middle-center' },
+            { x: 5, y: usableBottom - H - 8, snap: 'custom' },
+          ];
+        }
+      }
+      // Clamp candidates inside the canvas.
+      candidates = candidates.map((c) => ({
+        x: Math.max(0, Math.min(100 - W, c.x)),
+        y: Math.max(0, Math.min(100 - H, c.y)),
+        snap: c.snap,
+      }));
+      const slot = findFreeSlot(candidates, W, H, placed);
+      const updated: AnyOverlayItem = { ...o, x: Math.round(slot.x * 10) / 10, y: Math.round(slot.y * 10) / 10, snapPosition: slot.snap } as AnyOverlayItem;
+      placed.push(updated);
+    }
+    // Preserve original ordering for stability/rendering.
+    const byId = new Map(placed.map((p) => [p.id, p]));
+    handleCurrentChange(currentOverlays.map((o) => byId.get(o.id) ?? o));
+    toast({ title: 'Smart Layout applied', description: 'Overlays re-arranged into safe-zone slots.' });
+  }, [currentOverlays, aspectRatio, handleCurrentChange, toast]);
+
   const fetchAiSuggestions = useCallback(async () => {
     if (!projectId || !sceneId || !narration) {
       toast({ title: "Cannot generate suggestions", description: "Scene narration is required", variant: "destructive" });
@@ -861,9 +972,81 @@ export function SceneOverlayEditor({
         const dy = ((e.clientY - dragging.startY) / rect.height) * 100;
         const overlay = currentOverlays.find((o) => o.id === dragging.id);
         if (!overlay) return;
-        const newX = Math.max(0, Math.min(100 - overlay.width, dragging.origX + dx));
-        const newY = Math.max(0, Math.min(100 - overlay.height, dragging.origY + dy));
-        const dragUpdates: Partial<AnyOverlayItem> = { x: Math.round(newX * 10) / 10, y: Math.round(newY * 10) / 10 };
+        let rawX = Math.max(0, Math.min(100 - overlay.width, dragging.origX + dx));
+        let rawY = Math.max(0, Math.min(100 - overlay.height, dragging.origY + dy));
+
+        // Magnetic snap: snap leading/center/trailing edges of the dragged
+        // overlay to other overlays' edges/centers, the canvas centerline,
+        // and safe-zone boundaries when within ~1.2% of a target.
+        const SNAP = 1.2;
+        const w = overlay.width;
+        const h = overlay.height;
+        const others = currentOverlays.filter((o) => o.id !== overlay.id);
+        const safeZones = getSafeZones(aspectRatio);
+        const xTargets = new Set<number>([50]);
+        const yTargets = new Set<number>([50]);
+        for (const o of others) {
+          xTargets.add(o.x);
+          xTargets.add(o.x + o.width);
+          xTargets.add(o.x + o.width / 2);
+          yTargets.add(o.y);
+          yTargets.add(o.y + o.height);
+          yTargets.add(o.y + o.height / 2);
+        }
+        for (const z of safeZones) {
+          // Snap to the *inner* boundary of each safe (unsafe) zone so
+          // overlays park just inside the safe area, not on canvas edges.
+          //   top zone    (top===0)    -> snap to z.bottom
+          //   bottom zone (bottom===100)-> snap to z.top
+          //   left zone   (left===0)    -> snap to z.right
+          //   right zone  (right===100) -> snap to z.left
+          if (z.top === 0 && z.bottom < 100) yTargets.add(z.bottom);
+          if (z.bottom === 100 && z.top > 0) yTargets.add(z.top);
+          if (z.left === 0 && z.right < 100) xTargets.add(z.right);
+          if (z.right === 100 && z.left > 0) xTargets.add(z.left);
+        }
+
+        const activeV: number[] = [];
+        const activeH: number[] = [];
+        const candidatesX = [
+          { edge: 'l', val: rawX },
+          { edge: 'c', val: rawX + w / 2 },
+          { edge: 'r', val: rawX + w },
+        ];
+        const candidatesY = [
+          { edge: 't', val: rawY },
+          { edge: 'c', val: rawY + h / 2 },
+          { edge: 'b', val: rawY + h },
+        ];
+        let bestX: { delta: number; target: number; edge: string } | null = null;
+        for (const c of candidatesX) {
+          for (const t of xTargets) {
+            const delta = t - c.val;
+            if (Math.abs(delta) <= SNAP && (!bestX || Math.abs(delta) < Math.abs(bestX.delta))) {
+              bestX = { delta, target: t, edge: c.edge };
+            }
+          }
+        }
+        let bestY: { delta: number; target: number; edge: string } | null = null;
+        for (const c of candidatesY) {
+          for (const t of yTargets) {
+            const delta = t - c.val;
+            if (Math.abs(delta) <= SNAP && (!bestY || Math.abs(delta) < Math.abs(bestY.delta))) {
+              bestY = { delta, target: t, edge: c.edge };
+            }
+          }
+        }
+        if (bestX) {
+          rawX = Math.max(0, Math.min(100 - w, rawX + bestX.delta));
+          activeV.push(bestX.target);
+        }
+        if (bestY) {
+          rawY = Math.max(0, Math.min(100 - h, rawY + bestY.delta));
+          activeH.push(bestY.target);
+        }
+        setSnapGuides({ vertical: activeV, horizontal: activeH });
+
+        const dragUpdates: Partial<AnyOverlayItem> = { x: Math.round(rawX * 10) / 10, y: Math.round(rawY * 10) / 10 };
         if (isTextOverlay(overlay)) {
           (dragUpdates as Partial<TextOverlayItem>).snapPosition = 'custom';
         }
@@ -914,6 +1097,7 @@ export function SceneOverlayEditor({
     const handleMouseUp = () => {
       setDragging(null);
       setResizing(null);
+      setSnapGuides({ vertical: [], horizontal: [] });
     };
 
     window.addEventListener("mousemove", handleMouseMove);
@@ -995,6 +1179,16 @@ export function SceneOverlayEditor({
           >
             <FolderOpen className="w-3.5 h-3.5" /> Library
           </button>
+          {currentOverlays.length > 0 && (
+            <button
+              onClick={applySmartLayout}
+              className="text-xs px-2.5 py-1.5 rounded-lg border flex items-center gap-1 transition-colors hover:border-cyan-500/40 hover:bg-cyan-500/10"
+              style={{ borderColor: "var(--border-subtle)", color: "var(--text-secondary)" }}
+              title="Smart Layout: re-arrange all overlays into clean safe-zone slots"
+            >
+              <LayoutGrid className="w-3.5 h-3.5" /> Smart Layout
+            </button>
+          )}
           <button
             onClick={() => setShowSafeZones(!showSafeZones)}
             className="text-xs px-2.5 py-1.5 rounded-lg border flex items-center gap-1 transition-colors"
@@ -1231,6 +1425,38 @@ export function SceneOverlayEditor({
             </div>
           );
         })}
+        {/* Live alignment lines while dragging — magenta dashed guides
+            mark each axis where a snap was applied this frame. */}
+        {snapGuides.vertical.map((vx, i) => (
+          <div
+            key={`sv-${i}-${vx}`}
+            style={{
+              position: 'absolute',
+              left: `${vx}%`,
+              top: 0,
+              bottom: 0,
+              width: 0,
+              borderLeft: '1px dashed rgba(236, 72, 153, 0.85)',
+              zIndex: 200,
+              pointerEvents: 'none',
+            }}
+          />
+        ))}
+        {snapGuides.horizontal.map((vy, i) => (
+          <div
+            key={`sh-${i}-${vy}`}
+            style={{
+              position: 'absolute',
+              top: `${vy}%`,
+              left: 0,
+              right: 0,
+              height: 0,
+              borderTop: '1px dashed rgba(236, 72, 153, 0.85)',
+              zIndex: 200,
+              pointerEvents: 'none',
+            }}
+          />
+        ))}
         {currentOverlays.length === 0 && (
           <div className="absolute inset-0 flex items-center justify-center z-10">
             <div className="text-center bg-black/40 rounded-lg px-4 py-3 backdrop-blur-sm">
@@ -1246,6 +1472,15 @@ export function SceneOverlayEditor({
           const isText = isTextOverlay(overlay);
           const textOvl = isText ? (overlay as TextOverlayItem) : null;
           const inDangerZone = isText && isOverlayInDangerZone(overlay, aspectRatio);
+          // Resolve brand-bound fields the same way the Remotion renderers do,
+          // so the editor canvas preview matches the rendered output exactly
+          // (color/font for text, logo URL for image).
+          const tBinding = textOvl?.brandBinding;
+          const previewColor = (tBinding?.color && brand?.colors?.[tBinding.color]) || textOvl?.color || '#FFFFFF';
+          const previewFontFamily = (tBinding?.fontFamily && brand?.fonts?.[tBinding.fontFamily]) || textOvl?.fontFamily || 'Inter, sans-serif';
+          const previewBgColor = (tBinding?.backgroundColor && brand?.colors?.[tBinding.backgroundColor]) || textOvl?.backgroundColor;
+          const imgOvl = !isText ? (overlay as ImageOverlayItem) : null;
+          const previewImageUrl = (imgOvl?.brandBinding?.logo && brand?.logoUrl) ? brand.logoUrl : imgOvl?.url;
 
           return (
             <div
@@ -1273,8 +1508,8 @@ export function SceneOverlayEditor({
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: textOvl.textAlign === 'left' ? 'flex-start' : textOvl.textAlign === 'right' ? 'flex-end' : 'center',
-                    backgroundColor: textOvl.backgroundColor && textOvl.backgroundOpacity
-                      ? `rgba(${hexToRgb(textOvl.backgroundColor)}, ${(textOvl.backgroundOpacity ?? 0) / 100})`
+                    backgroundColor: previewBgColor && textOvl.backgroundOpacity
+                      ? `rgba(${hexToRgb(previewBgColor)}, ${(textOvl.backgroundOpacity ?? 0) / 100})`
                       : undefined,
                     borderRadius: textOvl.borderRadius ?? 0,
                     padding: '2%',
@@ -1284,9 +1519,9 @@ export function SceneOverlayEditor({
                   <div
                     style={{
                       fontSize: `clamp(8px, ${textOvl.fontSize * 0.35}px, ${textOvl.fontSize * 0.5}px)`,
-                      fontFamily: textOvl.fontFamily || 'Inter, sans-serif',
+                      fontFamily: previewFontFamily,
                       fontWeight: textOvl.fontWeight || '600',
-                      color: textOvl.color || '#FFFFFF',
+                      color: previewColor,
                       textAlign: textOvl.textAlign || 'center',
                       textShadow: textOvl.textShadow ? '1px 1px 3px rgba(0,0,0,0.7)' : undefined,
                       width: '100%',
@@ -1302,7 +1537,7 @@ export function SceneOverlayEditor({
                 </div>
               ) : (
                 <img
-                  src={(overlay as ImageOverlayItem).url}
+                  src={previewImageUrl}
                   alt={(overlay as ImageOverlayItem).name}
                   className="w-full h-full object-contain pointer-events-none"
                   draggable={false}
@@ -1399,8 +1634,10 @@ export function SceneOverlayEditor({
           ...imageOverlays.map((o) => ({
             id: o.id,
             name: o.name,
-            start: 0,
-            duration: sceneTotal,
+            // Unified canonical timeline: images honor timingStart /
+            // timingDuration the same way text overlays do.
+            start: o.timingStart ?? 0,
+            duration: o.timingDuration ?? sceneTotal,
             isText: false,
           })),
         ];
@@ -1597,6 +1834,85 @@ export function SceneOverlayEditor({
                   </label>
                 </div>
               </div>
+
+              {brand && (
+                <div className="border rounded-md p-2" style={{ borderColor: "var(--border-subtle)", backgroundColor: "rgba(59,130,246,0.04)" }}>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[10px] uppercase tracking-wider font-medium flex items-center gap-1" style={{ color: "var(--text-muted)" }}>
+                      <Link2 className="w-2.5 h-2.5" /> Brand Binding
+                    </span>
+                    {(selectedTextOverlay.brandBinding?.color || selectedTextOverlay.brandBinding?.fontFamily) && (
+                      <button
+                        onClick={() => updateOverlay(selectedOverlay.id, { brandBinding: undefined })}
+                        className="text-[9px] flex items-center gap-0.5 px-1 py-0.5 rounded hover:bg-white/5"
+                        style={{ color: "var(--text-muted)" }}
+                        title="Clear all brand bindings on this overlay"
+                      >
+                        <Link2Off className="w-2.5 h-2.5" /> Unbind
+                      </button>
+                    )}
+                  </div>
+                  <div className="mb-1.5">
+                    <label className="text-[9px] block mb-0.5" style={{ color: "var(--text-muted)" }}>Color</label>
+                    <div className="flex gap-1 items-center flex-wrap">
+                      {(['primary','secondary','accent','text','textLight'] as BrandColorKey[]).map((key) => {
+                        const hex = brand.colors?.[key];
+                        if (!hex) return null;
+                        const bound = selectedTextOverlay.brandBinding?.color === key;
+                        return (
+                          <button
+                            key={key}
+                            onClick={() => {
+                              const nextBinding: OverlayBrandBinding = { ...(selectedTextOverlay.brandBinding ?? {}), color: key };
+                              updateOverlay(selectedOverlay.id, { color: hex, brandBinding: nextBinding });
+                            }}
+                            className="flex items-center gap-1 px-1.5 py-0.5 rounded border transition-transform hover:scale-105"
+                            style={{
+                              borderColor: bound ? "rgb(59,130,246)" : "var(--border-subtle)",
+                              borderWidth: bound ? 2 : 1,
+                              backgroundColor: bound ? "rgba(59,130,246,0.1)" : "transparent",
+                            }}
+                            title={`Bind to brand ${key}`}
+                          >
+                            <span className="w-3 h-3 rounded-full border border-white/30" style={{ backgroundColor: hex }} />
+                            <span className="text-[9px]" style={{ color: bound ? "rgb(59,130,246)" : "var(--text-secondary)" }}>{key}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-[9px] block mb-0.5" style={{ color: "var(--text-muted)" }}>Font</label>
+                    <div className="flex gap-1">
+                      {(['heading','body'] as BrandFontKey[]).map((key) => {
+                        const fam = brand.fonts?.[key];
+                        if (!fam) return null;
+                        const bound = selectedTextOverlay.brandBinding?.fontFamily === key;
+                        return (
+                          <button
+                            key={key}
+                            onClick={() => {
+                              const nextBinding: OverlayBrandBinding = { ...(selectedTextOverlay.brandBinding ?? {}), fontFamily: key };
+                              updateOverlay(selectedOverlay.id, { fontFamily: fam, brandBinding: nextBinding });
+                            }}
+                            className="text-[9px] px-1.5 py-0.5 rounded border transition-colors"
+                            style={{
+                              borderColor: bound ? "rgb(59,130,246)" : "var(--border-subtle)",
+                              borderWidth: bound ? 2 : 1,
+                              backgroundColor: bound ? "rgba(59,130,246,0.1)" : "transparent",
+                              color: bound ? "rgb(59,130,246)" : "var(--text-secondary)",
+                              fontFamily: fam,
+                            }}
+                            title={`Bind font to brand ${key} (${fam})`}
+                          >
+                            {key}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
@@ -2012,6 +2328,44 @@ export function SceneOverlayEditor({
                     </label>
                   </div>
                 </div>
+
+                {brand && (
+                  <div className="border rounded-md p-2" style={{ borderColor: "var(--border-subtle)", backgroundColor: "rgba(124,58,237,0.04)" }}>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-[10px] uppercase tracking-wider font-medium flex items-center gap-1" style={{ color: "var(--text-muted)" }}>
+                        <Link2 className="w-2.5 h-2.5" /> Brand Binding
+                      </span>
+                      {img.brandBinding?.logo && (
+                        <button
+                          onClick={() => updateOverlay(img.id, { brandBinding: { ...(img.brandBinding ?? {}), logo: false } })}
+                          className="text-[9px] flex items-center gap-0.5 px-1 py-0.5 rounded hover:bg-white/5"
+                          style={{ color: "var(--text-muted)" }}
+                          title="Stop using brand logo"
+                        >
+                          <Link2Off className="w-2.5 h-2.5" /> Unbind
+                        </button>
+                      )}
+                    </div>
+                    <label className="text-[10px] flex items-center gap-1 cursor-pointer" style={{ color: "var(--text-muted)" }}>
+                      <input
+                        type="checkbox"
+                        checked={img.brandBinding?.logo ?? false}
+                        disabled={!brand.logoUrl}
+                        onChange={(e) => {
+                          const next: OverlayBrandBinding = { ...(img.brandBinding ?? {}), logo: e.target.checked };
+                          updateOverlay(img.id, { brandBinding: next });
+                        }}
+                        className="rounded"
+                      />
+                      Use brand logo {brand.logoUrl ? '' : '(no logo set)'}
+                    </label>
+                    {img.brandBinding?.logo && brand.logoUrl && (
+                      <p className="text-[9px] mt-1" style={{ color: "var(--text-muted)" }}>
+                        Image will use the brand logo and update automatically when the brand kit changes.
+                      </p>
+                    )}
+                  </div>
+                )}
 
                 <div className="grid grid-cols-2 gap-2">
                   <div>
