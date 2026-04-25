@@ -40,6 +40,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
+import { downloadAssetFile } from '@/lib/utils';
 import { AssetUploadModal, type AssetMetadata } from '@/components/video/AssetUploadModal';
 import { ASSET_CATEGORIES as TAXONOMY_CATEGORIES, getAssetType, getTypesByCategory } from '@shared/brand-asset-types';
 import S3AssetManager from '@/components/video/s3-asset-manager';
@@ -1016,7 +1017,17 @@ export default function AssetLibrary() {
                             {asset.source}
                           </Badge>
                           <div className="flex items-center gap-2">
-                            <Button size="sm" variant="ghost">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void downloadAssetFile(asset.url, {
+                                  filename: asset.name || `asset-${asset.id}`,
+                                  toast,
+                                });
+                              }}
+                            >
                               <Download className="h-4 w-4" />
                             </Button>
                           </div>
@@ -1423,11 +1434,11 @@ export default function AssetLibrary() {
                               variant="secondary"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                const a = document.createElement('a');
-                                a.href = character.referenceImageUrl!;
-                                a.download = `${character.name}-reference`;
-                                a.target = '_blank';
-                                a.click();
+                                void downloadAssetFile(character.referenceImageUrl!, {
+                                  filename: `${character.name}-reference`,
+                                  fallbackExt: 'png',
+                                  toast,
+                                });
                               }}
                             >
                               <Download className="h-4 w-4" />
@@ -2355,11 +2366,10 @@ export default function AssetLibrary() {
                   <Button
                     className="flex-1 bg-purple-600 hover:bg-purple-700"
                     onClick={() => {
-                      const a = document.createElement('a');
-                      a.href = selectedAsset.url;
-                      a.download = selectedAsset.name || 'asset';
-                      a.target = '_blank';
-                      a.click();
+                      void downloadAssetFile(selectedAsset.url, {
+                        filename: selectedAsset.name || `brand-asset-${selectedAsset.id}`,
+                        toast,
+                      });
                     }}
                   >
                     <Download className="h-4 w-4 mr-2" />
@@ -2485,11 +2495,14 @@ export default function AssetLibrary() {
                   <Button
                     className="flex-1 bg-purple-600 hover:bg-purple-700"
                     onClick={() => {
-                      const a = document.createElement('a');
-                      a.href = selectedLibraryAsset.assetUrl;
-                      a.download = `asset-${selectedLibraryAsset.id}`;
-                      a.target = '_blank';
-                      a.click();
+                      const eff = effectiveAssetType(selectedLibraryAsset);
+                      const fallbackExt = eff === 'video' ? 'mp4' : 'png';
+                      const baseName = (selectedLibraryAsset.prompt || `asset-${selectedLibraryAsset.id}`).slice(0, 60);
+                      void downloadAssetFile(selectedLibraryAsset.assetUrl, {
+                        filename: baseName,
+                        fallbackExt,
+                        toast,
+                      });
                     }}
                   >
                     <Download className="h-4 w-4 mr-2" />
