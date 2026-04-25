@@ -2,6 +2,7 @@ import React from 'react';
 import { Img, useCurrentFrame, useVideoConfig, interpolate, spring } from 'remotion';
 import type { ImageOverlayItem, BrandSettings, OverlayBrandBinding } from '../../shared/video-types';
 import { resolveBrandLogoUrl } from '../../shared/video-types';
+import { computeOverlayWindow, computeSafeAnimationRange } from './overlay-utils';
 
 export interface CustomImageOverlayProps {
   url: string;
@@ -58,34 +59,27 @@ export const CustomImageOverlay: React.FC<CustomImageOverlayProps> = ({
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
-  const startFrame = Math.max(0, Math.round((timingStart ?? 0) * fps));
-  const visibleDuration = timingDuration != null
-    ? Math.max(1, Math.round(timingDuration * fps))
-    : durationInFrames - startFrame;
-  const endFrame = Math.min(durationInFrames, startFrame + visibleDuration);
+  const { startFrame, endFrame, localDuration } = computeOverlayWindow({
+    timingStart,
+    timingDuration,
+    durationInFrames,
+    fps,
+  });
 
   if (frame < startFrame || frame > endFrame) return null;
 
   const localFrame = frame - startFrame;
-  const localDuration = Math.max(1, endFrame - startFrame);
   const baseOpacity = opacity / 100;
 
   // Short-circuit: not enough frames to safely run any 4-keyframe animation
   // — render the overlay statically to avoid any non-monotonic interpolate
   // input edge cases (e.g., 1-3 frame visibility windows, or animationDuration
   // larger than the overlay duration itself).
-  const tooShortForAnimation = localDuration < 4;
-
-  // Guarantee strictly-monotonic interpolation inputs even for very short
-  // overlay durations or oversized animationDuration values.
-  const requestedAnimFrames = Math.max(1, Math.round(animationDuration * fps));
-  const maxAnimFrames = Math.max(1, Math.floor((localDuration - 1) / 2));
-  const animFrames = Math.max(1, Math.min(requestedAnimFrames, maxAnimFrames));
-  // Build a strictly-increasing 4-tuple [0, a, b, localDuration].
-  const a = Math.min(animFrames, localDuration - 3);
-  const b = Math.max(a + 1, localDuration - animFrames);
-  const safeEnterEnd = Math.max(1, a);
-  const safeExitStart = Math.min(localDuration - 1, Math.max(safeEnterEnd + 1, b));
+  const { tooShortForAnimation, safeEnterEnd, safeExitStart } = computeSafeAnimationRange({
+    localDuration,
+    animationDuration,
+    fps,
+  });
 
   let animatedOpacity = baseOpacity;
   if (!tooShortForAnimation && (enterAnimation !== 'none' || exitAnimation !== 'none')) {

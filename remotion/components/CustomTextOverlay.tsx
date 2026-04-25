@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { useCurrentFrame, useVideoConfig, interpolate, spring } from 'remotion';
 import type { TextOverlayItem, TextOverlayEnterAnimation, TextOverlayExitAnimation, TextEmphasisAnimation, BrandSettings } from '../../shared/video-types';
 import { resolveBrandColor, resolveBrandFontFamily } from '../../shared/video-types';
+import { TEXT_OVERLAY_WRAP_STYLE } from './overlay-utils';
 
 const SYSTEM_FONTS = new Set(["Inter", "Arial", "Georgia", "Courier New", "Impact", "Verdana", "Trebuchet MS", "Palatino", "Open Sans"]);
 
@@ -284,10 +285,7 @@ export const CustomTextOverlay: React.FC<CustomTextOverlayProps> = ({
           lineHeight: overlay.lineHeight ?? 1.3,
           textShadow: overlay.textShadow !== false ? '1px 2px 6px rgba(0,0,0,0.7), 0 0 20px rgba(0,0,0,0.3)' : undefined,
           width: '100%',
-          wordBreak: 'keep-all',
-          overflowWrap: 'normal',
-          whiteSpace: 'pre-wrap',
-          hyphens: 'manual',
+          ...TEXT_OVERLAY_WRAP_STYLE,
         }}
       >
         {displayText}
