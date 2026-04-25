@@ -401,6 +401,157 @@ router.post('/save-url', async (req: Request, res: Response) => {
   }
 });
 
+function isInternalHostname(host: string): boolean {
+  const h = host.toLowerCase();
+  return (
+    h === 'localhost' ||
+    h === '0.0.0.0' ||
+    h === '::1' ||
+    h === '127.0.0.1' ||
+    h.endsWith('.local') ||
+    h.endsWith('.internal') ||
+    /^10\./.test(h) ||
+    /^192\.168\./.test(h) ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(h) ||
+    /^169\.254\./.test(h) ||
+    /^127\./.test(h) ||
+    /^0\./.test(h)
+  );
+}
+
+function validatePublicHttpUrl(raw: string): { ok: true; url: URL } | { ok: false; error: string } {
+  let parsed: URL;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    return { ok: false, error: 'url must be a valid absolute URL' };
+  }
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+    return { ok: false, error: 'url must use http(s) protocol' };
+  }
+  if (isInternalHostname(parsed.hostname)) {
+    return { ok: false, error: 'url must point to a public host' };
+  }
+  return { ok: true, url: parsed };
+}
+
+// Server-side proxy that streams a remote asset back with
+// Content-Disposition: attachment so the browser shows a Save dialog.
+// Bypasses cross-origin CORS issues that prevent client-side blob downloads.
+//
+// SSRF protections:
+//   - host is validated as public on every hop (initial + every redirect)
+//   - redirects are followed manually (max 5) so each Location is re-validated
+//   - request times out after 30s, max payload 1GB
+router.get('/download', async (req: Request, res: Response) => {
+  let timeoutId: NodeJS.Timeout | null = null;
+  let abortController: AbortController | null = null;
+  try {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ error: 'Not authenticated' });
+
+    const rawUrl = typeof req.query.url === 'string' ? req.query.url : '';
+    const filenameRaw = typeof req.query.filename === 'string' ? req.query.filename : '';
+    if (!rawUrl) return res.status(400).json({ error: 'url query param is required' });
+
+    const initial = validatePublicHttpUrl(rawUrl);
+    if (!initial.ok) return res.status(400).json({ error: initial.error });
+
+    const safeFilename = (filenameRaw || 'asset')
+      .replace(/[\r\n;"\\\/]+/g, '_')
+      .replace(/[^\x20-\x7E]/g, '_')
+      .slice(0, 200) || 'asset';
+
+    abortController = new AbortController();
+    timeoutId = setTimeout(() => abortController?.abort(), 30_000);
+
+    let currentUrl = initial.url.toString();
+    let upstream: Response | null = null;
+    const MAX_REDIRECTS = 5;
+    for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+      const r = await fetch(currentUrl, { redirect: 'manual', signal: abortController.signal });
+      const isRedirect = r.status >= 300 && r.status < 400 && r.headers.get('location');
+      if (!isRedirect) {
+        upstream = r;
+        break;
+      }
+      const loc = r.headers.get('location')!;
+      let nextUrl: string;
+      try {
+        nextUrl = new URL(loc, currentUrl).toString();
+      } catch {
+        return res.status(502).json({ error: 'Bad redirect URL from upstream' });
+      }
+      const check = validatePublicHttpUrl(nextUrl);
+      if (!check.ok) {
+        console.warn(`[AssetLibrary] Blocked SSRF redirect from ${currentUrl} -> ${nextUrl}`);
+        return res.status(400).json({ error: 'Upstream redirect to non-public host blocked' });
+      }
+      currentUrl = nextUrl;
+      if (hop === MAX_REDIRECTS) {
+        return res.status(502).json({ error: 'Too many redirects' });
+      }
+    }
+    if (!upstream || !upstream.ok || !upstream.body) {
+      console.warn(`[AssetLibrary] Proxy download upstream ${upstream?.status} for ${rawUrl}`);
+      return res.status(502).json({ error: `Upstream fetch failed: ${upstream?.status ?? 'no response'}` });
+    }
+
+    const contentType = upstream.headers.get('content-type') || 'application/octet-stream';
+    const contentLength = upstream.headers.get('content-length');
+    const MAX_BYTES = 1024 * 1024 * 1024; // 1 GB
+    if (contentLength && Number(contentLength) > MAX_BYTES) {
+      return res.status(413).json({ error: 'File too large to proxy' });
+    }
+    res.setHeader('Content-Type', contentType);
+    if (contentLength) res.setHeader('Content-Length', contentLength);
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${safeFilename}"; filename*=UTF-8''${encodeURIComponent(safeFilename)}`
+    );
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+
+    const reader = upstream.body.getReader();
+    let bytesSent = 0;
+    let aborted = false;
+    res.on('close', () => {
+      aborted = true;
+      try { reader.cancel(); } catch {}
+      try { abortController?.abort(); } catch {}
+    });
+
+    try {
+      while (!aborted) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (value) {
+          bytesSent += value.byteLength;
+          if (bytesSent > MAX_BYTES) {
+            try { reader.cancel(); } catch {}
+            break;
+          }
+          if (!res.write(Buffer.from(value))) {
+            await new Promise<void>((resolve) => res.once('drain', resolve));
+          }
+        }
+      }
+    } finally {
+      try { reader.cancel(); } catch {}
+    }
+    if (!aborted) res.end();
+  } catch (error: any) {
+    console.error('[AssetLibrary] Download proxy error:', error?.message || error);
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Failed to proxy download' });
+    } else {
+      try { res.end(); } catch {}
+    }
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+});
+
 router.post('/save-character', async (req: Request, res: Response) => {
   try {
     const userId = getUserId(req);

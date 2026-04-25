@@ -37,34 +37,34 @@ export interface DownloadAssetOptions {
 }
 
 /**
- * Downloads a remote asset to disk using a real Save dialog whenever possible.
- * Falls back to opening the URL in a new tab if CORS blocks the blob fetch.
+ * Downloads a remote asset to disk using a real Save dialog.
+ *
+ * Routes through a server-side proxy (`/api/asset-library/download`) that
+ * sets `Content-Disposition: attachment`, which forces the browser to save
+ * the file regardless of cross-origin CORS restrictions.
+ *
+ * Falls back to a direct cross-origin link if the proxy is unreachable.
  */
 export async function downloadAssetFile(url: string, options: DownloadAssetOptions = {}): Promise<void> {
   if (!url) return;
   const baseName = sanitizeFilenameBase(options.filename || "asset");
   const fallbackExt = options.fallbackExt || inferExtension(url, undefined, "bin");
+  const finalName = `${baseName}.${inferExtension(url, undefined, fallbackExt)}`;
 
   try {
-    const res = await fetch(url, { credentials: "omit", mode: "cors" });
-    if (!res.ok) throw new Error(`Download failed: ${res.status}`);
-    const blob = await res.blob();
-    const ext = inferExtension(url, blob.type, fallbackExt);
-    const finalName = `${baseName}.${ext}`;
-    const objectUrl = URL.createObjectURL(blob);
+    const proxied = `/api/asset-library/download?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(finalName)}`;
     const a = document.createElement("a");
-    a.href = objectUrl;
+    a.href = proxied;
     a.download = finalName;
     document.body.appendChild(a);
     a.click();
     a.remove();
-    setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
     options.toast?.({ title: "Download started", description: finalName });
   } catch {
     try {
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${baseName}.${fallbackExt}`;
+      a.download = finalName;
       a.target = "_blank";
       a.rel = "noopener noreferrer";
       document.body.appendChild(a);
