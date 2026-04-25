@@ -79,6 +79,19 @@ interface UserUpload {
   created_at: string;
 }
 
+function isVideoLikeUrl(url?: string | null): boolean {
+  if (!url || typeof url !== 'string') return false;
+  const lower = url.split('?')[0].toLowerCase();
+  return /\.(mp4|mov|webm|m4v|avi|mkv)$/.test(lower);
+}
+
+function effectiveAssetType(asset: { assetType?: string | null; assetUrl?: string | null }): 'video' | 'image' | 'unknown' {
+  if (asset.assetType === 'video') return 'video';
+  if (isVideoLikeUrl(asset.assetUrl)) return 'video';
+  if (asset.assetType === 'image') return 'image';
+  return 'unknown';
+}
+
 interface BrandMedia {
   id: number;
   name: string;
@@ -839,25 +852,42 @@ export default function AssetLibrary() {
                           onClick={() => setSelectedLibraryAsset(la)}
                         >
                           <div className="aspect-video bg-gray-800 relative">
-                            {la.assetType === 'image' ? (
-                              <img
-                                src={la.thumbnailUrl || la.assetUrl}
-                                alt={la.prompt?.substring(0, 40) || 'Generated asset'}
-                                className="w-full h-full object-cover"
-                              />
-                            ) : la.assetType === 'video' ? (
-                              <video
-                                src={la.assetUrl}
-                                className="w-full h-full object-cover"
-                                muted
-                                onMouseEnter={(e) => (e.target as HTMLVideoElement).play().catch(() => {})}
-                                onMouseLeave={(e) => { const v = e.target as HTMLVideoElement; v.pause(); v.currentTime = 0; }}
-                              />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center">
-                                <Image className="h-8 w-8 text-gray-600" />
-                              </div>
-                            )}
+                            {(() => {
+                              const eff = effectiveAssetType(la);
+                              const thumb = la.thumbnailUrl && !isVideoLikeUrl(la.thumbnailUrl) ? la.thumbnailUrl : null;
+                              if (eff === 'video') {
+                                return thumb ? (
+                                  <img
+                                    src={thumb}
+                                    alt={la.prompt?.substring(0, 40) || 'Video preview'}
+                                    className="w-full h-full object-cover"
+                                  />
+                                ) : (
+                                  <video
+                                    src={la.assetUrl}
+                                    className="w-full h-full object-cover"
+                                    muted
+                                    preload="metadata"
+                                    onMouseEnter={(e) => (e.target as HTMLVideoElement).play().catch(() => {})}
+                                    onMouseLeave={(e) => { const v = e.target as HTMLVideoElement; v.pause(); v.currentTime = 0; }}
+                                  />
+                                );
+                              }
+                              if (eff === 'image') {
+                                return (
+                                  <img
+                                    src={la.thumbnailUrl || la.assetUrl}
+                                    alt={la.prompt?.substring(0, 40) || 'Generated asset'}
+                                    className="w-full h-full object-cover"
+                                  />
+                                );
+                              }
+                              return (
+                                <div className="w-full h-full flex items-center justify-center">
+                                  <Image className="h-8 w-8 text-gray-600" />
+                                </div>
+                              );
+                            })()}
                             <div className="absolute top-1.5 left-1.5">
                               <Badge className="text-[10px] px-1.5 py-0 bg-purple-600/90 text-white border-0">
                                 {la.contentType?.toUpperCase() || la.assetType?.toUpperCase()}
@@ -2348,29 +2378,31 @@ export default function AssetLibrary() {
             <>
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2 text-white">
-                  {selectedLibraryAsset.assetType === 'video' ? <Video className="h-5 w-5 text-purple-400" /> : <Image className="h-5 w-5 text-purple-400" />}
+                  {effectiveAssetType(selectedLibraryAsset) === 'video' ? <Video className="h-5 w-5 text-purple-400" /> : <Image className="h-5 w-5 text-purple-400" />}
                   {selectedLibraryAsset.prompt?.substring(0, 80) || 'Generated Asset'}
                 </DialogTitle>
                 <DialogDescription className="text-gray-400">
-                  AI-generated {selectedLibraryAsset.assetType} preview
+                  AI-generated {effectiveAssetType(selectedLibraryAsset)} preview
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4">
                 <div className="bg-black rounded-lg overflow-hidden flex items-center justify-center" style={{ maxHeight: '60vh' }}>
-                  {selectedLibraryAsset.assetType === 'image' && (
+                  {effectiveAssetType(selectedLibraryAsset) === 'video' ? (
+                    <video
+                      src={selectedLibraryAsset.assetUrl}
+                      controls
+                      autoPlay
+                      poster={selectedLibraryAsset.thumbnailUrl && !isVideoLikeUrl(selectedLibraryAsset.thumbnailUrl) ? selectedLibraryAsset.thumbnailUrl : undefined}
+                      className="max-w-full max-h-[60vh]"
+                    />
+                  ) : effectiveAssetType(selectedLibraryAsset) === 'image' ? (
                     <img
                       src={selectedLibraryAsset.assetUrl}
                       alt={selectedLibraryAsset.prompt?.substring(0, 40) || 'Generated'}
                       className="max-w-full max-h-[60vh] object-contain"
                     />
-                  )}
-                  {selectedLibraryAsset.assetType === 'video' && (
-                    <video
-                      src={selectedLibraryAsset.assetUrl}
-                      controls
-                      autoPlay
-                      className="max-w-full max-h-[60vh]"
-                    />
+                  ) : (
+                    <div className="p-12 text-gray-500 text-sm">Preview unavailable</div>
                   )}
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
