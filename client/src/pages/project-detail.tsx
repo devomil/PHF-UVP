@@ -24,6 +24,7 @@ function normalizeProjectBrand(project: any): BrandSettings | undefined {
 import { useToast } from "@/hooks/use-toast";
 import { EnhancedSceneEditor } from "@/components/video/enhanced-scene-editor";
 import { SceneOverlayEditor, SceneOverlayItem } from "@/components/video/scene-overlay-editor";
+import { SceneImageActions } from "@/components/video/scene-image-actions";
 import { S3BackgroundPicker } from "@/components/video/S3BackgroundPicker";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { EndCardPreview } from "@/components/video/EndCardPreview";
@@ -5268,12 +5269,25 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
 
   const overlaySection = assets.visual?.status === "completed" && assets.visual?.url ? (
     <div className="border rounded-xl p-4" style={{ borderColor: "var(--border-subtle)", backgroundColor: "rgba(0,0,0,0.15)" }}>
-      <div className="flex items-center gap-2 mb-3">
-        <ImagePlus className="w-5 h-5 text-cyan-400" />
-        <h3 className="font-medium text-sm" style={{ color: "var(--text-primary)" }}>Scene Overlays</h3>
-        <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
-          {overlayItems.length} overlay{overlayItems.length !== 1 ? "s" : ""}
-        </span>
+      <div className="flex items-center justify-between gap-2 mb-3">
+        <div className="flex items-center gap-2 min-w-0">
+          <ImagePlus className="w-5 h-5 text-cyan-400 flex-shrink-0" />
+          <h3 className="font-medium text-sm" style={{ color: "var(--text-primary)" }}>Scene Overlays</h3>
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
+            {overlayItems.length} overlay{overlayItems.length !== 1 ? "s" : ""}
+          </span>
+        </div>
+        {assets.visual?.url && (
+          <SceneImageActions
+            variant="compact"
+            imageUrl={assets.visual.url}
+            projectId={projectId}
+            projectTitle={project?.title}
+            visualDirection={project?.visualDirection || project?.title}
+            width={previewSizing.pw}
+            height={previewSizing.ph}
+          />
+        )}
       </div>
       <div style={{
         ...(previewSizing.isVertical
@@ -5846,6 +5860,17 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
           </div>
 
           {overlaySection}
+
+          {assets.visual?.status === "completed" && assets.visual?.url && (
+            <SceneImageActions
+              imageUrl={assets.visual.url}
+              projectId={projectId}
+              projectTitle={project?.title}
+              visualDirection={project?.visualDirection || project?.title}
+              width={previewSizing.pw}
+              height={previewSizing.ph}
+            />
+          )}
 
           {isVideoMode && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

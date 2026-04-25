@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { ArrowLeft, Sparkles, Send, Calendar, Save, Loader2, AlertCircle, CheckCircle } from "lucide-react";
+import { ArrowLeft, Sparkles, Send, Calendar, Save, Loader2, AlertCircle, CheckCircle, Image as ImageIcon, X } from "lucide-react";
 
 const PLATFORMS = [
   { id: "twitter", label: "X / Twitter", color: "#1DA1F2", charLimit: 280 },
@@ -22,7 +22,7 @@ const TONES = [
 ];
 
 function SocialNewPost() {
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
   const queryClient = useQueryClient();
 
   const [title, setTitle] = useState("");
@@ -34,6 +34,22 @@ function SocialNewPost() {
   const [scheduledTime, setScheduledTime] = useState("");
   const [captionTopic, setCaptionTopic] = useState("");
   const [captionTone, setCaptionTone] = useState("professional");
+  const [mediaUrl, setMediaUrl] = useState<string | undefined>(undefined);
+  const [mediaType, setMediaType] = useState<"image" | "video" | undefined>(undefined);
+  const [projectId, setProjectId] = useState<string | undefined>(undefined);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const m = params.get("mediaUrl");
+    const t = params.get("mediaType");
+    const tt = params.get("title");
+    const pid = params.get("projectId");
+    setMediaUrl(m || undefined);
+    setMediaType(t === "image" || t === "video" ? t : undefined);
+    setProjectId(pid || undefined);
+    if (tt) setTitle(tt);
+  }, [location]);
 
   const createPost = useMutation({
     mutationFn: async () => {
@@ -44,7 +60,17 @@ function SocialNewPost() {
       const res = await fetch("/api/social/posts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ captions, title: title || undefined, platforms: selectedPlatforms, hashtags, scheduledFor }),
+        body: JSON.stringify({
+          captions,
+          title: title || undefined,
+          platforms: selectedPlatforms,
+          hashtags,
+          scheduledFor,
+          mediaUrl: mediaUrl || undefined,
+          mediaType: mediaType || (mediaUrl ? "image" : undefined),
+          thumbnailUrl: mediaType === "image" ? mediaUrl : undefined,
+          projectId: projectId || undefined,
+        }),
       });
       if (!res.ok) {
         const data = await res.json();
@@ -134,6 +160,44 @@ function SocialNewPost() {
               style={{ backgroundColor: "var(--input-bg)", color: "var(--text-primary)", border: "1px solid var(--border-medium)" }}
             />
           </div>
+
+          {mediaUrl && (
+            <div>
+              <label className="block text-sm font-medium mb-2" style={{ color: "var(--text-secondary)" }}>
+                Attached Media
+              </label>
+              <div
+                className="flex items-start gap-3 p-3 rounded-lg border"
+                style={{ borderColor: "var(--border-medium)", backgroundColor: "var(--input-bg)" }}
+                data-testid="attached-media-preview"
+              >
+                {mediaType === "video" ? (
+                  <video src={mediaUrl} className="w-20 h-20 rounded object-cover bg-black" muted />
+                ) : (
+                  <img src={mediaUrl} alt="Attached media" className="w-20 h-20 rounded object-cover bg-black" />
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5 text-xs font-medium" style={{ color: "var(--text-primary)" }}>
+                    <ImageIcon className="w-3.5 h-3.5" />
+                    {mediaType === "video" ? "Video attached" : "Image attached"}
+                  </div>
+                  <p className="text-xs mt-1 truncate" style={{ color: "var(--text-muted)" }}>
+                    {mediaUrl}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setMediaUrl(undefined); setMediaType(undefined); }}
+                  className="text-xs px-2 py-1 rounded hover:bg-white/10 inline-flex items-center gap-1"
+                  style={{ color: "var(--text-muted)" }}
+                  title="Remove attached media"
+                  data-testid="button-remove-attached-media"
+                >
+                  <X className="w-3 h-3" /> Remove
+                </button>
+              </div>
+            </div>
+          )}
 
           <div>
             <label className="block text-sm font-medium mb-2" style={{ color: "var(--text-secondary)" }}>

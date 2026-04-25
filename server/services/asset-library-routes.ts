@@ -306,6 +306,96 @@ router.post('/:id/favorite', async (req: Request, res: Response) => {
   }
 });
 
+router.post('/save-url', async (req: Request, res: Response) => {
+  try {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ error: 'Not authenticated' });
+
+    const {
+      assetUrl,
+      assetType,
+      thumbnailUrl,
+      provider,
+      prompt,
+      contentType,
+      projectId,
+      sceneId,
+      width,
+      height,
+      duration,
+      tags,
+      visualDirection,
+    } = req.body;
+
+    if (!assetUrl || typeof assetUrl !== 'string') {
+      return res.status(400).json({ error: 'assetUrl is required' });
+    }
+
+    let parsedUrl: URL;
+    try {
+      parsedUrl = new URL(assetUrl);
+    } catch {
+      return res.status(400).json({ error: 'assetUrl must be a valid absolute URL' });
+    }
+    if (parsedUrl.protocol !== 'https:' && parsedUrl.protocol !== 'http:') {
+      return res.status(400).json({ error: 'assetUrl must use http(s) protocol' });
+    }
+    const host = parsedUrl.hostname.toLowerCase();
+    const isInternalHost =
+      host === 'localhost' ||
+      host === '0.0.0.0' ||
+      host === '::1' ||
+      host === '127.0.0.1' ||
+      host.endsWith('.local') ||
+      host.endsWith('.internal') ||
+      /^10\./.test(host) ||
+      /^192\.168\./.test(host) ||
+      /^172\.(1[6-9]|2\d|3[01])\./.test(host) ||
+      /^169\.254\./.test(host);
+    if (isInternalHost) {
+      return res.status(400).json({ error: 'assetUrl must point to a public host' });
+    }
+    if (thumbnailUrl && typeof thumbnailUrl === 'string') {
+      try {
+        const tUrl = new URL(thumbnailUrl);
+        if (tUrl.protocol !== 'https:' && tUrl.protocol !== 'http:') {
+          return res.status(400).json({ error: 'thumbnailUrl must use http(s) protocol' });
+        }
+      } catch {
+        return res.status(400).json({ error: 'thumbnailUrl must be a valid absolute URL when provided' });
+      }
+    }
+
+    const type = (assetType || 'image').toString();
+    if (!['image', 'video'].includes(type)) {
+      return res.status(400).json({ error: 'assetType must be "image" or "video"' });
+    }
+
+    const [inserted] = await db.insert(assetLibrary).values({
+      assetUrl,
+      thumbnailUrl: thumbnailUrl || (type === 'image' ? assetUrl : undefined),
+      assetType: type,
+      provider: provider || 'project-export',
+      prompt: prompt || (visualDirection ? visualDirection.slice(0, 500) : 'Saved from project'),
+      visualDirection: visualDirection || undefined,
+      contentType: contentType || 'scene-export',
+      projectId: projectId || undefined,
+      sceneId: sceneId || undefined,
+      width: typeof width === 'number' ? width : undefined,
+      height: typeof height === 'number' ? height : undefined,
+      duration: typeof duration === 'number' ? String(duration) : undefined,
+      tags: Array.isArray(tags) ? tags : ['saved-from-project'],
+      createdBy: userId,
+    }).returning();
+
+    console.log(`[AssetLibrary] Saved URL to library (id: ${inserted.id}, type: ${type})`);
+    res.json({ success: true, asset: inserted });
+  } catch (error: any) {
+    console.error('[AssetLibrary] Save URL error:', error.message);
+    res.status(500).json({ error: 'Failed to save asset to library' });
+  }
+});
+
 router.post('/save-character', async (req: Request, res: Response) => {
   try {
     const userId = getUserId(req);
