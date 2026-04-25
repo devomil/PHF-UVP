@@ -5281,6 +5281,7 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
           <SceneImageActions
             variant="compact"
             imageUrl={assets.visual.url}
+            mediaType={project?.mediaMode === "image" ? "image" : (/\.(mp4|mov|webm|m4v)(\?|$)/i.test(assets.visual.url) ? "video" : "image")}
             projectId={projectId}
             projectTitle={project?.title}
             visualDirection={project?.visualDirection || project?.title}
@@ -5864,6 +5865,7 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
           {assets.visual?.status === "completed" && assets.visual?.url && (
             <SceneImageActions
               imageUrl={assets.visual.url}
+              mediaType={project?.mediaMode === "image" ? "image" : (/\.(mp4|mov|webm|m4v)(\?|$)/i.test(assets.visual.url) ? "video" : "image")}
               projectId={projectId}
               projectTitle={project?.title}
               visualDirection={project?.visualDirection || project?.title}

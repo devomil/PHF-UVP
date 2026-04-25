@@ -356,13 +356,18 @@ router.post('/save-url', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'assetUrl must point to a public host' });
     }
     if (thumbnailUrl && typeof thumbnailUrl === 'string') {
-      try {
-        const tUrl = new URL(thumbnailUrl);
-        if (tUrl.protocol !== 'https:' && tUrl.protocol !== 'http:') {
-          return res.status(400).json({ error: 'thumbnailUrl must use http(s) protocol' });
+      const isDataUrl = thumbnailUrl.startsWith('data:image/');
+      if (!isDataUrl) {
+        try {
+          const tUrl = new URL(thumbnailUrl);
+          if (tUrl.protocol !== 'https:' && tUrl.protocol !== 'http:') {
+            return res.status(400).json({ error: 'thumbnailUrl must use http(s) protocol or be a data:image URL' });
+          }
+        } catch {
+          return res.status(400).json({ error: 'thumbnailUrl must be a valid absolute URL or data:image URL when provided' });
         }
-      } catch {
-        return res.status(400).json({ error: 'thumbnailUrl must be a valid absolute URL when provided' });
+      } else if (thumbnailUrl.length > 1_500_000) {
+        return res.status(400).json({ error: 'thumbnailUrl data URL too large (max ~1.5MB)' });
       }
     }
 

@@ -12,8 +12,17 @@ export interface SceneImageActionsProps {
   visualDirection?: string;
   width?: number;
   height?: number;
+  /** "image" | "video" — defaults to "image". Drives asset library tagging, Social Hub mediaType, and download extension. */
+  mediaType?: "image" | "video";
   variant?: "bar" | "compact";
   className?: string;
+}
+
+function detectMediaType(url: string, hint?: "image" | "video"): "image" | "video" {
+  if (hint) return hint;
+  const lower = url.split("?")[0].toLowerCase();
+  if (/\.(mp4|mov|webm|m4v|avi|mkv)$/.test(lower)) return "video";
+  return "image";
 }
 
 function sanitizeFilename(input: string): string {
@@ -22,6 +31,56 @@ function sanitizeFilename(input: string): string {
     .replace(/[^a-z0-9-_]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 80) || "image";
+}
+
+async function captureVideoPosterDataUrl(videoUrl: string): Promise<string | undefined> {
+  return new Promise((resolve) => {
+    try {
+      const video = document.createElement("video");
+      video.crossOrigin = "anonymous";
+      video.muted = true;
+      video.playsInline = true;
+      video.preload = "auto";
+      let settled = false;
+      const cleanup = () => {
+        try { video.src = ""; video.remove(); } catch {}
+      };
+      const finish = (val: string | undefined) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        resolve(val);
+      };
+      const grab = () => {
+        try {
+          const w = video.videoWidth || 1280;
+          const h = video.videoHeight || 720;
+          const maxDim = 640;
+          const scale = Math.min(1, maxDim / Math.max(w, h));
+          const canvas = document.createElement("canvas");
+          canvas.width = Math.round(w * scale);
+          canvas.height = Math.round(h * scale);
+          const ctx = canvas.getContext("2d");
+          if (!ctx) return finish(undefined);
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          finish(canvas.toDataURL("image/jpeg", 0.78));
+        } catch {
+          finish(undefined);
+        }
+      };
+      video.addEventListener("loadeddata", () => {
+        if (video.readyState >= 2) {
+          try { video.currentTime = Math.min(0.1, (video.duration || 1) / 4); } catch { grab(); }
+        }
+      });
+      video.addEventListener("seeked", grab, { once: true });
+      video.addEventListener("error", () => finish(undefined), { once: true });
+      setTimeout(() => finish(undefined), 8000);
+      video.src = videoUrl;
+    } catch {
+      resolve(undefined);
+    }
+  });
 }
 
 export function SceneImageActions({
@@ -33,6 +92,7 @@ export function SceneImageActions({
   visualDirection,
   width,
   height,
+  mediaType: mediaTypeProp,
   variant = "bar",
   className = "",
 }: SceneImageActionsProps) {
@@ -41,6 +101,8 @@ export function SceneImageActions({
   const [downloading, setDownloading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savedOk, setSavedOk] = useState(false);
+  const mediaType = detectMediaType(imageUrl, mediaTypeProp);
+  const isVideo = mediaType === "video";
 
   const handleDownload = async () => {
     if (!imageUrl || downloading) return;
@@ -50,7 +112,7 @@ export function SceneImageActions({
     const scenePart = typeof sceneIndex === "number" ? `-scene${sceneIndex + 1}` : "";
     const fallbackExt = (() => {
       const m = imageUrl.split("?")[0].match(/\.([a-z0-9]{2,5})$/i);
-      return m ? m[1].toLowerCase() : "png";
+      return m ? m[1].toLowerCase() : (isVideo ? "mp4" : "png");
     })();
 
     try {
@@ -106,14 +168,18 @@ export function SceneImageActions({
     if (!imageUrl || saving) return;
     setSaving(true);
     try {
+      let videoThumbnail: string | undefined;
+      if (isVideo) {
+        videoThumbnail = await captureVideoPosterDataUrl(imageUrl).catch(() => undefined);
+      }
       const res = await fetch("/api/asset-library/save-url", {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           assetUrl: imageUrl,
-          assetType: "image",
-          thumbnailUrl: imageUrl,
+          assetType: mediaType,
+          thumbnailUrl: videoThumbnail || (isVideo ? undefined : imageUrl),
           provider: "project-export",
           contentType: "scene-export",
           projectId: projectId ? String(projectId) : undefined,
@@ -131,7 +197,10 @@ export function SceneImageActions({
       }
       setSavedOk(true);
       setTimeout(() => setSavedOk(false), 2000);
-      toast({ title: "Saved to Asset Library", description: "Image is now reusable across projects." });
+      toast({
+        title: "Saved to Asset Library",
+        description: `${isVideo ? "Video" : "Image"} is now reusable across projects.`,
+      });
     } catch (err: any) {
       toast({ title: "Save failed", description: err.message || "Could not save to library", variant: "destructive" });
     } finally {
@@ -143,7 +212,7 @@ export function SceneImageActions({
     if (!imageUrl) return;
     const params = new URLSearchParams();
     params.set("mediaUrl", imageUrl);
-    params.set("mediaType", "image");
+    params.set("mediaType", mediaType);
     if (projectTitle) params.set("title", projectTitle);
     if (projectId) params.set("projectId", String(projectId));
     setLocation(`/social/new?${params.toString()}`);
