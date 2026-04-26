@@ -3453,15 +3453,15 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
                           <AlertTriangle className={`w-3.5 h-3.5 mt-0.5 flex-shrink-0 ${audioLonger ? "text-amber-400" : "text-blue-400"}`} />
                           <div className="flex-1 min-w-0">
                             <p className="font-medium">
-                              Voiceover {Math.round(audioDur)}s vs video {videoDur}s
-                            </p>
-                            <p className="mt-0.5" style={{ color: "var(--text-secondary)" }}>
                               {audioLonger
-                                ? exceedsCap
-                                  ? `Even at the ${QC_MAX_VIDEO_DURATION}s max, the last ${Math.max(0, Math.round(audioDur - QC_MAX_VIDEO_DURATION))}s won't be heard.`
-                                  : `Only the first ${videoDur}s will be heard.`
-                                : `Video will end with ${Math.round(videoDur - audioDur)}s of silence.`}
+                                ? `Voiceover is ${Math.round(audioDur)}s but video length is ${videoDur}s — only the first ${videoDur}s will be heard.`
+                                : `Voiceover is ${Math.round(audioDur)}s but video length is ${videoDur}s — video will end with ${Math.round(videoDur - audioDur)}s of silence.`}
                             </p>
+                            {audioLonger && exceedsCap && (
+                              <p className="mt-0.5" style={{ color: "var(--text-secondary)" }}>
+                                Even at the {QC_MAX_VIDEO_DURATION}s max, the last {Math.max(0, Math.round(audioDur - QC_MAX_VIDEO_DURATION))}s won't be heard. Shorten the script to fit.
+                              </p>
+                            )}
                             <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
                               {matchWouldChange && (
                                 <button
@@ -5285,6 +5285,13 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
         Number(project?.totalDuration) ||
         6;
       setSelectedDuration(Math.max(3, Math.min(30, Math.round(hydratedDuration))));
+      // Hydrate the tone selector from the persisted voiceover so a
+      // returning user sees the same tone they originally picked, instead of
+      // silently falling back to "punchy".
+      const savedTone = assetsQuery.data.voiceover?.tone;
+      if (savedTone === "punchy" || savedTone === "educational" || savedTone === "story") {
+        setNarrationTone(savedTone);
+      }
       const savedNarration = assetsQuery.data.voiceover?.narrationText;
       if (savedNarration) {
         setNarrationText(savedNarration);
