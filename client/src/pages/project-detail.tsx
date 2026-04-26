@@ -3222,6 +3222,38 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
     },
   });
 
+  // Mirror of QuickCreateAssetPanel.suggestNarrationMutation so the
+  // "Shorten narration to fit" remediation works from the Render Config tile
+  // too. Tone is omitted here (the server defaults to "punchy") since the
+  // RenderConfig surface intentionally doesn't expose tone selection.
+  const suggestNarrationMutation = useMutation({
+    mutationFn: async (durationSec?: number) => {
+      const body: Record<string, unknown> = {};
+      if (durationSec && Number.isFinite(durationSec)) body.durationSec = durationSec;
+      const res = await fetch(`/api/projects/${projectId}/quick-create/suggest-narration`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(body),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "Failed to shorten narration");
+      return data as { script: string; wordCount: number; targetWords?: number };
+    },
+    onSuccess: (data) => {
+      // Refresh the script editor and any other panel reading narration state.
+      queryClient.invalidateQueries({ queryKey: ["quick-create-assets", projectId] });
+      queryClient.invalidateQueries({ queryKey: ["quick-create-assets-render", projectId] });
+      toast({
+        title: "Narration shortened",
+        description: `New script is ${data?.wordCount} words${data?.targetWords ? ` (target ~${data.targetWords})` : ""}. Click Regenerate Voiceover in the Voiceover panel above to re-record.`,
+      });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Could not shorten narration", description: err.message, variant: "destructive" });
+    },
+  });
+
   const saveMutation = useMutation({
     mutationFn: async (patch: any) => {
       const res = await fetch(`/api/universal-video/projects/${projectId}/render-settings`, {
@@ -3428,27 +3460,51 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
                                   : `Only the first ${videoDur}s will be heard.`
                                 : `Video will end with ${Math.round(videoDur - audioDur)}s of silence.`}
                             </p>
-                            {matchWouldChange && (
-                              <button
-                                type="button"
-                                onClick={() => updateDurationMutation.mutate(matchTarget)}
-                                disabled={updateDurationMutation.isPending || isProjectGenerating}
-                                data-testid="render-match-video-to-narration"
-                                className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded border transition-colors disabled:opacity-50"
-                                style={{
-                                  borderColor: "rgba(139, 92, 246, 0.5)",
-                                  color: "rgb(216, 201, 253)",
-                                  backgroundColor: "rgba(139, 92, 246, 0.12)",
-                                }}
-                              >
-                                {updateDurationMutation.isPending ? (
-                                  <Loader2 className="w-3 h-3 animate-spin" />
-                                ) : (
-                                  <Clock className="w-3 h-3" />
-                                )}
-                                {audioLonger ? `Match video (${matchTarget}s)` : `Trim video (${matchTarget}s)`}
-                              </button>
-                            )}
+                            <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                              {matchWouldChange && (
+                                <button
+                                  type="button"
+                                  onClick={() => updateDurationMutation.mutate(matchTarget)}
+                                  disabled={updateDurationMutation.isPending || isProjectGenerating}
+                                  data-testid="render-match-video-to-narration"
+                                  className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded border transition-colors disabled:opacity-50"
+                                  style={{
+                                    borderColor: "rgba(139, 92, 246, 0.5)",
+                                    color: "rgb(216, 201, 253)",
+                                    backgroundColor: "rgba(139, 92, 246, 0.12)",
+                                  }}
+                                >
+                                  {updateDurationMutation.isPending ? (
+                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                  ) : (
+                                    <Clock className="w-3 h-3" />
+                                  )}
+                                  {audioLonger ? `Match video (${matchTarget}s)` : `Trim video (${matchTarget}s)`}
+                                </button>
+                              )}
+                              {audioLonger && (
+                                <button
+                                  type="button"
+                                  onClick={() => suggestNarrationMutation.mutate(videoDur)}
+                                  disabled={suggestNarrationMutation.isPending || isProjectGenerating}
+                                  data-testid="render-shorten-narration-to-fit"
+                                  className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded border transition-colors disabled:opacity-50"
+                                  style={{
+                                    borderColor: "rgba(139, 92, 246, 0.5)",
+                                    color: "rgb(216, 201, 253)",
+                                    backgroundColor: "rgba(139, 92, 246, 0.12)",
+                                  }}
+                                  title="Re-write the narration script to fit the current video length. You'll need to regenerate the voiceover afterward."
+                                >
+                                  {suggestNarrationMutation.isPending ? (
+                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                  ) : (
+                                    <Sparkles className="w-3 h-3" />
+                                  )}
+                                  Shorten narration
+                                </button>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </div>
