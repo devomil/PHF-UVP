@@ -3482,7 +3482,7 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
                               {audioLonger && (
                                 <button
                                   type="button"
-                                  onClick={() => suggestNarrationMutation.mutate({ durationSec: videoDur, tone: quickAssets.voiceover?.tone })}
+                                  onClick={() => suggestNarrationMutation.mutate({ durationSec: videoDur, tone: quickAssets.voiceover?.tone || "punchy" })}
                                   disabled={suggestNarrationMutation.isPending || isProjectGenerating}
                                   data-testid="render-shorten-narration-to-fit"
                                   className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded border transition-colors disabled:opacity-50"
