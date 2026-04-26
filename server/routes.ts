@@ -1446,9 +1446,15 @@ export async function registerRoutes(app: Express) {
       const isVertical = aspectRatio === "9:16" || aspectRatio === "1:1";
       // Energetic VO pacing: short-form delivery ≈ 2.7 words/sec vertical, 2.3 wps horizontal.
       const wordsPerSecond = isVertical ? 2.7 : 2.3;
-      const targetWords = Math.max(10, Math.round(durationSec * wordsPerSecond));
+      // When called from the "Shorten narration to fit" mismatch fix
+      // (persist=true), use a strict word ceiling so the rewrite reliably
+      // fits inside durationSec instead of overshooting it.
+      const isStrictFit = req.body?.persist === true;
+      const targetWords = isStrictFit
+        ? Math.max(10, Math.floor(durationSec * wordsPerSecond * 0.95))
+        : Math.max(10, Math.round(durationSec * wordsPerSecond));
       const minWords = Math.max(8, Math.round(targetWords * 0.85));
-      const maxWords = Math.round(targetWords * 1.2);
+      const maxWords = isStrictFit ? targetWords : Math.round(targetWords * 1.2);
 
       const { llmClient } = await import("./services/piapi-llm-client");
       if (!llmClient.isAvailable()) {
