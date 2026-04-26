@@ -3229,7 +3229,12 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
   // in the Voiceover panel above.
   const suggestNarrationMutation = useMutation({
     mutationFn: async (args: { durationSec?: number; tone?: "punchy" | "educational" | "story" }) => {
-      const body: Record<string, unknown> = {};
+      // `persist: true` makes the server write the rewritten script back to
+      // assets.quickCreate.voiceover.narrationText, so the Voiceover editor
+      // immediately reflects the change after the query invalidation below.
+      // Without this, this remediation would be effectively a no-op for the
+      // user — the script would be returned in the response but never shown.
+      const body: Record<string, unknown> = { persist: true };
       if (args.durationSec && Number.isFinite(args.durationSec)) body.durationSec = args.durationSec;
       if (args.tone === "punchy" || args.tone === "educational" || args.tone === "story") body.tone = args.tone;
       const res = await fetch(`/api/projects/${projectId}/quick-create/suggest-narration`, {
@@ -3240,7 +3245,7 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || "Failed to shorten narration");
-      return data as { script: string; wordCount: number; targetWords?: number };
+      return data as { script: string; wordCount: number; targetWords?: number; persisted?: boolean };
     },
     onSuccess: (data) => {
       // Refresh the script editor and any other panel reading narration state.
@@ -3248,7 +3253,7 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
       queryClient.invalidateQueries({ queryKey: ["quick-create-assets-render", projectId] });
       toast({
         title: "Narration shortened",
-        description: `New script is ${data?.wordCount} words${data?.targetWords ? ` (target ~${data.targetWords})` : ""}. Click Regenerate Voiceover in the Voiceover panel above to re-record.`,
+        description: `New script is ${data?.wordCount} words${data?.targetWords ? ` (target ~${data.targetWords})` : ""}. The Voiceover editor was updated — click Regenerate Voiceover to re-record.`,
       });
     },
     onError: (err: Error) => {
@@ -5263,6 +5268,29 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
     // is set inside the effect, including it would cause a no-op re-trigger.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project?.totalDuration]);
+
+  // Track the last server-known narration so we can sync the editor when the
+  // server-side script changes externally (e.g. RenderConfigPanel's "Shorten
+  // narration to fit" persists a rewritten script). Without this sync, the
+  // remediation would update the database but leave the editor showing stale
+  // text, which is exactly the bug the reviewer flagged as blocking.
+  const lastServerNarrationRef = useRef<string | null>(null);
+  useEffect(() => {
+    const serverNarration = assetsQuery.data?.voiceover?.narrationText ?? null;
+    if (serverNarration && serverNarration !== lastServerNarrationRef.current) {
+      // Only adopt the server's narration when it's truly a new value coming
+      // from the server (not just a re-fetch returning the same string we
+      // already mirrored locally). This avoids clobbering in-flight user
+      // edits during normal polling.
+      const isFirstSync = lastServerNarrationRef.current === null;
+      const matchesLocal = serverNarration === narrationText;
+      if (!isFirstSync && !matchesLocal) {
+        setNarrationText(serverNarration);
+      }
+      lastServerNarrationRef.current = serverNarration;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [assetsQuery.data?.voiceover?.narrationText]);
 
   const initializedRef = useRef(false);
   useEffect(() => {

@@ -828,6 +828,11 @@ export async function registerRoutes(app: Express) {
           url: qc.voiceover?.url || null,
           duration: qc.voiceover?.duration || null,
           narrationText: qc.voiceover?.narrationText || null,
+          // Surface the persisted tone so cross-panel actions (e.g. Render
+          // Configuration's "Shorten narration to fit") can rewrite using the
+          // SAME tone the user originally picked instead of silently
+          // defaulting to "punchy".
+          tone: qc.voiceover?.tone || null,
           error: qc.voiceover?.error || null,
         },
         music: {
@@ -1523,12 +1528,48 @@ Output ONLY the narration. No quotes, no labels, no explanations.`;
       const wordCount = script.split(/\s+/).filter(Boolean).length;
       console.log(`[QuickCreate] Suggested narration: ${wordCount} words via ${result.provider}`);
 
+      // Optionally persist the new script to the project's voiceover asset.
+      // Used by the "Shorten narration to fit" remediation so the Quick Create
+      // editor and any other surface reading narrationText immediately reflect
+      // the rewrite without requiring a separate save round-trip. Also clears
+      // the now-stale audio so the user is prompted to regenerate.
+      const shouldPersist = req.body?.persist === true;
+      let persisted = false;
+      if (shouldPersist) {
+        const assetsObj = (project.assets as any) || {};
+        const qc = assetsObj.quickCreate || {};
+        const existingVO = qc.voiceover || {};
+        const updatedAssets = {
+          ...assetsObj,
+          quickCreate: {
+            ...qc,
+            voiceover: {
+              ...existingVO,
+              status: existingVO.status === "completed" ? "pending" : (existingVO.status || "pending"),
+              narrationText: script,
+              tone,
+              // Audio for the previous (longer) script is now stale; null it
+              // out so the UI surfaces "Regenerate Voiceover" clearly.
+              url: null,
+              duration: null,
+              error: null,
+            },
+          },
+        };
+        await db
+          .update(universalVideoProjects)
+          .set({ assets: updatedAssets, updatedAt: new Date() })
+          .where(eq(universalVideoProjects.projectId, projectId));
+        persisted = true;
+      }
+
       return res.json({
         script,
         wordCount,
         targetWords,
         durationSec,
         provider: result.provider,
+        persisted,
       });
     } catch (error: any) {
       console.error("[QuickCreate] Failed to suggest narration:", error?.message || error);
