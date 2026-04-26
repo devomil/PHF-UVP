@@ -1522,7 +1522,14 @@ Output ONLY the narration. No quotes, no labels, no explanations.`;
       const shouldPersist = req.body?.persist === true;
       let persisted = false;
       if (shouldPersist) {
-        const assetsObj = (project.assets as any) || {};
+        // Re-read the row immediately before writing to avoid clobbering
+        // concurrent quick-create asset updates.
+        const [fresh] = await db
+          .select({ assets: universalVideoProjects.assets })
+          .from(universalVideoProjects)
+          .where(eq(universalVideoProjects.projectId, projectId))
+          .limit(1);
+        const assetsObj = (fresh?.assets as any) || {};
         const qc = assetsObj.quickCreate || {};
         const existingVO = qc.voiceover || {};
         const updatedAssets = {
