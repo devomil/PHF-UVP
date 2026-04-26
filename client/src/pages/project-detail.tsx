@@ -5184,24 +5184,27 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
     },
   });
 
+  const [narrationTone, setNarrationTone] = useState<"punchy" | "educational" | "story">("punchy");
+
   const suggestNarrationMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (toneOverride?: "punchy" | "educational" | "story") => {
+      const tone = toneOverride || narrationTone;
       const res = await fetch(`/api/projects/${projectId}/quick-create/suggest-narration`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({}),
+        body: JSON.stringify({ tone }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || "Failed to suggest narration");
-      return data as { script: string; wordCount: number };
+      return data as { script: string; wordCount: number; targetWords?: number };
     },
     onSuccess: (data) => {
       if (data?.script) {
         setNarrationText(data.script);
         toast({
           title: "Narration suggested",
-          description: `${data.wordCount} words tailored to your prompt. Edit it, then click Generate Voiceover.`,
+          description: `${data.wordCount} words${data.targetWords ? ` (target ~${data.targetWords})` : ""}. Edit freely, then click Generate Voiceover.`,
         });
       }
     },
@@ -5980,17 +5983,40 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
                 )}
 
                 <div className="mb-3">
-                  <div className="flex items-center justify-between mb-1.5 gap-2">
+                  <div className="flex items-center justify-between mb-1.5 gap-2 flex-wrap">
                     <label className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>Narration Script</label>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       {assets.voiceover?.narrationText && narrationText !== assets.voiceover.narrationText && (
                         <span className="text-[10px] text-amber-400">Edited — regenerate to apply</span>
                       )}
+                      <div className="flex items-center gap-1 rounded-md p-0.5" style={{ backgroundColor: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }} role="radiogroup" aria-label="Narration tone">
+                        {(["punchy", "educational", "story"] as const).map((t) => {
+                          const active = narrationTone === t;
+                          const label = t === "punchy" ? "Punchy" : t === "educational" ? "Educational" : "Story";
+                          return (
+                            <button
+                              key={t}
+                              type="button"
+                              role="radio"
+                              aria-checked={active}
+                              onClick={() => setNarrationTone(t)}
+                              data-testid={`tone-${t}`}
+                              className="text-[10px] font-medium px-2 py-0.5 rounded transition-colors"
+                              style={{
+                                backgroundColor: active ? "rgba(139, 92, 246, 0.25)" : "transparent",
+                                color: active ? "rgb(216, 201, 253)" : "var(--text-secondary)",
+                              }}
+                            >
+                              {label}
+                            </button>
+                          );
+                        })}
+                      </div>
                       <button
                         type="button"
-                        onClick={() => suggestNarrationMutation.mutate()}
+                        onClick={() => suggestNarrationMutation.mutate(undefined)}
                         disabled={suggestNarrationMutation.isPending || !(promptText || (project as any)?.description)}
-                        title="Have AI write a punchy, on-brand narration script from your visual prompt"
+                        title="Have AI write an on-brand narration script from your visual prompt"
                         data-testid="suggest-narration"
                         className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-1 rounded-md border transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         style={{

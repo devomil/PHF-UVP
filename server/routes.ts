@@ -1423,13 +1423,18 @@ export async function registerRoutes(app: Express) {
         return res.status(400).json({ error: "Project has no visual prompt to base narration on" });
       }
 
+      const rawTone: string = (req.body?.tone || "punchy").toString().toLowerCase();
+      const tone: "punchy" | "educational" | "story" =
+        rawTone === "educational" || rawTone === "story" ? (rawTone as any) : "punchy";
+
       const aspectRatio: string = outputFormat.aspectRatio || "16:9";
       const durationSec: number = Math.max(3, Math.min(60, Math.round(Number(project.totalDuration) || 6)));
       const isVertical = aspectRatio === "9:16" || aspectRatio === "1:1";
-      // Voice-over pacing ≈ 2.4 words/sec for energetic delivery, 2.0 for calm
-      const targetWords = Math.max(8, Math.round(durationSec * (isVertical ? 2.4 : 2.1)));
-      const minWords = Math.max(6, Math.round(targetWords * 0.8));
-      const maxWords = Math.round(targetWords * 1.15);
+      // Energetic VO pacing: short-form delivery ≈ 2.7 words/sec vertical, 2.3 wps horizontal.
+      const wordsPerSecond = isVertical ? 2.7 : 2.3;
+      const targetWords = Math.max(10, Math.round(durationSec * wordsPerSecond));
+      const minWords = Math.max(8, Math.round(targetWords * 0.85));
+      const maxWords = Math.round(targetWords * 1.2);
 
       const { llmClient } = await import("./services/piapi-llm-client");
       if (!llmClient.isAvailable()) {
@@ -1440,32 +1445,45 @@ export async function registerRoutes(app: Express) {
         ? "TikTok / Reels / Shorts vertical-video viewer (high-retention, hook-first, scroll-stopping)"
         : "YouTube / web horizontal-video viewer (clear, confident, conversion-oriented)";
 
-      const systemPrompt = `You are a senior short-form video copywriter who has written hundreds of high-retention scripts for TikTok, Instagram Reels, YouTube Shorts and DTC product videos. You write punchy, conversational voice-over scripts that:
-- open with a 1-line scroll-stopping hook
-- speak directly to the viewer in second person
-- use short, rhythmic sentences (4–10 words each)
-- weave in 1 specific benefit or surprising detail
-- end with a clear, low-friction CTA
-- never use hashtags, emojis, stage directions, or speaker labels
-- never describe the video — only the words the narrator should say
+      const toneInstructions: Record<typeof tone, string> = {
+        punchy:
+          "High-energy, confident, slightly cheeky. Read fast. Modern, conversational. Think viral DTC ad.",
+        educational:
+          "Warm and authoritative. Like an expert explaining something genuinely useful to a friend. Curious, not salesy.",
+        story:
+          "Open with a relatable second-person scenario the viewer recognizes ('Your dog won't stop scratching…'), then resolve it with the product. Empathetic, human.",
+      };
 
-Return ONLY the narration text. No quotes, no preamble, no explanations.`;
+      const systemPrompt = `You are a senior short-form video copywriter for TikTok, Reels, YouTube Shorts, and DTC product videos. Your scripts are punchy, conversational, and DENSE with specifics — never generic.
 
-      const userPrompt = `Write a ${durationSec}-second voice-over script (~${minWords}-${maxWords} words) for this ${platformHint}.
+Iron rules:
+- The first 6 words MUST be a scroll-stopping hook (a question, a surprising claim, or a sharp pain point).
+- Speak directly to the viewer in second person ("you", "your").
+- Pull SPECIFIC details from the source brief: name actual capabilities, what the product detects, what problems it solves, what conditions it identifies. Never substitute a vague phrase like "helps your pet" for the real thing.
+- Use short, rhythmic sentences (3–12 words each).
+- End with exactly ONE clear, low-friction CTA.
+- Output plain text ONLY: no hashtags, no emojis, no markdown, no quotation marks, no stage directions, no speaker labels, no preamble, no explanations.
+- If the brief begins with a meta-instruction like "Create a video about…" or "Make a TikTok for…", IGNORE that wrapper and treat the rest as your subject.
 
-The video shows / is about:
+You are paid to deliver substance under a tight word budget — every word earns its place.`;
+
+      const userPrompt = `Write a ${durationSec}-second voice-over script for a ${platformHint}.
+
+SOURCE BRIEF (extract real specifics from this — ignore any "create a video" wrapper):
 """
 ${visualPrompt}
 """
 
-Hard rules:
-- Plain text only. No markdown, no quotes, no lists.
-- Aim for ${targetWords} words total (≈ ${durationSec}s when read at a natural energetic pace).
-- Open with a hook in the first 6 words.
-- End with a single CTA sentence.
-- Sound like a human, not a press release.
+Required structure:
+1. HOOK (first sentence, ≤8 words): grab attention with a question, surprising claim, or sharp pain point.
+2. SUBSTANCE (1–2 sentences): name 2–3 SPECIFIC things from the brief — actual capabilities, conditions detected, or problems solved. Use real terminology from the source. Don't say "helps your pet" — say WHAT it does.
+3. CTA (final sentence): one direct, low-friction ask.
 
-Output the script and nothing else.`;
+Word budget: aim for ${targetWords} words (acceptable range ${minWords}–${maxWords}). Under-shooting is worse than slightly over — fill the time with substance, not filler.
+
+Tone: ${toneInstructions[tone]}
+
+Output ONLY the narration. No quotes, no labels, no explanations.`;
 
       const result = await llmClient.createChatCompletion({
         systemPrompt,
