@@ -1286,10 +1286,7 @@ export async function registerRoutes(app: Express) {
       const { projectId } = req.params;
       const userId = (req.user as any).id;
       const { narrationText, voiceId, tone: rawTone } = req.body || {};
-      // Persist the user's narration tone alongside the voiceover so other
-      // panels (e.g. Render Configuration) can re-run "Shorten narration to
-      // fit" with the same tone the user originally chose. Defaults to the
-      // server-side default in suggest-narration if absent.
+      // Persist tone so cross-panel "Shorten narration" reuses it.
       const tone: "punchy" | "educational" | "story" | undefined =
         rawTone === "punchy" || rawTone === "educational" || rawTone === "story" ? rawTone : undefined;
 
@@ -1440,9 +1437,7 @@ export async function registerRoutes(app: Express) {
         rawTone === "educational" || rawTone === "story" ? (rawTone as any) : "punchy";
 
       const aspectRatio: string = outputFormat.aspectRatio || "16:9";
-      // Allow an optional `durationSec` override so the "Shorten narration to fit"
-      // UX can request a script sized to the user's CURRENT video-length picker
-      // selection without requiring a separate save round-trip first.
+      // Optional override so "Shorten to fit" can target the picker's current value.
       const requestedDurationOverride = Number(req.body?.durationSec);
       const baseDuration = Number.isFinite(requestedDurationOverride) && requestedDurationOverride > 0
         ? requestedDurationOverride
@@ -1524,7 +1519,6 @@ Output ONLY the narration. No quotes, no labels, no explanations.`;
       const wordCount = script.split(/\s+/).filter(Boolean).length;
       console.log(`[QuickCreate] Suggested narration: ${wordCount} words via ${result.provider}`);
 
-      // When persist=true, write script back to assets and clear stale audio.
       const shouldPersist = req.body?.persist === true;
       let persisted = false;
       if (shouldPersist) {
@@ -1540,8 +1534,6 @@ Output ONLY the narration. No quotes, no labels, no explanations.`;
               status: existingVO.status === "completed" ? "pending" : (existingVO.status || "pending"),
               narrationText: script,
               tone,
-              // Audio for the previous (longer) script is now stale; null it
-              // out so the UI surfaces "Regenerate Voiceover" clearly.
               url: null,
               duration: null,
               error: null,
@@ -1569,8 +1561,7 @@ Output ONLY the narration. No quotes, no labels, no explanations.`;
     }
   });
 
-  // Lightweight duration-only update for the "Match video length to narration"
-  // UX. Avoids triggering visual regeneration the way `generate-visual` does.
+  // Duration-only update for "Match video length" (no visual regen).
   app.patch("/api/projects/:projectId/quick-create/duration", async (req, res) => {
     try {
       if (!req.isAuthenticated() || !req.user) {
@@ -1582,8 +1573,6 @@ Output ONLY the narration. No quotes, no labels, no explanations.`;
       if (!Number.isFinite(requested) || requested <= 0) {
         return res.status(400).json({ error: "totalDuration is required" });
       }
-      // Quick Create only supports the picker steps surfaced in the UI; reject
-      // anything else so we never persist an unrenderable length here.
       const QC_DURATION_STEPS = [5, 6, 8, 10] as const;
       const totalDuration = Math.round(requested);
       if (!QC_DURATION_STEPS.includes(totalDuration as any)) {

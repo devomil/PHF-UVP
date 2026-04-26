@@ -3425,9 +3425,6 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
                     )}
                   </div>
                   {(() => {
-                    // Mismatch warning between generated voiceover audio and the
-                    // persisted project totalDuration. Only renders once a real
-                    // audio duration is known and the drift exceeds tolerance.
                     const audioDur = Number(settings.voiceover?.duration) || 0;
                     const videoDur = Number(projectTotalDuration) || 0;
                     if (!settings.voiceover.hasGenerated || audioDur <= 0 || videoDur <= 0) return null;
@@ -5068,18 +5065,11 @@ function TextOverlayControls({ projectId, project }: { projectId: string; projec
   );
 }
 
-// Quick Create Video-Length picker steps. Kept in sync with the picker UI
-// (5/6/8/10s) and the suggest-narration server-side word-budget logic.
+// Quick Create video-length picker steps (mirrors UI + server word budget).
 const QC_VIDEO_DURATION_STEPS = [5, 6, 8, 10] as const;
 const QC_MAX_VIDEO_DURATION = 10;
-// Mismatch threshold: < 0.5s of drift between video and voiceover is treated
-// as effectively aligned and never warned about.
 const QC_DURATION_TOLERANCE_SEC = 0.5;
 
-// Snap a continuous duration UP to the smallest supported video-length step
-// that is >= the input, capped at the provider max. Used by the
-// "Match video length to narration" UX so chosen lengths always honor the
-// available picker options.
 function snapDurationUp(seconds: number): number {
   const ceil = Math.max(1, Math.ceil(seconds));
   for (const step of QC_VIDEO_DURATION_STEPS) {
@@ -5088,9 +5078,7 @@ function snapDurationUp(seconds: number): number {
   return QC_MAX_VIDEO_DURATION;
 }
 
-// Words-per-second pacing model. Mirrors the server-side suggest-narration
-// budget so the read-time hint and the AI Suggest target stay consistent.
-// Vertical short-form scripts are written denser than horizontal.
+// Mirrors server suggest-narration WPS (vertical denser than horizontal).
 function readWordsPerSecond(aspectRatio: string | undefined): number {
   const isVertical = aspectRatio === "9:16" || aspectRatio === "1:1";
   return isVertical ? 2.7 : 2.3;
@@ -5456,18 +5444,12 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        // Send the active tone so the server persists it on the voiceover
-        // asset; this lets RenderConfigPanel's "Shorten narration" honor the
-        // same tone the user picked here.
         body: JSON.stringify({ narrationText: narrationText.trim() || promptText, voiceId: selectedVoiceId, tone: narrationTone }),
       });
       if (!res.ok) throw new Error("Failed to start voiceover generation");
       return res.json();
     },
     onSuccess: () => {
-      // Invalidate every panel that reads voiceover state so the Render
-      // Configuration tile flips to "Ready" the instant the audio lands —
-      // RenderConfigPanel and QuickCreateAssetPanel use different query keys.
       queryClient.invalidateQueries({ queryKey: ["quick-create-assets", projectId] });
       queryClient.invalidateQueries({ queryKey: ["quick-create-assets-render", projectId] });
       queryClient.invalidateQueries({ queryKey: ["render-settings", projectId] });
