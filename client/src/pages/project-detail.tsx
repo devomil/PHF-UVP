@@ -3224,12 +3224,14 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
 
   // Mirror of QuickCreateAssetPanel.suggestNarrationMutation so the
   // "Shorten narration to fit" remediation works from the Render Config tile
-  // too. Tone is omitted here (the server defaults to "punchy") since the
-  // RenderConfig surface intentionally doesn't expose tone selection.
+  // too. Tone is read from the persisted voiceover asset (saved by
+  // generate-voiceover) so the rewrite honors the same tone the user picked
+  // in the Voiceover panel above.
   const suggestNarrationMutation = useMutation({
-    mutationFn: async (durationSec?: number) => {
+    mutationFn: async (args: { durationSec?: number; tone?: "punchy" | "educational" | "story" }) => {
       const body: Record<string, unknown> = {};
-      if (durationSec && Number.isFinite(durationSec)) body.durationSec = durationSec;
+      if (args.durationSec && Number.isFinite(args.durationSec)) body.durationSec = args.durationSec;
+      if (args.tone === "punchy" || args.tone === "educational" || args.tone === "story") body.tone = args.tone;
       const res = await fetch(`/api/projects/${projectId}/quick-create/suggest-narration`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -3245,8 +3247,8 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
       queryClient.invalidateQueries({ queryKey: ["quick-create-assets", projectId] });
       queryClient.invalidateQueries({ queryKey: ["quick-create-assets-render", projectId] });
       toast({
-        title: "Narration shortened (default tone)",
-        description: `New script is ${data?.wordCount} words${data?.targetWords ? ` (target ~${data.targetWords})` : ""}. To keep your chosen tone, use Shorten in the Voiceover panel above. Then click Regenerate Voiceover to re-record.`,
+        title: "Narration shortened",
+        description: `New script is ${data?.wordCount} words${data?.targetWords ? ` (target ~${data.targetWords})` : ""}. Click Regenerate Voiceover in the Voiceover panel above to re-record.`,
       });
     },
     onError: (err: Error) => {
@@ -3485,7 +3487,7 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
                               {audioLonger && (
                                 <button
                                   type="button"
-                                  onClick={() => suggestNarrationMutation.mutate(videoDur)}
+                                  onClick={() => suggestNarrationMutation.mutate({ durationSec: videoDur, tone: quickAssets.voiceover?.tone })}
                                   disabled={suggestNarrationMutation.isPending || isProjectGenerating}
                                   data-testid="render-shorten-narration-to-fit"
                                   className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded border transition-colors disabled:opacity-50"
@@ -5429,7 +5431,10 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ narrationText: narrationText.trim() || promptText, voiceId: selectedVoiceId }),
+        // Send the active tone so the server persists it on the voiceover
+        // asset; this lets RenderConfigPanel's "Shorten narration" honor the
+        // same tone the user picked here.
+        body: JSON.stringify({ narrationText: narrationText.trim() || promptText, voiceId: selectedVoiceId, tone: narrationTone }),
       });
       if (!res.ok) throw new Error("Failed to start voiceover generation");
       return res.json();

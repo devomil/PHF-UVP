@@ -1284,7 +1284,13 @@ export async function registerRoutes(app: Express) {
       }
       const { projectId } = req.params;
       const userId = (req.user as any).id;
-      const { narrationText, voiceId } = req.body || {};
+      const { narrationText, voiceId, tone: rawTone } = req.body || {};
+      // Persist the user's narration tone alongside the voiceover so other
+      // panels (e.g. Render Configuration) can re-run "Shorten narration to
+      // fit" with the same tone the user originally chose. Defaults to the
+      // server-side default in suggest-narration if absent.
+      const tone: "punchy" | "educational" | "story" | undefined =
+        rawTone === "punchy" || rawTone === "educational" || rawTone === "story" ? rawTone : undefined;
 
       const [project] = await db
         .select()
@@ -1308,6 +1314,8 @@ export async function registerRoutes(app: Express) {
 
       const [latestForVO] = await db.select().from(universalVideoProjects).where(eq(universalVideoProjects.projectId, projectId)).limit(1);
       const existingAssetsVO = (latestForVO?.assets as any) || {};
+      const existingVO = (existingAssetsVO.quickCreate || {}).voiceover || {};
+      const persistedTone = tone ?? existingVO.tone;
       await db.update(universalVideoProjects).set({
         assets: {
           ...existingAssetsVO,
@@ -1318,6 +1326,7 @@ export async function registerRoutes(app: Express) {
               url: null,
               error: null,
               narrationText: text,
+              ...(persistedTone ? { tone: persistedTone } : {}),
               updatedAt: new Date().toISOString(),
             },
           },
@@ -1348,6 +1357,7 @@ export async function registerRoutes(app: Express) {
                   url: result.url,
                   duration: result.duration,
                   narrationText: text,
+                  ...(persistedTone ? { tone: persistedTone } : {}),
                   error: null,
                   updatedAt: new Date().toISOString(),
                 },
@@ -1366,6 +1376,7 @@ export async function registerRoutes(app: Express) {
                   status: "failed",
                   url: null,
                   narrationText: text,
+                  ...(persistedTone ? { tone: persistedTone } : {}),
                   error: result.error || "Voiceover generation failed",
                   updatedAt: new Date().toISOString(),
                 },
@@ -1383,7 +1394,7 @@ export async function registerRoutes(app: Express) {
             ...ea,
             quickCreate: {
               ...(ea.quickCreate || {}),
-              voiceover: { status: "failed", url: null, narrationText: text, error: err.message, updatedAt: new Date().toISOString() },
+              voiceover: { status: "failed", url: null, narrationText: text, ...(persistedTone ? { tone: persistedTone } : {}), error: err.message, updatedAt: new Date().toISOString() },
             },
           },
           updatedAt: new Date(),
