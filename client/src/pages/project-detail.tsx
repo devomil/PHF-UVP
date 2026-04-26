@@ -5251,6 +5251,19 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
     },
   });
 
+  // Keep the local picker in sync with the persisted project.totalDuration so
+  // external duration changes (e.g. RenderConfigPanel "Match video to
+  // narration") propagate back here without requiring a manual refresh.
+  useEffect(() => {
+    const persisted = Number(project?.totalDuration);
+    if (Number.isFinite(persisted) && persisted > 0 && persisted !== selectedDuration) {
+      setSelectedDuration(persisted);
+    }
+    // We intentionally only depend on project.totalDuration; selectedDuration
+    // is set inside the effect, including it would cause a no-op re-trigger.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project?.totalDuration]);
+
   const initializedRef = useRef(false);
   useEffect(() => {
     if (assetsQuery.data?.project?.prompt && !promptText) {
@@ -6082,8 +6095,18 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
                     <button
                       key={opt.value}
                       type="button"
-                      onClick={() => setSelectedDuration(opt.value)}
-                      className="flex-1 rounded-lg border-2 py-2 px-2 transition-all text-center"
+                      onClick={() => {
+                        // Optimistic local update for snappy picker feel, then
+                        // persist to the server so RenderConfigPanel and any
+                        // other surface reading project.totalDuration stay in
+                        // sync with what the user picked here.
+                        setSelectedDuration(opt.value);
+                        if (opt.value !== (project?.totalDuration || 0)) {
+                          updateDurationMutation.mutate(opt.value);
+                        }
+                      }}
+                      disabled={updateDurationMutation.isPending}
+                      className="flex-1 rounded-lg border-2 py-2 px-2 transition-all text-center disabled:opacity-60"
                       data-testid={`duration-${opt.value}`}
                       style={{
                         backgroundColor: selectedDuration === opt.value ? "rgba(139, 92, 246, 0.15)" : "var(--surface)",
