@@ -1538,7 +1538,15 @@ Output ONLY the narration. No quotes, no labels, no explanations.`;
       if (!Number.isFinite(requested) || requested <= 0) {
         return res.status(400).json({ error: "totalDuration is required" });
       }
-      const totalDuration = Math.max(3, Math.min(60, Math.round(requested)));
+      // Quick Create only supports the picker steps surfaced in the UI; reject
+      // anything else so we never persist an unrenderable length here.
+      const QC_DURATION_STEPS = [5, 6, 8, 10] as const;
+      const totalDuration = Math.round(requested);
+      if (!QC_DURATION_STEPS.includes(totalDuration as any)) {
+        return res.status(400).json({
+          error: `totalDuration must be one of ${QC_DURATION_STEPS.join(", ")} seconds`,
+        });
+      }
 
       const [project] = await db
         .select()

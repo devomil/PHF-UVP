@@ -2714,7 +2714,7 @@ export default function ProjectDetail({ params }: { params?: { id: string } }) {
           <RepurposePanel projectId={projectId} scenes={scenes} />
         )}
 
-        <RenderConfigPanel projectId={projectId} projectOutputUrl={project.outputUrl} projectStatus={project.status} projectScenes={project.scenes} projectRenderId={project.renderId} projectAspectRatio={project?.outputFormat?.aspectRatio || '16:9'} />
+        <RenderConfigPanel projectId={projectId} projectOutputUrl={project.outputUrl} projectStatus={project.status} projectScenes={project.scenes} projectRenderId={project.renderId} projectAspectRatio={project?.outputFormat?.aspectRatio || '16:9'} projectTotalDuration={project?.totalDuration} />
       </div>
     </div>
   );
@@ -3096,7 +3096,7 @@ function RenderButton({ projectId, hasVisual, hasVoiceover, hasMusic, initialOut
   );
 }
 
-function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, projectScenes, projectRenderId, projectAspectRatio = '16:9', projectTotalDuration, projectPlatform }: { projectId: string; projectOutputUrl?: string | null; projectStatus?: string; projectScenes?: any[]; projectRenderId?: string | null; projectAspectRatio?: string; projectTotalDuration?: number; projectPlatform?: string }) {
+function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, projectScenes, projectRenderId, projectAspectRatio = '16:9', projectTotalDuration }: { projectId: string; projectOutputUrl?: string | null; projectStatus?: string; projectScenes?: any[]; projectRenderId?: string | null; projectAspectRatio?: string; projectTotalDuration?: number }) {
   const [expanded, setExpanded] = useState(true);
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -3194,6 +3194,31 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
     },
     onError: (err: Error) => {
       toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const updateDurationMutation = useMutation({
+    mutationFn: async (totalDuration: number) => {
+      const res = await fetch(`/api/projects/${projectId}/quick-create/duration`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ totalDuration }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "Failed to update video length");
+      return data as { totalDuration: number };
+    },
+    onSuccess: (data) => {
+      // Mirror the QuickCreateAssetPanel invalidations so both panels refresh.
+      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+      queryClient.invalidateQueries({ queryKey: ["render-settings", projectId] });
+      queryClient.invalidateQueries({ queryKey: ["quick-create-assets-render", projectId] });
+      queryClient.invalidateQueries({ queryKey: ["quick-create-assets", projectId] });
+      toast({ title: "Video length updated", description: `Set to ${data?.totalDuration}s.` });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Could not update video length", description: err.message, variant: "destructive" });
     },
   });
 
@@ -3367,6 +3392,68 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
                       </button>
                     )}
                   </div>
+                  {(() => {
+                    // Mismatch warning between generated voiceover audio and the
+                    // persisted project totalDuration. Only renders once a real
+                    // audio duration is known and the drift exceeds tolerance.
+                    const audioDur = Number(settings.voiceover?.duration) || 0;
+                    const videoDur = Number(projectTotalDuration) || 0;
+                    if (!settings.voiceover.hasGenerated || audioDur <= 0 || videoDur <= 0) return null;
+                    const drift = Math.abs(audioDur - videoDur);
+                    if (drift <= QC_DURATION_TOLERANCE_SEC) return null;
+                    const audioLonger = audioDur > videoDur;
+                    const matchTarget = snapDurationUp(audioDur);
+                    const matchWouldChange = matchTarget !== videoDur;
+                    const exceedsCap = audioDur > QC_MAX_VIDEO_DURATION + QC_DURATION_TOLERANCE_SEC;
+                    return (
+                      <div
+                        className="rounded-md border p-2.5 text-[11px] leading-relaxed"
+                        data-testid="render-voiceover-duration-warning"
+                        style={{
+                          backgroundColor: audioLonger ? "rgba(245, 158, 11, 0.08)" : "rgba(59, 130, 246, 0.08)",
+                          borderColor: audioLonger ? "rgba(245, 158, 11, 0.35)" : "rgba(59, 130, 246, 0.35)",
+                          color: "var(--text-primary)",
+                        }}
+                      >
+                        <div className="flex items-start gap-2">
+                          <AlertTriangle className={`w-3.5 h-3.5 mt-0.5 flex-shrink-0 ${audioLonger ? "text-amber-400" : "text-blue-400"}`} />
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium">
+                              Voiceover {Math.round(audioDur)}s vs video {videoDur}s
+                            </p>
+                            <p className="mt-0.5" style={{ color: "var(--text-secondary)" }}>
+                              {audioLonger
+                                ? exceedsCap
+                                  ? `Even at the ${QC_MAX_VIDEO_DURATION}s max, the last ${Math.max(0, Math.round(audioDur - QC_MAX_VIDEO_DURATION))}s won't be heard.`
+                                  : `Only the first ${videoDur}s will be heard.`
+                                : `Video will end with ${Math.round(videoDur - audioDur)}s of silence.`}
+                            </p>
+                            {matchWouldChange && (
+                              <button
+                                type="button"
+                                onClick={() => updateDurationMutation.mutate(matchTarget)}
+                                disabled={updateDurationMutation.isPending || isProjectGenerating}
+                                data-testid="render-match-video-to-narration"
+                                className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded border transition-colors disabled:opacity-50"
+                                style={{
+                                  borderColor: "rgba(139, 92, 246, 0.5)",
+                                  color: "rgb(216, 201, 253)",
+                                  backgroundColor: "rgba(139, 92, 246, 0.12)",
+                                }}
+                              >
+                                {updateDurationMutation.isPending ? (
+                                  <Loader2 className="w-3 h-3 animate-spin" />
+                                ) : (
+                                  <Clock className="w-3 h-3" />
+                                )}
+                                {audioLonger ? `Match video (${matchTarget}s)` : `Trim video (${matchTarget}s)`}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </>
               )}
             </div>
