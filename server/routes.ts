@@ -1428,7 +1428,14 @@ export async function registerRoutes(app: Express) {
         rawTone === "educational" || rawTone === "story" ? (rawTone as any) : "punchy";
 
       const aspectRatio: string = outputFormat.aspectRatio || "16:9";
-      const durationSec: number = Math.max(3, Math.min(60, Math.round(Number(project.totalDuration) || 6)));
+      // Allow an optional `durationSec` override so the "Shorten narration to fit"
+      // UX can request a script sized to the user's CURRENT video-length picker
+      // selection without requiring a separate save round-trip first.
+      const requestedDurationOverride = Number(req.body?.durationSec);
+      const baseDuration = Number.isFinite(requestedDurationOverride) && requestedDurationOverride > 0
+        ? requestedDurationOverride
+        : Number(project.totalDuration) || 6;
+      const durationSec: number = Math.max(3, Math.min(60, Math.round(baseDuration)));
       const isVertical = aspectRatio === "9:16" || aspectRatio === "1:1";
       // Energetic VO pacing: short-form delivery ≈ 2.7 words/sec vertical, 2.3 wps horizontal.
       const wordsPerSecond = isVertical ? 2.7 : 2.3;
@@ -1515,6 +1522,50 @@ Output ONLY the narration. No quotes, no labels, no explanations.`;
     } catch (error: any) {
       console.error("[QuickCreate] Failed to suggest narration:", error?.message || error);
       return res.status(500).json({ error: error?.message || "Failed to suggest narration" });
+    }
+  });
+
+  // Lightweight duration-only update for the "Match video length to narration"
+  // UX. Avoids triggering visual regeneration the way `generate-visual` does.
+  app.patch("/api/projects/:projectId/quick-create/duration", async (req, res) => {
+    try {
+      if (!req.isAuthenticated() || !req.user) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+      const { projectId } = req.params;
+      const userId = (req.user as any).id;
+      const requested = Number(req.body?.totalDuration);
+      if (!Number.isFinite(requested) || requested <= 0) {
+        return res.status(400).json({ error: "totalDuration is required" });
+      }
+      const totalDuration = Math.max(3, Math.min(60, Math.round(requested)));
+
+      const [project] = await db
+        .select()
+        .from(universalVideoProjects)
+        .where(eq(universalVideoProjects.projectId, projectId))
+        .limit(1);
+
+      if (!project || project.ownerId !== userId) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+
+      const outputFormat = (project.outputFormat as any) || {};
+      if (outputFormat.platform !== "quick-create") {
+        return res.status(400).json({ error: "Not a Quick Create project" });
+      }
+
+      if (project.totalDuration !== totalDuration) {
+        await db.update(universalVideoProjects).set({
+          totalDuration,
+          updatedAt: new Date(),
+        }).where(eq(universalVideoProjects.projectId, projectId));
+      }
+
+      return res.json({ totalDuration });
+    } catch (error: any) {
+      console.error("[QuickCreate] Failed to update duration:", error?.message || error);
+      return res.status(500).json({ error: error?.message || "Failed to update duration" });
     }
   });
 

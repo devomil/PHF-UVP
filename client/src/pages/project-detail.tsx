@@ -3096,7 +3096,7 @@ function RenderButton({ projectId, hasVisual, hasVoiceover, hasMusic, initialOut
   );
 }
 
-function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, projectScenes, projectRenderId, projectAspectRatio = '16:9' }: { projectId: string; projectOutputUrl?: string | null; projectStatus?: string; projectScenes?: any[]; projectRenderId?: string | null; projectAspectRatio?: string }) {
+function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, projectScenes, projectRenderId, projectAspectRatio = '16:9', projectTotalDuration, projectPlatform }: { projectId: string; projectOutputUrl?: string | null; projectStatus?: string; projectScenes?: any[]; projectRenderId?: string | null; projectAspectRatio?: string; projectTotalDuration?: number; projectPlatform?: string }) {
   const [expanded, setExpanded] = useState(true);
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -4925,6 +4925,42 @@ function TextOverlayControls({ projectId, project }: { projectId: string; projec
   );
 }
 
+// Quick Create Video-Length picker steps. Kept in sync with the picker UI
+// (5/6/8/10s) and the suggest-narration server-side word-budget logic.
+const QC_VIDEO_DURATION_STEPS = [5, 6, 8, 10] as const;
+const QC_MAX_VIDEO_DURATION = 10;
+// Mismatch threshold: < 0.5s of drift between video and voiceover is treated
+// as effectively aligned and never warned about.
+const QC_DURATION_TOLERANCE_SEC = 0.5;
+
+// Snap a continuous duration UP to the smallest supported video-length step
+// that is >= the input, capped at the provider max. Used by the
+// "Match video length to narration" UX so chosen lengths always honor the
+// available picker options.
+function snapDurationUp(seconds: number): number {
+  const ceil = Math.max(1, Math.ceil(seconds));
+  for (const step of QC_VIDEO_DURATION_STEPS) {
+    if (step >= ceil) return step;
+  }
+  return QC_MAX_VIDEO_DURATION;
+}
+
+// Words-per-second pacing model. Mirrors the server-side suggest-narration
+// budget so the read-time hint and the AI Suggest target stay consistent.
+// Vertical short-form scripts are written denser than horizontal.
+function readWordsPerSecond(aspectRatio: string | undefined): number {
+  const isVertical = aspectRatio === "9:16" || aspectRatio === "1:1";
+  return isVertical ? 2.7 : 2.3;
+}
+
+// Predict how long it would take to read the given script aloud, in seconds.
+// Returns 0 for empty input. Used live as the user types/edits.
+function estimateReadTimeSec(script: string, aspectRatio: string | undefined): number {
+  const words = script.trim().split(/\s+/).filter(Boolean).length;
+  if (words === 0) return 0;
+  return words / readWordsPerSecond(aspectRatio);
+}
+
 const ELEVENLABS_VOICES = [
   { id: "21m00Tcm4TlvDq8ikWAM", name: "Rachel", gender: "female", description: "Calm, warm", accent: "American", useCase: "Narration" },
   { id: "pNInz6obpgDQGcFmaJgB", name: "Adam", gender: "male", description: "Deep, trustworthy", accent: "American", useCase: "Narration" },
@@ -5187,13 +5223,17 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
   const [narrationTone, setNarrationTone] = useState<"punchy" | "educational" | "story">("punchy");
 
   const suggestNarrationMutation = useMutation({
-    mutationFn: async (toneOverride?: "punchy" | "educational" | "story") => {
-      const tone = toneOverride || narrationTone;
+    mutationFn: async (opts?: { tone?: "punchy" | "educational" | "story"; durationSec?: number }) => {
+      const tone = opts?.tone || narrationTone;
+      const body: Record<string, unknown> = { tone };
+      if (opts?.durationSec && Number.isFinite(opts.durationSec)) {
+        body.durationSec = opts.durationSec;
+      }
       const res = await fetch(`/api/projects/${projectId}/quick-create/suggest-narration`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ tone }),
+        body: JSON.stringify(body),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || "Failed to suggest narration");
@@ -5213,6 +5253,33 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
     },
   });
 
+  const updateDurationMutation = useMutation({
+    mutationFn: async (totalDuration: number) => {
+      const res = await fetch(`/api/projects/${projectId}/quick-create/duration`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ totalDuration }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "Failed to update video length");
+      return data as { totalDuration: number };
+    },
+    onSuccess: (data) => {
+      if (data?.totalDuration) {
+        setSelectedDuration(data.totalDuration);
+      }
+      queryClient.invalidateQueries({ queryKey: ["quick-create-assets", projectId] });
+      queryClient.invalidateQueries({ queryKey: ["quick-create-assets-render", projectId] });
+      queryClient.invalidateQueries({ queryKey: ["render-settings", projectId] });
+      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+      toast({ title: "Video length updated", description: `Set to ${data?.totalDuration}s.` });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Could not update video length", description: err.message, variant: "destructive" });
+    },
+  });
+
   const generateVoiceoverMutation = useMutation({
     mutationFn: async () => {
       const res = await fetch(`/api/projects/${projectId}/quick-create/generate-voiceover`, {
@@ -5225,7 +5292,13 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
       return res.json();
     },
     onSuccess: () => {
+      // Invalidate every panel that reads voiceover state so the Render
+      // Configuration tile flips to "Ready" the instant the audio lands —
+      // RenderConfigPanel and QuickCreateAssetPanel use different query keys.
       queryClient.invalidateQueries({ queryKey: ["quick-create-assets", projectId] });
+      queryClient.invalidateQueries({ queryKey: ["quick-create-assets-render", projectId] });
+      queryClient.invalidateQueries({ queryKey: ["render-settings", projectId] });
+      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
       toast({ title: "Voiceover Generation Started", description: "Your voiceover is being generated." });
     },
     onError: (err: Error) => {
@@ -6048,11 +6121,34 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
                     className="w-full rounded-lg border px-3 py-2 text-sm leading-relaxed resize-y"
                     style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-medium)", color: "var(--text-primary)", minHeight: "5rem" }}
                   />
-                  <p className="text-[10px] mt-1" style={{ color: "var(--text-muted)" }}>
-                    {narrationText.trim()
-                      ? `${narrationText.trim().split(/\s+/).length} words · edit freely, then click Generate Voiceover to apply`
-                      : "Leave empty to use the visual prompt as narration"}
-                  </p>
+                  {(() => {
+                    const trimmed = narrationText.trim();
+                    if (!trimmed) {
+                      return (
+                        <p className="text-[10px] mt-1" style={{ color: "var(--text-muted)" }}>
+                          Leave empty to use the visual prompt as narration
+                        </p>
+                      );
+                    }
+                    const words = trimmed.split(/\s+/).length;
+                    const aspect = selectedAspectRatio || (project as any)?.outputFormat?.aspectRatio || "16:9";
+                    const readSec = estimateReadTimeSec(trimmed, aspect);
+                    const readSecRounded = Math.round(readSec);
+                    const overflowsPicker = readSec > selectedDuration + QC_DURATION_TOLERANCE_SEC;
+                    const overflowsCap = readSec > QC_MAX_VIDEO_DURATION + QC_DURATION_TOLERANCE_SEC;
+                    const color = overflowsCap
+                      ? "rgb(248,113,113)"
+                      : overflowsPicker
+                      ? "rgb(251,191,36)"
+                      : "var(--text-muted)";
+                    return (
+                      <p className="text-[10px] mt-1" style={{ color }} data-testid="narration-readtime-hint">
+                        {words} words · ~{readSecRounded}s read time (video is {selectedDuration}s)
+                        {overflowsPicker && !overflowsCap && " — will overflow the selected video length"}
+                        {overflowsCap && ` — exceeds the ${QC_MAX_VIDEO_DURATION}s max video length`}
+                      </p>
+                    );
+                  })()}
                 </div>
 
                 <div className="mb-3">
@@ -6093,6 +6189,98 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
                     ) : null;
                   })()}
                 </div>
+
+                {(() => {
+                  const audioDur = Number(assets.voiceover?.duration) || 0;
+                  if (assets.voiceover?.status !== "completed" || audioDur <= 0) return null;
+                  const videoDur = selectedDuration;
+                  const drift = Math.abs(audioDur - videoDur);
+                  if (drift <= QC_DURATION_TOLERANCE_SEC) return null;
+                  const audioLonger = audioDur > videoDur;
+                  const matchTarget = snapDurationUp(audioDur);
+                  const matchWouldChange = matchTarget !== videoDur;
+                  const exceedsCap = audioDur > QC_MAX_VIDEO_DURATION + QC_DURATION_TOLERANCE_SEC;
+                  return (
+                    <div
+                      className="mb-3 rounded-lg border p-3 text-xs"
+                      data-testid="voiceover-duration-warning"
+                      style={{
+                        backgroundColor: audioLonger ? "rgba(245, 158, 11, 0.08)" : "rgba(59, 130, 246, 0.08)",
+                        borderColor: audioLonger ? "rgba(245, 158, 11, 0.35)" : "rgba(59, 130, 246, 0.35)",
+                        color: "var(--text-primary)",
+                      }}
+                    >
+                      <div className="flex items-start gap-2">
+                        <AlertTriangle className={`w-4 h-4 mt-0.5 flex-shrink-0 ${audioLonger ? "text-amber-400" : "text-blue-400"}`} />
+                        <div className="flex-1">
+                          <p className="font-medium mb-1">
+                            {audioLonger
+                              ? `Voiceover is ${Math.round(audioDur)}s but video length is ${videoDur}s`
+                              : `Voiceover is ${Math.round(audioDur)}s but video length is ${videoDur}s`}
+                          </p>
+                          <p style={{ color: "var(--text-secondary)" }}>
+                            {audioLonger
+                              ? exceedsCap
+                                ? `Even at the ${QC_MAX_VIDEO_DURATION}s max video length, the last ${Math.max(0, Math.round(audioDur - QC_MAX_VIDEO_DURATION))}s of narration won't be heard. Shorten the script to fit.`
+                                : `Only the first ${videoDur}s of narration will be heard.`
+                              : `The video will have ${Math.round(videoDur - audioDur)}s of silence at the end.`}
+                          </p>
+                          <div className="flex flex-wrap items-center gap-2 mt-2">
+                            {matchWouldChange && (
+                              <button
+                                type="button"
+                                onClick={() => updateDurationMutation.mutate(matchTarget)}
+                                disabled={updateDurationMutation.isPending}
+                                data-testid="match-video-to-narration"
+                                className="inline-flex items-center gap-1 text-[11px] font-medium px-2.5 py-1 rounded-md border transition-colors disabled:opacity-50"
+                                style={{
+                                  borderColor: "rgba(139, 92, 246, 0.5)",
+                                  color: "rgb(216, 201, 253)",
+                                  backgroundColor: "rgba(139, 92, 246, 0.12)",
+                                }}
+                              >
+                                {updateDurationMutation.isPending ? (
+                                  <Loader2 className="w-3 h-3 animate-spin" />
+                                ) : (
+                                  <Clock className="w-3 h-3" />
+                                )}
+                                {audioLonger
+                                  ? `Match video to narration (${matchTarget}s)`
+                                  : `Trim video to narration (${matchTarget}s)`}
+                              </button>
+                            )}
+                            {audioLonger && (
+                              <button
+                                type="button"
+                                onClick={() => suggestNarrationMutation.mutate({ tone: narrationTone, durationSec: videoDur })}
+                                disabled={suggestNarrationMutation.isPending}
+                                data-testid="shorten-narration-to-fit"
+                                className="inline-flex items-center gap-1 text-[11px] font-medium px-2.5 py-1 rounded-md border transition-colors disabled:opacity-50"
+                                style={{
+                                  borderColor: "rgba(139, 92, 246, 0.5)",
+                                  color: "rgb(216, 201, 253)",
+                                  backgroundColor: "rgba(139, 92, 246, 0.12)",
+                                }}
+                              >
+                                {suggestNarrationMutation.isPending ? (
+                                  <Loader2 className="w-3 h-3 animate-spin" />
+                                ) : (
+                                  <Sparkles className="w-3 h-3" />
+                                )}
+                                Shorten narration to fit
+                              </button>
+                            )}
+                          </div>
+                          {audioLonger && (
+                            <p className="text-[10px] mt-2" style={{ color: "var(--text-muted)" }}>
+                              Tip: after shortening the script, click Regenerate Voiceover to re-render the audio.
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 <Button
                   onClick={() => generateVoiceoverMutation.mutate()}
