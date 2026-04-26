@@ -3428,10 +3428,9 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
                     const audioDur = Number(settings.voiceover?.duration) || 0;
                     const videoDur = Number(projectTotalDuration) || 0;
                     if (!settings.voiceover.hasGenerated || audioDur <= 0 || videoDur <= 0) return null;
-                    const audioLonger = audioDur > videoDur;
                     const drift = Math.abs(audioDur - videoDur);
-                    const tolerance = audioLonger ? QC_DURATION_TOLERANCE_SEC : QC_SILENCE_TOLERANCE_SEC;
-                    if (drift <= tolerance) return null;
+                    if (drift <= QC_DURATION_TOLERANCE_SEC) return null;
+                    const audioLonger = audioDur > videoDur;
                     const matchTarget = snapDurationUp(audioDur);
                     const matchWouldChange = matchTarget !== videoDur;
                     const exceedsCap = audioDur > QC_MAX_VIDEO_DURATION + QC_DURATION_TOLERANCE_SEC;
@@ -5070,10 +5069,6 @@ function TextOverlayControls({ projectId, project }: { projectId: string; projec
 const QC_VIDEO_DURATION_STEPS = [5, 6, 8, 10] as const;
 const QC_MAX_VIDEO_DURATION = 10;
 const QC_DURATION_TOLERANCE_SEC = 0.5;
-// Largest gap between adjacent picker steps. After "Match video length"
-// snap-up, audio-shorter drift can be up to this size and is expected;
-// warning only fires beyond it.
-const QC_SILENCE_TOLERANCE_SEC = 2;
 
 function snapDurationUp(seconds: number): number {
   const ceil = Math.max(1, Math.ceil(seconds));
@@ -6365,10 +6360,9 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
                   const audioDur = Number(assets.voiceover?.duration) || 0;
                   if (assets.voiceover?.status !== "completed" || audioDur <= 0) return null;
                   const videoDur = selectedDuration;
-                  const audioLonger = audioDur > videoDur;
                   const drift = Math.abs(audioDur - videoDur);
-                  const tolerance = audioLonger ? QC_DURATION_TOLERANCE_SEC : QC_SILENCE_TOLERANCE_SEC;
-                  if (drift <= tolerance) return null;
+                  if (drift <= QC_DURATION_TOLERANCE_SEC) return null;
+                  const audioLonger = audioDur > videoDur;
                   const matchTarget = snapDurationUp(audioDur);
                   const matchWouldChange = matchTarget !== videoDur;
                   const exceedsCap = audioDur > QC_MAX_VIDEO_DURATION + QC_DURATION_TOLERANCE_SEC;
