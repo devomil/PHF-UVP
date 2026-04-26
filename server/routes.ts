@@ -828,10 +828,6 @@ export async function registerRoutes(app: Express) {
           url: qc.voiceover?.url || null,
           duration: qc.voiceover?.duration || null,
           narrationText: qc.voiceover?.narrationText || null,
-          // Surface the persisted tone so cross-panel actions (e.g. Render
-          // Configuration's "Shorten narration to fit") can rewrite using the
-          // SAME tone the user originally picked instead of silently
-          // defaulting to "punchy".
           tone: qc.voiceover?.tone || null,
           error: qc.voiceover?.error || null,
         },
@@ -1528,11 +1524,7 @@ Output ONLY the narration. No quotes, no labels, no explanations.`;
       const wordCount = script.split(/\s+/).filter(Boolean).length;
       console.log(`[QuickCreate] Suggested narration: ${wordCount} words via ${result.provider}`);
 
-      // Optionally persist the new script to the project's voiceover asset.
-      // Used by the "Shorten narration to fit" remediation so the Quick Create
-      // editor and any other surface reading narrationText immediately reflect
-      // the rewrite without requiring a separate save round-trip. Also clears
-      // the now-stale audio so the user is prompted to regenerate.
+      // When persist=true, write script back to assets and clear stale audio.
       const shouldPersist = req.body?.persist === true;
       let persisted = false;
       if (shouldPersist) {

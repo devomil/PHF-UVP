@@ -3222,18 +3222,10 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
     },
   });
 
-  // Mirror of QuickCreateAssetPanel.suggestNarrationMutation so the
-  // "Shorten narration to fit" remediation works from the Render Config tile
-  // too. Tone is read from the persisted voiceover asset (saved by
-  // generate-voiceover) so the rewrite honors the same tone the user picked
-  // in the Voiceover panel above.
+  // "Shorten narration to fit" from the Render Config tile. Persists script
+  // server-side so the Voiceover editor picks up the rewrite.
   const suggestNarrationMutation = useMutation({
     mutationFn: async (args: { durationSec?: number; tone?: "punchy" | "educational" | "story" }) => {
-      // `persist: true` makes the server write the rewritten script back to
-      // assets.quickCreate.voiceover.narrationText, so the Voiceover editor
-      // immediately reflects the change after the query invalidation below.
-      // Without this, this remediation would be effectively a no-op for the
-      // user — the script would be returned in the response but never shown.
       const body: Record<string, unknown> = { persist: true };
       if (args.durationSec && Number.isFinite(args.durationSec)) body.durationSec = args.durationSec;
       if (args.tone === "punchy" || args.tone === "educational" || args.tone === "story") body.tone = args.tone;
@@ -5256,35 +5248,22 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
     },
   });
 
-  // Keep the local picker in sync with the persisted project.totalDuration so
-  // external duration changes (e.g. RenderConfigPanel "Match video to
-  // narration") propagate back here without requiring a manual refresh.
+  // Sync local picker with persisted duration changed elsewhere (e.g. RenderConfig "Match").
   useEffect(() => {
     const persisted = Number(project?.totalDuration);
     if (Number.isFinite(persisted) && persisted > 0 && persisted !== selectedDuration) {
       setSelectedDuration(persisted);
     }
-    // We intentionally only depend on project.totalDuration; selectedDuration
-    // is set inside the effect, including it would cause a no-op re-trigger.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project?.totalDuration]);
 
-  // Track the last server-known narration so we can sync the editor when the
-  // server-side script changes externally (e.g. RenderConfigPanel's "Shorten
-  // narration to fit" persists a rewritten script). Without this sync, the
-  // remediation would update the database but leave the editor showing stale
-  // text, which is exactly the bug the reviewer flagged as blocking.
+  // Sync editor when narration is rewritten server-side (RenderConfig shorten).
   const lastServerNarrationRef = useRef<string | null>(null);
   useEffect(() => {
     const serverNarration = assetsQuery.data?.voiceover?.narrationText ?? null;
     if (serverNarration && serverNarration !== lastServerNarrationRef.current) {
-      // Only adopt the server's narration when it's truly a new value coming
-      // from the server (not just a re-fetch returning the same string we
-      // already mirrored locally). This avoids clobbering in-flight user
-      // edits during normal polling.
       const isFirstSync = lastServerNarrationRef.current === null;
-      const matchesLocal = serverNarration === narrationText;
-      if (!isFirstSync && !matchesLocal) {
+      if (!isFirstSync && serverNarration !== narrationText) {
         setNarrationText(serverNarration);
       }
       lastServerNarrationRef.current = serverNarration;
@@ -5313,9 +5292,6 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
         Number(project?.totalDuration) ||
         6;
       setSelectedDuration(Math.max(3, Math.min(30, Math.round(hydratedDuration))));
-      // Hydrate the tone selector from the persisted voiceover so a
-      // returning user sees the same tone they originally picked, instead of
-      // silently falling back to "punchy".
       const savedTone = assetsQuery.data.voiceover?.tone;
       if (savedTone === "punchy" || savedTone === "educational" || savedTone === "story") {
         setNarrationTone(savedTone);
@@ -6131,12 +6107,6 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
                       key={opt.value}
                       type="button"
                       onClick={() => {
-                        // Optimistic local update for snappy picker feel, then
-                        // persist to the server so RenderConfigPanel and any
-                        // other surface reading project.totalDuration stay in
-                        // sync with what the user picked here. If the server
-                        // rejects the change, roll back to the previously
-                        // persisted duration so the picker doesn't lie.
                         const prior = selectedDuration;
                         setSelectedDuration(opt.value);
                         if (opt.value !== (project?.totalDuration || 0)) {
