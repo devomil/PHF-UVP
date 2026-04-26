@@ -6099,10 +6099,17 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
                         // Optimistic local update for snappy picker feel, then
                         // persist to the server so RenderConfigPanel and any
                         // other surface reading project.totalDuration stay in
-                        // sync with what the user picked here.
+                        // sync with what the user picked here. If the server
+                        // rejects the change, roll back to the previously
+                        // persisted duration so the picker doesn't lie.
+                        const prior = selectedDuration;
                         setSelectedDuration(opt.value);
                         if (opt.value !== (project?.totalDuration || 0)) {
-                          updateDurationMutation.mutate(opt.value);
+                          updateDurationMutation.mutate(opt.value, {
+                            onError: () => {
+                              setSelectedDuration(Number(project?.totalDuration) || prior);
+                            },
+                          });
                         }
                       }}
                       disabled={updateDurationMutation.isPending}
