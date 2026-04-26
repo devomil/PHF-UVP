@@ -3245,8 +3245,8 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
       queryClient.invalidateQueries({ queryKey: ["quick-create-assets", projectId] });
       queryClient.invalidateQueries({ queryKey: ["quick-create-assets-render", projectId] });
       toast({
-        title: "Narration shortened",
-        description: `New script is ${data?.wordCount} words${data?.targetWords ? ` (target ~${data.targetWords})` : ""}. Click Regenerate Voiceover in the Voiceover panel above to re-record.`,
+        title: "Narration shortened (default tone)",
+        description: `New script is ${data?.wordCount} words${data?.targetWords ? ` (target ~${data.targetWords})` : ""}. To keep your chosen tone, use Shorten in the Voiceover panel above. Then click Regenerate Voiceover to re-record.`,
       });
     },
     onError: (err: Error) => {
