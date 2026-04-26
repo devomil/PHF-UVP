@@ -959,12 +959,28 @@ export async function registerRoutes(app: Express) {
 
       const finalPrompt = newPrompt || project.description || "";
       const finalProvider = newProvider || "auto";
-      const finalDuration = newDuration || project.totalDuration || 6;
+      const requestedDuration = Number(newDuration);
+      const sanitizedRequestedDuration =
+        Number.isFinite(requestedDuration) && requestedDuration > 0
+          ? Math.max(3, Math.min(60, Math.round(requestedDuration)))
+          : null;
+      const finalDuration = sanitizedRequestedDuration ?? project.totalDuration ?? 6;
       const finalAspectRatio = newAspectRatio || outputFormat.aspectRatio || "16:9";
 
       if (newPrompt && newPrompt !== project.description) {
         await db.update(universalVideoProjects).set({
           description: newPrompt,
+          updatedAt: new Date(),
+        }).where(eq(universalVideoProjects.projectId, projectId));
+      }
+
+      if (
+        sanitizedRequestedDuration !== null &&
+        sanitizedRequestedDuration !== project.totalDuration &&
+        project.mediaMode !== "image"
+      ) {
+        await db.update(universalVideoProjects).set({
+          totalDuration: sanitizedRequestedDuration,
           updatedAt: new Date(),
         }).where(eq(universalVideoProjects.projectId, projectId));
       }

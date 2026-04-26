@@ -4979,6 +4979,7 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
   const [selectedProvider, setSelectedProvider] = useState("auto");
   const [negativePrompt, setNegativePrompt] = useState("");
   const [selectedAspectRatio, setSelectedAspectRatio] = useState("");
+  const [selectedDuration, setSelectedDuration] = useState<number>(6);
   const [visualGenerating, setVisualGenerating] = useState(false);
   const [editNegativePrompt, setEditNegativePrompt] = useState(false);
   const [imageFidelity, setImageFidelity] = useState<number | null>(null);
@@ -5085,6 +5086,11 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
         if (genInfo.artPresetId) setArtPresetId(genInfo.artPresetId);
       }
       setSelectedAspectRatio(assetsQuery.data.generationInfo?.aspectRatio || project?.outputFormat?.aspectRatio || "16:9");
+      const hydratedDuration =
+        Number(assetsQuery.data.project?.totalDuration) ||
+        Number(project?.totalDuration) ||
+        6;
+      setSelectedDuration(Math.max(3, Math.min(30, Math.round(hydratedDuration))));
       if (assetsQuery.data.voiceover?.narrationText) {
         setNarrationText(assetsQuery.data.voiceover.narrationText);
       }
@@ -5118,6 +5124,9 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
         negativePrompt: negativePrompt,
         aspectRatio: selectedAspectRatio || undefined,
       };
+      if (project.mediaMode !== "image" && Number.isFinite(selectedDuration) && selectedDuration > 0) {
+        body.duration = selectedDuration;
+      }
       if (imageFidelity !== null) {
         body.imageFidelity = imageFidelity;
       }
@@ -5794,6 +5803,43 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
                 ))}
               </div>
             </div>
+
+            {project.mediaMode !== "image" && (
+              <div className="mb-3">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5 text-purple-400" />
+                    <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>Video Length</span>
+                  </div>
+                  <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>
+                    Longer clips cost more and take longer to render
+                  </span>
+                </div>
+                <div className="flex gap-2">
+                  {([
+                    { value: 5, label: "5s", sublabel: "Snappy" },
+                    { value: 6, label: "6s", sublabel: "Default" },
+                    { value: 8, label: "8s", sublabel: "Detailed" },
+                    { value: 10, label: "10s", sublabel: "Extended" },
+                  ] as const).map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setSelectedDuration(opt.value)}
+                      className="flex-1 rounded-lg border-2 py-2 px-2 transition-all text-center"
+                      data-testid={`duration-${opt.value}`}
+                      style={{
+                        backgroundColor: selectedDuration === opt.value ? "rgba(139, 92, 246, 0.15)" : "var(--surface)",
+                        borderColor: selectedDuration === opt.value ? "rgb(139, 92, 246)" : "var(--border-subtle)",
+                      }}
+                    >
+                      <span className="text-[13px] font-semibold block" style={{ color: "var(--text-primary)" }}>{opt.label}</span>
+                      <span className="text-[9px] block" style={{ color: "var(--text-muted)" }}>{opt.sublabel}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="space-y-2.5">
               <div>
