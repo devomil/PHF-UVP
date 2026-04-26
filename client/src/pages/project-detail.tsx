@@ -5091,8 +5091,15 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
         Number(project?.totalDuration) ||
         6;
       setSelectedDuration(Math.max(3, Math.min(30, Math.round(hydratedDuration))));
-      if (assetsQuery.data.voiceover?.narrationText) {
-        setNarrationText(assetsQuery.data.voiceover.narrationText);
+      const savedNarration = assetsQuery.data.voiceover?.narrationText;
+      if (savedNarration) {
+        setNarrationText(savedNarration);
+      } else {
+        const fallbackNarration =
+          assetsQuery.data.project?.prompt ||
+          (project as any)?.description ||
+          "";
+        if (fallbackNarration) setNarrationText(fallbackNarration);
       }
       initializedRef.current = true;
     }
@@ -5947,17 +5954,25 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
                 )}
 
                 <div className="mb-3">
-                  <label className="text-xs font-medium block mb-1.5" style={{ color: "var(--text-secondary)" }}>Narration Script</label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>Narration Script</label>
+                    {assets.voiceover?.narrationText && narrationText !== assets.voiceover.narrationText && (
+                      <span className="text-[10px] text-amber-400">Edited — regenerate to apply</span>
+                    )}
+                  </div>
                   <textarea
                     value={narrationText}
                     onChange={(e) => setNarrationText(e.target.value)}
                     placeholder="Type what the narrator should say... (e.g. &quot;Welcome to Pine Hill&quot;)"
-                    rows={2}
-                    className="w-full rounded-lg border px-3 py-2 text-sm resize-none"
-                    style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-medium)", color: "var(--text-primary)" }}
+                    rows={5}
+                    data-testid="narration-script"
+                    className="w-full rounded-lg border px-3 py-2 text-sm leading-relaxed resize-y"
+                    style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-medium)", color: "var(--text-primary)", minHeight: "5rem" }}
                   />
                   <p className="text-[10px] mt-1" style={{ color: "var(--text-muted)" }}>
-                    {narrationText.trim() ? `${narrationText.trim().split(/\s+/).length} words` : "Leave empty to use the visual prompt as narration"}
+                    {narrationText.trim()
+                      ? `${narrationText.trim().split(/\s+/).length} words · edit freely, then click Generate Voiceover to apply`
+                      : "Leave empty to use the visual prompt as narration"}
                   </p>
                 </div>
 
