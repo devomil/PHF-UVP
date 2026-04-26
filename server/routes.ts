@@ -1395,6 +1395,111 @@ export async function registerRoutes(app: Express) {
     }
   });
 
+  app.post("/api/projects/:projectId/quick-create/suggest-narration", async (req, res) => {
+    try {
+      if (!req.isAuthenticated() || !req.user) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+      const { projectId } = req.params;
+      const userId = (req.user as any).id;
+
+      const [project] = await db
+        .select()
+        .from(universalVideoProjects)
+        .where(eq(universalVideoProjects.projectId, projectId))
+        .limit(1);
+
+      if (!project || project.ownerId !== userId) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+
+      const outputFormat = (project.outputFormat as any) || {};
+      if (outputFormat.platform !== "quick-create") {
+        return res.status(400).json({ error: "Not a Quick Create project" });
+      }
+
+      const visualPrompt = (project.description || "").trim();
+      if (!visualPrompt) {
+        return res.status(400).json({ error: "Project has no visual prompt to base narration on" });
+      }
+
+      const aspectRatio: string = outputFormat.aspectRatio || "16:9";
+      const durationSec: number = Math.max(3, Math.min(60, Math.round(Number(project.totalDuration) || 6)));
+      const isVertical = aspectRatio === "9:16" || aspectRatio === "1:1";
+      // Voice-over pacing ≈ 2.4 words/sec for energetic delivery, 2.0 for calm
+      const targetWords = Math.max(8, Math.round(durationSec * (isVertical ? 2.4 : 2.1)));
+      const minWords = Math.max(6, Math.round(targetWords * 0.8));
+      const maxWords = Math.round(targetWords * 1.15);
+
+      const { llmClient } = await import("./services/piapi-llm-client");
+      if (!llmClient.isAvailable()) {
+        return res.status(503).json({ error: "AI service is not configured. Set PIAPI_API_KEY or ANTHROPIC_API_KEY." });
+      }
+
+      const platformHint = isVertical
+        ? "TikTok / Reels / Shorts vertical-video viewer (high-retention, hook-first, scroll-stopping)"
+        : "YouTube / web horizontal-video viewer (clear, confident, conversion-oriented)";
+
+      const systemPrompt = `You are a senior short-form video copywriter who has written hundreds of high-retention scripts for TikTok, Instagram Reels, YouTube Shorts and DTC product videos. You write punchy, conversational voice-over scripts that:
+- open with a 1-line scroll-stopping hook
+- speak directly to the viewer in second person
+- use short, rhythmic sentences (4–10 words each)
+- weave in 1 specific benefit or surprising detail
+- end with a clear, low-friction CTA
+- never use hashtags, emojis, stage directions, or speaker labels
+- never describe the video — only the words the narrator should say
+
+Return ONLY the narration text. No quotes, no preamble, no explanations.`;
+
+      const userPrompt = `Write a ${durationSec}-second voice-over script (~${minWords}-${maxWords} words) for this ${platformHint}.
+
+The video shows / is about:
+"""
+${visualPrompt}
+"""
+
+Hard rules:
+- Plain text only. No markdown, no quotes, no lists.
+- Aim for ${targetWords} words total (≈ ${durationSec}s when read at a natural energetic pace).
+- Open with a hook in the first 6 words.
+- End with a single CTA sentence.
+- Sound like a human, not a press release.
+
+Output the script and nothing else.`;
+
+      const result = await llmClient.createChatCompletion({
+        systemPrompt,
+        messages: [{ role: "user", content: userPrompt }],
+        maxTokens: 600,
+        temperature: 0.9,
+      });
+
+      let script = (result.text || "").trim();
+      // Strip surrounding quotes the model sometimes adds despite instructions
+      script = script.replace(/^["'`]+|["'`]+$/g, "").trim();
+      // Collapse leading "Narrator:" / "Script:" labels just in case
+      script = script.replace(/^(narrator|script|voiceover|vo)\s*[:\-—]\s*/i, "").trim();
+
+      if (!script) {
+        return res.status(502).json({ error: "AI returned an empty script. Try again." });
+      }
+
+      const wordCount = script.split(/\s+/).filter(Boolean).length;
+      console.log(`[QuickCreate] Suggested narration: ${wordCount} words via ${result.provider}`);
+
+      return res.json({
+        script,
+        wordCount,
+        targetWords,
+        durationSec,
+        provider: result.provider,
+      });
+    } catch (error: any) {
+      console.error("[QuickCreate] Failed to suggest narration:", error?.message || error);
+      return res.status(500).json({ error: error?.message || "Failed to suggest narration" });
+    }
+  });
+
   app.post("/api/projects/:projectId/quick-create/generate-music", async (req, res) => {
     try {
       if (!req.isAuthenticated() || !req.user) {

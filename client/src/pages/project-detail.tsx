@@ -5184,6 +5184,32 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
     },
   });
 
+  const suggestNarrationMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/projects/${projectId}/quick-create/suggest-narration`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({}),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "Failed to suggest narration");
+      return data as { script: string; wordCount: number };
+    },
+    onSuccess: (data) => {
+      if (data?.script) {
+        setNarrationText(data.script);
+        toast({
+          title: "Narration suggested",
+          description: `${data.wordCount} words tailored to your prompt. Edit it, then click Generate Voiceover.`,
+        });
+      }
+    },
+    onError: (err: Error) => {
+      toast({ title: "Could not suggest narration", description: err.message, variant: "destructive" });
+    },
+  });
+
   const generateVoiceoverMutation = useMutation({
     mutationFn: async () => {
       const res = await fetch(`/api/projects/${projectId}/quick-create/generate-voiceover`, {
@@ -5954,11 +5980,38 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
                 )}
 
                 <div className="mb-3">
-                  <div className="flex items-center justify-between mb-1.5">
+                  <div className="flex items-center justify-between mb-1.5 gap-2">
                     <label className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>Narration Script</label>
-                    {assets.voiceover?.narrationText && narrationText !== assets.voiceover.narrationText && (
-                      <span className="text-[10px] text-amber-400">Edited — regenerate to apply</span>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {assets.voiceover?.narrationText && narrationText !== assets.voiceover.narrationText && (
+                        <span className="text-[10px] text-amber-400">Edited — regenerate to apply</span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => suggestNarrationMutation.mutate()}
+                        disabled={suggestNarrationMutation.isPending || !(promptText || (project as any)?.description)}
+                        title="Have AI write a punchy, on-brand narration script from your visual prompt"
+                        data-testid="suggest-narration"
+                        className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-1 rounded-md border transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        style={{
+                          borderColor: "rgba(139, 92, 246, 0.4)",
+                          color: "rgb(196, 181, 253)",
+                          backgroundColor: "rgba(139, 92, 246, 0.08)",
+                        }}
+                      >
+                        {suggestNarrationMutation.isPending ? (
+                          <>
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                            Writing…
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="w-3 h-3" />
+                            AI Suggest
+                          </>
+                        )}
+                      </button>
+                    </div>
                   </div>
                   <textarea
                     value={narrationText}
