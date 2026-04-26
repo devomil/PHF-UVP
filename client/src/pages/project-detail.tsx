@@ -3243,7 +3243,7 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
       queryClient.invalidateQueries({ queryKey: ["quick-create-assets", projectId] });
       queryClient.invalidateQueries({ queryKey: ["quick-create-assets-render", projectId] });
       queryClient.invalidateQueries({ queryKey: ["render-settings", projectId] });
-      queryClient.invalidateQueries({ queryKey: [`/api/universal-video/projects/${projectId}`] });
+      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
       toast({
         title: "Narration shortened",
         description: `New script is ${data?.wordCount} words${data?.targetWords ? ` (target ~${data.targetWords})` : ""}. The Voiceover editor was updated — click Regenerate Voiceover to re-record.`,
