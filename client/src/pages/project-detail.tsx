@@ -5381,7 +5381,7 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
   const [narrationTone, setNarrationTone] = useState<"punchy" | "educational" | "story">("punchy");
 
   const suggestNarrationMutation = useMutation({
-    mutationFn: async (opts?: { tone?: "punchy" | "educational" | "story"; durationSec?: number }) => {
+    mutationFn: async (opts?: { tone?: "punchy" | "educational" | "story"; durationSec?: number; auto?: boolean }) => {
       const tone = opts?.tone || narrationTone;
       const body: Record<string, unknown> = { tone };
       if (opts?.durationSec && Number.isFinite(opts.durationSec)) {
@@ -5397,13 +5397,18 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
       if (!res.ok) throw new Error(data?.error || "Failed to suggest narration");
       return data as { script: string; wordCount: number; targetWords?: number };
     },
-    onSuccess: (data) => {
+    onSuccess: (data, variables) => {
       if (data?.script) {
         setNarrationText(data.script);
-        toast({
-          title: "Narration suggested",
-          description: `${data.wordCount} words${data.targetWords ? ` (target ~${data.targetWords})` : ""}. Edit freely, then click Generate Voiceover.`,
-        });
+        // When chained from "Shorten narration to fit", suppress the per-step
+        // toast because the caller already shows a combined toast and will
+        // immediately kick off voiceover regeneration.
+        if (!variables?.auto) {
+          toast({
+            title: "Narration suggested",
+            description: `${data.wordCount} words${data.targetWords ? ` (target ~${data.targetWords})` : ""}. Edit freely, then click Generate Voiceover.`,
+          });
+        }
       }
     },
     onError: (err: Error) => {
@@ -5439,24 +5444,34 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
   });
 
   const generateVoiceoverMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (opts?: { narrationText?: string; silentToast?: boolean }) => {
+      // Allow callers to pass an explicit script (e.g. when chaining after
+      // "Shorten narration to fit") because React state updates are async and
+      // the local `narrationText` may not yet reflect the freshly suggested
+      // script when this mutation is invoked.
+      const text = (opts?.narrationText ?? narrationText).trim() || promptText;
       const res = await fetch(`/api/projects/${projectId}/quick-create/generate-voiceover`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ narrationText: narrationText.trim() || promptText, voiceId: selectedVoiceId, tone: narrationTone }),
+        body: JSON.stringify({ narrationText: text, voiceId: selectedVoiceId, tone: narrationTone }),
       });
       if (!res.ok) throw new Error("Failed to start voiceover generation");
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["quick-create-assets", projectId] });
       queryClient.invalidateQueries({ queryKey: ["quick-create-assets-render", projectId] });
       queryClient.invalidateQueries({ queryKey: ["render-settings", projectId] });
       queryClient.invalidateQueries({ queryKey: ["project", projectId] });
-      toast({ title: "Voiceover Generation Started", description: "Your voiceover is being generated." });
+      if (!variables?.silentToast) {
+        toast({ title: "Voiceover Generation Started", description: "Your voiceover is being generated." });
+      }
     },
-    onError: (err: Error) => {
+    onError: (err: Error, variables) => {
+      // When called from the chained "Shorten narration & re-record" flow,
+      // the caller surfaces its own combined recovery toast — don't double up.
+      if (variables?.silentToast) return;
       toast({ title: "Error", description: err.message, variant: "destructive" });
     },
   });
@@ -6418,8 +6433,46 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
                             {audioLonger && (
                               <button
                                 type="button"
-                                onClick={() => suggestNarrationMutation.mutate({ tone: narrationTone, durationSec: videoDur })}
-                                disabled={suggestNarrationMutation.isPending}
+                                onClick={async () => {
+                                  // Single click should resolve the mismatch end-to-end:
+                                  // (1) shorten the script, then (2) immediately
+                                  // re-record the voiceover with the new script.
+                                  toast({
+                                    title: "Shortening script and re-recording voiceover…",
+                                    description: "We're rewriting the narration to fit the video, then regenerating the voiceover.",
+                                  });
+                                  let suggested: { script: string; wordCount: number; targetWords?: number } | undefined;
+                                  try {
+                                    suggested = await suggestNarrationMutation.mutateAsync({
+                                      tone: narrationTone,
+                                      durationSec: videoDur,
+                                      auto: true,
+                                    });
+                                  } catch {
+                                    // Error toast already shown by suggestNarrationMutation.onError.
+                                    return;
+                                  }
+                                  if (!suggested?.script) return;
+                                  try {
+                                    await generateVoiceoverMutation.mutateAsync({
+                                      narrationText: suggested.script,
+                                      silentToast: true,
+                                    });
+                                    toast({
+                                      title: "Narration shortened, voiceover re-recording",
+                                      description: `New script is ${suggested.wordCount} words${suggested.targetWords ? ` (target ~${suggested.targetWords})` : ""}. The voiceover is being regenerated.`,
+                                    });
+                                  } catch {
+                                    // The script shortening already succeeded — surface a
+                                    // recovery hint so the user can retry the regenerate.
+                                    toast({
+                                      title: "Voiceover regeneration failed",
+                                      description: "The script was shortened, but we couldn't kick off the new voiceover. Click Regenerate Voiceover to try again.",
+                                      variant: "destructive",
+                                    });
+                                  }
+                                }}
+                                disabled={suggestNarrationMutation.isPending || generateVoiceoverMutation.isPending || assets.voiceover?.status === "generating"}
                                 data-testid="shorten-narration-to-fit"
                                 className="inline-flex items-center gap-1 text-[11px] font-medium px-2.5 py-1 rounded-md border transition-colors disabled:opacity-50"
                                 style={{
@@ -6428,18 +6481,18 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
                                   backgroundColor: "rgba(139, 92, 246, 0.12)",
                                 }}
                               >
-                                {suggestNarrationMutation.isPending ? (
+                                {(suggestNarrationMutation.isPending || generateVoiceoverMutation.isPending) ? (
                                   <Loader2 className="w-3 h-3 animate-spin" />
                                 ) : (
                                   <Sparkles className="w-3 h-3" />
                                 )}
-                                Shorten narration to fit
+                                Shorten narration & re-record
                               </button>
                             )}
                           </div>
                           {audioLonger && (
                             <p className="text-[10px] mt-2" style={{ color: "var(--text-muted)" }}>
-                              Tip: after shortening the script, click Regenerate Voiceover to re-render the audio.
+                              Tip: shortening the script will automatically re-record the voiceover with your selected voice.
                             </p>
                           )}
                         </div>
@@ -6449,7 +6502,7 @@ function QuickCreateAssetPanel({ projectId, project }: { projectId: string; proj
                 })()}
 
                 <Button
-                  onClick={() => generateVoiceoverMutation.mutate()}
+                  onClick={() => generateVoiceoverMutation.mutate(undefined)}
                   disabled={generateVoiceoverMutation.isPending || assets.voiceover?.status === "generating"}
                   variant="outline"
                   size="sm"
