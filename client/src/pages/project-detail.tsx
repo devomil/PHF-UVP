@@ -3176,7 +3176,8 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
   };
 
   const generateStepMutation = useMutation({
-    mutationFn: async (step: string) => {
+    mutationFn: async (args: string | { step: string; silentToast?: boolean }) => {
+      const step = typeof args === "string" ? args : args.step;
       const res = await fetch(`/api/universal-video/projects/${projectId}/generate-step`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -3186,13 +3187,21 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
       if (!res.ok) throw new Error(`Failed to generate ${step}`);
       return res.json();
     },
-    onSuccess: (_data, step) => {
+    onSuccess: (_data, args) => {
+      const step = typeof args === "string" ? args : args.step;
+      const silent = typeof args === "object" && !!args.silentToast;
       queryClient.invalidateQueries({ queryKey: ["project", projectId] });
       queryClient.invalidateQueries({ queryKey: ["render-settings", projectId] });
       queryClient.invalidateQueries({ queryKey: ["quick-create-assets-render", projectId] });
-      toast({ title: "Generation Started", description: `${step.charAt(0).toUpperCase() + step.slice(1)} generation started.` });
+      if (!silent) {
+        toast({ title: "Generation Started", description: `${step.charAt(0).toUpperCase() + step.slice(1)} generation started.` });
+      }
     },
-    onError: (err: Error) => {
+    onError: (err: Error, args) => {
+      // When chained from "Shorten narration & re-record", the caller surfaces
+      // its own combined recovery toast — don't double up.
+      const silent = typeof args === "object" && !!args.silentToast;
+      if (silent) return;
       toast({ title: "Error", description: err.message, variant: "destructive" });
     },
   });
@@ -3223,9 +3232,11 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
   });
 
   // "Shorten narration to fit" from the Render Config tile. Persists script
-  // server-side so the Voiceover editor picks up the rewrite.
+  // server-side so the Voiceover editor picks up the rewrite. When `auto` is
+  // set, the chained "Shorten narration & re-record" caller suppresses the
+  // per-step toast and shows a single combined toast instead.
   const suggestNarrationMutation = useMutation({
-    mutationFn: async (args: { durationSec?: number; tone?: "punchy" | "educational" | "story" }) => {
+    mutationFn: async (args: { durationSec?: number; tone?: "punchy" | "educational" | "story"; auto?: boolean }) => {
       const body: Record<string, unknown> = { persist: true };
       if (args.durationSec && Number.isFinite(args.durationSec)) body.durationSec = args.durationSec;
       if (args.tone === "punchy" || args.tone === "educational" || args.tone === "story") body.tone = args.tone;
@@ -3239,15 +3250,17 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
       if (!res.ok) throw new Error(data?.error || "Failed to shorten narration");
       return data as { script: string; wordCount: number; targetWords?: number; persisted?: boolean };
     },
-    onSuccess: (data) => {
+    onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["quick-create-assets", projectId] });
       queryClient.invalidateQueries({ queryKey: ["quick-create-assets-render", projectId] });
       queryClient.invalidateQueries({ queryKey: ["render-settings", projectId] });
       queryClient.invalidateQueries({ queryKey: ["project", projectId] });
-      toast({
-        title: "Narration shortened",
-        description: `New script is ${data?.wordCount} words${data?.targetWords ? ` (target ~${data.targetWords})` : ""}. The Voiceover editor was updated — click Regenerate Voiceover to re-record.`,
-      });
+      if (!variables?.auto) {
+        toast({
+          title: "Narration shortened",
+          description: `New script is ${data?.wordCount} words${data?.targetWords ? ` (target ~${data.targetWords})` : ""}. The Voiceover editor was updated — click Regenerate Voiceover to re-record.`,
+        });
+      }
     },
     onError: (err: Error) => {
       toast({ title: "Could not shorten narration", description: err.message, variant: "destructive" });
@@ -3482,8 +3495,44 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
                               {audioLonger && (
                                 <button
                                   type="button"
-                                  onClick={() => suggestNarrationMutation.mutate({ durationSec: videoDur, tone: quickAssets.voiceover?.tone || "punchy" })}
-                                  disabled={suggestNarrationMutation.isPending || isProjectGenerating}
+                                  onClick={async () => {
+                                    // Single click should resolve the mismatch end-to-end:
+                                    // (1) shorten the script (persisted server-side), then
+                                    // (2) immediately re-record the voiceover using the
+                                    // project's currently selected voice and tone.
+                                    toast({
+                                      title: "Shortening script and re-recording voiceover…",
+                                      description: "We're rewriting the narration to fit the video, then regenerating the voiceover.",
+                                    });
+                                    let suggested: { script: string; wordCount: number; targetWords?: number } | undefined;
+                                    try {
+                                      suggested = await suggestNarrationMutation.mutateAsync({
+                                        durationSec: videoDur,
+                                        tone: quickAssets.voiceover?.tone || "punchy",
+                                        auto: true,
+                                      });
+                                    } catch {
+                                      // Error toast already shown by suggestNarrationMutation.onError.
+                                      return;
+                                    }
+                                    if (!suggested?.script) return;
+                                    try {
+                                      await generateStepMutation.mutateAsync({ step: "voiceover", silentToast: true });
+                                      toast({
+                                        title: "Narration shortened, voiceover re-recording",
+                                        description: `New script is ${suggested.wordCount} words${suggested.targetWords ? ` (target ~${suggested.targetWords})` : ""}. The voiceover is being regenerated.`,
+                                      });
+                                    } catch {
+                                      // The script shortening already succeeded — surface a
+                                      // recovery hint so the user can retry the regenerate.
+                                      toast({
+                                        title: "Voiceover regeneration failed",
+                                        description: "The script was shortened, but we couldn't kick off the new voiceover. Click Regenerate Voiceover to try again.",
+                                        variant: "destructive",
+                                      });
+                                    }
+                                  }}
+                                  disabled={suggestNarrationMutation.isPending || generateStepMutation.isPending || isProjectGenerating}
                                   data-testid="render-shorten-narration-to-fit"
                                   className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded border transition-colors disabled:opacity-50"
                                   style={{
@@ -3491,9 +3540,9 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
                                     color: "rgb(216, 201, 253)",
                                     backgroundColor: "rgba(139, 92, 246, 0.12)",
                                   }}
-                                  title="Re-write the narration script to fit the current video length. You'll need to regenerate the voiceover afterward."
+                                  title="Re-write the narration script to fit the current video length and automatically re-record the voiceover."
                                 >
-                                  {suggestNarrationMutation.isPending ? (
+                                  {(suggestNarrationMutation.isPending || generateStepMutation.isPending) ? (
                                     <Loader2 className="w-3 h-3 animate-spin" />
                                   ) : (
                                     <Sparkles className="w-3 h-3" />
