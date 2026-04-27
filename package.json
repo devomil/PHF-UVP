@@ -65,6 +65,9 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.18",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
     "@types/bcrypt": "^5.0.2",
     "@types/connect-pg-simple": "^7.0.3",
     "@types/express": "^5.0.6",
@@ -78,6 +81,7 @@
     "@vitejs/plugin-react": "^4.7.0",
     "drizzle-kit": "^0.30.6",
     "esbuild": "^0.24.2",
+    "jsdom": "^25.0.1",
     "tailwindcss": "^4.1.18",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",

@@ -5189,7 +5189,7 @@ const ELEVENLABS_VOICES = [
   { id: "knrPHWnBmmDHMoiMeP3l", name: "Santa Claus", gender: "male", description: "Jolly, festive", accent: "American", useCase: "Christmas" },
 ];
 
-function QuickCreateAssetPanel({ projectId, project }: { projectId: string; project: any }) {
+export function QuickCreateAssetPanel({ projectId, project }: { projectId: string; project: any }) {
   const [expanded, setExpanded] = useState(true);
   const [promptText, setPromptText] = useState("");
   const [selectedProvider, setSelectedProvider] = useState("auto");
