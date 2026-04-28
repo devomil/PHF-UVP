@@ -478,11 +478,15 @@ export async function generateAllSceneImages(
     }
   }
 
-  // Bounded parallelism — fire scenes in parallel with a fixed concurrency
-  // so we don't open dozens of NB2 sockets at once or DOS Claude Vision.
-  // Concurrency 4 keeps wall-clock low while staying inside provider QPS.
+  // Concurrency: defaults to 1 (serial) because each `generateSceneImage`
+  // does a full-array JSONB read-modify-write on `universalVideoProjects.scenes`
+  // (twice: "mark generating" then "persist winner"). Without per-row CAS or
+  // a `jsonb_set` patch, parallel workers can lose each other's writes by
+  // overwriting the entire array with stale data. Operators who have audited
+  // their write contention can opt into bounded parallelism by setting
+  // STORYBOARD_BATCH_CONCURRENCY (clamped 1..8).
   const CONCURRENCY = Math.max(1, Math.min(
-    parseInt(process.env.STORYBOARD_BATCH_CONCURRENCY || '4', 10) || 4,
+    parseInt(process.env.STORYBOARD_BATCH_CONCURRENCY || '1', 10) || 1,
     8,
   ));
 

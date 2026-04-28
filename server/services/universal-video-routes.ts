@@ -3567,7 +3567,12 @@ router.post('/projects/:projectId/generate-storyboard', isAuthenticated, async (
     if ((projectData as any).ownerId !== userId) return res.status(403).json({ success: false, error: 'Access denied' });
 
     const skipExisting = req.body?.skipExisting !== false;
-    const numCandidates = typeof req.body?.numCandidates === 'number' ? req.body.numCandidates : 3;
+    // Clamp at the route boundary so the preflight estimate and the worker
+    // path agree on cost — otherwise a malformed numCandidates=99 from the
+    // client would inflate the estimate and trigger a spurious 402 even
+    // though the worker would have generated only 4 per scene.
+    const rawN = typeof req.body?.numCandidates === 'number' ? req.body.numCandidates : 3;
+    const numCandidates = Math.max(1, Math.min(rawN, 4));
     const confirmOverCap = req.body?.confirmOverCap === true;
 
     const { estimateBatchCost, generateAllSceneImages } = await import('./scene-image.service');
