@@ -351,6 +351,20 @@ export async function generateSceneImage(
         thumbnailStatus: 'failed',
         thumbnailError: flErr.message || String(flErr),
       });
+      // Structured failure telemetry — same schema as the success log so log
+      // aggregators can index on `status` to slice failed vs completed runs.
+      console.log('[SceneImage]', JSON.stringify({
+        sceneId,
+        projectId,
+        status: 'failed',
+        model: 'none',
+        candidateCount: 0,
+        qaScores: [],
+        selectedIndex: -1,
+        cost: Number(cost.toFixed(4)),
+        durationMs: Date.now() - startedAt,
+        error: flErr.message || String(flErr),
+      }));
       throw new Error(`All providers failed: ${flErr.message}`);
     }
   }
