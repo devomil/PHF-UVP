@@ -11,6 +11,8 @@ export default defineConfig({
       'remotion/**/*.test.ts',
       'client/src/**/*.test.{ts,tsx}',
       'client/src/__tests__/**/*.{test,spec}.{ts,tsx}',
+      'shared/**/*.test.ts',
+      'shared/**/__tests__/**/*.test.ts',
     ],
   },
   resolve: {
