@@ -91,18 +91,32 @@ export interface ReferenceSource {
 
 export async function resolveProductReferenceSource(
   productImages: ProductImage[] | undefined,
+  userId: string | undefined,
 ): Promise<ReferenceSource | undefined> {
   const primary = pickPrimaryProductImage(productImages);
   if (primary) {
     return { url: primary.url, name: primary.name, origin: 'project-product' };
   }
-  // Fallback: any global default brand-library image.
+  // Fallback: this user's own default brand-library image.
+  //
+  // SECURITY: brand-media is per-user (brandMediaLibrary.uploadedBy is the
+  // owning user). We MUST filter by uploadedBy here — otherwise project A
+  // owned by user X could auto-attach user Y's "default" brand image,
+  // leaking private brand media across tenants. Without a userId we refuse
+  // to fall back at all.
+  if (!userId) {
+    console.warn(
+      `[OmniRef] resolveProductReferenceSource: no userId supplied — refusing default-brand-asset fallback to avoid cross-tenant leakage.`,
+    );
+    return undefined;
+  }
   try {
     const rows = await db
       .select()
       .from(brandMediaLibrary)
       .where(
         and(
+          eq(brandMediaLibrary.uploadedBy, userId),
           eq(brandMediaLibrary.mediaType, 'image'),
           eq(brandMediaLibrary.isDefault, true),
           eq(brandMediaLibrary.isActive, true),
@@ -158,8 +172,9 @@ export function applyProductReferencesToScenes(
 export async function applyProductReferencesToScenesWithFallback(
   scenes: Scene[],
   productImages: ProductImage[] | undefined,
+  userId: string | undefined,
 ): Promise<ApplyProductReferencesResult> {
-  const source = await resolveProductReferenceSource(productImages);
+  const source = await resolveProductReferenceSource(productImages, userId);
   if (!source) {
     return {
       scenes,

@@ -1624,18 +1624,25 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
                                 type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  setExpandedSceneId(sceneId);
-                                  toast({
-                                    title: 'Scene opened — re-anchor available',
-                                    description: 'Use the Brand References panel below to re-generate with stronger anchoring.',
-                                  });
+                                  // Phase 20C: directly trigger video regen for
+                                  // this scene. The existing brandReferences[]
+                                  // are already attached and will be sent
+                                  // through the omni_reference path on the next
+                                  // render — this IS the "stronger anchoring"
+                                  // pass relative to whatever produced the
+                                  // current frame (which may have been a
+                                  // legacy single-ref or a non-Seedance
+                                  // provider). No editor open required.
+                                  if (regenVideoMutation.isPending) return;
+                                  regenVideoMutation.mutate(sceneId);
                                 }}
-                                className="text-[10px] px-1.5 py-0.5 rounded hover:bg-green-500/15 transition-colors underline-offset-2 hover:underline"
+                                disabled={regenVideoMutation.isPending}
+                                className="text-[10px] px-1.5 py-0.5 rounded hover:bg-green-500/15 transition-colors underline-offset-2 hover:underline disabled:opacity-50"
                                 style={{ color: 'rgb(74,222,128)' }}
                                 data-testid={`scene-card-reanchor-${sceneId}`}
-                                title="Open this scene to re-generate with stronger brand anchoring"
+                                title="Re-generate this scene with the attached brand references for stronger anchoring"
                               >
-                                Re-anchor
+                                {regenVideoMutation.isPending ? 'Re-anchoring…' : 'Re-anchor'}
                               </button>
                             </div>
                           );

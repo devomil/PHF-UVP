@@ -2003,16 +2003,18 @@ router.post('/projects/:projectId/apply-product-references', isAuthenticated, as
     }
 
     const productImages = (projectData as any)?.assets?.productImages as
-      | Array<{ id?: string; url: string; name?: string; isPrimary?: boolean }>
+      | ProductImage[]
       | undefined;
 
-    // Phase 20C: spec — when the project has no productImages, fall back to a
-    // global default brand-media image (mediaType=image, isDefault=true). The
-    // resolver inside the helper handles the fallback automatically.
+    // Phase 20C: spec — when the project has no productImages, fall back to
+    // THIS USER'S OWN default brand-media image (mediaType=image, isDefault=true,
+    // uploadedBy=userId). The resolver inside the helper enforces tenant
+    // isolation when the userId is provided.
     const { applyProductReferencesToScenesWithFallback } = await import('./brand-reference-helpers');
     const result = await applyProductReferencesToScenesWithFallback(
       projectData.scenes as Scene[],
       productImages,
+      (projectData as any).ownerId || userId,
     );
 
     if (!result.primaryAsset) {
@@ -6578,13 +6580,33 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, asy
         const { buildOmniReferencePrompt } = await import('../../shared/omni-reference-prompt');
         const projectAR = (projectData as any).outputFormat?.aspectRatio || (projectData as any).settings?.aspectRatio || '16:9';
 
-        // Resolve every reference URL to a public URL (signed, padded to project AR).
-        const resolvedRefUrls: string[] = [];
-        for (const ref of sceneBrandRefs) {
-          if (!ref?.assetUrl) continue;
+        // Resolve every reference URL to a public URL (signed, padded to
+        // project AR). CRITICAL: keep refs and resolved URLs aligned by index.
+        // If we compacted resolvedRefUrls (skipping failed resolutions) then
+        // re-mapped them positionally onto sceneBrandRefs, a single failed
+        // middle ref would shift every later ref onto the wrong @imageN slot,
+        // pairing the wrong URL with the wrong tag. Build parallel pairs and
+        // drop both sides together when a resolution fails, then renumber the
+        // tags so the prompt matches the surviving order exactly.
+        const resolvedPairs: Array<{
+          ref: { assetId?: number; assetUrl: string; tag?: string; label?: string };
+          url: string;
+          originalIndex: number;
+        }> = [];
+        for (let i = 0; i < sceneBrandRefs.length; i++) {
+          const ref = sceneBrandRefs[i];
+          if (!ref?.assetUrl) {
+            console.warn(`[OmniRef] Scene ${sceneId}: ref ${i + 1} has no assetUrl — dropping from omni payload.`);
+            continue;
+          }
           const publicUrl = await getPublicUrlForBrandAsset(ref.assetUrl, projectAR);
-          if (publicUrl) resolvedRefUrls.push(publicUrl);
+          if (!publicUrl) {
+            console.warn(`[OmniRef] Scene ${sceneId}: ref ${i + 1} (assetId=${ref.assetId ?? 'n/a'}) failed URL resolution — dropping from omni payload to keep tag/image alignment.`);
+            continue;
+          }
+          resolvedPairs.push({ ref, url: publicUrl, originalIndex: i });
         }
+        const resolvedRefUrls = resolvedPairs.map((p) => p.url);
 
         if (resolvedRefUrls.length > 0) {
           // Provider gating per spec: omni_reference (multi-image tagged path)
@@ -6600,20 +6622,24 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, asy
 
           if (isSeedance2) {
             // Full omni_reference path: tag prompt + pass all refs in tag order.
+            // Tags are RENUMBERED to the surviving (resolved) order so the
+            // prompt's @image1..@imageN positions always line up with
+            // finalSourceImageUrls[0..N-1].
             const omni = buildOmniReferencePrompt({
               basePrompt: effectivePrompt,
-              references: sceneBrandRefs.map((r, i) => ({
-                assetId: r.assetId,
-                assetUrl: resolvedRefUrls[i] ?? r.assetUrl,
-                tag: r.tag || `image${i + 1}`,
-                label: r.label,
+              references: resolvedPairs.map((p, i) => ({
+                assetId: p.ref.assetId,
+                assetUrl: p.url,
+                tag: `image${i + 1}`,
+                label: p.ref.label,
               })),
               verbose: true,
             });
             finalPromptForJob = omni.prompt;
             finalSourceImageUrls = resolvedRefUrls;
             if (!finalSourceImageUrl) finalSourceImageUrl = resolvedRefUrls[0];
-            console.log(`[OmniRef] Scene ${sceneId}: omni_reference path armed with ${resolvedRefUrls.length} reference(s), tagged prompt: "${finalPromptForJob.substring(0, 120)}..."`);
+            const droppedCount = sceneBrandRefs.length - resolvedPairs.length;
+            console.log(`[OmniRef] Scene ${sceneId}: omni_reference path armed with ${resolvedRefUrls.length} reference(s)${droppedCount > 0 ? ` (${droppedCount} ref(s) dropped due to URL resolution failures — tags renumbered to keep alignment)` : ''}, tagged prompt: "${finalPromptForJob.substring(0, 120)}..."`);
           } else {
             // Spec safety-net: provider is non-Seedance-2. Do NOT tag the prompt
             // and do NOT pass multiple refs. Fall back to legacy single-ref:
@@ -7789,6 +7815,7 @@ router.post('/:projectId/regenerate-all-videos', isAuthenticated, async (req: Re
         const autoApply = await applyProductReferencesToScenesWithFallback(
           projectData.scenes as Scene[],
           productImages,
+          (projectData as any).ownerId,
         );
         if (autoApply.attachedCount > 0) {
           // CRITICAL: write the mutated scenes back onto the project (and refresh
