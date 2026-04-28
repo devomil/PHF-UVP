@@ -86,6 +86,81 @@ describe('scene-image.service: generateSceneImage', () => {
     expect(r.cost).toBeCloseTo(0.09, 5);
   });
 
+  it('short-circuits without spending when fingerprint matches existing thumbnail+seed', async () => {
+    const cachedScene = sceneFactory({
+      thumbnailUrl: 'https://cdn.test/cached.png',
+      seedImageUrl: 'https://cdn.test/cached.png',
+      thumbnailGeneratedFor: 'cinematic::A serene meadow at sunset with a person walking',
+      thumbnailStatus: 'complete',
+      imageGenerationModel: 'nano-banana-2',
+      imageGenerationPrompt: 'cinematic, A serene meadow at sunset with a person walking, film grain',
+      imageCandidates: [{ url: 'https://cdn.test/cached.png', score: 0.9, selected: true }],
+    });
+    getProjectFromDbMock.mockResolvedValueOnce(projectFactory([cachedScene]));
+
+    const { generateSceneImage } = await import('../scene-image.service');
+    const r = await generateSceneImage('p1', 'scene-1');
+
+    expect(r.thumbnailUrl).toBe('https://cdn.test/cached.png');
+    expect(r.cost).toBe(0);
+    expect(r.stale).toBe(false);
+    // Critically: NB2 / Recraft / Flux should never have been called.
+    expect(generateCandidatesMock).not.toHaveBeenCalled();
+    expect(imageGenerationMock).not.toHaveBeenCalled();
+    expect(scoreImagesMock).not.toHaveBeenCalled();
+  });
+
+  it('passes scene.brandReferences URLs to NB2 as referenceImages', async () => {
+    const sceneWithRefs = sceneFactory({
+      brandReferences: [
+        { assetUrl: 'https://cdn.test/logo.png', tag: 'image1' },
+        { assetUrl: 'https://cdn.test/bottle.png', tag: 'image2' },
+      ],
+    });
+    getProjectFromDbMock
+      .mockResolvedValueOnce(projectFactory([sceneWithRefs]))
+      .mockResolvedValueOnce(projectFactory([sceneWithRefs]));
+
+    generateCandidatesMock.mockResolvedValue([{ imageUrl: 'https://cdn.test/c1.png' }]);
+    scoreImagesMock.mockResolvedValue([{ url: 'https://cdn.test/c1.png', score: 0.8 }]);
+
+    const { generateSceneImage } = await import('../scene-image.service');
+    await generateSceneImage('p1', 'scene-1');
+
+    expect(generateCandidatesMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        referenceImages: ['https://cdn.test/logo.png', 'https://cdn.test/bottle.png'],
+      }),
+      expect.any(Number)
+    );
+  });
+
+  it('falls back to project.assets.productImages when scene has no brand refs', async () => {
+    const project = projectFactory();
+    (project as any).assets = {
+      productImages: [
+        { url: 'https://cdn.test/product1.png' },
+        { url: 'https://cdn.test/product2.png' },
+      ],
+    };
+    getProjectFromDbMock
+      .mockResolvedValueOnce(project)
+      .mockResolvedValueOnce(project);
+
+    generateCandidatesMock.mockResolvedValue([{ imageUrl: 'https://cdn.test/c1.png' }]);
+    scoreImagesMock.mockResolvedValue([{ url: 'https://cdn.test/c1.png', score: 0.8 }]);
+
+    const { generateSceneImage } = await import('../scene-image.service');
+    await generateSceneImage('p1', 'scene-1');
+
+    expect(generateCandidatesMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        referenceImages: ['https://cdn.test/product1.png', 'https://cdn.test/product2.png'],
+      }),
+      expect.any(Number)
+    );
+  });
+
   it('falls back to Recraft when NB2 generates zero candidates', async () => {
     getProjectFromDbMock
       .mockResolvedValueOnce(projectFactory())

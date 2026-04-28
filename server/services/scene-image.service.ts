@@ -163,6 +163,53 @@ export async function generateSceneImage(
 
   const fingerprint = buildFingerprint(presetId, basePromptSource);
 
+  // Pre-generation idempotency: if the scene already has a thumbnail + seed
+  // whose fingerprint matches what we'd produce now, return existing values
+  // without spending a single NB2/Recraft/Flux dollar. Skipped when the
+  // caller forces a specific provider (explicit re-pay).
+  if (
+    !options.forceProvider &&
+    !options.promptOverride &&
+    scene.thumbnailGeneratedFor === fingerprint &&
+    scene.thumbnailUrl &&
+    scene.seedImageUrl &&
+    scene.thumbnailStatus !== 'failed'
+  ) {
+    console.log(`[SceneImage] scene=${sceneId} fingerprint match — returning cached result (no spend)`);
+    return {
+      sceneId,
+      thumbnailUrl: scene.thumbnailUrl,
+      seedImageUrl: scene.seedImageUrl,
+      model: scene.imageGenerationModel || 'nano-banana-2',
+      prompt: scene.imageGenerationPrompt || builtPrompt,
+      candidates: scene.imageCandidates || [],
+      cost: 0,
+      durationMs: Date.now() - startedAt,
+      stale: false,
+      fingerprint,
+    };
+  }
+
+  // Resolve brand-reference URLs to feed NB2 as conditioning. Scene-level
+  // brandReferences[] takes priority; if none, fall back to project-level
+  // productImages so storyboard candidates stay brand-aligned even before
+  // a user attaches scene-specific refs.
+  const sceneRefs: any[] = Array.isArray((scene as any).brandReferences) ? (scene as any).brandReferences : [];
+  const projectProductImages: any[] =
+    Array.isArray((projectData as any)?.assets?.productImages)
+      ? (projectData as any).assets.productImages
+      : [];
+  const referenceImageUrls: string[] = sceneRefs.length > 0
+    ? sceneRefs
+        .map((r: any) => (typeof r?.assetUrl === 'string' ? r.assetUrl : ''))
+        .filter((u: string) => u.length > 0)
+    : projectProductImages
+        .map((p: any) => (typeof p?.url === 'string' ? p.url : ''))
+        .filter((u: string) => u.length > 0);
+  if (referenceImageUrls.length > 0) {
+    console.log(`[SceneImage] scene=${sceneId} brand-refs=${referenceImageUrls.length} (source=${sceneRefs.length > 0 ? 'scene' : 'project'})`);
+  }
+
   // Mark scene as generating BEFORE the NB2 round-trip so the UI can show a
   // spinner. Stale-write check on completion ensures we never clobber a fresher
   // result with this in-progress one.
@@ -193,6 +240,7 @@ export async function generateSceneImage(
           prompt: builtPrompt,
           aspectRatio: nb2Aspect,
           format: 'jpeg',
+          referenceImages: referenceImageUrls.length > 0 ? referenceImageUrls : undefined,
         },
         numCandidates
       );
