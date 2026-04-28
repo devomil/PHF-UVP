@@ -2,6 +2,32 @@ const PIAPI_BASE = 'https://api.piapi.ai/api/v1';
 
 export type NB2AspectRatio = '16:9' | '9:16' | '1:1' | '4:3' | '3:4' | '4:1' | '8:1';
 export type NB2Format = 'jpeg' | 'png';
+export type NB2Resolution = '1K' | '2K' | '4K';
+
+/**
+ * Task #109: PiAPI bills `nano-banana-2` per image by output resolution
+ * (verified against piapi.ai/docs/gemini-api/nano-banana-2, Apr 2026):
+ *   - 1K (default): $0.06 / image
+ *   - 2K          : $0.08 / image
+ *   - 4K          : $0.12 / image
+ *
+ * Earlier code carried over a $0.03 / image constant from the original
+ * Nano Banana model, which under-reported NB2 spend by 2–4× and caused
+ * the storyboard budget cap and "near cap" warning to fire too late.
+ * Callers should price each NB2 image via `getNB2CostPerImage(resolution)`
+ * using the same `resolution` they pass into the API.
+ */
+export const NB2_COST_PER_IMAGE_BY_RESOLUTION: Record<NB2Resolution, number> = {
+  '1K': 0.06,
+  '2K': 0.08,
+  '4K': 0.12,
+};
+
+export const NB2_DEFAULT_RESOLUTION: NB2Resolution = '1K';
+
+export function getNB2CostPerImage(resolution: NB2Resolution = NB2_DEFAULT_RESOLUTION): number {
+  return NB2_COST_PER_IMAGE_BY_RESOLUTION[resolution] ?? NB2_COST_PER_IMAGE_BY_RESOLUTION[NB2_DEFAULT_RESOLUTION];
+}
 
 export interface NB2GenerateOptions {
   prompt: string;
@@ -9,6 +35,13 @@ export interface NB2GenerateOptions {
   format?: NB2Format;
   numImages?: number;
   referenceImages?: string[];
+  /**
+   * Output resolution. Drives both the wire-format request and the
+   * per-image price (see `NB2_COST_PER_IMAGE_BY_RESOLUTION`). When
+   * omitted we don't forward the field — PiAPI documents the server-side
+   * default as 1K, which matches our cost default.
+   */
+  resolution?: NB2Resolution;
   /**
    * Phase 21B (Task #107): Search-grounding flag forwarded as
    * `input.enable_web_search` on PiAPI's `nano-banana-2` task. When true the
@@ -51,6 +84,7 @@ export class NanoBanana2Service {
       numImages = 1,
       referenceImages = [],
       enableWebSearch,
+      resolution,
     } = options;
 
     if (referenceImages.length > 14) {
@@ -81,6 +115,12 @@ export class NanoBanana2Service {
     // Only forward when explicitly set; PiAPI defaults to true server-side.
     if (typeof enableWebSearch === 'boolean') {
       inputPayload.enable_web_search = enableWebSearch;
+    }
+
+    // Task #109: forward resolution only when caller is explicit so we
+    // never accidentally upgrade callers who relied on PiAPI's 1K default.
+    if (resolution) {
+      inputPayload.resolution = resolution;
     }
 
     const apiKey = this.getApiKey();
@@ -161,6 +201,7 @@ export class NanoBanana2Service {
       numImages,
       referenceImages = [],
       enableWebSearch,
+      resolution,
     } = options;
 
     const inputPayload: Record<string, any> = {
@@ -177,6 +218,12 @@ export class NanoBanana2Service {
     // See `NB2GenerateOptions.enableWebSearch` for pricing/SLA verification.
     if (typeof enableWebSearch === 'boolean') {
       inputPayload.enable_web_search = enableWebSearch;
+    }
+
+    // Task #109: forward resolution only when caller is explicit; see
+    // `generateImage` for rationale and pricing notes.
+    if (resolution) {
+      inputPayload.resolution = resolution;
     }
 
     const apiKey = this.getApiKey();

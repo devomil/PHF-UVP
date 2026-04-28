@@ -37,6 +37,12 @@ vi.mock('../nano-banana2.service', () => ({
     generateCandidates: generateCandidatesMock,
   },
   NB2AspectRatio: {} as any,
+  // Task #109: scene-image.service now depends on the resolution-aware
+  // pricing helpers exported by nano-banana2.service.
+  NB2_DEFAULT_RESOLUTION: '1K',
+  NB2_COST_PER_IMAGE_BY_RESOLUTION: { '1K': 0.06, '2K': 0.08, '4K': 0.12 },
+  getNB2CostPerImage: (res?: string) =>
+    ({ '1K': 0.06, '2K': 0.08, '4K': 0.12 } as Record<string, number>)[res ?? '1K'] ?? 0.06,
 }));
 vi.mock('../image-generation-service', () => ({
   imageGenerationService: {
@@ -99,7 +105,8 @@ describe('scene-image.service: generateSceneImage', () => {
     expect(r.model).toBe('nano-banana-2');
     expect(r.candidates).toHaveLength(3);
     expect(r.candidates.find(c => c.selected)?.url).toBe('https://cdn.test/c2.png');
-    expect(r.cost).toBeCloseTo(0.09, 5);
+    // Task #109: NB2 1K is $0.06 / image — 3 candidates = $0.18.
+    expect(r.cost).toBeCloseTo(0.18, 5);
   });
 
   it('short-circuits without spending when fingerprint matches existing thumbnail+seed', async () => {
@@ -310,7 +317,8 @@ describe('scene-image.service: generateSceneImage', () => {
     expect(result.seedImageUrl).toBe('https://cdn.test/grounded-2.png');
     expect(result.model).toBe('nano-banana-2');
     expect(result.candidates.find((c) => c.selected)?.url).toBe('https://cdn.test/grounded-2.png');
-    expect(result.cost).toBeCloseTo(0.09, 5); // 3 candidates × NB2_COST_PER_IMAGE
+    // Task #109: NB2 1K is $0.06 / image — 3 candidates = $0.18.
+    expect(result.cost).toBeCloseTo(0.18, 5);
     expect(result.stale).toBeFalsy();
     expect(result.fingerprint).toContain('lifestyle');
   });
@@ -407,7 +415,8 @@ describe('scene-image.service: estimateBatchCost', () => {
     const e = estimateBatchCost(scenes, { skipExisting: true, numCandidates: 3 });
     expect(e.scenesSkipped).toBe(1);
     expect(e.scenesToGenerate).toBe(2);
-    expect(e.estimatedCost).toBeCloseTo(0.18, 5); // 2 * 3 * 0.03
+    // Task #109: NB2 1K = $0.06 / image → 2 * 3 * 0.06 = $0.36.
+    expect(e.estimatedCost).toBeCloseTo(0.36, 5);
   });
 
   it('flags overCap when estimated cost exceeds the budget cap', async () => {
@@ -417,11 +426,40 @@ describe('scene-image.service: estimateBatchCost', () => {
     try {
       const scenes = Array.from({ length: 10 }, (_, i) => ({ id: `s${i}` }));
       const e = estimateBatchCost(scenes as any, { skipExisting: true, numCandidates: 3 });
-      // 10 * 3 * 0.03 = 0.90, cap = 0.10
+      // Task #109: 10 * 3 * 0.06 = 1.80 ≫ cap 0.10.
       expect(e.overCap).toBe(true);
+      expect(e.estimatedCost).toBeCloseTo(1.80, 5);
     } finally {
       if (oldCap === undefined) delete process.env.STORYBOARD_BUDGET_CAP;
       else process.env.STORYBOARD_BUDGET_CAP = oldCap;
+    }
+  });
+
+  it('prices each NB2 image at the configured resolution tier', async () => {
+    // Task #109: NB2 is billed by resolution. The estimator must follow
+    // STORYBOARD_NB2_RESOLUTION (1K $0.06, 2K $0.08, 4K $0.12) so the
+    // pre-flight cost shown to the user matches the PiAPI invoice.
+    const { estimateBatchCost } = await import('../scene-image.service');
+    const scenes = Array.from({ length: 4 }, (_, i) => ({ id: `s${i}` })) as any;
+    const oldRes = process.env.STORYBOARD_NB2_RESOLUTION;
+    try {
+      process.env.STORYBOARD_NB2_RESOLUTION = '1K';
+      expect(
+        estimateBatchCost(scenes, { skipExisting: true, numCandidates: 3 }).estimatedCost,
+      ).toBeCloseTo(4 * 3 * 0.06, 5);
+
+      process.env.STORYBOARD_NB2_RESOLUTION = '2K';
+      expect(
+        estimateBatchCost(scenes, { skipExisting: true, numCandidates: 3 }).estimatedCost,
+      ).toBeCloseTo(4 * 3 * 0.08, 5);
+
+      process.env.STORYBOARD_NB2_RESOLUTION = '4K';
+      expect(
+        estimateBatchCost(scenes, { skipExisting: true, numCandidates: 3 }).estimatedCost,
+      ).toBeCloseTo(4 * 3 * 0.12, 5);
+    } finally {
+      if (oldRes === undefined) delete process.env.STORYBOARD_NB2_RESOLUTION;
+      else process.env.STORYBOARD_NB2_RESOLUTION = oldRes;
     }
   });
 });

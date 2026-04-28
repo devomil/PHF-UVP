@@ -2,7 +2,13 @@
 // Generates NB2 candidates per scene, picks one via Claude Vision QA, and
 // persists thumbnail + seed image. Falls back NB2 → Recraft → Flux.
 
-import { nanoBanana2Service, NB2AspectRatio } from './nano-banana2.service';
+import {
+  nanoBanana2Service,
+  NB2AspectRatio,
+  NB2Resolution,
+  NB2_DEFAULT_RESOLUTION,
+  getNB2CostPerImage,
+} from './nano-banana2.service';
 import { imageGenerationService } from './image-generation-service';
 import { scoreImages, VisionScoreResult } from './claude-vision-qa.service';
 import { buildSceneImagePrompt } from '../../shared/image-prompt-builder';
@@ -70,9 +76,17 @@ export interface BatchProgressEvent {
   error?: string;
 }
 
-const NB2_COST_PER_IMAGE = 0.03;
+// Task #109: NB2 is billed per image by output resolution (1K $0.06, 2K
+// $0.08, 4K $0.12 — see `nano-banana2.service`). Storyboards run at 1K by
+// default; override via `STORYBOARD_NB2_RESOLUTION=2K|4K`.
 const RECRAFT_PRO_COST = 0.08;
 const FLUX_COST = 0.003;
+
+function getStoryboardResolution(): NB2Resolution {
+  const raw = (process.env.STORYBOARD_NB2_RESOLUTION || '').toUpperCase();
+  if (raw === '1K' || raw === '2K' || raw === '4K') return raw;
+  return NB2_DEFAULT_RESOLUTION;
+}
 
 function aspectRatioToNB2(ar: string | undefined): NB2AspectRatio {
   switch (ar) {
@@ -243,16 +257,19 @@ export async function generateSceneImage(
 
   const numCandidates = Math.max(1, Math.min(options.numCandidates ?? 3, 4));
   const forceProvider = options.forceProvider;
+  const nb2Resolution = getStoryboardResolution();
+  const nb2CostPerImage = getNB2CostPerImage(nb2Resolution);
 
   // Step 1: NB2 candidates
   if (!forceProvider || forceProvider === 'nano-banana-2') {
     try {
-      console.log(`[SceneImage] Scene ${sceneId}: NB2 generating ${numCandidates} candidate(s) | ${nb2Aspect}`);
+      console.log(`[SceneImage] Scene ${sceneId}: NB2 generating ${numCandidates} candidate(s) | ${nb2Aspect} | ${nb2Resolution}`);
       const nb2Results = await nanoBanana2Service.generateCandidates(
         {
           prompt: builtPrompt,
           aspectRatio: nb2Aspect,
           format: 'jpeg',
+          resolution: nb2Resolution,
           referenceImages: referenceImageUrls.length > 0 ? referenceImageUrls : undefined,
           enableWebSearch,
         },
@@ -260,7 +277,7 @@ export async function generateSceneImage(
       );
 
       if (nb2Results.length > 0) {
-        cost += nb2Results.length * NB2_COST_PER_IMAGE;
+        cost += nb2Results.length * nb2CostPerImage;
         const urls = nb2Results.map(r => r.imageUrl);
 
         // Single-candidate fast path: nothing to compare, so skip Anthropic
@@ -399,10 +416,13 @@ export async function generateSceneImage(
   });
 
   // Structured telemetry. Keep keys stable for log aggregators.
+  // Task #109: include `nb2Resolution` so spend analytics can join the
+  // logged cost back to the resolution-tier price actually invoiced.
   console.log('[SceneImage]', JSON.stringify({
     sceneId,
     projectId,
     model: chosenModel,
+    nb2Resolution: chosenModel === 'nano-banana-2' ? nb2Resolution : undefined,
     candidateCount: candidates.length,
     qaScores: candidates.map(c => Number(c.score.toFixed(3))),
     selectedIndex: candidates.findIndex(c => c.selected),
@@ -423,12 +443,19 @@ export async function generateSceneImage(
   };
 }
 
-// Default cap covers ~16 scenes at NB2 3-candidate price.
+// Task #109: Default cap covers ~16 scenes × 3 candidates at NB2's 1K
+// price ($0.06 / image) = $2.88. We round up to $3.00 so the cap keeps
+// representing roughly a 16-scene storyboard run after fixing the
+// previously under-counted per-image cost. Callers running 2K/4K
+// storyboards should override `STORYBOARD_BUDGET_CAP` accordingly
+// (e.g. 2K: ~$3.84, 4K: ~$5.76 for the same 16×3 budget).
+const DEFAULT_BUDGET_CAP_USD = 3.0;
+
 function getBudgetCap(): number {
   const raw = process.env.STORYBOARD_BUDGET_CAP;
-  if (!raw) return 1.5;
+  if (!raw) return DEFAULT_BUDGET_CAP_USD;
   const parsed = parseFloat(raw);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 1.5;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_BUDGET_CAP_USD;
 }
 
 export function estimateBatchCost(
@@ -436,6 +463,7 @@ export function estimateBatchCost(
   opts: { skipExisting: boolean; numCandidates: number },
 ): BatchEstimate {
   const cap = getBudgetCap();
+  const perImageCost = getNB2CostPerImage(getStoryboardResolution());
   let toGen = 0;
   let skipped = 0;
   for (const s of scenes) {
@@ -445,7 +473,7 @@ export function estimateBatchCost(
       toGen++;
     }
   }
-  const estimatedCost = toGen * (opts.numCandidates * NB2_COST_PER_IMAGE);
+  const estimatedCost = toGen * (opts.numCandidates * perImageCost);
   return {
     estimatedCost,
     budgetCap: cap,
