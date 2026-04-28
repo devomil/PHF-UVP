@@ -1,26 +1,10 @@
-// Phase 21B (Task #106): Lightweight Claude Vision QA scorer used to pick the
-// best NB2 candidate in the scene-image pipeline.
-//
-// Why Haiku 4.5 specifically: storyboard runs generate 3 images per scene and
-// can fan out to ~30 calls per project. Sonnet would dominate the per-scene
-// budget. Haiku is fast, cheap, and accurate enough for "which of these three
-// thumbnails best matches the brief?" — which is the only question we ask it.
-//
-// Output contract (kept narrow on purpose):
-//   - score: number in [0, 1]; 0.5 means "I don't know / parse failed".
-//   - reason: optional short string returned by the model for the inspector UI.
-//
-// Failure mode: If the Anthropic API is unavailable, the request fails, or
-// the model returns malformed JSON, every candidate gets the neutral 0.5
-// score so the FIRST candidate wins by stable ordering. We do not throw —
-// QA is best-effort metadata, not a critical-path check.
+// Phase 21B (Task #106): Claude Vision QA scorer for NB2 candidate selection.
+// Best-effort: any failure returns a neutral 0.5 so the first candidate wins
+// by stable ordering. Pinned to Haiku 4.5 to keep per-project cost bounded.
 
 import Anthropic from '@anthropic-ai/sdk';
 
-/**
- * Claude Vision QA model id — pinned to Haiku 4.5 (released 2025-10-01).
- * Exported so callers and tests can assert / log it.
- */
+/** Pinned Haiku 4.5 model id (2025-10-01). Exported for tests/log assertions. */
 export const CLAUDE_VISION_QA_MODEL = 'claude-haiku-4-5-20251001' as const;
 
 const MAX_TOKENS = 256;
@@ -56,19 +40,17 @@ function clamp01(n: number): number {
 }
 
 /**
- * Internal: parse the model's response. Accepts either:
- *   {"score": 0.82, "reason": "matches subject and lighting"}
- * or a plain number on its own line. Returns 0.5 + undefined on failure.
+ * Parse the model's response. Accepts JSON `{"score": ..., "reason": ...}`
+ * or a bare number; returns neutral 0.5 on any failure.
  */
 export function parseScoreResponse(raw: string): { score: number; reason?: string } {
   if (!raw || typeof raw !== 'string') return { score: 0.5 };
   const text = raw.trim();
 
-  // Try JSON first (most common path — system prompt asks for it).
   const jsonMatch = text.match(/\{[\s\S]*\}/);
   if (jsonMatch) {
     try {
-      const parsed = JSON.parse(jsonMatch[0]);
+      const parsed = JSON.parse(jsonMatch[0]) as { score?: unknown; reason?: unknown };
       const rawScore = typeof parsed.score === 'number' ? parsed.score : Number(parsed.score);
       const score = clamp01(Number.isFinite(rawScore) ? rawScore : NaN);
       const reason = typeof parsed.reason === 'string' ? parsed.reason.slice(0, 160) : undefined;
@@ -78,12 +60,11 @@ export function parseScoreResponse(raw: string): { score: number; reason?: strin
     }
   }
 
-  // Fallback: a bare number anywhere in the response.
   const numMatch = text.match(/-?\d+(?:\.\d+)?/);
   if (numMatch) {
     const n = Number(numMatch[0]);
     if (Number.isFinite(n)) {
-      // If the model gave 0..100 instead of 0..1, normalize.
+      // Normalize 0..100 inputs into 0..1.
       const score = n > 1 ? clamp01(n / 100) : clamp01(n);
       return { score };
     }
@@ -147,9 +128,10 @@ export async function scoreImage(
     const text = block && block.type === 'text' ? block.text : '';
     const parsed = parseScoreResponse(text);
     return { url: imageUrl, score: parsed.score, reason: parsed.reason };
-  } catch (err: any) {
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
     console.warn(
-      `[ClaudeVisionQA] Scoring failed for ${ctx.sceneLabel || 'scene'}: ${err?.message || err}`
+      `[ClaudeVisionQA] Scoring failed for ${ctx.sceneLabel || 'scene'}: ${msg}`
     );
     return { url: imageUrl, score: 0.5, reason: 'qa-error' };
   }
@@ -160,7 +142,5 @@ export async function scoreImages(
   ctx: SceneScoringContext
 ): Promise<VisionScoreResult[]> {
   if (imageUrls.length === 0) return [];
-  // Score in parallel — Haiku is rate-limit-friendly and there are only 3.
-  const results = await Promise.all(imageUrls.map(url => scoreImage(url, ctx)));
-  return results;
+  return Promise.all(imageUrls.map(url => scoreImage(url, ctx)));
 }

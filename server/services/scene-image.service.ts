@@ -1,36 +1,28 @@
 // Phase 21B (Task #106): NB2 storyboard + seed-image pipeline.
-//
-// Pipeline per scene:
-//   1. Build the prompt with shared/image-prompt-builder (motion-stripped,
-//      preset-wrapped) so everything generated for the project shares one
-//      art direction.
-//   2. Generate 3 NB2 candidates in a single PiAPI call (numImages=3).
-//   3. Score each with Claude Vision QA (Haiku 4.5) and pick the highest.
-//   4. Persist on the scene's JSONB row:
-//         thumbnailUrl       — the winner (drives the storyboard card)
-//         seedImageUrl       — the SAME url, kept distinct so omni_reference
-//                              can prepend it as @image1 without confusing
-//                              it with the cheap Flux Task 61 thumbnail.
-//         imageGenerationModel  — 'nano-banana-2' / 'recraft-v4-pro' / 'flux'
-//         imageGenerationPrompt — the exact final prompt that was sent
-//         imageCandidates    — { url, score, selected, reason }[]
-//      Stale-write protected via Task 61's fingerprint pattern.
-//
-// Provider fallback chain when NB2 fails entirely:
-//   nano-banana-2 → recraft-v4-pro (single image, no QA pass)
-//                 → flux           (single image, no QA pass)
-// Each fallback is logged. The first one that returns a URL wins.
+// Generates NB2 candidates per scene, picks one via Claude Vision QA, and
+// persists thumbnail + seed image. Falls back NB2 → Recraft → Flux.
 
 import { db } from '../db';
-import { universalVideoProjects } from '../../shared/schema';
-import { eq, sql } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 import { nanoBanana2Service, NB2AspectRatio } from './nano-banana2.service';
 import { imageGenerationService } from './image-generation-service';
 import { scoreImages, VisionScoreResult } from './claude-vision-qa.service';
 import { buildSceneImagePrompt } from '../../shared/image-prompt-builder';
 import { shouldEnableWebSearch } from '../utils/image-generation-policy';
 import { getProjectFromDb } from './video-project-db';
-import type { Scene } from '../../shared/video-types';
+import type { Scene, VideoProject, BrandReferenceInput } from '../../shared/video-types';
+
+// Scene fields that exist in the JSONB row but are not yet on the Scene
+// interface (legacy free-form prompt + product-image refs). Narrow extension
+// avoids `any` while keeping the type surface honest.
+type SceneWithLegacyFields = Scene & {
+  imagePrompt?: string;
+  artPresetId?: string;
+};
+
+interface ProductImageRef {
+  url?: string;
+}
 
 export interface SceneImageGenerationOptions {
   /** Number of NB2 candidates to generate (1..4). Default 3. */
@@ -39,6 +31,23 @@ export interface SceneImageGenerationOptions {
   promptOverride?: string;
   /** Force a particular fallback provider (used by tests / admin tools). */
   forceProvider?: 'nano-banana-2' | 'recraft-v4-pro' | 'flux';
+}
+
+export interface BatchEstimate {
+  estimatedCost: number;
+  budgetCap: number;
+  overCap: boolean;
+  scenesToGenerate: number;
+  scenesSkipped: number;
+}
+
+/** Error raised when batch cost would exceed the configured budget cap. */
+export class BudgetExceededError extends Error {
+  readonly code = 'BUDGET_EXCEEDED' as const;
+  constructor(message: string, public readonly estimate: BatchEstimate) {
+    super(message);
+    this.name = 'BudgetExceededError';
+  }
 }
 
 export interface SceneImageGenerationResult {
@@ -79,36 +88,23 @@ function aspectRatioToNB2(ar: string | undefined): NB2AspectRatio {
   }
 }
 
-// Fingerprint MUST stay byte-for-byte compatible with Task 61's pattern (used
-// by both the client `computeSceneFingerprint` in `client/src/pages/project-detail.tsx`
-// and the existing /generate-thumbnail handler). The chosen model is already
-// distinguished by `imageGenerationModel` on the scene — encoding it here
-// would cause the client's stale-detection to ALWAYS treat NB2 thumbnails as
-// stale and auto-trigger a Flux regen that clobbers the storyboard winner.
+// Fingerprint must stay byte-for-byte compatible with Task 61's pattern so
+// the client's stale-detection (computeSceneFingerprint in project-detail.tsx)
+// keeps treating matching NB2 thumbnails as fresh.
 function buildFingerprint(presetId: string | undefined, basePrompt: string): string {
   return `${presetId || 'auto'}::${basePrompt.substring(0, 80)}`;
 }
 
-/**
- * Atomically patch a single scene inside the JSONB `scenes` array, matched
- * by `id`, by deep-merging the partial `patch` into the matching element.
- *
- * This is the safe-under-parallel write primitive. Two concurrent workers
- * patching DIFFERENT scenes will each see the other's prior committed write
- * because the SQL evaluates `jsonb_agg(...)` against the row's CURRENT value
- * inside a single atomic UPDATE — there is no app-land read-then-write
- * window where a stale array can be written back. Workers patching the
- * SAME scene are serialized by Postgres' row-level lock.
- *
- * Returns the number of rows updated (0 if project not found).
- */
+// Atomic per-scene merge: jsonb_agg evaluates against the row's CURRENT value
+// in a single UPDATE, eliminating the lost-update race that a read-then-write
+// would have under concurrent workers.
 async function patchSceneInJsonb(
   projectId: string,
   sceneId: string,
-  patch: Record<string, any>
+  patch: Record<string, unknown>
 ): Promise<number> {
   const patchJson = JSON.stringify(patch);
-  const result: any = await db.execute(sql`
+  const result = await db.execute(sql`
     UPDATE universal_video_projects
     SET scenes = COALESCE(
           (SELECT jsonb_agg(
@@ -122,34 +118,50 @@ async function patchSceneInJsonb(
         ),
         updated_at = NOW()
     WHERE project_id = ${projectId}
-  `);
-  return typeof result?.rowCount === 'number' ? result.rowCount : 0;
+  `) as { rowCount?: number };
+  return typeof result.rowCount === 'number' ? result.rowCount : 0;
 }
 
-async function loadSceneAndPreset(projectId: string, sceneId: string) {
+// Visual-art preset record loaded by id; typed via the imported helper's
+// return so we never need a synthetic `any` here.
+type VisualArtPreset = NonNullable<
+  Awaited<ReturnType<typeof import('../../shared/config/visual-art-presets').getVisualArtPreset>>
+>;
+
+interface LoadedScene {
+  projectData: VideoProject;
+  scenes: Scene[];
+  scene: SceneWithLegacyFields;
+  sceneIndex: number;
+  preset: VisualArtPreset | null;
+  presetId: string | undefined;
+}
+
+async function loadSceneAndPreset(
+  projectId: string,
+  sceneId: string,
+): Promise<LoadedScene | { error: 'Project not found' | 'Scene not found' }> {
   const projectData = await getProjectFromDb(projectId);
-  if (!projectData) return { error: 'Project not found' as const };
+  if (!projectData) return { error: 'Project not found' };
 
   const scenes = (projectData.scenes || []) as Scene[];
-  const sceneIndex = scenes.findIndex((s: any) => s.id === sceneId);
-  if (sceneIndex === -1) return { error: 'Scene not found' as const };
+  const sceneIndex = scenes.findIndex((s) => s.id === sceneId);
+  if (sceneIndex === -1) return { error: 'Scene not found' };
 
-  const scene: any = scenes[sceneIndex];
+  const scene = scenes[sceneIndex] as SceneWithLegacyFields;
   const { getVisualArtPreset } = await import('../../shared/config/visual-art-presets');
   const presetId =
     scene.assignedStyleId ||
     scene.artPresetId ||
-    (projectData as any).progress?.artPresetId ||
-    (projectData as any).artPresetId;
-  const preset = presetId ? getVisualArtPreset(presetId) : null;
+    projectData.artPresetId;
+  const preset: VisualArtPreset | null = presetId ? (getVisualArtPreset(presetId) ?? null) : null;
 
   return { projectData, scenes, scene, sceneIndex, preset, presetId };
 }
 
 /**
- * Generate one storyboard image for a single scene.
- * Reads the scene fresh from JSONB before writing back; uses Task 61's
- * fingerprint pattern to discard stale-write results.
+ * Generate one storyboard image for a single scene. Stale-write protected
+ * via Task 61's fingerprint pattern; idempotent on fingerprint match.
  */
 export async function generateSceneImage(
   projectId: string,
@@ -159,7 +171,7 @@ export async function generateSceneImage(
   const startedAt = Date.now();
   const loaded = await loadSceneAndPreset(projectId, sceneId);
   if ('error' in loaded) throw new Error(loaded.error);
-  const { projectData, scene, sceneIndex, preset, presetId, scenes } = loaded;
+  const { projectData, scene, preset, presetId, scenes } = loaded;
 
   const basePromptSource =
     options.promptOverride ||
@@ -179,31 +191,24 @@ export async function generateSceneImage(
     throw new Error('Built image prompt is empty after motion-word stripping');
   }
 
-  const aspectRatio = (projectData as any).outputFormat?.aspectRatio || '16:9';
+  const aspectRatio = projectData.outputFormat?.aspectRatio || '16:9';
   const nb2Aspect = aspectRatioToNB2(aspectRatio);
-  const visualStyle =
-    (projectData as any).settings?.visualStyle ||
-    (projectData as any).style ||
-    'professional';
+  const visualStyle = preset?.id || presetId || 'professional';
   const sceneType = scene.type || scene.contentTag || 'content';
 
-  // Web-search policy is feature-flagged; helper kept so flipping the flag
-  // is a one-line change without re-touching this service.
+  // Web-search policy is flag-gated; the helper exists so flipping the flag
+  // is a one-line change once PiAPI surfaces the NB2 input.
   const wantsWebSearch = shouldEnableWebSearch(visualStyle, sceneType);
   const webSearchEnabled =
     process.env.NB2_WEB_SEARCH_ENABLED === 'true' && wantsWebSearch;
   if (webSearchEnabled) {
-    // PiAPI doesn't yet expose this flag in the NB2 task input. The flag
-    // is preserved here so the wiring is one line away once verified.
     console.log(`[SceneImage] Scene ${sceneId}: web-search policy fired (gated, no-op until PiAPI surfaces input)`);
   }
 
   const fingerprint = buildFingerprint(presetId, basePromptSource);
 
-  // Pre-generation idempotency: if the scene already has a thumbnail + seed
-  // whose fingerprint matches what we'd produce now, return existing values
-  // without spending a single NB2/Recraft/Flux dollar. Skipped when the
-  // caller forces a specific provider (explicit re-pay).
+  // Idempotency short-circuit: skip provider spend when the existing thumbnail
+  // already matches what we'd produce now. Bypassed by explicit overrides.
   if (
     !options.forceProvider &&
     !options.promptOverride &&
@@ -217,7 +222,7 @@ export async function generateSceneImage(
       sceneId,
       thumbnailUrl: scene.thumbnailUrl,
       seedImageUrl: scene.seedImageUrl,
-      model: scene.imageGenerationModel || 'nano-banana-2',
+      model: (scene.imageGenerationModel === 'flux-1.1-pro' ? 'flux' : scene.imageGenerationModel) || 'nano-banana-2',
       prompt: scene.imageGenerationPrompt || builtPrompt,
       candidates: scene.imageCandidates || [],
       cost: 0,
@@ -227,30 +232,26 @@ export async function generateSceneImage(
     };
   }
 
-  // Resolve brand-reference URLs to feed NB2 as conditioning. Scene-level
-  // brandReferences[] takes priority; if none, fall back to project-level
-  // productImages so storyboard candidates stay brand-aligned even before
-  // a user attaches scene-specific refs.
-  const sceneRefs: any[] = Array.isArray((scene as any).brandReferences) ? (scene as any).brandReferences : [];
-  const projectProductImages: any[] =
-    Array.isArray((projectData as any)?.assets?.productImages)
-      ? (projectData as any).assets.productImages
+  // Brand refs: scene-level brandReferences[] takes priority; project-level
+  // productImages is the fallback so storyboard runs stay brand-aligned even
+  // before users attach scene-specific refs.
+  const sceneRefs: BrandReferenceInput[] = Array.isArray(scene.brandReferences) ? scene.brandReferences : [];
+  const projectProductImages: ProductImageRef[] =
+    Array.isArray(projectData.assets?.productImages)
+      ? (projectData.assets.productImages as ProductImageRef[])
       : [];
   const referenceImageUrls: string[] = sceneRefs.length > 0
     ? sceneRefs
-        .map((r: any) => (typeof r?.assetUrl === 'string' ? r.assetUrl : ''))
-        .filter((u: string) => u.length > 0)
+        .map((r) => (typeof r?.assetUrl === 'string' ? r.assetUrl : ''))
+        .filter((u) => u.length > 0)
     : projectProductImages
-        .map((p: any) => (typeof p?.url === 'string' ? p.url : ''))
-        .filter((u: string) => u.length > 0);
+        .map((p) => (typeof p?.url === 'string' ? p.url : ''))
+        .filter((u) => u.length > 0);
   if (referenceImageUrls.length > 0) {
     console.log(`[SceneImage] scene=${sceneId} brand-refs=${referenceImageUrls.length} (source=${sceneRefs.length > 0 ? 'scene' : 'project'})`);
   }
 
-  // Mark scene as generating BEFORE the NB2 round-trip so the UI can show a
-  // spinner. Atomic per-scene patch — safe under parallel workers because
-  // `jsonb_agg(...)` evaluates against the row's CURRENT value inside the
-  // same UPDATE statement (no app-land read-then-write window).
+  // Mark generating before the round-trip so the UI shows a spinner.
   await patchSceneInJsonb(projectId, sceneId, {
     thumbnailStatus: 'generating',
     thumbnailError: null,
@@ -372,16 +373,15 @@ export async function generateSceneImage(
   // Stale-write protection: re-read scene and bail if prompt/preset changed.
   const fresh = await getProjectFromDb(projectId);
   const freshScenes = (fresh?.scenes || scenes) as Scene[];
-  const freshIdx = freshScenes.findIndex((s: any) => s.id === sceneId);
+  const freshIdx = freshScenes.findIndex((s) => s.id === sceneId);
   if (freshIdx === -1) {
     throw new Error('Scene disappeared during image generation');
   }
-  const freshScene: any = freshScenes[freshIdx];
+  const freshScene = freshScenes[freshIdx] as SceneWithLegacyFields;
   const freshPresetId =
     freshScene.assignedStyleId ||
     freshScene.artPresetId ||
-    (fresh as any)?.progress?.artPresetId ||
-    (fresh as any)?.artPresetId;
+    fresh?.artPresetId;
   const freshBasePrompt =
     freshScene.imagePrompt || freshScene.visualDirection || freshScene.narration || '';
   const freshFingerprint = buildFingerprint(freshPresetId, freshBasePrompt.toString());
@@ -390,11 +390,14 @@ export async function generateSceneImage(
 
   if (fingerprint !== freshFingerprint) {
     console.log(`[SceneImage] Scene ${sceneId}: stale result discarded (style/prompt changed during ${durationMs}ms generation)`);
+    const freshModel = freshScene.imageGenerationModel === 'flux-1.1-pro'
+      ? 'flux'
+      : freshScene.imageGenerationModel;
     return {
       sceneId,
       thumbnailUrl: freshScene.thumbnailUrl || '',
       seedImageUrl: freshScene.seedImageUrl || '',
-      model: freshScene.imageGenerationModel || chosenModel,
+      model: freshModel || chosenModel,
       prompt: freshScene.imageGenerationPrompt || builtPrompt,
       candidates: freshScene.imageCandidates || candidates,
       cost,
@@ -404,8 +407,7 @@ export async function generateSceneImage(
     };
   }
 
-  // Persist winner via atomic per-scene patch (jsonb_agg merge against the
-  // row's CURRENT value). Safe under parallel workers — see patchSceneInJsonb.
+  // Persist winner via atomic per-scene patch — see patchSceneInJsonb.
   await patchSceneInJsonb(projectId, sceneId, {
     thumbnailUrl: chosenUrl,
     seedImageUrl: chosenUrl,
@@ -418,9 +420,7 @@ export async function generateSceneImage(
     thumbnailError: null,
   });
 
-  // Structured telemetry payload — keep keys stable so log aggregators can
-  // index on them. Field names match the spec: model, candidateCount,
-  // qaScores, selectedIndex, cost, durationMs.
+  // Structured telemetry. Keep keys stable for log aggregators.
   console.log('[SceneImage]', JSON.stringify({
     sceneId,
     projectId,
@@ -445,7 +445,7 @@ export async function generateSceneImage(
   };
 }
 
-// Cost guardrail: default cap covers ~16 scenes at NB2 3-candidate price.
+// Default cap covers ~16 scenes at NB2 3-candidate price.
 function getBudgetCap(): number {
   const raw = process.env.STORYBOARD_BUDGET_CAP;
   if (!raw) return 1.5;
@@ -453,19 +453,14 @@ function getBudgetCap(): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 1.5;
 }
 
-export interface BatchEstimate {
-  estimatedCost: number;
-  budgetCap: number;
-  overCap: boolean;
-  scenesToGenerate: number;
-  scenesSkipped: number;
-}
-
-export function estimateBatchCost(scenes: Scene[], opts: { skipExisting: boolean; numCandidates: number }): BatchEstimate {
+export function estimateBatchCost(
+  scenes: Scene[],
+  opts: { skipExisting: boolean; numCandidates: number },
+): BatchEstimate {
   const cap = getBudgetCap();
   let toGen = 0;
   let skipped = 0;
-  for (const s of scenes as any[]) {
+  for (const s of scenes) {
     if (opts.skipExisting && s.thumbnailUrl && s.imageGenerationModel === 'nano-banana-2') {
       skipped++;
     } else {
@@ -501,15 +496,13 @@ export async function generateAllSceneImages(
   const estimate = estimateBatchCost(scenes, { skipExisting, numCandidates });
 
   if (estimate.overCap && !options.confirmOverCap) {
-    const err = new Error(
-      `Storyboard estimate $${estimate.estimatedCost.toFixed(2)} exceeds cap $${estimate.budgetCap.toFixed(2)}. Pass confirmOverCap=true to proceed.`
+    throw new BudgetExceededError(
+      `Storyboard estimate $${estimate.estimatedCost.toFixed(2)} exceeds cap $${estimate.budgetCap.toFixed(2)}. Pass confirmOverCap=true to proceed.`,
+      estimate,
     );
-    (err as any).code = 'BUDGET_EXCEEDED';
-    (err as any).estimate = estimate;
-    throw err;
   }
 
-  // Soft warning when within 20% of cap.
+  // Soft warning within 20% of cap.
   if (estimate.estimatedCost > estimate.budgetCap * 0.8) {
     console.warn(
       `[SceneImage:budget] Estimated cost $${estimate.estimatedCost.toFixed(2)} is within 20% of cap $${estimate.budgetCap.toFixed(2)} (${estimate.scenesToGenerate} scenes × ${numCandidates} candidates)`
@@ -521,9 +514,8 @@ export async function generateAllSceneImages(
   let failed = 0;
   let totalCost = 0;
 
-  // Partition scenes into "skip-now" (no API call) vs "needs-generate".
-  const toGenerate: any[] = [];
-  for (const scene of scenes as any[]) {
+  const toGenerate: Scene[] = [];
+  for (const scene of scenes) {
     if (
       skipExisting &&
       scene.thumbnailUrl &&
@@ -536,13 +528,8 @@ export async function generateAllSceneImages(
     }
   }
 
-  // Concurrency 4 by default. Safe under parallel workers because every
-  // scene write goes through `patchSceneInJsonb()`, which uses an atomic
-  // `jsonb_agg(...)` UPDATE — there is no app-land read-then-write window
-  // where a stale array can be persisted, and Postgres' row lock serializes
-  // workers patching the SAME scene. Different scenes can be patched in
-  // parallel without losing each other's updates. Bounded so we don't open
-  // dozens of NB2 sockets at once or DOS Claude Vision (env override clamped 1..8).
+  // Concurrency is bounded so we don't open dozens of NB2 sockets or hammer
+  // Claude Vision. Env override is clamped 1..8.
   const CONCURRENCY = Math.max(1, Math.min(
     parseInt(process.env.STORYBOARD_BATCH_CONCURRENCY || '4', 10) || 4,
     8,
@@ -565,10 +552,11 @@ export async function generateAllSceneImages(
           generated++;
           onProgress?.({ sceneId: scene.id, status: 'complete', thumbnailUrl: r.thumbnailUrl });
         }
-      } catch (err: any) {
+      } catch (err) {
         failed++;
-        console.error(`[SceneImage:batch] Scene ${scene.id} failed: ${err.message}`);
-        onProgress?.({ sceneId: scene.id, status: 'failed', error: err.message });
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error(`[SceneImage:batch] Scene ${scene.id} failed: ${msg}`);
+        onProgress?.({ sceneId: scene.id, status: 'failed', error: msg });
       }
     }
   };
