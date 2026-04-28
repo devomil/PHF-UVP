@@ -141,6 +141,24 @@ export interface RegenerateOptions {
   newProvider?: string;
 }
 
+// Phase 20C: structured brand reference entry used by Seedance 2 omni_reference.
+// Each entry maps to one @imageN tag in the prompt body. The order of the array
+// is the order of the tags (index 0 → @image1, index 1 → @image2, …, capped at 9).
+export interface BrandReferenceInput {
+  /** FK into brandAssets / brand-media-library. Optional for ad-hoc refs that
+   * carry only a URL (e.g. project.assets.productImages entries). */
+  assetId?: number;
+  /** Public URL of the reference image. Required — this is what's sent to PiAPI. */
+  assetUrl: string;
+  /** Stable label for this slot, e.g. "image1". The runtime tag is "@" + tag. */
+  tag: string;
+  /** Display label shown in the UI panel ("Product bottle", "Brand logo"). */
+  label?: string;
+  /** Optional dimensions used by the aspect-ratio mismatch warning. */
+  width?: number;
+  height?: number;
+}
+
 export interface PromptComplexityAnalysis {
   category: 'simple' | 'moderate' | 'complex' | 'impossible';
   warning?: string;
@@ -414,6 +432,15 @@ export interface Scene {
   textLabels?: TextLabel[];
   // Phase 15H: Workflow override - allows disabling brand asset matching per scene
   useBrandAssets?: boolean;
+  // Phase 20C: structured multi-image brand references for Seedance 2 omni_reference.
+  // Each entry has a stable @imageN tag the user (or buildOmniReferencePrompt) places
+  // in the prompt body. Coexists with single-ref fields above; reads should fall back
+  // to brandAssetId/brandAssetUrl/useBrandAssets when this array is empty.
+  brandReferences?: BrandReferenceInput[];
+  // Phase 20C: explicit opt-in to omni_reference multi-ref mode for this scene.
+  // When true AND brandReferences[] is non-empty AND provider resolves to Seedance 2,
+  // the generation path uses the multi-image omni_reference flow.
+  useOmniReference?: boolean;
   // Phase 15H: Generation method tracking - what method was used to generate the media
   generationMethod?: 'T2I' | 'I2I' | 'T2V' | 'I2V' | 'V2V' | 'stock';
   visualFormat?: VisualFormat;

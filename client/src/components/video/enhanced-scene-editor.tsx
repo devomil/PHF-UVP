@@ -25,6 +25,8 @@ import {
   PromptInspectorDrawer,
   RoleAwareReferenceSlots,
 } from "./scene-routing-ui";
+import { BrandReferencePanel } from "./brand-reference-panel";
+import type { BrandReferenceInput } from "@shared/video-types";
 
 const sceneTypes = [
   "hook", "problem", "agitation", "solution", "benefit",
@@ -613,6 +615,42 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
     narration: scene.narration || "",
     visualDirection: scene.visualDirection || "",
   });
+
+  // Phase 20C: brand references for Seedance 2 omni_reference. Local state is
+  // mirrored to the server via a debounced PATCH so drag-reorder/add/remove
+  // feel instant while still persisting.
+  const [brandReferences, setBrandReferences] = useState<BrandReferenceInput[]>(
+    ((scene as any).brandReferences as BrandReferenceInput[] | undefined) || [],
+  );
+  const brandRefsDebounceRef = useRef<NodeJS.Timeout | null>(null);
+  useEffect(() => {
+    // Re-sync from server when the underlying scene changes (e.g. after bulk-apply).
+    setBrandReferences(((scene as any).brandReferences as BrandReferenceInput[] | undefined) || []);
+  }, [scene.id, JSON.stringify((scene as any).brandReferences || [])]);
+
+  const persistBrandReferences = useCallback((next: BrandReferenceInput[]) => {
+    if (brandRefsDebounceRef.current) clearTimeout(brandRefsDebounceRef.current);
+    brandRefsDebounceRef.current = setTimeout(() => {
+      fetch(`/api/universal-video/projects/${projectId}/scenes/${sceneId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ brandReferences: next, useOmniReference: next.length > 0 }),
+      })
+        .then((res) => {
+          if (!res.ok) throw new Error('Failed to save brand references');
+          queryClient.invalidateQueries({ queryKey: ['project', projectId] });
+        })
+        .catch((err) => {
+          toast({ title: 'Failed to save brand references', description: err.message, variant: 'destructive' });
+        });
+    }, 500);
+  }, [projectId, sceneId, queryClient, toast]);
+
+  const handleBrandReferencesChange = useCallback((next: BrandReferenceInput[]) => {
+    setBrandReferences(next);
+    persistBrandReferences(next);
+  }, [persistBrandReferences]);
 
   // Task 56: smart-routing transparency
   const { data: routingPreview, refetch: refetchRouting } = useRoutingPreview(
@@ -1559,6 +1597,36 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
             </p>
           </div>
 
+          {/* Phase 20C: Brand References (Seedance 2 omni_reference) */}
+          <div className="mb-3">
+            <BrandReferencePanel
+              references={brandReferences}
+              onChange={handleBrandReferencesChange}
+              basePrompt={editValues.visualDirection}
+              onPromptChange={(next) => setEditValues({ ...editValues, visualDirection: next })}
+              projectAspectRatio={aspectRatio}
+              providerSupportsOmniRef={
+                (videoProviderLock || scene.assets?.videoProvider || '').toLowerCase().startsWith('seedance-2')
+              }
+              providerLabel={videoProviderLock || scene.assets?.videoProvider || undefined}
+              onSwitchProvider={() =>
+                setProviderLockMutation.mutate({ videoProviderLock: 'seedance-2.0' })
+              }
+              lastVideoUrl={scene.videoUrl || null}
+              onRegenerateWithStrongerAnchoring={() => {
+                // Append a stronger anchoring phrase to the prompt — keeps the
+                // user's edits intact while nudging Seedance harder toward the
+                // exact label/packaging in @image1.
+                const tag = brandReferences[0]?.tag || 'image1';
+                const anchor = ` Show @${tag} clearly with the exact label, packaging, and colorway preserved frame-to-frame.`;
+                if (!editValues.visualDirection.includes(anchor)) {
+                  setEditValues({ ...editValues, visualDirection: editValues.visualDirection.trimEnd() + anchor });
+                }
+                setTimeout(() => regenVideoMutation.mutate(), 600);
+              }}
+            />
+          </div>
+
           {/* Reference Images */}
           <div>
             <p className="text-[11px] font-medium flex items-center gap-1 mb-1" style={{ color: "var(--text-secondary)" }}>
@@ -1890,11 +1958,25 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                 Image
               </button>
               <button
-                onClick={() => regenVideoMutation.mutate()}
+                onClick={() => {
+                  // Phase 20C: hard guardrail — modal-confirm if brand refs are
+                  // attached but the resolved provider isn't Seedance 2. The
+                  // panel chip is the prevention; this is the safety net.
+                  const resolvedProvider = (videoProviderLock || (provider !== 'auto' ? provider : null) || scene.assets?.videoProvider || '').toString().toLowerCase();
+                  const isSeedance2 = resolvedProvider.startsWith('seedance-2');
+                  if (brandReferences.length > 0 && !isSeedance2 && resolvedProvider !== '') {
+                    const proceed = window.confirm(
+                      `This scene has ${brandReferences.length} brand reference${brandReferences.length === 1 ? '' : 's'} attached, but the selected provider (${resolvedProvider}) does not support omni_reference brand anchoring.\n\nThe references will be passed as generic reference images and the model may not preserve your product label exactly.\n\nProceed anyway?\n\n(Tip: Click "Cancel" and use the "Switch to Seedance 2 to anchor" chip above for proper brand anchoring.)`,
+                    );
+                    if (!proceed) return;
+                  }
+                  regenVideoMutation.mutate();
+                }}
                 disabled={isRegenerating}
                 className={`text-xs px-3 py-1.5 rounded-lg font-medium flex items-center gap-1.5 disabled:opacity-50 transition-colors ${
                   regeneratingType ? 'bg-purple-600/60 text-white/80' : 'bg-purple-600 text-white hover:bg-purple-500'
                 }`}
+                data-testid="regen-video-button"
               >
                 {(regenVideoMutation.isPending || regeneratingType === 'video') ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
                 {regeneratingType === 'video' ? 'Generating...' : regeneratingType === 'image' ? 'Working...' : 'Regenerate'}

@@ -2364,6 +2364,30 @@ export default function ProjectDetail({ params }: { params?: { id: string } }) {
     },
   });
 
+  // Phase 20C: bulk-attach the project's primary product image to every
+  // product/solution scene that has no brand references yet. Idempotent.
+  const applyProductReferencesMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(
+        `/api/universal-video/projects/${projectId}/apply-product-references`,
+        { method: 'POST', credentials: 'include' },
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || 'Failed to apply product references');
+      return data as { attachedCount: number; skippedAlreadyHasRefs: number; message: string };
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['project', projectId] });
+      toast({
+        title: data.attachedCount > 0 ? 'Brand references applied' : 'Nothing to apply',
+        description: data.message,
+      });
+    },
+    onError: (err: Error) => {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    },
+  });
+
   const handleDownload = async (url: string, filename: string) => {
     try {
       const res = await fetch(url);
@@ -2487,6 +2511,25 @@ export default function ProjectDetail({ params }: { params?: { id: string } }) {
               >
                 <RotateCcw className="w-4 h-4" />
                 {regenerateMutation.isPending ? "Queuing..." : "Regenerate"}
+              </Button>
+            )}
+            {/* Phase 20C: bulk-apply primary product image as @image1 reference
+                to every product/solution scene that lacks brand references. */}
+            {((project as any)?.assets?.productImages?.length || 0) > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                style={{ borderColor: 'var(--border-medium)', color: 'var(--text-secondary)' }}
+                onClick={() => applyProductReferencesMutation.mutate()}
+                disabled={applyProductReferencesMutation.isPending}
+                data-testid="apply-product-references-button"
+                title="Attach your primary product image as @image1 to every product/solution scene that doesn't already have a brand reference. Idempotent."
+              >
+                <ImagePlus className="w-4 h-4" />
+                {applyProductReferencesMutation.isPending
+                  ? 'Applying...'
+                  : 'Apply product to scenes'}
               </Button>
             )}
             <Button

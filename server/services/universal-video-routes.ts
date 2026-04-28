@@ -1984,6 +1984,70 @@ router.patch('/projects/:projectId/scenes/:sceneId/brand-assets', isAuthenticate
   }
 });
 
+// Phase 20C: Bulk-attach the project's primary product image as a brand
+// reference (`@image1`) to every product/solution scene that does not yet
+// have any brandReferences. Idempotent — scenes with existing references are
+// preserved as-is. Triggered by the project-page "Apply product to product
+// scenes" button, and also safe to invoke automatically on first generation.
+router.post('/projects/:projectId/apply-product-references', isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const userId = (req.user as any)?.id;
+    const { projectId } = req.params;
+
+    const projectData = await getProjectFromDb(projectId);
+    if (!projectData) {
+      return res.status(404).json({ success: false, error: 'Project not found' });
+    }
+    if (projectData.ownerId !== userId) {
+      return res.status(403).json({ success: false, error: 'Access denied' });
+    }
+
+    const productImages = (projectData as any)?.assets?.productImages as
+      | Array<{ id?: string; url: string; name?: string; isPrimary?: boolean }>
+      | undefined;
+    if (!productImages || productImages.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'No product images attached to this project — upload a product image first.',
+      });
+    }
+
+    const { applyProductReferencesToScenes } = await import('./brand-reference-helpers');
+    const result = applyProductReferencesToScenes(projectData.scenes as any, productImages as any);
+
+    if (result.attachedCount === 0) {
+      return res.json({
+        success: true,
+        attachedCount: 0,
+        skippedAlreadyHasRefs: result.skippedAlreadyHasRefs,
+        skippedNonProductType: result.skippedNonProductType,
+        primaryAsset: result.primaryAsset,
+        message: result.skippedAlreadyHasRefs > 0
+          ? `All product/solution scenes already have brand references — nothing to apply.`
+          : `No product/solution scenes found.`,
+      });
+    }
+
+    projectData.scenes = result.scenes as any;
+    projectData.updatedAt = new Date().toISOString();
+    await saveProjectToDb(projectData, projectData.ownerId);
+
+    console.log(`[OmniRef] Bulk-applied "${result.primaryAsset?.name || 'product'}" reference to ${result.attachedCount} scene(s) in project ${projectId} (skipped ${result.skippedAlreadyHasRefs} with existing refs, ${result.skippedNonProductType} non-product)`);
+
+    return res.json({
+      success: true,
+      attachedCount: result.attachedCount,
+      skippedAlreadyHasRefs: result.skippedAlreadyHasRefs,
+      skippedNonProductType: result.skippedNonProductType,
+      primaryAsset: result.primaryAsset,
+      message: `Attached "${result.primaryAsset?.name || 'product'}" to ${result.attachedCount} scene${result.attachedCount === 1 ? '' : 's'}.`,
+    });
+  } catch (error: any) {
+    console.error('[OmniRef] Error in apply-product-references:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Phase 14C: Update quality tier for a project
 router.patch('/projects/:projectId/quality-tier', isAuthenticated, async (req: Request, res: Response) => {
   try {
@@ -3171,8 +3235,8 @@ router.patch('/projects/:projectId/scenes/:sceneId', isAuthenticated, async (req
       return res.status(404).json({ success: false, error: 'Scene not found' });
     }
 
-    const allowedFields = ['narration', 'visualDirection', 'duration', 'type', 'name', 'title', 'searchQuery', 'keyPoints', 'overlayItems', 'microScenes', 'contentTag', 'artPresetId', 'assignedStyleId', 'textImageEnabled', 'onScreenText', 'lowerThird', 'shotType', 'cinematicNotes', 'thumbnailUrl', 'thumbnailStatus', 'thumbnailError', 'thumbnailGeneratedFor', 'thumbnailUpdatedAt'];
-    const clearableFields = new Set(['artPresetId', 'assignedStyleId', 'onScreenText', 'lowerThird', 'shotType', 'cinematicNotes', 'contentTag', 'thumbnailUrl', 'thumbnailStatus', 'thumbnailError', 'thumbnailGeneratedFor', 'thumbnailUpdatedAt']);
+    const allowedFields = ['narration', 'visualDirection', 'duration', 'type', 'name', 'title', 'searchQuery', 'keyPoints', 'overlayItems', 'microScenes', 'contentTag', 'artPresetId', 'assignedStyleId', 'textImageEnabled', 'onScreenText', 'lowerThird', 'shotType', 'cinematicNotes', 'thumbnailUrl', 'thumbnailStatus', 'thumbnailError', 'thumbnailGeneratedFor', 'thumbnailUpdatedAt', 'brandReferences', 'useOmniReference'];
+    const clearableFields = new Set(['artPresetId', 'assignedStyleId', 'onScreenText', 'lowerThird', 'shotType', 'cinematicNotes', 'contentTag', 'thumbnailUrl', 'thumbnailStatus', 'thumbnailError', 'thumbnailGeneratedFor', 'thumbnailUpdatedAt', 'brandReferences']);
     for (const field of allowedFields) {
       if (Object.prototype.hasOwnProperty.call(updates, field) && updates[field] === null && clearableFields.has(field)) {
         delete (scenes[sceneIndex] as any)[field];
@@ -6487,6 +6551,60 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, asy
       }
     }
     
+    // Phase 20C: structured multi-image omni_reference brand anchoring.
+    // When the scene carries `brandReferences[]`, build a tagged prompt and
+    // seed `finalSourceImageUrls` with the reference URLs in tag order so the
+    // downstream piapi-video-service path uses them as @image1...@imageN. This
+    // takes precedence over the legacy `useBrandAssets` single-ref path. The UI
+    // provider compatibility badge is the user-facing prevention; this server
+    // log is the safety net that surfaces refs+wrong-provider after the fact.
+    let finalPromptForJob = effectivePrompt;
+    const sceneBrandRefs = (scene as any).brandReferences as
+      | Array<{ assetId?: number; assetUrl: string; tag: string; label?: string }>
+      | undefined;
+    if (!forceT2V && sceneBrandRefs && sceneBrandRefs.length > 0) {
+      try {
+        const { buildOmniReferencePrompt } = await import('../../shared/omni-reference-prompt');
+        const projectAR = (projectData as any).outputFormat?.aspectRatio || (projectData as any).settings?.aspectRatio || '16:9';
+
+        // Resolve every reference URL to a public URL (signed, padded to project AR).
+        const resolvedRefUrls: string[] = [];
+        for (const ref of sceneBrandRefs) {
+          if (!ref?.assetUrl) continue;
+          const publicUrl = await getPublicUrlForBrandAsset(ref.assetUrl, projectAR);
+          if (publicUrl) resolvedRefUrls.push(publicUrl);
+        }
+
+        if (resolvedRefUrls.length > 0) {
+          const omni = buildOmniReferencePrompt({
+            basePrompt: effectivePrompt,
+            references: sceneBrandRefs.map((r, i) => ({
+              assetId: r.assetId,
+              assetUrl: resolvedRefUrls[i] ?? r.assetUrl,
+              tag: r.tag || `image${i + 1}`,
+              label: r.label,
+            })),
+            verbose: true,
+          });
+          finalPromptForJob = omni.prompt;
+          finalSourceImageUrls = resolvedRefUrls;
+          if (!finalSourceImageUrl) finalSourceImageUrl = resolvedRefUrls[0];
+
+          const providerHint = (effectiveProvider || sceneProviderHint || '').toLowerCase();
+          const isSeedance2 = providerHint.startsWith('seedance-2') || providerHint === 'seedance-2.0' || providerHint === 'seedance-2.0-fast';
+          if (!isSeedance2 && providerHint && providerHint !== 'auto' && providerHint !== '') {
+            console.warn(`[OmniRef] Scene ${sceneId}: ${resolvedRefUrls.length} brand reference(s) attached but resolved provider is "${providerHint}". omni_reference is Seedance-2-only — references will be passed as generic reference_images and the model may not anchor the product label. UI provider compatibility badge should have prevented this; investigate if reached.`);
+          } else {
+            console.log(`[OmniRef] Scene ${sceneId}: omni_reference path armed with ${resolvedRefUrls.length} reference(s), tagged prompt: "${finalPromptForJob.substring(0, 120)}..."`);
+          }
+        } else {
+          console.warn(`[OmniRef] Scene ${sceneId}: brandReferences attached but none resolved to a public URL — falling back to legacy path`);
+        }
+      } catch (omniErr: any) {
+        console.warn(`[OmniRef] Scene ${sceneId}: failed to build omni_reference payload: ${omniErr.message} — falling back to legacy path`);
+      }
+    }
+
     let normalizedMotionControl: { camera_movement: string; intensity: number } | undefined = undefined;
     if (motionControl && motionControl.cameraMovement && motionControl.cameraMovement !== 'auto') {
       normalizedMotionControl = {
@@ -6518,7 +6636,7 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, asy
       projectId,
       sceneId,
       provider: effectiveProvider,
-      prompt: effectivePrompt,
+      prompt: finalPromptForJob,
       fallbackPrompt,
       duration: scene.duration || 6,
       aspectRatio: (projectData as any).outputFormat?.aspectRatio || (projectData as any).settings?.aspectRatio || '16:9',
