@@ -1,0 +1,192 @@
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+
+// Module mocks must be set BEFORE the SUT is dynamically imported.
+const updateMock = vi.fn();
+const getProjectFromDbMock = vi.fn();
+const generateCandidatesMock = vi.fn();
+const scoreImagesMock = vi.fn();
+const imageGenerationMock = vi.fn();
+
+vi.mock('../../db', () => ({
+  db: {
+    update: () => ({ set: () => ({ where: updateMock }) }),
+  },
+}));
+vi.mock('../../../shared/schema', () => ({ universalVideoProjects: { projectId: 'projectId' } as any }));
+vi.mock('drizzle-orm', () => ({ eq: (a: any, b: any) => ({ a, b }) }));
+vi.mock('../video-project-db', () => ({
+  getProjectFromDb: getProjectFromDbMock,
+}));
+vi.mock('../nano-banana2.service', () => ({
+  nanoBanana2Service: {
+    generateCandidates: generateCandidatesMock,
+  },
+  NB2AspectRatio: {} as any,
+}));
+vi.mock('../image-generation-service', () => ({
+  imageGenerationService: {
+    generateImage: imageGenerationMock,
+  },
+}));
+vi.mock('../claude-vision-qa.service', () => ({
+  scoreImages: scoreImagesMock,
+}));
+vi.mock('../../../shared/config/visual-art-presets', () => ({
+  getVisualArtPreset: () => ({ imagePromptPrefix: 'cinematic,', imagePromptSuffix: 'film grain' }),
+}));
+
+const sceneFactory = (overrides: any = {}) => ({
+  id: 'scene-1',
+  imagePrompt: 'A serene meadow at sunset with a person walking',
+  visualDirection: 'A serene meadow at sunset',
+  narration: 'A serene meadow at sunset',
+  artPresetId: 'cinematic',
+  ...overrides,
+});
+
+const projectFactory = (scenes: any[] = [sceneFactory()]) => ({
+  projectId: 'p1',
+  scenes,
+  outputFormat: { aspectRatio: '16:9' },
+  settings: { visualStyle: 'professional' },
+  progress: { artPresetId: 'cinematic' },
+  ownerId: 'u1',
+});
+
+describe('scene-image.service: generateSceneImage', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    updateMock.mockResolvedValue(undefined);
+  });
+
+  it('picks the highest-scored NB2 candidate, persists thumbnailUrl + seedImageUrl', async () => {
+    getProjectFromDbMock
+      .mockResolvedValueOnce(projectFactory()) // initial load
+      .mockResolvedValueOnce(projectFactory()); // stale-write check
+
+    generateCandidatesMock.mockResolvedValue([
+      { imageUrl: 'https://cdn.test/c1.png' },
+      { imageUrl: 'https://cdn.test/c2.png' },
+      { imageUrl: 'https://cdn.test/c3.png' },
+    ]);
+    scoreImagesMock.mockResolvedValue([
+      { url: 'https://cdn.test/c1.png', score: 0.4, reason: 'meh' },
+      { url: 'https://cdn.test/c2.png', score: 0.9, reason: 'best' },
+      { url: 'https://cdn.test/c3.png', score: 0.7, reason: 'good' },
+    ]);
+
+    const { generateSceneImage } = await import('../scene-image.service');
+    const r = await generateSceneImage('p1', 'scene-1');
+
+    expect(r.thumbnailUrl).toBe('https://cdn.test/c2.png');
+    expect(r.seedImageUrl).toBe('https://cdn.test/c2.png');
+    expect(r.model).toBe('nano-banana-2');
+    expect(r.candidates).toHaveLength(3);
+    expect(r.candidates.find(c => c.selected)?.url).toBe('https://cdn.test/c2.png');
+    expect(r.cost).toBeCloseTo(0.09, 5);
+  });
+
+  it('falls back to Recraft when NB2 generates zero candidates', async () => {
+    getProjectFromDbMock
+      .mockResolvedValueOnce(projectFactory())
+      .mockResolvedValueOnce(projectFactory());
+
+    generateCandidatesMock.mockResolvedValue([]); // NB2 returns nothing
+    imageGenerationMock.mockResolvedValueOnce({ url: 'https://cdn.test/recraft.png' });
+
+    const { generateSceneImage } = await import('../scene-image.service');
+    const r = await generateSceneImage('p1', 'scene-1');
+
+    expect(r.model).toBe('recraft-v4-pro');
+    expect(r.thumbnailUrl).toBe('https://cdn.test/recraft.png');
+    expect(imageGenerationMock).toHaveBeenCalledWith(expect.objectContaining({ provider: 'recraft-v4-pro' }));
+  });
+
+  it('falls back to Flux when both NB2 and Recraft fail', async () => {
+    getProjectFromDbMock
+      .mockResolvedValueOnce(projectFactory())
+      .mockResolvedValueOnce(projectFactory());
+
+    generateCandidatesMock.mockRejectedValue(new Error('NB2 down'));
+    imageGenerationMock
+      .mockRejectedValueOnce(new Error('Recraft down')) // first call: recraft
+      .mockResolvedValueOnce({ url: 'https://cdn.test/flux.png' }); // second call: flux
+
+    const { generateSceneImage } = await import('../scene-image.service');
+    const r = await generateSceneImage('p1', 'scene-1');
+
+    expect(r.model).toBe('flux');
+    expect(r.thumbnailUrl).toBe('https://cdn.test/flux.png');
+    // Verify ordering: recraft first, then flux.
+    expect(imageGenerationMock.mock.calls[0][0].provider).toBe('recraft-v4-pro');
+    expect(imageGenerationMock.mock.calls[1][0].provider).toBe('flux');
+  });
+
+  it('discards stale results when the scene prompt/preset changed during generation', async () => {
+    const initialProject = projectFactory();
+    const changedProject = projectFactory([sceneFactory({
+      imagePrompt: 'A completely different prompt about mountains',
+      thumbnailUrl: 'https://cdn.test/existing.png',
+      imageGenerationModel: 'nano-banana-2',
+    })]);
+    getProjectFromDbMock
+      .mockResolvedValueOnce(initialProject)
+      .mockResolvedValueOnce(changedProject);
+
+    generateCandidatesMock.mockResolvedValue([
+      { imageUrl: 'https://cdn.test/old.png' },
+    ]);
+    scoreImagesMock.mockResolvedValue([
+      { url: 'https://cdn.test/old.png', score: 0.8 },
+    ]);
+
+    const { generateSceneImage } = await import('../scene-image.service');
+    const r = await generateSceneImage('p1', 'scene-1');
+
+    expect(r.stale).toBe(true);
+    expect(r.thumbnailUrl).toBe('https://cdn.test/existing.png'); // existing kept
+  });
+
+  it('throws when all providers fail', async () => {
+    getProjectFromDbMock.mockResolvedValueOnce(projectFactory());
+    generateCandidatesMock.mockRejectedValue(new Error('NB2 down'));
+    imageGenerationMock
+      .mockRejectedValueOnce(new Error('Recraft down'))
+      .mockRejectedValueOnce(new Error('Flux down'));
+    // The error path also re-reads the project to mark it failed.
+    getProjectFromDbMock.mockResolvedValueOnce(projectFactory());
+
+    const { generateSceneImage } = await import('../scene-image.service');
+    await expect(generateSceneImage('p1', 'scene-1')).rejects.toThrow(/All providers failed/);
+  });
+});
+
+describe('scene-image.service: estimateBatchCost', () => {
+  it('skips scenes whose existing thumbnail was generated by NB2', async () => {
+    const { estimateBatchCost } = await import('../scene-image.service');
+    const scenes = [
+      { id: 's1', thumbnailUrl: 'x', imageGenerationModel: 'nano-banana-2' },
+      { id: 's2', thumbnailUrl: 'x', imageGenerationModel: 'flux' },
+      { id: 's3' },
+    ] as any;
+    const e = estimateBatchCost(scenes, { skipExisting: true, numCandidates: 3 });
+    expect(e.scenesSkipped).toBe(1);
+    expect(e.scenesToGenerate).toBe(2);
+    expect(e.estimatedCost).toBeCloseTo(0.18, 5); // 2 * 3 * 0.03
+  });
+
+  it('flags overCap when estimated cost exceeds the budget cap', async () => {
+    const { estimateBatchCost } = await import('../scene-image.service');
+    const oldCap = process.env.STORYBOARD_BUDGET_CAP;
+    process.env.STORYBOARD_BUDGET_CAP = '0.10';
+    try {
+      const scenes = Array.from({ length: 10 }, (_, i) => ({ id: `s${i}` }));
+      const e = estimateBatchCost(scenes as any, { skipExisting: true, numCandidates: 3 });
+      // 10 * 3 * 0.03 = 0.90, cap = 0.10
+      expect(e.overCap).toBe(true);
+    } finally {
+      if (oldCap === undefined) delete process.env.STORYBOARD_BUDGET_CAP;
+      else process.env.STORYBOARD_BUDGET_CAP = oldCap;
+    }
+  });
+});

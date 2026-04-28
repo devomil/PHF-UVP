@@ -42,3 +42,33 @@ export function selectImageProvider(
 
   return preferredProviders[0];
 }
+
+/**
+ * Phase 21B (Task #106): When the storyboard pipeline calls Nano Banana 2,
+ * should we ask it to ground the generation with a web search?
+ *
+ * This is a POLICY helper only — it returns true when web-search would
+ * arguably help (real-world places, branded environments, niche subjects).
+ * The actual NB2 wiring is feature-flagged behind the
+ * `NB2_WEB_SEARCH_ENABLED=true` env var because PiAPI's web-search support
+ * has not yet been verified end-to-end and we don't want to silently break
+ * generation for everyone if it's unavailable.
+ *
+ * Caller pattern:
+ *   const enable = process.env.NB2_WEB_SEARCH_ENABLED === 'true'
+ *     && shouldEnableWebSearch(visualStyle, contentType);
+ */
+export function shouldEnableWebSearch(
+  visualStyle: string,
+  sceneContentType: string
+): boolean {
+  // Real-world / location-grounded subjects benefit from a web pass.
+  const groundedStyles = ['lifestyle', 'educational', 'social'];
+  if (groundedStyles.includes(visualStyle)) return true;
+
+  // Place / brand / nature scenes typically reference real entities.
+  const groundedTypes = ['nature', 'lifestyle', 'place'];
+  if (groundedTypes.includes(sceneContentType)) return true;
+
+  return false;
+}

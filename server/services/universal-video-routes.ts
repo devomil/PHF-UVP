@@ -3332,8 +3332,8 @@ router.patch('/projects/:projectId/scenes/:sceneId', isAuthenticated, async (req
       return res.status(404).json({ success: false, error: 'Scene not found' });
     }
 
-    const allowedFields = ['narration', 'visualDirection', 'duration', 'type', 'name', 'title', 'searchQuery', 'keyPoints', 'overlayItems', 'microScenes', 'contentTag', 'artPresetId', 'assignedStyleId', 'textImageEnabled', 'onScreenText', 'lowerThird', 'shotType', 'cinematicNotes', 'thumbnailUrl', 'thumbnailStatus', 'thumbnailError', 'thumbnailGeneratedFor', 'thumbnailUpdatedAt', 'brandReferences', 'useOmniReference'];
-    const clearableFields = new Set(['artPresetId', 'assignedStyleId', 'onScreenText', 'lowerThird', 'shotType', 'cinematicNotes', 'contentTag', 'thumbnailUrl', 'thumbnailStatus', 'thumbnailError', 'thumbnailGeneratedFor', 'thumbnailUpdatedAt', 'brandReferences']);
+    const allowedFields = ['narration', 'visualDirection', 'duration', 'type', 'name', 'title', 'searchQuery', 'keyPoints', 'overlayItems', 'microScenes', 'contentTag', 'artPresetId', 'assignedStyleId', 'textImageEnabled', 'onScreenText', 'lowerThird', 'shotType', 'cinematicNotes', 'thumbnailUrl', 'thumbnailStatus', 'thumbnailError', 'thumbnailGeneratedFor', 'thumbnailUpdatedAt', 'brandReferences', 'useOmniReference', 'seedImageUrl', 'imageGenerationModel', 'imageGenerationPrompt', 'imageCandidates'];
+    const clearableFields = new Set(['artPresetId', 'assignedStyleId', 'onScreenText', 'lowerThird', 'shotType', 'cinematicNotes', 'contentTag', 'thumbnailUrl', 'thumbnailStatus', 'thumbnailError', 'thumbnailGeneratedFor', 'thumbnailUpdatedAt', 'brandReferences', 'seedImageUrl', 'imageGenerationModel', 'imageGenerationPrompt', 'imageCandidates']);
     for (const field of allowedFields) {
       if (Object.prototype.hasOwnProperty.call(updates, field) && updates[field] === null && clearableFields.has(field)) {
         delete (scenes[sceneIndex] as any)[field];
@@ -3417,6 +3417,42 @@ router.post('/projects/:projectId/scenes/:sceneId/generate-thumbnail', isAuthent
     const sceneIndex = scenes.findIndex((s: any) => s.id === sceneId);
     if (sceneIndex === -1) {
       return res.status(404).json({ success: false, error: 'Scene not found' });
+    }
+
+    // Phase 21B (Task #106): clients can opt into the NB2 storyboard pipeline
+    // (3-candidate gen + Claude Vision QA + seed-image persist) by passing
+    // `mode=nb2-candidates`. Default keeps the cheap Task 61 Flux behavior so
+    // the existing Creative Brief preview path is unchanged.
+    const requestedMode = (req.query.mode || req.body?.mode || '').toString();
+    if (requestedMode === 'nb2-candidates') {
+      try {
+        const { generateSceneImage } = await import('./scene-image.service');
+        // Per-scene NB2 calls are intentionally NOT subject to the project-level
+        // budget cap (cap is enforced only on the bulk batch endpoint) because
+        // each per-scene call is an explicit user click. The numCandidates
+        // input is hard-clamped server-side (1..4) inside generateSceneImage,
+        // so each click costs at most ~$0.12. We log every NB2 spend so the
+        // total is auditable in production logs.
+        const requestedN = typeof req.body?.numCandidates === 'number' ? req.body.numCandidates : 3;
+        const clampedN = Math.max(1, Math.min(requestedN, 4));
+        console.log(`[SceneImage:budget] per-scene NB2 call project=${projectId} scene=${sceneId} candidates=${clampedN} max-cost=$${(clampedN * 0.03).toFixed(4)}`);
+        const result = await generateSceneImage(projectId, sceneId, {
+          numCandidates: clampedN,
+        });
+        return res.json({
+          success: true,
+          mode: 'nb2-candidates',
+          thumbnailUrl: result.thumbnailUrl,
+          seedImageUrl: result.seedImageUrl,
+          model: result.model,
+          candidates: result.candidates,
+          cost: result.cost,
+          stale: result.stale === true,
+        });
+      } catch (nbErr: any) {
+        console.error('[BriefThumbnail:nb2] Generation failed:', nbErr);
+        return res.status(500).json({ success: false, error: nbErr.message || 'NB2 storyboard generation failed' });
+      }
     }
 
     const scene: any = scenes[sceneIndex];
@@ -3513,6 +3549,54 @@ router.post('/projects/:projectId/scenes/:sceneId/generate-thumbnail', isAuthent
     }
   } catch (error: any) {
     console.error('[BriefThumbnail] Error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Phase 21B (Task #106): kick off the NB2 storyboard batch for every scene in
+// a project. Returns immediately with the budget estimate; per-scene progress
+// is reflected in the existing `thumbnailStatus` / `thumbnailUrl` fields on
+// the scenes JSONB, which the UI already polls.
+router.post('/projects/:projectId/generate-storyboard', isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const userId = (req.user as any)?.id;
+    const { projectId } = req.params;
+
+    const projectData = await getProjectFromDb(projectId);
+    if (!projectData) return res.status(404).json({ success: false, error: 'Project not found' });
+    if ((projectData as any).ownerId !== userId) return res.status(403).json({ success: false, error: 'Access denied' });
+
+    const skipExisting = req.body?.skipExisting !== false;
+    const numCandidates = typeof req.body?.numCandidates === 'number' ? req.body.numCandidates : 3;
+    const confirmOverCap = req.body?.confirmOverCap === true;
+
+    const { estimateBatchCost, generateAllSceneImages } = await import('./scene-image.service');
+    const scenes = projectData.scenes || [];
+    const estimate = estimateBatchCost(scenes as any, { skipExisting, numCandidates });
+
+    if (estimate.overCap && !confirmOverCap) {
+      return res.status(402).json({
+        success: false,
+        error: 'BUDGET_EXCEEDED',
+        message: `Storyboard estimate $${estimate.estimatedCost.toFixed(2)} exceeds cap $${estimate.budgetCap.toFixed(2)}.`,
+        estimate,
+      });
+    }
+
+    // Fire-and-forget: per-scene status writes drive the UI.
+    setImmediate(() => {
+      generateAllSceneImages(projectId, { skipExisting, numCandidates, confirmOverCap })
+        .then(r => console.log(`[Storyboard] project=${projectId} done generated=${r.generated} skipped=${r.skipped} failed=${r.failed} totalCost=$${r.totalCost.toFixed(4)}`))
+        .catch(err => console.error(`[Storyboard] project=${projectId} batch failed: ${err.message}`));
+    });
+
+    return res.json({
+      success: true,
+      message: `Storyboard generation started for ${estimate.scenesToGenerate} scene(s)`,
+      estimate,
+    });
+  } catch (error: any) {
+    console.error('[Storyboard] Error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -6693,10 +6777,15 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, asy
       console.log(`[OmniRef] Scene ${sceneId}: stronger-anchoring requested — appended explicit anchor phrase to prompt before any downstream path.`);
     }
 
+    // Phase 21B (Task #106): seed image, when present, becomes the @image1
+    // anchor for omni_reference and shifts brandReferences to @image2..@imageN+1.
+    // Resolved here (and only here) so the same logic runs whether the scene
+    // has refs, only a seed, or both.
+    const sceneSeedImageUrl = (scene as any).seedImageUrl as string | undefined;
     let finalPromptForJob = effectivePrompt;
-    if (!forceT2V && sceneBrandRefs && sceneBrandRefs.length > 0) {
+    if (!forceT2V && (sceneSeedImageUrl || (sceneBrandRefs && sceneBrandRefs.length > 0))) {
       try {
-        const { buildOmniReferencePrompt } = await import('../../shared/omni-reference-prompt');
+        const { assembleOmniReferenceImages } = await import('../../shared/omni-reference-assembler');
         // Phase 20C aspect-ratio contract — DOCUMENTED DEVIATION from spec.
         //
         // Spec said: force `aspect_ratio: 'auto'` for omni_reference so the
@@ -6723,8 +6812,8 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, asy
           url: string;
           originalIndex: number;
         }> = [];
-        for (let i = 0; i < sceneBrandRefs.length; i++) {
-          const ref = sceneBrandRefs[i];
+        for (let i = 0; i < (sceneBrandRefs?.length || 0); i++) {
+          const ref = sceneBrandRefs![i];
           if (!ref?.assetUrl) {
             console.warn(`[OmniRef] Scene ${sceneId}: ref ${i + 1} has no assetUrl — dropping from omni payload.`);
             continue;
@@ -6738,7 +6827,21 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, asy
         }
         const resolvedRefUrls = resolvedPairs.map((p) => p.url);
 
-        if (resolvedRefUrls.length > 0) {
+        // Phase 21B: resolve seed image to a public URL too, so it becomes
+        // @image1 ahead of brandReferences when the assembler runs.
+        let resolvedSeedUrl: string | null = null;
+        if (sceneSeedImageUrl) {
+          try {
+            resolvedSeedUrl = await getPublicUrlForBrandAsset(sceneSeedImageUrl, projectAR);
+            if (!resolvedSeedUrl) {
+              console.warn(`[OmniRef] Scene ${sceneId}: seedImageUrl failed URL resolution — falling back to refs-only payload.`);
+            }
+          } catch (seedErr: any) {
+            console.warn(`[OmniRef] Scene ${sceneId}: seed URL resolution threw: ${seedErr.message} — continuing without seed.`);
+          }
+        }
+
+        if (resolvedRefUrls.length > 0 || resolvedSeedUrl) {
           // Provider gating per spec: omni_reference (multi-image tagged path)
           // ONLY runs when the provider is explicitly resolved to Seedance 2.
           // Empty / "auto" / unresolved providers do NOT qualify — they fall
@@ -6751,36 +6854,41 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, asy
             providerHint === 'seedance-2.0-fast';
 
           if (isSeedance2) {
-            // Full omni_reference path: tag prompt + pass all refs in tag order.
-            // Tags are RENUMBERED to the surviving (resolved) order so the
-            // prompt's @image1..@imageN positions always line up with
-            // finalSourceImageUrls[0..N-1].
-            const omni = buildOmniReferencePrompt({
+            // Full omni_reference path. Phase 21B: the assembler is the SINGLE
+            // source of truth for "which images, in what order, with which
+            // tags?" — see shared/omni-reference-assembler.ts for the 4-branch
+            // priority rule (seed+refs / refs-only / seed-only / none).
+            const renumberedRefs = resolvedPairs.map((p, i) => ({
+              assetId: p.ref.assetId,
+              assetUrl: p.url,
+              // tag is overwritten by the assembler when seed is present.
+              tag: `image${i + 1}`,
+              label: p.ref.label,
+            }));
+            const omni = assembleOmniReferenceImages({
               basePrompt: effectivePrompt,
-              references: resolvedPairs.map((p, i) => ({
-                assetId: p.ref.assetId,
-                assetUrl: p.url,
-                tag: `image${i + 1}`,
-                label: p.ref.label,
-              })),
-              verbose: true,
+              seedImageUrl: resolvedSeedUrl,
+              references: renumberedRefs,
             });
             finalPromptForJob = omni.prompt;
-            finalSourceImageUrls = resolvedRefUrls;
-            if (!finalSourceImageUrl) finalSourceImageUrl = resolvedRefUrls[0];
-            const droppedCount = sceneBrandRefs.length - resolvedPairs.length;
-            console.log(`[OmniRef] Scene ${sceneId}: omni_reference path armed with ${resolvedRefUrls.length} reference(s)${droppedCount > 0 ? ` (${droppedCount} ref(s) dropped due to URL resolution failures — tags renumbered to keep alignment)` : ''}, tagged prompt: "${finalPromptForJob.substring(0, 120)}..."`);
+            finalSourceImageUrls = omni.imageList;
+            if (!finalSourceImageUrl && omni.imageList.length > 0) {
+              finalSourceImageUrl = omni.imageList[0];
+            }
+            const droppedCount = (sceneBrandRefs?.length || 0) - resolvedPairs.length;
+            console.log(`[OmniRef] Scene ${sceneId}: omni_reference path armed via assembler (mode=${omni.mode}, ${omni.imageList.length} image(s)${omni.promptShifted ? ', prompt tags shifted +1 for seed' : ''}${droppedCount > 0 ? `, ${droppedCount} ref(s) dropped due to URL resolution failures` : ''}), tagged prompt: "${finalPromptForJob.substring(0, 120)}..."`);
           } else {
             // Spec safety-net: provider is non-Seedance-2. Do NOT tag the prompt
             // and do NOT pass multiple refs. Fall back to legacy single-ref:
-            // first reference becomes the source image, prompt is untouched.
-            console.warn(`[OmniRef] Scene ${sceneId}: ${resolvedRefUrls.length} brand reference(s) attached but resolved provider is "${providerHint}" (not Seedance 2). FALLBACK: using only the first reference as a single source image; prompt is left untagged. The UI provider compatibility badge should have prevented this — investigate the call site if this fires repeatedly.`);
-            if (!finalSourceImageUrl) finalSourceImageUrl = resolvedRefUrls[0];
+            // first reference (or seed) becomes the source image, prompt is untouched.
+            const singleRef = resolvedSeedUrl || (resolvedRefUrls[0] || null);
+            console.warn(`[OmniRef] Scene ${sceneId}: ${resolvedRefUrls.length} brand reference(s)${resolvedSeedUrl ? ' + 1 seed image' : ''} attached but resolved provider is "${providerHint}" (not Seedance 2). FALLBACK: using only ${resolvedSeedUrl ? 'the seed image' : 'the first reference'} as a single source image; prompt is left untagged. The UI provider compatibility badge should have prevented this — investigate the call site if this fires repeatedly.`);
+            if (!finalSourceImageUrl && singleRef) finalSourceImageUrl = singleRef;
             // Leave finalPromptForJob = effectivePrompt (untouched)
             // Leave finalSourceImageUrls undefined unless legacy refs already populated it.
           }
         } else {
-          console.warn(`[OmniRef] Scene ${sceneId}: brandReferences attached but none resolved to a public URL — falling back to legacy path`);
+          console.warn(`[OmniRef] Scene ${sceneId}: brandReferences/seed attached but none resolved to a public URL — falling back to legacy path`);
         }
       } catch (omniErr: any) {
         console.warn(`[OmniRef] Scene ${sceneId}: failed to build omni_reference payload: ${omniErr.message} — falling back to legacy path`);

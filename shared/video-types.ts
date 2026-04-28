@@ -478,6 +478,35 @@ export interface Scene {
   thumbnailError?: string;
   thumbnailGeneratedFor?: string;
   thumbnailUpdatedAt?: string;
+  // Phase 21B (Task #106): NB2 storyboard + seed-image pipeline.
+  // `seedImageUrl` is the high-quality, art-direction-locked still that
+  // becomes the @image1 anchor for Seedance 2 omni_reference. It is the
+  // SAME asset URL as `thumbnailUrl` once an NB2 storyboard run completes,
+  // but is kept as a distinct field so:
+  //   1. Downstream code (omni-reference assembler) can prepend it BEFORE
+  //      brandReferences without conflating it with the cheap Flux preview
+  //      thumbnail produced by Task 61.
+  //   2. Users can swap the thumbnail (e.g. cropped variant) without losing
+  //      the canonical seed reference fed to Seedance 2.
+  seedImageUrl?: string;
+  /** Which provider produced the current `thumbnailUrl` / `seedImageUrl`.
+   *  Drives the small "NB2 / Recraft / Flux" badge on the storyboard card. */
+  imageGenerationModel?: 'nano-banana-2' | 'recraft-v4-pro' | 'flux' | 'flux-1.1-pro';
+  /** The exact prompt sent to the image model (after preset prefix/suffix
+   *  and motion-word stripping). Persisted so users can regenerate from
+   *  the same prompt or inspect what was sent. */
+  imageGenerationPrompt?: string;
+  /** All NB2 candidates considered for this scene plus their Claude Vision
+   *  QA scores. The auto-selected winner has `selected: true`. Users can
+   *  override the auto-pick from the inspect-candidates UI; the override
+   *  rewrites `thumbnailUrl` + `seedImageUrl` and flips the `selected`
+   *  flag without re-running NB2. */
+  imageCandidates?: Array<{
+    url: string;
+    score: number;
+    selected: boolean;
+    reason?: string;
+  }>;
 }
 
 // Phase 8A: Scene analysis types

@@ -647,6 +647,99 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
     },
   });
 
+  // Phase 21B (Task #106): NB2 storyboard pipeline — 3 candidates per scene,
+  // Claude Vision QA picks the winner, persists as both thumbnailUrl AND
+  // seedImageUrl so omni_reference can prepend it as @image1.
+  const generateStorySceneMutation = useMutation({
+    mutationFn: async (sceneId: string) => {
+      const res = await fetch(`/api/universal-video/projects/${projectId}/scenes/${sceneId}/generate-thumbnail?mode=nb2-candidates`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ numCandidates: 3 }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "Failed to generate storyboard image");
+      return data;
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+      if (data?.cost) {
+        toast({
+          title: "Storyboard frame ready",
+          description: `${data.candidates?.length || 1} candidate(s) — best pick by ${data.model}`,
+        });
+      }
+    },
+    onError: (err: Error) => {
+      toast({ title: "Storyboard generation failed", description: err.message, variant: "destructive" });
+      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+    },
+  });
+
+  const generateStoryboardBatchMutation = useMutation({
+    mutationFn: async (confirmOverCap?: boolean) => {
+      const res = await fetch(`/api/universal-video/projects/${projectId}/generate-storyboard`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ skipExisting: true, numCandidates: 3, confirmOverCap: !!confirmOverCap }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const err: any = new Error(data?.message || data?.error || "Storyboard batch failed");
+        err.payload = data;
+        throw err;
+      }
+      return data;
+    },
+    onSuccess: (data: any) => {
+      toast({
+        title: "Storyboard generation started",
+        description: `${data?.estimate?.scenesToGenerate || 0} scene(s) queued (~$${(data?.estimate?.estimatedCost || 0).toFixed(2)})`,
+      });
+      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+    },
+    onError: (err: any) => {
+      if (err?.payload?.error === "BUDGET_EXCEEDED") {
+        setBudgetConfirmDialog({ open: true, estimate: err.payload.estimate });
+        return;
+      }
+      toast({ title: "Storyboard batch failed", description: err.message, variant: "destructive" });
+    },
+  });
+
+  // Pick a different candidate as the winner: PATCH the scene's thumbnailUrl,
+  // seedImageUrl, and update imageCandidates[i].selected so the strip stays
+  // consistent. The PATCH allowlist already includes those fields.
+  const pickStoryboardCandidateMutation = useMutation({
+    mutationFn: async (args: { sceneId: string; candidateUrl: string; candidates: any[] }) => {
+      const newCandidates = args.candidates.map((c) => ({
+        ...c,
+        selected: c.url === args.candidateUrl,
+      }));
+      const res = await fetch(`/api/universal-video/projects/${projectId}/scenes/${args.sceneId}`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          thumbnailUrl: args.candidateUrl,
+          seedImageUrl: args.candidateUrl,
+          imageCandidates: newCandidates,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "Failed to pick candidate");
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Couldn't update pick", description: err.message, variant: "destructive" });
+    },
+  });
+
   // Task 63: Batch "Generate all thumbnails" — one-click cost-aware preview
   // for every scene in the brief. Mirrors the per-scene fingerprint logic in
   // server/services/universal-video-routes.ts so we skip scenes whose
@@ -728,6 +821,9 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
     if (!scene) return;
     if (scene.thumbnailUrl) return;
     if (scene.thumbnailStatus === 'generating') return;
+    // Phase 21B (Task #106): never auto-fire the cheap Flux thumbnail for a scene
+    // whose user-chosen winner came from the NB2 storyboard pipeline.
+    if (scene.imageGenerationModel === 'nano-banana-2') return;
     if (autoThumbnailAttemptedRef.current.has(expandedSceneId)) return;
     autoThumbnailAttemptedRef.current.add(expandedSceneId);
     generateThumbnailMutation.mutate(expandedSceneId);
@@ -744,6 +840,11 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
     for (const s of allScenes) {
       if (!s?.thumbnailUrl) continue;
       if (s.thumbnailStatus === 'generating') continue;
+      // Phase 21B (Task #106): NB2 storyboard winners are explicit user choices —
+      // never silently overwrite them with Flux when the prompt drifts. The user
+      // can hit "Storyboard (3-candidate)" or the stale-regenerate badge to refresh
+      // intentionally.
+      if (s.imageGenerationModel === 'nano-banana-2') continue;
       const fingerprint = computeSceneFingerprint(s);
       if (s.thumbnailGeneratedFor === fingerprint) continue;
       if (autoRestaleAttemptedRef.current.get(s.id) === fingerprint) continue;
@@ -1225,6 +1326,18 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
                           >
                             <ImagePlus className="w-3 h-3" />
                             Generate all thumbnails
+                          </button>
+                          {/* Phase 21B (Task #106): Bulk NB2 storyboard generator. */}
+                          <button
+                            onClick={() => generateStoryboardBatchMutation.mutate(false)}
+                            disabled={generateStoryboardBatchMutation.isPending}
+                            className="text-xs px-2.5 py-1 rounded-lg border flex items-center gap-1.5 transition-colors hover:border-purple-500/40 disabled:opacity-50"
+                            style={{ borderColor: "rgba(124,58,237,0.4)", color: "rgb(216,180,254)", backgroundColor: "rgba(124,58,237,0.08)" }}
+                            data-testid="button-generate-storyboard"
+                            title="Generate 3 NB2 candidates per scene + Vision QA. Costs ~$0.09/scene."
+                          >
+                            {generateStoryboardBatchMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                            Generate storyboard
                           </button>
                         </div>
                       ) : (
@@ -1817,6 +1930,32 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
                                     {isGenerating ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
                                     {thumbUrl ? 'Regenerate thumbnail' : 'Generate thumbnail'}
                                   </button>
+                                  {/* Phase 21B (Task #106): NB2 storyboard regen — themed AlertDialog confirm. */}
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); setStoryRegenDialog({ open: true, sceneId }); }}
+                                    disabled={generateStorySceneMutation.isPending && generateStorySceneMutation.variables === sceneId}
+                                    className="self-start text-xs px-2.5 py-1 rounded-md border transition-colors hover:border-purple-400/50 disabled:opacity-50 inline-flex items-center gap-1.5"
+                                    style={{ borderColor: "rgba(124,58,237,0.4)", color: "rgb(216,180,254)", backgroundColor: "rgba(124,58,237,0.08)" }}
+                                    data-testid={`button-regen-storyboard-${sceneId}`}
+                                    title="Generate 3 NB2 candidates and let Vision QA pick the best one."
+                                  >
+                                    {generateStorySceneMutation.isPending && generateStorySceneMutation.variables === sceneId ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                                    Storyboard (3-candidate)
+                                  </button>
+                                  {/* Model badge */}
+                                  {(scene as any).imageGenerationModel && (
+                                    <span
+                                      className="text-[10px] px-2 py-0.5 rounded-full border inline-flex items-center gap-1"
+                                      style={(scene as any).imageGenerationModel === 'nano-banana-2'
+                                        ? { borderColor: "rgba(124,58,237,0.4)", backgroundColor: "rgba(124,58,237,0.12)", color: "rgb(216,180,254)" }
+                                        : (scene as any).imageGenerationModel === 'recraft-v4-pro'
+                                          ? { borderColor: "rgba(245,158,11,0.4)", backgroundColor: "rgba(245,158,11,0.12)", color: "rgb(252,211,77)" }
+                                          : { borderColor: "var(--border-subtle)", color: "var(--text-muted)" }}
+                                      data-testid={`badge-image-model-${sceneId}`}
+                                    >
+                                      {(scene as any).imageGenerationModel === 'nano-banana-2' ? 'NB2' : (scene as any).imageGenerationModel === 'recraft-v4-pro' ? 'Recraft Pro' : 'Flux'}
+                                    </span>
+                                  )}
                                   {isStale && (
                                     <button
                                       onClick={(e) => { e.stopPropagation(); generateThumbnailMutation.mutate(sceneId); }}
@@ -1841,6 +1980,36 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
                                           ? 'Cheap preview — final video may differ.'
                                           : 'Sanity-check the visual style before generating.'}
                                 </span>
+                                {/* Phase 21B (Task #106): NB2 candidate strip — click to override the auto-pick. */}
+                                {Array.isArray((scene as any).imageCandidates) && (scene as any).imageCandidates.length > 1 && (
+                                  <div className="flex items-center gap-1.5 mt-1 flex-wrap" data-testid={`candidates-strip-${sceneId}`}>
+                                    <span className="text-[10px] uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>Candidates:</span>
+                                    {(scene as any).imageCandidates.map((cand: any, ci: number) => (
+                                      <button
+                                        key={`${cand.url}-${ci}`}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          if (cand.selected) return;
+                                          pickStoryboardCandidateMutation.mutate({
+                                            sceneId,
+                                            candidateUrl: cand.url,
+                                            candidates: (scene as any).imageCandidates,
+                                          });
+                                        }}
+                                        disabled={pickStoryboardCandidateMutation.isPending}
+                                        className={`relative h-10 w-14 rounded-md border overflow-hidden transition-all ${cand.selected ? 'ring-2 ring-purple-400' : 'opacity-70 hover:opacity-100'} disabled:cursor-wait`}
+                                        style={{ borderColor: cand.selected ? "rgb(192,132,252)" : "var(--border-subtle)" }}
+                                        title={`Score ${(cand.score ?? 0).toFixed(2)}${cand.reason ? ` — ${cand.reason}` : ''}`}
+                                        data-testid={`candidate-${sceneId}-${ci}`}
+                                      >
+                                        <img src={cand.url} alt="" className="w-full h-full object-cover" />
+                                        <span className="absolute bottom-0 right-0 text-[8px] px-1 bg-black/60 text-white rounded-tl-md">
+                                          {(cand.score ?? 0).toFixed(2)}
+                                        </span>
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
                               </div>
                             </div>
                           );
@@ -2486,6 +2655,9 @@ export default function ProjectDetail({ params }: { params?: { id: string } }) {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const [deleteProjectDialogOpen, setDeleteProjectDialogOpen] = useState(false);
+  // Phase 21B (Task #106): themed AlertDialog state (no native dialogs).
+  const [storyRegenDialog, setStoryRegenDialog] = useState<{ open: boolean; sceneId: string | null }>({ open: false, sceneId: null });
+  const [budgetConfirmDialog, setBudgetConfirmDialog] = useState<{ open: boolean; estimate: any }>({ open: false, estimate: null });
 
   const { data: project, isLoading, error } = useQuery({
     queryKey: ["project", projectId],
@@ -2941,6 +3113,67 @@ export default function ProjectDetail({ params }: { params?: { id: string } }) {
 
         <RenderConfigPanel projectId={projectId} projectOutputUrl={project.outputUrl} projectStatus={project.status} projectScenes={project.scenes} projectRenderId={project.renderId} projectAspectRatio={project?.outputFormat?.aspectRatio || '16:9'} projectTotalDuration={project?.totalDuration} />
       </div>
+
+      {/* Phase 21B (Task #106): NB2 storyboard regen confirmation. */}
+      <AlertDialog
+        open={storyRegenDialog.open}
+        onOpenChange={(open) => setStoryRegenDialog({ open, sceneId: open ? storyRegenDialog.sceneId : null })}
+      >
+        <AlertDialogContent data-testid="storyboard-regen-dialog">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-purple-400" />
+              Generate 3 storyboard candidates?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This generates 3 NB2 candidates (~$0.09) and uses Claude Vision QA to pick the best one. The winner becomes both the scene thumbnail and the seed image used to anchor the final video render.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setStoryRegenDialog({ open: false, sceneId: null })}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                const sId = storyRegenDialog.sceneId;
+                setStoryRegenDialog({ open: false, sceneId: null });
+                if (sId) generateStorySceneMutation.mutate(sId);
+              }}
+              data-testid="storyboard-regen-confirm"
+            >
+              Generate
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Phase 21B (Task #106): Budget over-cap confirmation. */}
+      <AlertDialog
+        open={budgetConfirmDialog.open}
+        onOpenChange={(open) => setBudgetConfirmDialog({ open, estimate: open ? budgetConfirmDialog.estimate : null })}
+      >
+        <AlertDialogContent data-testid="storyboard-budget-dialog">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-amber-400" />
+              Storyboard exceeds budget cap
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Estimated cost ${(budgetConfirmDialog.estimate?.estimatedCost ?? 0).toFixed(2)} for {budgetConfirmDialog.estimate?.scenesToGenerate ?? 0} scene(s) is above the cap of ${(budgetConfirmDialog.estimate?.budgetCap ?? 0).toFixed(2)}. Continue anyway?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setBudgetConfirmDialog({ open: false, estimate: null })}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setBudgetConfirmDialog({ open: false, estimate: null });
+                generateStoryboardBatchMutation.mutate(true);
+              }}
+              data-testid="storyboard-budget-confirm"
+            >
+              Continue
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog
         open={deleteProjectDialogOpen}
