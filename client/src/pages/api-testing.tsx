@@ -1,5 +1,15 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   FlaskConical,
   Video,
   Image,
@@ -80,6 +90,7 @@ export default function ApiTesting() {
   const [uploading, setUploading] = useState(false);
   const [uploadingVideo, setUploadingVideo] = useState(false);
   const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
+  const [clearResultsDialogOpen, setClearResultsDialogOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
 
@@ -507,11 +518,7 @@ export default function ApiTesting() {
           </p>
           {summary.total - summary.idle > 0 && (
             <button
-              onClick={async () => {
-                if (!confirm("Clear all saved test results?")) return;
-                await fetch("/api/piapi-tests/results", { method: "DELETE" });
-                setTestStates({});
-              }}
+              onClick={() => setClearResultsDialogOpen(true)}
               className="shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] border transition-colors hover:brightness-110"
               style={{
                 borderColor: "var(--border-subtle)",
@@ -988,6 +995,42 @@ export default function ApiTesting() {
           );
         })}
       </div>
+
+      <AlertDialog
+        open={clearResultsDialogOpen}
+        onOpenChange={setClearResultsDialogOpen}
+      >
+        <AlertDialogContent data-testid="clear-test-results-dialog">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <RotateCcw className="w-5 h-5 text-amber-400" />
+              Clear all saved test results?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently removes every saved test result on this page. You can rerun any test individually afterward.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              onClick={() => setClearResultsDialogOpen(false)}
+              data-testid="clear-test-results-cancel"
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => {
+                setClearResultsDialogOpen(false);
+                await fetch("/api/piapi-tests/results", { method: "DELETE" });
+                setTestStates({});
+              }}
+              className="bg-red-600 hover:bg-red-500"
+              data-testid="clear-test-results-confirm"
+            >
+              Clear results
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

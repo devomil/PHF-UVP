@@ -18,6 +18,16 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { VoiceSelector } from "./voice-selector";
@@ -4544,6 +4554,7 @@ function ScenePreview({
         </div>
       </DialogContent>
     </Dialog>
+
     </>
   );
 }
@@ -4971,6 +4982,7 @@ export default function UniversalVideoProducer() {
   const [musicEnabled, setMusicEnabled] = useState(true);
   const [showGenerationPreview, setShowGenerationPreview] = useState(false);
   const [showProviderRegistry, setShowProviderRegistry] = useState(false);
+  const [rerenderConfirmOpen, setRerenderConfirmOpen] = useState(false);
   const previewTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const createProductMutation = useMutation({
@@ -5874,11 +5886,7 @@ export default function UniversalVideoProducer() {
                     <>
                       <Button 
                         variant="outline"
-                        onClick={() => {
-                          if (confirm('This will re-render the video with the latest overlay and scene settings. Continue?')) {
-                            renderMutation.mutate();
-                          }
-                        }}
+                        onClick={() => setRerenderConfirmOpen(true)}
                         disabled={renderMutation.isPending}
                         data-testid="button-rerender-video"
                       >
@@ -6323,6 +6331,37 @@ export default function UniversalVideoProducer() {
           )}
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={rerenderConfirmOpen} onOpenChange={setRerenderConfirmOpen}>
+        <AlertDialogContent data-testid="rerender-video-dialog">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <RefreshCw className="w-5 h-5 text-purple-400" />
+              Re-render this video?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This will start a fresh render using the latest overlays, captions, and scene settings. The existing rendered video stays available until the new render finishes.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              onClick={() => setRerenderConfirmOpen(false)}
+              data-testid="rerender-video-cancel"
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setRerenderConfirmOpen(false);
+                renderMutation.mutate();
+              }}
+              data-testid="rerender-video-confirm"
+            >
+              Re-render
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
     </div>
   );

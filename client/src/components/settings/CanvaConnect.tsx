@@ -2,6 +2,16 @@ import { useState, useEffect } from 'react';
 import { Link2, Unlink, Loader2, CheckCircle, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 interface CanvaStatus {
   configured: boolean;
@@ -15,6 +25,7 @@ export function CanvaConnect() {
   const [status, setStatus] = useState<CanvaStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
+  const [disconnectDialogOpen, setDisconnectDialogOpen] = useState(false);
   const { toast } = useToast();
 
   const fetchStatus = async () => {
@@ -68,8 +79,8 @@ export function CanvaConnect() {
     }
   };
 
-  const handleDisconnect = async () => {
-    if (!confirm('Disconnect your Canva account? Future renders will not sync to Canva.')) return;
+  const performDisconnect = async () => {
+    setDisconnectDialogOpen(false);
     setActionLoading(true);
     try {
       const res = await fetch('/api/canva/disconnect', { method: 'DELETE', credentials: 'include' });
@@ -81,6 +92,10 @@ export function CanvaConnect() {
     } finally {
       setActionLoading(false);
     }
+  };
+
+  const handleDisconnect = () => {
+    setDisconnectDialogOpen(true);
   };
 
   if (loading) {
@@ -125,6 +140,7 @@ export function CanvaConnect() {
   }
 
   return (
+    <>
     <div
       className="border rounded-xl p-5"
       style={{
@@ -224,6 +240,39 @@ export function CanvaConnect() {
         </div>
       )}
     </div>
+
+    <AlertDialog
+      open={disconnectDialogOpen}
+      onOpenChange={setDisconnectDialogOpen}
+    >
+      <AlertDialogContent data-testid="canva-disconnect-dialog">
+        <AlertDialogHeader>
+          <AlertDialogTitle className="flex items-center gap-2">
+            <Unlink className="w-5 h-5 text-red-400" />
+            Disconnect Canva account?
+          </AlertDialogTitle>
+          <AlertDialogDescription>
+            Future renders will no longer sync to your Canva workspace. You can reconnect at any time.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel
+            onClick={() => setDisconnectDialogOpen(false)}
+            data-testid="canva-disconnect-cancel"
+          >
+            Cancel
+          </AlertDialogCancel>
+          <AlertDialogAction
+            onClick={performDisconnect}
+            className="bg-red-600 hover:bg-red-500"
+            data-testid="canva-disconnect-confirm"
+          >
+            Disconnect
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }
 

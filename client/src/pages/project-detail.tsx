@@ -27,6 +27,16 @@ import { SceneOverlayEditor, SceneOverlayItem } from "@/components/video/scene-o
 import { SceneImageActions } from "@/components/video/scene-image-actions";
 import { S3BackgroundPicker } from "@/components/video/S3BackgroundPicker";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { EndCardPreview } from "@/components/video/EndCardPreview";
 import { AskSuzziePanel } from "@/components/video/ask-suzzie-panel";
 import { CanvaSyncCard } from "@/components/canva/CanvaSyncCard";
@@ -2475,6 +2485,7 @@ export default function ProjectDetail({ params }: { params?: { id: string } }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
+  const [deleteProjectDialogOpen, setDeleteProjectDialogOpen] = useState(false);
 
   const { data: project, isLoading, error } = useQuery({
     queryKey: ["project", projectId],
@@ -2712,11 +2723,7 @@ export default function ProjectDetail({ params }: { params?: { id: string } }) {
               size="sm"
               className="gap-1.5 text-red-400 hover:text-red-300"
               style={{ borderColor: "var(--border-medium)" }}
-              onClick={() => {
-                if (confirm("Are you sure you want to delete this project?")) {
-                  deleteMutation.mutate();
-                }
-              }}
+              onClick={() => setDeleteProjectDialogOpen(true)}
               disabled={deleteMutation.isPending}
             >
               <Trash2 className="w-4 h-4" />
@@ -2934,6 +2941,41 @@ export default function ProjectDetail({ params }: { params?: { id: string } }) {
 
         <RenderConfigPanel projectId={projectId} projectOutputUrl={project.outputUrl} projectStatus={project.status} projectScenes={project.scenes} projectRenderId={project.renderId} projectAspectRatio={project?.outputFormat?.aspectRatio || '16:9'} projectTotalDuration={project?.totalDuration} />
       </div>
+
+      <AlertDialog
+        open={deleteProjectDialogOpen}
+        onOpenChange={setDeleteProjectDialogOpen}
+      >
+        <AlertDialogContent data-testid="delete-project-dialog">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Trash2 className="w-5 h-5 text-red-400" />
+              Delete this project?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently removes the project, its scenes, and any rendered videos. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              onClick={() => setDeleteProjectDialogOpen(false)}
+              data-testid="delete-project-cancel"
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setDeleteProjectDialogOpen(false);
+                deleteMutation.mutate();
+              }}
+              className="bg-red-600 hover:bg-red-500"
+              data-testid="delete-project-confirm"
+            >
+              Delete project
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

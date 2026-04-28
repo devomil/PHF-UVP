@@ -9,6 +9,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGr
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Progress } from '@/components/ui/progress';
 import { Textarea } from '@/components/ui/textarea';
 import { 
@@ -184,6 +194,19 @@ export default function AssetLibrary() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
   const [isCreatorOpen, setIsCreatorOpen] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState<{
+    title: string;
+    description: string;
+    confirmLabel?: string;
+    onConfirm: () => void;
+  } | null>(null);
+
+  const requestConfirm = (opts: {
+    title: string;
+    description: string;
+    confirmLabel?: string;
+    onConfirm: () => void;
+  }) => setConfirmDialog(opts);
 
   const { data: activeJobs, refetch: refetchJobs } = useQuery<any[]>({
     queryKey: ['/api/asset-library/jobs'],
@@ -906,9 +929,12 @@ export default function AssetLibrary() {
                                 variant="destructive"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  if (confirm('Are you sure you want to delete this asset?')) {
-                                    deleteLibraryAssetMutation.mutate(la.id);
-                                  }
+                                  requestConfirm({
+                                    title: 'Delete this asset?',
+                                    description: 'This permanently removes the generated asset from your library. This action cannot be undone.',
+                                    confirmLabel: 'Delete asset',
+                                    onConfirm: () => deleteLibraryAssetMutation.mutate(la.id),
+                                  });
                                 }}
                               >
                                 <Trash2 className="h-4 w-4" />
@@ -1187,9 +1213,12 @@ export default function AssetLibrary() {
                             variant="destructive"
                             onClick={(e) => {
                               e.stopPropagation();
-                              if (confirm('Are you sure you want to delete this asset?')) {
-                                deleteUnifiedAssetMutation.mutate(asset.id);
-                              }
+                              requestConfirm({
+                                title: 'Delete this asset?',
+                                description: 'This permanently removes the asset from your media library. This action cannot be undone.',
+                                confirmLabel: 'Delete asset',
+                                onConfirm: () => deleteUnifiedAssetMutation.mutate(asset.id),
+                              });
                             }}
                           >
                             <Trash2 className="h-4 w-4" />
@@ -1309,9 +1338,12 @@ export default function AssetLibrary() {
                             variant="destructive"
                             onClick={(e) => {
                               e.stopPropagation();
-                              if (confirm('Are you sure you want to delete this brand asset?')) {
-                                deleteBrandAssetMutation.mutate(asset.id);
-                              }
+                              requestConfirm({
+                                title: 'Delete this brand asset?',
+                                description: 'This permanently removes the brand asset and stops it from being matched into future videos. This action cannot be undone.',
+                                confirmLabel: 'Delete brand asset',
+                                onConfirm: () => deleteBrandAssetMutation.mutate(asset.id),
+                              });
                             }}
                           >
                             <Trash2 className="h-4 w-4" />
@@ -1449,9 +1481,12 @@ export default function AssetLibrary() {
                             variant="destructive"
                             onClick={(e) => {
                               e.stopPropagation();
-                              if (confirm(`Are you sure you want to delete "${character.name}"?`)) {
-                                deleteCharacterMutation.mutate(character.id);
-                              }
+                              requestConfirm({
+                                title: `Delete "${character.name}"?`,
+                                description: 'This permanently removes the character profile and reference image from your library. This action cannot be undone.',
+                                confirmLabel: 'Delete character',
+                                onConfirm: () => deleteCharacterMutation.mutate(character.id),
+                              });
                             }}
                           >
                             <Trash2 className="h-4 w-4" />
@@ -2276,9 +2311,12 @@ export default function AssetLibrary() {
                     <Button 
                       variant="destructive"
                       onClick={() => {
-                        if (confirm('Are you sure you want to delete this brand asset?')) {
-                          deleteBrandAssetMutation.mutate(selectedBrandAsset.id);
-                        }
+                        requestConfirm({
+                          title: 'Delete this brand asset?',
+                          description: 'This permanently removes the brand asset and stops it from being matched into future videos. This action cannot be undone.',
+                          confirmLabel: 'Delete brand asset',
+                          onConfirm: () => deleteBrandAssetMutation.mutate(selectedBrandAsset.id),
+                        });
                       }}
                     >
                       <Trash2 className="h-4 w-4 mr-2" />
@@ -2511,9 +2549,12 @@ export default function AssetLibrary() {
                   <Button
                     variant="destructive"
                     onClick={() => {
-                      if (confirm('Are you sure you want to delete this asset?')) {
-                        deleteLibraryAssetMutation.mutate(selectedLibraryAsset.id);
-                      }
+                      requestConfirm({
+                        title: 'Delete this asset?',
+                        description: 'This permanently removes the generated asset from your library. This action cannot be undone.',
+                        confirmLabel: 'Delete asset',
+                        onConfirm: () => deleteLibraryAssetMutation.mutate(selectedLibraryAsset.id),
+                      });
                     }}
                   >
                     <Trash2 className="h-4 w-4 mr-2" />
@@ -2698,9 +2739,12 @@ export default function AssetLibrary() {
                       <Button 
                         variant="destructive"
                         onClick={() => {
-                          if (confirm('Are you sure you want to delete this asset?')) {
-                            deleteUnifiedAssetMutation.mutate(selectedUnifiedAsset.id);
-                          }
+                          requestConfirm({
+                            title: 'Delete this asset?',
+                            description: 'This permanently removes the asset from your media library. This action cannot be undone.',
+                            confirmLabel: 'Delete asset',
+                            onConfirm: () => deleteUnifiedAssetMutation.mutate(selectedUnifiedAsset.id),
+                          });
                         }}
                       >
                         <Trash2 className="h-4 w-4" />
@@ -2860,6 +2904,44 @@ export default function AssetLibrary() {
         onOpenChange={setIsCreatorOpen}
         onJobStarted={handleJobStarted}
       />
+
+      <AlertDialog
+        open={confirmDialog !== null}
+        onOpenChange={(open) => {
+          if (!open) setConfirmDialog(null);
+        }}
+      >
+        <AlertDialogContent data-testid="asset-library-confirm-dialog">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Trash2 className="w-5 h-5 text-red-400" />
+              {confirmDialog?.title}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmDialog?.description}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              onClick={() => setConfirmDialog(null)}
+              data-testid="asset-library-confirm-cancel"
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                const action = confirmDialog?.onConfirm;
+                setConfirmDialog(null);
+                action?.();
+              }}
+              className="bg-red-600 hover:bg-red-500"
+              data-testid="asset-library-confirm-action"
+            >
+              {confirmDialog?.confirmLabel || 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
