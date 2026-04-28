@@ -7872,16 +7872,34 @@ router.post('/:projectId/regenerate-all-videos', isAuthenticated, async (req: Re
           );
           await saveProjectToDb(projectData, projectData.ownerId);
         } else {
-          // Even when nothing is attached, if a primary asset was discoverable
-          // we still mark the flag so we don't re-scan the world on every
-          // regenerate. If no primary asset is available at all, leave the
-          // flag unset so a later product-image upload will trigger the
-          // first-generation pass.
-          if (autoApply.primaryAsset) {
+          // Phase 20C — guard against eagerly setting the first-generation
+          // flag when there were never any qualifying product/solution scenes
+          // to evaluate. If we set the flag for a project whose scene list
+          // currently contains only intro/cta/branded-environment scenes, a
+          // user who later adds product scenes would be silently denied the
+          // auto-apply pass on the next bulk regen.
+          //
+          // We mark the flag ONLY when:
+          //   (a) a primary asset is discoverable AND
+          //   (b) qualifying product/solution scenes existed and were
+          //       intentionally skipped because they already had refs
+          //       (skippedAlreadyHasRefs > 0), which is a true "intentional
+          //       choice by the user" signal.
+          //
+          // If a primary asset exists but no product/solution scenes were
+          // evaluated at all (everything was skippedNonProductType), we leave
+          // the flag unset so the auto-apply pass will retry once the project
+          // shape changes. Same when no primary asset is available.
+          const evaluatedQualifyingScenes = autoApply.skippedAlreadyHasRefs > 0;
+          if (autoApply.primaryAsset && evaluatedQualifyingScenes) {
             projectAssets.brandRefsAutoApplied = true;
             await saveProjectToDb(projectData, projectData.ownerId);
             console.log(
-              `[OmniRef][BulkRegen] No scenes needed auto-apply (skipped ${autoApply.skippedAlreadyHasRefs} already-anchored, ${autoApply.skippedNonProductType} non-product). First-generation flag set.`,
+              `[OmniRef][BulkRegen] No new scenes needed auto-apply but ${autoApply.skippedAlreadyHasRefs} product/solution scene(s) already anchored — first-generation flag set (treating user's existing refs as deliberate).`,
+            );
+          } else if (autoApply.primaryAsset) {
+            console.log(
+              `[OmniRef][BulkRegen] Primary asset available but no qualifying product/solution scenes evaluated (skipped ${autoApply.skippedNonProductType} non-product scene(s)) — flag NOT set (will retry on next bulk regen if scene types change).`,
             );
           } else {
             console.log(

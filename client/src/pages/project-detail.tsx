@@ -762,6 +762,39 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
     },
   });
 
+  // Phase 20C — one-click "Switch to Seedance 2" affordance on the scene-card
+  // amber chip. Persists `videoProviderLock: 'seedance-2.0'` for the scene so
+  // the next regen runs the omni_reference path. Mirrors the editor-level
+  // setProviderLockMutation but is scene-scoped from the project page.
+  const switchProviderLockMutation = useMutation({
+    mutationFn: async ({ sceneId, provider }: { sceneId: string; provider: string }) => {
+      const res = await fetch(
+        `/api/universal-video/${projectId}/scenes/${sceneId}/provider-lock`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ videoProviderLock: provider }),
+        },
+      );
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody?.error || 'Failed to switch provider');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['project', projectId] });
+      toast({
+        title: 'Switched to Seedance 2',
+        description: 'Scene locked to Seedance 2. Hit Re-anchor or regenerate to render with your brand references.',
+      });
+    },
+    onError: (err: Error) => {
+      toast({ title: 'Could not switch provider', description: err.message, variant: 'destructive' });
+    },
+  });
+
   const regenVideoMutation = useMutation({
     mutationFn: async (
       params: string | { sceneId: string; strongAnchor?: boolean },
@@ -1578,14 +1611,28 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
                                 <CheckCircle2 className="w-2.5 h-2.5" /> Anchored · {refs.length}
                               </span>
                             ) : (
-                              <span
-                                className="text-[10px] px-1.5 py-0.5 rounded-full border flex items-center gap-0.5"
+                              <button
+                                type="button"
+                                className="text-[10px] px-1.5 py-0.5 rounded-full border flex items-center gap-0.5 transition-colors hover:bg-amber-500/20 hover:border-amber-500/60 cursor-pointer disabled:opacity-50 disabled:cursor-wait"
                                 style={{ borderColor: 'rgba(245,158,11,0.4)', backgroundColor: 'rgba(245,158,11,0.12)', color: 'rgb(252,211,77)' }}
-                                title={`${refs.length} brand reference${refs.length === 1 ? '' : 's'} attached but rendered with ${formatProviderName(scene.assets?.videoProvider || '')} — switch to Seedance 2 to anchor`}
-                                data-testid={`scene-brand-ref-mismatch-${sceneId}`}
+                                title={`${refs.length} brand reference${refs.length === 1 ? '' : 's'} attached but rendered with ${formatProviderName(scene.assets?.videoProvider || '')} — click to switch this scene to Seedance 2 and anchor your brand`}
+                                data-testid={`scene-brand-ref-mismatch-switcher-${sceneId}`}
+                                disabled={switchProviderLockMutation.isPending}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  // Phase 20C — one-click switcher on the scene-card
+                                  // amber chip. Mirrors the editor-level
+                                  // onSwitchProvider path: locks this scene to
+                                  // seedance-2.0 so the omni_reference path is
+                                  // armed on the next render. Does NOT auto-regen
+                                  // — user can then hit "Re-anchor" or the regen
+                                  // affordance to actually run with refs.
+                                  switchProviderLockMutation.mutate({ sceneId, provider: 'seedance-2.0' });
+                                }}
                               >
-                                <AlertTriangle className="w-2.5 h-2.5" /> Switch to Seedance 2
-                              </span>
+                                <AlertTriangle className="w-2.5 h-2.5" />
+                                {switchProviderLockMutation.isPending && switchProviderLockMutation.variables?.sceneId === sceneId ? 'Switching…' : 'Switch to Seedance 2'}
+                              </button>
                             );
                           })()}
                         </div>
