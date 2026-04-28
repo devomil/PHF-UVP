@@ -763,19 +763,33 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
   });
 
   const regenVideoMutation = useMutation({
-    mutationFn: async (sceneId: string) => {
+    mutationFn: async (
+      params: string | { sceneId: string; strongAnchor?: boolean },
+    ) => {
+      // Phase 20C: callers may pass a plain sceneId (legacy) OR an object that
+      // also requests stronger brand anchoring on the regen pass. The server
+      // appends an explicit anchoring phrase to the effective prompt before
+      // building the omni_reference payload when strongAnchor is true.
+      const { sceneId, strongAnchor } =
+        typeof params === 'string' ? { sceneId: params, strongAnchor: false } : params;
       const res = await fetch(`/api/universal-video/${projectId}/scenes/${sceneId}/regenerate-video`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ provider: selectedProvider }),
+        body: JSON.stringify({ provider: selectedProvider, strongAnchor: !!strongAnchor }),
       });
       if (!res.ok) throw new Error("Failed to regenerate video");
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (_data, params) => {
+      const strong = typeof params !== 'string' && params.strongAnchor;
       queryClient.invalidateQueries({ queryKey: ["project", projectId] });
-      toast({ title: "Regenerating Video", description: "Scene video is being regenerated." });
+      toast({
+        title: strong ? "Re-anchoring Video" : "Regenerating Video",
+        description: strong
+          ? "Re-running this scene with a stronger brand anchoring prompt."
+          : "Scene video is being regenerated.",
+      });
     },
     onError: (err: Error) => {
       toast({ title: "Error", description: err.message, variant: "destructive" });
@@ -1624,17 +1638,15 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
                                 type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  // Phase 20C: directly trigger video regen for
-                                  // this scene. The existing brandReferences[]
-                                  // are already attached and will be sent
-                                  // through the omni_reference path on the next
-                                  // render — this IS the "stronger anchoring"
-                                  // pass relative to whatever produced the
-                                  // current frame (which may have been a
-                                  // legacy single-ref or a non-Seedance
-                                  // provider). No editor open required.
+                                  // Phase 20C: directly trigger a STRONGER-anchoring
+                                  // regen for this scene. Sends `strongAnchor: true`
+                                  // so the server appends the explicit anchoring
+                                  // phrase ("The exact product shown in @image1,
+                                  // identical packaging frame-to-frame…") to the
+                                  // effective prompt before building the
+                                  // omni_reference payload. No editor open required.
                                   if (regenVideoMutation.isPending) return;
-                                  regenVideoMutation.mutate(sceneId);
+                                  regenVideoMutation.mutate({ sceneId, strongAnchor: true });
                                 }}
                                 disabled={regenVideoMutation.isPending}
                                 className="text-[10px] px-1.5 py-0.5 rounded hover:bg-green-500/15 transition-colors underline-offset-2 hover:underline disabled:opacity-50"

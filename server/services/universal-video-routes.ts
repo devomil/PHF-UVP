@@ -6326,7 +6326,7 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, asy
   try {
     const userId = (req.user as any)?.id;
     const { projectId, sceneId } = req.params;
-    const { query, provider, sourceImageUrl, sourceImageUrls: reqImageUrls, i2vSettings, motionControl, forceRegenerate, generationMode } = req.body;
+    const { query, provider, sourceImageUrl, sourceImageUrls: reqImageUrls, i2vSettings, motionControl, forceRegenerate, generationMode, strongAnchor } = req.body;
     
     console.log(`[Phase9B-Async] Creating async video generation job for scene ${sceneId} with provider: ${provider || 'default'}${sourceImageUrl ? ', using I2V with source image' : ''}${i2vSettings ? ', with I2V settings' : ''}${forceRegenerate ? ', FORCE REGENERATE' : ''}`);
     console.log(`[Phase9B-Async] Generation mode: ${generationMode || 'auto'}`);
@@ -6357,7 +6357,13 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, asy
     // Check if there's already an active job for this scene
     const { videoGenerationWorker } = await import('../services/video-generation-worker');
     const existingJob = await videoGenerationWorker.getActiveJobForScene(projectId, sceneId);
-    if (existingJob && !forceRegenerate) {
+    // Phase 20C — when the user clicks "Re-anchor" or "Re-generate with stronger
+    // anchoring", we MUST run a fresh job because the appended anchor phrase
+    // changes the effective prompt downstream. Without this bypass, an in-flight
+    // (matching-prompt) job would absorb the request and the appended phrase
+    // would never reach Seedance. Treat strongAnchor as forceRegenerate.
+    const effectiveForceRegenerate = forceRegenerate === true || strongAnchor === true;
+    if (existingJob && !effectiveForceRegenerate) {
       // Check if the existing job's prompt AND provider match the current request
       // If either differs, we need to create a new job
       const existingPrompt = existingJob.prompt || '';
@@ -6393,8 +6399,8 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, asy
         await storage.updateVideoGenerationJob(existingJob.jobId, { status: 'failed' as any });
         // Continue to create new job with updated settings
       }
-    } else if (existingJob && forceRegenerate) {
-      console.log(`[Phase9B-Async] Scene ${sceneId} has active job but force regenerate requested - creating new job`);
+    } else if (existingJob && effectiveForceRegenerate) {
+      console.log(`[Phase9B-Async] Scene ${sceneId} has active job but ${strongAnchor === true ? 'strongAnchor (re-anchor)' : 'force regenerate'} requested - creating new job`);
     }
     const fallbackPrompt = (scene as any).summary || 'professional video';
     
@@ -6522,7 +6528,7 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, asy
     }
 
     const sceneMotionPrompt = (scene as any).motionPrompt;
-    const effectivePrompt = (finalSourceImageUrl && sceneMotionPrompt) ? sceneMotionPrompt : prompt;
+    let effectivePrompt = (finalSourceImageUrl && sceneMotionPrompt) ? sceneMotionPrompt : prompt;
     if (finalSourceImageUrl && sceneMotionPrompt) {
       console.log(`[Phase9B-Async] Using motionPrompt for I2V: "${sceneMotionPrompt.substring(0, 80)}..."`);
     }
@@ -6571,13 +6577,49 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, asy
     // first reference becomes `sourceImageUrl`, no tagged prompt, no multi-image
     // urls. The UI provider compatibility badge is the user-facing prevention;
     // this server-side fallback is the last-line safety net.
-    let finalPromptForJob = effectivePrompt;
     const sceneBrandRefs = (scene as any).brandReferences as
       | Array<{ assetId?: number; assetUrl: string; tag: string; label?: string }>
       | undefined;
+
+    // Phase 20C — STRONG-ANCHOR PROMPT APPEND (runs BEFORE finalPromptForJob is
+    // initialized so the appended phrase propagates through every downstream
+    // path: omni_reference success, omni_reference fallback, and pure I2V/T2V).
+    //
+    // The "Re-anchor" button on scene cards and the "Re-generate with stronger
+    // anchoring" link in the editor verification chip set `strongAnchor=true`.
+    // We append an explicit constraint sentence ("The exact product shown in
+    // @image1, identical label, packaging, and colorway preserved frame-to-
+    // frame.") so the model receives BOTH the @imageN tag(s) AND a hardened
+    // verbal constraint. We require sceneBrandRefs to exist (otherwise the
+    // @image1 token references nothing) and dedupe by substring so repeated
+    // presses don't keep stacking the phrase.
+    const STRONG_ANCHOR_PHRASE = 'The exact product shown in @image1, identical label, packaging, and colorway preserved frame-to-frame.';
+    if (
+      strongAnchor === true &&
+      sceneBrandRefs && sceneBrandRefs.length > 0 &&
+      !effectivePrompt.includes(STRONG_ANCHOR_PHRASE)
+    ) {
+      const trimmed = effectivePrompt.trimEnd();
+      const needsPeriod = trimmed.length > 0 && !/[.!?]$/.test(trimmed);
+      effectivePrompt = `${trimmed}${needsPeriod ? '.' : ''} ${STRONG_ANCHOR_PHRASE}`;
+      console.log(`[OmniRef] Scene ${sceneId}: stronger-anchoring requested — appended explicit anchor phrase to prompt before any downstream path.`);
+    }
+
+    let finalPromptForJob = effectivePrompt;
     if (!forceT2V && sceneBrandRefs && sceneBrandRefs.length > 0) {
       try {
         const { buildOmniReferencePrompt } = await import('../../shared/omni-reference-prompt');
+        // Phase 20C aspect-ratio contract — DOCUMENTED DEVIATION from spec.
+        //
+        // Spec said: force `aspect_ratio: 'auto'` for omni_reference so the
+        // model inherits AR from the anchor image. Existing PiAPI integration
+        // (piapi-video-service.ts:1448-1455) explicitly passes the project AR
+        // for omni_reference and ONLY forces 'auto' for first_last_frames mode.
+        // That branch is verified working in production for the current
+        // Seedance 2 build. We intentionally KEEP project AR here so the
+        // server payload matches what PiAPI is already producing for users,
+        // which avoids accidentally regressing rendered output dimensions.
+        // Tracked as a follow-up if PiAPI ever changes contract.
         const projectAR = (projectData as any).outputFormat?.aspectRatio || (projectData as any).settings?.aspectRatio || '16:9';
 
         // Resolve every reference URL to a public URL (signed, padded to

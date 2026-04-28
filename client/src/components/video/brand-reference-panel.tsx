@@ -173,9 +173,9 @@ export function BrandReferencePanel({
     setLoadingLibrary(true);
     try {
       const res = await fetch('/api/brand-media-library', { credentials: 'include' });
-      const data = await res.json();
-      const assets: BrandMediaAsset[] = (data?.assets || []).filter(
-        (a: any) => a.mediaType === 'image' && a.url,
+      const data = (await res.json()) as { assets?: BrandMediaAsset[] };
+      const assets: BrandMediaAsset[] = (data?.assets ?? []).filter(
+        (a): a is BrandMediaAsset => a?.mediaType === 'image' && typeof a?.url === 'string' && a.url.length > 0,
       );
       setLibrary(assets);
       const m = tagInfoRef.current;
