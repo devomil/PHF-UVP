@@ -1639,6 +1639,35 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                 }
                 setTimeout(() => regenVideoMutation.mutate(), 600);
               }}
+              onApplySetToAllProductScenes={async (set) => {
+                // Task 91: bulk-apply a saved set to every product/solution
+                // scene in this project. The server skips scenes that already
+                // have brand references unless replaceExisting is sent.
+                try {
+                  const res = await fetch(
+                    `/api/universal-video/projects/${projectId}/apply-brand-reference-set`,
+                    {
+                      method: 'POST',
+                      credentials: 'include',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ setId: set.id }),
+                    },
+                  );
+                  const data = await res.json().catch(() => ({}));
+                  if (!res.ok) throw new Error(data?.error || 'Failed to apply set');
+                  toast({
+                    title: data.attachedCount > 0 ? 'Set applied to scenes' : 'Nothing to apply',
+                    description: data.message,
+                  });
+                  queryClient.invalidateQueries({ queryKey: ['project', projectId] });
+                } catch (e: any) {
+                  toast({
+                    title: 'Failed to apply set',
+                    description: e?.message || 'Unknown error',
+                    variant: 'destructive',
+                  });
+                }
+              }}
             />
           </div>
 

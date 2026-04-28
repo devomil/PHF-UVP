@@ -468,6 +468,35 @@ export const insertBrandMediaSchema = createInsertSchema(brandMediaLibrary).omit
 export type BrandMedia = typeof brandMediaLibrary.$inferSelect;
 export type InsertBrandMedia = z.infer<typeof insertBrandMediaSchema>;
 
+// Task 91: per-user named sets of brand references (product/pack/box images)
+// reusable across scenes. Each set stores an ordered list of reference entries
+// matching the BrandReferenceInput shape (assetUrl + optional assetId/label).
+// The order in `references` defines the @image1..@imageN tag order at apply time.
+export const brandReferenceSets = pgTable("brand_reference_sets", {
+  id: serial("id").primaryKey(),
+  ownerId: varchar("owner_id").notNull().references(() => users.id),
+  name: varchar("name", { length: 255 }).notNull(),
+  description: text("description"),
+  references: jsonb("references").notNull().default([]),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  ownerIdx: index("idx_brand_reference_sets_owner").on(table.ownerId),
+}));
+
+export const brandReferenceSetsRelations = relations(brandReferenceSets, ({ one }) => ({
+  owner: one(users, { fields: [brandReferenceSets.ownerId], references: [users.id] }),
+}));
+
+export const insertBrandReferenceSetSchema = createInsertSchema(brandReferenceSets).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type BrandReferenceSet = typeof brandReferenceSets.$inferSelect;
+export type InsertBrandReferenceSet = z.infer<typeof insertBrandReferenceSetSchema>;
+
 export const universalVideoProjects = pgTable("universal_video_projects", {
   id: serial("id").primaryKey(),
   projectId: varchar("project_id", { length: 100 }).notNull().unique(),

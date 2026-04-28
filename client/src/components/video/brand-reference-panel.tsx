@@ -6,9 +6,28 @@
 // persistence (PATCH `brandReferences`) — this component is purely a
 // controlled value editor.
 
-import { useState, useMemo, useRef, useEffect } from 'react';
-import { Image as ImageIcon, Plus, X, GripVertical, AlertTriangle, CheckCircle2 } from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
+import {
+  Image as ImageIcon,
+  Plus,
+  X,
+  GripVertical,
+  AlertTriangle,
+  CheckCircle2,
+  Bookmark,
+  BookmarkPlus,
+  Layers,
+  Trash2,
+  Loader2,
+} from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -20,6 +39,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import type { BrandReferenceInput } from '@shared/video-types';
 import { buildOmniReferencePrompt, analyzeReferenceHealth } from '@shared/omni-reference-prompt';
 
@@ -32,6 +52,15 @@ interface BrandMediaAsset {
   width?: number | null;
   height?: number | null;
   assetCategory?: string | null;
+}
+
+interface BrandReferenceSet {
+  id: number;
+  name: string;
+  description?: string | null;
+  references: BrandReferenceInput[];
+  createdAt?: string | null;
+  updatedAt?: string | null;
 }
 
 interface BrandReferencePanelProps {
@@ -55,6 +84,13 @@ interface BrandReferencePanelProps {
    * verification chip. Parent typically appends a stronger anchoring phrase
    * to the prompt and kicks off generation. */
   onRegenerateWithStrongerAnchoring?: () => void;
+  /** Task 91: when supplied, the saved-set picker shows an "Apply to all
+   * product scenes" action that delegates the bulk write to the parent
+   * (which knows the projectId). The callback should invoke
+   * POST /api/universal-video/projects/:projectId/apply-brand-reference-set.
+   * May return a Promise — the panel awaits it to keep the per-row spinner
+   * visible until the bulk write resolves. */
+  onApplySetToAllProductScenes?: (set: BrandReferenceSet) => Promise<void> | void;
 }
 
 // Phase 20C: Seedance 2 omni_reference supports up to 9 numbered images.
@@ -148,6 +184,7 @@ export function BrandReferencePanel({
   providerLabel,
   lastVideoUrl,
   onRegenerateWithStrongerAnchoring,
+  onApplySetToAllProductScenes,
 }: BrandReferencePanelProps) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [library, setLibrary] = useState<BrandMediaAsset[]>([]);
@@ -161,6 +198,18 @@ export function BrandReferencePanel({
     fixedPrompt: string;
   } | null>(null);
 
+  // Task 91: saved reference sets — per-user named bundles of references the
+  // user can pick-and-apply across many product/solution scenes without
+  // re-selecting the same hero/pack/box images per scene.
+  const [savedSets, setSavedSets] = useState<BrandReferenceSet[]>([]);
+  const [setsLoaded, setSetsLoaded] = useState(false);
+  const [setsLoading, setSetsLoading] = useState(false);
+  const [setsError, setSetsError] = useState<string | null>(null);
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const [saveName, setSaveName] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [bulkBusyId, setBulkBusyId] = useState<number | null>(null);
+
   const omniResult = useMemo(
     () => buildOmniReferencePrompt({ basePrompt, references }),
     [basePrompt, references],
@@ -169,6 +218,131 @@ export function BrandReferencePanel({
     () => analyzeReferenceHealth({ prompt: basePrompt, references }),
     [basePrompt, references],
   );
+
+  // Task 91: load saved sets exactly once on mount, with manual retry on
+  // failure. Earlier versions wrapped this in a useCallback whose identity
+  // depended on the loading flags — a fetch failure flipped the flags,
+  // changed the callback identity, and the effect re-fired forever, hammering
+  // the endpoint. The fix is a one-shot effect with a cancellation guard
+  // plus an explicit user-driven Retry button on error.
+  const loadAttemptedRef = useRef(false);
+  const reloadSets = useCallback(async () => {
+    setSetsLoading(true);
+    setSetsError(null);
+    try {
+      const res = await fetch('/api/brand-media-library/reference-sets', {
+        credentials: 'include',
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        sets?: BrandReferenceSet[];
+        error?: string;
+      };
+      if (!res.ok) throw new Error(data?.error || 'Failed to load saved sets');
+      setSavedSets(Array.isArray(data?.sets) ? data.sets : []);
+      setSetsLoaded(true);
+    } catch (e: any) {
+      console.error('[BrandReferencePanel] Failed to load saved sets', e);
+      setSetsError(e?.message || 'Failed to load saved sets');
+    } finally {
+      setSetsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (loadAttemptedRef.current) return;
+    loadAttemptedRef.current = true;
+    void reloadSets();
+  }, [reloadSets]);
+
+  // Task 91: applying a saved set fully replaces the current scene's
+  // references — that's the whole point ("don't re-pick the same images").
+  // We re-normalize tags to image1..imageN so order matches the set's order.
+  const applySetToScene = (set: BrandReferenceSet) => {
+    const refs = Array.isArray(set.references) ? set.references : [];
+    if (refs.length === 0) return;
+    const prev = references;
+    const next: BrandReferenceInput[] = normalizeRefs(
+      refs.slice(0, MAX_BRAND_REFS).map((r) => ({
+        assetId: r.assetId,
+        assetUrl: r.assetUrl,
+        tag: r.tag || 'image1',
+        label: r.label,
+        width: r.width,
+        height: r.height,
+      })),
+    );
+    onChange(next);
+    offerPromptRemap(prev, next, 'Reorder');
+  };
+
+  const saveCurrentAsSet = async () => {
+    if (saving) return;
+    const trimmed = saveName.trim();
+    if (!trimmed) return;
+    if (references.length === 0) return;
+    setSaving(true);
+    try {
+      const res = await fetch('/api/brand-media-library/reference-sets', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: trimmed,
+          references: references.map((r) => ({
+            assetId: r.assetId,
+            assetUrl: r.assetUrl,
+            label: r.label,
+            width: r.width,
+            height: r.height,
+          })),
+        }),
+      });
+      const data: BrandReferenceSet | { error?: string } =
+        await res.json().catch(() => ({} as { error?: string }));
+      if (!res.ok) {
+        const errMsg =
+          'error' in data && typeof data.error === 'string' ? data.error : 'Failed to save set';
+        throw new Error(errMsg);
+      }
+      const created = data as BrandReferenceSet;
+      setSavedSets((prev) => [created, ...prev.filter((s) => s.id !== created.id)]);
+      setSaveName('');
+      setSaveDialogOpen(false);
+    } catch (e: any) {
+      console.error('[BrandReferencePanel] Failed to save set', e);
+      setSetsError(e?.message || 'Failed to save set');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deleteSet = async (id: number) => {
+    if (!window.confirm('Delete this saved set? This cannot be undone.')) return;
+    try {
+      const res = await fetch(`/api/brand-media-library/reference-sets/${id}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(data?.error || 'Failed to delete set');
+      }
+      setSavedSets((prev) => prev.filter((s) => s.id !== id));
+    } catch (e: any) {
+      console.error('[BrandReferencePanel] Failed to delete set', e);
+      setSetsError(e?.message || 'Failed to delete set');
+    }
+  };
+
+  const applySetToAllProductScenes = async (set: BrandReferenceSet) => {
+    if (!onApplySetToAllProductScenes) return;
+    setBulkBusyId(set.id);
+    try {
+      await onApplySetToAllProductScenes(set);
+    } finally {
+      setBulkBusyId(null);
+    }
+  };
 
   // Lazy-load the brand media library on first picker open.
   const loadLibrary = async () => {
@@ -401,6 +575,194 @@ export function BrandReferencePanel({
           Reached maximum of {MAX_BRAND_REFS} brand references for Seedance 2.
         </div>
       )}
+
+      {/* Task 91: saved reference sets — pick a previously-saved bundle and
+          apply to this scene (or to all product/solution scenes) without
+          re-picking the same hero/pack/box images per scene. */}
+      <div className="rounded-md border" style={{ borderColor: 'var(--border-subtle)', backgroundColor: 'rgba(0,0,0,0.12)' }} data-testid="brand-reference-sets">
+        <div className="flex items-center justify-between px-2 py-1.5" style={{ borderBottom: savedSets.length > 0 ? '1px solid var(--border-subtle)' : 'none' }}>
+          <div className="flex items-center gap-1.5">
+            <Bookmark className="w-3 h-3" style={{ color: 'var(--text-muted)' }} />
+            <span className="text-[11px] font-medium" style={{ color: 'var(--text-secondary)' }}>
+              Saved sets
+            </span>
+            {setsLoading && <Loader2 className="w-3 h-3 animate-spin" style={{ color: 'var(--text-muted)' }} />}
+            {setsLoaded && savedSets.length > 0 && (
+              <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                ({savedSets.length})
+              </span>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setSaveName('');
+              setSetsError(null);
+              setSaveDialogOpen(true);
+            }}
+            disabled={references.length === 0}
+            className="text-[10px] px-2 py-0.5 rounded flex items-center gap-1 transition-colors hover:bg-indigo-500/15 disabled:opacity-40 disabled:cursor-not-allowed"
+            style={{ color: 'rgb(165,180,252)' }}
+            data-testid="brand-reference-save-set-button"
+            title={
+              references.length === 0
+                ? 'Add at least one reference before saving as a set'
+                : 'Save the current references as a reusable set'
+            }
+          >
+            <BookmarkPlus className="w-3 h-3" /> Save current as set
+          </button>
+        </div>
+
+        {setsError && (
+          <div className="text-[10px] px-2 py-1 flex items-center justify-between gap-2" style={{ color: 'rgb(252,165,165)' }}>
+            <span className="truncate">{setsError}</span>
+            <button
+              type="button"
+              onClick={() => void reloadSets()}
+              disabled={setsLoading}
+              className="px-1.5 py-0.5 rounded hover:bg-red-500/15 transition-colors underline-offset-2 hover:underline disabled:opacity-50"
+              data-testid="brand-reference-sets-retry"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
+        {setsLoaded && savedSets.length === 0 && !setsError ? (
+          <div className="text-[10px] px-2 py-2" style={{ color: 'var(--text-muted)' }}>
+            No saved sets yet. Build a set on this scene, then click "Save current as set" to reuse it on other scenes.
+          </div>
+        ) : (
+          <ul className="divide-y" style={{ borderColor: 'var(--border-subtle)' }}>
+            {savedSets.map((set) => {
+              const refCount = Array.isArray(set.references) ? set.references.length : 0;
+              const previews = Array.isArray(set.references) ? set.references.slice(0, 4) : [];
+              const isBulkBusy = bulkBusyId === set.id;
+              return (
+                <li
+                  key={set.id}
+                  className="flex items-center gap-2 px-2 py-1.5"
+                  data-testid={`brand-reference-set-${set.id}`}
+                >
+                  <div className="flex items-center gap-0.5 flex-shrink-0">
+                    {previews.map((r, i) => (
+                      <img
+                        key={`${set.id}-prev-${i}`}
+                        src={r.assetUrl}
+                        alt={r.label || `ref ${i + 1}`}
+                        className="w-6 h-6 object-cover rounded border"
+                        style={{ borderColor: 'var(--border-subtle)' }}
+                        loading="lazy"
+                      />
+                    ))}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[11px] truncate" style={{ color: 'var(--text-primary)' }}>
+                      {set.name}
+                    </div>
+                    <div className="text-[9px]" style={{ color: 'var(--text-muted)' }}>
+                      {refCount} reference{refCount === 1 ? '' : 's'}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => applySetToScene(set)}
+                    className="text-[10px] px-2 py-0.5 rounded hover:bg-indigo-500/15 transition-colors flex items-center gap-1"
+                    style={{ color: 'rgb(165,180,252)' }}
+                    data-testid={`brand-reference-set-apply-scene-${set.id}`}
+                    title={`Replace this scene's references with "${set.name}"`}
+                  >
+                    Apply to scene
+                  </button>
+                  {onApplySetToAllProductScenes && (
+                    <button
+                      type="button"
+                      onClick={() => applySetToAllProductScenes(set)}
+                      disabled={isBulkBusy}
+                      className="text-[10px] px-2 py-0.5 rounded hover:bg-indigo-500/15 transition-colors flex items-center gap-1 disabled:opacity-50"
+                      style={{ color: 'rgb(165,180,252)' }}
+                      data-testid={`brand-reference-set-apply-all-${set.id}`}
+                      title={`Apply "${set.name}" to all product/solution scenes that don't already have brand references`}
+                    >
+                      {isBulkBusy ? (
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                      ) : (
+                        <Layers className="w-3 h-3" />
+                      )}
+                      Apply to all product scenes
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => deleteSet(set.id)}
+                    className="p-1 rounded hover:bg-red-500/15 transition-colors"
+                    title="Delete this saved set"
+                    data-testid={`brand-reference-set-delete-${set.id}`}
+                  >
+                    <Trash2 className="w-3 h-3" style={{ color: 'var(--text-muted)' }} />
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+
+      <Dialog open={saveDialogOpen} onOpenChange={(o) => !o && !saving && setSaveDialogOpen(false)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Save brand reference set</DialogTitle>
+            <DialogDescription>
+              Save the {references.length} reference{references.length === 1 ? '' : 's'} currently attached to this scene as a reusable set. Apply it to other scenes — or to every product/solution scene at once — without re-picking each image.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-2">
+            <label className="text-xs font-medium mb-1 block" style={{ color: 'var(--text-secondary)' }}>
+              Set name
+            </label>
+            <Input
+              autoFocus
+              value={saveName}
+              onChange={(e) => setSaveName(e.target.value)}
+              placeholder='e.g. "Q4 Launch Pack: hero + box + label"'
+              maxLength={255}
+              data-testid="brand-reference-save-set-name-input"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && saveName.trim().length > 0 && !saving) {
+                  void saveCurrentAsSet();
+                }
+              }}
+            />
+            <div className="text-[10px] mt-1.5 flex items-center gap-1" style={{ color: 'var(--text-muted)' }}>
+              {references.slice(0, 6).map((r, i) => (
+                <img
+                  key={`save-prev-${i}`}
+                  src={r.assetUrl}
+                  alt={r.label || r.tag}
+                  className="w-7 h-7 object-cover rounded border"
+                  style={{ borderColor: 'var(--border-subtle)' }}
+                />
+              ))}
+              {references.length > 6 && <span>+{references.length - 6} more</span>}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setSaveDialogOpen(false)} disabled={saving}>
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => void saveCurrentAsSet()}
+              disabled={saving || saveName.trim().length === 0 || references.length === 0}
+              data-testid="brand-reference-save-set-confirm"
+            >
+              {saving ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <BookmarkPlus className="w-3 h-3 mr-1" />}
+              Save set
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Health linter */}
       {health.length > 0 && (

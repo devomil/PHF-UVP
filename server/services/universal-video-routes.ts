@@ -2057,6 +2057,94 @@ router.post('/projects/:projectId/apply-product-references', isAuthenticated, as
   }
 });
 
+// Task 91: bulk-apply a saved brand reference set to all product/solution
+// scenes in a project. Mirrors the existing single-image apply-product-references
+// endpoint but pulls the references from a per-user saved set instead of the
+// project's primary product image.
+//
+// Body: { setId: number, replaceExisting?: boolean (default false) }
+router.post('/projects/:projectId/apply-brand-reference-set', isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const userId = (req.user as any)?.id;
+    const { projectId } = req.params;
+    const setId = Number(req.body?.setId);
+    const replaceExisting = req.body?.replaceExisting === true;
+
+    if (!Number.isInteger(setId) || setId <= 0) {
+      return res.status(400).json({ success: false, error: 'setId is required' });
+    }
+
+    const projectData = await getProjectFromDb(projectId);
+    if (!projectData) {
+      return res.status(404).json({ success: false, error: 'Project not found' });
+    }
+    if (projectData.ownerId !== userId) {
+      return res.status(403).json({ success: false, error: 'Access denied' });
+    }
+
+    const { brandReferenceSets } = await import('../../shared/schema');
+    const { and, eq } = await import('drizzle-orm');
+    const { db } = await import('../db');
+    const [setRow] = await db
+      .select()
+      .from(brandReferenceSets)
+      .where(and(eq(brandReferenceSets.id, setId), eq(brandReferenceSets.ownerId, userId)))
+      .limit(1);
+    if (!setRow) {
+      return res.status(404).json({ success: false, error: 'Brand reference set not found' });
+    }
+    // Validate the JSONB blob read from the DB through the same sanitizer
+    // the create/update routes use, so malformed rows can never be written
+    // into a scene's brandReferences[]. Returns null on structural failure.
+    const { sanitizeBrandReferenceList, applyReferenceSetToScenes } =
+      await import('./brand-reference-helpers');
+    const setRefs = sanitizeBrandReferenceList(setRow.references);
+    if (!setRefs) {
+      return res.status(400).json({
+        success: false,
+        error: 'Saved set has no usable references (corrupt or empty)',
+      });
+    }
+
+    const result = applyReferenceSetToScenes(
+      projectData.scenes as Scene[],
+      setRefs,
+      { target: 'all-product', replaceExisting },
+    );
+
+    if (result.attachedCount === 0) {
+      return res.json({
+        success: true,
+        attachedCount: 0,
+        skippedAlreadyHasRefs: result.skippedAlreadyHasRefs,
+        skippedNonProductType: result.skippedNonProductType,
+        setName: setRow.name,
+        message: result.skippedAlreadyHasRefs > 0
+          ? `All product/solution scenes already have brand references — pass replaceExisting=true to overwrite.`
+          : `No product/solution scenes found.`,
+      });
+    }
+
+    projectData.scenes = result.scenes;
+    projectData.updatedAt = new Date().toISOString();
+    await saveProjectToDb(projectData, projectData.ownerId);
+
+    console.log(`[OmniRef] Bulk-applied saved set "${setRow.name}" (${setRefs.length} ref${setRefs.length === 1 ? '' : 's'}) to ${result.attachedCount} scene(s) in project ${projectId} (skipped ${result.skippedAlreadyHasRefs} with existing refs, ${result.skippedNonProductType} non-product, replace=${replaceExisting})`);
+
+    return res.json({
+      success: true,
+      attachedCount: result.attachedCount,
+      skippedAlreadyHasRefs: result.skippedAlreadyHasRefs,
+      skippedNonProductType: result.skippedNonProductType,
+      setName: setRow.name,
+      message: `Applied "${setRow.name}" to ${result.attachedCount} scene${result.attachedCount === 1 ? '' : 's'}.`,
+    });
+  } catch (error: any) {
+    console.error('[OmniRef] Error in apply-brand-reference-set:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Phase 14C: Update quality tier for a project
 router.patch('/projects/:projectId/quality-tier', isAuthenticated, async (req: Request, res: Response) => {
   try {

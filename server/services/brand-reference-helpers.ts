@@ -15,7 +15,7 @@
 import { db } from '../db';
 import { brandMediaLibrary } from '../../shared/schema';
 import { and, eq } from 'drizzle-orm';
-import type { Scene, ProductImage } from '../../shared/video-types';
+import type { Scene, ProductImage, BrandReferenceInput } from '../../shared/video-types';
 
 /**
  * Phase 20C — spec contract: brand-reference auto/bulk-apply targets ONLY
@@ -184,6 +184,120 @@ export async function applyProductReferencesToScenesWithFallback(
     };
   }
   return applyReferenceSourceToScenes(scenes, source);
+}
+
+/**
+ * Task 91: shared validator for reference-set payloads. Used by both the
+ * brand-media CRUD routes (validating user input) and the bulk-apply
+ * endpoint (validating data read back from the DB). Returning `null`
+ * indicates a structural failure — caller should surface a 400 / abort.
+ *
+ * The cap matches the Seedance 2 omni_reference limit (9 numbered images).
+ * Tags are re-normalized to image1..imageN regardless of input order so the
+ * stored array's index defines the canonical tag.
+ */
+export const MAX_BRAND_REFERENCE_SET_ENTRIES = 9;
+
+export function sanitizeBrandReferenceList(input: unknown): BrandReferenceInput[] | null {
+  if (!Array.isArray(input)) return null;
+  if (input.length === 0 || input.length > MAX_BRAND_REFERENCE_SET_ENTRIES) return null;
+  const out: BrandReferenceInput[] = [];
+  for (let i = 0; i < input.length; i++) {
+    const r = input[i] as Record<string, unknown> | null | undefined;
+    if (!r || typeof r !== 'object') return null;
+    const assetUrl = typeof r.assetUrl === 'string' ? r.assetUrl.trim() : '';
+    if (!assetUrl) return null;
+    out.push({
+      assetId: typeof r.assetId === 'number' ? r.assetId : undefined,
+      assetUrl,
+      tag: `image${i + 1}`,
+      label: typeof r.label === 'string' ? r.label : undefined,
+      width: typeof r.width === 'number' ? r.width : undefined,
+      height: typeof r.height === 'number' ? r.height : undefined,
+    });
+  }
+  return out;
+}
+
+/**
+ * Task 91: apply a saved reference set (ordered list of brand references) to
+ * scenes. Two modes are supported via `options`:
+ *
+ *   - `target: 'all-product'` → only product/solution scenes are touched.
+ *     Used by the project-level bulk action that mirrors the existing
+ *     single-image bulk-apply.
+ *   - `target: 'all'` → every scene is touched (currently unused by the UI but
+ *     left in for future flexibility).
+ *
+ * `replaceExisting` controls whether scenes that already have brandReferences
+ * are overwritten. The bulk-apply path defaults to `false` so users don't
+ * accidentally clobber per-scene customizations; the per-scene apply path
+ * (which is just `onChange()` in the panel) doesn't go through this helper.
+ *
+ * Tags in the resulting scene are normalized to image1..imageN regardless of
+ * the input order so the saved set's order is the canonical tag order.
+ */
+export interface ApplyReferenceSetResult {
+  scenes: Scene[];
+  attachedCount: number;
+  skippedAlreadyHasRefs: number;
+  skippedNonProductType: number;
+}
+
+export function applyReferenceSetToScenes(
+  scenes: Scene[],
+  setReferences: BrandReferenceInput[],
+  options: { target: 'all-product' | 'all'; replaceExisting?: boolean },
+): ApplyReferenceSetResult {
+  const replaceExisting = options.replaceExisting ?? false;
+  let attached = 0;
+  let skippedHasRefs = 0;
+  let skippedNonProduct = 0;
+
+  // Normalize set ordering → image1..imageN, strip stale tags.
+  const normalized: BrandReferenceInput[] = setReferences.map((r, i) => ({
+    assetId: r.assetId,
+    assetUrl: r.assetUrl,
+    label: r.label,
+    width: r.width,
+    height: r.height,
+    tag: `image${i + 1}`,
+  }));
+
+  if (normalized.length === 0) {
+    return {
+      scenes,
+      attachedCount: 0,
+      skippedAlreadyHasRefs: 0,
+      skippedNonProductType: 0,
+    };
+  }
+
+  const next = scenes.map((scene) => {
+    if (options.target === 'all-product' && !isProductLikeScene(scene)) {
+      skippedNonProduct++;
+      return scene;
+    }
+    const existing = (scene as Scene & { brandReferences?: unknown[] }).brandReferences;
+    if (!replaceExisting && existing && existing.length > 0) {
+      skippedHasRefs++;
+      return scene;
+    }
+    const updated: Scene = {
+      ...scene,
+      brandReferences: normalized.map((r) => ({ ...r })),
+      useOmniReference: true,
+    };
+    attached++;
+    return updated;
+  });
+
+  return {
+    scenes: next,
+    attachedCount: attached,
+    skippedAlreadyHasRefs: skippedHasRefs,
+    skippedNonProductType: skippedNonProduct,
+  };
 }
 
 function applyReferenceSourceToScenes(
