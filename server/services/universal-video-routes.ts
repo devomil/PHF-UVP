@@ -7760,34 +7760,66 @@ router.post('/:projectId/regenerate-all-videos', isAuthenticated, async (req: Re
     
     console.log(`[UniversalVideo] Starting bulk video regeneration for project ${projectId} with ${scenes.length} scenes`);
 
-    // Phase 20C: idempotent first-generation auto-apply pass — for product-style
-    // projects, attach a product image (project's primary, or global default
-    // brand-media image as fallback) to product/solution scenes that have no
-    // brandReferences yet. Safe to call on every bulk run because the helper
-    // never overwrites manual choices.
+    // Phase 20C: FIRST-GENERATION ONLY auto-apply pass.
+    //
+    // We attach a product image to product/solution scenes that lack
+    // brandReferences ONCE per project. The first time this runs, we set
+    // `assets.brandRefsAutoApplied = true` on the project. On every later
+    // bulk-regen, we skip the pass entirely so a user who deliberately
+    // removed references from a scene does NOT have them silently re-attached
+    // on the next regenerate (which would override their explicit choice).
+    //
+    // Users who want the auto-apply behavior again can hit the explicit
+    // "Apply product to scenes" header button (POST /apply-product-references),
+    // which is the user-driven escape hatch.
     try {
-      const productImages = ((projectData as any).assets?.productImages ||
-        (projectData as any).productImages ||
-        []) as Array<{ id?: string | number; url: string; name?: string; isPrimary?: boolean }>;
-      const { applyProductReferencesToScenesWithFallback } = await import('./brand-reference-helpers');
-      const autoApply = await applyProductReferencesToScenesWithFallback(
-        projectData.scenes as Scene[],
-        productImages,
-      );
-      if (autoApply.attachedCount > 0) {
-        // CRITICAL: write the mutated scenes back onto the project (and refresh
-        // the loop's local `scenes` reference) before we persist or iterate.
-        projectData.scenes = autoApply.scenes;
-        scenes.length = 0;
-        scenes.push(...(autoApply.scenes as typeof scenes));
+      const projectAssets = ((projectData as any).assets =
+        (projectData as any).assets || {});
+      const alreadyAutoApplied = projectAssets.brandRefsAutoApplied === true;
+
+      if (alreadyAutoApplied) {
         console.log(
-          `[OmniRef][BulkRegen] Auto-attached "${autoApply.primaryAsset?.name || 'reference'}" to ${autoApply.attachedCount} scene(s) before regeneration (skipped ${autoApply.skippedAlreadyHasRefs} already-anchored, ${autoApply.skippedNonProductType} non-product).`,
+          `[OmniRef][BulkRegen] Skipping first-generation auto-apply — project already auto-applied once. Use the "Apply product to scenes" button to re-attach explicitly.`,
         );
-        await saveProjectToDb(projectData, projectData.ownerId);
-      } else if (!autoApply.primaryAsset) {
-        console.log(
-          `[OmniRef][BulkRegen] No project product images and no global default brand image — auto-apply skipped.`,
+      } else {
+        const productImages = (projectAssets.productImages ||
+          (projectData as any).productImages ||
+          []) as ProductImage[];
+        const { applyProductReferencesToScenesWithFallback } = await import('./brand-reference-helpers');
+        const autoApply = await applyProductReferencesToScenesWithFallback(
+          projectData.scenes as Scene[],
+          productImages,
         );
+        if (autoApply.attachedCount > 0) {
+          // CRITICAL: write the mutated scenes back onto the project (and refresh
+          // the loop's local `scenes` reference) before we persist or iterate.
+          projectData.scenes = autoApply.scenes;
+          scenes.length = 0;
+          scenes.push(...(autoApply.scenes as typeof scenes));
+          // Mark as done so future bulk-regens skip this pass entirely.
+          projectAssets.brandRefsAutoApplied = true;
+          console.log(
+            `[OmniRef][BulkRegen] Auto-attached "${autoApply.primaryAsset?.name || 'reference'}" to ${autoApply.attachedCount} scene(s) before regeneration (skipped ${autoApply.skippedAlreadyHasRefs} already-anchored, ${autoApply.skippedNonProductType} non-product). First-generation flag set — auto-apply will not re-run.`,
+          );
+          await saveProjectToDb(projectData, projectData.ownerId);
+        } else {
+          // Even when nothing is attached, if a primary asset was discoverable
+          // we still mark the flag so we don't re-scan the world on every
+          // regenerate. If no primary asset is available at all, leave the
+          // flag unset so a later product-image upload will trigger the
+          // first-generation pass.
+          if (autoApply.primaryAsset) {
+            projectAssets.brandRefsAutoApplied = true;
+            await saveProjectToDb(projectData, projectData.ownerId);
+            console.log(
+              `[OmniRef][BulkRegen] No scenes needed auto-apply (skipped ${autoApply.skippedAlreadyHasRefs} already-anchored, ${autoApply.skippedNonProductType} non-product). First-generation flag set.`,
+            );
+          } else {
+            console.log(
+              `[OmniRef][BulkRegen] No project product images and no global default brand image — auto-apply skipped, flag NOT set (will retry once an image becomes available).`,
+            );
+          }
+        }
       }
     } catch (autoApplyErr: any) {
       console.warn(

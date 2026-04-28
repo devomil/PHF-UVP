@@ -71,9 +71,13 @@ export function buildOmniReferencePrompt(params: {
     .map((r) => r.assetUrl)
     .filter((u): u is string => !!u && typeof u === 'string');
 
-  // Pre-tagged: leave as-is.
-  if (/@image\d/i.test(basePrompt)) {
-    if (params.verbose) console.log('[OmniRef] Using pre-tagged prompt');
+  // Pre-tagged: leave as-is, but ONLY if the primary anchor `@image1` is
+  // already present (per spec). Prompts that mention only `@image2` (etc.)
+  // without `@image1` are NOT considered correctly anchored — they fall
+  // through to noun-injection / append so the model always receives the
+  // primary product anchor.
+  if (/@image1\b/i.test(basePrompt)) {
+    if (params.verbose) console.log('[OmniRef] Using pre-tagged prompt (@image1 present)');
     return {
       prompt: basePrompt,
       imageList,

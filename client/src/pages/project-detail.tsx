@@ -2618,24 +2618,29 @@ export default function ProjectDetail({ params }: { params?: { id: string } }) {
               </Button>
             )}
             {/* Phase 20C: bulk-apply primary product image as @image1 reference
-                to every product/solution scene that lacks brand references. */}
-            {((project as any)?.assets?.productImages?.length || 0) > 0 && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-1.5"
-                style={{ borderColor: 'var(--border-medium)', color: 'var(--text-secondary)' }}
-                onClick={() => applyProductReferencesMutation.mutate()}
-                disabled={applyProductReferencesMutation.isPending}
-                data-testid="apply-product-references-button"
-                title="Attach your primary product image as @image1 to every product/solution scene that doesn't already have a brand reference. Idempotent."
-              >
-                <ImagePlus className="w-4 h-4" />
-                {applyProductReferencesMutation.isPending
-                  ? 'Applying...'
-                  : 'Apply product to scenes'}
-              </Button>
-            )}
+                to every product/solution scene that lacks brand references.
+                Always rendered — the backend resolves the source itself,
+                falling back to a global default brand-media image when the
+                project has no productImages. UX matches the auto-apply path. */}
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              style={{ borderColor: 'var(--border-medium)', color: 'var(--text-secondary)' }}
+              onClick={() => applyProductReferencesMutation.mutate()}
+              disabled={applyProductReferencesMutation.isPending}
+              data-testid="apply-product-references-button"
+              title={
+                ((project as any)?.assets?.productImages?.length || 0) > 0
+                  ? "Attach your primary product image as @image1 to every product/solution scene that doesn't already have a brand reference. Idempotent."
+                  : "No product images on this project — will try to use the global default brand image (mark one as default in your brand library). Idempotent."
+              }
+            >
+              <ImagePlus className="w-4 h-4" />
+              {applyProductReferencesMutation.isPending
+                ? 'Applying...'
+                : 'Apply product to scenes'}
+            </Button>
             <Button
               variant="outline"
               size="sm"
