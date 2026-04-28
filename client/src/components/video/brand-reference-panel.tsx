@@ -9,6 +9,16 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { Image as ImageIcon, Plus, X, GripVertical, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import type { BrandReferenceInput } from '@shared/video-types';
 import { buildOmniReferencePrompt, analyzeReferenceHealth } from '@shared/omni-reference-prompt';
@@ -101,19 +111,6 @@ function applyTagRemap(
     .trim();
 }
 
-function describeRemap(rename: Map<string, string>, remove: Set<string>): string {
-  const parts: string[] = [];
-  if (remove.size > 0) {
-    parts.push(`remove ${[...remove].map((t) => `@${t}`).join(', ')}`);
-  }
-  if (rename.size > 0) {
-    parts.push(
-      [...rename.entries()].map(([o, n]) => `@${o} → @${n}`).join(', '),
-    );
-  }
-  return parts.join('\n');
-}
-
 function promptHasAnyAffectedTag(
   prompt: string,
   rename: Map<string, string>,
@@ -157,6 +154,12 @@ export function BrandReferencePanel({
   const [loadingLibrary, setLoadingLibrary] = useState(false);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const tagInfoRef = useRef<Map<string, BrandMediaAsset>>(new Map());
+  const [remapPrompt, setRemapPrompt] = useState<{
+    verb: 'Remove' | 'Reorder';
+    rename: Array<[string, string]>;
+    remove: string[];
+    fixedPrompt: string;
+  } | null>(null);
 
   const omniResult = useMemo(
     () => buildOmniReferencePrompt({ basePrompt, references }),
@@ -222,11 +225,12 @@ export function BrandReferencePanel({
     if (!promptHasAnyAffectedTag(basePrompt, rename, remove)) return;
     const fixed = applyTagRemap(basePrompt, rename, remove);
     if (fixed === basePrompt) return;
-    const desc = describeRemap(rename, remove);
-    const proceed = window.confirm(
-      `${verb} updated the reference order. Apply matching changes to the prompt?\n\n${desc}`,
-    );
-    if (proceed) onPromptChange(fixed);
+    setRemapPrompt({
+      verb,
+      rename: [...rename.entries()],
+      remove: [...remove],
+      fixedPrompt: fixed,
+    });
   };
 
   const removeReference = (index: number) => {
@@ -515,6 +519,75 @@ export function BrandReferencePanel({
         onPick={addReference}
         usedUrls={new Set(references.map((r) => r.assetUrl))}
       />
+
+      {/* Themed confirmation for remapping `@imageN` tags after a remove or
+          reorder (replaces the legacy window.confirm). Style mirrors the
+          Regenerate provider-mismatch dialog for consistency. */}
+      <AlertDialog
+        open={remapPrompt !== null}
+        onOpenChange={(open) => {
+          if (!open) setRemapPrompt(null);
+        }}
+      >
+        <AlertDialogContent data-testid="brand-reference-remap-dialog">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-amber-400" />
+              Update prompt to match new reference order?
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3">
+                <p>
+                  {remapPrompt?.verb === 'Remove'
+                    ? 'Removing this reference changed the @imageN numbering.'
+                    : 'Reordering changed the @imageN numbering.'}{' '}
+                  Apply matching changes to the prompt so your tags still point at the right images?
+                </p>
+                {remapPrompt && (remapPrompt.remove.length > 0 || remapPrompt.rename.length > 0) && (
+                  <div className="rounded-md border border-gray-800 bg-gray-900/60 p-3 text-xs space-y-1.5">
+                    {remapPrompt.remove.length > 0 && (
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="text-gray-400 shrink-0">Remove from prompt</span>
+                        <span className="font-mono text-red-300 text-right break-all">
+                          {remapPrompt.remove.map((t) => `@${t}`).join(', ')}
+                        </span>
+                      </div>
+                    )}
+                    {remapPrompt.rename.length > 0 && (
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="text-gray-400 shrink-0">Rename in prompt</span>
+                        <span className="font-mono text-emerald-300 text-right break-all">
+                          {remapPrompt.rename.map(([o, n]) => `@${o} → @${n}`).join(', ')}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
+                <p className="text-xs text-gray-400">
+                  Skip to leave the prompt as it is — you can edit the @imageN tags by hand later.
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              onClick={() => setRemapPrompt(null)}
+              data-testid="brand-reference-remap-skip"
+            >
+              Skip
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (remapPrompt && onPromptChange) onPromptChange(remapPrompt.fixedPrompt);
+                setRemapPrompt(null);
+              }}
+              data-testid="brand-reference-remap-apply"
+            >
+              Apply changes
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
