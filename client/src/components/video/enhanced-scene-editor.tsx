@@ -16,6 +16,16 @@ import { SCENE_CONTENT_TAGS, getSceneContentTag } from "@shared/config/scene-con
 import { getVisualArtPreset, getAllVisualArtPresets } from "@shared/config/visual-art-presets";
 import { CharacterProfilesPanel } from "./character-profiles-panel";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import type { CharacterProfile } from "@shared/video-types";
 import {
   useRoutingPreview,
@@ -171,6 +181,11 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
   const [showEditLibrary, setShowEditLibrary] = useState(false);
   const [showMultiImageTip, setShowMultiImageTip] = useState(false);
   const [regeneratingType, setRegeneratingType] = useState<'video' | 'image' | null>(null);
+  const [providerMismatchOpen, setProviderMismatchOpen] = useState(false);
+  const [providerMismatchInfo, setProviderMismatchInfo] = useState<{
+    providerLabel: string;
+    referenceCount: number;
+  } | null>(null);
   const [regenStartedAt, setRegenStartedAt] = useState<number | null>(null);
   const [regenElapsed, setRegenElapsed] = useState(0);
   const [sceneOverlays, setSceneOverlays] = useState<SceneOverlayItem[]>(
@@ -1970,13 +1985,14 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                   const resolvedProvider = (videoProviderLock || (provider !== 'auto' ? provider : null) || scene.assets?.videoProvider || '').toString().toLowerCase();
                   const isSeedance2 = resolvedProvider.startsWith('seedance-2');
                   if (brandReferences.length > 0 && !isSeedance2) {
-                    const providerLabel = resolvedProvider === ''
-                      ? 'auto-routing (provider not yet resolved to Seedance 2)'
-                      : resolvedProvider;
-                    const proceed = window.confirm(
-                      `This scene has ${brandReferences.length} brand reference${brandReferences.length === 1 ? '' : 's'} attached, but the selected provider — ${providerLabel} — does not support omni_reference brand anchoring.\n\nIf you proceed, the references will either be passed as a single generic reference image or be ignored entirely, and the model may not preserve your product label exactly.\n\nClick "Cancel" and use the "Switch to Seedance 2 to anchor" chip above for proper brand anchoring.\n\nProceed anyway?`,
-                    );
-                    if (!proceed) return;
+                    setProviderMismatchInfo({
+                      providerLabel: resolvedProvider === ''
+                        ? 'auto-routing (not yet resolved to Seedance 2)'
+                        : formatEditorProviderName(resolvedProvider),
+                      referenceCount: brandReferences.length,
+                    });
+                    setProviderMismatchOpen(true);
+                    return;
                   }
                   regenVideoMutation.mutate();
                 }}
@@ -3584,6 +3600,89 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
         open={showPromptInspector}
         onClose={() => setShowPromptInspector(false)}
       />
+
+      {/* Phase 20C: Provider mismatch confirmation (replaces window.confirm) */}
+      <AlertDialog open={providerMismatchOpen} onOpenChange={setProviderMismatchOpen}>
+        <AlertDialogContent data-testid="provider-mismatch-dialog">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-amber-400" />
+              Brand references won&apos;t be anchored
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3">
+                <p>
+                  This scene has{" "}
+                  <span className="font-medium text-white">
+                    {providerMismatchInfo?.referenceCount ?? 0} brand reference
+                    {(providerMismatchInfo?.referenceCount ?? 0) === 1 ? "" : "s"}
+                  </span>{" "}
+                  attached, but the selected provider doesn&apos;t support{" "}
+                  <code className="text-xs px-1 py-0.5 rounded bg-gray-800 text-gray-200">
+                    omni_reference
+                  </code>{" "}
+                  brand anchoring.
+                </p>
+                <div className="rounded-md border border-gray-800 bg-gray-900/60 p-3 text-xs space-y-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-gray-400">Selected provider</span>
+                    <span className="font-medium text-white truncate">
+                      {providerMismatchInfo?.providerLabel || "—"}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-gray-400">Anchors brand refs?</span>
+                    <span className="font-medium text-red-300">No</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-gray-400">Recommended</span>
+                    <span className="font-medium text-emerald-300">Seedance 2</span>
+                  </div>
+                </div>
+                <p className="text-xs text-gray-400">
+                  If you continue, your references will either be passed as a single generic
+                  image or ignored entirely — the model may not preserve your label or
+                  packaging frame-to-frame.
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              onClick={() => setProviderMismatchOpen(false)}
+              data-testid="provider-mismatch-dismiss"
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-gray-800 text-gray-200 hover:bg-gray-700"
+              onClick={() => {
+                setProviderMismatchOpen(false);
+                regenVideoMutation.mutate();
+              }}
+              data-testid="provider-mismatch-generate-anyway"
+            >
+              Generate anyway
+            </AlertDialogAction>
+            <AlertDialogAction
+              onClick={() => {
+                setProviderMismatchOpen(false);
+                setProviderLockMutation.mutate(
+                  { videoProviderLock: "seedance-2.0" },
+                  {
+                    onSuccess: () => {
+                      regenVideoMutation.mutate();
+                    },
+                  },
+                );
+              }}
+              data-testid="provider-mismatch-switch-and-generate"
+            >
+              Switch to Seedance 2 and generate
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
