@@ -47,8 +47,82 @@ interface BrandReferencePanelProps {
   onRegenerateWithStrongerAnchoring?: () => void;
 }
 
+// Phase 20C: Seedance 2 omni_reference supports up to 9 numbered images.
+const MAX_BRAND_REFS = 9;
+
 function normalizeRefs(refs: BrandReferenceInput[]): BrandReferenceInput[] {
   return refs.map((r, i) => ({ ...r, tag: `image${i + 1}` }));
+}
+
+/**
+ * Compute a tag rename / removal mapping by matching prev → next references
+ * by `assetUrl`. Items present in `prev` but missing from `next` are flagged
+ * for removal; items whose index changed are flagged for rename.
+ */
+function computeTagRemap(
+  prev: BrandReferenceInput[],
+  next: BrandReferenceInput[],
+): { rename: Map<string, string>; remove: Set<string> } {
+  const rename = new Map<string, string>();
+  const remove = new Set<string>();
+  const newTagByUrl = new Map<string, string>();
+  next.forEach((r, i) => newTagByUrl.set(r.assetUrl, `image${i + 1}`));
+  prev.forEach((r, i) => {
+    const oldTag = `image${i + 1}`;
+    const newTag = newTagByUrl.get(r.assetUrl);
+    if (!newTag) remove.add(oldTag);
+    else if (newTag !== oldTag) rename.set(oldTag, newTag);
+  });
+  return { rename, remove };
+}
+
+/**
+ * Atomically rewrite `@imageN` tokens in `prompt` according to the rename
+ * map and removal set. Single-pass replacement avoids cascade collisions
+ * (e.g. image2→image1 then image3→image2 would otherwise smash together).
+ */
+function applyTagRemap(
+  prompt: string,
+  rename: Map<string, string>,
+  remove: Set<string>,
+): string {
+  const out = prompt.replace(/@image(\d+)\b\.?/gi, (full, num) => {
+    const old = `image${num}`;
+    if (remove.has(old)) return '';
+    if (rename.has(old)) {
+      const trailingDot = full.endsWith('.') ? '.' : '';
+      return `@${rename.get(old)}${trailingDot}`;
+    }
+    return full;
+  });
+  return out
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/\s+([.,!?;:])/g, '$1')
+    .trim();
+}
+
+function describeRemap(rename: Map<string, string>, remove: Set<string>): string {
+  const parts: string[] = [];
+  if (remove.size > 0) {
+    parts.push(`remove ${[...remove].map((t) => `@${t}`).join(', ')}`);
+  }
+  if (rename.size > 0) {
+    parts.push(
+      [...rename.entries()].map(([o, n]) => `@${o} → @${n}`).join(', '),
+    );
+  }
+  return parts.join('\n');
+}
+
+function promptHasAnyAffectedTag(
+  prompt: string,
+  rename: Map<string, string>,
+  remove: Set<string>,
+): boolean {
+  for (const tag of [...rename.keys(), ...remove]) {
+    if (new RegExp(`@${tag}\\b`, 'i').test(prompt)) return true;
+  }
+  return false;
 }
 
 function parseAR(ar: string | undefined): number | undefined {
@@ -137,20 +211,29 @@ export function BrandReferencePanel({
     setPickerOpen(false);
   };
 
+  const offerPromptRemap = (
+    prev: BrandReferenceInput[],
+    next: BrandReferenceInput[],
+    verb: 'Remove' | 'Reorder',
+  ) => {
+    if (!onPromptChange) return;
+    const { rename, remove } = computeTagRemap(prev, next);
+    if (rename.size === 0 && remove.size === 0) return;
+    if (!promptHasAnyAffectedTag(basePrompt, rename, remove)) return;
+    const fixed = applyTagRemap(basePrompt, rename, remove);
+    if (fixed === basePrompt) return;
+    const desc = describeRemap(rename, remove);
+    const proceed = window.confirm(
+      `${verb} updated the reference order. Apply matching changes to the prompt?\n\n${desc}`,
+    );
+    if (proceed) onPromptChange(fixed);
+  };
+
   const removeReference = (index: number) => {
-    const removed = references[index];
-    const removedTag = removed?.tag;
+    const prev = references;
     const next = normalizeRefs(references.filter((_, i) => i !== index));
     onChange(next);
-
-    // If the removed tag still appears in the prompt, offer a quick fix.
-    if (removedTag && new RegExp(`@${removedTag}\\b`, 'i').test(basePrompt) && onPromptChange) {
-      const fixed = basePrompt.replace(new RegExp(`\\s*@${removedTag}\\b\\.?`, 'gi'), '').trim();
-      const proceed = window.confirm(
-        `Remove "@${removedTag}" from the prompt as well? It no longer points to a reference.`,
-      );
-      if (proceed) onPromptChange(fixed);
-    }
+    offerPromptRemap(prev, next, 'Remove');
   };
 
   const onDragStart = (i: number) => setDragIndex(i);
@@ -160,11 +243,14 @@ export function BrandReferencePanel({
   };
   const onDrop = (i: number) => {
     if (dragIndex === null || dragIndex === i) return;
+    const prev = references;
     const reordered = [...references];
     const [moved] = reordered.splice(dragIndex, 1);
     reordered.splice(i, 0, moved);
-    onChange(normalizeRefs(reordered));
+    const next = normalizeRefs(reordered);
+    onChange(next);
     setDragIndex(null);
+    offerPromptRemap(prev, next, 'Reorder');
   };
 
   const insertTagAtCursor = (tag: string) => {
@@ -221,9 +307,9 @@ export function BrandReferencePanel({
       {/* Reference list */}
       {references.length === 0 ? (
         <div className="text-[11px] py-2" style={{ color: 'var(--text-muted)' }}>
-          No brand references attached. Add up to 4 product / pack-shot images — each is referenced in the prompt as
+          No brand references attached. Add up to {MAX_BRAND_REFS} product / pack-shot images — each is referenced in the prompt as
           <code className="mx-1 px-1 rounded" style={{ backgroundColor: 'rgba(99,102,241,0.15)', color: 'rgb(165,180,252)' }}>@image1</code>,
-          <code className="mx-1 px-1 rounded" style={{ backgroundColor: 'rgba(99,102,241,0.15)', color: 'rgb(165,180,252)' }}>@image2</code>, etc.
+          <code className="mx-1 px-1 rounded" style={{ backgroundColor: 'rgba(99,102,241,0.15)', color: 'rgb(165,180,252)' }}>@image2</code>, ... up to <code className="mx-1 px-1 rounded" style={{ backgroundColor: 'rgba(99,102,241,0.15)', color: 'rgb(165,180,252)' }}>@image{MAX_BRAND_REFS}</code>.
         </div>
       ) : (
         <ul className="space-y-1.5" data-testid="brand-reference-list">
@@ -291,16 +377,25 @@ export function BrandReferencePanel({
         </ul>
       )}
 
-      {references.length < 4 && (
+      {references.length < MAX_BRAND_REFS ? (
         <button
           type="button"
           onClick={() => setPickerOpen(true)}
           className="w-full text-[11px] px-3 py-1.5 rounded-md border border-dashed flex items-center justify-center gap-1.5 transition-colors hover:border-indigo-500/40 hover:bg-indigo-500/5"
           style={{ borderColor: 'var(--border-subtle)', color: 'var(--text-secondary)' }}
           data-testid="brand-reference-add-button"
+          title={`Add another reference (${references.length}/${MAX_BRAND_REFS})`}
         >
-          <Plus className="w-3 h-3" /> Add brand reference
+          <Plus className="w-3 h-3" /> Add brand reference ({references.length}/{MAX_BRAND_REFS})
         </button>
+      ) : (
+        <div
+          className="text-[10px] text-center py-1"
+          style={{ color: 'var(--text-muted)' }}
+          data-testid="brand-reference-cap-reached"
+        >
+          Reached maximum of {MAX_BRAND_REFS} brand references for Seedance 2.
+        </div>
       )}
 
       {/* Health linter */}

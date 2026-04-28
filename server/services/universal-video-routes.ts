@@ -6554,10 +6554,14 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, asy
     // Phase 20C: structured multi-image omni_reference brand anchoring.
     // When the scene carries `brandReferences[]`, build a tagged prompt and
     // seed `finalSourceImageUrls` with the reference URLs in tag order so the
-    // downstream piapi-video-service path uses them as @image1...@imageN. This
-    // takes precedence over the legacy `useBrandAssets` single-ref path. The UI
-    // provider compatibility badge is the user-facing prevention; this server
-    // log is the safety net that surfaces refs+wrong-provider after the fact.
+    // downstream piapi-video-service path uses them as @image1...@imageN.
+    //
+    // SAFETY NET (per spec): omni_reference is Seedance-2-only. If the resolved
+    // provider is anything else, we DO NOT tag the prompt and DO NOT pass all
+    // refs as image_urls — instead we fall back to the legacy single-ref path:
+    // first reference becomes `sourceImageUrl`, no tagged prompt, no multi-image
+    // urls. The UI provider compatibility badge is the user-facing prevention;
+    // this server-side fallback is the last-line safety net.
     let finalPromptForJob = effectivePrompt;
     const sceneBrandRefs = (scene as any).brandReferences as
       | Array<{ assetId?: number; assetUrl: string; tag: string; label?: string }>
@@ -6576,26 +6580,38 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, asy
         }
 
         if (resolvedRefUrls.length > 0) {
-          const omni = buildOmniReferencePrompt({
-            basePrompt: effectivePrompt,
-            references: sceneBrandRefs.map((r, i) => ({
-              assetId: r.assetId,
-              assetUrl: resolvedRefUrls[i] ?? r.assetUrl,
-              tag: r.tag || `image${i + 1}`,
-              label: r.label,
-            })),
-            verbose: true,
-          });
-          finalPromptForJob = omni.prompt;
-          finalSourceImageUrls = resolvedRefUrls;
-          if (!finalSourceImageUrl) finalSourceImageUrl = resolvedRefUrls[0];
-
           const providerHint = (effectiveProvider || sceneProviderHint || '').toLowerCase();
-          const isSeedance2 = providerHint.startsWith('seedance-2') || providerHint === 'seedance-2.0' || providerHint === 'seedance-2.0-fast';
-          if (!isSeedance2 && providerHint && providerHint !== 'auto' && providerHint !== '') {
-            console.warn(`[OmniRef] Scene ${sceneId}: ${resolvedRefUrls.length} brand reference(s) attached but resolved provider is "${providerHint}". omni_reference is Seedance-2-only — references will be passed as generic reference_images and the model may not anchor the product label. UI provider compatibility badge should have prevented this; investigate if reached.`);
-          } else {
+          const isSeedance2 =
+            providerHint.startsWith('seedance-2') ||
+            providerHint === 'seedance-2.0' ||
+            providerHint === 'seedance-2.0-fast' ||
+            providerHint === '' ||
+            providerHint === 'auto';
+
+          if (isSeedance2) {
+            // Full omni_reference path: tag prompt + pass all refs in tag order.
+            const omni = buildOmniReferencePrompt({
+              basePrompt: effectivePrompt,
+              references: sceneBrandRefs.map((r, i) => ({
+                assetId: r.assetId,
+                assetUrl: resolvedRefUrls[i] ?? r.assetUrl,
+                tag: r.tag || `image${i + 1}`,
+                label: r.label,
+              })),
+              verbose: true,
+            });
+            finalPromptForJob = omni.prompt;
+            finalSourceImageUrls = resolvedRefUrls;
+            if (!finalSourceImageUrl) finalSourceImageUrl = resolvedRefUrls[0];
             console.log(`[OmniRef] Scene ${sceneId}: omni_reference path armed with ${resolvedRefUrls.length} reference(s), tagged prompt: "${finalPromptForJob.substring(0, 120)}..."`);
+          } else {
+            // Spec safety-net: provider is non-Seedance-2. Do NOT tag the prompt
+            // and do NOT pass multiple refs. Fall back to legacy single-ref:
+            // first reference becomes the source image, prompt is untouched.
+            console.warn(`[OmniRef] Scene ${sceneId}: ${resolvedRefUrls.length} brand reference(s) attached but resolved provider is "${providerHint}" (not Seedance 2). FALLBACK: using only the first reference as a single source image; prompt is left untagged. The UI provider compatibility badge should have prevented this — investigate the call site if this fires repeatedly.`);
+            if (!finalSourceImageUrl) finalSourceImageUrl = resolvedRefUrls[0];
+            // Leave finalPromptForJob = effectivePrompt (untouched)
+            // Leave finalSourceImageUrls undefined unless legacy refs already populated it.
           }
         } else {
           console.warn(`[OmniRef] Scene ${sceneId}: brandReferences attached but none resolved to a public URL — falling back to legacy path`);
@@ -7733,7 +7749,36 @@ router.post('/:projectId/regenerate-all-videos', isAuthenticated, async (req: Re
     }
     
     console.log(`[UniversalVideo] Starting bulk video regeneration for project ${projectId} with ${scenes.length} scenes`);
-    
+
+    // Phase 20C: idempotent first-generation auto-apply pass — for product-style
+    // projects, attach the project's primary product image to product/solution
+    // scenes that have no brandReferences yet. Safe to call on every bulk run
+    // because applyProductReferencesToScenes never overwrites manual choices.
+    try {
+      const productImages =
+        (projectData as any).assets?.productImages ||
+        (projectData as any).productImages ||
+        [];
+      if (Array.isArray(productImages) && productImages.length > 0) {
+        const { applyProductReferencesToScenes } = await import('./brand-reference-helpers');
+        const autoApply = applyProductReferencesToScenes(
+          projectData.scenes as any,
+          productImages as any,
+        );
+        if (autoApply.attachedCount > 0) {
+          console.log(
+            `[OmniRef][BulkRegen] Auto-attached primary product image to ${autoApply.attachedCount} scene(s) before regeneration (skipped ${autoApply.skippedAlreadyHasRefs} already-anchored).`,
+          );
+          // Persist the auto-applied references so the regeneration loop sees them.
+          await saveProjectToDb(projectData, projectData.ownerId);
+        }
+      }
+    } catch (autoApplyErr: any) {
+      console.warn(
+        `[OmniRef][BulkRegen] First-generation auto-apply failed (non-fatal): ${autoApplyErr.message}`,
+      );
+    }
+
     // Initialize status tracking
     bulkRegenerationStatus.set(projectId, {
       status: 'running',

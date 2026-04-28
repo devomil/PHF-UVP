@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
-import { ArrowLeft, Settings, Play, RefreshCw, Clock, Target, Monitor, BarChart3, Loader2, AlertCircle, AlertTriangle, Zap, Video, Image, Download, RotateCcw, Save, Trash2, ExternalLink, CheckCircle2, XCircle, X, Type, Film, ChevronDown, ChevronUp, CloudUpload, Mic, Music, Volume2, Palette, Shuffle, Sliders, Wand2, Sparkles, ImagePlus, Upload, Edit2, FileText, Plus, GripVertical, Eye, EyeOff, Layers, Maximize2, BookOpen, GripHorizontal, Star } from "lucide-react";
+import { ArrowLeft, Settings, Play, RefreshCw, Clock, Target, Monitor, BarChart3, Loader2, AlertCircle, AlertTriangle, Zap, Video, Image, Image as ImageIcon, Download, RotateCcw, Save, Trash2, ExternalLink, CheckCircle2, XCircle, X, Type, Film, ChevronDown, ChevronUp, CloudUpload, Mic, Music, Volume2, Palette, Shuffle, Sliders, Wand2, Sparkles, ImagePlus, Upload, Edit2, FileText, Plus, GripVertical, Eye, EyeOff, Layers, Maximize2, BookOpen, GripHorizontal, Star } from "lucide-react";
 import { getVisualArtPreset, getAllVisualArtPresets } from "@shared/config/visual-art-presets";
 import { SCENE_CONTENT_TAGS } from "@shared/config/scene-content-tags";
 import { Button } from "@/components/ui/button";
@@ -1532,10 +1532,112 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
                               <Video className="w-2.5 h-2.5" /> {formatProviderName(scene.assets.videoProvider)}
                             </span>
                           )}
+                          {/* Phase 20C: brand-reference compatibility badge on the scene card.
+                              Green when refs attached + provider is Seedance 2 (anchored).
+                              Amber when refs attached but provider is incompatible. */}
+                          {(() => {
+                            const refs = ((scene as any).brandReferences || []) as Array<{ tag?: string; assetUrl: string }>;
+                            if (!refs || refs.length === 0) return null;
+                            const provider = (scene.assets?.videoProvider || (scene.assets as any)?.requestedProvider || '').toLowerCase();
+                            const isSeedance2 = provider.startsWith('seedance-2') || provider === 'seedance-2.0' || provider === 'seedance-2.0-fast';
+                            // No render yet — show neutral pending chip.
+                            if (!provider) {
+                              return (
+                                <span
+                                  className="text-[10px] px-1.5 py-0.5 rounded-full border flex items-center gap-0.5"
+                                  style={{ borderColor: 'rgba(99,102,241,0.3)', backgroundColor: 'rgba(99,102,241,0.1)', color: 'rgb(165,180,252)' }}
+                                  title={`${refs.length} brand reference${refs.length === 1 ? '' : 's'} attached — will anchor on Seedance 2`}
+                                  data-testid={`scene-brand-ref-pending-${sceneId}`}
+                                >
+                                  <ImageIcon className="w-2.5 h-2.5" /> {refs.length} ref{refs.length === 1 ? '' : 's'}
+                                </span>
+                              );
+                            }
+                            return isSeedance2 ? (
+                              <span
+                                className="text-[10px] px-1.5 py-0.5 rounded-full border flex items-center gap-0.5"
+                                style={{ borderColor: 'rgba(34,197,94,0.35)', backgroundColor: 'rgba(34,197,94,0.1)', color: 'rgb(74,222,128)' }}
+                                title={`Anchored with ${refs.length} brand reference${refs.length === 1 ? '' : 's'} via Seedance 2 omni_reference`}
+                                data-testid={`scene-brand-ref-anchored-${sceneId}`}
+                              >
+                                <CheckCircle2 className="w-2.5 h-2.5" /> Anchored · {refs.length}
+                              </span>
+                            ) : (
+                              <span
+                                className="text-[10px] px-1.5 py-0.5 rounded-full border flex items-center gap-0.5"
+                                style={{ borderColor: 'rgba(245,158,11,0.4)', backgroundColor: 'rgba(245,158,11,0.12)', color: 'rgb(252,211,77)' }}
+                                title={`${refs.length} brand reference${refs.length === 1 ? '' : 's'} attached but rendered with ${formatProviderName(scene.assets?.videoProvider || '')} — switch to Seedance 2 to anchor`}
+                                data-testid={`scene-brand-ref-mismatch-${sceneId}`}
+                              >
+                                <AlertTriangle className="w-2.5 h-2.5" /> Switch to Seedance 2
+                              </span>
+                            );
+                          })()}
                         </div>
                         <p className="text-xs truncate mt-0.5" style={{ color: "var(--text-muted)" }}>
                           {narration.substring(0, 80)}{narration.length > 80 ? "..." : ""}
                         </p>
+                        {/* Phase 20C: post-gen verification row on the scene card.
+                            When refs are attached AND a video has been rendered, show
+                            a tiny "ref → first frame" strip with a Re-anchor action. */}
+                        {(() => {
+                          const refs = ((scene as any).brandReferences || []) as Array<{ tag?: string; assetUrl: string; label?: string }>;
+                          const renderedVideoUrl = (scene as any).background?.videoUrl || (scene as any).assets?.videoUrl;
+                          if (!refs || refs.length === 0 || !renderedVideoUrl) return null;
+                          return (
+                            <div
+                              className="mt-1 flex items-center gap-1.5"
+                              data-testid={`scene-card-postgen-verification-${sceneId}`}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <span className="text-[10px] flex items-center gap-1" style={{ color: 'var(--text-muted)' }}>
+                                Anchoring:
+                              </span>
+                              <div className="flex items-center gap-0.5">
+                                {refs.slice(0, 3).map((r, i) => (
+                                  <img
+                                    key={`pgv-${i}`}
+                                    src={r.assetUrl}
+                                    alt={r.label || r.tag || `image${i + 1}`}
+                                    className="w-5 h-5 object-cover rounded border"
+                                    style={{ borderColor: 'var(--border-subtle)' }}
+                                    title={`@${r.tag || `image${i + 1}`}`}
+                                  />
+                                ))}
+                                {refs.length > 3 && (
+                                  <span className="text-[9px] ml-0.5" style={{ color: 'var(--text-muted)' }}>+{refs.length - 3}</span>
+                                )}
+                              </div>
+                              <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>→</span>
+                              <video
+                                src={renderedVideoUrl}
+                                className="w-9 h-5 object-cover rounded border"
+                                style={{ borderColor: 'var(--border-subtle)' }}
+                                muted
+                                playsInline
+                                preload="metadata"
+                                title="First frame of last render"
+                              />
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setExpandedSceneId(sceneId);
+                                  toast({
+                                    title: 'Scene opened — re-anchor available',
+                                    description: 'Use the Brand References panel below to re-generate with stronger anchoring.',
+                                  });
+                                }}
+                                className="text-[10px] px-1.5 py-0.5 rounded hover:bg-green-500/15 transition-colors underline-offset-2 hover:underline"
+                                style={{ color: 'rgb(74,222,128)' }}
+                                data-testid={`scene-card-reanchor-${sceneId}`}
+                                title="Open this scene to re-generate with stronger brand anchoring"
+                              >
+                                Re-anchor
+                              </button>
+                            </div>
+                          );
+                        })()}
                       </div>
                       <div className="flex items-center gap-1.5 flex-shrink-0">
                         {scriptReady && (
