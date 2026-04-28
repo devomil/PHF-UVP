@@ -13,6 +13,8 @@ export default defineConfig({
       'client/src/__tests__/**/*.{test,spec}.{ts,tsx}',
       'shared/**/*.test.ts',
       'shared/**/__tests__/**/*.test.ts',
+      'server/**/*.test.ts',
+      'server/**/__tests__/**/*.test.ts',
     ],
   },
   resolve: {
