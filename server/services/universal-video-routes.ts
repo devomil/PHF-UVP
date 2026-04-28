@@ -2005,15 +2005,22 @@ router.post('/projects/:projectId/apply-product-references', isAuthenticated, as
     const productImages = (projectData as any)?.assets?.productImages as
       | Array<{ id?: string; url: string; name?: string; isPrimary?: boolean }>
       | undefined;
-    if (!productImages || productImages.length === 0) {
+
+    // Phase 20C: spec — when the project has no productImages, fall back to a
+    // global default brand-media image (mediaType=image, isDefault=true). The
+    // resolver inside the helper handles the fallback automatically.
+    const { applyProductReferencesToScenesWithFallback } = await import('./brand-reference-helpers');
+    const result = await applyProductReferencesToScenesWithFallback(
+      projectData.scenes as Scene[],
+      productImages,
+    );
+
+    if (!result.primaryAsset) {
       return res.status(400).json({
         success: false,
-        error: 'No product images attached to this project — upload a product image first.',
+        error: 'No product images attached to this project and no global default brand image is configured — upload a product image or set a default brand asset first.',
       });
     }
-
-    const { applyProductReferencesToScenes } = await import('./brand-reference-helpers');
-    const result = applyProductReferencesToScenes(projectData.scenes as any, productImages as any);
 
     if (result.attachedCount === 0) {
       return res.json({
@@ -2028,7 +2035,7 @@ router.post('/projects/:projectId/apply-product-references', isAuthenticated, as
       });
     }
 
-    projectData.scenes = result.scenes as any;
+    projectData.scenes = result.scenes;
     projectData.updatedAt = new Date().toISOString();
     await saveProjectToDb(projectData, projectData.ownerId);
 
@@ -6580,13 +6587,16 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, asy
         }
 
         if (resolvedRefUrls.length > 0) {
+          // Provider gating per spec: omni_reference (multi-image tagged path)
+          // ONLY runs when the provider is explicitly resolved to Seedance 2.
+          // Empty / "auto" / unresolved providers do NOT qualify — they fall
+          // back to the legacy single-ref behavior so we never accidentally
+          // ship a tagged @image1 prompt to a non-Seedance model.
           const providerHint = (effectiveProvider || sceneProviderHint || '').toLowerCase();
           const isSeedance2 =
             providerHint.startsWith('seedance-2') ||
             providerHint === 'seedance-2.0' ||
-            providerHint === 'seedance-2.0-fast' ||
-            providerHint === '' ||
-            providerHint === 'auto';
+            providerHint === 'seedance-2.0-fast';
 
           if (isSeedance2) {
             // Full omni_reference path: tag prompt + pass all refs in tag order.
@@ -7751,27 +7761,33 @@ router.post('/:projectId/regenerate-all-videos', isAuthenticated, async (req: Re
     console.log(`[UniversalVideo] Starting bulk video regeneration for project ${projectId} with ${scenes.length} scenes`);
 
     // Phase 20C: idempotent first-generation auto-apply pass — for product-style
-    // projects, attach the project's primary product image to product/solution
-    // scenes that have no brandReferences yet. Safe to call on every bulk run
-    // because applyProductReferencesToScenes never overwrites manual choices.
+    // projects, attach a product image (project's primary, or global default
+    // brand-media image as fallback) to product/solution scenes that have no
+    // brandReferences yet. Safe to call on every bulk run because the helper
+    // never overwrites manual choices.
     try {
-      const productImages =
-        (projectData as any).assets?.productImages ||
+      const productImages = ((projectData as any).assets?.productImages ||
         (projectData as any).productImages ||
-        [];
-      if (Array.isArray(productImages) && productImages.length > 0) {
-        const { applyProductReferencesToScenes } = await import('./brand-reference-helpers');
-        const autoApply = applyProductReferencesToScenes(
-          projectData.scenes as any,
-          productImages as any,
+        []) as Array<{ id?: string | number; url: string; name?: string; isPrimary?: boolean }>;
+      const { applyProductReferencesToScenesWithFallback } = await import('./brand-reference-helpers');
+      const autoApply = await applyProductReferencesToScenesWithFallback(
+        projectData.scenes as Scene[],
+        productImages,
+      );
+      if (autoApply.attachedCount > 0) {
+        // CRITICAL: write the mutated scenes back onto the project (and refresh
+        // the loop's local `scenes` reference) before we persist or iterate.
+        projectData.scenes = autoApply.scenes;
+        scenes.length = 0;
+        scenes.push(...(autoApply.scenes as typeof scenes));
+        console.log(
+          `[OmniRef][BulkRegen] Auto-attached "${autoApply.primaryAsset?.name || 'reference'}" to ${autoApply.attachedCount} scene(s) before regeneration (skipped ${autoApply.skippedAlreadyHasRefs} already-anchored, ${autoApply.skippedNonProductType} non-product).`,
         );
-        if (autoApply.attachedCount > 0) {
-          console.log(
-            `[OmniRef][BulkRegen] Auto-attached primary product image to ${autoApply.attachedCount} scene(s) before regeneration (skipped ${autoApply.skippedAlreadyHasRefs} already-anchored).`,
-          );
-          // Persist the auto-applied references so the regeneration loop sees them.
-          await saveProjectToDb(projectData, projectData.ownerId);
-        }
+        await saveProjectToDb(projectData, projectData.ownerId);
+      } else if (!autoApply.primaryAsset) {
+        console.log(
+          `[OmniRef][BulkRegen] No project product images and no global default brand image — auto-apply skipped.`,
+        );
       }
     } catch (autoApplyErr: any) {
       console.warn(

@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { ProviderCatalogSelector } from "@/components/video/provider-catalog-selector";
 import { SlotTile } from "@/components/video/scene-routing-ui";
 import { VIDEO_PROVIDERS as PROVIDER_CONFIG, type VideoProvider } from "@shared/provider-config";
-import type { BrandSettings } from "@shared/video-types";
+import type { BrandSettings, BrandReferenceInput, Scene } from "@shared/video-types";
 
 // Normalize the loosely-typed `project.brand` blob (the project shape is
 // `any` because it is hydrated from a generic JSON API) into a typed
@@ -1536,9 +1536,10 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
                               Green when refs attached + provider is Seedance 2 (anchored).
                               Amber when refs attached but provider is incompatible. */}
                           {(() => {
-                            const refs = ((scene as any).brandReferences || []) as Array<{ tag?: string; assetUrl: string }>;
-                            if (!refs || refs.length === 0) return null;
-                            const provider = (scene.assets?.videoProvider || (scene.assets as any)?.requestedProvider || '').toLowerCase();
+                            const sceneTyped = scene as Scene;
+                            const refs: BrandReferenceInput[] = sceneTyped.brandReferences || [];
+                            if (refs.length === 0) return null;
+                            const provider = (sceneTyped.assets?.videoProvider || sceneTyped.assets?.requestedProvider || '').toLowerCase();
                             const isSeedance2 = provider.startsWith('seedance-2') || provider === 'seedance-2.0' || provider === 'seedance-2.0-fast';
                             // No render yet — show neutral pending chip.
                             if (!provider) {
@@ -1581,9 +1582,10 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
                             When refs are attached AND a video has been rendered, show
                             a tiny "ref → first frame" strip with a Re-anchor action. */}
                         {(() => {
-                          const refs = ((scene as any).brandReferences || []) as Array<{ tag?: string; assetUrl: string; label?: string }>;
-                          const renderedVideoUrl = (scene as any).background?.videoUrl || (scene as any).assets?.videoUrl;
-                          if (!refs || refs.length === 0 || !renderedVideoUrl) return null;
+                          const sceneTyped = scene as Scene;
+                          const refs: BrandReferenceInput[] = sceneTyped.brandReferences || [];
+                          const renderedVideoUrl = sceneTyped.background?.videoUrl || sceneTyped.assets?.videoUrl;
+                          if (refs.length === 0 || !renderedVideoUrl) return null;
                           return (
                             <div
                               className="mt-1 flex items-center gap-1.5"
