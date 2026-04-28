@@ -2,14 +2,12 @@
 // Generates NB2 candidates per scene, picks one via Claude Vision QA, and
 // persists thumbnail + seed image. Falls back NB2 → Recraft → Flux.
 
-import { db } from '../db';
-import { sql } from 'drizzle-orm';
 import { nanoBanana2Service, NB2AspectRatio } from './nano-banana2.service';
 import { imageGenerationService } from './image-generation-service';
 import { scoreImages, VisionScoreResult } from './claude-vision-qa.service';
 import { buildSceneImagePrompt } from '../../shared/image-prompt-builder';
 import { shouldEnableWebSearch } from '../utils/image-generation-policy';
-import { getProjectFromDb } from './video-project-db';
+import { getProjectFromDb, patchSceneAtomic } from './video-project-db';
 import type { Scene, VideoProject, BrandReferenceInput } from '../../shared/video-types';
 
 // Scene fields that exist in the JSONB row but are not yet on the Scene
@@ -95,32 +93,8 @@ function buildFingerprint(presetId: string | undefined, basePrompt: string): str
   return `${presetId || 'auto'}::${basePrompt.substring(0, 80)}`;
 }
 
-// Atomic per-scene merge: jsonb_agg evaluates against the row's CURRENT value
-// in a single UPDATE, eliminating the lost-update race that a read-then-write
-// would have under concurrent workers.
-async function patchSceneInJsonb(
-  projectId: string,
-  sceneId: string,
-  patch: Record<string, unknown>
-): Promise<number> {
-  const patchJson = JSON.stringify(patch);
-  const result = await db.execute(sql`
-    UPDATE universal_video_projects
-    SET scenes = COALESCE(
-          (SELECT jsonb_agg(
-             CASE WHEN s->>'id' = ${sceneId}
-                  THEN s || ${patchJson}::jsonb
-                  ELSE s
-             END
-           )
-           FROM jsonb_array_elements(scenes) AS s),
-          scenes
-        ),
-        updated_at = NOW()
-    WHERE project_id = ${projectId}
-  `) as { rowCount?: number };
-  return typeof result.rowCount === 'number' ? result.rowCount : 0;
-}
+// Centralized atomic per-scene merge — see video-project-db.ts (Task #108).
+const patchSceneInJsonb = patchSceneAtomic;
 
 // Visual-art preset record loaded by id; typed via the imported helper's
 // return so we never need a synthetic `any` here.
@@ -407,7 +381,6 @@ export async function generateSceneImage(
     };
   }
 
-  // Persist winner via atomic per-scene patch — see patchSceneInJsonb.
   await patchSceneInJsonb(projectId, sceneId, {
     thumbnailUrl: chosenUrl,
     seedImageUrl: chosenUrl,

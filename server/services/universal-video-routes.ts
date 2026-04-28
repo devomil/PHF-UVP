@@ -580,6 +580,7 @@ import {
   saveProjectToDb,
   getProjectFromDb,
   mergeRenderSettingsToDb,
+  patchSceneAtomic,
   type VideoProjectWithMeta,
 } from '../services/video-project-db';
 
@@ -3475,12 +3476,11 @@ router.post('/projects/:projectId/scenes/:sceneId/generate-thumbnail', isAuthent
     if (aspectRatio === '9:16') { width = 288; height = 512; }
     else if (aspectRatio === '1:1') { width = 384; height = 384; }
 
-    // Mark as generating
-    scene.thumbnailStatus = 'generating';
-    delete scene.thumbnailError;
-    await db.update(universalVideoProjects)
-      .set({ scenes, updatedAt: new Date() })
-      .where(eq(universalVideoProjects.projectId, projectId));
+    // Atomic per-scene patch — see video-project-db.ts (Task #108).
+    await patchSceneAtomic(projectId, sceneId, {
+      thumbnailStatus: 'generating',
+      thumbnailError: null,
+    });
 
     try {
       const image = await imageGenerationService.generateImage({
@@ -3499,10 +3499,7 @@ router.post('/projects/:projectId/scenes/:sceneId/generate-thumbnail', isAuthent
         return res.status(404).json({ success: false, error: 'Scene not found' });
       }
 
-      // Stale-write protection: if the scene's style or prompt has changed
-      // since this request started, a newer regeneration is in flight or has
-      // already completed. Discard our (now-outdated) result instead of
-      // overwriting the fresher thumbnail.
+      // Stale-write protection: discard if the scene's style/prompt changed mid-flight.
       const freshScene: any = freshScenes[freshIdx];
       const freshPresetId = freshScene.assignedStyleId || freshScene.artPresetId || (fresh as any)?.progress?.artPresetId || (fresh as any)?.artPresetId;
       const freshBasePrompt = (freshScene.imagePrompt || freshScene.visualDirection || freshScene.narration || '').toString().trim();
@@ -3517,15 +3514,13 @@ router.post('/projects/:projectId/scenes/:sceneId/generate-thumbnail', isAuthent
         });
       }
 
-      freshScene.thumbnailUrl = image.url;
-      freshScene.thumbnailStatus = 'complete';
-      freshScene.thumbnailGeneratedFor = requestFingerprint;
-      freshScene.thumbnailUpdatedAt = new Date().toISOString();
-      delete freshScene.thumbnailError;
-
-      await db.update(universalVideoProjects)
-        .set({ scenes: freshScenes, updatedAt: new Date() })
-        .where(eq(universalVideoProjects.projectId, projectId));
+      await patchSceneAtomic(projectId, sceneId, {
+        thumbnailUrl: image.url,
+        thumbnailStatus: 'complete',
+        thumbnailGeneratedFor: requestFingerprint,
+        thumbnailUpdatedAt: new Date().toISOString(),
+        thumbnailError: null,
+      });
 
       return res.json({
         success: true,
@@ -3534,16 +3529,10 @@ router.post('/projects/:projectId/scenes/:sceneId/generate-thumbnail', isAuthent
         cost: image.cost,
       });
     } catch (genError: any) {
-      const fresh = await getProjectFromDb(projectId);
-      const freshScenes = fresh?.scenes || scenes;
-      const freshIdx = freshScenes.findIndex((s: any) => s.id === sceneId);
-      if (freshIdx !== -1) {
-        (freshScenes[freshIdx] as any).thumbnailStatus = 'failed';
-        (freshScenes[freshIdx] as any).thumbnailError = genError.message || String(genError);
-        await db.update(universalVideoProjects)
-          .set({ scenes: freshScenes, updatedAt: new Date() })
-          .where(eq(universalVideoProjects.projectId, projectId));
-      }
+      await patchSceneAtomic(projectId, sceneId, {
+        thumbnailStatus: 'failed',
+        thumbnailError: genError.message || String(genError),
+      });
       console.error('[BriefThumbnail] Generation failed:', genError);
       return res.status(500).json({ success: false, error: genError.message || 'Thumbnail generation failed' });
     }

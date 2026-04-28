@@ -20,9 +20,18 @@ vi.mock('drizzle-orm', () => ({
   // sql template returns a stable token; we only assert that execute was called.
   sql: (strings: TemplateStringsArray, ...values: any[]) => ({ strings, values }),
 }));
-vi.mock('../video-project-db', () => ({
-  getProjectFromDb: getProjectFromDbMock,
-}));
+// Use the REAL patchSceneAtomic (which routes through the mocked db.execute)
+// so the storyboard service still funnels writes through the same atomic
+// primitive after Task #108's centralization.
+vi.mock('../video-project-db', async () => {
+  const actual = await vi.importActual<typeof import('../video-project-db')>(
+    '../video-project-db',
+  );
+  return {
+    ...actual,
+    getProjectFromDb: getProjectFromDbMock,
+  };
+});
 vi.mock('../nano-banana2.service', () => ({
   nanoBanana2Service: {
     generateCandidates: generateCandidatesMock,

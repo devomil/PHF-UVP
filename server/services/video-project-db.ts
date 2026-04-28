@@ -2,7 +2,7 @@
 import type { VideoProject } from '../../shared/video-types';
 import { db } from '../db';
 import { universalVideoProjects } from '../../shared/schema';
-import { eq, sql } from 'drizzle-orm';
+import { eq, sql, type SQL } from 'drizzle-orm';
 
 export type VideoProjectWithMeta = VideoProject & {
   renderId?: string;
@@ -150,34 +150,67 @@ export async function getProjectFromDb(projectId: string): Promise<VideoProject 
   return dbRowToVideoProject(rows[0]);
 }
 
+// Atomic per-scene patch (Task #108). Merges the patch into the matching
+// scene via jsonb_agg over the row's current value in a single UPDATE, so
+// concurrent writers targeting different scenes can't lose each other's data.
+export async function patchSceneAtomic(
+  projectId: string,
+  sceneId: string,
+  patch: Record<string, unknown>,
+): Promise<number> {
+  const patchJson = JSON.stringify(patch);
+  const result = await db.execute(sql`
+    UPDATE universal_video_projects
+    SET scenes = COALESCE(
+          (SELECT jsonb_agg(
+             CASE WHEN s->>'id' = ${sceneId}
+                  THEN s || ${patchJson}::jsonb
+                  ELSE s
+             END
+           )
+           FROM jsonb_array_elements(scenes) AS s),
+          scenes
+        ),
+        updated_at = NOW()
+    WHERE project_id = ${projectId}
+  `) as { rowCount?: number };
+  return typeof result.rowCount === 'number' ? result.rowCount : 0;
+}
+
+// Atomic single-microScene imageUrl write. CASE guards out-of-bounds.
 export async function updateMicroSceneImageUrl(
   projectId: string,
   sceneId: string,
   msIdx: number,
   imageUrl: string,
 ): Promise<boolean> {
-  const rows = await db.select({ scenes: universalVideoProjects.scenes })
-    .from(universalVideoProjects)
-    .where(eq(universalVideoProjects.projectId, projectId));
+  if (msIdx < 0) return false;
 
-  if (rows.length === 0) return false;
-
-  const scenes = rows[0].scenes as any[];
-  const sceneIndex = scenes.findIndex((s: any) => s.id === sceneId);
-  if (sceneIndex === -1) return false;
-
-  const scene = scenes[sceneIndex];
-  if (!scene.microScenes || msIdx < 0 || msIdx >= scene.microScenes.length) return false;
-
-  scene.microScenes[msIdx].imageUrl = imageUrl;
-
-  await db.update(universalVideoProjects)
-    .set({ scenes, updatedAt: new Date() })
-    .where(eq(universalVideoProjects.projectId, projectId));
-
-  return true;
+  const path = `{microScenes,${msIdx},imageUrl}`;
+  const result = await db.execute(sql`
+    UPDATE universal_video_projects
+    SET scenes = COALESCE(
+          (SELECT jsonb_agg(
+             CASE
+               WHEN s->>'id' = ${sceneId}
+                    AND jsonb_typeof(s->'microScenes') = 'array'
+                    AND jsonb_array_length(s->'microScenes') > ${msIdx}
+               THEN jsonb_set(s, ${path}::text[], to_jsonb(${imageUrl}::text))
+               ELSE s
+             END
+           )
+           FROM jsonb_array_elements(scenes) AS s),
+          scenes
+        ),
+        updated_at = NOW()
+    WHERE project_id = ${projectId}
+  `) as { rowCount?: number };
+  return (result.rowCount ?? 0) > 0;
 }
 
+// Atomic batch microScene imageUrl writes — chains jsonb_set calls inside a
+// single UPDATE. The outer length guard against the largest msIdx makes
+// out-of-range indices a no-op rather than appending phantom array elements.
 export async function batchUpdateMicroSceneImageUrls(
   projectId: string,
   sceneId: string,
@@ -185,30 +218,33 @@ export async function batchUpdateMicroSceneImageUrls(
 ): Promise<boolean> {
   if (updates.length === 0) return true;
 
-  const rows = await db.select({ scenes: universalVideoProjects.scenes })
-    .from(universalVideoProjects)
-    .where(eq(universalVideoProjects.projectId, projectId));
-
-  if (rows.length === 0) return false;
-
-  const scenes = rows[0].scenes as any[];
-  const sceneIndex = scenes.findIndex((s: any) => s.id === sceneId);
-  if (sceneIndex === -1) return false;
-
-  const scene = scenes[sceneIndex];
-  if (!scene.microScenes) return false;
-
+  let sceneExpr: SQL = sql`s`;
   for (const { msIdx, imageUrl } of updates) {
-    if (msIdx >= 0 && msIdx < scene.microScenes.length) {
-      scene.microScenes[msIdx].imageUrl = imageUrl;
-    }
+    if (msIdx < 0) continue;
+    const path = `{microScenes,${msIdx},imageUrl}`;
+    sceneExpr = sql`jsonb_set(${sceneExpr}, ${path}::text[], to_jsonb(${imageUrl}::text))`;
   }
 
-  await db.update(universalVideoProjects)
-    .set({ scenes, updatedAt: new Date() })
-    .where(eq(universalVideoProjects.projectId, projectId));
+  const maxIdx = updates.reduce((m, u) => (u.msIdx > m ? u.msIdx : m), -1);
 
-  return true;
+  const result = await db.execute(sql`
+    UPDATE universal_video_projects
+    SET scenes = COALESCE(
+          (SELECT jsonb_agg(
+             CASE WHEN s->>'id' = ${sceneId}
+                       AND jsonb_typeof(s->'microScenes') = 'array'
+                       AND jsonb_array_length(s->'microScenes') > ${maxIdx}
+                  THEN ${sceneExpr}
+                  ELSE s
+             END
+           )
+           FROM jsonb_array_elements(scenes) AS s),
+          scenes
+        ),
+        updated_at = NOW()
+    WHERE project_id = ${projectId}
+  `) as { rowCount?: number };
+  return (result.rowCount ?? 0) > 0;
 }
 
 export async function mergeRenderSettingsToDb(
