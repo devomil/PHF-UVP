@@ -415,6 +415,8 @@ export async function generateAllSceneImages(
   let failed = 0;
   let totalCost = 0;
 
+  // Partition scenes into "skip-now" (no API call) vs "needs-generate".
+  const toGenerate: any[] = [];
   for (const scene of scenes as any[]) {
     if (
       skipExisting &&
@@ -423,27 +425,51 @@ export async function generateAllSceneImages(
     ) {
       skipped++;
       onProgress?.({ sceneId: scene.id, status: 'skipped' });
-      continue;
-    }
-    onProgress?.({ sceneId: scene.id, status: 'started' });
-    try {
-      const r = await generateSceneImage(projectId, scene.id, { numCandidates });
-      totalCost += r.cost;
-      if (r.stale) {
-        skipped++;
-        onProgress?.({ sceneId: scene.id, status: 'skipped' });
-      } else {
-        generated++;
-        onProgress?.({ sceneId: scene.id, status: 'complete', thumbnailUrl: r.thumbnailUrl });
-      }
-    } catch (err: any) {
-      failed++;
-      console.error(`[SceneImage:batch] Scene ${scene.id} failed: ${err.message}`);
-      onProgress?.({ sceneId: scene.id, status: 'failed', error: err.message });
+    } else {
+      toGenerate.push(scene);
     }
   }
 
-  console.log(`[SceneImage:batch] project=${projectId} generated=${generated} skipped=${skipped} failed=${failed} totalCost=$${totalCost.toFixed(4)}`);
+  // Bounded parallelism — fire scenes in parallel with a fixed concurrency
+  // so we don't open dozens of NB2 sockets at once or DOS Claude Vision.
+  // Concurrency 4 keeps wall-clock low while staying inside provider QPS.
+  const CONCURRENCY = Math.max(1, Math.min(
+    parseInt(process.env.STORYBOARD_BATCH_CONCURRENCY || '4', 10) || 4,
+    8,
+  ));
+
+  let cursor = 0;
+  const worker = async () => {
+    while (true) {
+      const idx = cursor++;
+      if (idx >= toGenerate.length) return;
+      const scene = toGenerate[idx];
+      onProgress?.({ sceneId: scene.id, status: 'started' });
+      try {
+        const r = await generateSceneImage(projectId, scene.id, { numCandidates });
+        totalCost += r.cost;
+        if (r.stale) {
+          skipped++;
+          onProgress?.({ sceneId: scene.id, status: 'skipped' });
+        } else {
+          generated++;
+          onProgress?.({ sceneId: scene.id, status: 'complete', thumbnailUrl: r.thumbnailUrl });
+        }
+      } catch (err: any) {
+        failed++;
+        console.error(`[SceneImage:batch] Scene ${scene.id} failed: ${err.message}`);
+        onProgress?.({ sceneId: scene.id, status: 'failed', error: err.message });
+      }
+    }
+  };
+
+  const workers = Array.from(
+    { length: Math.min(CONCURRENCY, toGenerate.length) },
+    () => worker(),
+  );
+  await Promise.all(workers);
+
+  console.log(`[SceneImage:batch] project=${projectId} concurrency=${CONCURRENCY} generated=${generated} skipped=${skipped} failed=${failed} totalCost=$${totalCost.toFixed(4)}`);
 
   return { generated, skipped, failed, totalCost, estimate };
 }

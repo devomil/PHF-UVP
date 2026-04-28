@@ -650,6 +650,11 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
   // Phase 21B (Task #106): NB2 storyboard pipeline — 3 candidates per scene,
   // Claude Vision QA picks the winner, persists as both thumbnailUrl AND
   // seedImageUrl so omni_reference can prepend it as @image1.
+  // Dialog state lives here in `ScriptGenerationPanel` because both the
+  // mutations below and the trigger badges/buttons (regen badge, header
+  // bulk button) are also defined inside this component.
+  const [storyRegenDialog, setStoryRegenDialog] = useState<{ open: boolean; sceneId: string | null }>({ open: false, sceneId: null });
+  const [budgetConfirmDialog, setBudgetConfirmDialog] = useState<{ open: boolean; estimate: any }>({ open: false, estimate: null });
   const generateStorySceneMutation = useMutation({
     mutationFn: async (sceneId: string) => {
       const res = await fetch(`/api/universal-video/projects/${projectId}/scenes/${sceneId}/generate-thumbnail?mode=nb2-candidates`, {
@@ -2443,6 +2448,67 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
           </div>
         )}
       </div>
+
+      {/* Phase 21B (Task #106): NB2 storyboard regen confirmation. */}
+      <AlertDialog
+        open={storyRegenDialog.open}
+        onOpenChange={(open) => setStoryRegenDialog({ open, sceneId: open ? storyRegenDialog.sceneId : null })}
+      >
+        <AlertDialogContent data-testid="storyboard-regen-dialog">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-purple-400" />
+              Generate 3 storyboard candidates?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This generates 3 NB2 candidates (~$0.09) and uses Claude Vision QA to pick the best one. The winner becomes both the scene thumbnail and the seed image used to anchor the final video render.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setStoryRegenDialog({ open: false, sceneId: null })}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                const sId = storyRegenDialog.sceneId;
+                setStoryRegenDialog({ open: false, sceneId: null });
+                if (sId) generateStorySceneMutation.mutate(sId);
+              }}
+              data-testid="storyboard-regen-confirm"
+            >
+              Generate
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Phase 21B (Task #106): Budget over-cap confirmation. */}
+      <AlertDialog
+        open={budgetConfirmDialog.open}
+        onOpenChange={(open) => setBudgetConfirmDialog({ open, estimate: open ? budgetConfirmDialog.estimate : null })}
+      >
+        <AlertDialogContent data-testid="storyboard-budget-dialog">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-amber-400" />
+              Storyboard exceeds budget cap
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Estimated cost ${(budgetConfirmDialog.estimate?.estimatedCost ?? 0).toFixed(2)} for {budgetConfirmDialog.estimate?.scenesToGenerate ?? 0} scene(s) is above the cap of ${(budgetConfirmDialog.estimate?.budgetCap ?? 0).toFixed(2)}. Continue anyway?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setBudgetConfirmDialog({ open: false, estimate: null })}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setBudgetConfirmDialog({ open: false, estimate: null });
+                generateStoryboardBatchMutation.mutate(true);
+              }}
+              data-testid="storyboard-budget-confirm"
+            >
+              Continue
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -2655,9 +2721,6 @@ export default function ProjectDetail({ params }: { params?: { id: string } }) {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const [deleteProjectDialogOpen, setDeleteProjectDialogOpen] = useState(false);
-  // Phase 21B (Task #106): themed AlertDialog state (no native dialogs).
-  const [storyRegenDialog, setStoryRegenDialog] = useState<{ open: boolean; sceneId: string | null }>({ open: false, sceneId: null });
-  const [budgetConfirmDialog, setBudgetConfirmDialog] = useState<{ open: boolean; estimate: any }>({ open: false, estimate: null });
 
   const { data: project, isLoading, error } = useQuery({
     queryKey: ["project", projectId],
@@ -3113,67 +3176,6 @@ export default function ProjectDetail({ params }: { params?: { id: string } }) {
 
         <RenderConfigPanel projectId={projectId} projectOutputUrl={project.outputUrl} projectStatus={project.status} projectScenes={project.scenes} projectRenderId={project.renderId} projectAspectRatio={project?.outputFormat?.aspectRatio || '16:9'} projectTotalDuration={project?.totalDuration} />
       </div>
-
-      {/* Phase 21B (Task #106): NB2 storyboard regen confirmation. */}
-      <AlertDialog
-        open={storyRegenDialog.open}
-        onOpenChange={(open) => setStoryRegenDialog({ open, sceneId: open ? storyRegenDialog.sceneId : null })}
-      >
-        <AlertDialogContent data-testid="storyboard-regen-dialog">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-purple-400" />
-              Generate 3 storyboard candidates?
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              This generates 3 NB2 candidates (~$0.09) and uses Claude Vision QA to pick the best one. The winner becomes both the scene thumbnail and the seed image used to anchor the final video render.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setStoryRegenDialog({ open: false, sceneId: null })}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                const sId = storyRegenDialog.sceneId;
-                setStoryRegenDialog({ open: false, sceneId: null });
-                if (sId) generateStorySceneMutation.mutate(sId);
-              }}
-              data-testid="storyboard-regen-confirm"
-            >
-              Generate
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Phase 21B (Task #106): Budget over-cap confirmation. */}
-      <AlertDialog
-        open={budgetConfirmDialog.open}
-        onOpenChange={(open) => setBudgetConfirmDialog({ open, estimate: open ? budgetConfirmDialog.estimate : null })}
-      >
-        <AlertDialogContent data-testid="storyboard-budget-dialog">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="w-5 h-5 text-amber-400" />
-              Storyboard exceeds budget cap
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              Estimated cost ${(budgetConfirmDialog.estimate?.estimatedCost ?? 0).toFixed(2)} for {budgetConfirmDialog.estimate?.scenesToGenerate ?? 0} scene(s) is above the cap of ${(budgetConfirmDialog.estimate?.budgetCap ?? 0).toFixed(2)}. Continue anyway?
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setBudgetConfirmDialog({ open: false, estimate: null })}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                setBudgetConfirmDialog({ open: false, estimate: null });
-                generateStoryboardBatchMutation.mutate(true);
-              }}
-              data-testid="storyboard-budget-confirm"
-            >
-              Continue
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
       <AlertDialog
         open={deleteProjectDialogOpen}
