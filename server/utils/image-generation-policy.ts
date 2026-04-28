@@ -44,19 +44,24 @@ export function selectImageProvider(
 }
 
 /**
- * Phase 21B (Task #106): When the storyboard pipeline calls Nano Banana 2,
- * should we ask it to ground the generation with a web search?
+ * When the storyboard pipeline calls Nano Banana 2, should we ask it to
+ * ground the generation with a web search?
  *
- * This is a POLICY helper only — it returns true when web-search would
- * arguably help (real-world places, branded environments, niche subjects).
- * The actual NB2 wiring is feature-flagged behind the
- * `NB2_WEB_SEARCH_ENABLED=true` env var because PiAPI's web-search support
- * has not yet been verified end-to-end and we don't want to silently break
- * generation for everyone if it's unavailable.
+ * This is a POLICY helper — it returns true when web-search would arguably
+ * help (real-world places, branded environments, niche subjects).
  *
- * Caller pattern:
- *   const enable = process.env.NB2_WEB_SEARCH_ENABLED === 'true'
- *     && shouldEnableWebSearch(visualStyle, contentType);
+ * Phase 21B (Task #107) verification: PiAPI's nano-banana-2 task accepts an
+ * `input.enable_web_search` boolean (verified against
+ * piapi.ai/docs/gemini-api/nano-banana-2 in March 2026). It defaults to
+ * `true` server-side, is part of the documented input schema, and does not
+ * carry a separate web-search surcharge — pricing remains the per-image
+ * resolution-based rate (1K $0.06, 2K $0.08, 4K $0.12). SLA matches a plain
+ * NB2 task (typical completion 10–30s, well within the existing poll loop).
+ * The earlier `NB2_WEB_SEARCH_ENABLED` env-var safety gate has been removed;
+ * the policy result is now forwarded straight to the NB2 service.
+ *
+ * Caller pattern (see `scene-image.service.ts`):
+ *   enableWebSearch: shouldEnableWebSearch(visualStyle, sceneType)
  */
 export function shouldEnableWebSearch(
   visualStyle: string,

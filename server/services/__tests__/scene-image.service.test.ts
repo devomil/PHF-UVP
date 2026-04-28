@@ -238,6 +238,104 @@ describe('scene-image.service: generateSceneImage', () => {
     expect(r.thumbnailUrl).toBe('https://cdn.test/existing.png'); // existing kept
   });
 
+  it('renders a grounded lifestyle scene end-to-end with web search ON and persists the result', async () => {
+    // Task #107: Higher-level happy-path assertion for a grounded scene.
+    // This is the "short test confirming web-grounded scenes render with
+    // relevant context" requested by the task. We can't hit live PiAPI in a
+    // unit test, but we can drive the full scene-image pipeline for a scene
+    // that the policy classifies as grounded and assert the contract holds:
+    //   1. The web-search flag is forwarded to NB2 (so PiAPI grounds the
+    //      generation against live web context).
+    //   2. Brand reference URLs are forwarded alongside it (typical grounded
+    //      use case is "real product in real environment").
+    //   3. The chosen candidate is persisted to the scene JSONB via the
+    //      atomic per-scene patch primitive.
+    //   4. The returned result advertises the right model, fingerprint, and
+    //      cost — nothing in the grounded path silently swaps providers.
+    // For a live-API smoke test, see scripts/manual/verify-nb2-web-search.ts.
+    const groundedScene = sceneFactory({
+      id: 'scene-grounded',
+      artPresetId: 'lifestyle',
+      imagePrompt: 'A barista pouring oat-milk latte art at a Tokyo specialty cafe',
+      brandReferences: [
+        { assetUrl: 'https://cdn.test/brand-cup.png', tag: 'image1' },
+      ],
+    });
+    const groundedProject = projectFactory([groundedScene]);
+    getProjectFromDbMock.mockReset();
+    getProjectFromDbMock
+      .mockResolvedValueOnce(groundedProject)
+      .mockResolvedValueOnce(groundedProject);
+
+    generateCandidatesMock.mockResolvedValue([
+      { imageUrl: 'https://cdn.test/grounded-1.png' },
+      { imageUrl: 'https://cdn.test/grounded-2.png' },
+      { imageUrl: 'https://cdn.test/grounded-3.png' },
+    ]);
+    scoreImagesMock.mockResolvedValue([
+      { url: 'https://cdn.test/grounded-1.png', score: 0.6, reason: 'ok' },
+      { url: 'https://cdn.test/grounded-2.png', score: 0.95, reason: 'best — sharp brand match' },
+      { url: 'https://cdn.test/grounded-3.png', score: 0.7, reason: 'good' },
+    ]);
+    executeMock.mockResolvedValue({ rowCount: 1 });
+
+    const { generateSceneImage } = await import('../scene-image.service');
+    const result = await generateSceneImage('p1', 'scene-grounded');
+
+    // (1) + (2) NB2 received the grounded-scene contract: web search ON,
+    // brand references forwarded.
+    expect(generateCandidatesMock).toHaveBeenCalledTimes(1);
+    const [nb2Opts, nb2Count] = generateCandidatesMock.mock.calls[0];
+    expect(nb2Opts).toMatchObject({
+      enableWebSearch: true,
+      referenceImages: ['https://cdn.test/brand-cup.png'],
+      aspectRatio: '16:9',
+    });
+    expect(nb2Count).toBe(3);
+
+    // (3) The chosen candidate landed in the scene via the atomic per-scene
+    // patch (jsonb_agg merge), not a full-array overwrite.
+    expect(updateMock).not.toHaveBeenCalled();
+    type PatchTag = { strings: TemplateStringsArray; values: unknown[] };
+    const persistedPatchCall = executeMock.mock.calls.find((call) => {
+      const tag = call[0] as PatchTag | undefined;
+      const values = tag?.values ?? [];
+      return values.includes('scene-grounded')
+        && values.some((v) => typeof v === 'string' && v.includes('https://cdn.test/grounded-2.png'));
+    });
+    expect(persistedPatchCall).toBeDefined();
+
+    // (4) The returned envelope reflects the grounded happy path.
+    expect(result.thumbnailUrl).toBe('https://cdn.test/grounded-2.png');
+    expect(result.seedImageUrl).toBe('https://cdn.test/grounded-2.png');
+    expect(result.model).toBe('nano-banana-2');
+    expect(result.candidates.find((c) => c.selected)?.url).toBe('https://cdn.test/grounded-2.png');
+    expect(result.cost).toBeCloseTo(0.09, 5); // 3 candidates × NB2_COST_PER_IMAGE
+    expect(result.stale).toBeFalsy();
+    expect(result.fingerprint).toContain('lifestyle');
+  });
+
+  it('forwards enableWebSearch=false to NB2 for non-grounded scenes', async () => {
+    // The default project factory uses a `cinematic` preset with no grounded
+    // content type — policy must return false and we must explicitly pass it
+    // through so the model skips the search round-trip.
+    getProjectFromDbMock.mockReset();
+    getProjectFromDbMock
+      .mockResolvedValueOnce(projectFactory())
+      .mockResolvedValueOnce(projectFactory());
+
+    generateCandidatesMock.mockResolvedValue([{ imageUrl: 'https://cdn.test/n1.png' }]);
+    scoreImagesMock.mockResolvedValue([{ url: 'https://cdn.test/n1.png', score: 0.8 }]);
+
+    const { generateSceneImage } = await import('../scene-image.service');
+    await generateSceneImage('p1', 'scene-1');
+
+    expect(generateCandidatesMock).toHaveBeenCalledWith(
+      expect.objectContaining({ enableWebSearch: false }),
+      expect.any(Number),
+    );
+  });
+
   it('throws when all providers fail', async () => {
     getProjectFromDbMock.mockResolvedValueOnce(projectFactory());
     generateCandidatesMock.mockRejectedValue(new Error('NB2 down'));

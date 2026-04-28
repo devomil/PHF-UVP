@@ -170,13 +170,17 @@ export async function generateSceneImage(
   const visualStyle = preset?.id || presetId || 'professional';
   const sceneType = scene.type || scene.contentTag || 'content';
 
-  // Web-search policy is flag-gated; the helper exists so flipping the flag
-  // is a one-line change once PiAPI surfaces the NB2 input.
-  const wantsWebSearch = shouldEnableWebSearch(visualStyle, sceneType);
-  const webSearchEnabled =
-    process.env.NB2_WEB_SEARCH_ENABLED === 'true' && wantsWebSearch;
-  if (webSearchEnabled) {
-    console.log(`[SceneImage] Scene ${sceneId}: web-search policy fired (gated, no-op until PiAPI surfaces input)`);
+  // Phase 21B (Task #107): PiAPI's nano-banana-2 task accepts an
+  // `enable_web_search` boolean (verified against piapi.ai docs Mar 2026 —
+  // see `NB2GenerateOptions.enableWebSearch` for pricing/SLA notes). The
+  // earlier env-var gate was removed once verification confirmed that the
+  // flag is part of the documented input schema with no surcharge. The
+  // policy helper now drives behavior directly: grounded scenes get
+  // web-grounding ON (matches PiAPI's server-side default), non-grounded
+  // scenes get it explicitly OFF to skip an unnecessary search round-trip.
+  const enableWebSearch = shouldEnableWebSearch(visualStyle, sceneType);
+  if (enableWebSearch) {
+    console.log(`[SceneImage] Scene ${sceneId}: web-search ON (style=${visualStyle}, type=${sceneType})`);
   }
 
   const fingerprint = buildFingerprint(presetId, basePromptSource);
@@ -250,6 +254,7 @@ export async function generateSceneImage(
           aspectRatio: nb2Aspect,
           format: 'jpeg',
           referenceImages: referenceImageUrls.length > 0 ? referenceImageUrls : undefined,
+          enableWebSearch,
         },
         numCandidates
       );

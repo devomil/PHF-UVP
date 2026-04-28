@@ -9,6 +9,26 @@ export interface NB2GenerateOptions {
   format?: NB2Format;
   numImages?: number;
   referenceImages?: string[];
+  /**
+   * Phase 21B (Task #107): Search-grounding flag forwarded as
+   * `input.enable_web_search` on PiAPI's `nano-banana-2` task. When true the
+   * model can pull live web context (real-world places, branded environments,
+   * recent events) before generating, which materially improves factual
+   * accuracy for grounded scenes.
+   *
+   * Verified against piapi.ai/docs/gemini-api/nano-banana-2 (Mar 2026):
+   *   - Type: boolean. Lives in `input`. Defaults to `true` server-side, so
+   *     omitting the field is equivalent to opting in.
+   *   - Pricing: rolled into the per-image rate (no separate web-search
+   *     surcharge documented). PiAPI bills NB2 per image by resolution —
+   *     1K $0.06, 2K $0.08, 4K $0.12. Same SLA as a plain NB2 task; the
+   *     existing 60×3s poll loop comfortably covers the typical 10–30s
+   *     completion window.
+   *
+   * Caller pattern (see `scene-image.service.ts`):
+   *   enableWebSearch: shouldEnableWebSearch(visualStyle, sceneType)
+   */
+  enableWebSearch?: boolean;
 }
 
 export interface NB2GenerateResult {
@@ -30,6 +50,7 @@ export class NanoBanana2Service {
       format = 'jpeg',
       numImages = 1,
       referenceImages = [],
+      enableWebSearch,
     } = options;
 
     if (referenceImages.length > 14) {
@@ -37,7 +58,7 @@ export class NanoBanana2Service {
     }
 
     const isI2I = referenceImages.length > 0;
-    console.log(`[NB2] Generating ${isI2I ? 'I2I' : 'T2I'} image | ${aspectRatio} | ${numImages} image(s)`);
+    console.log(`[NB2] Generating ${isI2I ? 'I2I' : 'T2I'} image | ${aspectRatio} | ${numImages} image(s)${enableWebSearch === false ? ' | web-search:off' : enableWebSearch === true ? ' | web-search:on' : ''}`);
     if (isI2I) {
       console.log(`[NB2] ${referenceImages.length} reference image(s) attached`);
     }
@@ -55,6 +76,11 @@ export class NanoBanana2Service {
 
     if (referenceImages.length > 0) {
       inputPayload.reference_images = referenceImages;
+    }
+
+    // Only forward when explicitly set; PiAPI defaults to true server-side.
+    if (typeof enableWebSearch === 'boolean') {
+      inputPayload.enable_web_search = enableWebSearch;
     }
 
     const apiKey = this.getApiKey();
@@ -134,6 +160,7 @@ export class NanoBanana2Service {
       format = 'jpeg',
       numImages,
       referenceImages = [],
+      enableWebSearch,
     } = options;
 
     const inputPayload: Record<string, any> = {
@@ -145,6 +172,11 @@ export class NanoBanana2Service {
 
     if (referenceImages.length > 0) {
       inputPayload.reference_images = referenceImages;
+    }
+
+    // See `NB2GenerateOptions.enableWebSearch` for pricing/SLA verification.
+    if (typeof enableWebSearch === 'boolean') {
+      inputPayload.enable_web_search = enableWebSearch;
     }
 
     const apiKey = this.getApiKey();
