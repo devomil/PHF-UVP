@@ -26,7 +26,7 @@ import {
   RoleAwareReferenceSlots,
 } from "./scene-routing-ui";
 import { BrandReferencePanel } from "./brand-reference-panel";
-import type { BrandReferenceInput } from "@shared/video-types";
+import type { BrandReferenceInput, Scene } from "@shared/video-types";
 
 const sceneTypes = [
   "hook", "problem", "agitation", "solution", "benefit",
@@ -620,13 +620,13 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
   // mirrored to the server via a debounced PATCH so drag-reorder/add/remove
   // feel instant while still persisting.
   const [brandReferences, setBrandReferences] = useState<BrandReferenceInput[]>(
-    ((scene as any).brandReferences as BrandReferenceInput[] | undefined) || [],
+    (scene as Scene).brandReferences || [],
   );
   const brandRefsDebounceRef = useRef<NodeJS.Timeout | null>(null);
   useEffect(() => {
     // Re-sync from server when the underlying scene changes (e.g. after bulk-apply).
-    setBrandReferences(((scene as any).brandReferences as BrandReferenceInput[] | undefined) || []);
-  }, [scene.id, JSON.stringify((scene as any).brandReferences || [])]);
+    setBrandReferences((scene as Scene).brandReferences || []);
+  }, [scene.id, JSON.stringify((scene as Scene).brandReferences || [])]);
 
   const persistBrandReferences = useCallback((next: BrandReferenceInput[]) => {
     if (brandRefsDebounceRef.current) clearTimeout(brandRefsDebounceRef.current);
@@ -1959,14 +1959,22 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
               </button>
               <button
                 onClick={() => {
-                  // Phase 20C: hard guardrail — modal-confirm if brand refs are
-                  // attached but the resolved provider isn't Seedance 2. The
-                  // panel chip is the prevention; this is the safety net.
+                  // Phase 20C — HARD pre-flight guardrail. Whenever this scene
+                  // has brand references attached AND the provider is not
+                  // explicitly resolved to Seedance 2, we block generation
+                  // until the user explicitly acknowledges. This includes the
+                  // unresolved/auto case ('') because the server's auto-router
+                  // may pick a non-Seedance provider that silently ignores
+                  // omni_reference, and we never want a "looks anchored, isn't"
+                  // surprise.
                   const resolvedProvider = (videoProviderLock || (provider !== 'auto' ? provider : null) || scene.assets?.videoProvider || '').toString().toLowerCase();
                   const isSeedance2 = resolvedProvider.startsWith('seedance-2');
-                  if (brandReferences.length > 0 && !isSeedance2 && resolvedProvider !== '') {
+                  if (brandReferences.length > 0 && !isSeedance2) {
+                    const providerLabel = resolvedProvider === ''
+                      ? 'auto-routing (provider not yet resolved to Seedance 2)'
+                      : resolvedProvider;
                     const proceed = window.confirm(
-                      `This scene has ${brandReferences.length} brand reference${brandReferences.length === 1 ? '' : 's'} attached, but the selected provider (${resolvedProvider}) does not support omni_reference brand anchoring.\n\nThe references will be passed as generic reference images and the model may not preserve your product label exactly.\n\nProceed anyway?\n\n(Tip: Click "Cancel" and use the "Switch to Seedance 2 to anchor" chip above for proper brand anchoring.)`,
+                      `This scene has ${brandReferences.length} brand reference${brandReferences.length === 1 ? '' : 's'} attached, but the selected provider — ${providerLabel} — does not support omni_reference brand anchoring.\n\nIf you proceed, the references will either be passed as a single generic reference image or be ignored entirely, and the model may not preserve your product label exactly.\n\nClick "Cancel" and use the "Switch to Seedance 2 to anchor" chip above for proper brand anchoring.\n\nProceed anyway?`,
                     );
                     if (!proceed) return;
                   }

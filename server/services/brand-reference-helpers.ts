@@ -17,14 +17,20 @@ import { brandMediaLibrary } from '../../shared/schema';
 import { and, eq } from 'drizzle-orm';
 import type { Scene, ProductImage } from '../../shared/video-types';
 
-const PRODUCT_SCENE_TYPES = new Set<string>([
-  'product',
-  'solution',
+/**
+ * Phase 20C — spec contract: brand-reference auto/bulk-apply targets ONLY
+ * scenes whose contentType is `product` or `solution`. We deliberately do NOT
+ * attach references to `cta`, `outro`, `intro`, `branded-environment`, etc.,
+ * because those scenes are pacing/tonal and don't necessarily depict the
+ * product. Users can still attach references manually per-scene.
+ *
+ * The `assets.sceneType` legacy aliases `product-hero` and `product-in-context`
+ * (see video-types.ts:426) are explicit product depictions, so they qualify.
+ */
+const PRODUCT_CONTENT_TYPES = new Set<string>(['product', 'solution']);
+const LEGACY_PRODUCT_ASSET_SCENE_TYPES = new Set<string>([
   'product-hero',
   'product-in-context',
-  'branded-environment',
-  'cta',
-  'outro',
 ]);
 
 export interface ApplyProductReferencesResult {
@@ -36,11 +42,26 @@ export interface ApplyProductReferencesResult {
 }
 
 export function isProductLikeScene(scene: Scene): boolean {
-  const t = ((scene as any)?.type || '').toString().toLowerCase();
-  if (PRODUCT_SCENE_TYPES.has(t)) return true;
-  // Some legacy scenes mark intent via assets.sceneType (see video-types.ts:426)
-  const assetType = ((scene as any)?.assets?.sceneType || '').toString().toLowerCase();
-  if (assetType.startsWith('product-') || assetType === 'branded-environment') return true;
+  // Spec primary signal: scene.contentType === 'product' | 'solution'.
+  const sceneAny = scene as Scene & {
+    contentType?: string;
+    type?: string;
+    assets?: { sceneType?: string };
+  };
+  const contentType = (sceneAny.contentType || '').toString().toLowerCase();
+  if (PRODUCT_CONTENT_TYPES.has(contentType)) return true;
+
+  // Back-compat: many older scenes encode the same intent via `type` instead
+  // of `contentType` (e.g. type: 'product'). Accept the same narrow set.
+  const t = (sceneAny.type || '').toString().toLowerCase();
+  if (PRODUCT_CONTENT_TYPES.has(t)) return true;
+
+  // Legacy hint: assets.sceneType of `product-hero` / `product-in-context`
+  // unambiguously depicts the product. `branded-environment` does NOT — it
+  // shows an environment branded with the product, which is a tonal frame.
+  const assetType = (sceneAny.assets?.sceneType || '').toString().toLowerCase();
+  if (LEGACY_PRODUCT_ASSET_SCENE_TYPES.has(assetType)) return true;
+
   return false;
 }
 

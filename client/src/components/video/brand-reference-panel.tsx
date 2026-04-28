@@ -498,11 +498,11 @@ export function BrandReferencePanel({
             )}
           </div>
           <div
-            className="text-[11px] font-mono rounded p-2 max-h-24 overflow-auto whitespace-pre-wrap break-words"
+            className="text-[11px] font-mono rounded p-2 max-h-32 overflow-auto whitespace-pre-wrap break-words leading-6"
             style={{ backgroundColor: 'rgba(0,0,0,0.25)', color: 'var(--text-secondary)', border: '1px solid var(--border-subtle)' }}
             data-testid="brand-reference-tag-preview"
           >
-            {highlightTags(omniResult.prompt)}
+            {highlightTags(omniResult.prompt, references)}
           </div>
         </div>
       )}
@@ -519,24 +519,55 @@ export function BrandReferencePanel({
   );
 }
 
-function highlightTags(prompt: string): React.ReactNode {
+/**
+ * Phase 20C — bind each `@imageN` token in the final prompt to its matching
+ * reference thumbnail, inline. This makes it visually obvious which slot the
+ * model will see when it reads the tag, and surfaces dangling/unused refs
+ * before the user hits Generate.
+ *
+ * Tokens that point past the end of `references` (e.g. `@image3` when only 2
+ * are attached) render in amber with no thumbnail so the user can spot the
+ * mismatch instantly.
+ */
+function highlightTags(prompt: string, references: BrandReferenceInput[]): React.ReactNode {
   const parts: React.ReactNode[] = [];
-  const re = /@image\d+/gi;
+  const re = /@image(\d+)/gi;
   let last = 0;
   let m: RegExpExecArray | null;
   let key = 0;
   while ((m = re.exec(prompt)) !== null) {
     if (m.index > last) parts.push(prompt.slice(last, m.index));
+    const token = m[0];
+    const idx = parseInt(m[1], 10) - 1;
+    const ref = idx >= 0 && idx < references.length ? references[idx] : undefined;
+    const isDangling = !ref;
     parts.push(
       <span
         key={`tag-${key++}`}
-        className="px-1 rounded"
-        style={{ backgroundColor: 'rgba(99,102,241,0.25)', color: 'rgb(199,210,254)' }}
+        className="inline-flex items-center gap-1 align-middle px-1 py-0.5 rounded"
+        style={{
+          backgroundColor: isDangling ? 'rgba(245,158,11,0.18)' : 'rgba(99,102,241,0.25)',
+          color: isDangling ? 'rgb(252,211,77)' : 'rgb(199,210,254)',
+          border: isDangling ? '1px dashed rgba(245,158,11,0.55)' : '1px solid transparent',
+        }}
+        title={isDangling
+          ? `${token} has no matching reference (only ${references.length} attached) — remove the tag or add another reference.`
+          : `${token} → ${ref!.label || `reference ${idx + 1}`}`}
+        data-testid={`tag-preview-token-${idx + 1}`}
       >
-        {m[0]}
+        {ref && (
+          <img
+            src={ref.assetUrl}
+            alt={ref.label || `reference ${idx + 1}`}
+            className="w-4 h-4 rounded object-cover"
+            style={{ border: '1px solid rgba(255,255,255,0.15)' }}
+            loading="lazy"
+          />
+        )}
+        <span>{token}</span>
       </span>,
     );
-    last = m.index + m[0].length;
+    last = m.index + token.length;
   }
   if (last < prompt.length) parts.push(prompt.slice(last));
   return parts;
