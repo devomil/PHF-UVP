@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 // Module mocks must be set BEFORE the SUT is dynamically imported.
 const updateMock = vi.fn();
+const executeMock = vi.fn();
 const getProjectFromDbMock = vi.fn();
 const generateCandidatesMock = vi.fn();
 const scoreImagesMock = vi.fn();
@@ -10,10 +11,15 @@ const imageGenerationMock = vi.fn();
 vi.mock('../../db', () => ({
   db: {
     update: () => ({ set: () => ({ where: updateMock }) }),
+    execute: executeMock,
   },
 }));
 vi.mock('../../../shared/schema', () => ({ universalVideoProjects: { projectId: 'projectId' } as any }));
-vi.mock('drizzle-orm', () => ({ eq: (a: any, b: any) => ({ a, b }) }));
+vi.mock('drizzle-orm', () => ({
+  eq: (a: any, b: any) => ({ a, b }),
+  // sql template returns a stable token; we only assert that execute was called.
+  sql: (strings: TemplateStringsArray, ...values: any[]) => ({ strings, values }),
+}));
 vi.mock('../video-project-db', () => ({
   getProjectFromDb: getProjectFromDbMock,
 }));
@@ -57,6 +63,7 @@ describe('scene-image.service: generateSceneImage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     updateMock.mockResolvedValue(undefined);
+    executeMock.mockResolvedValue({ rowCount: 1 });
   });
 
   it('picks the highest-scored NB2 candidate, persists thumbnailUrl + seedImageUrl', async () => {
@@ -233,6 +240,52 @@ describe('scene-image.service: generateSceneImage', () => {
 
     const { generateSceneImage } = await import('../scene-image.service');
     await expect(generateSceneImage('p1', 'scene-1')).rejects.toThrow(/All providers failed/);
+  });
+});
+
+describe('scene-image.service: concurrent writes are atomic per-scene', () => {
+  it('persists each scene via per-scene jsonb_agg patches, never full-array writes (no lost updates)', async () => {
+    // Two scenes generated back-to-back. The atomicity guarantee lives in the
+    // SQL itself (jsonb_agg merge over the row's CURRENT value), so the unit
+    // test asserts the CALL PATH: every persistence MUST go through the atomic
+    // per-scene primitive (db.execute) and NEVER through the full-array
+    // read-modify-write (db.update). If db.update were invoked from inside
+    // generateSceneImage, two parallel workers could overwrite each other's
+    // committed scenes — the very lost-update race this refactor fixes.
+    const sceneA = sceneFactory({ id: 'scene-A' });
+    const sceneB = sceneFactory({ id: 'scene-B' });
+    // Reset implementation queue so unconsumed mockResolvedValueOnce from prior
+    // tests don't bleed into this one — clearAllMocks only resets call history.
+    getProjectFromDbMock.mockReset();
+    getProjectFromDbMock.mockResolvedValue(projectFactory([sceneA, sceneB]));
+    generateCandidatesMock.mockResolvedValue([
+      { imageUrl: 'https://cand/1.jpg' },
+      { imageUrl: 'https://cand/2.jpg' },
+      { imageUrl: 'https://cand/3.jpg' },
+    ]);
+    scoreImagesMock.mockResolvedValue([
+      { url: 'https://cand/1.jpg', score: 0.9, reason: 'best' },
+      { url: 'https://cand/2.jpg', score: 0.7, reason: 'good' },
+      { url: 'https://cand/3.jpg', score: 0.5, reason: 'ok' },
+    ]);
+
+    const { generateSceneImage } = await import('../scene-image.service');
+    const resA = await generateSceneImage('p1', 'scene-A');
+    const resB = await generateSceneImage('p1', 'scene-B');
+
+    expect(resA.thumbnailUrl).toBe('https://cand/1.jpg');
+    expect(resB.thumbnailUrl).toBe('https://cand/1.jpg');
+
+    // CRITICAL: db.update (full-array R-M-W) must NEVER be invoked from the
+    // per-scene path — that's what would reintroduce the lost-update race.
+    expect(updateMock).not.toHaveBeenCalled();
+    expect(executeMock).toHaveBeenCalled();
+
+    // The atomic patch primitive bound BOTH scene ids across the calls,
+    // proving each scene's writes flow through their own per-scene patch.
+    const calls = executeMock.mock.calls.map(c => c[0]);
+    const allBoundValues = calls.flatMap((tag: any) => tag?.values ?? []);
+    expect(allBoundValues).toEqual(expect.arrayContaining(['scene-A', 'scene-B']));
   });
 });
 

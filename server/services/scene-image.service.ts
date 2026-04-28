@@ -23,7 +23,7 @@
 
 import { db } from '../db';
 import { universalVideoProjects } from '../../shared/schema';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { nanoBanana2Service, NB2AspectRatio } from './nano-banana2.service';
 import { imageGenerationService } from './image-generation-service';
 import { scoreImages, VisionScoreResult } from './claude-vision-qa.service';
@@ -87,6 +87,43 @@ function aspectRatioToNB2(ar: string | undefined): NB2AspectRatio {
 // stale and auto-trigger a Flux regen that clobbers the storyboard winner.
 function buildFingerprint(presetId: string | undefined, basePrompt: string): string {
   return `${presetId || 'auto'}::${basePrompt.substring(0, 80)}`;
+}
+
+/**
+ * Atomically patch a single scene inside the JSONB `scenes` array, matched
+ * by `id`, by deep-merging the partial `patch` into the matching element.
+ *
+ * This is the safe-under-parallel write primitive. Two concurrent workers
+ * patching DIFFERENT scenes will each see the other's prior committed write
+ * because the SQL evaluates `jsonb_agg(...)` against the row's CURRENT value
+ * inside a single atomic UPDATE — there is no app-land read-then-write
+ * window where a stale array can be written back. Workers patching the
+ * SAME scene are serialized by Postgres' row-level lock.
+ *
+ * Returns the number of rows updated (0 if project not found).
+ */
+async function patchSceneInJsonb(
+  projectId: string,
+  sceneId: string,
+  patch: Record<string, any>
+): Promise<number> {
+  const patchJson = JSON.stringify(patch);
+  const result: any = await db.execute(sql`
+    UPDATE universal_video_projects
+    SET scenes = COALESCE(
+          (SELECT jsonb_agg(
+             CASE WHEN s->>'id' = ${sceneId}
+                  THEN s || ${patchJson}::jsonb
+                  ELSE s
+             END
+           )
+           FROM jsonb_array_elements(scenes) AS s),
+          scenes
+        ),
+        updated_at = NOW()
+    WHERE project_id = ${projectId}
+  `);
+  return typeof result?.rowCount === 'number' ? result.rowCount : 0;
 }
 
 async function loadSceneAndPreset(projectId: string, sceneId: string) {
@@ -211,16 +248,13 @@ export async function generateSceneImage(
   }
 
   // Mark scene as generating BEFORE the NB2 round-trip so the UI can show a
-  // spinner. Stale-write check on completion ensures we never clobber a fresher
-  // result with this in-progress one.
-  scenes[sceneIndex] = {
-    ...(scene as any),
+  // spinner. Atomic per-scene patch — safe under parallel workers because
+  // `jsonb_agg(...)` evaluates against the row's CURRENT value inside the
+  // same UPDATE statement (no app-land read-then-write window).
+  await patchSceneInJsonb(projectId, sceneId, {
     thumbnailStatus: 'generating',
-    thumbnailError: undefined,
-  } as Scene;
-  await db.update(universalVideoProjects)
-    .set({ scenes, updatedAt: new Date() })
-    .where(eq(universalVideoProjects.projectId, projectId));
+    thumbnailError: null,
+  });
 
   let chosenUrl = '';
   let chosenModel: 'nano-banana-2' | 'recraft-v4-pro' | 'flux' = 'nano-banana-2';
@@ -303,17 +337,11 @@ export async function generateSceneImage(
       cost += FLUX_COST;
       candidates = [{ url: result.url, score: 0.5, selected: true, reason: 'flux-fallback' }];
     } catch (flErr: any) {
-      // Mark failed and surface the error.
-      const fresh = await getProjectFromDb(projectId);
-      const freshScenes = (fresh?.scenes || scenes) as Scene[];
-      const freshIdx = freshScenes.findIndex((s: any) => s.id === sceneId);
-      if (freshIdx !== -1) {
-        (freshScenes[freshIdx] as any).thumbnailStatus = 'failed';
-        (freshScenes[freshIdx] as any).thumbnailError = flErr.message || String(flErr);
-        await db.update(universalVideoProjects)
-          .set({ scenes: freshScenes, updatedAt: new Date() })
-          .where(eq(universalVideoProjects.projectId, projectId));
-      }
+      // Mark failed and surface the error — atomic per-scene patch.
+      await patchSceneInJsonb(projectId, sceneId, {
+        thumbnailStatus: 'failed',
+        thumbnailError: flErr.message || String(flErr),
+      });
       throw new Error(`All providers failed: ${flErr.message}`);
     }
   }
@@ -353,20 +381,19 @@ export async function generateSceneImage(
     };
   }
 
-  // Persist winner.
-  freshScene.thumbnailUrl = chosenUrl;
-  freshScene.seedImageUrl = chosenUrl;
-  freshScene.imageGenerationModel = chosenModel;
-  freshScene.imageGenerationPrompt = builtPrompt;
-  freshScene.imageCandidates = candidates;
-  freshScene.thumbnailStatus = 'complete';
-  freshScene.thumbnailGeneratedFor = fingerprint;
-  freshScene.thumbnailUpdatedAt = new Date().toISOString();
-  delete freshScene.thumbnailError;
-
-  await db.update(universalVideoProjects)
-    .set({ scenes: freshScenes, updatedAt: new Date() })
-    .where(eq(universalVideoProjects.projectId, projectId));
+  // Persist winner via atomic per-scene patch (jsonb_agg merge against the
+  // row's CURRENT value). Safe under parallel workers — see patchSceneInJsonb.
+  await patchSceneInJsonb(projectId, sceneId, {
+    thumbnailUrl: chosenUrl,
+    seedImageUrl: chosenUrl,
+    imageGenerationModel: chosenModel,
+    imageGenerationPrompt: builtPrompt,
+    imageCandidates: candidates,
+    thumbnailStatus: 'complete',
+    thumbnailGeneratedFor: fingerprint,
+    thumbnailUpdatedAt: new Date().toISOString(),
+    thumbnailError: null,
+  });
 
   console.log(
     `[SceneImage] scene=${sceneId} model=${chosenModel} candidates=${candidates.length} ` +
@@ -478,15 +505,15 @@ export async function generateAllSceneImages(
     }
   }
 
-  // Concurrency: defaults to 1 (serial) because each `generateSceneImage`
-  // does a full-array JSONB read-modify-write on `universalVideoProjects.scenes`
-  // (twice: "mark generating" then "persist winner"). Without per-row CAS or
-  // a `jsonb_set` patch, parallel workers can lose each other's writes by
-  // overwriting the entire array with stale data. Operators who have audited
-  // their write contention can opt into bounded parallelism by setting
-  // STORYBOARD_BATCH_CONCURRENCY (clamped 1..8).
+  // Concurrency 4 by default. Safe under parallel workers because every
+  // scene write goes through `patchSceneInJsonb()`, which uses an atomic
+  // `jsonb_agg(...)` UPDATE — there is no app-land read-then-write window
+  // where a stale array can be persisted, and Postgres' row lock serializes
+  // workers patching the SAME scene. Different scenes can be patched in
+  // parallel without losing each other's updates. Bounded so we don't open
+  // dozens of NB2 sockets at once or DOS Claude Vision (env override clamped 1..8).
   const CONCURRENCY = Math.max(1, Math.min(
-    parseInt(process.env.STORYBOARD_BATCH_CONCURRENCY || '1', 10) || 1,
+    parseInt(process.env.STORYBOARD_BATCH_CONCURRENCY || '4', 10) || 4,
     8,
   ));
 
