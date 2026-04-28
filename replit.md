@@ -9,6 +9,9 @@ The AI Video Production Studio is a full-stack platform designed to streamline v
 - Modern, professional, cutting-edge UI (Canva-inspired)
 - Glassmorphism card surfaces, gradient thumbnails, visual project cards
 
+## Contributor Conventions
+- **No native browser pop-ups in `client/src`**: never use `window.confirm`, `window.alert`, `window.prompt`, or their bare unqualified equivalents (`confirm(...)`, `alert(...)`, `prompt(...)`). They cannot be themed against the dark UI, are inaccessible, and cannot be reliably tested. Use the themed `AlertDialog` from `@/components/ui/alert-dialog` for blocking confirmations (model the dialog after `client/src/pages/asset-library.tsx`, `client/src/pages/project-detail.tsx`, `client/src/pages/api-testing.tsx`, `client/src/components/settings/CanvaConnect.tsx`, `client/src/components/video/universal-video-producer.tsx`, or the saved-set delete dialog in `client/src/components/video/brand-reference-panel.tsx`), and use `useToast` from `@/hooks/use-toast` for non-blocking alerts. The check `npm run lint:dialogs` (`scripts/check-no-native-dialogs.sh`) greps `client/src` for any new occurrences (both `window.*` qualified and bare-global calls) and exits non-zero — wire it into CI / pre-commit. The very rare intentional exception can be opted in with a `// allow-native-dialog` comment on the same line.
+
 ## System Architecture
 -   **Tech Stack**: React 18, Vite, TypeScript, Tailwind CSS v4, shadcn/ui, wouter, @tanstack/react-query for frontend; Express.js, TypeScript, Passport.js, bcrypt for backend; PostgreSQL (Neon) with Drizzle ORM for database; Remotion for video composition.
 -   **UI/UX**: Canva-inspired persistent sidebar navigation, glassmorphism card surfaces, animated gradient landing page, split-panel authentication, and visual project cards with gradient thumbnails. Modern dark theme with dynamic light/dark mode toggling.

@@ -227,6 +227,12 @@ export function BrandReferencePanel({
   // shortcut so the user gets feedback while the PUT is in flight.
   const [pushBusyId, setPushBusyId] = useState<number | null>(null);
 
+  // Task 102: themed confirmation for deleting a saved set. Replaces a
+  // legacy native browser confirm prompt so the dialog matches the rest
+  // of the dark UI and can be styled / tested consistently with AlertDialog.
+  const [deleteSetTarget, setDeleteSetTarget] = useState<BrandReferenceSet | null>(null);
+  const [deletingSet, setDeletingSet] = useState(false);
+
   const omniResult = useMemo(
     () => buildOmniReferencePrompt({ basePrompt, references }),
     [basePrompt, references],
@@ -333,10 +339,19 @@ export function BrandReferencePanel({
     }
   };
 
-  const deleteSet = async (id: number) => {
-    if (!window.confirm('Delete this saved set? This cannot be undone.')) return;
+  // Task 102: open the themed confirmation dialog instead of triggering a
+  // native window.confirm. The actual DELETE happens in confirmDeleteSet
+  // once the user clicks through.
+  const requestDeleteSet = (set: BrandReferenceSet) => {
+    setDeleteSetTarget(set);
+  };
+
+  const confirmDeleteSet = async () => {
+    const target = deleteSetTarget;
+    if (!target) return;
+    setDeletingSet(true);
     try {
-      const res = await fetch(`/api/brand-media-library/reference-sets/${id}`, {
+      const res = await fetch(`/api/brand-media-library/reference-sets/${target.id}`, {
         method: 'DELETE',
         credentials: 'include',
       });
@@ -344,10 +359,14 @@ export function BrandReferencePanel({
         const data = (await res.json().catch(() => ({}))) as { error?: string };
         throw new Error(data?.error || 'Failed to delete set');
       }
-      setSavedSets((prev) => prev.filter((s) => s.id !== id));
+      setSavedSets((prev) => prev.filter((s) => s.id !== target.id));
+      setDeleteSetTarget(null);
     } catch (e: any) {
       console.error('[BrandReferencePanel] Failed to delete set', e);
       setSetsError(e?.message || 'Failed to delete set');
+      setDeleteSetTarget(null);
+    } finally {
+      setDeletingSet(false);
     }
   };
 
@@ -925,7 +944,7 @@ export function BrandReferencePanel({
                   </button>
                   <button
                     type="button"
-                    onClick={() => deleteSet(set.id)}
+                    onClick={() => requestDeleteSet(set)}
                     className="p-1 rounded hover:bg-red-500/15 transition-colors"
                     title="Delete this saved set"
                     data-testid={`brand-reference-set-delete-${set.id}`}
@@ -1355,6 +1374,53 @@ export function BrandReferencePanel({
               data-testid="brand-reference-remap-apply"
             >
               Apply changes
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Task 102: themed delete confirmation for saved sets — replaces the
+          legacy window.confirm so the prompt matches the rest of the app. */}
+      <AlertDialog
+        open={deleteSetTarget !== null}
+        onOpenChange={(open) => {
+          if (!open && !deletingSet) setDeleteSetTarget(null);
+        }}
+      >
+        <AlertDialogContent data-testid="brand-reference-set-delete-dialog">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Trash2 className="w-5 h-5 text-red-400" />
+              Delete saved reference set?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteSetTarget
+                ? `"${deleteSetTarget.name}" will be removed from your saved sets. This cannot be undone.`
+                : 'This saved set will be removed. This cannot be undone.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              onClick={() => setDeleteSetTarget(null)}
+              disabled={deletingSet}
+              data-testid="brand-reference-set-delete-cancel"
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => void confirmDeleteSet()}
+              disabled={deletingSet}
+              className="bg-red-600 hover:bg-red-500"
+              data-testid="brand-reference-set-delete-confirm"
+            >
+              {deletingSet ? (
+                <span className="inline-flex items-center gap-1.5">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  Deleting…
+                </span>
+              ) : (
+                'Delete set'
+              )}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
