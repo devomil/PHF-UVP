@@ -1,0 +1,39 @@
+name: Lint
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  lint-dialogs:
+    name: No native browser pop-ups
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      # ripgrep (rg) is required by scripts/check-no-native-dialogs.sh.
+      # It is preinstalled on ubuntu-latest, but install defensively in case
+      # GitHub changes the runner image.
+      - name: Ensure ripgrep is available
+        run: |
+          if ! command -v rg >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y ripgrep
+          fi
+          rg --version
+
+      # Install dependencies so the workflow stays robust if lint:dialogs ever
+      # grows real npm dependencies. Husky's `prepare` script is harmless in
+      # CI — it just configures git hooks for the checked-out runner.
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run lint:dialogs
+        run: npm run lint:dialogs
