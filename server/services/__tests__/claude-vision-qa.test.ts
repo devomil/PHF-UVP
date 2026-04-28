@@ -1,5 +1,17 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { CLAUDE_VISION_QA_MODEL, parseScoreResponse } from '../claude-vision-qa.service';
+
+// Mocked Anthropic transport — captures the request that scoreImage builds
+// and lets each test return its own canned response. The mock is hoisted so
+// the SUT picks it up via dynamic import below.
+const messagesCreateMock = vi.fn();
+vi.mock('@anthropic-ai/sdk', () => {
+  return {
+    default: class {
+      messages = { create: messagesCreateMock };
+    },
+  };
+});
 
 describe('CLAUDE_VISION_QA_MODEL', () => {
   it('is pinned to Haiku 4.5 (2025-10-01)', () => {
@@ -46,5 +58,68 @@ describe('parseScoreResponse', () => {
     const r = parseScoreResponse(`{"score": 0.5, "reason": "${long}"}`);
     expect(r.reason).toBeDefined();
     expect(r.reason!.length).toBeLessThanOrEqual(160);
+  });
+});
+
+describe('scoreImage / scoreImages — mocked Anthropic transport', () => {
+  beforeEach(() => {
+    messagesCreateMock.mockReset();
+    process.env.ANTHROPIC_API_KEY = 'test-key';
+  });
+
+  it('calls Anthropic with the pinned Haiku model and returns the parsed score', async () => {
+    messagesCreateMock.mockResolvedValueOnce({
+      content: [{ type: 'text', text: '{"score": 0.84, "reason": "great match"}' }],
+    });
+    const { scoreImage } = await import('../claude-vision-qa.service');
+
+    const r = await scoreImage('https://cdn/test.png', { prompt: 'a sunset', sceneLabel: 's1' });
+
+    expect(messagesCreateMock).toHaveBeenCalledTimes(1);
+    const callArg = messagesCreateMock.mock.calls[0][0];
+    expect(callArg.model).toBe(CLAUDE_VISION_QA_MODEL);
+    // Confirm the image URL and prompt were passed in the user content blocks.
+    const blocks = callArg.messages[0].content;
+    expect(blocks.find((b: any) => b.type === 'image')?.source?.url).toBe('https://cdn/test.png');
+    expect(blocks.find((b: any) => b.type === 'text')?.text).toContain('a sunset');
+    expect(r).toEqual({ url: 'https://cdn/test.png', score: 0.84, reason: 'great match' });
+  });
+
+  it('returns a neutral 0.5 with reason "qa-error" when the SDK call rejects', async () => {
+    messagesCreateMock.mockRejectedValueOnce(new Error('429 rate limit'));
+    const { scoreImage } = await import('../claude-vision-qa.service');
+
+    const r = await scoreImage('https://cdn/x.png', { prompt: 'p', sceneLabel: 's' });
+    expect(r.score).toBe(0.5);
+    expect(r.reason).toBe('qa-error');
+  });
+
+  it('returns "qa-disabled" when no API key is configured (skips the SDK entirely)', async () => {
+    delete process.env.ANTHROPIC_API_KEY;
+    // Reload the module so the cached client is re-evaluated against the
+    // missing key.
+    vi.resetModules();
+    const { scoreImage } = await import('../claude-vision-qa.service');
+    const r = await scoreImage('https://cdn/x.png', { prompt: 'p' });
+    expect(r.score).toBe(0.5);
+    expect(r.reason).toBe('qa-disabled');
+    expect(messagesCreateMock).not.toHaveBeenCalled();
+  });
+
+  it('scoreImages fans out one SDK call per image URL', async () => {
+    process.env.ANTHROPIC_API_KEY = 'test-key';
+    vi.resetModules();
+    messagesCreateMock.mockResolvedValue({
+      content: [{ type: 'text', text: '{"score": 0.7}' }],
+    });
+    const { scoreImages } = await import('../claude-vision-qa.service');
+
+    const results = await scoreImages(
+      ['https://cdn/a.png', 'https://cdn/b.png', 'https://cdn/c.png'],
+      { prompt: 'p' }
+    );
+    expect(results).toHaveLength(3);
+    expect(messagesCreateMock).toHaveBeenCalledTimes(3);
+    for (const r of results) expect(r.score).toBeCloseTo(0.7, 5);
   });
 });

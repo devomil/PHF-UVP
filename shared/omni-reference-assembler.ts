@@ -48,6 +48,17 @@ export interface AssemblyResult {
   mode: OmniReferenceMode;
   /** True when at least one `@imageN` token in basePrompt was renumbered. */
   promptShifted: boolean;
+  /**
+   * Map of `@imageN` token → resolved URL, in slot order. Lets callers (and
+   * logs) trace exactly which image landed at which tag without re-deriving
+   * the order from `imageList`.
+   */
+  tagMap: Record<string, string>;
+  /**
+   * The list of token rewrites applied to the prompt when a seed image is
+   * promoted to `@image1`. Empty when no shift occurred.
+   */
+  promptRewrites: Array<{ from: string; to: string }>;
 }
 
 /**
@@ -91,9 +102,27 @@ export function assembleOmniReferenceImages(input: AssemblyInput): AssemblyResul
   const hasSeed = seedUrl.length > 0;
   const hasRefs = refs.length > 0;
 
+  // Helper to derive a `tagMap` from a renumbered references list, so callers
+  // can trace which URL landed at which @imageN slot.
+  const buildTagMap = (renumbered: BrandReferenceInput[]): Record<string, string> => {
+    const m: Record<string, string> = {};
+    for (const r of renumbered) {
+      const tag = `@${r.tag || ''}`.replace(/^@@/, '@');
+      if (tag !== '@' && r.assetUrl) m[tag] = r.assetUrl;
+    }
+    return m;
+  };
+
   // Branch 4 — nothing to inject.
   if (!hasSeed && !hasRefs) {
-    return { prompt: basePrompt, imageList: [], mode: 'none', promptShifted: false };
+    return {
+      prompt: basePrompt,
+      imageList: [],
+      mode: 'none',
+      promptShifted: false,
+      tagMap: {},
+      promptRewrites: [],
+    };
   }
 
   // Branch 3 — legacy Phase 20C path.
@@ -104,6 +133,8 @@ export function assembleOmniReferenceImages(input: AssemblyInput): AssemblyResul
       imageList: omni.imageList,
       mode: 'refs-only',
       promptShifted: false,
+      tagMap: buildTagMap(refs),
+      promptRewrites: [],
     };
   }
 
@@ -117,13 +148,24 @@ export function assembleOmniReferenceImages(input: AssemblyInput): AssemblyResul
       imageList: omni.imageList,
       mode: 'seed-only',
       promptShifted: false,
+      tagMap: buildTagMap([seedRef]),
+      promptRewrites: [],
     };
   }
 
   // Branch 1 — seed + refs. Shift existing @imageN tokens by +1, prepend the
   // seed, then renumber refs to image2..image(N+1).
-  const matchesBeforeShift = /@image\d+/i.test(basePrompt);
+  const tagsBeforeShift = (basePrompt.match(/@image\d+/gi) || []) as string[];
+  const matchesBeforeShift = tagsBeforeShift.length > 0;
   const shiftedPrompt = matchesBeforeShift ? shiftImageTags(basePrompt, 1) : basePrompt;
+
+  // Compute the from→to rewrites so callers can audit the shift.
+  const promptRewrites: Array<{ from: string; to: string }> = matchesBeforeShift
+    ? Array.from(new Set(tagsBeforeShift.map(t => t.toLowerCase()))).map(from => {
+        const n = parseInt(from.replace(/@image/i, ''), 10);
+        return { from, to: `@image${n + 1}` };
+      })
+    : [];
 
   const renumberedRefs: BrandReferenceInput[] = [
     { assetUrl: seedUrl, tag: 'image1', label: 'seed' },
@@ -140,6 +182,8 @@ export function assembleOmniReferenceImages(input: AssemblyInput): AssemblyResul
     imageList: omni.imageList,
     mode: 'seed+refs',
     promptShifted: matchesBeforeShift,
+    tagMap: buildTagMap(renumberedRefs),
+    promptRewrites,
   };
 }
 

@@ -6881,7 +6881,10 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, asy
               finalSourceImageUrl = omni.imageList[0];
             }
             const droppedCount = (sceneBrandRefs?.length || 0) - resolvedPairs.length;
-            console.log(`[OmniRef] Scene ${sceneId}: omni_reference path armed via assembler (mode=${omni.mode}, ${omni.imageList.length} image(s)${omni.promptShifted ? ', prompt tags shifted +1 for seed' : ''}${droppedCount > 0 ? `, ${droppedCount} ref(s) dropped due to URL resolution failures` : ''}), tagged prompt: "${finalPromptForJob.substring(0, 120)}..."`);
+            const seedPromotedNote = omni.mode === 'seed+refs'
+              ? `, seed image promoted to @image1 (brand refs shifted to @image2..@image${omni.imageList.length})`
+              : (omni.mode === 'seed-only' ? ', seed image promoted to @image1' : '');
+            console.log(`[OmniRef] Scene ${sceneId}: omni_reference path armed via assembler (mode=${omni.mode}, ${omni.imageList.length} image(s)${seedPromotedNote}${omni.promptShifted ? `, prompt tags rewritten: ${omni.promptRewrites.map(r => `${r.from}→${r.to}`).join(', ')}` : ''}${droppedCount > 0 ? `, ${droppedCount} ref(s) dropped due to URL resolution failures` : ''}), tagged prompt: "${finalPromptForJob.substring(0, 120)}..."`);
           } else {
             // Spec safety-net: provider is non-Seedance-2. Do NOT tag the prompt
             // and do NOT pass multiple refs. Fall back to legacy single-ref:
