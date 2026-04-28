@@ -1,0 +1,15 @@
+Three things to confirm before: Step 3 — Claude Vision QA model should be Haiku, not Sonnet. The original Phase 21B spec specified claude-haiku-4-5-20251001 for scoring. Scoring three images for brand alignment is a low-complexity task — Haiku is faster, cheaper, and sufficient. If the agent defaults to Sonnet here it will work but costs 5x more per storyboard generation. Confirm the model string in the QA service before the agent writes it.
+Step 8 — seedImageUrl as @image1 must coexist with Phase 20C's brandReferences. Phase 20C just established that brandReferences[0] through brandReferences[8] map to @image1 through @image9 in the omni_reference payload. Now Phase 21B wants to prepend seedImageUrl as @image1. These two systems need a clear priority rule:
+If scene.seedImageUrl AND scene.brandReferences both exist:
+→ seedImageUrl becomes @image1 (visual anchor / starting frame)
+→ brandReferences[0] becomes @image2 (product label reference)
+→ brandReferences[1] becomes @image3, etc.
+
+If only brandReferences exist (no seedImageUrl):
+→ brandReferences[0] stays as @image1 (existing Phase 20C behavior). Implement this explicit priority rule in the Omni_Reference payload assembler. Without it, the two systems will conflict silently — whichever runs last wins, which is non-deterministic. Step 7 — enable_web_search deferral is correctly scoped but needs a flag. The agent correctly defers web search until PiAPI confirms the parameter. However, the shouldEnableWebSearch() helper from Phase 21A already exists in server/utils/image-generation-policy.ts. The agent should keep calling that helper but wrap the actual parameter injection in a feature flag check:
+typescript// Only pass enable_web_search if PiAPI has confirmed support
+const WEB_SEARCH_ENABLED = process.env.NB2_WEB_SEARCH_ENABLED === 'true';
+if (WEB_SEARCH_ENABLED && shouldEnableWebSearch(visualStyle, contentType)) {
+requestBody.input.enable_web_search = true;
+}
+This way the helper logic is preserved and tested, but the parameter isn't sent until you've confirmed it with PiAPI. Flip the env var to true once confirmed.
