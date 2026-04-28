@@ -282,21 +282,30 @@ export async function generateSceneImage(
       if (nb2Results.length > 0) {
         cost += nb2Results.length * NB2_COST_PER_IMAGE;
         const urls = nb2Results.map(r => r.imageUrl);
-        qaScores = await scoreImages(urls, { prompt: builtPrompt, sceneLabel: `${projectId}/${sceneId}` });
 
-        // Pick highest score; stable order on tie (first generated wins).
-        let bestIdx = 0;
-        for (let i = 1; i < qaScores.length; i++) {
-          if (qaScores[i].score > qaScores[bestIdx].score) bestIdx = i;
+        // Single-candidate fast path: nothing to compare, so skip Anthropic
+        // QA spend and assign a perfect score by definition.
+        if (urls.length === 1) {
+          chosenUrl = urls[0];
+          chosenModel = 'nano-banana-2';
+          candidates = [{ url: urls[0], score: 1.0, selected: true, reason: 'single-candidate-fast-path' }];
+        } else {
+          qaScores = await scoreImages(urls, { prompt: builtPrompt, sceneLabel: `${projectId}/${sceneId}` });
+
+          // Pick highest score; stable order on tie (first generated wins).
+          let bestIdx = 0;
+          for (let i = 1; i < qaScores.length; i++) {
+            if (qaScores[i].score > qaScores[bestIdx].score) bestIdx = i;
+          }
+          chosenUrl = urls[bestIdx];
+          chosenModel = 'nano-banana-2';
+          candidates = qaScores.map((s, i) => ({
+            url: s.url,
+            score: s.score,
+            selected: i === bestIdx,
+            reason: s.reason,
+          }));
         }
-        chosenUrl = urls[bestIdx];
-        chosenModel = 'nano-banana-2';
-        candidates = qaScores.map((s, i) => ({
-          url: s.url,
-          score: s.score,
-          selected: i === bestIdx,
-          reason: s.reason,
-        }));
       }
     } catch (nb2Err: any) {
       console.warn(`[SceneImage] Scene ${sceneId}: NB2 generation failed (${nb2Err.message}) — trying Recraft fallback`);
@@ -395,11 +404,19 @@ export async function generateSceneImage(
     thumbnailError: null,
   });
 
-  console.log(
-    `[SceneImage] scene=${sceneId} model=${chosenModel} candidates=${candidates.length} ` +
-    `qaScores=[${candidates.map(c => c.score.toFixed(2)).join(',')}] ` +
-    `selected=${candidates.findIndex(c => c.selected)} cost=$${cost.toFixed(4)} durationMs=${durationMs}`
-  );
+  // Structured telemetry payload — keep keys stable so log aggregators can
+  // index on them. Field names match the spec: model, candidateCount,
+  // qaScores, selectedIndex, cost, durationMs.
+  console.log('[SceneImage]', JSON.stringify({
+    sceneId,
+    projectId,
+    model: chosenModel,
+    candidateCount: candidates.length,
+    qaScores: candidates.map(c => Number(c.score.toFixed(3))),
+    selectedIndex: candidates.findIndex(c => c.selected),
+    cost: Number(cost.toFixed(4)),
+    durationMs,
+  }));
 
   return {
     sceneId,
