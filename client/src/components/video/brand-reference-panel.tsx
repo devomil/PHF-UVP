@@ -19,6 +19,8 @@ import {
   Layers,
   Trash2,
   Loader2,
+  Pencil,
+  Save,
 } from 'lucide-react';
 import {
   Dialog,
@@ -210,6 +212,21 @@ export function BrandReferencePanel({
   const [saving, setSaving] = useState(false);
   const [bulkBusyId, setBulkBusyId] = useState<number | null>(null);
 
+  // Task 97: edit-set dialog state. `editingSet` is the original snapshot of
+  // the set being edited; `editName` and `editRefs` are the working copy that
+  // the user mutates inside the dialog. We don't write back to `savedSets`
+  // until the user clicks Save changes (and the PUT succeeds).
+  const [editingSet, setEditingSet] = useState<BrandReferenceSet | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editRefs, setEditRefs] = useState<BrandReferenceInput[]>([]);
+  const [editDragIndex, setEditDragIndex] = useState<number | null>(null);
+  const [editPickerOpen, setEditPickerOpen] = useState(false);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  // Task 97: per-row spinner for the inline "save scene refs back to set"
+  // shortcut so the user gets feedback while the PUT is in flight.
+  const [pushBusyId, setPushBusyId] = useState<number | null>(null);
+
   const omniResult = useMemo(
     () => buildOmniReferencePrompt({ basePrompt, references }),
     [basePrompt, references],
@@ -334,6 +351,192 @@ export function BrandReferencePanel({
     }
   };
 
+  // Task 97: open the edit dialog for a saved set. Snapshot its name and
+  // references into the working copy so changes can be discarded by closing
+  // the dialog without saving.
+  const openEditSet = (set: BrandReferenceSet) => {
+    const refs = Array.isArray(set.references) ? set.references : [];
+    setEditingSet(set);
+    setEditName(set.name || '');
+    setEditRefs(
+      normalizeRefs(
+        refs.map((r) => ({
+          assetId: r.assetId,
+          assetUrl: r.assetUrl,
+          tag: r.tag || 'image1',
+          label: r.label,
+          width: r.width,
+          height: r.height,
+        })),
+      ),
+    );
+    setEditDragIndex(null);
+    setEditError(null);
+  };
+
+  const closeEditSet = () => {
+    if (editSaving) return;
+    setEditingSet(null);
+    setEditPickerOpen(false);
+    setEditError(null);
+  };
+
+  const editRemoveRef = (index: number) => {
+    setEditRefs((prev) => normalizeRefs(prev.filter((_, i) => i !== index)));
+  };
+
+  const editAddRef = (asset: BrandMediaAsset) => {
+    setEditRefs((prev) => {
+      if (prev.some((r) => r.assetUrl === asset.url)) return prev;
+      const next = normalizeRefs([
+        ...prev,
+        {
+          assetId: asset.id,
+          assetUrl: asset.url,
+          tag: `image${prev.length + 1}`,
+          label: asset.name,
+        },
+      ]);
+      return next;
+    });
+    tagInfoRef.current.set(asset.url, asset);
+    setEditPickerOpen(false);
+  };
+
+  const editOnDragStart = (i: number) => setEditDragIndex(i);
+  const editOnDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+  };
+  const editOnDrop = (i: number) => {
+    if (editDragIndex === null || editDragIndex === i) return;
+    setEditRefs((prev) => {
+      const reordered = [...prev];
+      const [moved] = reordered.splice(editDragIndex, 1);
+      reordered.splice(i, 0, moved);
+      return normalizeRefs(reordered);
+    });
+    setEditDragIndex(null);
+  };
+
+  // Task 97: shortcut inside the edit dialog — pull the current scene's
+  // references[] into the working copy. The user still has to click Save
+  // changes to persist; this just saves them from re-picking the same images.
+  const editPullFromScene = () => {
+    setEditRefs(
+      normalizeRefs(
+        references.slice(0, MAX_BRAND_REFS).map((r) => ({
+          assetId: r.assetId,
+          assetUrl: r.assetUrl,
+          tag: r.tag,
+          label: r.label,
+          width: r.width,
+          height: r.height,
+        })),
+      ),
+    );
+  };
+
+  const persistEditedSet = async () => {
+    if (!editingSet || editSaving) return;
+    const trimmed = editName.trim();
+    if (!trimmed) {
+      setEditError('Name cannot be empty');
+      return;
+    }
+    if (editRefs.length === 0) {
+      setEditError('Add at least one reference');
+      return;
+    }
+    setEditSaving(true);
+    setEditError(null);
+    try {
+      const res = await fetch(
+        `/api/brand-media-library/reference-sets/${editingSet.id}`,
+        {
+          method: 'PUT',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: trimmed,
+            references: editRefs.map((r) => ({
+              assetId: r.assetId,
+              assetUrl: r.assetUrl,
+              label: r.label,
+              width: r.width,
+              height: r.height,
+            })),
+          }),
+        },
+      );
+      const data = (await res.json().catch(() => ({}))) as
+        | BrandReferenceSet
+        | { error?: string };
+      if (!res.ok) {
+        const errMsg =
+          'error' in data && typeof data.error === 'string'
+            ? data.error
+            : 'Failed to update set';
+        throw new Error(errMsg);
+      }
+      const updated = data as BrandReferenceSet;
+      setSavedSets((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+      setEditingSet(null);
+      setEditPickerOpen(false);
+    } catch (e: unknown) {
+      console.error('[BrandReferencePanel] Failed to update set', e);
+      setEditError(e instanceof Error ? e.message : 'Failed to update set');
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
+  // Task 97: one-click "save scene refs back to this set" — writes the
+  // current scene's references[] to the chosen set without opening the edit
+  // dialog. Useful after the user has tweaked refs on a scene and wants the
+  // saved set to reflect those changes.
+  const pushSceneRefsToSet = async (set: BrandReferenceSet) => {
+    if (pushBusyId === set.id) return;
+    if (references.length === 0) return;
+    setPushBusyId(set.id);
+    setSetsError(null);
+    try {
+      const res = await fetch(
+        `/api/brand-media-library/reference-sets/${set.id}`,
+        {
+          method: 'PUT',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            references: references.map((r) => ({
+              assetId: r.assetId,
+              assetUrl: r.assetUrl,
+              label: r.label,
+              width: r.width,
+              height: r.height,
+            })),
+          }),
+        },
+      );
+      const data = (await res.json().catch(() => ({}))) as
+        | BrandReferenceSet
+        | { error?: string };
+      if (!res.ok) {
+        const errMsg =
+          'error' in data && typeof data.error === 'string'
+            ? data.error
+            : 'Failed to update set';
+        throw new Error(errMsg);
+      }
+      const updated = data as BrandReferenceSet;
+      setSavedSets((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+    } catch (e: unknown) {
+      console.error('[BrandReferencePanel] Failed to push scene refs to set', e);
+      setSetsError(e instanceof Error ? e.message : 'Failed to update set');
+    } finally {
+      setPushBusyId(null);
+    }
+  };
+
   const applySetToAllProductScenes = async (set: BrandReferenceSet) => {
     if (!onApplySetToAllProductScenes) return;
     setBulkBusyId(set.id);
@@ -365,8 +568,8 @@ export function BrandReferencePanel({
   };
 
   useEffect(() => {
-    if (pickerOpen) loadLibrary();
-  }, [pickerOpen]);
+    if (pickerOpen || editPickerOpen) loadLibrary();
+  }, [pickerOpen, editPickerOpen]);
 
   const addReference = (asset: BrandMediaAsset) => {
     const exists = references.some((r) => r.assetUrl === asset.url);
@@ -695,6 +898,33 @@ export function BrandReferencePanel({
                   )}
                   <button
                     type="button"
+                    onClick={() => void pushSceneRefsToSet(set)}
+                    disabled={pushBusyId === set.id || references.length === 0}
+                    className="p-1 rounded hover:bg-indigo-500/15 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    title={
+                      references.length === 0
+                        ? 'Add references on this scene first'
+                        : `Save the current scene's references back to "${set.name}"`
+                    }
+                    data-testid={`brand-reference-set-push-scene-${set.id}`}
+                  >
+                    {pushBusyId === set.id ? (
+                      <Loader2 className="w-3 h-3 animate-spin" style={{ color: 'rgb(165,180,252)' }} />
+                    ) : (
+                      <Save className="w-3 h-3" style={{ color: 'var(--text-muted)' }} />
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openEditSet(set)}
+                    className="p-1 rounded hover:bg-indigo-500/15 transition-colors"
+                    title="Edit name and references in this saved set"
+                    data-testid={`brand-reference-set-edit-${set.id}`}
+                  >
+                    <Pencil className="w-3 h-3" style={{ color: 'var(--text-muted)' }} />
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => deleteSet(set.id)}
                     className="p-1 rounded hover:bg-red-500/15 transition-colors"
                     title="Delete this saved set"
@@ -763,6 +993,185 @@ export function BrandReferencePanel({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Task 97: edit-set dialog — rename and reorder/add/remove references
+          inside an existing saved set. Uses the same drag/remove affordances
+          as the per-scene reference list. Closing without saving discards
+          changes; Save changes calls PUT /reference-sets/:id. */}
+      <Dialog
+        open={editingSet !== null}
+        onOpenChange={(o) => {
+          if (!o) closeEditSet();
+        }}
+      >
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Edit brand reference set</DialogTitle>
+            <DialogDescription>
+              Rename the set, or add, remove, and reorder its references. Changes are saved when you click Save changes.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 overflow-auto py-2 space-y-3">
+            <div>
+              <label className="text-xs font-medium mb-1 block" style={{ color: 'var(--text-secondary)' }}>
+                Set name
+              </label>
+              <Input
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                placeholder='e.g. "Q1 Launch Pack: hero + box + label"'
+                maxLength={255}
+                data-testid="brand-reference-edit-set-name-input"
+              />
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
+                  References ({editRefs.length}/{MAX_BRAND_REFS})
+                </label>
+                <button
+                  type="button"
+                  onClick={() => void editPullFromScene()}
+                  disabled={references.length === 0}
+                  className="text-[10px] px-2 py-0.5 rounded hover:bg-indigo-500/15 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1"
+                  style={{ color: 'rgb(165,180,252)' }}
+                  data-testid="brand-reference-edit-set-pull-scene"
+                  title={
+                    references.length === 0
+                      ? 'No references on this scene to pull in'
+                      : "Replace these references with the current scene's references"
+                  }
+                >
+                  Use current scene references ({references.length})
+                </button>
+              </div>
+
+              {editRefs.length === 0 ? (
+                <div
+                  className="text-[11px] py-3 px-2 rounded border border-dashed text-center"
+                  style={{
+                    color: 'var(--text-muted)',
+                    borderColor: 'var(--border-subtle)',
+                    backgroundColor: 'rgba(0,0,0,0.15)',
+                  }}
+                  data-testid="brand-reference-edit-set-empty"
+                >
+                  No references in this set. Add at least one before saving.
+                </div>
+              ) : (
+                <ul className="space-y-1.5" data-testid="brand-reference-edit-set-list">
+                  {editRefs.map((ref, i) => {
+                    const meta = tagInfoRef.current.get(ref.assetUrl);
+                    return (
+                      <li
+                        key={`edit-${ref.assetUrl}-${i}`}
+                        draggable
+                        onDragStart={() => editOnDragStart(i)}
+                        onDragOver={editOnDragOver}
+                        onDrop={() => editOnDrop(i)}
+                        className="flex items-center gap-2 px-2 py-1.5 rounded-md border"
+                        style={{
+                          borderColor: 'var(--border-subtle)',
+                          backgroundColor: 'rgba(0,0,0,0.15)',
+                          cursor: editDragIndex === i ? 'grabbing' : 'grab',
+                          opacity: editDragIndex !== null && editDragIndex !== i ? 0.7 : 1,
+                        }}
+                        data-testid={`brand-reference-edit-set-item-${i}`}
+                      >
+                        <GripVertical className="w-3.5 h-3.5 flex-shrink-0" style={{ color: 'var(--text-muted)' }} />
+                        <img
+                          src={ref.assetUrl}
+                          alt={ref.label || ref.tag}
+                          className="w-9 h-9 object-cover rounded border"
+                          style={{ borderColor: 'var(--border-subtle)' }}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <code
+                              className="text-[10px] px-1.5 py-0.5 rounded font-mono"
+                              style={{ backgroundColor: 'rgba(99,102,241,0.18)', color: 'rgb(165,180,252)' }}
+                            >
+                              @{ref.tag}
+                            </code>
+                            <span className="text-[11px] truncate" style={{ color: 'var(--text-secondary)' }}>
+                              {ref.label || meta?.name || 'Reference'}
+                            </span>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => editRemoveRef(i)}
+                          className="p-1 rounded hover:bg-red-500/15 transition-colors"
+                          title="Remove from this set"
+                          data-testid={`brand-reference-edit-set-remove-${i}`}
+                        >
+                          <X className="w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} />
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+
+              {editRefs.length < MAX_BRAND_REFS && (
+                <button
+                  type="button"
+                  onClick={() => setEditPickerOpen(true)}
+                  className="mt-2 w-full text-[11px] px-3 py-1.5 rounded-md border border-dashed flex items-center justify-center gap-1.5 transition-colors hover:border-indigo-500/40 hover:bg-indigo-500/5"
+                  style={{ borderColor: 'var(--border-subtle)', color: 'var(--text-secondary)' }}
+                  data-testid="brand-reference-edit-set-add-button"
+                >
+                  <Plus className="w-3 h-3" /> Add reference ({editRefs.length}/{MAX_BRAND_REFS})
+                </button>
+              )}
+            </div>
+
+            {editError && (
+              <div
+                className="text-[11px] px-2 py-1 rounded"
+                style={{
+                  color: 'rgb(252,165,165)',
+                  backgroundColor: 'rgba(239,68,68,0.08)',
+                  border: '1px solid rgba(239,68,68,0.2)',
+                }}
+                data-testid="brand-reference-edit-set-error"
+              >
+                {editError}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={closeEditSet} disabled={editSaving}>
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => void persistEditedSet()}
+              disabled={
+                editSaving || editName.trim().length === 0 || editRefs.length === 0
+              }
+              data-testid="brand-reference-edit-set-confirm"
+            >
+              {editSaving ? (
+                <Loader2 className="w-3 h-3 animate-spin mr-1" />
+              ) : (
+                <Save className="w-3 h-3 mr-1" />
+              )}
+              Save changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <BrandLibraryPicker
+        open={editPickerOpen}
+        onClose={() => setEditPickerOpen(false)}
+        loading={loadingLibrary}
+        assets={library}
+        onPick={editAddRef}
+        usedUrls={new Set(editRefs.map((r) => r.assetUrl))}
+      />
 
       {/* Health linter */}
       {health.length > 0 && (
