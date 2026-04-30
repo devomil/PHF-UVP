@@ -3419,12 +3419,11 @@ router.patch('/projects/:projectId/scenes/:sceneId', isAuthenticated, async (req
     // It is handled exclusively by the validated atomic-write branch
     // below so the legacy full-array save path can never write it
     // (defense-in-depth against the round-6 clobber bug).
-    // Phase 20D (Task #126): `generateNativeAudio` is intentionally NOT in
-    // clearableFields — only `true` opts in; `false` and `undefined` both
-    // mean "no native audio", so explicit-null clearing has no semantic
-    // value beyond setting it to false.
-    const allowedFields = ['narration', 'visualDirection', 'duration', 'type', 'name', 'title', 'searchQuery', 'keyPoints', 'overlayItems', 'microScenes', 'contentTag', 'artPresetId', 'assignedStyleId', 'textImageEnabled', 'onScreenText', 'lowerThird', 'shotType', 'cinematicNotes', 'thumbnailUrl', 'thumbnailStatus', 'thumbnailError', 'thumbnailGeneratedFor', 'thumbnailUpdatedAt', 'brandReferences', 'useOmniReference', 'seedImageUrl', 'imageGenerationModel', 'imageGenerationPrompt', 'imageCandidates', 'generateNativeAudio'];
-    const clearableFields = new Set(['artPresetId', 'assignedStyleId', 'onScreenText', 'lowerThird', 'shotType', 'cinematicNotes', 'contentTag', 'thumbnailUrl', 'thumbnailStatus', 'thumbnailError', 'thumbnailGeneratedFor', 'thumbnailUpdatedAt', 'brandReferences', 'seedImageUrl', 'imageGenerationModel', 'imageGenerationPrompt', 'imageCandidates']);
+    // The PATCH allowlist + clearable-field rules live in
+    // `scene-patch-allowlist.ts` so they can be unit-tested in
+    // isolation; importing here keeps the route the single caller.
+    const { SCENE_PATCH_ALLOWED_FIELDS: allowedFields, SCENE_PATCH_CLEARABLE_FIELDS: clearableFields } =
+      await import('./scene-patch-allowlist');
 
     // Phase 23A: Manual override fast path. When the only meaningful
     // change is `renderSystemType`, route through `patchSceneAtomic` so

@@ -11,6 +11,7 @@ import {
   clampSeedance2Duration,
   SEEDANCE_2_DEFAULT_DURATION,
 } from "./seedance-duration";
+import { VIDEO_PROVIDERS } from "@shared/provider-config";
 
 export type ResolvedProvider =
   | "seedance-2.0"
@@ -53,29 +54,12 @@ const PROVIDER_RANGES: Record<string, { min: number; max: number; presets: numbe
   "runway-4.5": { min: 5, max: 10, presets: [5, 10] },
 };
 
-// Per-provider cost in USD per second of generated clip. Mirrors the
-// values in `server/config/ai-video-providers.ts` so the UI can show a
-// real-time cost preview without an extra round-trip. Keep these in
-// sync when the server-side rates change.
-const PROVIDER_COST_PER_SECOND: Record<string, number> = {
-  "seedance-2.0": 0.035,
-  "seedance-2.0-fast": 0.020,
-  "seedance-1.0": 0.03,
-  kling: 0.03,
-  "kling-2.6": 0.039,
-  "kling-2.6-pro": 0.05,
-  luma: 0.04,
-  hailuo: 0.025,
-  "veo-3": 0.30,
-  "veo-3.1": 0.30,
-  "wan-2.1": 0.025,
-  "wan-2.6": 0.025,
-  hunyuan: 0.025,
-  "sora-2": 0.10,
-  "sora-2-pro": 0.30,
-  runway: 0.05,
-  "runway-4.5": 0.05,
-};
+// Cost rate is read from the shared provider catalog so UI/server stay
+// in sync. Returns undefined when the provider isn't in the catalog.
+function getCostPerSecond(providerKey: string | undefined): number | undefined {
+  if (!providerKey) return undefined;
+  return VIDEO_PROVIDERS[providerKey]?.costPerSecond;
+}
 
 const SEEDANCE_2_PROVIDERS = new Set(["seedance-2.0", "seedance-2.0-fast"]);
 
@@ -103,7 +87,7 @@ export function SceneDurationControl({ provider, value, onChange, disabled }: Pr
   }, [value]);
 
   const isSeedance2 = provider ? SEEDANCE_2_PROVIDERS.has(provider) : false;
-  const ratePerSecond = provider ? PROVIDER_COST_PER_SECOND[provider] : undefined;
+  const ratePerSecond = getCostPerSecond(provider);
 
   async function commit(next: number) {
     if (next === value) return;

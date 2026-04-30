@@ -3715,10 +3715,10 @@ function ScenePreview({
                   )}
                 </div>
                 
-                {/* Scene Duration & Native Audio (Phase 20D / Task #126) */}
+                {/* Scene Duration & Native Audio */}
                 {(() => {
                   const resolvedProvider =
-                    (scene.assets?.videoSource as string | undefined) ||
+                    scene.assets?.videoProviderLock ||
                     projectPreferredProvider ||
                     'seedance-2.0-fast';
                   const isSeedance2 = resolvedProvider === 'seedance-2.0' || resolvedProvider === 'seedance-2.0-fast';
