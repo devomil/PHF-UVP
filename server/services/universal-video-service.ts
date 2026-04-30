@@ -748,7 +748,7 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
     try {
       const parsed = await scriptParserService.parseScript(input.script, {
         platform: input.platform || "youtube",
-        visualStyle: "warm",
+        visualStyle: input.style || "warm",
         targetDuration: input.targetDuration,
         artPresetId: input.artPresetId,
       });
@@ -789,7 +789,7 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
     try {
       const parsed = await scriptParserService.parseScript(input.script, {
         platform: input.platform || "youtube",
-        visualStyle: "warm",
+        visualStyle: input.style || "warm",
         targetDuration: input.targetDuration,
         artPresetId: input.artPresetId,
         productContext: input.productContext || undefined,
@@ -5130,6 +5130,8 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
               ...(scene.contentTag ? { contentTag: scene.contentTag } : {}),
               ...(sceneIsCharRef ? { isCharacterReference: true } : {}),
               ...(scene.negativePrompt ? { negativePrompt: scene.negativePrompt } : {}),
+              // Phase 20D (Task #126): per-scene Seedance 2 native-audio opt-in.
+              ...(scene.generateNativeAudio === true ? { generateNativeAudio: true } : {}),
             });
             if (aiResult.success && aiResult.s3Url) {
               videoResult = { url: aiResult.s3Url, source: aiResult.provider || 'ai', duration: aiResult.duration };
@@ -5161,6 +5163,8 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
               ...(scene.contentTag ? { contentTag: scene.contentTag } : {}),
               ...(sceneIsCharRef ? { isCharacterReference: true } : {}),
               ...(scene.negativePrompt ? { negativePrompt: scene.negativePrompt } : {}),
+              // Phase 20D (Task #126): per-scene Seedance 2 native-audio opt-in.
+              ...(scene.generateNativeAudio === true ? { generateNativeAudio: true } : {}),
             };
             deferredVideoTasks.push({
               sceneId: scene.id,
@@ -5224,6 +5228,8 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
                 imageUrl: sourceImageUrl,
                 ...(projectPreferredProvider ? { preferredProvider: projectPreferredProvider } : {}),
                 ...(scene.negativePrompt ? { negativePrompt: scene.negativePrompt } : {}),
+                // Phase 20D (Task #126): per-scene Seedance 2 native-audio opt-in.
+                ...(scene.generateNativeAudio === true ? { generateNativeAudio: true } : {}),
               });
               
               if (i2vResult.success && i2vResult.s3Url) {
@@ -5252,6 +5258,8 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
                   imageUrl: aiGeneratedImage,
                   ...(projectPreferredProvider ? { preferredProvider: projectPreferredProvider } : {}),
                   ...(scene.negativePrompt ? { negativePrompt: scene.negativePrompt } : {}),
+                  // Phase 20D (Task #126): per-scene Seedance 2 native-audio opt-in.
+                  ...(scene.generateNativeAudio === true ? { generateNativeAudio: true } : {}),
                 });
                 
                 if (i2vResult.success && i2vResult.s3Url) {
@@ -5279,6 +5287,8 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
                 qualityTier: sceneQualityTier,
                 artPresetId: scene.artPresetId || projectArtPresetIdForVideo,
                 ...(scene.negativePrompt ? { negativePrompt: scene.negativePrompt } : {}),
+                // Phase 20D (Task #126): per-scene Seedance 2 native-audio opt-in.
+                ...(scene.generateNativeAudio === true ? { generateNativeAudio: true } : {}),
               });
               
               if (t2vResult.success && t2vResult.s3Url) {
@@ -6696,6 +6706,8 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
           qualityTier: sceneQualityTier as 'ultra' | 'premium' | 'standard',
           artPresetId: scene.artPresetId || (project as any).artPresetId,
           ...(scene.negativePrompt ? { negativePrompt: scene.negativePrompt } : {}),
+          // Phase 20D (Task #126): per-scene Seedance 2 native-audio opt-in.
+          ...(scene.generateNativeAudio === true ? { generateNativeAudio: true } : {}),
         });
         
         if (aiResult.success && aiResult.s3Url) {

@@ -483,6 +483,20 @@ export interface Scene {
   thumbnailError?: string;
   thumbnailGeneratedFor?: string;
   thumbnailUpdatedAt?: string;
+  // Phase 20D (Task #126): per-scene Seedance 2 native-audio opt-in.
+  // When `true` AND the scene's resolved video provider is
+  // `seedance-2.0` / `seedance-2.0-fast`, the PiAPI request payload
+  // emits `generate_audio: true` so Seedance produces ambient audio.
+  // The flag is intentionally tri-state via optionality: `undefined`
+  // and `false` both mean "no native audio" (default), only `true`
+  // opts in. Other providers ignore this flag entirely.
+  //
+  // Conflict semantics: when the scene also has a non-empty narration
+  // (TTS voiceover), the editor surfaces a warning because mixing
+  // generated dialogue/ambient audio with the user's voiceover is
+  // almost always wrong. The actionable affordance there is "Mute
+  // voiceover" — clearing `narration` — not unsetting this flag.
+  generateNativeAudio?: boolean;
   // Phase 23A (Task #118): Claude Haiku 4.5 scene classifier output. The
   // narrative `type` (above) describes WHAT story beat this scene serves;
   // `renderSystemType` describes HOW it should be rendered. The two layers
@@ -870,7 +884,11 @@ export interface ScriptVideoInput {
   title: string;
   script: string;
   platform: 'youtube' | 'tiktok' | 'instagram' | 'instagram-reels' | 'facebook' | 'website';
-  style: 'professional' | 'casual' | 'energetic' | 'calm' | 'cinematic' | 'documentary' | 'luxury' | 'minimal' | 'instructional' | 'educational' | 'training';
+  // Phase 20D (Task #126): includes the visual-style ids consumed by
+  // `getDefaultDurationForStyle` (hero, lifestyle, product, social,
+  // premium) so script generation can pass the project's chosen style
+  // through to the parser instead of hard-coding "professional".
+  style: 'professional' | 'casual' | 'energetic' | 'calm' | 'cinematic' | 'documentary' | 'luxury' | 'minimal' | 'instructional' | 'educational' | 'training' | 'hero' | 'lifestyle' | 'product' | 'social' | 'premium';
   targetDuration?: number;
   brandSettings?: {
     introLogoUrl?: string;

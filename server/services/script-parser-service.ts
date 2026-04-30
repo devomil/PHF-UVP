@@ -5,6 +5,7 @@ import { getBrandContext, getBrandNameOrDefault, type BrandContext } from "./bra
 import { getVisualArtPreset, isStylizedPreset } from "@shared/config/visual-art-presets";
 import { evaluateSceneTextRouting } from "../utils/recraft-scene-policy";
 import type { Scene } from "../../shared/video-types";
+import { getDefaultDurationForStyle } from "../../shared/scene-defaults";
 
 export interface ParsedScene {
   id: string;
@@ -99,7 +100,7 @@ class ScriptParserService {
       });
 
       console.log(`[ScriptParser] LLM response via ${result.provider} (${result.model})`);
-      return this.parseResponse(result.text, serviceMatches, artPreset);
+      return this.parseResponse(result.text, serviceMatches, artPreset, options);
     } catch (error: any) {
       console.error("[ScriptParser] Parsing failed:", error.message);
       throw error;
@@ -416,7 +417,8 @@ Return ONLY valid JSON matching this structure:
   private parseResponse(
     responseText: string,
     serviceMatches: { services: string[]; products: string[]; conditions: string[] },
-    artPreset?: any
+    artPreset: any,
+    options: ScriptParseOptions
   ): ParsedScript {
     try {
       const jsonMatch = responseText.match(/\{[\s\S]*\}/);
@@ -426,11 +428,15 @@ Return ONLY valid JSON matching this structure:
 
       const parsed = JSON.parse(jsonMatch[0]);
 
+      // Phase 20D (Task #126): seed an empty/missing duration from the
+      // project's visual style (e.g. social=5, hero=12). LLM-supplied
+      // durations are preserved unchanged.
+      const fallbackDuration = getDefaultDurationForStyle(options.visualStyle);
       const scenes: ParsedScene[] = parsed.scenes.map((scene: any, index: number) => ({
         id: scene.id || `scene-${index + 1}`,
         type: this.validateSceneType(scene.type),
         narration: scene.narration || "",
-        duration: scene.duration || 5,
+        duration: scene.duration || fallbackDuration,
         visualDirection: scene.visualDirection || "",
         searchQuery: scene.searchQuery || "",
         fallbackQuery: scene.fallbackQuery || "",

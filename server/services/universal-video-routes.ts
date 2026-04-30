@@ -3068,7 +3068,10 @@ router.post('/projects/:projectId/generate-script', isAuthenticated, async (req:
         title: 'Generated Script',
         script,
         platform: platform as ScriptVideoInput['platform'],
-        style: 'professional',
+        // Phase 20D (Task #126): the script-parser uses `style` to seed
+        // per-scene defaults (duration). Pass the project's chosen
+        // visual style instead of hard-coding "professional".
+        style: visualStyle as ScriptVideoInput['style'],
         targetDuration,
         artPresetId: artPresetIdFromProgress,
         artPresetIds: artPresetIdsFromProgress,
@@ -3100,6 +3103,9 @@ router.post('/projects/:projectId/generate-script', isAuthenticated, async (req:
         contentStructure,
         trendHooks,
         projectPurpose,
+        // Phase 20D (Task #126): seed per-scene defaults from the
+        // project's visual style when the LLM omits a duration.
+        visualStyle,
       });
       scenes = pipelineResult.scenes;
       summary = pipelineResult.summary;
@@ -3413,7 +3419,11 @@ router.patch('/projects/:projectId/scenes/:sceneId', isAuthenticated, async (req
     // It is handled exclusively by the validated atomic-write branch
     // below so the legacy full-array save path can never write it
     // (defense-in-depth against the round-6 clobber bug).
-    const allowedFields = ['narration', 'visualDirection', 'duration', 'type', 'name', 'title', 'searchQuery', 'keyPoints', 'overlayItems', 'microScenes', 'contentTag', 'artPresetId', 'assignedStyleId', 'textImageEnabled', 'onScreenText', 'lowerThird', 'shotType', 'cinematicNotes', 'thumbnailUrl', 'thumbnailStatus', 'thumbnailError', 'thumbnailGeneratedFor', 'thumbnailUpdatedAt', 'brandReferences', 'useOmniReference', 'seedImageUrl', 'imageGenerationModel', 'imageGenerationPrompt', 'imageCandidates'];
+    // Phase 20D (Task #126): `generateNativeAudio` is intentionally NOT in
+    // clearableFields — only `true` opts in; `false` and `undefined` both
+    // mean "no native audio", so explicit-null clearing has no semantic
+    // value beyond setting it to false.
+    const allowedFields = ['narration', 'visualDirection', 'duration', 'type', 'name', 'title', 'searchQuery', 'keyPoints', 'overlayItems', 'microScenes', 'contentTag', 'artPresetId', 'assignedStyleId', 'textImageEnabled', 'onScreenText', 'lowerThird', 'shotType', 'cinematicNotes', 'thumbnailUrl', 'thumbnailStatus', 'thumbnailError', 'thumbnailGeneratedFor', 'thumbnailUpdatedAt', 'brandReferences', 'useOmniReference', 'seedImageUrl', 'imageGenerationModel', 'imageGenerationPrompt', 'imageCandidates', 'generateNativeAudio'];
     const clearableFields = new Set(['artPresetId', 'assignedStyleId', 'onScreenText', 'lowerThird', 'shotType', 'cinematicNotes', 'contentTag', 'thumbnailUrl', 'thumbnailStatus', 'thumbnailError', 'thumbnailGeneratedFor', 'thumbnailUpdatedAt', 'brandReferences', 'seedImageUrl', 'imageGenerationModel', 'imageGenerationPrompt', 'imageCandidates']);
 
     // Phase 23A: Manual override fast path. When the only meaningful

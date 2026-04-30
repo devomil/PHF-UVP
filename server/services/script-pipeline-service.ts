@@ -6,6 +6,7 @@ import { getTrendingHooks, type TrendResult } from "./trend-intelligence-service
 import { getProjectPurpose, getContentTagForSceneType } from "../../shared/config/project-types";
 import { getSceneContentTagIds } from "../../shared/config/scene-content-tags";
 import { evaluateSceneTextRouting } from "../utils/recraft-scene-policy";
+import { getDefaultDurationForStyle } from "../../shared/scene-defaults";
 
 export interface PipelineContext {
   description: string;
@@ -33,6 +34,12 @@ export interface PipelineContext {
   contentStructure?: string | null;
   trendHooks?: string[] | null;
   projectPurpose?: string | null;
+  // Phase 20D (Task #126): seed default per-scene durations from the
+  // project's visual style id (`hero`, `social`, `educational`, …)
+  // when the LLM doesn't supply an explicit duration. Falls back to
+  // SCENE_DEFAULT_DURATION_FALLBACK (8) for unknown styles, preserving
+  // the prior behavior for projects that don't pass this through.
+  visualStyle?: string;
 }
 
 export interface CreativeStrategy {
@@ -477,12 +484,16 @@ DURATION RULES:
   const raw = await callLLMWithRetry(systemPrompt, userPrompt, 3000, "Stage 2: Narrative Architecture");
   const parsed = extractJSON(raw);
 
+  // Phase 20D (Task #126): when the LLM omits a duration, fall back to
+  // the project visual-style default (e.g. social=5, hero=12). Existing
+  // explicit durations from the LLM are preserved unchanged.
+  const fallbackDuration = getDefaultDurationForStyle(ctx.visualStyle);
   const scenes: NarrativeScene[] = Array.isArray(parsed.scenes)
     ? parsed.scenes.map((s: any, i: number) => ({
         order: s.order ?? i + 1,
         type: s.type || "benefit",
         purpose: s.purpose || "",
-        duration: s.duration || 5,
+        duration: s.duration || fallbackDuration,
         emotionalBeat: s.emotionalBeat || "",
         keyMessage: s.keyMessage || "",
       }))
@@ -1638,17 +1649,20 @@ export async function enhanceChapterScenesWithStage4(
   strategy.primaryEmotion = 'trust';
   strategy.toneGuidance = ctx.scriptPresets?.scriptTone || 'educational';
 
+  // Phase 20D (Task #126): use the project visual-style default for any
+  // chapter content scene that arrives without an explicit duration.
+  const chapterFallbackDuration = getDefaultDurationForStyle(ctx.visualStyle);
   const narrativeScenes: NarrativeScene[] = contentScenes.map((s: any, i: number) => ({
     order: i + 1,
     type: s.type || 'content',
     purpose: '',
-    duration: s.duration || 8,
+    duration: s.duration || chapterFallbackDuration,
     emotionalBeat: s.type === 'hook' ? 'curiosity' : s.type === 'cta' ? 'urgency' : 'engagement',
     keyMessage: '',
   }));
   const narrative: NarrativeArchitecture = {
     scenes: narrativeScenes,
-    totalDuration: contentScenes.reduce((sum: number, s: any) => sum + (s.duration || 8), 0),
+    totalDuration: contentScenes.reduce((sum: number, s: any) => sum + (s.duration || chapterFallbackDuration), 0),
     pacing: 'steady educational pacing with emotional peaks',
   };
 

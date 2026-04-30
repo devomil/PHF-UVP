@@ -55,6 +55,12 @@ interface AIVideoOptions {
   contentTag?: string;
   isCharacterReference?: boolean;
   isProviderHint?: boolean;
+  // Phase 20D (Task #126): per-scene Seedance 2 native-audio opt-in.
+  // Only consulted when the resolved provider is `seedance-2.0` /
+  // `seedance-2.0-fast`; ignored by every other branch in the
+  // generation switch. See Scene.generateNativeAudio in
+  // shared/video-types.ts for full semantics.
+  generateNativeAudio?: boolean;
 }
 
 // Maps base provider + quality tier to the appropriate versioned provider
@@ -629,6 +635,11 @@ class AIVideoService {
         motionControl,
         isCharacterReference: options.isCharacterReference,
         artPresetId: options.artPresetId,
+        // Phase 20D (Task #126): forward the scene-level Seedance 2
+        // native-audio opt-in. The I2V handler only honors it when the
+        // resolved model is a Seedance 2 variant; every other branch
+        // (Veo, Wan, Hailuo, etc.) ignores this field.
+        ...(options.generateNativeAudio === true ? { generateAudio: true } : {}),
       });
       
       return {
@@ -650,6 +661,7 @@ class AIVideoService {
       model: providerKey,
       negativePrompt: options.negativePrompt,
       motionControl, // Pass motion control for T2V
+      generateNativeAudio: options.generateNativeAudio,
     });
     
     return {

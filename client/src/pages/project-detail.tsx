@@ -25,6 +25,7 @@ function normalizeProjectBrand(project: any): BrandSettings | undefined {
   return brand as BrandSettings;
 }
 import { useToast } from "@/hooks/use-toast";
+import { SceneDefaultsBulkAction } from "@/components/video/scene-defaults-bulk-action";
 import { EnhancedSceneEditor } from "@/components/video/enhanced-scene-editor";
 import { SceneOverlayEditor, SceneOverlayItem } from "@/components/video/scene-overlay-editor";
 import { SceneImageActions } from "@/components/video/scene-image-actions";
@@ -3237,6 +3238,23 @@ export default function ProjectDetail({ params }: { params?: { id: string } }) {
                     }
                   }}
                 />
+              )}
+              {/* Phase 20D (Task #126): bulk-set duration / native audio
+                  across every scene with a single PUT call. Hidden until
+                  the project actually has scenes. */}
+              {!isStudioPolish && scenes.length > 0 && (
+                <div className="mt-2">
+                  <SceneDefaultsBulkAction
+                    projectId={project.id}
+                    scenes={scenes as any}
+                    projectPreferredProvider={(project as any).preferredProvider}
+                    onUpdated={() =>
+                      queryClient.invalidateQueries({
+                        queryKey: ["project", projectId],
+                      })
+                    }
+                  />
+                </div>
               )}
             </div>
           </div>

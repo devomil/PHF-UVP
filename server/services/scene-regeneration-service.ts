@@ -90,6 +90,8 @@ class SceneRegenerationService {
         aspectRatio,
         sceneType: scene.type,
         negativePrompt: this.buildNegativePrompt(issues),
+        // Phase 20D (Task #126): per-scene Seedance 2 native-audio opt-in.
+        ...(scene.generateNativeAudio === true ? { generateNativeAudio: true } : {}),
       });
       
       if (!videoResult.success || !videoResult.s3Url) {

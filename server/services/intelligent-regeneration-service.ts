@@ -166,6 +166,8 @@ class IntelligentRegenerationService {
         negativePrompt: this.buildNegativePrompt(issues),
         preferredProvider: provider,
         imageUrl: strategy.changes.useReference ? strategy.changes.referenceUrl : undefined,
+        // Phase 20D (Task #126): per-scene Seedance 2 native-audio opt-in.
+        ...(scene.generateNativeAudio === true ? { generateNativeAudio: true } : {}),
       });
       
       if (!videoResult.success || !videoResult.s3Url) {

@@ -4,6 +4,7 @@ import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { AI_VIDEO_PROVIDERS } from '../config/ai-video-providers';
 import { MotionControlConfig, mapToKlingMotion, buildVeoMotionPrompt } from '../../shared/config/motion-control';
 import { isStylizedPreset, getVisualArtPreset, STYLIZED_CHARACTER_CFG, STYLIZED_ENVIRONMENT_CFG } from '../../shared/config/visual-art-presets';
+import { clampSeedance2Duration } from '../utils/duration';
 
 function hasActionPrompt(prompt: string): boolean {
   const actionPatterns = [
@@ -58,6 +59,12 @@ interface PiAPIGenerationOptions {
   model: string;
   negativePrompt?: string;
   motionControl?: MotionControlConfig;
+  // Phase 20D (Task #126): when true AND `model` is a Seedance 2 variant
+  // (`seedance-2.0` / `seedance-2.0-fast`), the request payload emits
+  // `generate_audio: true` so the model produces ambient audio. Other
+  // model branches ignore this flag — see Scene.generateNativeAudio
+  // in shared/video-types.ts for the full semantics.
+  generateNativeAudio?: boolean;
 }
 
 interface ModelConfig {
@@ -616,15 +623,21 @@ class PiAPIVideoService {
         if (isPeakHours) {
           console.warn(`[PiAPI T2V] ⚠ Seedance 2 GA request during peak hours (09:00-15:00 GMT) — expect longer queue times`);
         }
-        console.log(`[PiAPI T2V] Using Seedance 2 GA (text_to_video mode)`);
+        const wantsAudio = options.generateNativeAudio === true;
+        console.log(`[PiAPI T2V] Using Seedance 2 GA (text_to_video mode, generate_audio=${wantsAudio})`);
         return {
           model: 'seedance',
           task_type: 'seedance-2',
           input: {
             prompt: safePrompt,
             mode: 'text_to_video',
-            duration: Math.min(options.duration, 15),
+            duration: clampSeedance2Duration(options.duration),
             aspect_ratio: options.aspectRatio || '16:9',
+            // Phase 20D (Task #126): only emit when explicitly opted in.
+            // Including `generate_audio: false` is harmless but noisy in
+            // payload logs, so we keep the field absent in the default
+            // case to make request diffs easier to read.
+            ...(wantsAudio ? { generate_audio: true } : {}),
           },
         };
       }
@@ -634,15 +647,17 @@ class PiAPIVideoService {
         if (isPeakHours) {
           console.warn(`[PiAPI T2V] ⚠ Seedance 2 Fast GA request during peak hours (09:00-15:00 GMT) — expect longer queue times`);
         }
-        console.log(`[PiAPI T2V] Using Seedance 2 Fast GA (text_to_video mode)`);
+        const wantsAudio = options.generateNativeAudio === true;
+        console.log(`[PiAPI T2V] Using Seedance 2 Fast GA (text_to_video mode, generate_audio=${wantsAudio})`);
         return {
           model: 'seedance',
           task_type: 'seedance-2-fast',
           input: {
             prompt: safePrompt,
             mode: 'text_to_video',
-            duration: Math.min(options.duration, 15),
+            duration: clampSeedance2Duration(options.duration),
             aspect_ratio: options.aspectRatio || '16:9',
+            ...(wantsAudio ? { generate_audio: true } : {}),
           },
         };
       }
@@ -1387,7 +1402,14 @@ class PiAPIVideoService {
         if (isPeakHours) {
           console.warn(`[PiAPI I2V] ⚠ Seedance 2 first_last_frames request during peak hours (09:00-15:00 GMT)`);
         }
-        console.log(`[PiAPI I2V] Seedance 2 FIRST_LAST_FRAMES (${taskType}): ${flfImageUrls.length} anchor frame(s), aspect_ratio=auto`);
+        // Phase 20D (Task #126): Seedance I2V honors generate_audio in
+        // both `first_last_frames` and `omni_reference` modes. The flag
+        // arrives via `options.generateAudio` (existing field on
+        // generateImageToVideo) which is fed from the scene-level
+        // `generateNativeAudio`. Other I2V branches (Veo, Wan, etc.)
+        // intentionally ignore it — see those handlers below.
+        const wantsAudio = options.generateAudio === true;
+        console.log(`[PiAPI I2V] Seedance 2 FIRST_LAST_FRAMES (${taskType}): ${flfImageUrls.length} anchor frame(s), aspect_ratio=auto, generate_audio=${wantsAudio}`);
 
         return {
           model: 'seedance',
@@ -1396,8 +1418,9 @@ class PiAPIVideoService {
             prompt: sanitizedPrompt, // describe motion/action only — subject is locked by the anchor frame
             mode: 'first_last_frames',
             image_urls: flfImageUrls,
-            duration: Math.max(4, Math.min(options.duration, 15)),
+            duration: clampSeedance2Duration(options.duration),
             aspect_ratio: 'auto',
+            ...(wantsAudio ? { generate_audio: true } : {}),
           },
         };
       }
@@ -1441,7 +1464,9 @@ class PiAPIVideoService {
       if (isPeakHours) {
         console.warn(`[PiAPI I2V] ⚠ Seedance 2 GA request during peak hours (09:00-15:00 GMT) — expect longer queue times`);
       }
-      console.log(`[PiAPI I2V] Seedance 2 GA (${taskType}, ${seedanceMode} mode): ${allImageUrls.length} image(s)`);
+      // Phase 20D (Task #126): omni_reference branch also honors generate_audio.
+      const wantsAudioOmni = options.generateAudio === true;
+      console.log(`[PiAPI I2V] Seedance 2 GA (${taskType}, ${seedanceMode} mode): ${allImageUrls.length} image(s), generate_audio=${wantsAudioOmni}`);
       return {
         model: 'seedance',
         task_type: taskType,
@@ -1449,10 +1474,11 @@ class PiAPIVideoService {
           prompt: promptWithRefs,
           mode: seedanceMode,
           image_urls: allImageUrls,
-          duration: Math.min(options.duration, 15),
+          duration: clampSeedance2Duration(options.duration),
           // first_last_frames inherits aspect from the anchor image; omni_reference
           // accepts an explicit aspect_ratio.
           aspect_ratio: seedanceMode === 'first_last_frames' ? 'auto' : (options.aspectRatio || '16:9'),
+          ...(wantsAudioOmni ? { generate_audio: true } : {}),
         },
       };
     }

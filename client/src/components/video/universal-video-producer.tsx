@@ -32,6 +32,8 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/h
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { VoiceSelector } from "./voice-selector";
 import { QualityReport } from "./quality-report";
+import { SceneDurationControl } from "./scene-duration-control";
+import { NativeAudioToggle } from "./native-audio-toggle";
 import { BrandSettingsPanel, BrandSettings as UIBrandSettings } from "./brand-settings-panel";
 import { EndCardSettingsPanel, EndCardSettings, DEFAULT_END_CARD_SETTINGS } from "./video/EndCardSettingsPanel";
 import { SoundDesignSettingsPanel, SoundDesignSettings, DEFAULT_SOUND_DESIGN_SETTINGS } from "./video/SoundDesignSettingsPanel";
@@ -1440,6 +1442,8 @@ function ScenePreview({
   projectId,
   projectTitle,
   projectQualityTier,
+  projectPreferredProvider,
+  projectVisualStyle,
   onToggleProductOverlay,
   onSceneUpdate,
   onProjectUpdate
@@ -1449,6 +1453,11 @@ function ScenePreview({
   projectId?: string;
   projectTitle?: string;
   projectQualityTier?: 'ultra' | 'premium' | 'standard';
+  // Phase 20D (Task #126): used by SceneEditorModal to resolve the
+  // "effective" provider for the duration slider + native-audio toggle
+  // (Seedance 2 → continuous slider; everything else → fixed presets).
+  projectPreferredProvider?: string;
+  projectVisualStyle?: string;
   onToggleProductOverlay?: (sceneId: string, useOverlay: boolean) => void;
   onSceneUpdate?: () => void;
   onProjectUpdate?: (project: VideoProject) => void;
@@ -3706,73 +3715,62 @@ function ScenePreview({
                   )}
                 </div>
                 
-                {/* Scene Duration Section */}
-                <div className="space-y-2 p-3 bg-muted/50 rounded-lg">
-                  <Label className="text-sm font-medium flex items-center gap-2">
-                    <Clock className="w-4 h-4 text-muted-foreground" />
-                    Scene Duration
-                  </Label>
-                  <div className="flex items-center gap-3">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-8 w-8 p-0"
-                      onClick={async () => {
-                        const newDuration = Math.max(1, (scene.duration || 5) - 1);
-                        try {
-                          await apiRequest('PATCH', `/api/universal-video/projects/${projectId}/scenes/${scene.id}`, { duration: newDuration });
-                          onSceneUpdate?.();
-                          toast({ title: 'Duration updated', description: `Scene duration set to ${newDuration}s` });
-                        } catch (err) {
-                          toast({ title: 'Error', description: 'Failed to update duration', variant: 'destructive' });
-                        }
-                      }}
-                      disabled={(scene.duration || 5) <= 1}
-                    >
-                      <Minus className="h-4 w-4" />
-                    </Button>
-                    <Input
-                      type="number"
-                      min={1}
-                      max={60}
-                      value={scene.duration || 5}
-                      onChange={async (e) => {
-                        const val = parseInt(e.target.value, 10);
-                        if (!isNaN(val) && val >= 1 && val <= 60) {
+                {/* Scene Duration & Native Audio (Phase 20D / Task #126) */}
+                {(() => {
+                  const resolvedProvider =
+                    (scene.assets?.videoSource as string | undefined) ||
+                    projectPreferredProvider ||
+                    'seedance-2.0-fast';
+                  const isSeedance2 = resolvedProvider === 'seedance-2.0' || resolvedProvider === 'seedance-2.0-fast';
+                  const currentDuration = scene.duration || (isSeedance2 ? 8 : 5);
+                  const currentAudio = (scene as any).generateNativeAudio === true;
+                  const hasVoiceover = !!(scene.narration && scene.narration.trim().length > 0);
+                  return (
+                    <div className="space-y-3" data-testid="scene-editor-duration-audio">
+                      <SceneDurationControl
+                        provider={resolvedProvider}
+                        value={currentDuration}
+                        onChange={async (next) => {
                           try {
-                            await apiRequest('PATCH', `/api/universal-video/projects/${projectId}/scenes/${scene.id}`, { duration: val });
+                            await apiRequest('PATCH', `/api/universal-video/projects/${projectId}/scenes/${scene.id}`, { duration: next });
                             onSceneUpdate?.();
+                            toast({ title: 'Duration updated', description: `Scene duration set to ${next}s` });
                           } catch (err) {
                             toast({ title: 'Error', description: 'Failed to update duration', variant: 'destructive' });
                           }
-                        }
-                      }}
-                      className="w-20 text-center h-8"
-                    />
-                    <span className="text-sm text-muted-foreground">seconds</span>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-8 w-8 p-0"
-                      onClick={async () => {
-                        const newDuration = Math.min(60, (scene.duration || 5) + 1);
-                        try {
-                          await apiRequest('PATCH', `/api/universal-video/projects/${projectId}/scenes/${scene.id}`, { duration: newDuration });
-                          onSceneUpdate?.();
-                          toast({ title: 'Duration updated', description: `Scene duration set to ${newDuration}s` });
-                        } catch (err) {
-                          toast({ title: 'Error', description: 'Failed to update duration', variant: 'destructive' });
-                        }
-                      }}
-                      disabled={(scene.duration || 5) >= 60}
-                    >
-                      <Plus className="h-4 w-4" />
-                    </Button>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Controls how long this scene plays in the final video (1-60 seconds)
-                  </p>
-                </div>
+                        }}
+                      />
+                      <NativeAudioToggle
+                        provider={resolvedProvider}
+                        value={currentAudio}
+                        hasVoiceover={hasVoiceover}
+                        onChange={async (next) => {
+                          try {
+                            await apiRequest('PATCH', `/api/universal-video/projects/${projectId}/scenes/${scene.id}`, { generateNativeAudio: next });
+                            onSceneUpdate?.();
+                            toast({
+                              title: next ? 'Native audio enabled' : 'Native audio disabled',
+                              description: next
+                                ? 'Seedance 2 will generate ambient audio for this scene.'
+                                : 'This scene will use only its voiceover (if any).',
+                            });
+                          } catch (err) {
+                            toast({ title: 'Error', description: 'Failed to update audio setting', variant: 'destructive' });
+                          }
+                        }}
+                        onMuteVoiceover={async () => {
+                          try {
+                            await apiRequest('PATCH', `/api/universal-video/projects/${projectId}/scenes/${scene.id}`, { narration: '' });
+                            onSceneUpdate?.();
+                            toast({ title: 'Voiceover muted', description: 'Narration cleared for this scene.' });
+                          } catch (err) {
+                            toast({ title: 'Error', description: 'Failed to mute voiceover', variant: 'destructive' });
+                          }
+                        }}
+                      />
+                    </div>
+                  );
+                })()}
                 
                 {/* Per-Scene Quality Tier Section */}
                 {(() => {
@@ -6105,6 +6103,8 @@ export default function UniversalVideoProducer() {
                     projectId={project.id}
                     projectTitle={project.title}
                     projectQualityTier={project.qualityTier}
+                    projectPreferredProvider={(project as any).preferredProvider}
+                    projectVisualStyle={(project as any).visualStyle}
                     onToggleProductOverlay={handleToggleProductOverlay}
                     onSceneUpdate={() => queryClient.invalidateQueries({ queryKey: ['/api/universal-video/projects', project.id] })}
                     onProjectUpdate={(updatedProject) => setProject(updatedProject)}
