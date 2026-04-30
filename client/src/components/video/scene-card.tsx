@@ -9,6 +9,7 @@ import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import { SceneDurationControl } from './scene-duration-control';
 import { NativeAudioToggle } from './native-audio-toggle';
+import { resolveSceneVideoProvider } from './scene-provider-resolver';
 
 interface SceneSoundDesign {
   ambient: { type: string; description: string } | null;
@@ -238,7 +239,7 @@ export function SceneCard({
                 Duration
               </label>
               <SceneDurationControl
-                provider={scene.videoProvider || projectPreferredProvider}
+                provider={resolveSceneVideoProvider(scene, projectPreferredProvider)}
                 value={scene.duration}
                 disabled={disabled}
                 onChange={handleDurationChange}
@@ -247,7 +248,7 @@ export function SceneCard({
 
             <div>
               <NativeAudioToggle
-                provider={scene.videoProvider || projectPreferredProvider}
+                provider={resolveSceneVideoProvider(scene, projectPreferredProvider)}
                 value={Boolean(scene.generateNativeAudio)}
                 hasVoiceover={Boolean((scene.narration || '').trim())}
                 disabled={disabled}

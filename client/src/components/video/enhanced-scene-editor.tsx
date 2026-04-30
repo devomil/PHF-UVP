@@ -17,6 +17,7 @@ import { getVisualArtPreset, getAllVisualArtPresets } from "@shared/config/visua
 import { CharacterProfilesPanel } from "./character-profiles-panel";
 import { SceneDurationControl } from "./scene-duration-control";
 import { NativeAudioToggle } from "./native-audio-toggle";
+import { resolveSceneVideoProvider } from "./scene-provider-resolver";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import {
   AlertDialog,
@@ -2383,7 +2384,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
               Duration
             </label>
             <SceneDurationControl
-              provider={scene.assets?.videoProviderLock || projectPreferredProvider}
+              provider={resolveSceneVideoProvider(scene, projectPreferredProvider)}
               value={editValues.duration}
               disabled={!isEditing}
               onChange={(next) => {
@@ -2396,7 +2397,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
 
         <div className="mt-3">
           <NativeAudioToggle
-            provider={scene.assets?.videoProviderLock || projectPreferredProvider}
+            provider={resolveSceneVideoProvider(scene, projectPreferredProvider)}
             value={editValues.generateNativeAudio}
             hasVoiceover={Boolean(editValues.narration.trim())}
             disabled={!isEditing}

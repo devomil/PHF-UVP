@@ -3718,8 +3718,7 @@ function ScenePreview({
                 {/* Scene Duration & Native Audio */}
                 {(() => {
                   const resolvedProvider =
-                    scene.assets?.videoProviderLock ||
-                    projectPreferredProvider ||
+                    resolveSceneVideoProvider(scene, projectPreferredProvider) ||
                     'seedance-2.0-fast';
                   const isSeedance2 = resolvedProvider === 'seedance-2.0' || resolvedProvider === 'seedance-2.0-fast';
                   const currentDuration = scene.duration || (isSeedance2 ? 8 : 5);
