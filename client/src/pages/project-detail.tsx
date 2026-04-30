@@ -43,6 +43,16 @@ import {
 import { EndCardPreview } from "@/components/video/EndCardPreview";
 import { AskSuzziePanel } from "@/components/video/ask-suzzie-panel";
 import { CanvaSyncCard } from "@/components/canva/CanvaSyncCard";
+// Task #119: project-header render-type histogram + per-scene badge.
+// `RenderTypeHistogram` shows the count of each render system across
+// the current project's scenes (with a built-in "Reclassify all" button
+// that calls POST /classify-scenes); `RenderTypeBadge` is reused inside
+// each scene-list card so the model assignment is visible without
+// opening the editor.
+import {
+  RenderTypeHistogram,
+  RenderTypeBadge,
+} from "@/components/video/render-type-badge";
 
 const statusDot: Record<string, string> = {
   pending: "bg-gray-500",
@@ -1836,6 +1846,25 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
                           <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-400 uppercase tracking-wider font-medium">
                             {scene.type || "scene"}
                           </span>
+                          {/* Task #119: per-scene render-system badge.
+                              Display-only (no `onReclassify` handler).
+                              We deliberately do NOT stopPropagation —
+                              clicking the badge falls through to the
+                              card-expand toggle (which is what users
+                              expect from the rest of the chip row);
+                              the tooltip is hover-driven so it's still
+                              readable without expanding the card. The
+                              editor retains the inline reclassify
+                              affordance for per-scene overrides. */}
+                          <span data-testid={`scene-list-render-type-${sceneId}`}>
+                            <RenderTypeBadge
+                              renderSystemType={(scene as Scene).renderSystemType}
+                              classifierConfidence={(scene as Scene).classifierConfidence}
+                              classifierReasoning={(scene as Scene).classifierReasoning}
+                              manuallyClassified={(scene as Scene).manuallyClassified}
+                              classifiedAt={(scene as Scene).classifiedAt}
+                            />
+                          </span>
                           {scene.duration && (
                             <span className="text-[10px] px-1.5 py-0.5 rounded-full border" style={{ borderColor: "var(--border-subtle)", color: "var(--text-muted)" }}>
                               {scene.duration}s
@@ -3038,6 +3067,50 @@ export default function ProjectDetail({ params }: { params?: { id: string } }) {
     },
   });
 
+  // Task #119: bulk-reclassify every scene's render system. The
+  // server-side endpoint already exists (POST /classify-scenes); we
+  // pass `force: true` so previously auto-classified scenes are
+  // re-evaluated (manually-overridden scenes stay locked — that skip
+  // is enforced inside `scene-classifier.service.shouldSkip`).
+  // The histogram component owns the in-flight spinner; we just await
+  // the network call and surface failures via toast.
+  const reclassifyAllMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(
+        `/api/universal-video/projects/${projectId}/classify-scenes`,
+        {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ force: true }),
+        },
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || 'Failed to reclassify scenes');
+      return data as {
+        success: true;
+        classified: number;
+        skipped: number;
+        distribution: Record<string, number>;
+        missingKey?: boolean;
+      };
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['project', projectId] });
+      const desc = data.missingKey
+        ? 'No ANTHROPIC_API_KEY configured — scenes received the neutral fallback. Ask an admin to set the key.'
+        : `${data.classified} scene${data.classified === 1 ? '' : 's'} reclassified, ${data.skipped} skipped (manual overrides preserved).`;
+      toast({
+        title: data.missingKey ? 'Reclassify completed (fallback)' : 'Reclassified',
+        description: desc,
+        variant: data.missingKey ? 'destructive' : undefined,
+      });
+    },
+    onError: (err: Error) => {
+      toast({ title: 'Reclassify failed', description: err.message, variant: 'destructive' });
+    },
+  });
+
   // Phase 20C: bulk-attach the project's primary product image to every
   // product/solution scene that has no brand references yet. Idempotent.
   const applyProductReferencesMutation = useMutation({
@@ -3144,6 +3217,27 @@ export default function ProjectDetail({ params }: { params?: { id: string } }) {
                   );
                 })()}
               </p>
+              {/* Task #119: project-wide render-mix at a glance. Hidden
+                  while there are no scenes yet (the component returns
+                  null in that case); when scenes exist, an inline
+                  "Reclassify all" button calls POST /classify-scenes
+                  with `force: true` and refreshes the project. */}
+              {!isStudioPolish && (
+                <RenderTypeHistogram
+                  scenes={scenes}
+                  onReclassifyAll={async () => {
+                    // Swallow the rejection: the mutation's `onError`
+                    // already surfaces the failure via toast. Re-throwing
+                    // would just bubble up as an unhandled promise
+                    // rejection because React's onClick doesn't await.
+                    try {
+                      await reclassifyAllMutation.mutateAsync();
+                    } catch {
+                      /* toast already fired in mutation onError */
+                    }
+                  }}
+                />
+              )}
             </div>
           </div>
           <div className="flex gap-2 flex-wrap">

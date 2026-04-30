@@ -186,3 +186,190 @@ export function RenderTypeBadge({
 // here keeps the dropdown labels in sync with the badge labels without a
 // second source of truth.
 export const RENDER_TYPE_LABELS = TYPE_LABELS;
+
+// ─── Task #119: project-header render-type histogram ───────────────────
+// Renders a single-line summary of how many scenes belong to each render
+// system (e.g. "5 AI Video · 2 Title Card · 1 Infographic"), plus an
+// optional "Reclassify all" button. Re-uses the same TYPE_STYLES color
+// tokens as the per-scene badge so the histogram matches the inline
+// chips at a glance.
+//
+// Behavior contract:
+//  - Pills are only rendered for types that actually appear in the
+//    project (zero-count types are hidden to avoid clutter).
+//  - A trailing "Unclassified" pill is added when at least one scene has
+//    no `renderSystemType` set yet — this is what tells the editor the
+//    classifier hasn't finished (or the scene was added after the last
+//    batch).
+//  - The "Reclassify all" button owns its own in-flight spinner state,
+//    matching the per-scene badge contract: callers just await their
+//    network call inside the handler. Errors are surfaced by the caller
+//    via toast.
+
+interface SceneForHistogram {
+  renderSystemType?: RenderSystemType | string | null;
+}
+
+/**
+ * Compute the render-type histogram for a list of scenes. Exported so
+ * unit tests can verify counts directly (the rendered chip order is
+ * driven by this map's iteration order, which is the declaration order
+ * of TYPE_LABELS — i.e. ai_video → ugc_avatar — so callers get a stable
+ * left-to-right ordering across renders).
+ *
+ * Returns an object with:
+ *  - counts: Record<RenderSystemType, number> for known types
+ *  - unclassified: number of scenes with no/unknown renderSystemType
+ */
+export function computeRenderTypeHistogram(scenes: SceneForHistogram[]): {
+  counts: Record<RenderSystemType, number>;
+  unclassified: number;
+} {
+  const counts: Record<RenderSystemType, number> = {
+    ai_video: 0,
+    title_card: 0,
+    infographic: 0,
+    scientific_medical: 0,
+    brand_environment: 0,
+    product_showcase: 0,
+    ugc_avatar: 0,
+  };
+  let unclassified = 0;
+  for (const s of scenes) {
+    const t = s?.renderSystemType;
+    if (typeof t === "string" && t in counts) {
+      counts[t as RenderSystemType] += 1;
+    } else {
+      unclassified += 1;
+    }
+  }
+  return { counts, unclassified };
+}
+
+interface RenderTypeHistogramProps {
+  scenes: SceneForHistogram[];
+  /** Async handler fired when the user clicks "Reclassify all". The
+   *  histogram owns the in-flight spinner state so callers don't have
+   *  to thread loading state through. Errors should be surfaced by the
+   *  caller via toast. Omit to hide the button entirely. */
+  onReclassifyAll?: () => Promise<void>;
+}
+
+export function RenderTypeHistogram({
+  scenes,
+  onReclassifyAll,
+}: RenderTypeHistogramProps) {
+  const [isReclassifying, setIsReclassifying] = useState(false);
+  const { counts, unclassified } = computeRenderTypeHistogram(scenes);
+
+  // Stable left-to-right order: declaration order of TYPE_LABELS.
+  const presentTypes = (Object.keys(TYPE_LABELS) as RenderSystemType[]).filter(
+    (t) => counts[t] > 0,
+  );
+
+  const handleReclassify = async () => {
+    if (!onReclassifyAll || isReclassifying) return;
+    setIsReclassifying(true);
+    try {
+      await onReclassifyAll();
+    } finally {
+      setIsReclassifying(false);
+    }
+  };
+
+  // Empty-state: no scenes at all. Rendering nothing keeps the header
+  // compact when the user is still on the "generate script" step.
+  if (scenes.length === 0) return null;
+
+  return (
+    <div
+      className="flex items-center gap-1.5 flex-wrap mt-2"
+      data-testid="render-type-histogram"
+    >
+      <span
+        className="text-[10px] uppercase tracking-wider mr-1"
+        style={{ color: "var(--text-muted)" }}
+      >
+        Render mix
+      </span>
+      {presentTypes.length === 0 && unclassified === scenes.length ? (
+        <span
+          className="text-[11px] inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5"
+          style={{
+            color: PENDING_STYLE.fg,
+            borderColor: PENDING_STYLE.border,
+            backgroundColor: PENDING_STYLE.bg,
+          }}
+          data-testid="render-type-histogram-all-unclassified"
+        >
+          {unclassified} unclassified
+        </span>
+      ) : (
+        <>
+          {presentTypes.map((t) => {
+            const style = TYPE_STYLES[t];
+            return (
+              <span
+                key={t}
+                className="text-[11px] inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 font-medium"
+                style={{
+                  color: style.fg,
+                  borderColor: style.border,
+                  backgroundColor: style.bg,
+                }}
+                data-testid={`render-type-histogram-pill-${t}`}
+              >
+                <span
+                  className="inline-block h-1.5 w-1.5 rounded-full"
+                  style={{ backgroundColor: style.fg }}
+                />
+                <span className="tabular-nums">{counts[t]}</span>
+                <span>{TYPE_LABELS[t]}</span>
+              </span>
+            );
+          })}
+          {unclassified > 0 ? (
+            <span
+              className="text-[11px] inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5"
+              style={{
+                color: PENDING_STYLE.fg,
+                borderColor: PENDING_STYLE.border,
+                backgroundColor: PENDING_STYLE.bg,
+              }}
+              data-testid="render-type-histogram-pill-unclassified"
+            >
+              <span className="tabular-nums">{unclassified}</span>
+              <span>Unclassified</span>
+            </span>
+          ) : null}
+        </>
+      )}
+      {onReclassifyAll ? (
+        <button
+          type="button"
+          onClick={handleReclassify}
+          disabled={isReclassifying}
+          data-testid="reclassify-all-btn"
+          className="ml-1 inline-flex items-center gap-1 text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full border opacity-80 hover:opacity-100 disabled:opacity-50 disabled:cursor-wait transition-opacity"
+          style={{
+            color: "var(--text-secondary)",
+            borderColor: "var(--border-subtle)",
+            backgroundColor: "transparent",
+          }}
+          aria-label={
+            isReclassifying ? "Reclassifying all scenes" : "Reclassify all scenes"
+          }
+        >
+          {isReclassifying ? (
+            <span
+              data-testid="reclassify-all-spinner"
+              className="inline-block h-2.5 w-2.5 rounded-full border-[1.5px] border-current border-t-transparent animate-spin"
+              aria-hidden
+            />
+          ) : null}
+          <span>{isReclassifying ? "Reclassifying…" : "Reclassify all"}</span>
+        </button>
+      ) : null}
+    </div>
+  );
+}
