@@ -2,32 +2,17 @@ const PIAPI_BASE = 'https://api.piapi.ai/api/v1';
 
 export type NB2AspectRatio = '16:9' | '9:16' | '1:1' | '4:3' | '3:4' | '4:1' | '8:1';
 export type NB2Format = 'jpeg' | 'png';
-export type NB2Resolution = '1K' | '2K' | '4K';
 
-/**
- * Task #109: PiAPI bills `nano-banana-2` per image by output resolution
- * (verified against piapi.ai/docs/gemini-api/nano-banana-2, Apr 2026):
- *   - 1K (default): $0.06 / image
- *   - 2K          : $0.08 / image
- *   - 4K          : $0.12 / image
- *
- * Earlier code carried over a $0.03 / image constant from the original
- * Nano Banana model, which under-reported NB2 spend by 2–4× and caused
- * the storyboard budget cap and "near cap" warning to fire too late.
- * Callers should price each NB2 image via `getNB2CostPerImage(resolution)`
- * using the same `resolution` they pass into the API.
- */
-export const NB2_COST_PER_IMAGE_BY_RESOLUTION: Record<NB2Resolution, number> = {
-  '1K': 0.06,
-  '2K': 0.08,
-  '4K': 0.12,
-};
-
-export const NB2_DEFAULT_RESOLUTION: NB2Resolution = '1K';
-
-export function getNB2CostPerImage(resolution: NB2Resolution = NB2_DEFAULT_RESOLUTION): number {
-  return NB2_COST_PER_IMAGE_BY_RESOLUTION[resolution] ?? NB2_COST_PER_IMAGE_BY_RESOLUTION[NB2_DEFAULT_RESOLUTION];
-}
+// Task #111: NB2 pricing now lives in `shared/nb2-pricing.ts` so the client's
+// live cost preview and the server's estimator/telemetry use the same source
+// of truth. Re-exported here to keep existing server-side imports stable.
+import type { NB2Resolution } from '../../shared/nb2-pricing';
+export {
+  NB2_COST_PER_IMAGE_BY_RESOLUTION,
+  NB2_DEFAULT_RESOLUTION,
+  getNB2CostPerImage,
+} from '../../shared/nb2-pricing';
+export type { NB2Resolution } from '../../shared/nb2-pricing';
 
 export interface NB2GenerateOptions {
   prompt: string;

@@ -4,6 +4,9 @@ import { Link, useLocation } from "wouter";
 import { ArrowLeft, Settings, Play, RefreshCw, Clock, Target, Monitor, BarChart3, Loader2, AlertCircle, AlertTriangle, Zap, Video, Image, Image as ImageIcon, Download, RotateCcw, Save, Trash2, ExternalLink, CheckCircle2, XCircle, X, Type, Film, ChevronDown, ChevronUp, CloudUpload, Mic, Music, Volume2, Palette, Shuffle, Sliders, Wand2, Sparkles, ImagePlus, Upload, Edit2, FileText, Plus, GripVertical, Eye, EyeOff, Layers, Maximize2, BookOpen, GripHorizontal, Star } from "lucide-react";
 import { getVisualArtPreset, getAllVisualArtPresets } from "@shared/config/visual-art-presets";
 import { SCENE_CONTENT_TAGS } from "@shared/config/scene-content-tags";
+// Task #111: shared NB2 price source — same helper the server's estimator
+// uses, so the live cost preview never drifts from the PiAPI invoice.
+import { getNB2CostPerImage } from "@shared/nb2-pricing";
 import { Button } from "@/components/ui/button";
 import { ProviderCatalogSelector } from "@/components/video/provider-catalog-selector";
 import { SlotTile } from "@/components/video/scene-routing-ui";
@@ -655,13 +658,81 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
   // bulk button) are also defined inside this component.
   const [storyRegenDialog, setStoryRegenDialog] = useState<{ open: boolean; sceneId: string | null }>({ open: false, sceneId: null });
   const [budgetConfirmDialog, setBudgetConfirmDialog] = useState<{ open: boolean; estimate: any }>({ open: false, estimate: null });
+
+  // Task #111: per-project NB2 storyboard resolution picker.
+  //
+  // We deliberately distinguish "no explicit choice" (null) from an
+  // explicit 1K pick. When the project has never set a tier and the user
+  // has not picked one, generate calls omit `resolution` so the server's
+  // `getStoryboardResolution(undefined)` can fall back to the operator's
+  // STORYBOARD_NB2_RESOLUTION env override (or 1K default). The picker
+  // still visually highlights the *effective* tier — i.e. the persisted
+  // value if set, otherwise 1K — so the UI is never blank, but it does
+  // not coerce that visual default into the request body.
+  const projectStoryRes = ((project as any).storyboardResolution ?? null) as '1K' | '2K' | '4K' | null;
+  const [chosenResolution, setChosenResolution] = useState<'1K' | '2K' | '4K' | null>(projectStoryRes);
+  useEffect(() => {
+    setChosenResolution(((project as any).storyboardResolution ?? null) as '1K' | '2K' | '4K' | null);
+  }, [(project as any).storyboardResolution]);
+  // Server echoes the *effective* tier it would use right now (project >
+  // env > default). Falling back to '1K' here only happens during the
+  // first render before the project payload arrives — once it does, the
+  // env-aware value takes over so an operator's STORYBOARD_NB2_RESOLUTION
+  // is honored visually instead of silently overridden by a client-side
+  // 1K assumption.
+  const effectiveServerResolution = (((project as any).storyboardResolutionEffective ?? null) as '1K' | '2K' | '4K' | null);
+  const storyboardResolution: '1K' | '2K' | '4K' = chosenResolution ?? effectiveServerResolution ?? '1K';
+  const setStoryboardResolution = (next: '1K' | '2K' | '4K' | null) => setChosenResolution(next);
+  const setStoryboardResolutionMutation = useMutation({
+    // Task #111: capture the previous tier in onMutate so rollback is
+    // deterministic during rapid toggles — otherwise the picker could
+    // settle on a value the server didn't accept and the next batch run
+    // would diverge from what the user sees.
+    mutationFn: async (next: '1K' | '2K' | '4K') => {
+      const res = await fetch(`/api/universal-video/projects/${projectId}/storyboard-resolution`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ resolution: next }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || 'Failed to save resolution');
+      return data;
+    },
+    onMutate: () => {
+      // Capture the *current local* tier (the value at the time the
+      // picker click triggered this mutation, before the optimistic
+      // update is committed) so rapid toggles roll back to what the
+      // user actually saw last, not the older persisted project value.
+      // `null` means "no explicit choice yet" — preserved on rollback
+      // so we don't accidentally promote 1K to a real selection.
+      const previous = chosenResolution;
+      return { previous };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['project', projectId] });
+    },
+    onError: (err: Error, _next, context) => {
+      const previous = (context as { previous?: '1K' | '2K' | '4K' | null } | undefined)?.previous
+        ?? (((project as any).storyboardResolution ?? null) as '1K' | '2K' | '4K' | null);
+      setChosenResolution(previous);
+      toast({ title: 'Could not save resolution', description: err.message, variant: 'destructive' });
+    },
+  });
   const generateStorySceneMutation = useMutation({
     mutationFn: async (sceneId: string) => {
       const res = await fetch(`/api/universal-video/projects/${projectId}/scenes/${sceneId}/generate-thumbnail?mode=nb2-candidates`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ numCandidates: 3 }),
+        // Task #111: forward the chosen tier so single-scene regens honor it.
+        // Only send `resolution` if the user (or project) explicitly picked
+        // a tier — otherwise the server falls back to env > default, which
+        // lets operators set STORYBOARD_NB2_RESOLUTION globally.
+        body: JSON.stringify({
+          numCandidates: 3,
+          ...(chosenResolution ? { resolution: chosenResolution } : {}),
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || "Failed to generate storyboard image");
@@ -688,7 +759,16 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ skipExisting: true, numCandidates: 3, confirmOverCap: !!confirmOverCap }),
+        // Task #111: send the per-batch tier; the server also persists it.
+        // Omit `resolution` when no explicit tier has been chosen yet so
+        // the server can fall back to STORYBOARD_NB2_RESOLUTION env or
+        // the 1K default — preserves the documented unset semantics.
+        body: JSON.stringify({
+          skipExisting: true,
+          numCandidates: 3,
+          confirmOverCap: !!confirmOverCap,
+          ...(chosenResolution ? { resolution: chosenResolution } : {}),
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -767,6 +847,19 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
     return true;
   });
   const estimatedBatchCost = scenesNeedingThumbnail.length * FLUX_SCHNELL_COST_PER_IMAGE;
+  // Task #111: NB2 storyboard skip rule must mirror the server's
+  // `estimateBatchCost`/`generateAllSceneImages` logic — only scenes that
+  // already have an NB2-generated thumbnail are skipped. Counting against
+  // `scenesNeedingThumbnail` (which uses Flux fingerprint logic) would
+  // under-count when a scene has a Flux/Recraft thumbnail and make the
+  // live estimate disagree with the server's preflight & invoice.
+  const scenesNeedingStoryboard = scenes.filter((s: any) => {
+    const basePrompt = (s.imagePrompt || s.visualDirection || s.narration || '').toString().trim();
+    if (!basePrompt) return false;
+    if (s.thumbnailStatus === 'generating') return false;
+    if (s.thumbnailUrl && s.imageGenerationModel === 'nano-banana-2') return false;
+    return true;
+  });
   const [batchThumbProgress, setBatchThumbProgress] = useState<
     { total: number; completed: number; failed: number } | null
   >(null);
@@ -1314,46 +1407,123 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
                           <Loader2 className="w-3 h-3 animate-spin text-purple-400" />
                           Generating thumbnails… {(batchThumbProgress!.completed + batchThumbProgress!.failed)}/{batchThumbProgress!.total}
                         </div>
-                      ) : scenesNeedingThumbnail.length > 0 ? (
-                        <div className="flex items-center gap-2">
-                          <span
-                            className="text-[11px]"
-                            style={{ color: "var(--text-muted)" }}
-                            data-testid="batch-thumbnail-estimate"
+                      ) : (
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {scenesNeedingThumbnail.length > 0 ? (
+                            <>
+                              <span
+                                className="text-[11px]"
+                                style={{ color: "var(--text-muted)" }}
+                                data-testid="batch-thumbnail-estimate"
+                              >
+                                ~${estimatedBatchCost.toFixed(2)} for {scenesNeedingThumbnail.length} scene{scenesNeedingThumbnail.length === 1 ? '' : 's'}
+                              </span>
+                              <button
+                                onClick={handleGenerateAllThumbnails}
+                                className="text-xs px-2.5 py-1 rounded-lg border flex items-center gap-1.5 transition-colors hover:border-purple-500/40"
+                                style={{ borderColor: "var(--border-subtle)", color: "var(--text-secondary)" }}
+                                data-testid="button-generate-all-thumbnails"
+                              >
+                                <ImagePlus className="w-3 h-3" />
+                                Generate all thumbnails
+                              </button>
+                            </>
+                          ) : (
+                            <span
+                              className="text-[11px] flex items-center gap-1"
+                              style={{ color: "var(--text-muted)" }}
+                              data-testid="batch-thumbnail-uptodate"
+                            >
+                              <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                              Thumbnails up to date
+                            </span>
+                          )}
+                          {/* Task #111: NB2 storyboard resolution picker.
+                              Persists per-project (PATCH /storyboard-resolution)
+                              and is forwarded into the batch + per-scene calls
+                              so the bill matches what's shown here. Rendered
+                              alongside (not nested inside) the Flux thumbnail
+                              flow so users can preselect tier even when their
+                              base thumbnails are already up to date. */}
+                          <div
+                            className="inline-flex items-center rounded-lg border overflow-hidden"
+                            style={{ borderColor: "var(--border-subtle)" }}
+                            role="group"
+                            aria-label="Storyboard resolution"
+                            data-testid="storyboard-resolution-picker"
                           >
-                            ~${estimatedBatchCost.toFixed(2)} for {scenesNeedingThumbnail.length} scene{scenesNeedingThumbnail.length === 1 ? '' : 's'}
-                          </span>
-                          <button
-                            onClick={handleGenerateAllThumbnails}
-                            className="text-xs px-2.5 py-1 rounded-lg border flex items-center gap-1.5 transition-colors hover:border-purple-500/40"
-                            style={{ borderColor: "var(--border-subtle)", color: "var(--text-secondary)" }}
-                            data-testid="button-generate-all-thumbnails"
-                          >
-                            <ImagePlus className="w-3 h-3" />
-                            Generate all thumbnails
-                          </button>
+                            {(['1K','2K','4K'] as const).map((tier) => {
+                              // Visual selection follows the *effective* tier
+                              // (chosen or default), but the click handler
+                              // compares against the explicit choice so that
+                              // clicking the visually-active default (e.g. 1K
+                              // when nothing is persisted) still triggers
+                              // persistence and pins the request body
+                              // resolution — without that, env defaults of
+                              // 2K/4K would silently override what the user
+                              // clearly clicked.
+                              const active = storyboardResolution === tier;
+                              return (
+                                <button
+                                  key={tier}
+                                  type="button"
+                                  onClick={() => {
+                                    if (chosenResolution === tier) return;
+                                    setStoryboardResolution(tier);
+                                    setStoryboardResolutionMutation.mutate(tier);
+                                  }}
+                                  className="text-[11px] px-2 py-1 transition-colors"
+                                  style={{
+                                    backgroundColor: active ? "rgba(124,58,237,0.18)" : "transparent",
+                                    color: active ? "rgb(216,180,254)" : "var(--text-secondary)",
+                                  }}
+                                  data-testid={`storyboard-resolution-${tier.toLowerCase()}`}
+                                  title={`${tier} preview — $${getNB2CostPerImage(tier).toFixed(2)} per image`}
+                                  aria-pressed={active}
+                                >
+                                  {tier}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          {/* Live cost estimate that uses the same per-image
+                              price helper the server uses, so what users see
+                              tracks PiAPI's invoice. When every scene already
+                              has an NB2 thumbnail the count drops to 0 — show
+                              an explicit up-to-date badge instead of "$0 for
+                              0 scenes" so the picker still reads as actionable
+                              for next-time tier choices. */}
+                          {scenesNeedingStoryboard.length > 0 ? (
+                            <span
+                              className="text-[11px]"
+                              style={{ color: "var(--text-muted)" }}
+                              data-testid="storyboard-batch-estimate"
+                            >
+                              ~${(scenesNeedingStoryboard.length * 3 * getNB2CostPerImage(storyboardResolution)).toFixed(2)} for {scenesNeedingStoryboard.length} scene{scenesNeedingStoryboard.length === 1 ? '' : 's'} × 3 @ {storyboardResolution}
+                            </span>
+                          ) : (
+                            <span
+                              className="text-[11px] flex items-center gap-1"
+                              style={{ color: "var(--text-muted)" }}
+                              data-testid="storyboard-batch-uptodate"
+                            >
+                              <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                              Storyboard up to date @ {storyboardResolution}
+                            </span>
+                          )}
                           {/* Phase 21B (Task #106): Bulk NB2 storyboard generator. */}
                           <button
                             onClick={() => generateStoryboardBatchMutation.mutate(false)}
-                            disabled={generateStoryboardBatchMutation.isPending}
+                            disabled={generateStoryboardBatchMutation.isPending || scenesNeedingStoryboard.length === 0}
                             className="text-xs px-2.5 py-1 rounded-lg border flex items-center gap-1.5 transition-colors hover:border-purple-500/40 disabled:opacity-50"
                             style={{ borderColor: "rgba(124,58,237,0.4)", color: "rgb(216,180,254)", backgroundColor: "rgba(124,58,237,0.08)" }}
                             data-testid="button-generate-storyboard"
-                            title="Generate 3 NB2 candidates per scene + Vision QA. Costs ~$0.09/scene."
+                            title={`Generate 3 NB2 candidates per scene + Vision QA at ${storyboardResolution} ($${(3 * getNB2CostPerImage(storyboardResolution)).toFixed(2)}/scene).`}
                           >
                             {generateStoryboardBatchMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
                             Generate storyboard
                           </button>
                         </div>
-                      ) : (
-                        <span
-                          className="text-[11px] flex items-center gap-1"
-                          style={{ color: "var(--text-muted)" }}
-                          data-testid="batch-thumbnail-uptodate"
-                        >
-                          <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                          Thumbnails up to date
-                        </span>
                       )
                     )}
                   {!editingRationale ? (
@@ -2461,7 +2631,7 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
               Generate 3 storyboard candidates?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              This generates 3 NB2 candidates (~$0.09) and uses Claude Vision QA to pick the best one. The winner becomes both the scene thumbnail and the seed image used to anchor the final video render.
+              This generates 3 NB2 candidates at {storyboardResolution} (~${(3 * getNB2CostPerImage(storyboardResolution)).toFixed(2)}) and uses Claude Vision QA to pick the best one. The winner becomes both the scene thumbnail and the seed image used to anchor the final video render.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -2492,7 +2662,8 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
               Storyboard exceeds budget cap
             </AlertDialogTitle>
             <AlertDialogDescription>
-              Estimated cost ${(budgetConfirmDialog.estimate?.estimatedCost ?? 0).toFixed(2)} for {budgetConfirmDialog.estimate?.scenesToGenerate ?? 0} scene(s) is above the cap of ${(budgetConfirmDialog.estimate?.budgetCap ?? 0).toFixed(2)}. Continue anyway?
+              Estimated cost ${(budgetConfirmDialog.estimate?.estimatedCost ?? 0).toFixed(2)} for {budgetConfirmDialog.estimate?.scenesToGenerate ?? 0} scene(s) at {budgetConfirmDialog.estimate?.resolution ?? storyboardResolution}{' '}
+              (${(budgetConfirmDialog.estimate?.perImageCost ?? getNB2CostPerImage(storyboardResolution)).toFixed(2)}/image) is above the cap of ${(budgetConfirmDialog.estimate?.budgetCap ?? 0).toFixed(2)}. Higher tiers like 2K/4K hit the cap faster — continue anyway?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

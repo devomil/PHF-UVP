@@ -1363,10 +1363,24 @@ router.get('/projects/:projectId', isAuthenticated, async (req: Request, res: Re
       });
     }
     
+    // Task #111: surface the *effective* NB2 storyboard tier the server
+    // would use right now (project.storyboardResolution > env > default).
+    // The client uses this to highlight the picker default so unset
+    // projects can't visually disagree with what the server would actually
+    // run when an operator has set STORYBOARD_NB2_RESOLUTION.
+    const { getStoryboardResolution } = await import('./scene-image.service');
+    const storyboardResolutionEffective = getStoryboardResolution(
+      ((projectData as any).storyboardResolution || undefined) as '1K' | '2K' | '4K' | undefined
+    );
+
     res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     res.set('Pragma', 'no-cache');
     res.set('Expires', '0');
-    res.json({ success: true, project: projectData, fetchedAt: new Date().toISOString() });
+    res.json({
+      success: true,
+      project: { ...projectData, storyboardResolutionEffective },
+      fetchedAt: new Date().toISOString(),
+    });
   } catch (error: any) {
     console.error('[UniversalVideo] Error getting project:', error);
     res.status(500).json({ success: false, error: error.message });
@@ -2262,6 +2276,50 @@ router.patch('/projects/:projectId/aspect-ratio', isAuthenticated, async (req: R
     });
   } catch (error: any) {
     console.error('[AspectRatio] Error updating aspect ratio:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Task #111: persist the user's chosen NB2 storyboard resolution tier on the
+// project so the per-batch UI estimate, the bulk generator, and per-scene
+// regens all default to the same tier. Sending `null` clears the override
+// and re-defers to the env default.
+router.patch('/projects/:projectId/storyboard-resolution', isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const userId = (req.user as any)?.id;
+    const { projectId } = req.params;
+    const raw = req.body?.resolution;
+
+    let next: '1K' | '2K' | '4K' | null;
+    if (raw === null || raw === undefined || raw === '') {
+      next = null;
+    } else if (typeof raw === 'string') {
+      const upper = raw.toUpperCase();
+      if (upper === '1K' || upper === '2K' || upper === '4K') {
+        next = upper as '1K' | '2K' | '4K';
+      } else {
+        return res.status(400).json({ success: false, error: 'Invalid resolution. Must be one of: 1K, 2K, 4K' });
+      }
+    } else {
+      return res.status(400).json({ success: false, error: 'Invalid resolution. Must be one of: 1K, 2K, 4K' });
+    }
+
+    const projectData = await getProjectFromDb(projectId);
+    if (!projectData) return res.status(404).json({ success: false, error: 'Project not found' });
+    if (projectData.ownerId !== userId) return res.status(403).json({ success: false, error: 'Access denied' });
+
+    if (next === null) {
+      delete (projectData as any).storyboardResolution;
+    } else {
+      (projectData as any).storyboardResolution = next;
+    }
+    projectData.updatedAt = new Date().toISOString();
+    await saveProjectToDb(projectData, projectData.ownerId);
+
+    console.log(`[StoryboardResolution] project=${projectId} set to ${next ?? 'env-default'}`);
+    return res.json({ success: true, storyboardResolution: next });
+  } catch (error: any) {
+    console.error('[StoryboardResolution] Error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -3436,9 +3494,25 @@ router.post('/projects/:projectId/scenes/:sceneId/generate-thumbnail', isAuthent
         // total is auditable in production logs.
         const requestedN = typeof req.body?.numCandidates === 'number' ? req.body.numCandidates : 3;
         const clampedN = Math.max(1, Math.min(requestedN, 4));
-        console.log(`[SceneImage:budget] per-scene NB2 call project=${projectId} scene=${sceneId} candidates=${clampedN} max-cost=$${(clampedN * 0.03).toFixed(4)}`);
+        // Task #111: forward the per-batch / per-project resolution choice
+        // to single-scene regens so the user-selected tier is honored on
+        // every NB2 click, not just bulk runs. We strictly validate the
+        // payload so a typo'd value returns 400 rather than silently
+        // falling through to the env/default — this keeps UI/server
+        // pricing in lockstep instead of letting clients drift.
+        let requestedResolution: '1K' | '2K' | '4K' | undefined = undefined;
+        if (req.body?.resolution !== undefined && req.body?.resolution !== null) {
+          const rawRes = typeof req.body.resolution === 'string' ? req.body.resolution.toUpperCase() : '';
+          if (rawRes === '1K' || rawRes === '2K' || rawRes === '4K') {
+            requestedResolution = rawRes;
+          } else {
+            return res.status(400).json({ success: false, error: 'Invalid resolution. Must be one of: 1K, 2K, 4K' });
+          }
+        }
+        console.log(`[SceneImage:budget] per-scene NB2 call project=${projectId} scene=${sceneId} candidates=${clampedN} resolution=${requestedResolution || (projectData as any).storyboardResolution || 'env-default'}`);
         const result = await generateSceneImage(projectId, sceneId, {
           numCandidates: clampedN,
+          resolution: requestedResolution,
         });
         return res.json({
           success: true,
@@ -3564,29 +3638,54 @@ router.post('/projects/:projectId/generate-storyboard', isAuthenticated, async (
     const numCandidates = Math.max(1, Math.min(rawN, 4));
     const confirmOverCap = req.body?.confirmOverCap === true;
 
+    // Task #111: per-batch resolution override (1K | 2K | 4K). When omitted,
+    // falls back to the project-persisted choice and finally the env default.
+    // Strict validation: a typo or unsupported tier returns 400 instead of
+    // silently downgrading, so the cost preview the client showed always
+    // matches what the server runs.
+    let requestedResolution: '1K' | '2K' | '4K' | null = null;
+    if (req.body?.resolution !== undefined && req.body?.resolution !== null) {
+      const rawRes = typeof req.body.resolution === 'string' ? req.body.resolution.toUpperCase() : '';
+      if (rawRes === '1K' || rawRes === '2K' || rawRes === '4K') {
+        requestedResolution = rawRes;
+      } else {
+        return res.status(400).json({ success: false, error: 'Invalid resolution. Must be one of: 1K, 2K, 4K' });
+      }
+    }
+    const projectResolution = ((projectData as any).storyboardResolution || null) as '1K' | '2K' | '4K' | null;
+    const effectiveResolution = requestedResolution || projectResolution || null;
+
     const { estimateBatchCost, generateAllSceneImages } = await import('./scene-image.service');
     const scenes = projectData.scenes || [];
-    const estimate = estimateBatchCost(scenes as any, { skipExisting, numCandidates });
+    const estimate = estimateBatchCost(scenes as any, { skipExisting, numCandidates, resolution: effectiveResolution });
 
     if (estimate.overCap && !confirmOverCap) {
       return res.status(402).json({
         success: false,
         error: 'BUDGET_EXCEEDED',
-        message: `Storyboard estimate $${estimate.estimatedCost.toFixed(2)} exceeds cap $${estimate.budgetCap.toFixed(2)}.`,
+        message: `Storyboard estimate $${estimate.estimatedCost.toFixed(2)} at ${estimate.resolution} exceeds cap $${estimate.budgetCap.toFixed(2)}.`,
         estimate,
       });
     }
 
+    // Task #111: persist the chosen tier so the next run defaults to it and
+    // the UI's pre-flight estimate stays in sync after a refresh.
+    if (requestedResolution && requestedResolution !== projectResolution) {
+      (projectData as any).storyboardResolution = requestedResolution;
+      projectData.updatedAt = new Date().toISOString();
+      await saveProjectToDb(projectData, projectData.ownerId);
+    }
+
     // Fire-and-forget: per-scene status writes drive the UI.
     setImmediate(() => {
-      generateAllSceneImages(projectId, { skipExisting, numCandidates, confirmOverCap })
-        .then(r => console.log(`[Storyboard] project=${projectId} done generated=${r.generated} skipped=${r.skipped} failed=${r.failed} totalCost=$${r.totalCost.toFixed(4)}`))
+      generateAllSceneImages(projectId, { skipExisting, numCandidates, confirmOverCap, resolution: effectiveResolution || undefined })
+        .then(r => console.log(`[Storyboard] project=${projectId} resolution=${r.estimate.resolution} done generated=${r.generated} skipped=${r.skipped} failed=${r.failed} totalCost=$${r.totalCost.toFixed(4)}`))
         .catch(err => console.error(`[Storyboard] project=${projectId} batch failed: ${err.message}`));
     });
 
     return res.json({
       success: true,
-      message: `Storyboard generation started for ${estimate.scenesToGenerate} scene(s)`,
+      message: `Storyboard generation started for ${estimate.scenesToGenerate} scene(s) at ${estimate.resolution}`,
       estimate,
     });
   } catch (error: any) {

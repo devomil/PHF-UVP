@@ -462,4 +462,113 @@ describe('scene-image.service: estimateBatchCost', () => {
       else process.env.STORYBOARD_NB2_RESOLUTION = oldRes;
     }
   });
+
+  it('Task #111: per-call resolution override beats the env default and surfaces in the estimate', async () => {
+    // The UI's pre-flight estimate passes the user's tier choice so the
+    // displayed cost reflects the chosen 1K/2K/4K rather than whatever
+    // STORYBOARD_NB2_RESOLUTION happens to be set to in the environment.
+    const { estimateBatchCost } = await import('../scene-image.service');
+    const scenes = Array.from({ length: 5 }, (_, i) => ({ id: `s${i}` })) as any;
+    const oldRes = process.env.STORYBOARD_NB2_RESOLUTION;
+    try {
+      process.env.STORYBOARD_NB2_RESOLUTION = '1K';
+
+      const e2k = estimateBatchCost(scenes, { skipExisting: true, numCandidates: 3, resolution: '2K' });
+      expect(e2k.resolution).toBe('2K');
+      expect(e2k.perImageCost).toBeCloseTo(0.08, 5);
+      expect(e2k.estimatedCost).toBeCloseTo(5 * 3 * 0.08, 5);
+
+      const e4k = estimateBatchCost(scenes, { skipExisting: true, numCandidates: 3, resolution: '4K' });
+      expect(e4k.resolution).toBe('4K');
+      expect(e4k.perImageCost).toBeCloseTo(0.12, 5);
+      expect(e4k.estimatedCost).toBeCloseTo(5 * 3 * 0.12, 5);
+
+      // Null/undefined override must not poison the env-derived default.
+      const eDefault = estimateBatchCost(scenes, { skipExisting: true, numCandidates: 3, resolution: null });
+      expect(eDefault.resolution).toBe('1K');
+      expect(eDefault.perImageCost).toBeCloseTo(0.06, 5);
+    } finally {
+      if (oldRes === undefined) delete process.env.STORYBOARD_NB2_RESOLUTION;
+      else process.env.STORYBOARD_NB2_RESOLUTION = oldRes;
+    }
+  });
+});
+
+describe('scene-image.service: getStoryboardResolution', () => {
+  it('Task #111: explicit override > env > default', async () => {
+    const { getStoryboardResolution } = await import('../scene-image.service');
+    const oldRes = process.env.STORYBOARD_NB2_RESOLUTION;
+    try {
+      // No env, no override → default (1K)
+      delete process.env.STORYBOARD_NB2_RESOLUTION;
+      expect(getStoryboardResolution()).toBe('1K');
+
+      // Env set, no override → env wins
+      process.env.STORYBOARD_NB2_RESOLUTION = '2K';
+      expect(getStoryboardResolution()).toBe('2K');
+      expect(getStoryboardResolution(null)).toBe('2K');
+
+      // Override beats env
+      expect(getStoryboardResolution('4K')).toBe('4K');
+      expect(getStoryboardResolution('1K')).toBe('1K');
+    } finally {
+      if (oldRes === undefined) delete process.env.STORYBOARD_NB2_RESOLUTION;
+      else process.env.STORYBOARD_NB2_RESOLUTION = oldRes;
+    }
+  });
+});
+
+describe('scene-image.service: per-scene resolution plumbing', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    updateMock.mockResolvedValue(undefined);
+    executeMock.mockResolvedValue({ rowCount: 1 });
+  });
+
+  it('Task #111: forwards options.resolution into the NB2 request and prices candidates at that tier', async () => {
+    getProjectFromDbMock
+      .mockResolvedValueOnce(projectFactory())
+      .mockResolvedValueOnce(projectFactory());
+
+    generateCandidatesMock.mockResolvedValue([
+      { imageUrl: 'https://cdn.test/c1.png' },
+      { imageUrl: 'https://cdn.test/c2.png' },
+    ]);
+    scoreImagesMock.mockResolvedValue([
+      { url: 'https://cdn.test/c1.png', score: 0.5 },
+      { url: 'https://cdn.test/c2.png', score: 0.9 },
+    ]);
+
+    const { generateSceneImage } = await import('../scene-image.service');
+    const r = await generateSceneImage('p1', 'scene-1', { numCandidates: 2, resolution: '4K' });
+
+    // The override must reach the NB2 service so the wire request matches
+    // what the user is being billed for in the UI.
+    expect(generateCandidatesMock).toHaveBeenCalledWith(
+      expect.objectContaining({ resolution: '4K' }),
+      2,
+    );
+    // Cost reflects the 4K tier (2 × $0.12), not the 1K default.
+    expect(r.cost).toBeCloseTo(2 * 0.12, 5);
+  });
+
+  it('Task #111: project.storyboardResolution is honored when no explicit override is passed', async () => {
+    const project = projectFactory();
+    (project as any).storyboardResolution = '2K';
+    getProjectFromDbMock
+      .mockResolvedValueOnce(project)
+      .mockResolvedValueOnce(project);
+
+    generateCandidatesMock.mockResolvedValue([{ imageUrl: 'https://cdn.test/c1.png' }]);
+    scoreImagesMock.mockResolvedValue([{ url: 'https://cdn.test/c1.png', score: 0.9 }]);
+
+    const { generateSceneImage } = await import('../scene-image.service');
+    const r = await generateSceneImage('p1', 'scene-1');
+
+    expect(generateCandidatesMock).toHaveBeenCalledWith(
+      expect.objectContaining({ resolution: '2K' }),
+      expect.any(Number),
+    );
+    expect(r.cost).toBeCloseTo(0.08, 5);
+  });
 });

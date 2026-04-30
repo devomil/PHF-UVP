@@ -35,6 +35,12 @@ export interface SceneImageGenerationOptions {
   promptOverride?: string;
   /** Force a particular fallback provider (used by tests / admin tools). */
   forceProvider?: 'nano-banana-2' | 'recraft-v4-pro' | 'flux';
+  /**
+   * Task #111: per-call NB2 output resolution override. When provided,
+   * supersedes the `STORYBOARD_NB2_RESOLUTION` env default for both the
+   * wire request and the per-image price used in cost telemetry.
+   */
+  resolution?: NB2Resolution;
 }
 
 export interface BatchEstimate {
@@ -43,6 +49,10 @@ export interface BatchEstimate {
   overCap: boolean;
   scenesToGenerate: number;
   scenesSkipped: number;
+  /** Task #111: resolution tier the estimate was priced against. */
+  resolution: NB2Resolution;
+  /** Task #111: per-image price used in the estimate. */
+  perImageCost: number;
 }
 
 /** Error raised when batch cost would exceed the configured budget cap. */
@@ -82,7 +92,17 @@ export interface BatchProgressEvent {
 const RECRAFT_PRO_COST = 0.08;
 const FLUX_COST = 0.003;
 
-function getStoryboardResolution(): NB2Resolution {
+/**
+ * Resolve the NB2 storyboard resolution tier.
+ *
+ * Task #111: callers (per-project / per-batch UI) can now override the env
+ * default by passing an explicit value. Resolution priority:
+ *   1. explicit `override` arg (per-batch / per-project user choice)
+ *   2. `STORYBOARD_NB2_RESOLUTION` env var
+ *   3. `NB2_DEFAULT_RESOLUTION` (1K)
+ */
+export function getStoryboardResolution(override?: NB2Resolution | null): NB2Resolution {
+  if (override === '1K' || override === '2K' || override === '4K') return override;
   const raw = (process.env.STORYBOARD_NB2_RESOLUTION || '').toUpperCase();
   if (raw === '1K' || raw === '2K' || raw === '4K') return raw;
   return NB2_DEFAULT_RESOLUTION;
@@ -257,7 +277,10 @@ export async function generateSceneImage(
 
   const numCandidates = Math.max(1, Math.min(options.numCandidates ?? 3, 4));
   const forceProvider = options.forceProvider;
-  const nb2Resolution = getStoryboardResolution();
+  // Task #111: resolution priority — per-call override > project setting > env default.
+  const nb2Resolution = getStoryboardResolution(
+    options.resolution ?? (projectData as any).storyboardResolution ?? null,
+  );
   const nb2CostPerImage = getNB2CostPerImage(nb2Resolution);
 
   // Step 1: NB2 candidates
@@ -460,10 +483,11 @@ function getBudgetCap(): number {
 
 export function estimateBatchCost(
   scenes: Scene[],
-  opts: { skipExisting: boolean; numCandidates: number },
+  opts: { skipExisting: boolean; numCandidates: number; resolution?: NB2Resolution | null },
 ): BatchEstimate {
   const cap = getBudgetCap();
-  const perImageCost = getNB2CostPerImage(getStoryboardResolution());
+  const resolution = getStoryboardResolution(opts.resolution ?? null);
+  const perImageCost = getNB2CostPerImage(resolution);
   let toGen = 0;
   let skipped = 0;
   for (const s of scenes) {
@@ -480,6 +504,8 @@ export function estimateBatchCost(
     overCap: estimatedCost > cap,
     scenesToGenerate: toGen,
     scenesSkipped: skipped,
+    resolution,
+    perImageCost,
   };
 }
 
@@ -499,19 +525,24 @@ export async function generateAllSceneImages(
   const scenes = (projectData.scenes || []) as Scene[];
   const numCandidates = Math.max(1, Math.min(options.numCandidates ?? 3, 4));
   const skipExisting = options.skipExisting !== false;
-  const estimate = estimateBatchCost(scenes, { skipExisting, numCandidates });
+  // Task #111: per-batch override > project-persisted choice > env default.
+  const resolution = getStoryboardResolution(
+    options.resolution ?? (projectData as any).storyboardResolution ?? null,
+  );
+  const estimate = estimateBatchCost(scenes, { skipExisting, numCandidates, resolution });
 
   if (estimate.overCap && !options.confirmOverCap) {
     throw new BudgetExceededError(
-      `Storyboard estimate $${estimate.estimatedCost.toFixed(2)} exceeds cap $${estimate.budgetCap.toFixed(2)}. Pass confirmOverCap=true to proceed.`,
+      `Storyboard estimate $${estimate.estimatedCost.toFixed(2)} at ${resolution} exceeds cap $${estimate.budgetCap.toFixed(2)}. Pass confirmOverCap=true to proceed.`,
       estimate,
     );
   }
 
-  // Soft warning within 20% of cap.
+  // Soft warning within 20% of cap. Task #111: include the chosen tier so
+  // operators can see why a 4K run hit the cap faster than the 1K default.
   if (estimate.estimatedCost > estimate.budgetCap * 0.8) {
     console.warn(
-      `[SceneImage:budget] Estimated cost $${estimate.estimatedCost.toFixed(2)} is within 20% of cap $${estimate.budgetCap.toFixed(2)} (${estimate.scenesToGenerate} scenes × ${numCandidates} candidates)`
+      `[SceneImage:budget] Estimated cost $${estimate.estimatedCost.toFixed(2)} at ${resolution} is within 20% of cap $${estimate.budgetCap.toFixed(2)} (${estimate.scenesToGenerate} scenes × ${numCandidates} candidates × $${estimate.perImageCost.toFixed(2)}/image)`
     );
   }
 
@@ -549,7 +580,7 @@ export async function generateAllSceneImages(
       const scene = toGenerate[idx];
       onProgress?.({ sceneId: scene.id, status: 'started' });
       try {
-        const r = await generateSceneImage(projectId, scene.id, { numCandidates });
+        const r = await generateSceneImage(projectId, scene.id, { numCandidates, resolution });
         totalCost += r.cost;
         if (r.stale) {
           skipped++;
@@ -573,7 +604,7 @@ export async function generateAllSceneImages(
   );
   await Promise.all(workers);
 
-  console.log(`[SceneImage:batch] project=${projectId} concurrency=${CONCURRENCY} generated=${generated} skipped=${skipped} failed=${failed} totalCost=$${totalCost.toFixed(4)}`);
+  console.log(`[SceneImage:batch] project=${projectId} resolution=${resolution} concurrency=${CONCURRENCY} generated=${generated} skipped=${skipped} failed=${failed} totalCost=$${totalCost.toFixed(4)}`);
 
   return { generated, skipped, failed, totalCost, estimate };
 }

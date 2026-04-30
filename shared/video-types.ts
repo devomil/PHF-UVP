@@ -40,6 +40,11 @@ export interface VideoProject {
   artPresetId?: string;
   characters?: CharacterProfile[];
   visualStyleRationale?: string;
+  // Task #111: per-project NB2 storyboard resolution. Drives both the wire
+  // request and the per-image price (1K $0.06, 2K $0.08, 4K $0.12). Falls
+  // back to the `STORYBOARD_NB2_RESOLUTION` env default when unset so older
+  // projects keep their existing tier.
+  storyboardResolution?: '1K' | '2K' | '4K';
 }
 
 export type VideoProjectStatus = 'draft' | 'queued' | 'generating' | 'ready' | 'render_queued' | 'rendering' | 'lambda_pending' | 'complete' | 'error';
