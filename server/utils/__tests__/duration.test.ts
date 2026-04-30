@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   clampSeedance2Duration,
   isValidSeedance2Duration,
+  validateSeedance2Duration,
   SEEDANCE_2_MIN_DURATION,
   SEEDANCE_2_MAX_DURATION,
   SEEDANCE_2_DEFAULT_DURATION,
@@ -67,5 +68,34 @@ describe('isValidSeedance2Duration', () => {
     expect(isValidSeedance2Duration(NaN)).toBe(false);
     expect(isValidSeedance2Duration(undefined)).toBe(false);
     expect(isValidSeedance2Duration('5')).toBe(false);
+  });
+});
+
+describe('validateSeedance2Duration', () => {
+  it('returns null for valid whole numbers in range', () => {
+    expect(validateSeedance2Duration(4)).toBeNull();
+    expect(validateSeedance2Duration(8)).toBeNull();
+    expect(validateSeedance2Duration(15)).toBeNull();
+  });
+
+  it('returns a message when the value is missing', () => {
+    expect(validateSeedance2Duration(undefined)).toMatch(/required/i);
+    expect(validateSeedance2Duration(null)).toMatch(/required/i);
+    expect(validateSeedance2Duration('')).toMatch(/required/i);
+  });
+
+  it('returns a message for non-finite or non-numeric input', () => {
+    expect(validateSeedance2Duration(NaN)).toMatch(/finite/i);
+    expect(validateSeedance2Duration(Number.POSITIVE_INFINITY)).toMatch(/finite/i);
+    expect(validateSeedance2Duration('not a number')).toMatch(/finite/i);
+  });
+
+  it('returns a message for fractional input', () => {
+    expect(validateSeedance2Duration(7.5)).toMatch(/whole number/i);
+  });
+
+  it('returns a message for out-of-range input', () => {
+    expect(validateSeedance2Duration(3)).toMatch(/at least 4/i);
+    expect(validateSeedance2Duration(16)).toMatch(/at most 15/i);
   });
 });

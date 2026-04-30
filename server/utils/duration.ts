@@ -56,3 +56,32 @@ export function isValidSeedance2Duration(value: unknown): value is number {
     value <= SEEDANCE_2_MAX_DURATION
   );
 }
+
+/**
+ * Human-readable validator. Returns `null` when the input is a valid
+ * Seedance 2 duration (a whole number in [4, 15]); otherwise returns a
+ * short error message describing why it's not. Routes/forms can render
+ * the message directly without composing their own string.
+ *
+ * This is the API the Phase 20D spec asked for. `isValidSeedance2Duration`
+ * stays available for callers that only need a boolean.
+ */
+export function validateSeedance2Duration(value: unknown): string | null {
+  if (value === null || value === undefined || value === '') {
+    return 'Duration is required.';
+  }
+  const n = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(n)) {
+    return 'Duration must be a finite number.';
+  }
+  if (!Number.isInteger(n)) {
+    return 'Duration must be a whole number of seconds.';
+  }
+  if (n < SEEDANCE_2_MIN_DURATION) {
+    return `Duration must be at least ${SEEDANCE_2_MIN_DURATION}s.`;
+  }
+  if (n > SEEDANCE_2_MAX_DURATION) {
+    return `Duration must be at most ${SEEDANCE_2_MAX_DURATION}s.`;
+  }
+  return null;
+}

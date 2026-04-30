@@ -17,7 +17,10 @@ import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Clock, Loader2 } from "lucide-react";
-import { clampSeedance2Duration } from "./seedance-duration";
+import {
+  clampSeedance2Duration,
+  SEEDANCE_2_DEFAULT_DURATION,
+} from "./seedance-duration";
 
 export type ResolvedProvider =
   | "seedance-2.0"
@@ -143,8 +146,14 @@ export function SceneDurationControl({ provider, value, onChange, disabled }: Pr
             max={15}
             step={1}
             disabled={disabled}
-            onValueChange={(vals) => setLocalValue(vals[0] ?? 4)}
-            onValueCommit={(vals) => commit(clampSeedance2Duration(vals[0] ?? 4))}
+            onValueChange={(vals) =>
+              setLocalValue(vals[0] ?? SEEDANCE_2_DEFAULT_DURATION)
+            }
+            onValueCommit={(vals) =>
+              commit(
+                clampSeedance2Duration(vals[0] ?? SEEDANCE_2_DEFAULT_DURATION),
+              )
+            }
             className="flex-1"
             data-testid="scene-duration-slider"
           />

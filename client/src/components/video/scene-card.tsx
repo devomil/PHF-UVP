@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { GripVertical, ChevronDown, ChevronUp, Clock, Video, Volume2, Eye, Type, Shuffle, Minus, Plus } from 'lucide-react';
+import { useState } from 'react';
+import { GripVertical, ChevronDown, ChevronUp, Clock, Video, Volume2, Eye, Type, Shuffle } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ContentTypeSelector, ContentType, getContentTypeIcon } from './content-type-selector';
@@ -7,6 +7,12 @@ import { VisualDirectionEditor } from './visual-direction-editor';
 import { WorkflowOverrideCompact } from './workflow-override-toggle';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
+// Phase 20D (Task #126): provider-aware duration control + Seedance 2
+// native-audio toggle. Replace the legacy 1-60 free-form numeric input
+// so this card renders only durations the resolved provider accepts and
+// surfaces the native-audio flag inline.
+import { SceneDurationControl } from './scene-duration-control';
+import { NativeAudioToggle } from './native-audio-toggle';
 
 interface SceneSoundDesign {
   ambient: { type: string; description: string } | null;
@@ -40,6 +46,11 @@ interface Scene {
   soundDesign?: SceneSoundDesign;
   intelligence?: SceneIntelligence;
   useBrandAssets?: boolean;
+  // Phase 20D (Task #126): per-scene Seedance 2 native-audio toggle.
+  generateNativeAudio?: boolean;
+  // Per-scene pinned video provider; falls back to project-level
+  // preferredProvider when undefined.
+  videoProvider?: string;
 }
 
 interface SceneCardProps {
@@ -50,6 +61,11 @@ interface SceneCardProps {
   onDragStart?: () => void;
   expanded?: boolean;
   disabled?: boolean;
+  // Phase 20D (Task #126): falls back here when the scene doesn't pin
+  // its own video provider. Used to drive the duration control variant
+  // (slider for Seedance 2, presets for others) and the native-audio
+  // toggle's enabled state.
+  projectPreferredProvider?: string;
 }
 
 const SCENE_TYPE_COLORS: Record<string, string> = {
@@ -71,82 +87,45 @@ export function SceneCard({
   onDragStart,
   expanded: defaultExpanded = false,
   disabled = false,
+  projectPreferredProvider,
 }: SceneCardProps) {
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
   const [savingBrandAssets, setSavingBrandAssets] = useState(false);
-  const [localDuration, setLocalDuration] = useState<number>(scene.duration);
-  const [savingDuration, setSavingDuration] = useState(false);
-  const [durationInputValue, setDurationInputValue] = useState<string>(String(scene.duration));
-  const durationDebounceRef = useRef<NodeJS.Timeout | null>(null);
   const { toast } = useToast();
 
-  useEffect(() => {
-    setLocalDuration(scene.duration);
-    setDurationInputValue(String(scene.duration));
-  }, [scene.duration]);
-
-  useEffect(() => {
-    return () => {
-      if (durationDebounceRef.current) {
-        clearTimeout(durationDebounceRef.current);
-      }
-    };
-  }, []);
-
-  const saveDuration = useCallback(async (newDuration: number) => {
-    const clampedDuration = Math.max(1, Math.min(60, newDuration));
-    setSavingDuration(true);
+  // Phase 20D (Task #126): the SceneDurationControl owns the in-flight
+  // "Saving…" state for duration changes; SceneCard just patches.
+  const handleDurationChange = async (next: number) => {
     try {
-      await onUpdate(scene.id, { duration: clampedDuration });
-      toast({ title: 'Duration updated', description: `Scene duration set to ${clampedDuration}s` });
-    } catch (err: any) {
+      await onUpdate(scene.id, { duration: next });
+      toast({ title: 'Duration updated', description: `Scene duration set to ${next}s` });
+    } catch {
       toast({ title: 'Error', description: 'Failed to update duration', variant: 'destructive' });
-      setLocalDuration(scene.duration);
-      setDurationInputValue(String(scene.duration));
-    } finally {
-      setSavingDuration(false);
-    }
-  }, [scene.id, scene.duration, onUpdate, toast]);
-
-  const handleDurationChange = (newDuration: number, immediate = false) => {
-    const clampedDuration = Math.max(1, Math.min(60, newDuration));
-    setLocalDuration(clampedDuration);
-    setDurationInputValue(String(clampedDuration));
-    
-    if (durationDebounceRef.current) {
-      clearTimeout(durationDebounceRef.current);
-    }
-    
-    if (immediate) {
-      saveDuration(clampedDuration);
-    } else {
-      durationDebounceRef.current = setTimeout(() => {
-        saveDuration(clampedDuration);
-      }, 800);
     }
   };
 
-  const handleDurationInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    setDurationInputValue(value);
-    const parsed = parseInt(value, 10);
-    if (!isNaN(parsed) && parsed >= 1 && parsed <= 60) {
-      setLocalDuration(parsed);
-      if (durationDebounceRef.current) {
-        clearTimeout(durationDebounceRef.current);
-      }
-      durationDebounceRef.current = setTimeout(() => {
-        saveDuration(parsed);
-      }, 800);
+  const handleNativeAudioChange = async (next: boolean) => {
+    try {
+      await onUpdate(scene.id, { generateNativeAudio: next });
+    } catch {
+      toast({
+        title: 'Error',
+        description: 'Failed to update native audio',
+        variant: 'destructive',
+      });
     }
   };
 
-  const handleDurationBlur = () => {
-    const parsed = parseInt(durationInputValue, 10);
-    if (isNaN(parsed) || parsed < 1 || parsed > 60) {
-      setDurationInputValue(String(localDuration));
-    } else if (parsed !== scene.duration) {
-      handleDurationChange(parsed, true);
+  const handleMuteVoiceover = async () => {
+    try {
+      await onUpdate(scene.id, { narration: '' });
+      toast({ title: 'Voiceover muted', description: 'Narration cleared for this scene.' });
+    } catch {
+      toast({
+        title: 'Error',
+        description: 'Failed to mute voiceover',
+        variant: 'destructive',
+      });
     }
   };
 
@@ -267,41 +246,27 @@ export function SceneCard({
             <div>
               <label className="text-xs font-medium text-gray-500 block mb-1">
                 <Clock className="h-3 w-3 inline mr-1" />
-                Duration (seconds)
+                Duration
               </label>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => handleDurationChange(localDuration - 1, true)}
-                  disabled={disabled || savingDuration || localDuration <= 1}
-                  className="p-1.5 rounded bg-gray-100 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  data-testid="btn-decrease-duration"
-                >
-                  <Minus className="h-4 w-4" />
-                </button>
-                <input
-                  type="number"
-                  min={1}
-                  max={60}
-                  value={durationInputValue}
-                  onChange={handleDurationInputChange}
-                  onBlur={handleDurationBlur}
-                  disabled={disabled || savingDuration}
-                  className="w-16 text-center border rounded px-2 py-1 text-sm disabled:opacity-50"
-                  data-testid="input-scene-duration"
-                />
-                <button
-                  onClick={() => handleDurationChange(localDuration + 1, true)}
-                  disabled={disabled || savingDuration || localDuration >= 60}
-                  className="p-1.5 rounded bg-gray-100 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  data-testid="btn-increase-duration"
-                >
-                  <Plus className="h-4 w-4" />
-                </button>
-                {savingDuration && <span className="text-xs text-gray-400">Saving...</span>}
-              </div>
-              <p className="text-xs text-gray-400 mt-1">
-                Controls how long this scene plays in the final video (1-60 seconds)
-              </p>
+              {/* Phase 20D (Task #126): provider-aware duration control. */}
+              <SceneDurationControl
+                provider={scene.videoProvider || projectPreferredProvider}
+                value={scene.duration}
+                disabled={disabled}
+                onChange={handleDurationChange}
+              />
+            </div>
+
+            {/* Phase 20D (Task #126): per-scene Seedance 2 native-audio toggle. */}
+            <div>
+              <NativeAudioToggle
+                provider={scene.videoProvider || projectPreferredProvider}
+                value={Boolean(scene.generateNativeAudio)}
+                hasVoiceover={Boolean((scene.narration || '').trim())}
+                disabled={disabled}
+                onChange={handleNativeAudioChange}
+                onMuteVoiceover={handleMuteVoiceover}
+              />
             </div>
 
             <div>
