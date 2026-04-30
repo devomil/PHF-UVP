@@ -34,6 +34,7 @@ import { VoiceSelector } from "./voice-selector";
 import { QualityReport } from "./quality-report";
 import { SceneDurationControl } from "./scene-duration-control";
 import { NativeAudioToggle } from "./native-audio-toggle";
+import { resolveSceneVideoProvider } from "./scene-provider-resolver";
 import { BrandSettingsPanel, BrandSettings as UIBrandSettings } from "./brand-settings-panel";
 import { EndCardSettingsPanel, EndCardSettings, DEFAULT_END_CARD_SETTINGS } from "./video/EndCardSettingsPanel";
 import { SoundDesignSettingsPanel, SoundDesignSettings, DEFAULT_SOUND_DESIGN_SETTINGS } from "./video/SoundDesignSettingsPanel";
