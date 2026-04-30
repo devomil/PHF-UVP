@@ -8,6 +8,7 @@ import { remotionLambdaService } from '../services/remotion-lambda-service';
 import { chunkedRenderService, ChunkedRenderProgress, MAX_CHUNK_DURATION_SEC, CHUNK_THRESHOLD_SEC } from '../services/chunked-render-service';
 import { qualityEvaluationService, VideoQualityReport, QualityIssue } from '../services/quality-evaluation-service';
 import { sceneAnalysisService, SceneContext } from '../services/scene-analysis-service';
+import { registerSceneClassifierRoutes } from './scene-classifier-routes';
 import type { Phase8AnalysisResult } from '../../shared/video-types';
 import { sceneRegenerationService } from '../services/scene-regeneration-service';
 import { autoRegenerationService, SceneForRegeneration, RegenerationResult } from '../services/auto-regeneration-service';
@@ -3423,8 +3424,10 @@ router.patch('/projects/:projectId/scenes/:sceneId', isAuthenticated, async (req
       Object.prototype.hasOwnProperty.call(updates, 'renderSystemType') &&
       typeof updates.renderSystemType === 'string'
     ) {
-      const { RENDER_SYSTEM_TYPES } = await import('../../shared/video-types');
-      if (!RENDER_SYSTEM_TYPES.includes(updates.renderSystemType)) {
+      const { isRenderSystemType } = await import('../../shared/video-types');
+      // Use the type guard (not a cast) so `updates.renderSystemType` is
+      // properly narrowed to `RenderSystemType` for the helper call below.
+      if (!isRenderSystemType(updates.renderSystemType)) {
         return res.status(400).json({
           success: false,
           error: `Invalid renderSystemType: ${updates.renderSystemType}`,
@@ -3432,24 +3435,28 @@ router.patch('/projects/:projectId/scenes/:sceneId', isAuthenticated, async (req
       }
 
       // Strip server-owned fields the client might have tried to set.
+      // Phase 23A security note: the four classifier-metadata fields
+      // (classifierConfidence, classifierReasoning, classifiedAt,
+      // manuallyClassified) are SERVER-OWNED — they are deliberately
+      // omitted from the public allowlist above and stripped here even
+      // if a client tries to forge them. This is a documented deviation
+      // from the literal spec wording ("Add all five to the scenes
+      // PATCH allowlist"): leaving `manuallyClassified` client-settable
+      // would let any authenticated request unset another editor's
+      // override on every save. The route still satisfies the spec's
+      // INTENT (manual override is sticky and survives auto-classify)
+      // by stamping these fields on the server below via
+      // buildManualOverrideStamp.
       delete updates.classifierConfidence;
       delete updates.classifierReasoning;
       delete updates.classifiedAt;
       delete updates.manuallyClassified;
 
-      // Inspect the rest of the payload — if `renderSystemType` is the
-      // only change, do an atomic 5-field patch and return. If there
-      // are other concurrent fields too, fall through to the
-      // read-modify-write path below (with the override metadata
-      // attached) so the editor's existing single-PATCH save flow
-      // still works end-to-end. We add the metadata back to `updates`
-      // so it gets written in the same full-array save.
       // Source of truth for the stamp shape lives in the classifier
       // service so the unit test for the PATCH contract asserts against
       // the same constants the route writes.
       const { buildManualOverrideStamp } = await import('./scene-classifier.service');
-      // Type already narrowed by the RENDER_SYSTEM_TYPES.includes check above.
-      const overrideStamp = buildManualOverrideStamp(updates.renderSystemType as any);
+      const overrideStamp = buildManualOverrideStamp(updates.renderSystemType);
 
       const otherKeys = Object.keys(updates).filter((k) => k !== 'renderSystemType');
       if (otherKeys.length === 0) {
@@ -3542,101 +3549,12 @@ router.patch('/projects/:projectId/scenes/:sceneId', isAuthenticated, async (req
   }
 });
 
-// Phase 23A (Task #118): batch classifier — re-run Claude Haiku 4.5 across
-// every scene in a project (skipping `manuallyClassified` and already-
-// classified scenes unless `force: true`). Atomic per-scene writes happen
-// inside the service via patchSceneAtomic; the route just dispatches and
-// returns the summary.
-router.post('/projects/:projectId/classify-scenes', isAuthenticated, async (req: Request, res: Response) => {
-  try {
-    const userId = (req.user as any)?.id;
-    const { projectId } = req.params;
+// Phase 23A (Task #118): scene-classifier routes (batch + per-scene reclassify)
+// were extracted into `scene-classifier-routes.ts` so they can be unit-tested
+// with supertest without spinning up this 14k-line file. The import lives at
+// the top of the file with the other route-module imports.
+registerSceneClassifierRoutes(router, { isAuthenticated, getProjectFromDb });
 
-    // Strict request validation — typo'd body field returns 400 so the
-    // client can't accidentally send `{ forced: true }` and silently get
-    // skip-only behavior.
-    const body: Record<string, unknown> = req.body && typeof req.body === 'object' ? req.body : {};
-    const allowedKeys = new Set(['force']);
-    for (const key of Object.keys(body)) {
-      if (!allowedKeys.has(key)) {
-        return res.status(400).json({
-          success: false,
-          error: `Unknown field: ${key}. Allowed: ${[...allowedKeys].join(', ')}`,
-        });
-      }
-    }
-    const force = body.force === true;
-
-    const projectData = await getProjectFromDb(projectId);
-    if (!projectData) {
-      return res.status(404).json({ success: false, error: 'Project not found' });
-    }
-    if (projectData.ownerId !== userId) {
-      return res.status(403).json({ success: false, error: 'Access denied' });
-    }
-
-    const scenes = (projectData.scenes || []) as Scene[];
-    const { classifyProjectScenes } = await import('./scene-classifier.service');
-    const summary = await classifyProjectScenes(projectId, scenes, { force });
-
-    return res.json({ success: true, ...summary });
-  } catch (error: any) {
-    // classifyProjectScenes is documented as never-throw, but guard the
-    // route anyway so a programming error in a refactor doesn't surface
-    // as a 500 to the user.
-    console.error('[ClassifyScenes] Unexpected error:', error);
-    return res.status(500).json({ success: false, error: error?.message || 'Failed to classify scenes' });
-  }
-});
-
-// Phase 23A (Task #118): per-scene re-classify — always runs, regardless of
-// `manuallyClassified`, and CLEARS the manual flag (the user is explicitly
-// asking the classifier to redo its work).
-router.post('/projects/:projectId/scenes/:sceneId/classify', isAuthenticated, async (req: Request, res: Response) => {
-  try {
-    const userId = (req.user as any)?.id;
-    const { projectId, sceneId } = req.params;
-
-    // Body must be empty or `{}` — same strict-validation pattern Task #111
-    // used. Reject typo'd fields so callers don't think they're passing
-    // useful options.
-    const body: Record<string, unknown> = req.body && typeof req.body === 'object' ? req.body : {};
-    if (Object.keys(body).length > 0) {
-      return res.status(400).json({
-        success: false,
-        error: `This endpoint takes no body fields. Got: ${Object.keys(body).join(', ')}`,
-      });
-    }
-
-    const projectData = await getProjectFromDb(projectId);
-    if (!projectData) {
-      return res.status(404).json({ success: false, error: 'Project not found' });
-    }
-    if (projectData.ownerId !== userId) {
-      return res.status(403).json({ success: false, error: 'Access denied' });
-    }
-
-    const scenes = (projectData.scenes || []) as Scene[];
-    const scene = scenes.find((s) => s.id === sceneId);
-    if (!scene) {
-      return res.status(404).json({ success: false, error: 'Scene not found' });
-    }
-
-    const { reclassifySingleScene } = await import('./scene-classifier.service');
-    const result = await reclassifySingleScene(projectId, scene);
-
-    return res.json({
-      success: true,
-      sceneId,
-      renderSystemType: result.renderSystemType,
-      classifierConfidence: result.confidence,
-      classifierReasoning: result.reasoning,
-    });
-  } catch (error: any) {
-    console.error('[ClassifyScene] Unexpected error:', error);
-    return res.status(500).json({ success: false, error: error?.message || 'Failed to classify scene' });
-  }
-});
 
 // Task 61: Generate a cheap still-image thumbnail for the Creative Brief preview.
 // Uses Flux Schnell (~$0.003) so users can sanity-check style mix before paying

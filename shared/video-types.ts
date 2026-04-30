@@ -615,6 +615,14 @@ export const RENDER_SYSTEM_TYPES: readonly RenderSystemType[] = [
   'ugc_avatar',
 ] as const;
 
+/** Type guard — narrows `unknown` (or any string) to `RenderSystemType`
+ *  without a cast. Use at the route boundary so a `JSON.parse` result
+ *  can be safely passed to functions expecting the narrowed type. */
+export function isRenderSystemType(value: unknown): value is RenderSystemType {
+  return typeof value === 'string'
+    && (RENDER_SYSTEM_TYPES as readonly string[]).includes(value);
+}
+
 export type SceneType =
   | 'hook'
   | 'intro'
