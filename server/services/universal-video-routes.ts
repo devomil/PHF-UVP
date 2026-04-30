@@ -3409,7 +3409,11 @@ router.patch('/projects/:projectId/scenes/:sceneId', isAuthenticated, async (req
     // this allowlist). Letting clients set them directly would let any
     // authenticated request forge classifier results / bypass the
     // sticky manual lock.
-    const allowedFields = ['narration', 'visualDirection', 'duration', 'type', 'name', 'title', 'searchQuery', 'keyPoints', 'overlayItems', 'microScenes', 'contentTag', 'artPresetId', 'assignedStyleId', 'textImageEnabled', 'onScreenText', 'lowerThird', 'shotType', 'cinematicNotes', 'thumbnailUrl', 'thumbnailStatus', 'thumbnailError', 'thumbnailGeneratedFor', 'thumbnailUpdatedAt', 'brandReferences', 'useOmniReference', 'seedImageUrl', 'imageGenerationModel', 'imageGenerationPrompt', 'imageCandidates', 'renderSystemType'];
+    // Phase 23A: `renderSystemType` is intentionally NOT in this list.
+    // It is handled exclusively by the validated atomic-write branch
+    // below so the legacy full-array save path can never write it
+    // (defense-in-depth against the round-6 clobber bug).
+    const allowedFields = ['narration', 'visualDirection', 'duration', 'type', 'name', 'title', 'searchQuery', 'keyPoints', 'overlayItems', 'microScenes', 'contentTag', 'artPresetId', 'assignedStyleId', 'textImageEnabled', 'onScreenText', 'lowerThird', 'shotType', 'cinematicNotes', 'thumbnailUrl', 'thumbnailStatus', 'thumbnailError', 'thumbnailGeneratedFor', 'thumbnailUpdatedAt', 'brandReferences', 'useOmniReference', 'seedImageUrl', 'imageGenerationModel', 'imageGenerationPrompt', 'imageCandidates'];
     const clearableFields = new Set(['artPresetId', 'assignedStyleId', 'onScreenText', 'lowerThird', 'shotType', 'cinematicNotes', 'contentTag', 'thumbnailUrl', 'thumbnailStatus', 'thumbnailError', 'thumbnailGeneratedFor', 'thumbnailUpdatedAt', 'brandReferences', 'seedImageUrl', 'imageGenerationModel', 'imageGenerationPrompt', 'imageCandidates']);
 
     // Phase 23A: Manual override fast path. When the only meaningful
@@ -3419,70 +3423,67 @@ router.patch('/projects/:projectId/scenes/:sceneId', isAuthenticated, async (req
     // read-modify-write, which is racy under concurrent editors). Also
     // drop any client-supplied classifier metadata defensively — only
     // the server should set those.
-    if (
-      Object.prototype.hasOwnProperty.call(updates, 'renderSystemType') &&
-      typeof updates.renderSystemType === 'string'
-    ) {
+    if (Object.prototype.hasOwnProperty.call(updates, 'renderSystemType')) {
+      // Phase 23A: ANY presence of `renderSystemType` in the payload
+      // (string OR not) must go through validation + the atomic write
+      // branch — there is no "skip" path. A non-string value (null,
+      // number, object) was previously bypassing this guard and being
+      // assigned by the legacy loop without atomicity or type
+      // checking. Reject any non-enum value with 400.
       const { isRenderSystemType } = await import('../../shared/video-types');
-      // Use the type guard (not a cast) so `updates.renderSystemType` is
-      // properly narrowed to `RenderSystemType` for the helper call below.
       if (!isRenderSystemType(updates.renderSystemType)) {
         return res.status(400).json({
           success: false,
-          error: `Invalid renderSystemType: ${updates.renderSystemType}`,
+          error: `Invalid renderSystemType: ${typeof updates.renderSystemType === 'string' ? updates.renderSystemType : typeof updates.renderSystemType}`,
         });
       }
-
-      // Strip server-owned fields the client might have tried to set.
       // Phase 23A security note: the four classifier-metadata fields
       // (classifierConfidence, classifierReasoning, classifiedAt,
-      // manuallyClassified) are SERVER-OWNED — they are deliberately
-      // omitted from the public allowlist above and stripped here even
-      // if a client tries to forge them. This is a documented deviation
-      // from the literal spec wording ("Add all five to the scenes
-      // PATCH allowlist"): leaving `manuallyClassified` client-settable
-      // would let any authenticated request unset another editor's
-      // override on every save. The route still satisfies the spec's
-      // INTENT (manual override is sticky and survives auto-classify)
-      // by stamping these fields on the server below via
-      // buildManualOverrideStamp.
+      // manuallyClassified) are SERVER-OWNED — deliberately omitted
+      // from the legacy allowlist above and stripped here even if a
+      // client tries to forge them. Documented deviation from the
+      // literal spec ("Add all five to the PATCH allowlist"): leaving
+      // `manuallyClassified` client-settable would let any save unset
+      // another editor's override. The route still satisfies the
+      // spec's INTENT via the server-stamped buildManualOverrideStamp.
       delete updates.classifierConfidence;
       delete updates.classifierReasoning;
       delete updates.classifiedAt;
       delete updates.manuallyClassified;
 
+      // Phase 23A round-8 hardening: `renderSystemType` PATCHes MUST
+      // be isolated. Mixing classifier writes with other field updates
+      // would force a non-atomic full-array `db.update({ scenes })` to
+      // run after the atomic write, opening a window where a
+      // concurrent classifier update from another request could be
+      // reverted by this request's tail save. The client (scene
+      // editor's manual-override dropdown) already sends only this
+      // field, so 400-rejecting mixed PATCHes is API-safe.
+      const otherKeys = Object.keys(updates).filter((k) => k !== 'renderSystemType');
+      if (otherKeys.length > 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'renderSystemType must be PATCHed alone — split mixed updates into two requests',
+          mixedFields: otherKeys,
+        });
+      }
+
       // Source of truth for the stamp shape lives in the classifier
-      // service so the unit test for the PATCH contract asserts against
-      // the same constants the route writes.
+      // service so the PATCH-contract unit test asserts against the
+      // same constants the route writes.
       const { buildManualOverrideStamp } = await import('./scene-classifier.service');
       const overrideStamp = buildManualOverrideStamp(updates.renderSystemType);
 
-      const otherKeys = Object.keys(updates).filter((k) => k !== 'renderSystemType');
-      if (otherKeys.length === 0) {
-        try {
-          const { patchSceneAtomic } = await import('./video-project-db');
-          const rowCount = await patchSceneAtomic(projectId, sceneId, overrideStamp);
-          if (rowCount === 0) {
-            return res.status(404).json({ success: false, error: 'Scene not found' });
-          }
-          // Return the freshly-patched scene shape so the editor can
-          // optimistic-update without an extra GET.
-          const refreshed = await getProjectFromDb(projectId);
-          return res.json({ success: true, project: refreshed });
-        } catch (err: any) {
-          console.error('[UpdateScene] atomic override patch failed:', err);
-          // Fall through to the legacy path so the user still gets
-          // their save (just without atomicity guarantees).
-        }
+      const { patchSceneAtomic } = await import('./video-project-db');
+      const rowCount = await patchSceneAtomic(projectId, sceneId, {
+        renderSystemType: updates.renderSystemType,
+        ...overrideStamp,
+      });
+      if (rowCount === 0) {
+        return res.status(404).json({ success: false, error: 'Scene not found' });
       }
-
-      // Mixed PATCH (renderSystemType + other fields): keep the legacy
-      // path but include the override metadata so the stamp still
-      // makes it into the saved row.
-      Object.assign(updates, overrideStamp);
-      // Whitelist the metadata for THIS request only — the constants
-      // above stay locked down for any future code reading them.
-      allowedFields.push('classifierConfidence', 'classifierReasoning', 'classifiedAt', 'manuallyClassified');
+      const refreshed = await getProjectFromDb(projectId);
+      return res.json({ success: true, project: refreshed });
     }
 
     for (const field of allowedFields) {
@@ -3525,6 +3526,30 @@ router.patch('/projects/:projectId/scenes/:sceneId', isAuthenticated, async (req
       if (assets?.images) {
         assets.images = assets.images.filter((img: any) => img.sceneId !== sceneId);
       }
+      // Phase 23A round-10: same merge-preserve stopgap as the
+      // non-clearImage branch below — refresh classifier metadata
+      // immediately before the full-array save so a concurrent atomic
+      // classifier write isn't reverted by this clearImage cascade.
+      try {
+        const fresh = await getProjectFromDb(projectId);
+        const freshScene = (fresh?.scenes as Array<Record<string, unknown>> | undefined)?.find(
+          (s) => s?.id === sceneId,
+        );
+        if (freshScene) {
+          const target = scenes[sceneIndex] as Record<string, unknown>;
+          const classifierKeys = ['renderSystemType', 'classifierConfidence', 'classifierReasoning', 'classifiedAt', 'manuallyClassified'] as const;
+          for (const k of classifierKeys) {
+            if (k in freshScene) {
+              target[k] = freshScene[k];
+            } else {
+              delete target[k];
+            }
+          }
+        }
+      } catch (mergeErr) {
+        const msg = mergeErr instanceof Error ? mergeErr.message : String(mergeErr);
+        console.warn(`[UpdateScene:clearImage] classifier metadata refresh failed for project=${projectId} scene=${sceneId}: ${msg} — proceeding with possibly-stale snapshot`);
+      }
       await db.update(universalVideoProjects)
         .set({
           scenes,
@@ -3533,6 +3558,34 @@ router.patch('/projects/:projectId/scenes/:sceneId', isAuthenticated, async (req
         })
         .where(eq(universalVideoProjects.projectId, projectId));
     } else {
+    // Phase 23A round-9 stopgap: re-read the freshest classifier
+    // metadata for this scene from the DB and force-merge it back into
+    // our in-memory copy so any concurrent atomic classifier write
+    // (from /classify-scenes, /scenes/:sceneId/classify, or another
+    // PATCH that ran AFTER our initial getProjectFromDb) is preserved
+    // by this tail full-array save. The full migration of this PATCH
+    // route to per-field atomic patching is tracked separately
+    // (architectural follow-up to Task #108) and is out of scope here.
+    try {
+      const fresh = await getProjectFromDb(projectId);
+      const freshScene = (fresh?.scenes as Array<Record<string, unknown>> | undefined)?.find(
+        (s) => s?.id === sceneId,
+      );
+      if (freshScene) {
+        const target = scenes[sceneIndex] as Record<string, unknown>;
+        const classifierKeys = ['renderSystemType', 'classifierConfidence', 'classifierReasoning', 'classifiedAt', 'manuallyClassified'] as const;
+        for (const k of classifierKeys) {
+          if (k in freshScene) {
+            target[k] = freshScene[k];
+          } else {
+            delete target[k];
+          }
+        }
+      }
+    } catch (mergeErr) {
+      const msg = mergeErr instanceof Error ? mergeErr.message : String(mergeErr);
+      console.warn(`[UpdateScene] classifier metadata refresh failed for project=${projectId} scene=${sceneId}: ${msg} — proceeding with possibly-stale snapshot`);
+    }
     await db.update(universalVideoProjects)
       .set({
         scenes,

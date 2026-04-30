@@ -164,7 +164,9 @@ export function parseClassifierResponse(
     .replace(/```json\s*/gi, '')
     .replace(/```/g, '')
     .trim();
-  const match = stripped.match(/\{[\s\S]*\}/);
+  // Non-greedy: capture only the FIRST balanced-looking JSON object so a
+  // trailing JSON-shaped log line in the model output can't poison the parse.
+  const match = stripped.match(/\{[\s\S]*?\}/);
   if (!match) return neutralFallback('no JSON object in response');
   let parsed: { renderSystemType?: unknown; confidence?: unknown; reasoning?: unknown };
   try {

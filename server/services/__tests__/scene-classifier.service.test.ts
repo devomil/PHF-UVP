@@ -553,6 +553,27 @@ describe('buildManualOverrideStamp — PATCH contract', () => {
     expect(ts).toBeGreaterThanOrEqual(before);
     expect(ts).toBeLessThanOrEqual(after);
   });
+
+  // Phase 23A round-8 regression: the override stamp is the ONLY
+  // mutation a renderSystemType PATCH may produce. The route enforces
+  // this by 400-rejecting any PATCH that mixes renderSystemType with
+  // other allowed fields (preventing the round-6 clobber + concurrency
+  // window where a tail full-array save could revert a concurrent
+  // classifier write). This test asserts the buildManualOverrideStamp
+  // output contains exactly the 5 fields the atomic write persists —
+  // any drift here would mean the route writes more or fewer fields
+  // than the contract claims.
+  it('override-stamp contract: produces exactly the 5 fields persisted by the atomic write — no extras, no omissions', async () => {
+    const { buildManualOverrideStamp } = await import('../scene-classifier.service');
+    const stamp = buildManualOverrideStamp('infographic', new Date('2026-04-30T15:30:00.000Z'));
+    expect(Object.keys(stamp).sort()).toEqual([
+      'classifiedAt',
+      'classifierConfidence',
+      'classifierReasoning',
+      'manuallyClassified',
+      'renderSystemType',
+    ]);
+  });
 });
 
 describe('reclassifySingleScene', () => {
