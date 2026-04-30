@@ -146,7 +146,6 @@ export function RenderTypeBadge({
                   data-testid="render-type-badge-low-confidence"
                   className="text-[10px] opacity-50 select-none"
                   aria-label="Low confidence — review before generating"
-                  title="Low confidence — review before generating"
                 >
                   ?
                 </span>

@@ -209,6 +209,9 @@ export async function classifyScene(
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  // Track the secondary race timeout so we can clear it on success and
+  // avoid leaking a no-op Node timer for the full timeout window.
+  let raceTimer: ReturnType<typeof setTimeout> | undefined;
 
   try {
     const response = await Promise.race([
@@ -225,9 +228,9 @@ export async function classifyScene(
       // resolve the SDK's promise (older SDK versions buffered before
       // honoring abort), the racing timeout still rejects. Same shape as
       // claude-vision-qa.service.ts.
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('Scene classifier timed out')), REQUEST_TIMEOUT_MS),
-      ),
+      new Promise<never>((_, reject) => {
+        raceTimer = setTimeout(() => reject(new Error('Scene classifier timed out')), REQUEST_TIMEOUT_MS);
+      }),
     ]);
 
     const block = (response as Anthropic.Messages.Message).content[0];
@@ -250,6 +253,7 @@ export async function classifyScene(
     return neutralFallback(msg);
   } finally {
     clearTimeout(timer);
+    if (raceTimer !== undefined) clearTimeout(raceTimer);
   }
 }
 

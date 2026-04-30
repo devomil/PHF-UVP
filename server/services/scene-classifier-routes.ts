@@ -79,6 +79,15 @@ export function registerSceneClassifierRoutes(
             });
           }
         }
+        // Strict type check: a non-boolean `force` (string "true",
+        // number 1, etc.) is almost certainly a client bug — fail loud
+        // instead of silently coercing to the safe-default `false`.
+        if ('force' in body && typeof body.force !== 'boolean') {
+          return res.status(400).json({
+            success: false,
+            error: `Invalid type for force: expected boolean, got ${typeof body.force}`,
+          });
+        }
         const force = body.force === true;
 
         const projectData = await getProjectFromDb(projectId);
