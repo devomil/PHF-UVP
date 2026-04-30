@@ -284,6 +284,23 @@ export interface ClassifyBatchSummary {
   distribution: Record<RenderSystemType, number>;
   /** Approximate USD spend for THIS batch (skipped scenes excluded). */
   estimatedCost: number;
+  /** Per-scene `patchSceneAtomic` calls that threw or returned rowCount=0.
+   *  These scenes are still counted in `classified` (we got a result) but
+   *  the result didn't make it to the DB. Surfaced so production
+   *  monitoring can alert on systemic write failure instead of silent
+   *  loss. */
+  writeFailures: number;
+  /** Number of scenes whose result is the documented neutral fallback
+   *  (`confidence === 0` with reasoning starting `Classifier error:`).
+   *  A run where this equals `classified` means EVERY classify call
+   *  failed — almost always a missing/expired API key, not "the model
+   *  thought the answer was ai_video". */
+  fallbackCount: number;
+  /** True iff `ANTHROPIC_API_KEY` was unset when the batch started — in
+   *  that case `fallbackCount === classified` and zero real classifier
+   *  work happened. The route layer can use this to return 200-with-
+   *  warning instead of misleading "looks fine" responses. */
+  missingKey: boolean;
 }
 
 function emptyDistribution(): Record<RenderSystemType, number> {
@@ -326,6 +343,11 @@ export async function classifyProjectScenes(
   const distribution = emptyDistribution();
   let classified = 0;
   let skipped = 0;
+  let writeFailures = 0;
+  let fallbackCount = 0;
+  // Captured at batch start so a key set mid-batch (or unset mid-batch)
+  // doesn't lie about what actually happened.
+  const missingKey = !process.env.ANTHROPIC_API_KEY;
 
   // Pre-populate distribution with already-classified scenes so the
   // returned histogram reflects the WHOLE project, not just what this
@@ -351,7 +373,7 @@ export async function classifyProjectScenes(
     console.log(
       `[Classifier] project=${projectId} batch=skipped (all ${scenes.length} scenes already classified or manually locked)`,
     );
-    return { classified: 0, skipped, distribution, estimatedCost: 0 };
+    return { classified: 0, skipped, distribution, estimatedCost: 0, writeFailures: 0, fallbackCount: 0, missingKey };
   }
 
   // Rolling worker pool — keeps `concurrency` requests in flight at all
@@ -395,6 +417,7 @@ export async function classifyProjectScenes(
             console.warn(
               `[Classifier] write missed (project gone): projectId=${projectId} sceneId=${scene.id}`,
             );
+            writeFailures++;
             // Still count it locally so distribution stays consistent
             // with what the caller asked us to do.
           }
@@ -406,10 +429,14 @@ export async function classifyProjectScenes(
           console.warn(
             `[Classifier] write failed: projectId=${projectId} sceneId=${scene.id} (${msg})`,
           );
+          writeFailures++;
         }
 
         distribution[result.renderSystemType] = (distribution[result.renderSystemType] || 0) + 1;
         classified++;
+        if (result.confidence === 0 && result.reasoning.startsWith('Classifier error:')) {
+          fallbackCount++;
+        }
       }
     })());
   }
@@ -423,9 +450,22 @@ export async function classifyProjectScenes(
       distribution,
       estimatedCost,
       concurrency,
+      writeFailures,
+      fallbackCount,
+      missingKey,
     })}`,
   );
-  return { classified, skipped, distribution, estimatedCost };
+  if (missingKey || (classified > 0 && fallbackCount === classified)) {
+    console.warn(
+      `[Classifier] project=${projectId} batch produced 100% fallback results (missingKey=${missingKey}, fallbackCount=${fallbackCount}/${classified}) — check ANTHROPIC_API_KEY`,
+    );
+  }
+  if (writeFailures > 0) {
+    console.warn(
+      `[Classifier] project=${projectId} batch had ${writeFailures} DB write failure(s) — results in memory but not persisted`,
+    );
+  }
+  return { classified, skipped, distribution, estimatedCost, writeFailures, fallbackCount, missingKey };
 }
 
 /**

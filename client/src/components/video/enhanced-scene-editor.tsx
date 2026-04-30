@@ -37,6 +37,15 @@ import {
 } from "./scene-routing-ui";
 import { BrandReferencePanel } from "./brand-reference-panel";
 import type { BrandReferenceInput, Scene } from "@shared/video-types";
+import { RENDER_SYSTEM_TYPES, type RenderSystemType } from "@shared/video-types";
+import { RenderTypeBadge, RENDER_TYPE_LABELS } from "./render-type-badge";
+import {
+  Select as RsSelect,
+  SelectContent as RsSelectContent,
+  SelectItem as RsSelectItem,
+  SelectTrigger as RsSelectTrigger,
+  SelectValue as RsSelectValue,
+} from "@/components/ui/select";
 
 const sceneTypes = [
   "hook", "problem", "agitation", "solution", "benefit",
@@ -2279,6 +2288,76 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
         </div>
 
 
+
+        {/* Phase 23A (Task #118): Render-system classifier row.
+            Sits ABOVE the narrative Scene Type so the editor sees the
+            high-level "how this scene gets rendered" decision before the
+            "what story beat is this" tag. Uses shadcn Select for the
+            override dropdown (matches the rest of Sprint 3). */}
+        <div className="grid grid-cols-[1fr_220px] gap-3 items-end">
+          <div>
+            <label className="text-[11px] font-medium uppercase tracking-wider mb-1.5 flex items-center gap-2" style={{ color: "var(--text-secondary)" }}>
+              Render System
+              <RenderTypeBadge
+                renderSystemType={(scene as Scene).renderSystemType}
+                classifierConfidence={(scene as Scene).classifierConfidence}
+                classifierReasoning={(scene as Scene).classifierReasoning}
+                manuallyClassified={(scene as Scene).manuallyClassified}
+                classifiedAt={(scene as Scene).classifiedAt}
+              />
+            </label>
+            <RsSelect
+              value={(scene as Scene).renderSystemType || ""}
+              onValueChange={(value: string) => {
+                if (!value) return;
+                // Send only renderSystemType — the server stamps
+                // manuallyClassified + confidence + reasoning + timestamp
+                // automatically inside the PATCH override block.
+                silentSaveMutation.mutate({ renderSystemType: value });
+              }}
+            >
+              <RsSelectTrigger
+                className="w-full text-sm"
+                data-testid="render-system-override-select"
+              >
+                <RsSelectValue placeholder="Auto (waiting for classifier)" />
+              </RsSelectTrigger>
+              <RsSelectContent>
+                {RENDER_SYSTEM_TYPES.map((t) => (
+                  <RsSelectItem key={t} value={t}>
+                    {RENDER_TYPE_LABELS[t as RenderSystemType]}
+                  </RsSelectItem>
+                ))}
+              </RsSelectContent>
+            </RsSelect>
+          </div>
+          <div className="flex items-end justify-end h-full">
+            <button
+              type="button"
+              data-testid="reclassify-scene-btn"
+              onClick={async () => {
+                try {
+                  const res = await fetch(
+                    `/api/universal-video/projects/${projectId}/scenes/${sceneId}/classify`,
+                    { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: "{}" },
+                  );
+                  if (!res.ok) {
+                    const errBody = await res.json().catch(() => ({}));
+                    throw new Error(errBody.error || "Reclassify failed");
+                  }
+                  await queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+                  toast({ title: "Reclassified", description: "Scene re-evaluated by Claude Haiku." });
+                } catch (err: any) {
+                  toast({ title: "Reclassify failed", description: err?.message || String(err), variant: "destructive" });
+                }
+              }}
+              className="text-[11px] px-3 py-1.5 rounded-md border transition-colors"
+              style={{ borderColor: "var(--border-subtle)", color: "var(--text-secondary)" }}
+            >
+              Reclassify
+            </button>
+          </div>
+        </div>
 
         {/* Scene Type + Duration Row */}
         <div className="grid grid-cols-[1fr_200px] gap-3">

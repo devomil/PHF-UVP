@@ -3400,27 +3400,28 @@ router.patch('/projects/:projectId/scenes/:sceneId', isAuthenticated, async (req
       return res.status(404).json({ success: false, error: 'Scene not found' });
     }
 
-    // Phase 23A (Task #118): added 5 classifier fields. `renderSystemType`
-    // is the user-facing override field; `classifierConfidence`,
-    // `classifierReasoning`, `classifiedAt` are persisted alongside it. The
-    // `manuallyClassified` flag is whitelisted only so the per-scene
-    // re-classify endpoint (which clears it back to false) can pass it
-    // through this same handler — clients should NOT set it directly; the
-    // override-stamping block below sets it on their behalf.
-    const allowedFields = ['narration', 'visualDirection', 'duration', 'type', 'name', 'title', 'searchQuery', 'keyPoints', 'overlayItems', 'microScenes', 'contentTag', 'artPresetId', 'assignedStyleId', 'textImageEnabled', 'onScreenText', 'lowerThird', 'shotType', 'cinematicNotes', 'thumbnailUrl', 'thumbnailStatus', 'thumbnailError', 'thumbnailGeneratedFor', 'thumbnailUpdatedAt', 'brandReferences', 'useOmniReference', 'seedImageUrl', 'imageGenerationModel', 'imageGenerationPrompt', 'imageCandidates', 'renderSystemType', 'classifierConfidence', 'classifierReasoning', 'classifiedAt', 'manuallyClassified'];
+    // Phase 23A (Task #118): only `renderSystemType` is client-settable.
+    // The four metadata fields (`classifierConfidence`,
+    // `classifierReasoning`, `classifiedAt`, `manuallyClassified`) are
+    // SERVER-OWNED — the override block below stamps them when the
+    // client sends `renderSystemType`, and the dedicated reclassify
+    // route writes them via `patchSceneAtomic` directly (NOT through
+    // this allowlist). Letting clients set them directly would let any
+    // authenticated request forge classifier results / bypass the
+    // sticky manual lock.
+    const allowedFields = ['narration', 'visualDirection', 'duration', 'type', 'name', 'title', 'searchQuery', 'keyPoints', 'overlayItems', 'microScenes', 'contentTag', 'artPresetId', 'assignedStyleId', 'textImageEnabled', 'onScreenText', 'lowerThird', 'shotType', 'cinematicNotes', 'thumbnailUrl', 'thumbnailStatus', 'thumbnailError', 'thumbnailGeneratedFor', 'thumbnailUpdatedAt', 'brandReferences', 'useOmniReference', 'seedImageUrl', 'imageGenerationModel', 'imageGenerationPrompt', 'imageCandidates', 'renderSystemType'];
     const clearableFields = new Set(['artPresetId', 'assignedStyleId', 'onScreenText', 'lowerThird', 'shotType', 'cinematicNotes', 'contentTag', 'thumbnailUrl', 'thumbnailStatus', 'thumbnailError', 'thumbnailGeneratedFor', 'thumbnailUpdatedAt', 'brandReferences', 'seedImageUrl', 'imageGenerationModel', 'imageGenerationPrompt', 'imageCandidates']);
 
-    // Phase 23A: Manual override semantics. When a client sends
-    // `renderSystemType` directly (i.e. user picked from the dropdown), we
-    // also stamp `manuallyClassified: true` + confidence 1.0 + a fixed
-    // reasoning string + a fresh timestamp so the next batch classify
-    // doesn't undo the user's choice. Skip if the client also sent
-    // `manuallyClassified: false` explicitly (that path is reserved for
-    // the per-scene re-classify route, which clears the flag).
+    // Phase 23A: Manual override fast path. When the only meaningful
+    // change is `renderSystemType`, route through `patchSceneAtomic` so
+    // a concurrent full-array PATCH or a concurrent classifier write
+    // can't clobber the override (the rest of this handler is
+    // read-modify-write, which is racy under concurrent editors). Also
+    // drop any client-supplied classifier metadata defensively — only
+    // the server should set those.
     if (
       Object.prototype.hasOwnProperty.call(updates, 'renderSystemType') &&
-      typeof updates.renderSystemType === 'string' &&
-      updates.manuallyClassified !== false
+      typeof updates.renderSystemType === 'string'
     ) {
       const { RENDER_SYSTEM_TYPES } = await import('../../shared/video-types');
       if (!RENDER_SYSTEM_TYPES.includes(updates.renderSystemType)) {
@@ -3429,10 +3430,54 @@ router.patch('/projects/:projectId/scenes/:sceneId', isAuthenticated, async (req
           error: `Invalid renderSystemType: ${updates.renderSystemType}`,
         });
       }
-      updates.manuallyClassified = true;
-      updates.classifierConfidence = 1.0;
-      updates.classifierReasoning = 'Manual override';
-      updates.classifiedAt = new Date().toISOString();
+
+      // Strip server-owned fields the client might have tried to set.
+      delete updates.classifierConfidence;
+      delete updates.classifierReasoning;
+      delete updates.classifiedAt;
+      delete updates.manuallyClassified;
+
+      // Inspect the rest of the payload — if `renderSystemType` is the
+      // only change, do an atomic 5-field patch and return. If there
+      // are other concurrent fields too, fall through to the
+      // read-modify-write path below (with the override metadata
+      // attached) so the editor's existing single-PATCH save flow
+      // still works end-to-end. We add the metadata back to `updates`
+      // so it gets written in the same full-array save.
+      const overrideStamp = {
+        renderSystemType: updates.renderSystemType,
+        manuallyClassified: true,
+        classifierConfidence: 1.0,
+        classifierReasoning: 'Manual override',
+        classifiedAt: new Date().toISOString(),
+      };
+
+      const otherKeys = Object.keys(updates).filter((k) => k !== 'renderSystemType');
+      if (otherKeys.length === 0) {
+        try {
+          const { patchSceneAtomic } = await import('./video-project-db');
+          const rowCount = await patchSceneAtomic(projectId, sceneId, overrideStamp);
+          if (rowCount === 0) {
+            return res.status(404).json({ success: false, error: 'Scene not found' });
+          }
+          // Return the freshly-patched scene shape so the editor can
+          // optimistic-update without an extra GET.
+          const refreshed = await getProjectFromDb(projectId);
+          return res.json({ success: true, project: refreshed });
+        } catch (err: any) {
+          console.error('[UpdateScene] atomic override patch failed:', err);
+          // Fall through to the legacy path so the user still gets
+          // their save (just without atomicity guarantees).
+        }
+      }
+
+      // Mixed PATCH (renderSystemType + other fields): keep the legacy
+      // path but include the override metadata so the stamp still
+      // makes it into the saved row.
+      Object.assign(updates, overrideStamp);
+      // Whitelist the metadata for THIS request only — the constants
+      // above stay locked down for any future code reading them.
+      allowedFields.push('classifierConfidence', 'classifierReasoning', 'classifiedAt', 'manuallyClassified');
     }
 
     for (const field of allowedFields) {
