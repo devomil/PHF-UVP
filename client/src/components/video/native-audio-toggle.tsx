@@ -1,12 +1,7 @@
-// Phase 20D (Task #126): per-scene Seedance 2 native-audio toggle.
-//
-// Renders a themed switch + an actionable conflict warning when the
-// scene also has a non-empty narration (TTS voiceover). The warning
-// surfaces a "Mute voiceover" affordance that opens a themed
-// AlertDialog (no native window.confirm — lint:dialogs forbids it)
-// and, when confirmed, clears `scene.narration`. The toggle itself
-// is disabled with a tooltip when the resolved provider isn't a
-// Seedance 2 variant, because no other model honors the flag.
+// Per-scene Seedance 2 native-audio toggle. Disabled with a tooltip
+// when the resolved provider isn't a Seedance 2 variant. When the scene
+// also has a voiceover, surfaces a "Mute voiceover" AlertDialog so the
+// caller can clear the narration before the audio sources collide.
 
 import { useState } from "react";
 import { Label } from "@/components/ui/label";

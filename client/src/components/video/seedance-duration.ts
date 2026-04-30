@@ -1,4 +1,4 @@
-// Phase 20D (Task #126): client-side mirror of server/utils/duration.ts.
+// Client-side mirror of server/utils/duration.ts.
 //
 // Kept tiny and inlined here (rather than imported from server/) to avoid
 // pulling server-only modules into the browser bundle. Both the slider

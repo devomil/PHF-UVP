@@ -7,10 +7,6 @@ import { VisualDirectionEditor } from './visual-direction-editor';
 import { WorkflowOverrideCompact } from './workflow-override-toggle';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
-// Phase 20D (Task #126): provider-aware duration control + Seedance 2
-// native-audio toggle. Replace the legacy 1-60 free-form numeric input
-// so this card renders only durations the resolved provider accepts and
-// surfaces the native-audio flag inline.
 import { SceneDurationControl } from './scene-duration-control';
 import { NativeAudioToggle } from './native-audio-toggle';
 
@@ -46,7 +42,6 @@ interface Scene {
   soundDesign?: SceneSoundDesign;
   intelligence?: SceneIntelligence;
   useBrandAssets?: boolean;
-  // Phase 20D (Task #126): per-scene Seedance 2 native-audio toggle.
   generateNativeAudio?: boolean;
   // Per-scene pinned video provider; falls back to project-level
   // preferredProvider when undefined.
@@ -61,10 +56,6 @@ interface SceneCardProps {
   onDragStart?: () => void;
   expanded?: boolean;
   disabled?: boolean;
-  // Phase 20D (Task #126): falls back here when the scene doesn't pin
-  // its own video provider. Used to drive the duration control variant
-  // (slider for Seedance 2, presets for others) and the native-audio
-  // toggle's enabled state.
   projectPreferredProvider?: string;
 }
 
@@ -93,8 +84,6 @@ export function SceneCard({
   const [savingBrandAssets, setSavingBrandAssets] = useState(false);
   const { toast } = useToast();
 
-  // Phase 20D (Task #126): the SceneDurationControl owns the in-flight
-  // "Saving…" state for duration changes; SceneCard just patches.
   const handleDurationChange = async (next: number) => {
     try {
       await onUpdate(scene.id, { duration: next });
@@ -248,7 +237,6 @@ export function SceneCard({
                 <Clock className="h-3 w-3 inline mr-1" />
                 Duration
               </label>
-              {/* Phase 20D (Task #126): provider-aware duration control. */}
               <SceneDurationControl
                 provider={scene.videoProvider || projectPreferredProvider}
                 value={scene.duration}
@@ -257,7 +245,6 @@ export function SceneCard({
               />
             </div>
 
-            {/* Phase 20D (Task #126): per-scene Seedance 2 native-audio toggle. */}
             <div>
               <NativeAudioToggle
                 provider={scene.videoProvider || projectPreferredProvider}

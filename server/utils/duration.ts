@@ -1,10 +1,6 @@
-// Phase 20D (Task #126): scene-duration helpers for Seedance 2.
-//
-// PiAPI's Seedance 2 / Seedance 2 Fast models accept `duration` between
-// 4 and 15 seconds inclusive. Outside that range the request 400s. To
-// keep the UI slider, the bulk-action popover, and the request payload
-// builder all in agreement on the same bounds, all surfaces use these
-// helpers as the single source of truth.
+// Scene-duration helpers for Seedance 2 (the model rejects anything
+// outside 4-15s). Single source of truth for the slider, bulk action,
+// and request payload builder.
 
 export const SEEDANCE_2_MIN_DURATION = 4;
 export const SEEDANCE_2_MAX_DURATION = 15;
@@ -62,9 +58,6 @@ export function isValidSeedance2Duration(value: unknown): value is number {
  * Seedance 2 duration (a whole number in [4, 15]); otherwise returns a
  * short error message describing why it's not. Routes/forms can render
  * the message directly without composing their own string.
- *
- * This is the API the Phase 20D spec asked for. `isValidSeedance2Duration`
- * stays available for callers that only need a boolean.
  */
 export function validateSeedance2Duration(value: unknown): string | null {
   if (value === null || value === undefined || value === '') {

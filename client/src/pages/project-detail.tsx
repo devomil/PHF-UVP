@@ -3240,9 +3240,6 @@ export default function ProjectDetail({ params }: { params?: { id: string } }) {
                   }}
                 />
               )}
-              {/* Phase 20D (Task #126): bulk-set duration / native audio
-                  across every scene with a single PUT call. Hidden until
-                  the project actually has scenes. */}
               {!isStudioPolish && scenes.length > 0 && (
                 <div className="mt-2">
                   <SceneDefaultsBulkAction

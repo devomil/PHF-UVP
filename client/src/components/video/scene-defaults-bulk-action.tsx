@@ -1,17 +1,5 @@
-// Phase 20D (Task #126): project-header "Scene defaults" bulk action.
-//
-// Lets the user push a duration preset and/or a native-audio default
-// to every scene in the project in a single PUT call. The flow is:
-//
-//   1. Click "Scene defaults" → opens a compact themed Dialog
-//      (project doesn't ship Popover; Dialog is the closest themed
-//      surface and avoids adding another dep).
-//   2. Pick a duration preset and toggle "Native scene audio".
-//   3. "Apply to all scenes" opens a themed AlertDialog confirmation
-//      (lint:dialogs forbids window.confirm) showing the scene count.
-//   4. On confirm, we issue exactly ONE PUT request to
-//      `/api/universal-video/projects/${projectId}/scenes` with the
-//      mutated `scenes` array.
+// Project-header "Scene defaults" bulk action: pushes a duration preset
+// and/or a native-audio default to every scene with exactly one PUT.
 
 import { useEffect, useMemo, useState } from "react";
 import { Sliders, Loader2 } from "lucide-react";
@@ -42,12 +30,11 @@ import { useToast } from "@/hooks/use-toast";
 
 const DURATION_PRESETS = [5, 8, 12] as const;
 
-interface MinimalScene {
+type MinimalScene = {
   id: string;
   duration?: number;
   generateNativeAudio?: boolean;
-  [k: string]: any;
-}
+};
 
 interface Props {
   projectId: string;
@@ -97,6 +84,21 @@ export function SceneDefaultsBulkAction({
 
   const nothingSelected = duration === null && !setAudio;
 
+  // Human-readable summary of the chosen mutations, shown in the
+  // confirm dialog so the user always sees exactly what's about to
+  // change before they hit "Apply".
+  const summaryItems: string[] = [];
+  if (duration !== null) {
+    summaryItems.push(`set duration to ${duration}s`);
+  }
+  if (setAudio) {
+    summaryItems.push(`turn native audio ${audioValue ? "on" : "off"}`);
+  }
+  const summaryLine =
+    summaryItems.length === 0
+      ? "No changes selected."
+      : `This will ${summaryItems.join(" and ")} on all ${sceneCount} scenes.`;
+
   async function applyDefaults() {
     if (nothingSelected) return;
     setSaving(true);
@@ -107,8 +109,6 @@ export function SceneDefaultsBulkAction({
         if (setAudio) next.generateNativeAudio = audioValue;
         return next;
       });
-      // Single PUT — endpoint replaces the entire scenes array
-      // (server/services/universal-video-routes.ts:1395).
       await apiRequest(
         "PUT",
         `/api/universal-video/projects/${projectId}/scenes`,
@@ -126,10 +126,11 @@ export function SceneDefaultsBulkAction({
       setConfirmOpen(false);
       setOpen(false);
       onUpdated?.();
-    } catch (err: any) {
+    } catch (err) {
       toast({
         title: "Error",
-        description: err?.message || "Failed to apply scene defaults",
+        description:
+          err instanceof Error ? err.message : "Failed to apply scene defaults",
         variant: "destructive",
       });
     } finally {
@@ -253,9 +254,9 @@ export function SceneDefaultsBulkAction({
           <AlertDialogContent data-testid="scene-defaults-confirm">
             <AlertDialogHeader>
               <AlertDialogTitle>Apply to {sceneCount} scenes?</AlertDialogTitle>
-              <AlertDialogDescription>
-                This overwrites the current per-scene values. You can still
-                tweak any scene afterwards in its editor.
+              <AlertDialogDescription data-testid="scene-defaults-confirm-summary">
+                {summaryLine} This overwrites the current per-scene values.
+                You can still tweak any scene afterwards in its editor.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>

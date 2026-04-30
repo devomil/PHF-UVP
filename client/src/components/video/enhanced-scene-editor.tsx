@@ -15,10 +15,6 @@ import { VIDEO_PROVIDERS as PROVIDER_CONFIG, getMultiImageSupport, type MultiIma
 import { SCENE_CONTENT_TAGS, getSceneContentTag } from "@shared/config/scene-content-tags";
 import { getVisualArtPreset, getAllVisualArtPresets } from "@shared/config/visual-art-presets";
 import { CharacterProfilesPanel } from "./character-profiles-panel";
-// Phase 20D (Task #126): per-scene duration slider + native-audio toggle.
-// These replace the old free-form 1-60 numeric input so the editor
-// renders only durations the resolved provider actually accepts and
-// surfaces the Seedance 2 native-audio flag inline.
 import { SceneDurationControl } from "./scene-duration-control";
 import { NativeAudioToggle } from "./native-audio-toggle";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
@@ -139,9 +135,6 @@ interface EnhancedSceneEditorProps {
   brandColors?: string[];
   brand?: import("@shared/video-types").BrandSettings;
   projectMode?: string;
-  // Phase 20D (Task #126): the project's preferred video provider, used
-  // to drive the per-scene duration control + native-audio toggle when
-  // the scene itself doesn't pin a specific provider.
   projectPreferredProvider?: string;
 }
 
@@ -648,6 +641,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
     duration: scene.duration || 5,
     narration: scene.narration || "",
     visualDirection: scene.visualDirection || "",
+    generateNativeAudio: Boolean(scene.generateNativeAudio),
   });
 
   // Phase 20C: brand references for Seedance 2 omni_reference. Local state is
@@ -2388,16 +2382,8 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
             <label className="text-[11px] font-medium uppercase tracking-wider mb-1.5 block" style={{ color: "var(--text-secondary)" }}>
               Duration
             </label>
-            {/* Phase 20D (Task #126): provider-aware duration control.
-                Renders a 4-15 slider for Seedance 2 / Seedance 2 Fast and
-                discrete preset buttons for every other provider. The
-                resolved provider is the per-scene pin if one is set,
-                otherwise the project's preferred provider. */}
             <SceneDurationControl
-              provider={
-                (scene.assets?.videoProviderLock as string | undefined) ||
-                projectPreferredProvider
-              }
+              provider={scene.assets?.videoProviderLock || projectPreferredProvider}
               value={editValues.duration}
               disabled={!isEditing}
               onChange={(next) => {
@@ -2408,22 +2394,14 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
           </div>
         </div>
 
-        {/* Phase 20D (Task #126): per-scene Seedance 2 native-audio
-            toggle. Disabled (with tooltip) when the resolved provider
-            isn't a Seedance 2 variant. When the scene also has a
-            voiceover narration, the warning panel offers a themed
-            AlertDialog to clear it instead of silently double-stacking
-            audio sources. */}
         <div className="mt-3">
           <NativeAudioToggle
-            provider={
-              (scene.assets?.videoProviderLock as string | undefined) ||
-              projectPreferredProvider
-            }
-            value={Boolean(scene.generateNativeAudio)}
-            hasVoiceover={Boolean((editValues.narration || "").trim())}
+            provider={scene.assets?.videoProviderLock || projectPreferredProvider}
+            value={editValues.generateNativeAudio}
+            hasVoiceover={Boolean(editValues.narration.trim())}
             disabled={!isEditing}
             onChange={(next) => {
+              setEditValues({ ...editValues, generateNativeAudio: next });
               silentSaveMutation.mutate({ generateNativeAudio: next });
             }}
             onMuteVoiceover={async () => {
@@ -3661,6 +3639,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                       duration: scene.duration || 5,
                       narration: scene.narration || "",
                       visualDirection: scene.visualDirection || "",
+                      generateNativeAudio: Boolean(scene.generateNativeAudio),
                     });
                   }}
                   className="text-xs px-3 py-1.5 rounded-lg border transition-colors"

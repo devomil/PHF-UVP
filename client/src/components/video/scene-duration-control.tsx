@@ -1,16 +1,6 @@
-// Phase 20D (Task #126): per-scene duration control.
-//
-// Renders the right control depending on the scene's resolved video
-// provider:
-//   • Seedance 2 / Seedance 2 Fast → continuous slider 4-15 (step 1)
-//     because the model accepts any integer in that range.
-//   • Every other provider → discrete buttons drawn from PROVIDER_RANGES
-//     (the legacy stepper allowed 1-60 but most providers reject most of
-//     those values, so we render only the valid bucket per provider).
-//
-// All persistence is done by the parent via `onChange` (the editor patches
-// the scene optimistically). The control reports a "saving" state so the
-// parent can render a "Saving…" indicator without owning the timing.
+// Per-scene duration control. Renders a 4-15s slider for Seedance 2 and
+// discrete preset buttons for every other provider (only durations the
+// provider actually accepts). Parent persists via `onChange`.
 
 import { useEffect, useState } from "react";
 import { Slider } from "@/components/ui/slider";
