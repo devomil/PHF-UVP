@@ -4,6 +4,7 @@ import { projectInstructionsService } from "./project-instructions-service";
 import { getBrandContext, getBrandNameOrDefault, type BrandContext } from "./brand-settings-service";
 import { getVisualArtPreset, isStylizedPreset } from "@shared/config/visual-art-presets";
 import { evaluateSceneTextRouting } from "../utils/recraft-scene-policy";
+import type { Scene } from "../../shared/video-types";
 
 export interface ParsedScene {
   id: string;
@@ -574,22 +575,18 @@ Return ONLY valid JSON matching this structure:
 export const scriptParserService = new ScriptParserService();
 
 /**
- * Phase 23A (Task #118) — fire-and-forget classifier trigger.
- *
- * Called by every route that PERSISTS freshly parsed scenes (currently
- * `POST /projects/script` and `POST /projects/:projectId/generate-script`).
- * Centralized here per the spec so all parse paths use the same wiring;
- * `scene-classifier.service.autoClassifyAfterParse` already has the
- * "skip when no narration" + "swallow all errors" guarantees, so this
- * is a thin pass-through that lets the route handlers stay agnostic of
- * the classifier module.
+ * Phase 23A — fire-and-forget classifier trigger. Called by every route
+ * that persists freshly parsed scenes (`POST /projects/script` and
+ * `POST /projects/:projectId/generate-script`). Delegates to
+ * scene-classifier.service.autoClassifyAfterParse, which already
+ * handles the "skip when no narration" and "swallow all errors" rules.
  */
 export function triggerAutoClassifyAfterParse(
   projectId: string,
-  scenes: Array<{ narration?: string }> | null | undefined,
+  scenes: Scene[] | null | undefined,
 ): void {
   if (!projectId || !scenes || scenes.length === 0) return;
   void import('./scene-classifier.service')
-    .then(({ autoClassifyAfterParse }) => autoClassifyAfterParse(projectId, scenes as any))
+    .then(({ autoClassifyAfterParse }) => autoClassifyAfterParse(projectId, scenes))
     .catch((err) => console.warn('[Classifier] auto-classify trigger import failed:', err));
 }
