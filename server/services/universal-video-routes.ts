@@ -3676,11 +3676,161 @@ router.post('/projects/:projectId/generate-storyboard', isAuthenticated, async (
       await saveProjectToDb(projectData, projectData.ownerId);
     }
 
-    // Fire-and-forget: per-scene status writes drive the UI.
+    // Task #112: stamp an initial storyboardBatchProgress so the polling UI
+    // sees the run "live" between request return and the first per-scene
+    // event firing. The merge primitive does a top-level || so the prior
+    // run's terminal state is fully overwritten by this fresh snapshot.
+    //
+    // Counter contract (do not break — UI denominators depend on it):
+    //   * `totalToGenerate`         — scenes the worker pool will attempt
+    //                                  (excludes skipExisting plan-skips).
+    //   * `completedCount`          — terminal events from the worker pool
+    //                                  (generated + failed + runtimeSkippedCount).
+    //                                  Shares `totalToGenerate` denominator.
+    //   * `generatedCount`          — successful scenes from the worker pool.
+    //   * `failedCount`             — errored scenes from the worker pool.
+    //   * `runtimeSkippedCount`     — in-flight stale-write skips from the pool.
+    //   * `scenesSkippedByPlan`     — pre-flight skips (already had an NB2
+    //                                  thumbnail, skipExisting=true). Not part
+    //                                  of `completedCount` or `totalToGenerate`.
+    const runId = `run-${Date.now()}`;
+    const startedAt = new Date().toISOString();
+    await mergeRenderSettingsToDb(projectId, {
+      storyboardBatchProgress: {
+        runId,
+        status: 'running',
+        startedAt,
+        updatedAt: startedAt,
+        totalToGenerate: estimate.scenesToGenerate,
+        scenesPlanned: estimate.scenesToGenerate,
+        scenesSkippedByPlan: estimate.scenesSkipped,
+        completedCount: 0,
+        generatedCount: 0,
+        failedCount: 0,
+        runtimeSkippedCount: 0,
+        cumulativeCost: 0,
+        estimatedCost: estimate.estimatedCost,
+        budgetCap: estimate.budgetCap,
+        nearCap: false,
+        nb2Resolution: undefined,
+      },
+    }).catch((err) => {
+      console.warn(`[Storyboard] project=${projectId} initial-progress write failed: ${err.message}`);
+    });
+
+    // Fire-and-forget: per-scene status writes drive the UI plus a coarse
+    // batch-level progress doc for the running cost counter.
     setImmediate(() => {
-      generateAllSceneImages(projectId, { skipExisting, numCandidates, confirmOverCap, resolution: effectiveResolution || undefined })
-        .then(r => console.log(`[Storyboard] project=${projectId} resolution=${r.estimate.resolution} done generated=${r.generated} skipped=${r.skipped} failed=${r.failed} totalCost=$${r.totalCost.toFixed(4)}`))
-        .catch(err => console.error(`[Storyboard] project=${projectId} batch failed: ${err.message}`));
+      let lastWriteAt = 0;
+      let pendingWrite: Promise<unknown> | null = null;
+      // `runtimeSkipped` ONLY counts in-flight stale-write skips — plan-skips
+      // (scene already had an NB2 thumbnail when skipExisting=true) are
+      // tracked separately as `scenesSkippedByPlan` and are intentionally
+      // excluded from `completedCount`/`totalToGenerate`. Splitting on
+      // `e.skipReason` keeps the run denominator self-consistent.
+      const generatedCounters = { generated: 0, failed: 0, runtimeSkipped: 0 };
+
+      const writeProgress = async (
+        e: import('./scene-image.service').BatchProgressEvent,
+        opts: { force?: boolean } = {},
+      ) => {
+        // Coalesce to ~once per 750ms so a 16-scene burst doesn't write 60+
+        // jsonb merges. Always write on terminal scene events so the UI sees
+        // the final per-scene cost, and always write when nearCap flips on.
+        const now = Date.now();
+        const isTerminal = e.status === 'complete' || e.status === 'failed' || e.status === 'skipped';
+        if (!opts.force && !isTerminal && now - lastWriteAt < 750) return;
+        lastWriteAt = now;
+        const patch = {
+          storyboardBatchProgress: {
+            runId,
+            status: 'running',
+            startedAt,
+            updatedAt: new Date().toISOString(),
+            totalToGenerate: e.totalToGenerate ?? estimate.scenesToGenerate,
+            scenesPlanned: estimate.scenesToGenerate,
+            scenesSkippedByPlan: estimate.scenesSkipped,
+            completedCount: e.completedCount ?? 0,
+            generatedCount: generatedCounters.generated,
+            failedCount: generatedCounters.failed,
+            runtimeSkippedCount: generatedCounters.runtimeSkipped,
+            cumulativeCost: e.cumulativeCost ?? 0,
+            estimatedCost: e.estimatedCost ?? estimate.estimatedCost,
+            budgetCap: e.budgetCap ?? estimate.budgetCap,
+            nearCap: e.nearCap === true,
+            lastSceneId: e.sceneId,
+            lastSceneStatus: e.status,
+            lastSceneSkipReason: e.skipReason,
+            lastSceneCost: e.cost,
+            lastNb2Resolution: e.nb2Resolution,
+          },
+        };
+        // Chain writes so a slow merge can't reorder against a faster one.
+        pendingWrite = (pendingWrite ?? Promise.resolve())
+          .then(() => mergeRenderSettingsToDb(projectId, patch))
+          .catch((err) => {
+            console.warn(`[Storyboard] project=${projectId} progress write failed: ${err.message}`);
+          });
+      };
+
+      generateAllSceneImages(
+        projectId,
+        { skipExisting, numCandidates, confirmOverCap, resolution: effectiveResolution || undefined },
+        (e) => {
+          if (e.status === 'complete') generatedCounters.generated++;
+          else if (e.status === 'failed') generatedCounters.failed++;
+          // Only stale-skips advance the runtime counter; plan-skips were
+          // accounted for at request time as `scenesSkippedByPlan`.
+          else if (e.status === 'skipped' && e.skipReason === 'stale') generatedCounters.runtimeSkipped++;
+          // fire-and-forget — chained inside writeProgress
+          void writeProgress(e);
+        },
+      )
+        .then(async (r) => {
+          console.log(`[Storyboard] project=${projectId} resolution=${r.estimate.resolution} done generated=${r.generated} planSkipped=${r.planSkipped} runtimeSkipped=${r.runtimeSkipped} failed=${r.failed} totalCost=$${r.totalCost.toFixed(4)}`);
+          // Wait for any in-flight per-scene write to land first so the
+          // "complete" terminal write is observably the last writer.
+          if (pendingWrite) await pendingWrite.catch(() => {});
+          // Use the split fields from generateAllSceneImages — `r.planSkipped`
+          // belongs to `scenesSkippedByPlan`, `r.runtimeSkipped` belongs to
+          // the in-pool `runtimeSkippedCount`. Summing them would over-count.
+          await mergeRenderSettingsToDb(projectId, {
+            storyboardBatchProgress: {
+              runId,
+              status: 'complete',
+              startedAt,
+              updatedAt: new Date().toISOString(),
+              totalToGenerate: r.estimate.scenesToGenerate,
+              scenesPlanned: r.estimate.scenesToGenerate,
+              scenesSkippedByPlan: r.planSkipped,
+              completedCount: r.generated + r.failed + r.runtimeSkipped,
+              generatedCount: r.generated,
+              failedCount: r.failed,
+              runtimeSkippedCount: r.runtimeSkipped,
+              cumulativeCost: r.totalCost,
+              estimatedCost: r.estimate.estimatedCost,
+              budgetCap: r.estimate.budgetCap,
+              nearCap: r.estimate.budgetCap > 0 && r.totalCost >= r.estimate.budgetCap * 0.8,
+              finishedAt: new Date().toISOString(),
+            },
+          }).catch((err) => {
+            console.warn(`[Storyboard] project=${projectId} terminal-progress write failed: ${err.message}`);
+          });
+        })
+        .catch(async (err) => {
+          console.error(`[Storyboard] project=${projectId} batch failed: ${err.message}`);
+          if (pendingWrite) await pendingWrite.catch(() => {});
+          await mergeRenderSettingsToDb(projectId, {
+            storyboardBatchProgress: {
+              runId,
+              status: 'failed',
+              startedAt,
+              updatedAt: new Date().toISOString(),
+              error: err.message || String(err),
+              finishedAt: new Date().toISOString(),
+            },
+          }).catch(() => {});
+        });
     });
 
     return res.json({

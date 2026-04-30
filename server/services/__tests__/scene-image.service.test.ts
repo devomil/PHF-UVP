@@ -404,6 +404,163 @@ describe('scene-image.service: concurrent writes are atomic per-scene', () => {
   });
 });
 
+describe('scene-image.service: generateAllSceneImages — Task #112 progress events', () => {
+  it('emits per-scene cost, nb2Resolution, and a running cumulativeCost on each tick', async () => {
+    // Three scenes, all needing fresh generation. Each NB2 call returns one
+    // candidate (single-candidate fast path keeps Vision QA out of the math),
+    // so the per-scene cost is exactly 1 × $0.06 at 1K.
+    const sceneA = sceneFactory({ id: 'A', imagePrompt: 'a' });
+    const sceneB = sceneFactory({ id: 'B', imagePrompt: 'b' });
+    const sceneC = sceneFactory({ id: 'C', imagePrompt: 'c' });
+    getProjectFromDbMock.mockReset();
+    getProjectFromDbMock.mockResolvedValue(projectFactory([sceneA, sceneB, sceneC]));
+    generateCandidatesMock.mockResolvedValue([{ imageUrl: 'https://cdn.test/x.png' }]);
+
+    // Force serial execution so the cumulative tally we assert against is
+    // deterministic regardless of how the worker pool happens to interleave.
+    const oldConc = process.env.STORYBOARD_BATCH_CONCURRENCY;
+    process.env.STORYBOARD_BATCH_CONCURRENCY = '1';
+    try {
+      const { generateAllSceneImages } = await import('../scene-image.service');
+      const events: any[] = [];
+      const result = await generateAllSceneImages(
+        'p1',
+        { skipExisting: false, numCandidates: 1 },
+        (e) => events.push(e),
+      );
+
+      // Every event carries the budget snapshot.
+      for (const e of events) {
+        expect(e.totalToGenerate).toBe(3);
+        expect(typeof e.budgetCap).toBe('number');
+        expect(typeof e.estimatedCost).toBe('number');
+        expect(typeof e.cumulativeCost).toBe('number');
+      }
+
+      const completes = events.filter((e) => e.status === 'complete');
+      expect(completes).toHaveLength(3);
+      // Per-scene cost is the 1K price for one candidate.
+      expect(completes.map((e) => e.cost)).toEqual([0.06, 0.06, 0.06].map((c) => c));
+      // Cumulative climbs monotonically: 0.06, 0.12, 0.18.
+      expect(completes.map((e) => Number(e.cumulativeCost.toFixed(4)))).toEqual([0.06, 0.12, 0.18]);
+      // Resolution tier rides on each complete event.
+      expect(completes.every((e) => e.nb2Resolution === '1K')).toBe(true);
+      // completedCount monotonically counts terminal events.
+      expect(completes.map((e) => e.completedCount)).toEqual([1, 2, 3]);
+      expect(result.totalCost).toBeCloseTo(0.18, 5);
+    } finally {
+      if (oldConc === undefined) delete process.env.STORYBOARD_BATCH_CONCURRENCY;
+      else process.env.STORYBOARD_BATCH_CONCURRENCY = oldConc;
+    }
+  });
+
+  it('Task #112: tags plan-skips with skipReason="plan" and excludes them from completedCount/totalToGenerate', async () => {
+    // 4 scenes total: scenes 0 and 1 already have NB2 thumbnails (plan-skip
+    // when skipExisting=true), scenes 2 and 3 need fresh generation. The
+    // batch denominator must reflect ONLY the two scenes the worker pool
+    // will run, and the plan-skip events must arrive tagged so the route
+    // layer can split its persisted counters cleanly.
+    const presentScenes = [
+      sceneFactory({ id: 'cached-A', thumbnailUrl: 'https://cdn.test/cached-a.png', imageGenerationModel: 'nano-banana-2', imagePrompt: 'a' }),
+      sceneFactory({ id: 'cached-B', thumbnailUrl: 'https://cdn.test/cached-b.png', imageGenerationModel: 'nano-banana-2', imagePrompt: 'b' }),
+      sceneFactory({ id: 'fresh-C', imagePrompt: 'c' }),
+      sceneFactory({ id: 'fresh-D', imagePrompt: 'd' }),
+    ];
+    getProjectFromDbMock.mockReset();
+    getProjectFromDbMock.mockResolvedValue(projectFactory(presentScenes));
+    generateCandidatesMock.mockResolvedValue([{ imageUrl: 'https://cdn.test/x.png' }]);
+
+    const oldConc = process.env.STORYBOARD_BATCH_CONCURRENCY;
+    process.env.STORYBOARD_BATCH_CONCURRENCY = '1';
+    try {
+      const { generateAllSceneImages } = await import('../scene-image.service');
+      const events: any[] = [];
+      await generateAllSceneImages(
+        'p1',
+        { skipExisting: true, numCandidates: 1 },
+        (e) => events.push(e),
+      );
+
+      // Plan-skip events fire first, before any worker started.
+      const planSkips = events.filter((e) => e.status === 'skipped' && e.skipReason === 'plan');
+      const staleSkips = events.filter((e) => e.status === 'skipped' && e.skipReason === 'stale');
+      const completes = events.filter((e) => e.status === 'complete');
+
+      expect(planSkips.map((e) => e.sceneId).sort()).toEqual(['cached-A', 'cached-B']);
+      expect(staleSkips).toHaveLength(0);
+      expect(completes).toHaveLength(2);
+
+      // Crucial: plan-skips must NOT bump completedCount and must report
+      // totalToGenerate=2 (only the worker-pool scenes), so the persisted
+      // route counters can split cleanly into (completedCount/totalToGenerate)
+      // for the in-pool denominator and `scenesSkippedByPlan` for the rest.
+      for (const e of planSkips) {
+        expect(e.completedCount).toBe(0);
+        expect(e.totalToGenerate).toBe(2);
+      }
+      expect(completes.map((e) => e.completedCount)).toEqual([1, 2]);
+      for (const e of completes) {
+        expect(e.totalToGenerate).toBe(2);
+        expect(e.skipReason).toBeUndefined();
+      }
+
+      // The return value also splits cleanly: callers persisting terminal
+      // counters in jsonb (e.g. `/generate-storyboard`) must use these
+      // separate fields rather than the legacy `skipped` sum.
+      const { generateAllSceneImages: _g } = await import('../scene-image.service');
+      const r = await _g(
+        'p1',
+        { skipExisting: true, numCandidates: 1 },
+        () => {},
+      );
+      expect(r.planSkipped).toBe(2);
+      expect(r.runtimeSkipped).toBe(0);
+      expect(r.generated).toBe(2);
+      expect(r.failed).toBe(0);
+      // Backwards-compat: `skipped` is the sum of plan + runtime.
+      expect(r.skipped).toBe(2);
+      // Denominator math the route layer relies on for `completedCount`:
+      expect(r.generated + r.failed + r.runtimeSkipped).toBe(r.estimate.scenesToGenerate);
+    } finally {
+      if (oldConc === undefined) delete process.env.STORYBOARD_BATCH_CONCURRENCY;
+      else process.env.STORYBOARD_BATCH_CONCURRENCY = oldConc;
+    }
+  });
+
+  it('flips nearCap=true once cumulative spend crosses 80% of the budget cap', async () => {
+    // Cap = $0.20 → 80% threshold = $0.16. Each NB2 call here costs $0.06,
+    // so after the 3rd scene cumulative=$0.18 ≥ $0.16 → nearCap should fire.
+    const scenes = Array.from({ length: 3 }, (_, i) => sceneFactory({ id: `s${i}`, imagePrompt: `p${i}` }));
+    getProjectFromDbMock.mockReset();
+    getProjectFromDbMock.mockResolvedValue(projectFactory(scenes));
+    generateCandidatesMock.mockResolvedValue([{ imageUrl: 'https://cdn.test/x.png' }]);
+
+    const oldCap = process.env.STORYBOARD_BUDGET_CAP;
+    const oldConc = process.env.STORYBOARD_BATCH_CONCURRENCY;
+    process.env.STORYBOARD_BUDGET_CAP = '0.20';
+    process.env.STORYBOARD_BATCH_CONCURRENCY = '1';
+    try {
+      const { generateAllSceneImages } = await import('../scene-image.service');
+      const events: any[] = [];
+      await generateAllSceneImages(
+        'p1',
+        { skipExisting: false, numCandidates: 1, confirmOverCap: true },
+        (e) => events.push(e),
+      );
+
+      const completes = events.filter((e) => e.status === 'complete');
+      expect(completes[0].nearCap).toBe(false);  // 0.06 < 0.16
+      expect(completes[1].nearCap).toBe(false);  // 0.12 < 0.16
+      expect(completes[2].nearCap).toBe(true);   // 0.18 ≥ 0.16
+    } finally {
+      if (oldCap === undefined) delete process.env.STORYBOARD_BUDGET_CAP;
+      else process.env.STORYBOARD_BUDGET_CAP = oldCap;
+      if (oldConc === undefined) delete process.env.STORYBOARD_BATCH_CONCURRENCY;
+      else process.env.STORYBOARD_BATCH_CONCURRENCY = oldConc;
+    }
+  });
+});
+
 describe('scene-image.service: estimateBatchCost', () => {
   it('skips scenes whose existing thumbnail was generated by NB2', async () => {
     const { estimateBatchCost } = await import('../scene-image.service');
@@ -433,6 +590,41 @@ describe('scene-image.service: estimateBatchCost', () => {
       if (oldCap === undefined) delete process.env.STORYBOARD_BUDGET_CAP;
       else process.env.STORYBOARD_BUDGET_CAP = oldCap;
     }
+  });
+
+  it('Task #112: surfaces nb2Resolution on the result envelope so batch UI can label spend', async () => {
+    getProjectFromDbMock.mockReset();
+    getProjectFromDbMock
+      .mockResolvedValueOnce(projectFactory())
+      .mockResolvedValueOnce(projectFactory());
+    generateCandidatesMock.mockResolvedValue([{ imageUrl: 'https://cdn.test/n1.png' }]);
+    scoreImagesMock.mockResolvedValue([{ url: 'https://cdn.test/n1.png', score: 0.8 }]);
+
+    const oldRes = process.env.STORYBOARD_NB2_RESOLUTION;
+    process.env.STORYBOARD_NB2_RESOLUTION = '2K';
+    try {
+      const { generateSceneImage } = await import('../scene-image.service');
+      const r = await generateSceneImage('p1', 'scene-1');
+      expect(r.model).toBe('nano-banana-2');
+      expect(r.nb2Resolution).toBe('2K');
+    } finally {
+      if (oldRes === undefined) delete process.env.STORYBOARD_NB2_RESOLUTION;
+      else process.env.STORYBOARD_NB2_RESOLUTION = oldRes;
+    }
+  });
+
+  it('Task #112: leaves nb2Resolution undefined for non-NB2 fallbacks', async () => {
+    getProjectFromDbMock.mockReset();
+    getProjectFromDbMock
+      .mockResolvedValueOnce(projectFactory())
+      .mockResolvedValueOnce(projectFactory());
+    generateCandidatesMock.mockResolvedValue([]); // NB2 returns nothing → Recraft
+    imageGenerationMock.mockResolvedValueOnce({ url: 'https://cdn.test/recraft.png' });
+
+    const { generateSceneImage } = await import('../scene-image.service');
+    const r = await generateSceneImage('p1', 'scene-1');
+    expect(r.model).toBe('recraft-v4-pro');
+    expect(r.nb2Resolution).toBeUndefined();
   });
 
   it('prices each NB2 image at the configured resolution tier', async () => {

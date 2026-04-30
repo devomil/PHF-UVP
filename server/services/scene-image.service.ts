@@ -77,6 +77,10 @@ export interface SceneImageGenerationResult {
    *  result was discarded and the existing thumbnail was kept. */
   stale?: boolean;
   fingerprint?: string;
+  /** Task #112: NB2 output-tier the scene was billed at. Only populated
+   *  when the chosen model is `nano-banana-2`; fallback providers leave it
+   *  undefined since they're priced flat. */
+  nb2Resolution?: NB2Resolution;
 }
 
 export interface BatchProgressEvent {
@@ -84,6 +88,34 @@ export interface BatchProgressEvent {
   status: 'started' | 'complete' | 'skipped' | 'failed';
   thumbnailUrl?: string;
   error?: string;
+  /** Task #112: USD spent on this scene (NB2 candidates + Vision QA fallback
+   *  amortized to the chosen-model line item). Always present on `complete`,
+   *  zero on `skipped`/`failed`/`started`. */
+  cost?: number;
+  /** Task #112: which NB2 tier billed this scene. Only set when the chosen
+   *  model is `nano-banana-2`. */
+  nb2Resolution?: NB2Resolution;
+  /** Task #112: cumulative USD across the batch through this event. */
+  cumulativeCost?: number;
+  /** Task #112: how many scenes have terminal status (complete + failed +
+   *  skipped) through this event. */
+  completedCount?: number;
+  /** Task #112: how many scenes the batch will attempt total (after the
+   *  skip-existing filter). */
+  totalToGenerate?: number;
+  /** Task #112: pre-flight cost estimate. */
+  estimatedCost?: number;
+  /** Task #112: configured budget cap (USD). */
+  budgetCap?: number;
+  /** Task #112: true once `cumulativeCost` crosses 80% of `budgetCap`. */
+  nearCap?: boolean;
+  /** Task #112: only set when `status === 'skipped'` — distinguishes a
+   *  pre-flight "scene already has an NB2 thumbnail, skipExisting=true"
+   *  skip (`'plan'`) from an in-flight stale-write skip (`'stale'`). The
+   *  former does NOT advance `completedCount`/`totalToGenerate`; the latter
+   *  does. Subscribers persisting per-status counters should split on this
+   *  field to keep their own denominators consistent. */
+  skipReason?: 'plan' | 'stale';
 }
 
 // Task #109: NB2 is billed per image by output resolution (1K $0.06, 2K
@@ -230,17 +262,26 @@ export async function generateSceneImage(
     scene.thumbnailStatus !== 'failed'
   ) {
     console.log(`[SceneImage] scene=${sceneId} fingerprint match — returning cached result (no spend)`);
+    const cachedModel =
+      (scene.imageGenerationModel === 'flux-1.1-pro' ? 'flux' : scene.imageGenerationModel) || 'nano-banana-2';
     return {
       sceneId,
       thumbnailUrl: scene.thumbnailUrl,
       seedImageUrl: scene.seedImageUrl,
-      model: (scene.imageGenerationModel === 'flux-1.1-pro' ? 'flux' : scene.imageGenerationModel) || 'nano-banana-2',
+      model: cachedModel,
       prompt: scene.imageGenerationPrompt || builtPrompt,
       candidates: scene.imageCandidates || [],
       cost: 0,
       durationMs: Date.now() - startedAt,
       stale: false,
       fingerprint,
+      // Task #112: surface the previously billed NB2 tier (persisted by an
+      // earlier successful run) so the UI keeps showing the resolution badge
+      // when the cache short-circuit path runs.
+      nb2Resolution:
+        cachedModel === 'nano-banana-2'
+          ? ((scene as Scene & { nb2Resolution?: NB2Resolution }).nb2Resolution)
+          : undefined,
     };
   }
 
@@ -423,6 +464,9 @@ export async function generateSceneImage(
       durationMs,
       stale: true,
       fingerprint: freshFingerprint,
+      // Task #112: even on stale-discard the spend was real, so the batch
+      // total still needs the tier we billed at to label the line item.
+      nb2Resolution: chosenModel === 'nano-banana-2' ? nb2Resolution : undefined,
     };
   }
 
@@ -436,6 +480,10 @@ export async function generateSceneImage(
     thumbnailGeneratedFor: fingerprint,
     thumbnailUpdatedAt: new Date().toISOString(),
     thumbnailError: null,
+    // Task #112: persist the NB2 tier so the UI can show which resolution
+    // billed each scene without re-deriving it from the env. Cleared on
+    // fallback so a Recraft/Flux run doesn't keep a stale NB2 badge.
+    nb2Resolution: chosenModel === 'nano-banana-2' ? nb2Resolution : null,
   });
 
   // Structured telemetry. Keep keys stable for log aggregators.
@@ -463,6 +511,9 @@ export async function generateSceneImage(
     cost,
     durationMs,
     fingerprint,
+    // Task #112: surface the billed NB2 tier on the result envelope so the
+    // batch driver can stream it through `BatchProgressEvent.nb2Resolution`.
+    nb2Resolution: chosenModel === 'nano-banana-2' ? nb2Resolution : undefined,
   };
 }
 
@@ -518,7 +569,24 @@ export async function generateAllSceneImages(
   projectId: string,
   options: BatchOptions = {},
   onProgress?: (e: BatchProgressEvent) => void
-): Promise<{ generated: number; skipped: number; failed: number; totalCost: number; estimate: BatchEstimate }> {
+): Promise<{
+  generated: number;
+  /** Total skip count (planSkipped + runtimeSkipped). Kept for backwards
+   *  compatibility — new callers should split on the two fields below
+   *  because they answer different questions:
+   *    - `planSkipped`    — pre-flight skip (already had an NB2 thumbnail)
+   *    - `runtimeSkipped` — in-flight stale-write skip from the worker pool */
+  skipped: number;
+  /** Task #112: pre-flight plan skips. Equal to `estimate.scenesSkipped`.
+   *  Excluded from `completedCount`/`totalToGenerate`. */
+  planSkipped: number;
+  /** Task #112: runtime stale-write skips emitted by the worker pool.
+   *  Counted INTO `completedCount` because the pool started the scene. */
+  runtimeSkipped: number;
+  failed: number;
+  totalCost: number;
+  estimate: BatchEstimate;
+}> {
   const projectData = await getProjectFromDb(projectId);
   if (!projectData) throw new Error('Project not found');
 
@@ -547,22 +615,57 @@ export async function generateAllSceneImages(
   }
 
   let generated = 0;
-  let skipped = 0;
+  // Task #112: split skip accounting so the route layer can persist
+  // denominator-consistent counters. `planSkipped` mirrors `estimate.scenesSkipped`
+  // (pre-flight skip-existing); `runtimeSkipped` only counts stale-write
+  // bailouts from inside the worker pool and shares the `totalToGenerate`
+  // denominator with `generated`/`failed`.
+  let planSkipped = 0;
+  let runtimeSkipped = 0;
   let failed = 0;
   let totalCost = 0;
 
   const toGenerate: Scene[] = [];
+  const skippedAtPlan: string[] = [];
   for (const scene of scenes) {
     if (
       skipExisting &&
       scene.thumbnailUrl &&
       scene.imageGenerationModel === 'nano-banana-2'
     ) {
-      skipped++;
-      onProgress?.({ sceneId: scene.id, status: 'skipped' });
+      planSkipped++;
+      skippedAtPlan.push(scene.id);
     } else {
       toGenerate.push(scene);
     }
+  }
+
+  // Task #112: snapshot the budget context once so every progress event the
+  // batch emits can be self-describing (UI doesn't need to reach for the
+  // estimate separately).
+  const totalToGenerate = toGenerate.length;
+  const budgetCap = estimate.budgetCap;
+  const estimatedCost = estimate.estimatedCost;
+  const nearCapAt = budgetCap * 0.8;
+  let nearCapEmitted = false;
+  let completedCount = 0;
+  // Emit the queued skips AFTER capturing total counts so the receiver sees
+  // accurate `totalToGenerate` / `cumulativeCost` from the very first event.
+  // Plan-skips intentionally do not advance `completedCount` — the worker
+  // pool denominator is `totalToGenerate`, which already excludes them.
+  for (const id of skippedAtPlan) {
+    onProgress?.({
+      sceneId: id,
+      status: 'skipped',
+      skipReason: 'plan',
+      cost: 0,
+      cumulativeCost: totalCost,
+      completedCount,
+      totalToGenerate,
+      estimatedCost,
+      budgetCap,
+      nearCap: false,
+    });
   }
 
   // Concurrency is bounded so we don't open dozens of NB2 sockets or hammer
@@ -572,28 +675,63 @@ export async function generateAllSceneImages(
     8,
   ));
 
+  // Helper that decorates every per-scene event with the running batch-level
+  // counters so subscribers get a self-contained snapshot per tick.
+  const emit = (e: Pick<BatchProgressEvent, 'sceneId' | 'status' | 'thumbnailUrl' | 'error' | 'cost' | 'nb2Resolution' | 'skipReason'>) => {
+    const nearCap = budgetCap > 0 && totalCost >= nearCapAt;
+    if (nearCap && !nearCapEmitted) {
+      nearCapEmitted = true;
+      console.warn(
+        `[SceneImage:budget] Live spend $${totalCost.toFixed(2)} crossed 80% of cap $${budgetCap.toFixed(2)} (${completedCount}/${totalToGenerate} scenes done)`,
+      );
+    }
+    onProgress?.({
+      ...e,
+      cumulativeCost: totalCost,
+      completedCount,
+      totalToGenerate,
+      estimatedCost,
+      budgetCap,
+      nearCap,
+    });
+  };
+
   let cursor = 0;
   const worker = async () => {
     while (true) {
       const idx = cursor++;
       if (idx >= toGenerate.length) return;
       const scene = toGenerate[idx];
-      onProgress?.({ sceneId: scene.id, status: 'started' });
+      emit({ sceneId: scene.id, status: 'started', cost: 0 });
       try {
         const r = await generateSceneImage(projectId, scene.id, { numCandidates, resolution });
         totalCost += r.cost;
+        completedCount++;
         if (r.stale) {
-          skipped++;
-          onProgress?.({ sceneId: scene.id, status: 'skipped' });
+          runtimeSkipped++;
+          emit({
+            sceneId: scene.id,
+            status: 'skipped',
+            skipReason: 'stale',
+            cost: r.cost,
+            nb2Resolution: r.nb2Resolution,
+          });
         } else {
           generated++;
-          onProgress?.({ sceneId: scene.id, status: 'complete', thumbnailUrl: r.thumbnailUrl });
+          emit({
+            sceneId: scene.id,
+            status: 'complete',
+            thumbnailUrl: r.thumbnailUrl,
+            cost: r.cost,
+            nb2Resolution: r.nb2Resolution,
+          });
         }
       } catch (err) {
         failed++;
+        completedCount++;
         const msg = err instanceof Error ? err.message : String(err);
         console.error(`[SceneImage:batch] Scene ${scene.id} failed: ${msg}`);
-        onProgress?.({ sceneId: scene.id, status: 'failed', error: msg });
+        emit({ sceneId: scene.id, status: 'failed', error: msg, cost: 0 });
       }
     }
   };
@@ -604,7 +742,15 @@ export async function generateAllSceneImages(
   );
   await Promise.all(workers);
 
-  console.log(`[SceneImage:batch] project=${projectId} resolution=${resolution} concurrency=${CONCURRENCY} generated=${generated} skipped=${skipped} failed=${failed} totalCost=$${totalCost.toFixed(4)}`);
+  console.log(`[SceneImage:batch] project=${projectId} resolution=${resolution} concurrency=${CONCURRENCY} generated=${generated} planSkipped=${planSkipped} runtimeSkipped=${runtimeSkipped} failed=${failed} totalCost=$${totalCost.toFixed(4)}`);
 
-  return { generated, skipped, failed, totalCost, estimate };
+  return {
+    generated,
+    skipped: planSkipped + runtimeSkipped,
+    planSkipped,
+    runtimeSkipped,
+    failed,
+    totalCost,
+    estimate,
+  };
 }

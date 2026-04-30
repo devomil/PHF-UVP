@@ -794,6 +794,43 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
     },
   });
 
+  // Task #112: live storyboard batch progress (cumulative cost, near-cap
+  // warning, scene counters). Written by `generateAllSceneImages` via
+  // `mergeRenderSettingsToDb` and surfaced through the existing 5s polling
+  // on the project query — no new transport required.
+  // Counter contract documented in `universal-video-routes.ts /generate-storyboard`:
+  //   completedCount / totalToGenerate           — worker-pool denominator
+  //   runtimeSkippedCount                        — in-flight stale-write skips (in pool)
+  //   scenesSkippedByPlan                        — pre-flight plan skips (NOT in pool)
+  // The two skip counters are intentionally separate; never sum them.
+  const storyboardBatchProgress = (project?.progress as any)?.storyboardBatchProgress as
+    | {
+        status?: 'running' | 'complete' | 'failed';
+        totalToGenerate?: number;
+        completedCount?: number;
+        generatedCount?: number;
+        failedCount?: number;
+        runtimeSkippedCount?: number;
+        scenesSkippedByPlan?: number;
+        cumulativeCost?: number;
+        estimatedCost?: number;
+        budgetCap?: number;
+        nearCap?: boolean;
+        lastNb2Resolution?: string;
+        lastSceneCost?: number;
+      }
+    | undefined;
+  const isStoryboardBatchRunning = storyboardBatchProgress?.status === 'running';
+  // Refetch once every 2.5s while a batch is running so the cost counter
+  // ticks faster than the global 5s project polling cadence.
+  useEffect(() => {
+    if (!isStoryboardBatchRunning) return;
+    const t = setInterval(() => {
+      queryClient.invalidateQueries({ queryKey: ['project', projectId] });
+    }, 2500);
+    return () => clearInterval(t);
+  }, [isStoryboardBatchRunning, projectId, queryClient]);
+
   // Pick a different candidate as the winner: PATCH the scene's thumbnailUrl,
   // seedImageUrl, and update imageCandidates[i].selected so the strip stays
   // consistent. The PATCH allowlist already includes those fields.
@@ -1396,6 +1433,43 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
                     </span>
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
+                    {/* Task #112: live storyboard batch cost counter. */}
+                    {isStoryboardBatchRunning && storyboardBatchProgress && (() => {
+                      const spent = storyboardBatchProgress.cumulativeCost ?? 0;
+                      const cap = storyboardBatchProgress.budgetCap ?? 0;
+                      const total = storyboardBatchProgress.totalToGenerate ?? 0;
+                      const done = storyboardBatchProgress.completedCount ?? 0;
+                      const nearCap = !!storyboardBatchProgress.nearCap;
+                      const lastRes = storyboardBatchProgress.lastNb2Resolution;
+                      return (
+                        <div
+                          className="text-xs px-2.5 py-1 rounded-lg border flex items-center gap-2"
+                          style={
+                            nearCap
+                              ? { borderColor: "rgba(245,158,11,0.5)", backgroundColor: "rgba(245,158,11,0.10)", color: "rgb(252,211,77)" }
+                              : { borderColor: "rgba(124,58,237,0.4)", backgroundColor: "rgba(124,58,237,0.08)", color: "rgb(216,180,254)" }
+                          }
+                          data-testid="storyboard-batch-progress"
+                          title={
+                            nearCap
+                              ? `Live spend has crossed 80% of the $${cap.toFixed(2)} budget cap.`
+                              : 'Live storyboard spend updates after each scene completes.'
+                          }
+                        >
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                          <span>
+                            Storyboard {done}/{total} —{' '}
+                            <span data-testid="storyboard-batch-spent">
+                              Spent ${spent.toFixed(2)} of ${cap.toFixed(2)}
+                            </span>
+                            {lastRes ? <span className="ml-1 opacity-80">· {lastRes}</span> : null}
+                          </span>
+                          {nearCap && (
+                            <AlertTriangle className="w-3 h-3" data-testid="storyboard-batch-near-cap" />
+                          )}
+                        </div>
+                      );
+                    })()}
                     {/* Task 63: One-click batch thumbnail generation */}
                     {scenes.length > 0 && (
                       isBatchThumbRunning ? (
@@ -1514,13 +1588,13 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
                           {/* Phase 21B (Task #106): Bulk NB2 storyboard generator. */}
                           <button
                             onClick={() => generateStoryboardBatchMutation.mutate(false)}
-                            disabled={generateStoryboardBatchMutation.isPending || scenesNeedingStoryboard.length === 0}
+                            disabled={generateStoryboardBatchMutation.isPending || isStoryboardBatchRunning || scenesNeedingStoryboard.length === 0}
                             className="text-xs px-2.5 py-1 rounded-lg border flex items-center gap-1.5 transition-colors hover:border-purple-500/40 disabled:opacity-50"
                             style={{ borderColor: "rgba(124,58,237,0.4)", color: "rgb(216,180,254)", backgroundColor: "rgba(124,58,237,0.08)" }}
                             data-testid="button-generate-storyboard"
                             title={`Generate 3 NB2 candidates per scene + Vision QA at ${storyboardResolution} ($${(3 * getNB2CostPerImage(storyboardResolution)).toFixed(2)}/scene).`}
                           >
-                            {generateStoryboardBatchMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                            {(generateStoryboardBatchMutation.isPending || isStoryboardBatchRunning) ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
                             Generate storyboard
                           </button>
                         </div>
@@ -2129,6 +2203,19 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
                                       data-testid={`badge-image-model-${sceneId}`}
                                     >
                                       {(scene as any).imageGenerationModel === 'nano-banana-2' ? 'NB2' : (scene as any).imageGenerationModel === 'recraft-v4-pro' ? 'Recraft Pro' : 'Flux'}
+                                    </span>
+                                  )}
+                                  {/* Task #112: NB2 resolution-tier badge — shows
+                                       which billing tier this scene was generated at
+                                       (1K $0.06, 2K $0.08, 4K $0.12 per image). */}
+                                  {(scene as any).imageGenerationModel === 'nano-banana-2' && (scene as any).nb2Resolution && (
+                                    <span
+                                      className="text-[10px] px-2 py-0.5 rounded-full border inline-flex items-center"
+                                      style={{ borderColor: "rgba(124,58,237,0.3)", backgroundColor: "rgba(124,58,237,0.06)", color: "rgb(196,181,253)" }}
+                                      data-testid={`badge-nb2-resolution-${sceneId}`}
+                                      title={`Billed at NB2 ${(scene as any).nb2Resolution} tier — change via STORYBOARD_NB2_RESOLUTION.`}
+                                    >
+                                      {(scene as any).nb2Resolution}
                                     </span>
                                   )}
                                   {isStale && (
