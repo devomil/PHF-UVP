@@ -3723,7 +3723,7 @@ function ScenePreview({
                     'seedance-2.0-fast';
                   const isSeedance2 = resolvedProvider === 'seedance-2.0' || resolvedProvider === 'seedance-2.0-fast';
                   const currentDuration = scene.duration || (isSeedance2 ? 8 : 5);
-                  const currentAudio = (scene as any).generateNativeAudio === true;
+                  const currentAudio = scene.generateNativeAudio === true;
                   const hasVoiceover = !!(scene.narration && scene.narration.trim().length > 0);
                   return (
                     <div className="space-y-3" data-testid="scene-editor-duration-audio">
@@ -6103,8 +6103,8 @@ export default function UniversalVideoProducer() {
                     projectId={project.id}
                     projectTitle={project.title}
                     projectQualityTier={project.qualityTier}
-                    projectPreferredProvider={(project as any).preferredProvider}
-                    projectVisualStyle={(project as any).visualStyle}
+                    projectPreferredProvider={project.preferredProvider}
+                    projectVisualStyle={project.visualStyle}
                     onToggleProductOverlay={handleToggleProductOverlay}
                     onSceneUpdate={() => queryClient.invalidateQueries({ queryKey: ['/api/universal-video/projects', project.id] })}
                     onProjectUpdate={(updatedProject) => setProject(updatedProject)}

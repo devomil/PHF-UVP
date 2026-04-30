@@ -3,27 +3,38 @@
 // PiAPI's Seedance 2 / Seedance 2 Fast models accept `duration` between
 // 4 and 15 seconds inclusive. Outside that range the request 400s. To
 // keep the UI slider, the bulk-action popover, and the request payload
-// builder all in agreement on the same bounds, both pieces use these
+// builder all in agreement on the same bounds, all surfaces use these
 // helpers as the single source of truth.
 
 export const SEEDANCE_2_MIN_DURATION = 4;
 export const SEEDANCE_2_MAX_DURATION = 15;
 
 /**
+ * Sensible mid-range default used when input is missing or invalid.
+ * Chosen so callers that pass `null`, `undefined`, `NaN`, `0`, or a
+ * non-numeric value still get a usable scene length (8s sits comfortably
+ * in the typical 5-12s sweet spot for both models).
+ */
+export const SEEDANCE_2_DEFAULT_DURATION = 8;
+
+/**
  * Clamp an arbitrary numeric duration into the Seedance 2 valid range.
- * Non-finite or non-numeric input falls back to the lower bound (the
- * model rejects anything below 4s, so the lower bound is the safest
- * recovery — it returns a 4-second clip rather than a 400 error).
+ *
+ * Behavior:
+ *   - `NaN`, `null`, `undefined`, non-numeric strings, or `0` → `8` (the
+ *     "I have no real value" fallback).
+ *   - `±Infinity` → `8` (treated as invalid, not as a clamp target — the
+ *     caller almost never wants the absolute max for a scene duration).
+ *   - Any other finite number → rounded to the nearest integer and then
+ *     clamped into [4, 15].
  */
 export function clampSeedance2Duration(value: unknown): number {
   const n = typeof value === 'number' ? value : Number(value);
-  // NaN / non-numeric → safest default (request still succeeds at min).
-  if (Number.isNaN(n)) return SEEDANCE_2_MIN_DURATION;
-  // ±Infinity → snap to the matching bound rather than the safe default.
-  // The intent of "clamp" is "drag into range", and a callers passing
-  // `Infinity` means "as large as possible".
-  if (n === Number.POSITIVE_INFINITY) return SEEDANCE_2_MAX_DURATION;
-  if (n === Number.NEGATIVE_INFINITY) return SEEDANCE_2_MIN_DURATION;
+  // NaN / ±Infinity / non-numeric → safe mid-range default.
+  if (!Number.isFinite(n)) return SEEDANCE_2_DEFAULT_DURATION;
+  // Treat 0 as "missing" — same fallback as null/undefined so callers
+  // can pass `scene.duration ?? 0` without surprise.
+  if (n === 0) return SEEDANCE_2_DEFAULT_DURATION;
   // Round to whole seconds — PiAPI rejects fractional values.
   const rounded = Math.round(n);
   if (rounded < SEEDANCE_2_MIN_DURATION) return SEEDANCE_2_MIN_DURATION;

@@ -45,6 +45,17 @@ export interface VideoProject {
   // back to the `STORYBOARD_NB2_RESOLUTION` env default when unset so older
   // projects keep their existing tier.
   storyboardResolution?: '1K' | '2K' | '4K';
+  // Phase 20D (Task #126): the project's preferred video provider — read
+  // by the per-scene duration / native-audio controls so the UI can pick
+  // the right control variant (slider vs preset buttons) and toggle
+  // affordances. Mirrors `GenerationSettings.preferredProvider` but is
+  // also persisted at the project level so the client never needs to
+  // unwrap nested settings just to render scene controls.
+  preferredProvider?: string;
+  // Phase 20D (Task #126): the project's visual style label
+  // (e.g. 'hero', 'social', 'educational'). Drives default scene
+  // durations on creation and the bulk "Scene defaults" popover.
+  visualStyle?: string;
 }
 
 export type VideoProjectStatus = 'draft' | 'queued' | 'generating' | 'ready' | 'render_queued' | 'rendering' | 'lambda_pending' | 'complete' | 'error';

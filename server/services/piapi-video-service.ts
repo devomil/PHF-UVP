@@ -623,6 +623,9 @@ class PiAPIVideoService {
         if (isPeakHours) {
           console.warn(`[PiAPI T2V] ⚠ Seedance 2 GA request during peak hours (09:00-15:00 GMT) — expect longer queue times`);
         }
+        // Phase 20D (Task #126): always emit `generate_audio` as an explicit
+        // boolean so we never inherit PiAPI's server-side default for the
+        // field — opting OUT must be just as explicit as opting IN.
         const wantsAudio = options.generateNativeAudio === true;
         console.log(`[PiAPI T2V] Using Seedance 2 GA (text_to_video mode, generate_audio=${wantsAudio})`);
         return {
@@ -633,11 +636,7 @@ class PiAPIVideoService {
             mode: 'text_to_video',
             duration: clampSeedance2Duration(options.duration),
             aspect_ratio: options.aspectRatio || '16:9',
-            // Phase 20D (Task #126): only emit when explicitly opted in.
-            // Including `generate_audio: false` is harmless but noisy in
-            // payload logs, so we keep the field absent in the default
-            // case to make request diffs easier to read.
-            ...(wantsAudio ? { generate_audio: true } : {}),
+            generate_audio: wantsAudio,
           },
         };
       }
@@ -647,6 +646,8 @@ class PiAPIVideoService {
         if (isPeakHours) {
           console.warn(`[PiAPI T2V] ⚠ Seedance 2 Fast GA request during peak hours (09:00-15:00 GMT) — expect longer queue times`);
         }
+        // Phase 20D (Task #126): always emit `generate_audio` as an explicit
+        // boolean so the field is never inherited from PiAPI server defaults.
         const wantsAudio = options.generateNativeAudio === true;
         console.log(`[PiAPI T2V] Using Seedance 2 Fast GA (text_to_video mode, generate_audio=${wantsAudio})`);
         return {
@@ -657,7 +658,7 @@ class PiAPIVideoService {
             mode: 'text_to_video',
             duration: clampSeedance2Duration(options.duration),
             aspect_ratio: options.aspectRatio || '16:9',
-            ...(wantsAudio ? { generate_audio: true } : {}),
+            generate_audio: wantsAudio,
           },
         };
       }
@@ -1420,7 +1421,7 @@ class PiAPIVideoService {
             image_urls: flfImageUrls,
             duration: clampSeedance2Duration(options.duration),
             aspect_ratio: 'auto',
-            ...(wantsAudio ? { generate_audio: true } : {}),
+            generate_audio: wantsAudio,
           },
         };
       }
@@ -1478,7 +1479,7 @@ class PiAPIVideoService {
           // first_last_frames inherits aspect from the anchor image; omni_reference
           // accepts an explicit aspect_ratio.
           aspect_ratio: seedanceMode === 'first_last_frames' ? 'auto' : (options.aspectRatio || '16:9'),
-          ...(wantsAudioOmni ? { generate_audio: true } : {}),
+          generate_audio: wantsAudioOmni,
         },
       };
     }

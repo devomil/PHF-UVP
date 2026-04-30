@@ -3246,8 +3246,8 @@ export default function ProjectDetail({ params }: { params?: { id: string } }) {
                 <div className="mt-2">
                   <SceneDefaultsBulkAction
                     projectId={project.id}
-                    scenes={scenes as any}
-                    projectPreferredProvider={(project as any).preferredProvider}
+                    scenes={scenes}
+                    projectPreferredProvider={project.preferredProvider}
                     onUpdated={() =>
                       queryClient.invalidateQueries({
                         queryKey: ["project", projectId],

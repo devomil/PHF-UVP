@@ -51,8 +51,12 @@ beforeEach(() => {
 afterEach(cleanup);
 
 import { SceneDefaultsBulkAction } from "../scene-defaults-bulk-action";
+import type { Scene } from "@shared/video-types";
 
-const SCENES = [
+// Minimal Scene shapes for the bulk-action's contract — id + duration
+// + the new generateNativeAudio flag are all the component reads.
+// `Partial<Scene>` lets us avoid filling in every unrelated field.
+const SCENES: Partial<Scene>[] = [
   { id: "s1", duration: 5, generateNativeAudio: false },
   { id: "s2", duration: 7 },
   { id: "s3", duration: 12, generateNativeAudio: true },
@@ -72,7 +76,7 @@ describe("SceneDefaultsBulkAction", () => {
     render(
       <SceneDefaultsBulkAction
         projectId="p1"
-        scenes={SCENES as any}
+        scenes={SCENES as Scene[]}
         onUpdated={onUpdated}
       />,
     );
@@ -107,7 +111,7 @@ describe("SceneDefaultsBulkAction", () => {
   });
 
   it("Apply button is disabled when nothing has been picked", async () => {
-    render(<SceneDefaultsBulkAction projectId="p1" scenes={SCENES as any} />);
+    render(<SceneDefaultsBulkAction projectId="p1" scenes={SCENES as Scene[]} />);
     fireEvent.click(screen.getByTestId("scene-defaults-bulk-trigger"));
     const apply = (await screen.findByTestId(
       "scene-defaults-apply-button",
@@ -116,7 +120,7 @@ describe("SceneDefaultsBulkAction", () => {
   });
 
   it("only updates duration when audio set is off", async () => {
-    render(<SceneDefaultsBulkAction projectId="p1" scenes={SCENES as any} />);
+    render(<SceneDefaultsBulkAction projectId="p1" scenes={SCENES as Scene[]} />);
     fireEvent.click(screen.getByTestId("scene-defaults-bulk-trigger"));
     fireEvent.click(await screen.findByTestId("scene-defaults-preset-12"));
     fireEvent.click(screen.getByTestId("scene-defaults-apply-button"));

@@ -66,6 +66,31 @@ describe("SceneDurationControl", () => {
     );
   });
 
+  it("shows a per-second rate and per-scene cost estimate for Seedance 2 Fast", () => {
+    render(
+      <SceneDurationControl
+        provider="seedance-2.0-fast"
+        value={10}
+        onChange={vi.fn()}
+      />,
+    );
+    const cost = screen.getByTestId("scene-duration-cost");
+    // seedance-2.0-fast = $0.020/s → 10s × $0.020 = $0.20/scene.
+    // formatUsd shows 3 decimals for sub-$0.10 values, 2 decimals otherwise.
+    expect(cost.textContent).toContain("0.020");
+    expect(cost.textContent).toContain("0.20");
+  });
+
+  it("shows a per-second rate and per-scene cost estimate for non-Seedance providers", () => {
+    render(
+      <SceneDurationControl provider="kling" value={10} onChange={vi.fn()} />,
+    );
+    const cost = screen.getByTestId("scene-duration-cost");
+    // kling = $0.030/s → 10s × $0.030 = $0.30/scene.
+    expect(cost.textContent).toContain("0.030");
+    expect(cost.textContent).toContain("0.30");
+  });
+
   it("renders preset buttons for kling (5s, 10s only)", () => {
     render(
       <SceneDurationControl provider="kling" value={5} onChange={vi.fn()} />,

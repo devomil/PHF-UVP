@@ -4,6 +4,7 @@ import {
   isValidSeedance2Duration,
   SEEDANCE_2_MIN_DURATION,
   SEEDANCE_2_MAX_DURATION,
+  SEEDANCE_2_DEFAULT_DURATION,
 } from '../duration';
 
 describe('clampSeedance2Duration', () => {
@@ -13,16 +14,15 @@ describe('clampSeedance2Duration', () => {
     expect(clampSeedance2Duration(15)).toBe(15);
   });
 
-  it('clamps below 4 up to the lower bound', () => {
-    expect(clampSeedance2Duration(0)).toBe(SEEDANCE_2_MIN_DURATION);
+  it('clamps finite values below 4 up to the lower bound', () => {
     expect(clampSeedance2Duration(3)).toBe(SEEDANCE_2_MIN_DURATION);
+    expect(clampSeedance2Duration(1)).toBe(SEEDANCE_2_MIN_DURATION);
     expect(clampSeedance2Duration(-100)).toBe(SEEDANCE_2_MIN_DURATION);
   });
 
-  it('clamps above 15 down to the upper bound', () => {
+  it('clamps finite values above 15 down to the upper bound', () => {
     expect(clampSeedance2Duration(16)).toBe(SEEDANCE_2_MAX_DURATION);
     expect(clampSeedance2Duration(60)).toBe(SEEDANCE_2_MAX_DURATION);
-    expect(clampSeedance2Duration(Number.POSITIVE_INFINITY)).toBe(SEEDANCE_2_MAX_DURATION);
   });
 
   it('rounds fractional inputs to whole seconds', () => {
@@ -31,11 +31,16 @@ describe('clampSeedance2Duration', () => {
     expect(clampSeedance2Duration(14.51)).toBe(15);
   });
 
-  it('falls back to lower bound for non-finite / non-numeric input', () => {
-    expect(clampSeedance2Duration(NaN)).toBe(SEEDANCE_2_MIN_DURATION);
-    expect(clampSeedance2Duration(undefined)).toBe(SEEDANCE_2_MIN_DURATION);
-    expect(clampSeedance2Duration(null)).toBe(SEEDANCE_2_MIN_DURATION);
-    expect(clampSeedance2Duration('not a number')).toBe(SEEDANCE_2_MIN_DURATION);
+  it('falls back to the safe default for invalid / missing input', () => {
+    // 0, NaN, null, undefined, ±Infinity, and non-numeric strings all
+    // mean "no real duration provided" → mid-range default of 8s.
+    expect(clampSeedance2Duration(0)).toBe(SEEDANCE_2_DEFAULT_DURATION);
+    expect(clampSeedance2Duration(NaN)).toBe(SEEDANCE_2_DEFAULT_DURATION);
+    expect(clampSeedance2Duration(undefined)).toBe(SEEDANCE_2_DEFAULT_DURATION);
+    expect(clampSeedance2Duration(null)).toBe(SEEDANCE_2_DEFAULT_DURATION);
+    expect(clampSeedance2Duration('not a number')).toBe(SEEDANCE_2_DEFAULT_DURATION);
+    expect(clampSeedance2Duration(Number.POSITIVE_INFINITY)).toBe(SEEDANCE_2_DEFAULT_DURATION);
+    expect(clampSeedance2Duration(Number.NEGATIVE_INFINITY)).toBe(SEEDANCE_2_DEFAULT_DURATION);
   });
 
   it('coerces numeric strings inside the range', () => {
