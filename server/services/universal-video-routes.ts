@@ -3444,13 +3444,12 @@ router.patch('/projects/:projectId/scenes/:sceneId', isAuthenticated, async (req
       // attached) so the editor's existing single-PATCH save flow
       // still works end-to-end. We add the metadata back to `updates`
       // so it gets written in the same full-array save.
-      const overrideStamp = {
-        renderSystemType: updates.renderSystemType,
-        manuallyClassified: true,
-        classifierConfidence: 1.0,
-        classifierReasoning: 'Manual override',
-        classifiedAt: new Date().toISOString(),
-      };
+      // Source of truth for the stamp shape lives in the classifier
+      // service so the unit test for the PATCH contract asserts against
+      // the same constants the route writes.
+      const { buildManualOverrideStamp } = await import('./scene-classifier.service');
+      // Type already narrowed by the RENDER_SYSTEM_TYPES.includes check above.
+      const overrideStamp = buildManualOverrideStamp(updates.renderSystemType as any);
 
       const otherKeys = Object.keys(updates).filter((k) => k !== 'renderSystemType');
       if (otherKeys.length === 0) {

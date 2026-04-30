@@ -2294,48 +2294,21 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
             high-level "how this scene gets rendered" decision before the
             "what story beat is this" tag. Uses shadcn Select for the
             override dropdown (matches the rest of Sprint 3). */}
-        <div className="grid grid-cols-[1fr_220px] gap-3 items-end">
-          <div>
-            <label className="text-[11px] font-medium uppercase tracking-wider mb-1.5 flex items-center gap-2" style={{ color: "var(--text-secondary)" }}>
-              Render System
-              <RenderTypeBadge
-                renderSystemType={(scene as Scene).renderSystemType}
-                classifierConfidence={(scene as Scene).classifierConfidence}
-                classifierReasoning={(scene as Scene).classifierReasoning}
-                manuallyClassified={(scene as Scene).manuallyClassified}
-                classifiedAt={(scene as Scene).classifiedAt}
-              />
-            </label>
-            <RsSelect
-              value={(scene as Scene).renderSystemType || ""}
-              onValueChange={(value: string) => {
-                if (!value) return;
-                // Send only renderSystemType — the server stamps
-                // manuallyClassified + confidence + reasoning + timestamp
-                // automatically inside the PATCH override block.
-                silentSaveMutation.mutate({ renderSystemType: value });
-              }}
-            >
-              <RsSelectTrigger
-                className="w-full text-sm"
-                data-testid="render-system-override-select"
-              >
-                <RsSelectValue placeholder="Auto (waiting for classifier)" />
-              </RsSelectTrigger>
-              <RsSelectContent>
-                {RENDER_SYSTEM_TYPES.map((t) => (
-                  <RsSelectItem key={t} value={t}>
-                    {RENDER_TYPE_LABELS[t as RenderSystemType]}
-                  </RsSelectItem>
-                ))}
-              </RsSelectContent>
-            </RsSelect>
-          </div>
-          <div className="flex items-end justify-end h-full">
-            <button
-              type="button"
-              data-testid="reclassify-scene-btn"
-              onClick={async () => {
+        <div>
+          <label className="text-[11px] font-medium uppercase tracking-wider mb-1.5 flex items-center gap-2 flex-wrap" style={{ color: "var(--text-secondary)" }}>
+            Render System
+            {/* The reclassify action lives INSIDE the badge (with its own
+                in-flight spinner) so the editor doesn't have to thread
+                loading state through. The badge owns the lifecycle; we
+                just await our network call inside `onReclassify` and
+                surface failures via toast. */}
+            <RenderTypeBadge
+              renderSystemType={(scene as Scene).renderSystemType}
+              classifierConfidence={(scene as Scene).classifierConfidence}
+              classifierReasoning={(scene as Scene).classifierReasoning}
+              manuallyClassified={(scene as Scene).manuallyClassified}
+              classifiedAt={(scene as Scene).classifiedAt}
+              onReclassify={async () => {
                 try {
                   const res = await fetch(
                     `/api/universal-video/projects/${projectId}/scenes/${sceneId}/classify`,
@@ -2351,12 +2324,32 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                   toast({ title: "Reclassify failed", description: err?.message || String(err), variant: "destructive" });
                 }
               }}
-              className="text-[11px] px-3 py-1.5 rounded-md border transition-colors"
-              style={{ borderColor: "var(--border-subtle)", color: "var(--text-secondary)" }}
+            />
+          </label>
+          <RsSelect
+            value={(scene as Scene).renderSystemType || ""}
+            onValueChange={(value: string) => {
+              if (!value) return;
+              // Send only renderSystemType — the server stamps
+              // manuallyClassified + confidence + reasoning + timestamp
+              // automatically inside the PATCH override block.
+              silentSaveMutation.mutate({ renderSystemType: value });
+            }}
+          >
+            <RsSelectTrigger
+              className="w-full text-sm"
+              data-testid="render-system-override-select"
             >
-              Reclassify
-            </button>
-          </div>
+              <RsSelectValue placeholder="Auto (waiting for classifier)" />
+            </RsSelectTrigger>
+            <RsSelectContent>
+              {RENDER_SYSTEM_TYPES.map((t) => (
+                <RsSelectItem key={t} value={t}>
+                  {RENDER_TYPE_LABELS[t as RenderSystemType]}
+                </RsSelectItem>
+              ))}
+            </RsSelectContent>
+          </RsSelect>
         </div>
 
         {/* Scene Type + Duration Row */}

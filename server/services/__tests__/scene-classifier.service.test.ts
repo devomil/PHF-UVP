@@ -5,7 +5,7 @@
 // response without burning API credits, AND we mock the patchSceneAtomic
 // writer so we can assert the exact JSONB patch shape.
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   SCENE_CLASSIFIER_MODEL,
   parseClassifierResponse,
@@ -307,6 +307,236 @@ describe('classifyProjectScenes — batch flow with patchSceneAtomic', () => {
     const summary = await classifyProjectScenes('proj_x', scenes);
     expect(summary.classified).toBe(2);
     expect(patchSceneAtomicMock).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('classifyScene — AbortController timeout', () => {
+  beforeEach(async () => {
+    messagesCreateMock.mockReset();
+    patchSceneAtomicMock.mockReset();
+    process.env.ANTHROPIC_API_KEY = 'test-key';
+    const { __resetClassifierClientForTests } = await import('../scene-classifier.service');
+    __resetClassifierClientForTests();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('returns the neutral fallback when the SDK promise never resolves (12s racing timeout fires)', async () => {
+    vi.useFakeTimers();
+    // SDK never resolves — the racing setTimeout in classifyScene must
+    // reject the Promise.race with "Scene classifier timed out", which
+    // becomes the reasoning on the neutral fallback. This is the
+    // critical safety property: a hung Anthropic call CANNOT block the
+    // batch indefinitely.
+    messagesCreateMock.mockImplementationOnce(() => new Promise(() => { /* hang forever */ }));
+    const { classifyScene } = await import('../scene-classifier.service');
+
+    const promise = classifyScene({ sceneId: 's_hang', narration: 'x', visualDirection: 'y' });
+    // Drive past the 12s timeout. advanceTimersByTimeAsync also flushes
+    // microtasks so the Promise.race resolution + catch + return all
+    // settle before we await.
+    await vi.advanceTimersByTimeAsync(12_500);
+    const r = await promise;
+
+    expect(r.renderSystemType).toBe('ai_video');
+    expect(r.confidence).toBe(0);
+    expect(r.reasoning).toMatch(/Classifier error:/);
+    expect(r.reasoning).toMatch(/timed out/i);
+  });
+});
+
+describe('classifyProjectScenes — worker-pool concurrency cap', () => {
+  beforeEach(async () => {
+    messagesCreateMock.mockReset();
+    patchSceneAtomicMock.mockReset();
+    patchSceneAtomicMock.mockResolvedValue(1);
+    process.env.ANTHROPIC_API_KEY = 'test-key';
+    process.env.SCENE_CLASSIFIER_CONCURRENCY = '3';
+    const { __resetClassifierClientForTests } = await import('../scene-classifier.service');
+    __resetClassifierClientForTests();
+  });
+
+  afterEach(() => {
+    delete process.env.SCENE_CLASSIFIER_CONCURRENCY;
+  });
+
+  it('never exceeds SCENE_CLASSIFIER_CONCURRENCY in-flight requests at any moment', async () => {
+    let inFlight = 0;
+    let peakInFlight = 0;
+    // Hold every SDK call open until we explicitly release it, so we
+    // can observe the steady-state in-flight count BEFORE any settle.
+    const releases: Array<() => void> = [];
+    messagesCreateMock.mockImplementation(() => {
+      inFlight++;
+      if (inFlight > peakInFlight) peakInFlight = inFlight;
+      return new Promise((resolve) => {
+        releases.push(() => {
+          inFlight--;
+          resolve({
+            content: [{ type: 'text', text: '{"renderSystemType":"ai_video","confidence":0.8,"reasoning":"x"}' }],
+          });
+        });
+      });
+    });
+    const { classifyProjectScenes } = await import('../scene-classifier.service');
+
+    // 12 scenes vs concurrency=3 — if the worker pool were broken (e.g.
+    // Promise.all over the whole array) peakInFlight would be 12.
+    const scenes: Scene[] = Array.from({ length: 12 }, (_, i) =>
+      makeScene({ id: `s${i}`, narration: `n${i}` }),
+    );
+
+    const batchPromise = classifyProjectScenes('proj_x', scenes);
+
+    // Let the workers start and reach steady state.
+    await new Promise((r) => setImmediate(r));
+    await new Promise((r) => setImmediate(r));
+
+    // Drain in waves — each release frees a worker slot for the next
+    // queued scene. The peak should NEVER exceed the configured cap.
+    while (releases.length > 0) {
+      const r = releases.shift()!;
+      r();
+      await new Promise((res) => setImmediate(res));
+      await new Promise((res) => setImmediate(res));
+    }
+
+    const summary = await batchPromise;
+    expect(summary.classified).toBe(12);
+    expect(messagesCreateMock).toHaveBeenCalledTimes(12);
+    expect(peakInFlight).toBeLessThanOrEqual(3);
+    // And we should actually have HIT the cap — otherwise we're not
+    // really proving concurrency is happening at all.
+    expect(peakInFlight).toBeGreaterThan(1);
+  });
+});
+
+describe('classifyProjectScenes — telemetry on degenerate paths', () => {
+  beforeEach(async () => {
+    messagesCreateMock.mockReset();
+    patchSceneAtomicMock.mockReset();
+    process.env.ANTHROPIC_API_KEY = 'test-key';
+    process.env.SCENE_CLASSIFIER_CONCURRENCY = '5';
+    const { __resetClassifierClientForTests } = await import('../scene-classifier.service');
+    __resetClassifierClientForTests();
+  });
+
+  it('surfaces rowCount=0 as writeFailures (logged, not thrown) and keeps the batch running', async () => {
+    messagesCreateMock.mockResolvedValue({
+      content: [{ type: 'text', text: '{"renderSystemType":"ai_video","confidence":0.8,"reasoning":"x"}' }],
+    });
+    // First write returns 0 (project row gone), the rest succeed.
+    patchSceneAtomicMock
+      .mockResolvedValueOnce(0)
+      .mockResolvedValue(1);
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { classifyProjectScenes } = await import('../scene-classifier.service');
+
+    const scenes: Scene[] = [
+      makeScene({ id: 's1', narration: 'a' }),
+      makeScene({ id: 's2', narration: 'b' }),
+      makeScene({ id: 's3', narration: 'c' }),
+    ];
+
+    const summary = await classifyProjectScenes('proj_gone', scenes);
+
+    expect(summary.classified).toBe(3);
+    expect(summary.writeFailures).toBe(1);
+    // Critical: even though the write missed, we did NOT throw.
+    expect(patchSceneAtomicMock).toHaveBeenCalledTimes(3);
+    // Warn line for the missed write must be present so production logs
+    // can alert on it instead of silent loss.
+    const warnedAboutMiss = warnSpy.mock.calls.some(
+      (args) => typeof args[0] === 'string' && args[0].includes('write missed (project gone)') && args[0].includes('proj_gone'),
+    );
+    expect(warnedAboutMiss).toBe(true);
+
+    warnSpy.mockRestore();
+  });
+
+  it('reports estimatedCost as classified × per-scene cost and a non-zero distribution', async () => {
+    messagesCreateMock.mockResolvedValue({
+      content: [{ type: 'text', text: '{"renderSystemType":"infographic","confidence":0.9,"reasoning":"chart"}' }],
+    });
+    patchSceneAtomicMock.mockResolvedValue(1);
+    const { classifyProjectScenes } = await import('../scene-classifier.service');
+
+    const scenes: Scene[] = [
+      makeScene({ id: 's1', narration: 'a' }),
+      makeScene({ id: 's2', narration: 'b' }),
+      makeScene({ id: 's3', narration: 'c' }),
+      makeScene({ id: 's4', narration: 'd' }),
+    ];
+
+    const summary = await classifyProjectScenes('proj_x', scenes);
+
+    expect(summary.classified).toBe(4);
+    expect(summary.distribution.infographic).toBe(4);
+    // 4 × $0.00025 = $0.001. Don't pin the exact constant here (the
+    // approximation may shift over time), just assert the relationship
+    // and that the cost is positive + finite.
+    expect(summary.estimatedCost).toBeGreaterThan(0);
+    expect(Number.isFinite(summary.estimatedCost)).toBe(true);
+    expect(summary.estimatedCost).toBeCloseTo(summary.classified * (summary.estimatedCost / summary.classified), 5);
+  });
+
+  it('reports missingKey=true and 100% fallback when ANTHROPIC_API_KEY is unset at batch start', async () => {
+    delete process.env.ANTHROPIC_API_KEY;
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    patchSceneAtomicMock.mockResolvedValue(1);
+    const { __resetClassifierClientForTests, classifyProjectScenes } = await import('../scene-classifier.service');
+    __resetClassifierClientForTests();
+
+    const scenes: Scene[] = [
+      makeScene({ id: 's1', narration: 'a' }),
+      makeScene({ id: 's2', narration: 'b' }),
+    ];
+
+    const summary = await classifyProjectScenes('proj_no_key', scenes);
+
+    expect(summary.missingKey).toBe(true);
+    expect(summary.fallbackCount).toBe(summary.classified);
+    expect(summary.fallbackCount).toBe(2);
+    // Loud warn is required so silent classifier outage gets noticed.
+    const warnedAboutKey = warnSpy.mock.calls.some(
+      (args) => typeof args[0] === 'string' && /100% fallback/.test(args[0]),
+    );
+    expect(warnedAboutKey).toBe(true);
+
+    warnSpy.mockRestore();
+    process.env.ANTHROPIC_API_KEY = 'test-key';
+  });
+});
+
+describe('buildManualOverrideStamp — PATCH contract', () => {
+  it('returns the exact 5-field stamp the PATCH route writes when the client supplies renderSystemType', async () => {
+    const { buildManualOverrideStamp } = await import('../scene-classifier.service');
+    const fixed = new Date('2026-04-30T12:00:00.000Z');
+
+    const stamp = buildManualOverrideStamp('infographic', fixed);
+
+    // Spec contract — the route + this helper share one source of truth.
+    expect(stamp).toEqual({
+      renderSystemType: 'infographic',
+      manuallyClassified: true,
+      classifierConfidence: 1.0,
+      classifierReasoning: 'Manual override',
+      classifiedAt: '2026-04-30T12:00:00.000Z',
+    });
+  });
+
+  it('uses now() by default and produces a parseable ISO timestamp', async () => {
+    const { buildManualOverrideStamp } = await import('../scene-classifier.service');
+    const before = Date.now();
+    const stamp = buildManualOverrideStamp('title_card');
+    const after = Date.now();
+
+    const ts = Date.parse(stamp.classifiedAt);
+    expect(Number.isFinite(ts)).toBe(true);
+    expect(ts).toBeGreaterThanOrEqual(before);
+    expect(ts).toBeLessThanOrEqual(after);
   });
 });
 

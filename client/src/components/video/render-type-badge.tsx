@@ -11,10 +11,16 @@
 //   - "Pending" empty-state shows when the classifier hasn't run yet
 //     (e.g. project predates Phase 23A or auto-classify is still in
 //     flight).
+//   - Low-confidence (<0.6) classifications get a faint "?" suffix so
+//     editors can spot scenes that need a manual second look.
 //   - Hover tooltip shows the model's reasoning (truncated to 160 chars
 //     server-side, but we use `whitespace-pre-wrap` so a longer string
 //     coming from a manual override still renders cleanly).
+//   - Optional inline `onReclassify` action — renders a small "Reclassify"
+//     link inside the badge with an in-flight spinner, replacing the
+//     external button the editor used to ship.
 
+import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import type { RenderSystemType } from "../../../../shared/video-types";
@@ -25,7 +31,14 @@ interface RenderTypeBadgeProps {
   classifierReasoning?: string;
   manuallyClassified?: boolean;
   classifiedAt?: string;
-  /** Optional inline action button — used to host "Reclassify". */
+  /** Async handler that fires when the user clicks the inline
+   *  "Reclassify" link. The badge owns the in-flight spinner state so
+   *  callers don't have to thread loading state through their own
+   *  components — they just await their network call inside the
+   *  handler. Errors should be surfaced by the caller via toast. */
+  onReclassify?: () => Promise<void>;
+  /** Optional extra inline content (rendered after the reclassify
+   *  link). Kept for forward-compat with future per-scene actions. */
   trailingAction?: React.ReactNode;
 }
 
@@ -57,6 +70,11 @@ const PENDING_STYLE = {
   border: "var(--border-subtle)",
 };
 
+/** Low-confidence threshold (per Phase 23A spec). Any successful
+ *  classification under this score gets a faint "?" indicator so the
+ *  editor knows to double-check it before shipping. */
+const LOW_CONFIDENCE_THRESHOLD = 0.6;
+
 function formatConfidence(c?: number): string {
   if (typeof c !== "number" || !Number.isFinite(c)) return "—";
   return `${Math.round(Math.max(0, Math.min(1, c)) * 100)}%`;
@@ -68,8 +86,11 @@ export function RenderTypeBadge({
   classifierReasoning,
   manuallyClassified,
   classifiedAt,
+  onReclassify,
   trailingAction,
 }: RenderTypeBadgeProps) {
+  const [isReclassifying, setIsReclassifying] = useState(false);
+
   const isKnown = !!renderSystemType && renderSystemType in TYPE_LABELS;
   const style = isKnown ? TYPE_STYLES[renderSystemType as RenderSystemType] : PENDING_STYLE;
   const label = isKnown ? TYPE_LABELS[renderSystemType as RenderSystemType] : "Unclassified";
@@ -80,13 +101,35 @@ export function RenderTypeBadge({
     && typeof classifierReasoning === "string"
     && classifierReasoning.startsWith("Classifier error:");
 
+  // Low-confidence indicator: only show on auto-classified scenes (manual
+  // overrides are by definition certain), and not on the error fallback
+  // (already shows "fallback").
+  const isLowConfidence =
+    isKnown &&
+    !manuallyClassified &&
+    !isErrorFallback &&
+    typeof classifierConfidence === "number" &&
+    classifierConfidence < LOW_CONFIDENCE_THRESHOLD &&
+    classifierConfidence > 0;
+
   const tooltipBody = [
     isKnown ? `Render system: ${label}` : "Render system not yet classified",
     classifierReasoning ? `Reason: ${classifierReasoning}` : null,
     typeof classifierConfidence === "number" ? `Confidence: ${formatConfidence(classifierConfidence)}` : null,
+    isLowConfidence ? "Low confidence — review before generating." : null,
     classifiedAt ? `Classified: ${new Date(classifiedAt).toLocaleString()}` : null,
     manuallyClassified ? "Manually overridden by editor" : null,
   ].filter(Boolean).join("\n");
+
+  const handleReclassify = async () => {
+    if (!onReclassify || isReclassifying) return;
+    setIsReclassifying(true);
+    try {
+      await onReclassify();
+    } finally {
+      setIsReclassifying(false);
+    }
+  };
 
   return (
     <TooltipProvider delayDuration={200}>
@@ -117,12 +160,42 @@ export function RenderTypeBadge({
               ) : (
                 <span className="text-[9px] uppercase tracking-wider opacity-70">pending</span>
               )}
+              {isLowConfidence ? (
+                <span
+                  data-testid="render-type-badge-low-confidence"
+                  className="text-[10px] opacity-50 select-none"
+                  aria-label="Low confidence — review before generating"
+                  title="Low confidence — review before generating"
+                >
+                  ?
+                </span>
+              ) : null}
             </span>
           </TooltipTrigger>
           <TooltipContent side="top" className="max-w-xs whitespace-pre-wrap text-[11px]">
             {tooltipBody}
           </TooltipContent>
         </Tooltip>
+        {onReclassify ? (
+          <button
+            type="button"
+            onClick={handleReclassify}
+            disabled={isReclassifying}
+            data-testid="reclassify-scene-btn"
+            className="ml-1 inline-flex items-center gap-1 text-[10px] uppercase tracking-wider opacity-80 hover:opacity-100 disabled:opacity-50 disabled:cursor-wait transition-opacity"
+            style={{ color: style.fg }}
+            aria-label={isReclassifying ? "Reclassifying scene" : "Reclassify scene"}
+          >
+            {isReclassifying ? (
+              <span
+                data-testid="reclassify-spinner"
+                className="inline-block h-2.5 w-2.5 rounded-full border-[1.5px] border-current border-t-transparent animate-spin"
+                aria-hidden
+              />
+            ) : null}
+            <span>{isReclassifying ? "…" : "Reclassify"}</span>
+          </button>
+        ) : null}
         {trailingAction}
       </div>
     </TooltipProvider>

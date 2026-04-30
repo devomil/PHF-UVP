@@ -469,6 +469,39 @@ export async function classifyProjectScenes(
 }
 
 /**
+ * Pure helper: build the JSONB patch that the PATCH /scenes/:id route
+ * stamps when the client supplies `renderSystemType` (i.e. user clicked
+ * the override Select). Kept here — alongside the rest of the classifier
+ * field semantics — so the route handler and the unit test for the
+ * "manual override" PATCH contract reference the same source of truth.
+ *
+ * Contract (Phase 23A spec):
+ *   manuallyClassified  = true            (sticky; only the per-scene
+ *                                          reclassify endpoint clears it)
+ *   classifierConfidence = 1.0            (user is certain by definition)
+ *   classifierReasoning  = 'Manual override'
+ *   classifiedAt         = now (ISO)
+ */
+export function buildManualOverrideStamp(
+  renderSystemType: RenderSystemType,
+  now: Date = new Date(),
+): {
+  renderSystemType: RenderSystemType;
+  manuallyClassified: true;
+  classifierConfidence: 1.0;
+  classifierReasoning: 'Manual override';
+  classifiedAt: string;
+} {
+  return {
+    renderSystemType,
+    manuallyClassified: true,
+    classifierConfidence: 1.0,
+    classifierReasoning: 'Manual override',
+    classifiedAt: now.toISOString(),
+  };
+}
+
+/**
  * Re-classify a single scene by id. Always runs (regardless of
  * `manuallyClassified`) and clears the manual-override flag so subsequent
  * batch runs treat it normally again. This is the user explicitly asking
