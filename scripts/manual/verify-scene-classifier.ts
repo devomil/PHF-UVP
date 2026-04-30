@@ -1,15 +1,22 @@
 // Phase 23A (Task #118): Manual verification script for the Claude Haiku
-// scene classifier. Hits the live Anthropic API with five hand-crafted
-// scenes that should each map to a distinct `renderSystemType`. Hard-fails
-// when ANTHROPIC_API_KEY is missing — otherwise the neutral fallback would
-// give every scene the same `ai_video` answer and falsely "pass" 4/5.
+// scene classifier. Hits the live Anthropic API with five canonical scenes
+// drawn from the Pine Hill Farm "Deep Dive" reference deck.
+//
+// Mandatory pre-flight (per task spec): refuse to run when
+// `ANTHROPIC_API_KEY` is unset. Without it, every classify call falls
+// back to `ai_video`, and the lifestyle case below would falsely "pass"
+// while masking a total classifier outage on the other four cases.
+//
+// Mirrors `scripts/manual/verify-nb2-web-search.ts` from Task #107.
 //
 // Usage: `npx tsx scripts/manual/verify-scene-classifier.ts`
-//
-// Exit codes:
-//   0 — every scene classified correctly (or with a sensible alternate)
-//   1 — at least one scene came back with an unexpected type, or env was
-//       not configured
+
+if (!process.env.ANTHROPIC_API_KEY) {
+  console.error('[verify] ANTHROPIC_API_KEY is unset — aborting.');
+  console.error('[verify] Without a key, every scene falls back to');
+  console.error('[verify] ai_video and 4 of 5 cases would falsely pass.');
+  process.exit(1);
+}
 
 import {
   classifyScene,
@@ -21,9 +28,6 @@ import type { RenderSystemType } from '../../shared/video-types';
 interface VerifyCase {
   label: string;
   expected: RenderSystemType;
-  /** Other types we'll grudgingly accept (e.g. ai_video for a scene that
-   *  is reasonably ambiguous). Empty = strict expected only. */
-  alternates?: RenderSystemType[];
   scene: {
     sceneId: string;
     sceneType?: string;
@@ -34,64 +38,60 @@ interface VerifyCase {
 
 const CASES: VerifyCase[] = [
   {
-    label: 'Title card — explicit chapter title',
+    label: 'Pine Hill Week-1 title scene',
     expected: 'title_card',
     scene: {
       sceneId: 'verify_title',
       sceneType: 'intro',
-      narration: 'Welcome to Pine Hill Farm. Episode One: The Soil.',
+      narration: 'Welcome to Pine Hill Farm Deep Dive. Week One: Foundations.',
       visualDirection:
         'Centered serif title text on a clean cream background. Small farm icon below the title. No motion, no people, no products.',
     },
   },
   {
-    label: 'Infographic — stat callout with comparison',
+    label: 'Sugar Problem comparison',
     expected: 'infographic',
-    alternates: ['scientific_medical'],
     scene: {
       sceneId: 'verify_infographic',
-      sceneType: 'proof',
+      sceneType: 'problem',
       narration:
-        'Eighty-seven percent of customers reported smoother skin within four weeks.',
+        'Most snack bars contain twenty-three grams of added sugar. Ours contain three.',
       visualDirection:
-        'Animated horizontal bar chart with a large 87% callout, comparison ticks at 25/50/75/100, brand colors',
+        'Side-by-side bar chart comparing 23g sugar vs 3g sugar, large numeric callouts, comparison ticks, brand colors',
     },
   },
   {
-    label: 'Scientific / medical — anatomical diagram',
+    label: 'Blood-glucose response curve',
     expected: 'scientific_medical',
-    alternates: ['infographic'],
     scene: {
       sceneId: 'verify_medical',
       sceneType: 'explanation',
       narration:
-        'CBD interacts with the endocannabinoid system, binding to CB1 receptors throughout the central nervous system.',
+        'Blood glucose spikes within thirty minutes of a sugary snack, crashing two hours later.',
       visualDirection:
-        'Cross-section diagram of a neuron with labeled CB1 receptors, molecular structure of CBD beside it, clinical illustration style',
+        'Animated line chart of blood glucose over time, axis labels in mg/dL and minutes, clinical illustration style with reference range overlay',
     },
   },
   {
-    label: 'Brand environment — branded storefront / shelf',
+    label: 'Origin Holistic at Pine Hill Farm',
     expected: 'brand_environment',
-    alternates: ['ai_video'],
     scene: {
       sceneId: 'verify_brand_env',
       sceneType: 'product',
-      narration: 'Find Pine Hill Farm products at your local co-op.',
+      narration: 'Origin Holistic, crafted at Pine Hill Farm.',
       visualDirection:
-        'Wide shot inside a natural-foods grocery aisle. Pine Hill Farm signage prominent above the shelf. Branded packaging visible at eye level. Soft warm light, no people in frame.',
+        'Wide shot of the farm storefront. Pine Hill Farm signage above the door, branded packaging displayed in the window. Warm afternoon light, no people in frame.',
     },
   },
   {
-    label: 'Product showcase — hero shot of single SKU',
-    expected: 'product_showcase',
-    alternates: ['ai_video'],
+    label: 'Lifestyle B-roll',
+    expected: 'ai_video',
     scene: {
-      sceneId: 'verify_product',
-      sceneType: 'product',
-      narration: 'Introducing our new full-spectrum tincture.',
+      sceneId: 'verify_lifestyle',
+      sceneType: 'lifestyle',
+      narration: 'Real people, real moments — sunrise hike with a friend.',
       visualDirection:
-        'Macro hero shot of a single amber dropper bottle on dark stone, slow 360 rotation, dramatic side lighting, droplet of oil hanging from the dropper, no humans, no environment',
+        'Cinematic golden-hour shot of two friends hiking a forest trail, gentle camera dolly forward, natural movement, no text, no charts',
     },
   },
 ];
@@ -101,43 +101,29 @@ function fmt(r: ClassifierResult): string {
 }
 
 async function main(): Promise<number> {
-  if (!process.env.ANTHROPIC_API_KEY) {
-    console.error(
-      '[verify-scene-classifier] ANTHROPIC_API_KEY is not set. Without it, every scene will fall back to "ai_video" and the script would falsely report 1/5 passing. Aborting.',
-    );
-    return 1;
-  }
-
-  console.log(`[verify-scene-classifier] model=${SCENE_CLASSIFIER_MODEL}`);
-  console.log(`[verify-scene-classifier] running ${CASES.length} cases...`);
+  console.log(`[verify] model=${SCENE_CLASSIFIER_MODEL}`);
+  console.log(`[verify] running ${CASES.length} canonical Pine Hill Farm cases...`);
 
   let pass = 0;
-  let acceptable = 0;
   let fail = 0;
 
   for (const c of CASES) {
     const result = await classifyScene(c.scene);
-    const accepted = [c.expected, ...(c.alternates || [])];
     const ok = result.renderSystemType === c.expected;
-    const altOk = !ok && accepted.includes(result.renderSystemType);
-    const label = ok ? 'PASS' : altOk ? 'PASS (alt)' : 'FAIL';
-    if (ok) pass++;
-    else if (altOk) acceptable++;
-    else fail++;
+    const mark = ok ? '✅' : '❌';
+    if (ok) pass++; else fail++;
     console.log(
-      `  [${label}] ${c.label}\n     expected: ${c.expected}${c.alternates && c.alternates.length ? ` (or: ${c.alternates.join(', ')})` : ''}\n     got:      ${fmt(result)}`,
+      `  ${mark} ${c.label}\n     expected: ${c.expected}\n     got:      ${fmt(result)}`,
     );
   }
 
-  console.log(
-    `\n[verify-scene-classifier] summary: ${pass} pass, ${acceptable} pass-alt, ${fail} fail (of ${CASES.length})`,
-  );
+  console.log(`\n[verify] summary: ${pass}/${CASES.length} passed, ${fail} failed`);
   return fail === 0 ? 0 : 1;
 }
 
 main()
   .then((code) => process.exit(code))
   .catch((err) => {
-    console.error('[verify-scene-classifier] crashed:', err);
+    console.error('[verify] crashed:', err);
     process.exit(1);
   });
