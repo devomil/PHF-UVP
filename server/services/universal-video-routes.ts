@@ -1276,7 +1276,16 @@ router.post('/projects/script', isAuthenticated, async (req: Request, res: Respo
     
     await saveProjectToDb(project, userId);
     console.log('[UniversalVideo] Script project saved to database:', project.id);
-    
+
+    // Phase 23A (Task #118): Fire-and-forget Claude Haiku 4.5 classification
+    // so each scene gets a `renderSystemType` populated within ~10s of the
+    // user landing on the editor. Does NOT block this response — the
+    // classifier writes per-scene via patchSceneAtomic, so the editor
+    // sees badges populate scene-by-scene as it polls /projects/:id.
+    // Skips silently when zero scenes have narration.
+    const { autoClassifyAfterParse } = await import('./scene-classifier.service');
+    autoClassifyAfterParse(project.id, scenes);
+
     res.json({
       success: true,
       project,
@@ -3391,8 +3400,41 @@ router.patch('/projects/:projectId/scenes/:sceneId', isAuthenticated, async (req
       return res.status(404).json({ success: false, error: 'Scene not found' });
     }
 
-    const allowedFields = ['narration', 'visualDirection', 'duration', 'type', 'name', 'title', 'searchQuery', 'keyPoints', 'overlayItems', 'microScenes', 'contentTag', 'artPresetId', 'assignedStyleId', 'textImageEnabled', 'onScreenText', 'lowerThird', 'shotType', 'cinematicNotes', 'thumbnailUrl', 'thumbnailStatus', 'thumbnailError', 'thumbnailGeneratedFor', 'thumbnailUpdatedAt', 'brandReferences', 'useOmniReference', 'seedImageUrl', 'imageGenerationModel', 'imageGenerationPrompt', 'imageCandidates'];
+    // Phase 23A (Task #118): added 5 classifier fields. `renderSystemType`
+    // is the user-facing override field; `classifierConfidence`,
+    // `classifierReasoning`, `classifiedAt` are persisted alongside it. The
+    // `manuallyClassified` flag is whitelisted only so the per-scene
+    // re-classify endpoint (which clears it back to false) can pass it
+    // through this same handler — clients should NOT set it directly; the
+    // override-stamping block below sets it on their behalf.
+    const allowedFields = ['narration', 'visualDirection', 'duration', 'type', 'name', 'title', 'searchQuery', 'keyPoints', 'overlayItems', 'microScenes', 'contentTag', 'artPresetId', 'assignedStyleId', 'textImageEnabled', 'onScreenText', 'lowerThird', 'shotType', 'cinematicNotes', 'thumbnailUrl', 'thumbnailStatus', 'thumbnailError', 'thumbnailGeneratedFor', 'thumbnailUpdatedAt', 'brandReferences', 'useOmniReference', 'seedImageUrl', 'imageGenerationModel', 'imageGenerationPrompt', 'imageCandidates', 'renderSystemType', 'classifierConfidence', 'classifierReasoning', 'classifiedAt', 'manuallyClassified'];
     const clearableFields = new Set(['artPresetId', 'assignedStyleId', 'onScreenText', 'lowerThird', 'shotType', 'cinematicNotes', 'contentTag', 'thumbnailUrl', 'thumbnailStatus', 'thumbnailError', 'thumbnailGeneratedFor', 'thumbnailUpdatedAt', 'brandReferences', 'seedImageUrl', 'imageGenerationModel', 'imageGenerationPrompt', 'imageCandidates']);
+
+    // Phase 23A: Manual override semantics. When a client sends
+    // `renderSystemType` directly (i.e. user picked from the dropdown), we
+    // also stamp `manuallyClassified: true` + confidence 1.0 + a fixed
+    // reasoning string + a fresh timestamp so the next batch classify
+    // doesn't undo the user's choice. Skip if the client also sent
+    // `manuallyClassified: false` explicitly (that path is reserved for
+    // the per-scene re-classify route, which clears the flag).
+    if (
+      Object.prototype.hasOwnProperty.call(updates, 'renderSystemType') &&
+      typeof updates.renderSystemType === 'string' &&
+      updates.manuallyClassified !== false
+    ) {
+      const { RENDER_SYSTEM_TYPES } = await import('../../shared/video-types');
+      if (!RENDER_SYSTEM_TYPES.includes(updates.renderSystemType)) {
+        return res.status(400).json({
+          success: false,
+          error: `Invalid renderSystemType: ${updates.renderSystemType}`,
+        });
+      }
+      updates.manuallyClassified = true;
+      updates.classifierConfidence = 1.0;
+      updates.classifierReasoning = 'Manual override';
+      updates.classifiedAt = new Date().toISOString();
+    }
+
     for (const field of allowedFields) {
       if (Object.prototype.hasOwnProperty.call(updates, field) && updates[field] === null && clearableFields.has(field)) {
         delete (scenes[sceneIndex] as any)[field];
@@ -3453,6 +3495,102 @@ router.patch('/projects/:projectId/scenes/:sceneId', isAuthenticated, async (req
   } catch (error: any) {
     console.error('[UpdateScene] Error:', error);
     res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Phase 23A (Task #118): batch classifier — re-run Claude Haiku 4.5 across
+// every scene in a project (skipping `manuallyClassified` and already-
+// classified scenes unless `force: true`). Atomic per-scene writes happen
+// inside the service via patchSceneAtomic; the route just dispatches and
+// returns the summary.
+router.post('/projects/:projectId/classify-scenes', isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const userId = (req.user as any)?.id;
+    const { projectId } = req.params;
+
+    // Strict request validation — typo'd body field returns 400 so the
+    // client can't accidentally send `{ forced: true }` and silently get
+    // skip-only behavior.
+    const body: Record<string, unknown> = req.body && typeof req.body === 'object' ? req.body : {};
+    const allowedKeys = new Set(['force']);
+    for (const key of Object.keys(body)) {
+      if (!allowedKeys.has(key)) {
+        return res.status(400).json({
+          success: false,
+          error: `Unknown field: ${key}. Allowed: ${[...allowedKeys].join(', ')}`,
+        });
+      }
+    }
+    const force = body.force === true;
+
+    const projectData = await getProjectFromDb(projectId);
+    if (!projectData) {
+      return res.status(404).json({ success: false, error: 'Project not found' });
+    }
+    if (projectData.ownerId !== userId) {
+      return res.status(403).json({ success: false, error: 'Access denied' });
+    }
+
+    const scenes = (projectData.scenes || []) as Scene[];
+    const { classifyProjectScenes } = await import('./scene-classifier.service');
+    const summary = await classifyProjectScenes(projectId, scenes, { force });
+
+    return res.json({ success: true, ...summary });
+  } catch (error: any) {
+    // classifyProjectScenes is documented as never-throw, but guard the
+    // route anyway so a programming error in a refactor doesn't surface
+    // as a 500 to the user.
+    console.error('[ClassifyScenes] Unexpected error:', error);
+    return res.status(500).json({ success: false, error: error?.message || 'Failed to classify scenes' });
+  }
+});
+
+// Phase 23A (Task #118): per-scene re-classify — always runs, regardless of
+// `manuallyClassified`, and CLEARS the manual flag (the user is explicitly
+// asking the classifier to redo its work).
+router.post('/projects/:projectId/scenes/:sceneId/classify', isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const userId = (req.user as any)?.id;
+    const { projectId, sceneId } = req.params;
+
+    // Body must be empty or `{}` — same strict-validation pattern Task #111
+    // used. Reject typo'd fields so callers don't think they're passing
+    // useful options.
+    const body: Record<string, unknown> = req.body && typeof req.body === 'object' ? req.body : {};
+    if (Object.keys(body).length > 0) {
+      return res.status(400).json({
+        success: false,
+        error: `This endpoint takes no body fields. Got: ${Object.keys(body).join(', ')}`,
+      });
+    }
+
+    const projectData = await getProjectFromDb(projectId);
+    if (!projectData) {
+      return res.status(404).json({ success: false, error: 'Project not found' });
+    }
+    if (projectData.ownerId !== userId) {
+      return res.status(403).json({ success: false, error: 'Access denied' });
+    }
+
+    const scenes = (projectData.scenes || []) as Scene[];
+    const scene = scenes.find((s) => s.id === sceneId);
+    if (!scene) {
+      return res.status(404).json({ success: false, error: 'Scene not found' });
+    }
+
+    const { reclassifySingleScene } = await import('./scene-classifier.service');
+    const result = await reclassifySingleScene(projectId, scene);
+
+    return res.json({
+      success: true,
+      sceneId,
+      renderSystemType: result.renderSystemType,
+      classifierConfidence: result.confidence,
+      classifierReasoning: result.reasoning,
+    });
+  } catch (error: any) {
+    console.error('[ClassifyScene] Unexpected error:', error);
+    return res.status(500).json({ success: false, error: error?.message || 'Failed to classify scene' });
   }
 });
 

@@ -483,6 +483,30 @@ export interface Scene {
   thumbnailError?: string;
   thumbnailGeneratedFor?: string;
   thumbnailUpdatedAt?: string;
+  // Phase 23A (Task #118): Claude Haiku 4.5 scene classifier output. The
+  // narrative `type` (above) describes WHAT story beat this scene serves;
+  // `renderSystemType` describes HOW it should be rendered. The two layers
+  // are orthogonal — `type='product'` could be rendered as either
+  // `product_showcase` (Seedance hero shot) or `infographic` depending on
+  // the visual direction.
+  //
+  // Persistence rules (enforced by scene-classifier.service + the scene
+  // PATCH route):
+  //   - `manuallyClassified === true` is sticky: the auto-classifier never
+  //     overwrites it. Only the per-scene re-classify endpoint clears it.
+  //   - When a client PATCHes `renderSystemType` directly, the route also
+  //     stamps `manuallyClassified: true`, `classifierConfidence: 1.0`,
+  //     `classifierReasoning: 'Manual override'`, and `classifiedAt: now()`
+  //     in the same atomic patch.
+  //   - Classifier failures (no API key, timeout, parse error) silently
+  //     write `renderSystemType: 'ai_video'`, `confidence: 0`, and a
+  //     reasoning string starting with `Classifier error:` — generation
+  //     never blocks on the classifier.
+  renderSystemType?: RenderSystemType;
+  classifierConfidence?: number;
+  classifierReasoning?: string;
+  classifiedAt?: string;
+  manuallyClassified?: boolean;
   // Phase 21B (Task #106): NB2 storyboard + seed-image pipeline.
   // `seedImageUrl` is the high-quality, art-direction-locked still that
   // becomes the @image1 anchor for Seedance 2 omni_reference. It is the
@@ -563,6 +587,33 @@ export interface SoundEffectConfig {
   duration: number;
   volume: number;
 }
+
+// Phase 23A (Task #118): Render-system classification.
+// Set by `server/services/scene-classifier.service.ts` (Claude Haiku 4.5)
+// and consumed at render time by Phases 23B / 24A / 24B / 25 / 28 to pick
+// the right pipeline. Adding a new value here is a breaking change for the
+// renderer router — keep it in sync with `RENDER_SYSTEM_TYPES` below.
+export type RenderSystemType =
+  | 'ai_video'              // Seedance / Kling / Veo etc. — default pick
+  | 'title_card'            // Remotion title card (chapter/section titles)
+  | 'infographic'           // Remotion data viz / numbered list / chart
+  | 'scientific_medical'    // Recraft V3 with anatomical / lab overlay
+  | 'brand_environment'     // Recraft V3 with branded signage / setting
+  | 'product_showcase'      // Seedance hero shot, product as primary subject
+  | 'ugc_avatar';           // Phase 27 — talking-head UGC, not yet rendered
+
+/** Source of truth for valid `RenderSystemType` strings. Used by the
+ *  classifier's `validateType` and by the PATCH allowlist guard. Keep this
+ *  array exhaustive against the union above. */
+export const RENDER_SYSTEM_TYPES: readonly RenderSystemType[] = [
+  'ai_video',
+  'title_card',
+  'infographic',
+  'scientific_medical',
+  'brand_environment',
+  'product_showcase',
+  'ugc_avatar',
+] as const;
 
 export type SceneType =
   | 'hook'
