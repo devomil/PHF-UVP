@@ -1,24 +1,5 @@
-// Phase 23A (Task #118): Compact badge surfacing the Claude Haiku scene
-// classifier output. Stays purposely small (one row, ~28px tall) so it can
-// sit inline next to the existing "Scene Type" select without re-flowing
-// the editor layout.
-//
-// Visual contract:
-//   - Color is keyed by `renderSystemType` (matches the planned renderer
-//     palette so users get the same color in editor + storyboard preview).
-//   - "Manual" pill replaces the confidence pill when the user has
-//     overridden the auto pick.
-//   - "Pending" empty-state shows when the classifier hasn't run yet
-//     (e.g. project predates Phase 23A or auto-classify is still in
-//     flight).
-//   - Low-confidence (<0.6) classifications get a faint "?" suffix so
-//     editors can spot scenes that need a manual second look.
-//   - Hover tooltip shows the model's reasoning (truncated to 160 chars
-//     server-side, but we use `whitespace-pre-wrap` so a longer string
-//     coming from a manual override still renders cleanly).
-//   - Optional inline `onReclassify` action — renders a small "Reclassify"
-//     link inside the badge with an in-flight spinner, replacing the
-//     external button the editor used to ship.
+// Phase 23A: badge for the Claude Haiku scene classifier output.
+// Inline reclassify with built-in spinner; "?" indicator when confidence < 0.6.
 
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";

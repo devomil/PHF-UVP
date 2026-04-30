@@ -1,23 +1,7 @@
-// Phase 23A (Task #118): Claude Haiku 4.5 scene render-system classifier.
-//
-// Reads each scene's narration + visual direction (and optional sceneType /
-// imagePrompt context) and assigns a `renderSystemType` so downstream
-// pipelines (Phases 23B, 24A, 24B, 25, 28) know which renderer to use.
-//
-// Architecture rules (enforced here, mirrored in the route handlers):
-//   1. Never throws upstream. Every failure path returns the documented
-//      neutral fallback `{ renderSystemType: 'ai_video', confidence: 0,
-//      reasoning: 'Classifier error: ...' }` so generation never blocks
-//      on the classifier.
-//   2. Atomic per-scene writes via `patchSceneAtomic`. The function
-//      returns rowCount; rowCount=0 means the project row was deleted
-//      mid-batch — log and continue.
-//   3. Manual override (`manuallyClassified === true`) is sticky. The
-//      batch path always skips those scenes; only the per-scene
-//      reclassify endpoint clears the flag.
-//   4. Worker-pool concurrency cap (default 5, env-overridable). NEVER use
-//      `Promise.all(slice)` chunks — a slow Haiku call would stall the
-//      others in the same batch.
+// Phase 23A: Claude Haiku 4.5 scene render-system classifier.
+// Never throws (always returns neutral fallback on error). Atomic per-scene
+// writes via patchSceneAtomic. Manual override is sticky (batch skips it).
+// Worker-pool concurrency cap (env: SCENE_CLASSIFIER_CONCURRENCY, default 5).
 
 import Anthropic from '@anthropic-ai/sdk';
 import { patchSceneAtomic } from './video-project-db';

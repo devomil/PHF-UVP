@@ -1,9 +1,5 @@
-// Phase 23A (Task #118): tests for scene-classifier.service.
-//
-// We mock the Anthropic SDK at the transport boundary (the same pattern
-// the Claude Vision QA tests use) so each test can hand back a canned
-// response without burning API credits, AND we mock the patchSceneAtomic
-// writer so we can assert the exact JSONB patch shape.
+// Phase 23A: tests for scene-classifier.service. Mocks @anthropic-ai/sdk
+// + patchSceneAtomic at the module boundary.
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
@@ -11,10 +7,8 @@ import {
   parseClassifierResponse,
 } from '../scene-classifier.service';
 import type { Scene } from '../../../shared/video-types';
+import { RENDER_SYSTEM_TYPES } from '../../../shared/video-types';
 
-// vi.mock factories are hoisted above all top-level code, so any captured
-// references must be hoisted too via vi.hoisted (otherwise the closure
-// runs before the const initializer).
 const { messagesCreateMock, patchSceneAtomicMock } = vi.hoisted(() => ({
   messagesCreateMock: vi.fn(),
   patchSceneAtomicMock: vi.fn(),
@@ -146,6 +140,27 @@ describe('classifyScene — mocked Anthropic transport', () => {
     expect(r.renderSystemType).toBe('title_card');
     expect(r.confidence).toBeCloseTo(0.88, 5);
   });
+
+  it.each(RENDER_SYSTEM_TYPES)(
+    'parses a happy-path response for renderSystemType=%s',
+    async (type) => {
+      messagesCreateMock.mockResolvedValueOnce({
+        content: [{
+          type: 'text',
+          text: `{"renderSystemType": "${type}", "confidence": 0.85, "reasoning": "happy-path ${type}"}`,
+        }],
+      });
+      const { classifyScene } = await import('../scene-classifier.service');
+      const r = await classifyScene({
+        sceneId: `s_${type}`,
+        narration: `narration for ${type}`,
+        visualDirection: `visuals for ${type}`,
+      });
+      expect(r.renderSystemType).toBe(type);
+      expect(r.confidence).toBeCloseTo(0.85, 5);
+      expect(r.reasoning).toContain(type);
+    },
+  );
 
   it('returns the neutral fallback (no API call) when ANTHROPIC_API_KEY is missing', async () => {
     delete process.env.ANTHROPIC_API_KEY;

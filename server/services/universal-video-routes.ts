@@ -1278,14 +1278,9 @@ router.post('/projects/script', isAuthenticated, async (req: Request, res: Respo
     await saveProjectToDb(project, userId);
     console.log('[UniversalVideo] Script project saved to database:', project.id);
 
-    // Phase 23A (Task #118): Fire-and-forget Claude Haiku 4.5 classification
-    // so each scene gets a `renderSystemType` populated within ~10s of the
-    // user landing on the editor. Does NOT block this response — the
-    // classifier writes per-scene via patchSceneAtomic, so the editor
-    // sees badges populate scene-by-scene as it polls /projects/:id.
-    // Skips silently when zero scenes have narration.
-    const { autoClassifyAfterParse } = await import('./scene-classifier.service');
-    autoClassifyAfterParse(project.id, scenes);
+    // Phase 23A (Task #118): fire-and-forget classifier trigger.
+    const { triggerAutoClassifyAfterParse } = await import('./script-parser-service');
+    triggerAutoClassifyAfterParse(project.id, scenes);
 
     res.json({
       success: true,
@@ -3270,6 +3265,10 @@ router.post('/projects/:projectId/generate-script', isAuthenticated, async (req:
       .where(eq(universalVideoProjects.projectId, projectId));
 
     console.log(`[GenerateScript] Generated ${scenes.length} scenes for project ${projectId}${pipelineStrategy ? ' (pipeline)' : ' (chapter-based)'}`);
+
+    // Phase 23A (Task #118): fire-and-forget classifier trigger.
+    const { triggerAutoClassifyAfterParse } = await import('./script-parser-service');
+    triggerAutoClassifyAfterParse(projectId, scenes);
 
     res.json({
       success: true,

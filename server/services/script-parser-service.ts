@@ -572,3 +572,24 @@ Return ONLY valid JSON matching this structure:
 }
 
 export const scriptParserService = new ScriptParserService();
+
+/**
+ * Phase 23A (Task #118) — fire-and-forget classifier trigger.
+ *
+ * Called by every route that PERSISTS freshly parsed scenes (currently
+ * `POST /projects/script` and `POST /projects/:projectId/generate-script`).
+ * Centralized here per the spec so all parse paths use the same wiring;
+ * `scene-classifier.service.autoClassifyAfterParse` already has the
+ * "skip when no narration" + "swallow all errors" guarantees, so this
+ * is a thin pass-through that lets the route handlers stay agnostic of
+ * the classifier module.
+ */
+export function triggerAutoClassifyAfterParse(
+  projectId: string,
+  scenes: Array<{ narration?: string }> | null | undefined,
+): void {
+  if (!projectId || !scenes || scenes.length === 0) return;
+  void import('./scene-classifier.service')
+    .then(({ autoClassifyAfterParse }) => autoClassifyAfterParse(projectId, scenes as any))
+    .catch((err) => console.warn('[Classifier] auto-classify trigger import failed:', err));
+}
