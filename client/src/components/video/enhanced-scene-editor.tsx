@@ -1685,8 +1685,8 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
             />
           </div>
 
-          {/* Reference Images */}
-          <div>
+          {/* Reference Images — col-span-3 so it spans the full grid width and the tiles flow horizontally */}
+          <div className="col-span-3">
             <p className="text-[11px] font-medium flex items-center gap-1 mb-1" style={{ color: "var(--text-secondary)" }}>
               <Image className="w-3 h-3" /> Reference Images
               {brandAssetUrl && (
@@ -1891,7 +1891,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
           </div>
 
           {projectMode !== 'studio-polish' && (
-          <div className="flex flex-col items-end gap-2">
+          <div className="col-span-3 flex flex-col items-end gap-2">
             <div
               className="flex flex-wrap items-center justify-end gap-1.5 rounded-lg border px-2 py-1.5"
               style={{ borderColor: "var(--border-subtle)", backgroundColor: "rgba(255,255,255,0.02)" }}
