@@ -1397,23 +1397,55 @@ router.put('/projects/:projectId/scenes', isAuthenticated, async (req: Request, 
     const userId = (req.user as any)?.id;
     const { projectId } = req.params;
     const { scenes } = req.body;
-    
+
+    if (!Array.isArray(scenes)) {
+      return res.status(400).json({ success: false, error: 'scenes must be an array' });
+    }
+
     const projectData = await getProjectFromDb(projectId);
     if (!projectData) {
       return res.status(404).json({ success: false, error: 'Project not found' });
     }
-    
+
     if (projectData.ownerId !== userId) {
       return res.status(403).json({ success: false, error: 'Access denied' });
     }
-    
-    projectData.scenes = scenes;
-    projectData.totalDuration = scenes.reduce((acc: number, s: Scene) => acc + s.duration, 0);
+
+    // Task #128: merge-by-id rather than full-array replace. The bulk
+    // "Scene defaults" action now sends only the subset of scenes the
+    // user picked (via the scope picker), so any scene whose id is NOT
+    // in the request body must be left exactly as-is. Scenes whose id
+    // IS in the body are replaced with the incoming object.
+    const incomingById = new Map<string, Scene>();
+    for (const s of scenes as Scene[]) {
+      if (s && typeof s.id === 'string') incomingById.set(s.id, s);
+    }
+
+    const existing = projectData.scenes || [];
+    const existingIds = new Set(existing.map((s: Scene) => s.id));
+    const unknownIncoming = (scenes as Scene[]).filter(
+      (s) => s && typeof s.id === 'string' && !existingIds.has(s.id),
+    );
+    if (unknownIncoming.length > 0) {
+      return res.status(400).json({
+        success: false,
+        error: `Unknown scene id(s): ${unknownIncoming.map((s) => s.id).join(', ')}`,
+      });
+    }
+
+    const merged = existing.map((s: Scene) => incomingById.get(s.id) ?? s);
+
+    projectData.scenes = merged;
+    projectData.totalDuration = merged.reduce((acc: number, s: Scene) => acc + (s.duration || 0), 0);
     projectData.updatedAt = new Date().toISOString();
-    
+
     await saveProjectToDb(projectData, projectData.ownerId);
-    
-    res.json({ success: true, project: projectData });
+
+    res.json({
+      success: true,
+      project: projectData,
+      updatedSceneIds: Array.from(incomingById.keys()),
+    });
   } catch (error: any) {
     console.error('[UniversalVideo] Error updating scenes:', error);
     res.status(500).json({ success: false, error: error.message });

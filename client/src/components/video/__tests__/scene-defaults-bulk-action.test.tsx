@@ -139,4 +139,71 @@ describe("SceneDefaultsBulkAction", () => {
     expect(body.scenes[1].generateNativeAudio).toBeUndefined();
     expect(body.scenes[2].generateNativeAudio).toBe(true);
   });
+
+  // Task #128: scope = "Selected scenes" must only PUT the chosen ids.
+  it("scope=selected sends only the picked scene ids", async () => {
+    render(<SceneDefaultsBulkAction projectId="p1" scenes={SCENES as Scene[]} />);
+    fireEvent.click(screen.getByTestId("scene-defaults-bulk-trigger"));
+    fireEvent.click(await screen.findByTestId("scene-defaults-preset-8"));
+    fireEvent.click(screen.getByTestId("scene-defaults-scope-selected"));
+    fireEvent.click(
+      await screen.findByTestId("scene-defaults-picker-checkbox-s1"),
+    );
+    fireEvent.click(screen.getByTestId("scene-defaults-picker-checkbox-s3"));
+
+    fireEvent.click(screen.getByTestId("scene-defaults-apply-button"));
+    fireEvent.click(
+      await screen.findByTestId("scene-defaults-confirm-action"),
+    );
+
+    await waitFor(() => {
+      expect(apiRequestMock).toHaveBeenCalledTimes(1);
+    });
+
+    const body = apiRequestMock.mock.calls[0][2];
+    expect(body.scenes.map((s: any) => s.id)).toEqual(["s1", "s3"]);
+    expect(body.scenes.every((s: any) => s.duration === 8)).toBe(true);
+  });
+
+  // Task #128: scope = "untouched" should match scenes still on the
+  // project's modal/most-common value for the field being changed.
+  // SCENES has durations [5, 7, 12]; 5/7/12 each appear once so the
+  // mode-of pick falls back to the first one (5), so only s1 should
+  // be considered untouched.
+  it("scope=untouched only sends scenes still on the modal default", async () => {
+    const SC: Partial<Scene>[] = [
+      { id: "a", duration: 5 },
+      { id: "b", duration: 5 },
+      { id: "c", duration: 5 },
+      { id: "d", duration: 8 },
+    ];
+    render(<SceneDefaultsBulkAction projectId="p1" scenes={SC as Scene[]} />);
+    fireEvent.click(screen.getByTestId("scene-defaults-bulk-trigger"));
+    fireEvent.click(await screen.findByTestId("scene-defaults-preset-12"));
+    fireEvent.click(screen.getByTestId("scene-defaults-scope-untouched"));
+
+    fireEvent.click(screen.getByTestId("scene-defaults-apply-button"));
+    fireEvent.click(
+      await screen.findByTestId("scene-defaults-confirm-action"),
+    );
+
+    await waitFor(() => {
+      expect(apiRequestMock).toHaveBeenCalledTimes(1);
+    });
+
+    const body = apiRequestMock.mock.calls[0][2];
+    expect(body.scenes.map((s: any) => s.id)).toEqual(["a", "b", "c"]);
+    expect(body.scenes.every((s: any) => s.duration === 12)).toBe(true);
+  });
+
+  it("apply button is disabled when scope=selected and nothing is checked", async () => {
+    render(<SceneDefaultsBulkAction projectId="p1" scenes={SCENES as Scene[]} />);
+    fireEvent.click(screen.getByTestId("scene-defaults-bulk-trigger"));
+    fireEvent.click(await screen.findByTestId("scene-defaults-preset-8"));
+    fireEvent.click(screen.getByTestId("scene-defaults-scope-selected"));
+    const apply = (await screen.findByTestId(
+      "scene-defaults-apply-button",
+    )) as HTMLButtonElement;
+    expect(apply.disabled).toBe(true);
+  });
 });
