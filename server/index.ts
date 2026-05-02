@@ -3,6 +3,39 @@ import { createServer } from "http";
 import { setupAuth } from "./auth";
 import { registerRoutes } from "./routes";
 
+// Absorb DB connection drops (Neon idle-suspend, ECONNRESET, socket
+// hang up) before they can crash the process via unhandled rejection or
+// uncaught exception. The pool handler in db.ts covers the pool-level
+// events; these catch anything that escapes from async worker callbacks.
+const TRANSIENT_DB_MSGS = [
+  "terminating connection",
+  "Connection terminated",
+  "socket hang up",
+  "ECONNRESET",
+  "57P01",
+];
+function isTransientDbError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return TRANSIENT_DB_MSGS.some((s) => msg.includes(s));
+}
+
+process.on("unhandledRejection", (reason) => {
+  if (isTransientDbError(reason)) {
+    console.warn("[Server] Absorbed transient DB rejection — process stays up:", (reason as Error).message ?? reason);
+  } else {
+    console.error("[Server] Unhandled rejection:", reason);
+  }
+});
+
+process.on("uncaughtException", (err) => {
+  if (isTransientDbError(err)) {
+    console.warn("[Server] Absorbed transient DB exception — process stays up:", err.message);
+  } else {
+    console.error("[Server] Uncaught exception:", err);
+    process.exit(1);
+  }
+});
+
 const app = express();
 app.use(express.json({
   limit: "50mb",
