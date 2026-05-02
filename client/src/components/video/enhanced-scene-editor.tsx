@@ -1494,7 +1494,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
         )}
 
         {/* Provider Info + Reference Images + Regenerate Controls */}
-        <div className="mt-3 grid grid-cols-[1fr_auto_auto] gap-3 items-start">
+        <div className="mt-3 grid grid-cols-[minmax(190px,1fr)_auto_auto] gap-3 items-start">
           {/* Provider & Prompt Info */}
           <div className="min-w-0">
             {providerUsed && (
