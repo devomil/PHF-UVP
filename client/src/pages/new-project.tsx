@@ -1600,18 +1600,36 @@ const QC_MODE_CONFIG: Record<QuickCreateMode, { label: string; shortLabel: strin
 
 const QC_VIDEO_PROVIDERS = [
   { id: 'auto', name: 'Auto (Best Match)' },
+  // Kling family
   { id: 'kling-2.6', name: 'Kling 2.6' },
   { id: 'kling-2.6-pro', name: 'Kling 2.6 Pro' },
+  { id: 'kling-2.1-master', name: 'Kling 2.1 Master' },
+  { id: 'kling-2.6-motion-control-pro', name: 'Kling 2.6 Motion Control Pro' },
+  { id: 'kling-effects', name: 'Kling Effects (VFX)' },
+  // Veo
   { id: 'veo-3.1', name: 'Veo 3.1' },
+  // Luma
   { id: 'luma', name: 'Luma Dream Machine' },
+  // Hailuo
   { id: 'hailuo', name: 'Hailuo MiniMax' },
+  // Wan
   { id: 'wan-2.6', name: 'Wan 2.6' },
+  // Pika
   { id: 'pika', name: 'Pika' },
+  // Seedance
   { id: 'seedance-1.0', name: 'Seedance 1.0' },
+  { id: 'seedance-2.0', name: 'Seedance 2' },
+  { id: 'seedance-2.0-fast', name: 'Seedance 2 Fast' },
+  // Sora
   { id: 'sora-2', name: 'Sora 2' },
+  { id: 'sora-2-pro', name: 'Sora 2 Pro' },
+  // Hunyuan
+  { id: 'hunyuan', name: 'Hunyuan' },
+  // Runway
   { id: 'runway', name: 'Runway Gen-3' },
   { id: 'runway-4.5', name: 'Runway 4.5' },
   { id: 'runway-gen4', name: 'Runway Gen-4' },
+  { id: 'runway-gen4-aleph', name: 'Runway Gen-4 Aleph' },
 ];
 
 interface UploadedFile {
