@@ -11,7 +11,7 @@ import {
   clampSeedance2Duration,
   SEEDANCE_2_DEFAULT_DURATION,
 } from "./seedance-duration";
-import { VIDEO_PROVIDERS } from "@shared/provider-config";
+import { formatUsd, getCostPerSecond } from "./scene-cost";
 
 export type ResolvedProvider =
   | "seedance-2.0"
@@ -54,20 +54,7 @@ const PROVIDER_RANGES: Record<string, { min: number; max: number; presets: numbe
   "runway-4.5": { min: 5, max: 10, presets: [5, 10] },
 };
 
-// Cost rate is read from the shared provider catalog so UI/server stay
-// in sync. Returns undefined when the provider isn't in the catalog.
-function getCostPerSecond(providerKey: string | undefined): number | undefined {
-  if (!providerKey) return undefined;
-  return VIDEO_PROVIDERS[providerKey]?.costPerSecond;
-}
-
 const SEEDANCE_2_PROVIDERS = new Set(["seedance-2.0", "seedance-2.0-fast"]);
-
-function formatUsd(amount: number): string {
-  // Sub-cent values are confusing as "$0.00" — show 3 decimals when small.
-  if (amount < 0.10) return `$${amount.toFixed(3)}`;
-  return `$${amount.toFixed(2)}`;
-}
 
 interface Props {
   provider: ResolvedProvider | undefined;

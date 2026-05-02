@@ -119,6 +119,40 @@ describe("SceneDefaultsBulkAction", () => {
     expect(apply.disabled).toBe(true);
   });
 
+  it("shows the new project-total cost preview when a duration is picked", async () => {
+    // seedance-2.0-fast = $0.020/s.
+    // 3 scenes × 8s × $0.020 = $0.48 new total.
+    // Current total = (5 + 7 + 12)s × $0.020 = $0.48… coincidence-prone,
+    // so use a non-overlapping preset (12s) to keep the assertions tight.
+    render(
+      <SceneDefaultsBulkAction
+        projectId="p1"
+        scenes={SCENES as Scene[]}
+        projectPreferredProvider="seedance-2.0-fast"
+      />,
+    );
+    fireEvent.click(screen.getByTestId("scene-defaults-bulk-trigger"));
+    // No duration picked yet → preview is hidden.
+    expect(screen.queryByTestId("scene-defaults-cost-preview")).toBeNull();
+
+    fireEvent.click(await screen.findByTestId("scene-defaults-preset-12"));
+    const preview = await screen.findByTestId("scene-defaults-cost-preview");
+    // 3 scenes × 12s × $0.020/s = $0.72 new total.
+    expect(preview.textContent).toContain("0.72");
+    expect(preview.textContent).toContain("New project total");
+    // Current total = (5 + 7 + 12) × $0.020 = $0.48.
+    expect(preview.textContent).toContain("0.48");
+  });
+
+  it("hides the cost preview when no provider is supplied", async () => {
+    render(
+      <SceneDefaultsBulkAction projectId="p1" scenes={SCENES as Scene[]} />,
+    );
+    fireEvent.click(screen.getByTestId("scene-defaults-bulk-trigger"));
+    fireEvent.click(await screen.findByTestId("scene-defaults-preset-8"));
+    expect(screen.queryByTestId("scene-defaults-cost-preview")).toBeNull();
+  });
+
   it("only updates duration when audio set is off", async () => {
     render(<SceneDefaultsBulkAction projectId="p1" scenes={SCENES as Scene[]} />);
     fireEvent.click(screen.getByTestId("scene-defaults-bulk-trigger"));

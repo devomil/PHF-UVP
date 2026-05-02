@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { formatUsd, getCostPerSecond } from "./scene-cost";
 
 const DURATION_PRESETS = [5, 8, 12] as const;
 
@@ -117,6 +118,27 @@ export function SceneDefaultsBulkAction({
   }, [open]);
 
   const sceneCount = scenes.length;
+
+  // Task #127: live render-cost preview. Uses the project's preferred
+  // provider as a stand-in for the per-scene provider (scenes don't
+  // carry their own provider in the data model — they inherit the
+  // project's). The preview is hidden when we don't have a known cost
+  // rate for that provider so we never invent a number.
+  const ratePerSecond = useMemo(
+    () => getCostPerSecond(projectPreferredProvider),
+    [projectPreferredProvider],
+  );
+  const currentTotalSeconds = useMemo(
+    () => scenes.reduce((sum, s) => sum + (s.duration ?? 0), 0),
+    [scenes],
+  );
+  const newTotalSeconds =
+    duration !== null ? sceneCount * duration : currentTotalSeconds;
+  const currentTotalCost =
+    ratePerSecond !== undefined ? currentTotalSeconds * ratePerSecond : null;
+  const newTotalCost =
+    ratePerSecond !== undefined ? newTotalSeconds * ratePerSecond : null;
+
   const audioWillBeIgnored = useMemo(
     () =>
       setAudio &&
@@ -323,6 +345,22 @@ export function SceneDefaultsBulkAction({
                 ? "Tap a preset to set scene duration."
                 : `Targeted scenes will be set to ${duration} seconds.`}
             </p>
+            {duration !== null &&
+              newTotalCost !== null &&
+              currentTotalCost !== null && (
+                <div
+                  className="flex items-center justify-between text-xs text-muted-foreground"
+                  data-testid="scene-defaults-cost-preview"
+                >
+                  <span>
+                    {sceneCount} {sceneCount === 1 ? "scene" : "scenes"} ·
+                    current ~{formatUsd(currentTotalCost)}
+                  </span>
+                  <span className="tabular-nums font-medium">
+                    New project total: ~{formatUsd(newTotalCost)}
+                  </span>
+                </div>
+              )}
           </div>
 
           <div className="space-y-2 rounded-lg border border-border/60 p-3">
