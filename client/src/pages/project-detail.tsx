@@ -7180,7 +7180,7 @@ export function QuickCreateAssetPanel({ projectId, project }: { projectId: strin
                       </div>
                       <button
                         type="button"
-                        onClick={() => suggestNarrationMutation.mutate(undefined)}
+                        onClick={() => suggestNarrationMutation.mutate({ durationSec: selectedDuration })}
                         disabled={suggestNarrationMutation.isPending || !(promptText || (project as any)?.description)}
                         title="Have AI write an on-brand narration script from your visual prompt"
                         data-testid="suggest-narration"

@@ -1305,9 +1305,14 @@ export async function registerRoutes(app: Express) {
         return res.status(400).json({ error: "Not a Quick Create project" });
       }
 
-      const text = (narrationText || "").trim() || project.description || "";
-      if (!text.trim()) {
-        return res.status(400).json({ error: "No narration text provided" });
+      const text = (narrationText || "").trim();
+      if (!text) {
+        // project.description is a cinematography/camera direction prompt — it is
+        // NOT suitable narration and is often much longer than the video clip.
+        // Require the caller to provide explicit narration text or use AI Suggest first.
+        return res.status(400).json({
+          error: "No narration text provided. Click \"AI Suggest\" to auto-write a script, or type your own in the Narration Script box.",
+        });
       }
 
       const [latestForVO] = await db.select().from(universalVideoProjects).where(eq(universalVideoProjects.projectId, projectId)).limit(1);
@@ -1499,7 +1504,7 @@ Required structure:
 2. SUBSTANCE (1–2 sentences): name 2–3 SPECIFIC things from the brief — actual capabilities, conditions detected, or problems solved. Use real terminology from the source. Don't say "helps your pet" — say WHAT it does.
 3. CTA (final sentence): one direct, low-friction ask.
 
-Word budget: aim for ${targetWords} words (acceptable range ${minWords}–${maxWords}). Under-shooting is worse than slightly over — fill the time with substance, not filler.
+Word budget: STRICT MAXIMUM ${maxWords} words. Target ${targetWords} words (range ${minWords}–${maxWords}). Do NOT exceed ${maxWords} words under any circumstances — the video is only ${durationSec}s long and extra words get cut off. Quality over quantity: choose the best ${targetWords} words, not the most.
 
 Tone: ${toneInstructions[tone]}
 
