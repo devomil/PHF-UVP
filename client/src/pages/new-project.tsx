@@ -1630,6 +1630,10 @@ const QC_VIDEO_PROVIDERS = [
   { id: 'runway-4.5', name: 'Runway 4.5' },
   { id: 'runway-gen4', name: 'Runway Gen-4' },
   { id: 'runway-gen4-aleph', name: 'Runway Gen-4 Aleph' },
+  // Avatar / Talking Photo
+  { id: 'kling-avatar', name: 'Kling AI Avatar' },
+  { id: 'omniavatar', name: 'OmniAvatar' },
+  { id: 'omni-human-1.5', name: 'OmniHuman 1.5 (Talking Photo)' },
 ];
 
 interface UploadedFile {
@@ -2128,8 +2132,11 @@ function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () => void; 
   const [validationError, setValidationError] = useState<string | null>(null);
   const [i2iTransformType, setI2iTransformType] = useState<string>("scene-integration");
   const [i2iStrength, setI2iStrength] = useState(0.65);
+  const [audioUrl, setAudioUrl] = useState("");
+  const [isUploadingAudio, setIsUploadingAudio] = useState(false);
   const refImageSectionRef = useRef<HTMLDivElement>(null);
   const refVideoSectionRef = useRef<HTMLDivElement>(null);
+  const audioInputRef = useRef<HTMLInputElement>(null);
 
   const allPresets = getAllVisualArtPresets();
   const cfg = QC_MODE_CONFIG[genMode];
@@ -2221,6 +2228,12 @@ function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () => void; 
       refVideoSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
+    if (genMode === 'i2v' && provider === 'omni-human-1.5' && !audioUrl) {
+      const msg = "OmniHuman 1.5 requires a speech audio clip for lip-sync.";
+      setValidationError(msg);
+      toast({ title: "Audio required", description: msg, variant: "destructive" });
+      return;
+    }
     const payload: any = {
       mode: "quick-create",
       generationMode: genMode,
@@ -2239,6 +2252,7 @@ function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () => void; 
       imageFidelity: genMode === "i2v" ? imageFidelity : undefined,
       i2iTransformType: genMode === "i2i" ? i2iTransformType : undefined,
       i2iStrength: genMode === "i2i" ? i2iStrength : undefined,
+      audioUrl: (genMode === 'i2v' && provider === 'omni-human-1.5' && audioUrl) ? audioUrl : undefined,
     };
     if (selectedCharacter && selectedCharacter.referenceImageUrl) {
       payload.characterReferenceUrl = selectedCharacter.referenceImageUrl;
@@ -2341,6 +2355,48 @@ function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () => void; 
                     setReferenceImagePreview(preview);
                     setValidationError(null);
                     uploadFile(file, setReferenceImageUrl, null, setIsUploadingImage, "Reference image");
+                  }
+                }}
+              />
+            </div>
+          </div>
+        )}
+
+        {genMode === 'i2v' && provider === 'omni-human-1.5' && (
+          <div>
+            <Label style={{ color: "var(--text-secondary)" }}>Speech Audio * <span className="text-xs font-normal text-violet-400">(required for OmniHuman)</span></Label>
+            <p className="text-[11px] mt-0.5 mb-2" style={{ color: "var(--text-tertiary)" }}>Upload a speech audio clip — the portrait will lip-sync to it.</p>
+            <div className="mt-1.5 space-y-2">
+              {audioUrl ? (
+                <div className="flex items-center gap-2 p-2 rounded-lg border" style={{ backgroundColor: "var(--surface)", borderColor: "rgb(139,92,246,0.4)" }}>
+                  <svg className="w-4 h-4 flex-shrink-0 text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2z" /></svg>
+                  <audio controls src={audioUrl} className="h-7 flex-1" style={{ maxWidth: '260px' }} />
+                  <button type="button" onClick={() => { setAudioUrl(""); if (audioInputRef.current) audioInputRef.current.value = ""; }} className="text-red-400 hover:text-red-300">
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => audioInputRef.current?.click()}
+                  disabled={isUploadingAudio}
+                  className="flex items-center gap-2 px-4 py-3 rounded-lg border border-dashed transition-all hover:border-violet-500/50"
+                  style={{ borderColor: "rgba(139,92,246,0.4)", color: "var(--text-secondary)" }}
+                >
+                  {isUploadingAudio ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                  {isUploadingAudio ? "Uploading..." : "Upload Speech Audio"}
+                </button>
+              )}
+              <input
+                ref={audioInputRef}
+                type="file"
+                accept="audio/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    setValidationError(null);
+                    uploadFile(file, setAudioUrl, null, setIsUploadingAudio, "Audio");
                   }
                 }}
               />
