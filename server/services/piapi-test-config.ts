@@ -346,7 +346,7 @@ export const PIAPI_TEST_DEFINITIONS: PiAPITestDefinition[] = [
   {
     id: 'omnihuman-1.5',
     name: 'OmniHuman 1.5',
-    category: 'talking-photo',
+    category: 'i2v',
     model: 'omni-human',
     taskType: 'omni-human-1.5',
     input: {
@@ -413,6 +413,44 @@ export const PIAPI_TEST_DEFINITIONS: PiAPITestDefinition[] = [
   },
 
   // ==================== IMAGE-TO-VIDEO (I2V) ====================
+  {
+    id: 'i2v-kling-avatar',
+    name: 'Kling AI Avatar I2V',
+    category: 'i2v',
+    model: 'kling',
+    taskType: 'video_generation',
+    input: {
+      prompt: 'A professional presenter speaks warmly and naturally to the camera',
+      mode: 'std',
+      duration: 5,
+      aspect_ratio: '16:9',
+      version: '2.0',
+    },
+    requiresImage: true,
+    imageInputField: 'image_url',
+    pollForResult: true,
+    estimatedCost: '$0.23',
+    estimatedTime: '~90s',
+    notes: 'Kling Avatar I2V: animates a portrait photo as an avatar. Uses version 2.0 avatar mode.',
+  },
+  {
+    id: 'i2v-omniavatar',
+    name: 'OmniAvatar I2V',
+    category: 'i2v',
+    model: 'omniavatar',
+    taskType: 'video_generation',
+    input: {
+      prompt: 'A digital avatar speaks expressively with natural head movement',
+      aspect_ratio: '16:9',
+      duration: 5,
+    },
+    requiresImage: true,
+    imageInputField: 'image_url',
+    pollForResult: true,
+    estimatedCost: '$0.30',
+    estimatedTime: '~120s',
+    notes: 'OmniAvatar I2V: animates a portrait image into a speaking avatar clip.',
+  },
   {
     id: 'i2v-kling-2.6',
     name: 'Kling 2.6 I2V',

@@ -78,6 +78,10 @@ const VIDEO_PROVIDERS = [
   { id: 'runway-gen4', name: 'Runway Gen-4' },
   { id: 'runway-gen4-aleph', name: 'Runway Gen-4 Aleph' },
   { id: 'runway-act-two', name: 'Runway Act Two' },
+  // Avatar / Talking Photo
+  { id: 'kling-avatar', name: 'Kling AI Avatar' },
+  { id: 'omniavatar', name: 'OmniAvatar' },
+  { id: 'omni-human-1.5', name: 'OmniHuman 1.5 (Talking Photo)' },
 ];
 
 const IMAGE_PROVIDERS = [

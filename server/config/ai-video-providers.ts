@@ -7,6 +7,8 @@ const CACHE_TTL_MS = 5 * 60 * 1000;
 
 const PROVIDER_TEST_ID_MAP: Record<string, string[]> = {
   'omni-human-1.5': ['omnihuman-1.5'],
+  'kling-avatar': ['i2v-kling-avatar'],
+  'omniavatar': ['i2v-omniavatar'],
   'kling-2.6': ['kling-2.6'],
   'kling-2.6-pro': ['kling-2.6'],
   'kling-2.1-master': ['kling-2.6'],
