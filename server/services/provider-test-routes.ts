@@ -148,6 +148,8 @@ router.get('/task/:taskId', isAuthenticated, async (req: Request, res: Response)
 
 function formatProviderName(id: string): string {
   const nameMap: Record<string, string> = {
+    'omni-human': 'OmniHuman 1.5',
+    'omni-human-1.5': 'OmniHuman 1.5',
     'kling': 'Kling 1.6',
     'kling-1.6': 'Kling 1.6',
     'kling-2.0': 'Kling 2.0',

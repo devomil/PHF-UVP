@@ -240,6 +240,24 @@ export const VIDEO_PROVIDERS: Record<string, VideoProvider> = {
       },
   },
 
+  'omni-human-1.5': {
+    id: 'omni-human-1.5',
+    name: 'omni-human-1.5',
+    displayName: 'OmniHuman 1.5',
+    costPerSecond: 0.05,
+    maxDuration: 30,
+    family: 'omni-human',
+    tier: 'premium',
+    specialization: 'talking-photo',
+    strengths: ['Realistic lip-sync', 'Natural head motion', 'Portrait animation', 'Audio-driven'],
+    weaknesses: ['Requires audio input', 'Portrait/head-focused'],
+    bestFor: ['talking-photo', 'lip-sync', 'portrait-animation', 'family-video', 'avatar'],
+    specialties: ['Talking photo from portrait + audio', 'Realistic lip-sync animation', 'Natural facial expression and head movement'],
+    limitations: ['Requires both a portrait image and audio file', 'Optimized for face/head shots'],
+    visualCategory: ['human_subjects', 'talking-head'],
+    qualityNotes: 'Best for animating a still portrait image to lip-sync with speech audio',
+  },
+
   'kling-avatar': {
     id: 'kling-avatar',
     name: 'kling-avatar',

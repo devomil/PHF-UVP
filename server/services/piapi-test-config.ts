@@ -1,7 +1,7 @@
 export interface PiAPITestDefinition {
   id: string;
   name: string;
-  category: 'video' | 'image' | 'audio' | 'llm' | 'llm-service' | 'i2v' | 'i2i' | 'v2v' | 'toolkit' | 'character-performance';
+  category: 'video' | 'image' | 'audio' | 'llm' | 'llm-service' | 'i2v' | 'i2i' | 'v2v' | 'toolkit' | 'character-performance' | 'talking-photo';
   model: string;
   taskType: string;
   input: Record<string, any>;
@@ -17,6 +17,8 @@ export interface PiAPITestDefinition {
   imageInputField?: string;
   requiresVideo?: boolean;
   videoInputField?: string;
+  requiresAudio?: boolean;
+  audioInputField?: string;
   disabled?: boolean;
   disabledReason?: string;
 }
@@ -344,20 +346,21 @@ export const PIAPI_TEST_DEFINITIONS: PiAPITestDefinition[] = [
   {
     id: 'omnihuman-1.5',
     name: 'OmniHuman 1.5',
-    category: 'video',
+    category: 'talking-photo',
     model: 'omni-human',
     taskType: 'omni-human-1.5',
     input: {
-      prompt: 'A person waving hello with a friendly smile',
+      prompt: 'A person speaks warmly and expressively with natural head movement',
       fast_mode: true,
     },
     requiresImage: true,
     imageInputField: 'image_url',
+    requiresAudio: true,
+    audioInputField: 'audio_url',
     pollForResult: true,
     estimatedCost: '$0.30',
     estimatedTime: '~120s',
-    disabled: true,
-    disabledReason: 'OmniHuman requires both audio_url and image_url inputs - audio upload not yet supported in testing',
+    notes: 'Talking photo: animates a portrait image to lip-sync with the provided audio. Upload a portrait photo and a speech audio clip.',
   },
   {
     id: 'kling-effects',

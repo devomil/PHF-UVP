@@ -18,11 +18,15 @@ const CHAT_ENDPOINT = `${PIAPI_BASE}/v1/chat/completions`;
 
 const TEST_IMAGE_DIR = path.join(process.cwd(), 'public', 'test-images');
 const TEST_VIDEO_DIR = path.join(process.cwd(), 'public', 'test-videos');
+const TEST_AUDIO_DIR = path.join(process.cwd(), 'public', 'test-audio');
 if (!fs.existsSync(TEST_IMAGE_DIR)) {
   fs.mkdirSync(TEST_IMAGE_DIR, { recursive: true });
 }
 if (!fs.existsSync(TEST_VIDEO_DIR)) {
   fs.mkdirSync(TEST_VIDEO_DIR, { recursive: true });
+}
+if (!fs.existsSync(TEST_AUDIO_DIR)) {
+  fs.mkdirSync(TEST_AUDIO_DIR, { recursive: true });
 }
 
 const upload = multer({
@@ -63,6 +67,25 @@ const videoUpload = multer({
   },
 });
 
+const audioUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, TEST_AUDIO_DIR),
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname) || '.wav';
+      cb(null, `test-audio${ext}`);
+    },
+  }),
+  limits: { fileSize: 50 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const allowed = ['audio/wav', 'audio/mpeg', 'audio/mp3', 'audio/ogg', 'audio/webm', 'audio/x-wav', 'audio/wave'];
+    if (allowed.includes(file.mimetype) || file.originalname.match(/\.(wav|mp3|ogg|webm)$/i)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only WAV, MP3, OGG, and WebM audio files are allowed'));
+    }
+  },
+});
+
 function buildPublicUrl(subPath: string): string {
   const replitDomain = process.env.REPLIT_DEV_DOMAIN || process.env.REPLIT_DOMAINS;
   if (replitDomain) {
@@ -85,6 +108,12 @@ function getTestVideoUrl(_req: Request): string | null {
   const files = fs.readdirSync(TEST_VIDEO_DIR).filter(f => f.startsWith('test-video'));
   if (files.length === 0) return null;
   return buildPublicUrl(`test-videos/${files[0]}`);
+}
+
+function getTestAudioUrl(_req: Request): string | null {
+  const files = fs.readdirSync(TEST_AUDIO_DIR).filter(f => f.startsWith('test-audio'));
+  if (files.length === 0) return null;
+  return buildPublicUrl(`test-audio/${files[0]}`);
 }
 
 interface TestResult {
@@ -121,6 +150,7 @@ router.get('/api/piapi-tests/definitions', (req: Request, res: Response) => {
     i2v: getTestsByCategory('i2v'),
     i2i: getTestsByCategory('i2i'),
     v2v: getTestsByCategory('v2v'),
+    'talking-photo': getTestsByCategory('talking-photo'),
     toolkit: getTestsByCategory('toolkit'),
     'character-performance': getTestsByCategory('character-performance'),
     audio: getTestsByCategory('audio'),
@@ -129,7 +159,8 @@ router.get('/api/piapi-tests/definitions', (req: Request, res: Response) => {
   };
   const imageUrl = getTestImageUrl(req);
   const videoUrl = getTestVideoUrl(req);
-  res.json({ definitions: grouped, totalCount: PIAPI_TEST_DEFINITIONS.length, testImageUrl: imageUrl, testVideoUrl: videoUrl });
+  const audioUrl = getTestAudioUrl(req);
+  res.json({ definitions: grouped, totalCount: PIAPI_TEST_DEFINITIONS.length, testImageUrl: imageUrl, testVideoUrl: videoUrl, testAudioUrl: audioUrl });
 });
 
 router.post('/api/piapi-tests/upload-test-image', (req: Request, res: Response) => {
@@ -157,6 +188,35 @@ router.delete('/api/piapi-tests/test-image', (req: Request, res: Response) => {
   const files = fs.readdirSync(TEST_IMAGE_DIR).filter(f => f.startsWith('test-image'));
   for (const f of files) {
     fs.unlinkSync(path.join(TEST_IMAGE_DIR, f));
+  }
+  res.json({ success: true });
+});
+
+router.post('/api/piapi-tests/upload-test-audio', (req: Request, res: Response) => {
+  if (!requireAuth(req, res)) return;
+  audioUpload.single('audio')(req, res, (err) => {
+    if (err) {
+      return res.status(400).json({ error: err.message });
+    }
+    if (!req.file) {
+      return res.status(400).json({ error: 'No audio file provided' });
+    }
+    const audioUrl = getTestAudioUrl(req);
+    res.json({ success: true, audioUrl, filename: req.file.filename });
+  });
+});
+
+router.get('/api/piapi-tests/test-audio', (req: Request, res: Response) => {
+  if (!requireAuth(req, res)) return;
+  const audioUrl = getTestAudioUrl(req);
+  res.json({ audioUrl });
+});
+
+router.delete('/api/piapi-tests/test-audio', (req: Request, res: Response) => {
+  if (!requireAuth(req, res)) return;
+  const files = fs.readdirSync(TEST_AUDIO_DIR).filter(f => f.startsWith('test-audio'));
+  for (const f of files) {
+    fs.unlinkSync(path.join(TEST_AUDIO_DIR, f));
   }
   res.json({ success: true });
 });
@@ -519,6 +579,21 @@ router.post('/api/piapi-tests/submit/:testId', async (req: Request, res: Respons
       } else {
         inputData[field] = imageUrl;
       }
+    }
+    if (test.requiresAudio) {
+      const audioUrl = getTestAudioUrl(req);
+      if (!audioUrl) {
+        return res.json({
+          id: test.id,
+          name: test.name,
+          category: test.category,
+          status: 'fail',
+          responseTime: 0,
+          error: 'No test audio uploaded. Please upload a speech audio clip first.',
+        } as TestResult);
+      }
+      const aField = test.audioInputField || 'audio_url';
+      inputData[aField] = audioUrl;
     }
 
     let submitUrl = TASK_ENDPOINT;
@@ -1079,6 +1154,21 @@ async function runSingleTest(test: any, apiKey: string, req: Request): Promise<T
       }
       const field = test.imageInputField || 'image_url';
       inputData[field] = imageUrl;
+    }
+    if (test.requiresAudio) {
+      const audioUrl = getTestAudioUrl(req);
+      if (!audioUrl) {
+        return {
+          id: test.id,
+          name: test.name,
+          category: test.category,
+          status: 'fail',
+          responseTime: 0,
+          error: 'No test audio uploaded. Please upload a speech audio clip first.',
+        };
+      }
+      const aField = test.audioInputField || 'audio_url';
+      inputData[aField] = audioUrl;
     }
 
     const createRes = await fetch(TASK_ENDPOINT, {

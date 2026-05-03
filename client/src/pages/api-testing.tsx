@@ -50,6 +50,7 @@ interface TestDefinition {
   notes?: string;
   requiresImage?: boolean;
   requiresVideo?: boolean;
+  requiresAudio?: boolean;
   input?: Record<string, any>;
   endpoint?: string;
   disabled?: boolean;
@@ -68,6 +69,7 @@ interface TestState {
 
 const categoryConfig: Record<string, { label: string; icon: any; color: string; description: string }> = {
   video: { label: "Video Generation (T2V)", icon: Video, color: "purple", description: "Text-to-Video" },
+  "talking-photo": { label: "Talking Photo", icon: Music, color: "violet", description: "Animate a portrait image to lip-sync with audio — requires test image + test audio" },
   i2v: { label: "Image-to-Video (I2V)", icon: Clapperboard, color: "indigo", description: "Image-to-Video — requires test image" },
   v2v: { label: "Video-to-Video (V2V)", icon: Repeat, color: "pink", description: "Video-to-Video — requires test video" },
   "character-performance": { label: "Character Performance", icon: User, color: "rose", description: "Runway Act Two — requires test image + test video" },
@@ -79,7 +81,7 @@ const categoryConfig: Record<string, { label: string; icon: any; color: string; 
   "llm-service": { label: "LLM Service Integration", icon: Sparkles, color: "purple", description: "PiAPI LLM Client — tests piapi-llm-client with PiAPI→Anthropic failover" },
 };
 
-const categoryOrder = ["video", "i2v", "v2v", "character-performance", "image", "i2i", "toolkit", "audio", "llm", "llm-service"];
+const categoryOrder = ["video", "talking-photo", "i2v", "v2v", "character-performance", "image", "i2i", "toolkit", "audio", "llm", "llm-service"];
 
 export default function ApiTesting() {
   const [definitions, setDefinitions] = useState<Record<string, TestDefinition[]>>({});
@@ -87,12 +89,15 @@ export default function ApiTesting() {
   const [loading, setLoading] = useState(true);
   const [testImageUrl, setTestImageUrl] = useState<string | null>(null);
   const [testVideoUrl, setTestVideoUrl] = useState<string | null>(null);
+  const [testAudioUrl, setTestAudioUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadingVideo, setUploadingVideo] = useState(false);
+  const [uploadingAudio, setUploadingAudio] = useState(false);
   const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
   const [clearResultsDialogOpen, setClearResultsDialogOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
+  const audioInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     Promise.all([
@@ -103,6 +108,7 @@ export default function ApiTesting() {
         setDefinitions(defData.definitions || {});
         setTestImageUrl(defData.testImageUrl || null);
         setTestVideoUrl(defData.testVideoUrl || null);
+        setTestAudioUrl(defData.testAudioUrl || null);
         if (resultsData.results) {
           const savedStates: Record<string, TestState> = {};
           for (const r of resultsData.results) {
@@ -217,6 +223,34 @@ export default function ApiTesting() {
       setTestVideoUrl(null);
     } catch (err) {
       console.error("Video delete failed:", err);
+    }
+  };
+
+  const handleAudioUpload = async (file: File) => {
+    setUploadingAudio(true);
+    const formData = new FormData();
+    formData.append("audio", file);
+    try {
+      const res = await fetch("/api/piapi-tests/upload-test-audio", {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+      if (data.success) {
+        setTestAudioUrl(data.audioUrl);
+      }
+    } catch (err) {
+      console.error("Audio upload failed:", err);
+    }
+    setUploadingAudio(false);
+  };
+
+  const handleDeleteAudio = async () => {
+    try {
+      await fetch("/api/piapi-tests/test-audio", { method: "DELETE" });
+      setTestAudioUrl(null);
+    } catch (err) {
+      console.error("Audio delete failed:", err);
     }
   };
 
@@ -469,8 +503,9 @@ export default function ApiTesting() {
   };
 
   const summary = getSummary();
-  const requiresImageCategories = ["i2v", "i2i", "character-performance"];
+  const requiresImageCategories = ["i2v", "i2i", "character-performance", "talking-photo"];
   const requiresVideoCategories = ["v2v", "character-performance"];
+  const requiresAudioCategories = ["talking-photo"];
 
   if (loading) {
     return (
@@ -738,6 +773,96 @@ export default function ApiTesting() {
           />
         </div>
 
+        <div
+          className="border rounded-xl p-4 mb-6"
+          style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)" }}
+        >
+          <div className="flex items-center gap-2 mb-3">
+            <Music className="w-4 h-4 text-violet-400" />
+            <span className="text-sm font-semibold">Test Audio for Talking Photo</span>
+            <span className="text-[11px] px-2 py-0.5 rounded-full bg-violet-500/10 text-violet-400 border border-violet-500/20">
+              Required for OmniHuman tests
+            </span>
+          </div>
+
+          {testAudioUrl ? (
+            <div className="flex items-center gap-4">
+              <div className="p-3 rounded-lg border" style={{ borderColor: "var(--border-subtle)", backgroundColor: "var(--app-bg)" }}>
+                <Music className="w-8 h-8 text-violet-400" />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-medium text-emerald-400 flex items-center gap-1.5">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  Audio uploaded
+                </p>
+                <audio controls src={testAudioUrl} className="mt-1 h-8 w-full max-w-xs" />
+                <p className="text-[11px] mt-1 break-all" style={{ color: "var(--text-tertiary)" }}>
+                  {testAudioUrl}
+                </p>
+                <div className="flex gap-2 mt-2">
+                  <button
+                    onClick={() => audioInputRef.current?.click()}
+                    className="text-[11px] px-2 py-1 rounded border transition-colors hover:brightness-110"
+                    style={{ borderColor: "var(--border-subtle)", backgroundColor: "var(--surface-hover)", color: "var(--text-secondary)" }}
+                  >
+                    Replace Audio
+                  </button>
+                  <button
+                    onClick={handleDeleteAudio}
+                    className="text-[11px] px-2 py-1 rounded border transition-colors hover:brightness-110 text-red-400"
+                    style={{ borderColor: "var(--border-subtle)", backgroundColor: "var(--surface-hover)" }}
+                  >
+                    Remove
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div
+              className="border-2 border-dashed rounded-xl p-6 text-center cursor-pointer hover:brightness-110 transition-all"
+              style={{ borderColor: "var(--border-subtle)", backgroundColor: "var(--app-bg)" }}
+              onClick={() => audioInputRef.current?.click()}
+              onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+              onDrop={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const file = e.dataTransfer.files[0];
+                if (file) handleAudioUpload(file);
+              }}
+            >
+              {uploadingAudio ? (
+                <div className="flex flex-col items-center gap-2">
+                  <Loader2 className="w-6 h-6 text-violet-400 animate-spin" />
+                  <span className="text-sm" style={{ color: "var(--text-secondary)" }}>Uploading audio...</span>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center gap-2">
+                  <Upload className="w-6 h-6 text-violet-400" />
+                  <span className="text-sm font-medium" style={{ color: "var(--text-secondary)" }}>
+                    Upload a speech audio clip
+                  </span>
+                  <span className="text-[11px]" style={{ color: "var(--text-tertiary)" }}>
+                    Click or drag & drop. WAV, MP3, or OGG (max 50MB).
+                    This audio will lip-sync with your portrait image in OmniHuman tests.
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
+          <input
+            ref={audioInputRef}
+            type="file"
+            accept="audio/wav,audio/mpeg,audio/mp3,audio/ogg,audio/webm,.wav,.mp3,.ogg,.webm"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) handleAudioUpload(file);
+              e.target.value = "";
+            }}
+          />
+        </div>
+
         {categoryOrder.map((category) => {
           const config = categoryConfig[category];
           if (!config) return null;
@@ -746,8 +871,10 @@ export default function ApiTesting() {
           const Icon = config.icon;
           const needsImage = requiresImageCategories.includes(category);
           const needsVideo = requiresVideoCategories.includes(category);
+          const needsAudio = requiresAudioCategories.includes(category);
           const hasImage = !!testImageUrl;
           const hasVideo = !!testVideoUrl;
+          const hasAudio = !!testAudioUrl;
 
           const catStates = tests.map((t) => testStates[t.id]?.status || "idle");
           const catPassed = catStates.filter((s) => s === "pass").length;
@@ -828,7 +955,8 @@ export default function ApiTesting() {
                   const isRunning = state.status === "submitting" || state.status === "polling";
                   const testNeedsImage = test.requiresImage;
                   const testNeedsVideo = test.requiresVideo;
-                  const isDisabled = isRunning || (testNeedsImage && !hasImage) || (testNeedsVideo && !hasVideo) || !!test.disabled;
+                  const testNeedsAudio = test.requiresAudio;
+                  const isDisabled = isRunning || (testNeedsImage && !hasImage) || (testNeedsVideo && !hasVideo) || (testNeedsAudio && !hasAudio) || !!test.disabled;
                   const badge = getStatusBadge(state.status);
                   const hasFinalResult = state.status === "pass" || state.status === "fail" || state.status === "timeout";
                   const prompt = test.input?.prompt
@@ -862,6 +990,11 @@ export default function ApiTesting() {
                           {test.requiresVideo && (
                             <span className="text-[10px] px-1.5 py-0.5 rounded bg-pink-500/10 text-pink-400 border border-pink-500/20">
                               VID
+                            </span>
+                          )}
+                          {test.requiresAudio && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-400 border border-violet-500/20">
+                              AUD
                             </span>
                           )}
                           {test.disabled && (

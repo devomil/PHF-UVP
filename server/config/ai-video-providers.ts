@@ -6,6 +6,7 @@ let cacheTimestamp = 0;
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
 const PROVIDER_TEST_ID_MAP: Record<string, string[]> = {
+  'omni-human-1.5': ['omnihuman-1.5'],
   'kling-2.6': ['kling-2.6'],
   'kling-2.6-pro': ['kling-2.6'],
   'kling-2.1-master': ['kling-2.6'],
@@ -425,6 +426,14 @@ export const AI_VIDEO_PROVIDERS: Record<string, AIVideoProviderConfig> = {
     costPerSecond: 0.12,
     maxDuration: 10,
     capabilities: { t2v: true, i2v: false, v2v: false },
+    supportedAspectRatios: ['16:9', '9:16', '1:1'],
+  },
+  'omni-human-1.5': {
+    modelId: 'omni-human',
+    apiProvider: 'piapi',
+    costPerSecond: 0.05,
+    maxDuration: 30,
+    capabilities: { t2v: false, i2v: true, v2v: false },
     supportedAspectRatios: ['16:9', '9:16', '1:1'],
   },
 };

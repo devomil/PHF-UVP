@@ -931,6 +931,8 @@ class PiAPIVideoService {
       'kling-2.6-motion-control-pro': { modelId: 'kling', maxDuration: 30 },
       'kling-avatar': { modelId: 'kling', maxDuration: 60 },
       'kling-effects': { modelId: 'kling', maxDuration: 5 },
+      // OmniHuman (talking photo)
+      'omni-human-1.5': { modelId: 'omni-human', maxDuration: 30 },
       // Luma Family
       'luma': { modelId: 'luma', maxDuration: 5 },
       'luma-dream-machine': { modelId: 'luma', maxDuration: 5 },
