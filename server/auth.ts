@@ -115,6 +115,17 @@ export function setupAuth(app: Express) {
         })
         .returning();
 
+      // Phase NC-01 — explicitly create the FREE_TRIAL subscription row
+      // at registration time. Without this hook the trial is only minted
+      // lazily on first credit endpoint hit, which the architect flagged
+      // as a deviation from the "14-day trial on signup" requirement.
+      try {
+        const { createInitialTrialForNewUser } = await import("./services/credits-service");
+        await createInitialTrialForNewUser(newUser.id);
+      } catch (creditErr) {
+        console.error("[Auth] Failed to provision trial subscription:", creditErr);
+      }
+
       req.login(newUser, (err) => {
         if (err) return res.status(500).json({ message: "Login failed after registration" });
         const { password: _, ...safeUser } = newUser;

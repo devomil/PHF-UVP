@@ -274,6 +274,7 @@ router.post("/api/billing/webhook/:providerName", async (req: Request, res: Resp
             event.data.subscriptionId,
             event.data.currentPeriodStart,
             event.data.currentPeriodEnd,
+            tx,
           );
         }
       } else if (event.type === "subscription.deleted") {
@@ -286,13 +287,13 @@ router.post("/api/billing/webhook/:providerName", async (req: Request, res: Resp
         if (userId) {
           const [sub] = await tx.select().from(subscriptions).where(eq(subscriptions.userId, userId));
           if (sub) {
-            await resetMonthlyCredits(userId, sub.plan as PlanTier, sub.billingCycleStart ?? new Date(), sub.billingCycleEnd ?? new Date());
+            await resetMonthlyCredits(userId, sub.plan as PlanTier, sub.billingCycleStart ?? new Date(), sub.billingCycleEnd ?? new Date(), tx);
           }
         }
       } else if (event.type === "topup.paid") {
         const userId = await resolveUserId(event.data.userId, event.data.customerId);
         if (userId) {
-          await addTopUpCredits(userId, event.data.gcAmount, event.data.catalogKey);
+          await addTopUpCredits(userId, event.data.gcAmount, event.data.catalogKey, tx);
         }
       }
 

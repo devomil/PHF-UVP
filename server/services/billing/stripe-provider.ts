@@ -107,12 +107,35 @@ class StripeProvider implements BillingProvider {
 
     const eventId = event.id;
 
+    // Stripe SDK type drift: `current_period_{start,end}` may live on the
+    // subscription itself OR on its first item depending on the API
+    // version the account is pinned to. Read both shapes safely from one
+    // helper so the call sites stay type-clean.
+    const extractPeriod = (
+      sub: Stripe.Subscription,
+      which: "start" | "end",
+    ): number => {
+      const subView = sub as Stripe.Subscription & {
+        current_period_start?: number;
+        current_period_end?: number;
+      };
+      const itemView = sub.items?.data?.[0] as
+        | (Stripe.SubscriptionItem & {
+            current_period_start?: number;
+            current_period_end?: number;
+          })
+        | undefined;
+      const key = which === "start" ? "current_period_start" : "current_period_end";
+      return subView[key] ?? itemView?.[key] ?? 0;
+    };
+
     switch (event.type) {
       case "customer.subscription.created":
       case "customer.subscription.updated": {
         const sub = event.data.object as Stripe.Subscription;
-        const userId = (sub.metadata as any)?.userId ?? null;
-        const catalogKey = (sub.metadata as any)?.catalogKey ?? null;
+        // `metadata` is `Stripe.Metadata` (Record<string,string>) — no cast needed.
+        const userId = sub.metadata?.userId ?? null;
+        const catalogKey = sub.metadata?.catalogKey ?? null;
         const status = mapSubStatus(sub.status);
         return {
           type: "subscription.updated",
@@ -124,9 +147,11 @@ class StripeProvider implements BillingProvider {
             catalogKey,
             // current_period_{start,end} moved onto subscription items in
             // recent Stripe API versions. Read top-level for older accounts
-            // and fall back to the first item for newer ones.
-            currentPeriodStart: new Date(((sub as any).current_period_start ?? (sub.items?.data?.[0] as any)?.current_period_start ?? 0) * 1000),
-            currentPeriodEnd: new Date(((sub as any).current_period_end ?? (sub.items?.data?.[0] as any)?.current_period_end ?? 0) * 1000),
+            // and fall back to the first item for newer ones. The narrow
+            // `SubscriptionPeriodFields` type isolates the SDK version drift
+            // to one place instead of leaking `as any` across the file.
+            currentPeriodStart: new Date(extractPeriod(sub, "start") * 1000),
+            currentPeriodEnd: new Date(extractPeriod(sub, "end") * 1000),
             status,
           },
         };
@@ -139,15 +164,18 @@ class StripeProvider implements BillingProvider {
           data: {
             subscriptionId: sub.id,
             customerId: typeof sub.customer === "string" ? sub.customer : sub.customer.id,
-            userId: (sub.metadata as any)?.userId ?? null,
+            userId: sub.metadata?.userId ?? null,
           },
         };
       }
       case "invoice.paid": {
         const inv = event.data.object as Stripe.Invoice;
-        // Invoice.subscription was renamed in newer SDK types; cast to any
-        // so we keep working across SDK majors.
-        const invSub = (inv as any).subscription;
+        // `Invoice.subscription` was renamed across SDK majors — narrow
+        // the unknown shape with a typed view rather than a blanket `any`.
+        const invView = inv as Stripe.Invoice & {
+          subscription?: string | { id: string } | null;
+        };
+        const invSub = invView.subscription;
         const subId = typeof invSub === "string" ? invSub : invSub?.id;
         return {
           type: "invoice.paid",
@@ -155,13 +183,13 @@ class StripeProvider implements BillingProvider {
           data: {
             subscriptionId: subId ?? "",
             customerId: typeof inv.customer === "string" ? inv.customer : inv.customer?.id ?? "",
-            userId: (inv.metadata as any)?.userId ?? null,
+            userId: inv.metadata?.userId ?? null,
           },
         };
       }
       case "payment_intent.succeeded": {
         const pi = event.data.object as Stripe.PaymentIntent;
-        const meta = pi.metadata as any;
+        const meta = pi.metadata;
         if (meta?.kind !== "topup" || !meta?.catalogKey) {
           return { type: "ignored", eventId, nativeType: event.type };
         }

@@ -18,6 +18,18 @@ import { PLAN_CONFIG, type PlanTier } from "../config/plans";
 import { planAllowsProvider } from "../config/providerPermissions";
 import { eq, and } from "drizzle-orm";
 
+// Caller-provided transaction handle, or `undefined` to open a fresh one.
+// Webhook flow passes its own `tx` so the business mutation + the
+// `billing_events` dedupe insert commit (or roll back) atomically.
+type TxOrDb = Parameters<Parameters<typeof db.transaction>[0]>[0] | typeof db;
+async function runInTx<T>(
+  maybeTx: TxOrDb | undefined,
+  fn: (tx: TxOrDb) => Promise<T>,
+): Promise<T> {
+  if (maybeTx) return fn(maybeTx);
+  return db.transaction(fn);
+}
+
 export type CreditSource = "subscription" | "topup" | "mixed";
 
 export interface CreditSnapshot {
@@ -60,6 +72,13 @@ export interface RefundContext {
 // NC-01 would retroactively credit every existing user with 50 GC + a
 // trial period, even ones who signed up months ago.
 const TRIAL_GRACE_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+// Public: explicit subscription creation hook to be called at the end of
+// /api/register. Idempotent — if a row already exists (e.g. webhook beat
+// us to it) we leave it alone.
+export async function createInitialTrialForNewUser(userId: string): Promise<Subscription> {
+  return ensureSubscription(userId);
+}
 
 // Look up the user's subscription row. On first access:
 //  • New accounts (created within the last 24h) get a FREE_TRIAL with the
@@ -321,11 +340,19 @@ export async function refundCredits(userId: string, gcAmount: number, ctx: Refun
 
 // Monthly reset triggered by `invoice.paid`. Applies rollover per plan
 // rules: currentGC = monthlyGC + min(floor(currentGC * rolloverPercent/100), rolloverMax).
-// Top-up GC carries forward untouched.
-export async function resetMonthlyCredits(userId: string, plan: PlanTier, periodStart: Date, periodEnd: Date): Promise<void> {
+// Top-up GC carries forward untouched. Accepts optional `outerTx` so the
+// webhook handler can run reset + ledger insert atomically with the
+// billing_events dedupe row.
+export async function resetMonthlyCredits(
+  userId: string,
+  plan: PlanTier,
+  periodStart: Date,
+  periodEnd: Date,
+  outerTx?: TxOrDb,
+): Promise<void> {
   const planCfg = PLAN_CONFIG[plan];
 
-  await db.transaction(async (tx) => {
+  await runInTx(outerTx, async (tx) => {
     const locked = await tx.execute(
       sql`SELECT id, current_gc FROM subscriptions WHERE user_id = ${userId} FOR UPDATE`,
     );
@@ -370,9 +397,16 @@ export async function resetMonthlyCredits(userId: string, plan: PlanTier, period
 }
 
 // Add top-up GC (called from webhook after successful one-time payment).
-export async function addTopUpCredits(userId: string, gcAmount: number, sourceLabel: string): Promise<void> {
+// Accepts optional `outerTx` so the webhook can keep the credit add and
+// the billing_events dedupe insert in one commit.
+export async function addTopUpCredits(
+  userId: string,
+  gcAmount: number,
+  sourceLabel: string,
+  outerTx?: TxOrDb,
+): Promise<void> {
   await ensureSubscription(userId);
-  await db.transaction(async (tx) => {
+  await runInTx(outerTx, async (tx) => {
     const locked = await tx.execute(
       sql`SELECT id, topup_gc, current_gc FROM subscriptions WHERE user_id = ${userId} FOR UPDATE`,
     );
@@ -400,6 +434,7 @@ export async function updateSubscriptionPlan(
   subscriptionId: string | null,
   periodStart: Date | null,
   periodEnd: Date | null,
+  outerTx?: TxOrDb,
 ): Promise<void> {
   await ensureSubscription(userId);
   const planCfg = PLAN_CONFIG[plan];
@@ -408,7 +443,7 @@ export async function updateSubscriptionPlan(
   // consistent monthlyGC + plan tier. Without this lock a webhook-driven
   // plan change racing with a spend can briefly mis-cap the user's
   // remaining balance.
-  await db.transaction(async (tx) => {
+  await runInTx(outerTx, async (tx) => {
     await tx.execute(sql`SELECT id FROM subscriptions WHERE user_id = ${userId} FOR UPDATE`);
     await tx
       .update(subscriptions)
