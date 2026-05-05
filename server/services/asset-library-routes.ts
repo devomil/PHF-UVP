@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import crypto from 'crypto';
 import { isAuthenticated } from '../auth';
+import { requireCredits } from '../middleware/requireCredits';
 import { db } from '../db';
 import { assetLibrary, videoGenerationJobs } from '../../shared/schema';
 import { eq, desc, and, or, ilike, sql } from 'drizzle-orm';
@@ -89,7 +90,24 @@ const IMAGE_OUTPUT_MODES = ['t2i', 'i2i', 'upscale-image', 'bg-remove-image'];
 const NEEDS_REF_IMAGE = ['i2v', 'i2i', 'upscale-image', 'bg-remove-image', 'character-performance'];
 const NEEDS_REF_VIDEO = ['v2v', 'upscale-video', 'bg-remove-video', 'character-performance'];
 
-router.post('/generate', async (req: Request, res: Response) => {
+// Phase NC-01 — paywall enforcement BEFORE we enqueue any provider work.
+// We resolve provider/duration from the request body. When the client
+// sends "auto" we fall back to a representative mid-tier provider so the
+// affordability check still catches empty wallets up front; the worker
+// performs the precise debit against whichever provider actually fulfils
+// the job.
+router.post('/generate', requireCredits({
+  provider: (req) => {
+    const p = (req.body?.provider as string | undefined)?.trim();
+    if (p && p !== 'auto') return p;
+    const mode = req.body?.mode as string | undefined;
+    return IMAGE_OUTPUT_MODES.includes(mode || '') ? 'flux-pro' : 'kling-2.6';
+  },
+  durationS: (req) => {
+    const d = req.body?.duration;
+    return typeof d === 'number' ? d : null;
+  },
+}), async (req: Request, res: Response) => {
   try {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ error: 'Not authenticated' });
