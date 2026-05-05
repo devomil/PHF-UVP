@@ -11,6 +11,18 @@ export interface ProviderCatalogEntry {
   aspectRatios: string[];
   highlight?: string;
   multiImageSupport?: boolean;
+  // Phase 20D (Task #136): single source of truth for "this video model
+  // accepts the per-scene `generateNativeAudio` toggle". When true, the UI
+  // toggle is enabled, the ai-video-service forwards the flag to the
+  // provider, and the corresponding piapi branch emits `generate_audio`
+  // in its payload. When false/undefined, the toggle is disabled and the
+  // flag is dropped before reaching any provider branch.
+  //
+  // NOTE: This is NOT the same as Veo's always-on baked-in audio (which
+  // we surface via the 'Audio' string in `capabilities`). This flag means
+  // "supports the *toggleable* per-scene audio opt-in". Adding a new
+  // audio-toggleable model is a one-line change here.
+  supportsNativeAudio?: boolean;
 }
 
 export const VIDEO_PROVIDER_CATALOG: ProviderCatalogEntry[] = [
@@ -314,6 +326,7 @@ export const VIDEO_PROVIDER_CATALOG: ProviderCatalogEntry[] = [
     aspectRatios: ['16:9', '9:16', '1:1'],
     highlight: 'Primary Provider',
     multiImageSupport: true,
+    supportsNativeAudio: true,
   },
   {
     id: 'seedance-2.0-fast',
@@ -328,6 +341,7 @@ export const VIDEO_PROVIDER_CATALOG: ProviderCatalogEntry[] = [
     aspectRatios: ['16:9', '9:16', '1:1'],
     highlight: 'Fast Generation',
     multiImageSupport: true,
+    supportsNativeAudio: true,
   },
   {
     id: 'pika',
@@ -595,4 +609,16 @@ export function getVideoProviders(excludeAliases = true): ProviderCatalogEntry[]
 
 export function getImageProviders(): ProviderCatalogEntry[] {
   return IMAGE_PROVIDER_CATALOG;
+}
+
+// Phase 20D (Task #136): single source of truth for the per-scene
+// `generateNativeAudio` toggle. Every consumer (the UI toggle's
+// disabled-state, the ai-video-service forwarding gate, and any future
+// payload gate) must read this — DO NOT reintroduce a model-string
+// allowlist anywhere downstream. Adding a new audio-toggleable model
+// is a one-line `supportsNativeAudio: true` in VIDEO_PROVIDER_CATALOG.
+export function providerSupportsNativeAudio(providerId: string | undefined | null): boolean {
+  if (!providerId) return false;
+  const entry = VIDEO_PROVIDER_CATALOG.find(p => p.id === providerId);
+  return entry?.supportsNativeAudio === true;
 }

@@ -12,6 +12,7 @@ import {
   clearProviderCache
 } from '../config/ai-video-providers';
 import { getVisualStyleConfig, VisualStyleConfig } from '@shared/visual-style-config';
+import { providerSupportsNativeAudio } from '@shared/provider-catalog';
 import { getMotionControl, MotionControlConfig } from '@shared/config/motion-control';
 import { optimizePrompt, logPromptOptimization, analyzePrompt } from './video-prompt-optimizer';
 import { getBrandContext, getBrandNameOrDefault } from './brand-settings-service';
@@ -55,11 +56,13 @@ interface AIVideoOptions {
   contentTag?: string;
   isCharacterReference?: boolean;
   isProviderHint?: boolean;
-  // Phase 20D (Task #126): per-scene Seedance 2 native-audio opt-in.
-  // Only consulted when the resolved provider is `seedance-2.0` /
-  // `seedance-2.0-fast`; ignored by every other branch in the
-  // generation switch. See Scene.generateNativeAudio in
-  // shared/video-types.ts for full semantics.
+  // Phase 20D (Task #126): per-scene native-audio opt-in. Only
+  // consulted when the resolved provider's catalog entry has
+  // `supportsNativeAudio: true` (see shared/provider-catalog.ts —
+  // Task #136 made the catalog the single source of truth). Ignored
+  // by every other branch in the generation switch. See
+  // Scene.generateNativeAudio in shared/video-types.ts for full
+  // semantics.
   generateNativeAudio?: boolean;
 }
 
@@ -635,14 +638,15 @@ class AIVideoService {
         motionControl,
         isCharacterReference: options.isCharacterReference,
         artPresetId: options.artPresetId,
-        // Phase 20D (Task #126): forward the scene-level Seedance 2
-        // native-audio opt-in. Gated to Seedance 2 variants ONLY — Veo
-        // I2V also reads `options.generateAudio` and would otherwise
-        // emit `generate_audio: true` to Google's API if a stale flag
+        // Phase 20D (Task #126): forward the scene-level native-audio
+        // opt-in. Gated by the provider catalog's `supportsNativeAudio`
+        // flag (Task #136 — single source of truth). Veo I2V also
+        // reads `options.generateAudio` and would otherwise emit
+        // `generate_audio: true` to Google's API if a stale flag
         // survived a provider switch in the UI. Belt-and-suspenders
         // alongside the disabled toggle in the scene editor.
         ...(options.generateNativeAudio === true &&
-          (providerKey === 'seedance-2.0' || providerKey === 'seedance-2.0-fast')
+          providerSupportsNativeAudio(providerKey)
           ? { generateAudio: true }
           : {}),
       });

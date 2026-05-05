@@ -1,7 +1,9 @@
-// Per-scene Seedance 2 native-audio toggle. Disabled with a tooltip
-// when the resolved provider isn't a Seedance 2 variant. When the scene
-// also has a voiceover, surfaces a "Mute voiceover" AlertDialog so the
-// caller can clear the narration before the audio sources collide.
+// Per-scene native-audio toggle. Disabled with a tooltip when the
+// resolved provider doesn't advertise `supportsNativeAudio` in the
+// shared provider catalog (Task #136 — single source of truth). When
+// the scene also has a voiceover, surfaces a "Mute voiceover"
+// AlertDialog so the caller can clear the narration before the audio
+// sources collide.
 
 import { useState } from "react";
 import { Label } from "@/components/ui/label";
@@ -23,8 +25,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-
-const SEEDANCE_2_PROVIDERS = new Set(["seedance-2.0", "seedance-2.0-fast"]);
+import { providerSupportsNativeAudio } from "@shared/provider-catalog";
 
 interface Props {
   provider: string | undefined;
@@ -50,9 +51,9 @@ export function NativeAudioToggle({
   const [muting, setMuting] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
-  const isSeedance2 = provider ? SEEDANCE_2_PROVIDERS.has(provider) : false;
-  const effectivelyDisabled = disabled || !isSeedance2;
-  const showWarning = isSeedance2 && value && hasVoiceover;
+  const supportsAudio = providerSupportsNativeAudio(provider);
+  const effectivelyDisabled = disabled || !supportsAudio;
+  const showWarning = supportsAudio && value && hasVoiceover;
 
   async function handleToggle(next: boolean) {
     setSaving(true);
@@ -83,7 +84,7 @@ export function NativeAudioToggle({
       disabled={effectivelyDisabled || saving}
       onCheckedChange={handleToggle}
       data-testid="scene-native-audio-switch"
-      aria-label="Enable native Seedance 2 audio"
+      aria-label="Enable native scene audio"
     />
   );
 
@@ -111,8 +112,8 @@ export function NativeAudioToggle({
               </TooltipTrigger>
               <TooltipContent side="top">
                 {provider
-                  ? `Native audio is only supported on Seedance 2 (current model: ${provider}).`
-                  : "Native audio requires a Seedance 2 video model."}
+                  ? `Native audio isn't supported on this model (current model: ${provider}).`
+                  : "Native audio requires a model that supports it."}
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -122,9 +123,9 @@ export function NativeAudioToggle({
       </div>
 
       <p className="text-xs text-muted-foreground">
-        {isSeedance2
-          ? "When on, Seedance 2 generates ambient audio inside the clip itself."
-          : "Switch to a Seedance 2 model to generate native scene audio."}
+        {supportsAudio
+          ? "When on, the model generates ambient audio inside the clip itself."
+          : "Switch to a model that supports native audio to enable this."}
       </p>
 
       {showWarning && (
@@ -138,7 +139,7 @@ export function NativeAudioToggle({
               Voiceover may clash with generated scene audio.
             </p>
             <p>
-              Mixing your TTS narration with Seedance ambient audio almost
+              Mixing your TTS narration with the model's ambient audio almost
               always sounds wrong. Consider muting the voiceover for this
               scene.
             </p>
@@ -160,9 +161,9 @@ export function NativeAudioToggle({
           <AlertDialogHeader>
             <AlertDialogTitle>Mute voiceover for this scene?</AlertDialogTitle>
             <AlertDialogDescription>
-              This clears the narration for this scene only. The Seedance 2
-              clip will play with its own generated audio. You can paste the
-              narration back at any time.
+              This clears the narration for this scene only. The clip will
+              play with its own generated audio. You can paste the narration
+              back at any time.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

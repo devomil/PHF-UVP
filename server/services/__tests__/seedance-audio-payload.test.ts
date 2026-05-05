@@ -9,6 +9,10 @@
 
 import { describe, it, expect } from 'vitest';
 import { piapiVideoService } from '../piapi-video-service';
+import {
+  providerSupportsNativeAudio,
+  VIDEO_PROVIDER_CATALOG,
+} from '../../../shared/provider-catalog';
 
 const svc = piapiVideoService as any;
 
@@ -168,14 +172,44 @@ describe('Seedance I2V payload — generate_audio is an explicit boolean', () =>
   });
 });
 
-describe('ai-video-service generateAudio gate — Seedance only (Task #126)', () => {
+describe('ai-video-service generateAudio gate — catalog-driven (Tasks #126, #136)', () => {
   // The forwarding gate in ai-video-service.ts MUST NOT pass
-  // generateAudio=true to non-Seedance providers (Veo I2V is the
-  // dangerous one — it reads options.generateAudio and would emit
-  // generate_audio:true to Google's API). We assert by inspecting the
-  // exact ternary used in the service file so a future refactor that
-  // accidentally drops the provider check fails this test.
-  it('only forwards generateAudio for seedance-2.0 / seedance-2.0-fast', () => {
+  // generateAudio=true to providers that don't advertise native audio
+  // in the shared provider catalog (Veo I2V is the dangerous one — it
+  // reads options.generateAudio and would emit generate_audio:true to
+  // Google's API).
+  //
+  // Task #136 made the provider catalog (shared/provider-catalog.ts)
+  // the single source of truth via the `supportsNativeAudio` flag, so
+  // we assert two things:
+  //   1. The catalog correctly marks the audio-capable models.
+  //   2. The ai-video-service gate reads from the catalog helper —
+  //      not from a hardcoded model-string allowlist.
+  it('catalog flag is set on Seedance 2 variants and not on dangerous neighbors', () => {
+    // Positive: the models the runtime is currently routing audio to
+    // must keep the flag — losing this would silently disable the UI.
+    expect(providerSupportsNativeAudio('seedance-2.0')).toBe(true);
+    expect(providerSupportsNativeAudio('seedance-2.0-fast')).toBe(true);
+    // Negative spot-checks: these are the providers most likely to be
+    // mis-flagged in a future edit. Veo I2V in particular reads
+    // generate_audio downstream — flipping its flag would silently
+    // start emitting audio requests to Google's API and bill the user.
+    expect(providerSupportsNativeAudio('veo-3')).toBe(false);
+    expect(providerSupportsNativeAudio('veo-3.1')).toBe(false);
+    expect(providerSupportsNativeAudio('veo-2')).toBe(false);
+    expect(providerSupportsNativeAudio('seedance-1.0')).toBe(false);
+    expect(providerSupportsNativeAudio('kling-2.6')).toBe(false);
+    expect(providerSupportsNativeAudio('runway-4.5')).toBe(false);
+    expect(providerSupportsNativeAudio(undefined)).toBe(false);
+    expect(providerSupportsNativeAudio('not-a-real-model')).toBe(false);
+    // Sanity: at least one model is flagged. Adding a NEW audio-capable
+    // model should NOT require editing this test — that's the whole
+    // point of Task #136. We deliberately don't pin the exact set.
+    const flagged = VIDEO_PROVIDER_CATALOG.filter(p => p.supportsNativeAudio === true);
+    expect(flagged.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('ai-video-service gate uses the catalog helper, not a model-string allowlist', () => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const fs = require('node:fs');
     const path = require('node:path');
@@ -183,10 +217,11 @@ describe('ai-video-service generateAudio gate — Seedance only (Task #126)', ()
       path.resolve(__dirname, '..', 'ai-video-service.ts'),
       'utf8',
     );
-    // The gate must mention BOTH seedance variants and the
-    // generateNativeAudio === true check in the same I2V branch.
+    // The gate must read from the shared catalog helper.
+    expect(src).toMatch(/providerSupportsNativeAudio\s*\(/);
     expect(src).toMatch(/generateNativeAudio === true/);
-    expect(src).toMatch(/providerKey === ['"]seedance-2\.0['"]/);
-    expect(src).toMatch(/providerKey === ['"]seedance-2\.0-fast['"]/);
+    // And it must NOT have reverted to a hardcoded model-string check.
+    expect(src).not.toMatch(/providerKey === ['"]seedance-2\.0['"]/);
+    expect(src).not.toMatch(/providerKey === ['"]seedance-2\.0-fast['"]/);
   });
 });
