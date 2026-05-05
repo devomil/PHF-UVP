@@ -22,6 +22,8 @@ import SocialAccounts from "@/pages/social-accounts";
 import ApiTesting from "@/pages/api-testing";
 import Landing from "@/pages/landing";
 import NotFound from "@/pages/not-found";
+import BillingPage from "@/pages/billing";
+import BillingTransactionsPage from "@/pages/billing-transactions";
 import AppLayout from "@/components/layout/app-layout";
 import AdminDashboard from "@/pages/admin/admin-dashboard";
 import AdminUsers from "@/pages/admin/admin-users";
@@ -73,6 +75,8 @@ function AuthenticatedApp() {
             <Route path="/providers" component={Providers} />
             <Route path="/api-testing" component={ApiTesting} />
             <Route path="/profile" component={Profile} />
+            <Route path="/billing" component={BillingPage} />
+            <Route path="/billing/transactions" component={BillingTransactionsPage} />
             <Route component={NotFound} />
           </Switch>
         </AppLayout>

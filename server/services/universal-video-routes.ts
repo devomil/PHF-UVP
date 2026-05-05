@@ -11,6 +11,7 @@ import { sceneAnalysisService, SceneContext } from '../services/scene-analysis-s
 import { registerSceneClassifierRoutes } from './scene-classifier-routes';
 import type { Phase8AnalysisResult } from '../../shared/video-types';
 import { sceneRegenerationService } from '../services/scene-regeneration-service';
+import { requireCredits } from '../middleware/requireCredits';
 import { autoRegenerationService, SceneForRegeneration, RegenerationResult } from '../services/auto-regeneration-service';
 import { intelligentRegenerationService } from '../services/intelligent-regeneration-service';
 import { intelligentPromptImprover } from '../services/intelligent-prompt-improver';
@@ -4177,7 +4178,14 @@ router.patch('/projects/:projectId/visual-style-rationale', isAuthenticated, asy
   }
 });
 
-router.post('/projects/:projectId/generate-assets', isAuthenticated, async (req: Request, res: Response) => {
+router.post('/projects/:projectId/generate-assets', isAuthenticated, requireCredits({
+  // Quick Create kicks off the full generation pipeline. We gate on the
+  // requested provider's per-clip cost — the worker consumes credits per
+  // job once each clip lands. Falls back to a cheap reference rate so we
+  // don't paywall projects with provider not yet selected.
+  provider: (req) => req.body?.videoProvider || 'kling-2.6',
+  warnOnly: false,
+}), async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
     const { projectId } = req.params;
@@ -5885,7 +5893,9 @@ router.get('/projects/:projectId/render-status', isAuthenticated, async (req: Re
   }
 });
 
-router.post('/generate-image', isAuthenticated, async (req: Request, res: Response) => {
+router.post('/generate-image', isAuthenticated, requireCredits({
+  provider: 'image-flux',
+}), async (req: Request, res: Response) => {
   try {
     const { prompt, sceneId, aspectRatio } = req.body;
     
@@ -6930,7 +6940,9 @@ router.post('/:projectId/scenes/:sceneId/regenerate-image', isAuthenticated, asy
   }
 });
 
-router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, async (req: Request, res: Response) => {
+router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, requireCredits({
+  provider: (req) => req.body?.provider || 'kling-2.6',
+}), async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
     const { projectId, sceneId } = req.params;

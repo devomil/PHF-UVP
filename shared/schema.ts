@@ -854,3 +854,91 @@ export const canvaSyncJobs = pgTable('canva_sync_jobs', {
 
 export type CanvaSyncJob = typeof canvaSyncJobs.$inferSelect;
 export type NewCanvaSyncJob = typeof canvaSyncJobs.$inferInsert;
+
+// ============================================================================
+// Phase NC-01 — Credits & Subscriptions
+// ----------------------------------------------------------------------------
+// Plan/status enums are stored as varchar (Drizzle enums require Postgres
+// enum types; we keep them as strings for simpler migrations and rely on
+// app-level validation via the unions in `server/config/plans.ts`).
+// ============================================================================
+
+export const subscriptions = pgTable("subscriptions", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  plan: varchar("plan", { length: 20 }).notNull().default("FREE_TRIAL"),
+  status: varchar("status", { length: 20 }).notNull().default("TRIALING"),
+  monthlyGC: integer("monthly_gc").notNull().default(50),
+  currentGC: integer("current_gc").notNull().default(50),
+  topupGC: integer("topup_gc").notNull().default(0),
+  billingCycleStart: timestamp("billing_cycle_start").defaultNow(),
+  billingCycleEnd: timestamp("billing_cycle_end"),
+  stripeCustomerId: varchar("stripe_customer_id", { length: 255 }),
+  stripeSubscriptionId: varchar("stripe_subscription_id", { length: 255 }),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  userIdUnique: unique("uq_subscriptions_user_id").on(table.userId),
+  stripeCustomerIdx: index("idx_subscriptions_stripe_customer").on(table.stripeCustomerId),
+  stripeSubIdx: index("idx_subscriptions_stripe_sub").on(table.stripeSubscriptionId),
+}));
+
+export type Subscription = typeof subscriptions.$inferSelect;
+export type InsertSubscription = typeof subscriptions.$inferInsert;
+
+export const creditTransactions = pgTable("credit_transactions", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  type: varchar("type", { length: 30 }).notNull(),
+  // signed: negative = consumed, positive = credited
+  gcAmount: integer("gc_amount").notNull(),
+  // running balance AFTER this transaction (subscription + topup)
+  gcBalance: integer("gc_balance").notNull(),
+  provider: varchar("provider", { length: 100 }),
+  quality: varchar("quality", { length: 50 }),
+  durationS: integer("duration_s"),
+  jobId: varchar("job_id", { length: 100 }),
+  source: varchar("source", { length: 20 }),
+  description: text("description"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  userIdx: index("idx_credit_tx_user_id").on(table.userId),
+  jobIdx: index("idx_credit_tx_job_id").on(table.jobId),
+  typeIdx: index("idx_credit_tx_type").on(table.type),
+  createdAtIdx: index("idx_credit_tx_created_at").on(table.createdAt),
+  // Idempotency: one GENERATION (or one REFUND) row per jobId. Allows
+  // multiple jobIds with type='ROLLOVER'/'MONTHLY_RESET' (jobId NULL).
+  uniqJobType: unique("uq_credit_tx_job_type").on(table.jobId, table.type),
+}));
+
+export type CreditTransaction = typeof creditTransactions.$inferSelect;
+export type InsertCreditTransaction = typeof creditTransactions.$inferInsert;
+
+export const generationRates = pgTable("generation_rates", {
+  id: serial("id").primaryKey(),
+  provider: varchar("provider", { length: 100 }).notNull(),
+  quality: varchar("quality", { length: 50 }),
+  durationS: integer("duration_s"),
+  gcCost: integer("gc_cost").notNull(),
+  apiCostUSD: decimal("api_cost_usd", { precision: 10, scale: 4 }).notNull(),
+  tier: varchar("tier", { length: 20 }).notNull().default("standard"),
+  isActive: boolean("is_active").notNull().default(true),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  providerIdx: index("idx_gen_rates_provider").on(table.provider),
+  activeIdx: index("idx_gen_rates_active").on(table.isActive),
+}));
+
+export type GenerationRate = typeof generationRates.$inferSelect;
+
+// Idempotency ledger: store every billing-provider event id we've processed
+// so replays from Stripe (or any future provider) are no-ops.
+export const billingEvents = pgTable("billing_events", {
+  id: serial("id").primaryKey(),
+  provider: varchar("provider", { length: 30 }).notNull(),
+  eventId: varchar("event_id", { length: 200 }).notNull(),
+  eventType: varchar("event_type", { length: 100 }).notNull(),
+  processedAt: timestamp("processed_at").defaultNow(),
+}, (table) => ({
+  providerEventUnique: unique("uq_billing_events_provider_event").on(table.provider, table.eventId),
+}));

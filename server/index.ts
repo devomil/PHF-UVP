@@ -43,6 +43,12 @@ app.use(express.json({
     if (req.originalUrl === "/api/social/webhook" || req.url === "/api/social/webhook") {
       req.rawBody = buf;
     }
+    // Phase NC-01 — billing webhook signature verification needs the
+    // unmodified request body. Capture it before JSON parsing for any
+    // /api/billing/webhook/* path.
+    if (req.originalUrl?.startsWith("/api/billing/webhook") || req.url?.startsWith("/api/billing/webhook")) {
+      req.rawBody = buf;
+    }
   },
 }));
 app.use(express.urlencoded({ extended: false }));

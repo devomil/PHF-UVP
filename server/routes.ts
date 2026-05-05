@@ -27,6 +27,8 @@ import { getProjectType, getContentStructure } from "../shared/config/project-ty
 import studioPolishUploadRouter from "./services/studio-polish-upload";
 import { canvaAuthRouter } from "./services/canva-auth-routes";
 import { canvaSyncRouter } from "./services/canva-sync-routes";
+import creditsRouter from "./services/credits-routes";
+import { seedGenerationRatesIfNeeded } from "./scripts/seed-generation-rates";
 
 async function analyzeAndStoreProductMedia(projectId: string, mediaUrl: string, brief: string, userId: string, scriptPresets?: any) {
   console.log(`[Routes] Starting product media analysis for project ${projectId}`);
@@ -105,6 +107,11 @@ export async function registerRoutes(app: Express) {
   app.use("/api/social", socialPublishingRouter);
   app.use("/api/canva", canvaAuthRouter);
   app.use("/api/canva", canvaSyncRouter);
+  // Phase NC-01 — Credits / subscriptions / billing webhooks. The router
+  // owns its own /api/credits, /api/subscriptions, /api/billing/* paths.
+  app.use(creditsRouter);
+  // Seed canonical rates on boot (idempotent — no-ops once rows exist).
+  seedGenerationRatesIfNeeded().catch((e) => console.warn("[Routes] rate seed warn:", e?.message));
   app.use('/uploads', express.static('uploads'));
   app.use('/test-images', express.static('public/test-images'));
   app.use('/test-videos', express.static('public/test-videos'));
