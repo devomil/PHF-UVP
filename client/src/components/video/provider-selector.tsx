@@ -1,10 +1,11 @@
 import { memo, useState } from 'react';
-import { Sparkles, Folder, Archive, ChevronDown, ChevronUp, Image, Video, Wand2 } from 'lucide-react';
+import { Sparkles, Folder, Archive, ChevronDown, ChevronUp, Image, Video, Wand2, Volume2 } from 'lucide-react';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { providerSupportsNativeAudio } from '@shared/provider-catalog';
 
 export interface ProviderInfo {
   id: string;
@@ -474,6 +475,16 @@ export const ProviderSelector = memo(function ProviderSelector({
                       Best for this scene
                     </Badge>
                   )}
+                  {providerSupportsNativeAudio(provider.id) && (
+                    <Badge
+                      className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200 text-xs"
+                      title="Generates audio inside the clip — no separate SFX or voiceover needed."
+                      data-testid={`provider-native-audio-badge-${provider.id}`}
+                    >
+                      <Volume2 className="h-3 w-3 mr-1" />
+                      Native audio
+                    </Badge>
+                  )}
                 </div>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                   {provider.description}
@@ -648,6 +659,16 @@ export const ProviderSelectorPanel = memo(function ProviderSelectorPanel({
             <Badge className="bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200 text-xs">
               <Sparkles className="h-3 w-3 mr-1" />
               Best for this scene
+            </Badge>
+          )}
+          {providerSupportsNativeAudio(provider.id) && (
+            <Badge
+              className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200 text-xs"
+              title="Generates audio inside the clip — no separate SFX or voiceover needed."
+              data-testid={`provider-native-audio-badge-${provider.id}`}
+            >
+              <Volume2 className="h-3 w-3 mr-1" />
+              Native audio
             </Badge>
           )}
         </div>

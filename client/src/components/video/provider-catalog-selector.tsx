@@ -1,6 +1,11 @@
 import { useState } from "react";
-import { Sparkles, Video, Image } from "lucide-react";
-import { getVideoProviders, getImageProviders, COST_TIER_LABELS } from "@shared/provider-catalog";
+import { Sparkles, Video, Image, Volume2 } from "lucide-react";
+import {
+  getVideoProviders,
+  getImageProviders,
+  COST_TIER_LABELS,
+  providerSupportsNativeAudio,
+} from "@shared/provider-catalog";
 
 interface ProviderCatalogSelectorProps {
   outputType: "video" | "image";
@@ -44,6 +49,16 @@ export function ProviderCatalogSelector({ outputType, provider, onProviderChange
                 <span className="font-medium text-sm" style={{ color: "var(--text-primary)" }}>{selectedProvider.name}</span>
                 {selectedProvider.highlight && (
                   <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-500/20 text-purple-400 whitespace-nowrap">{selectedProvider.highlight}</span>
+                )}
+                {providerSupportsNativeAudio(selectedProvider.id) && (
+                  <span
+                    className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 whitespace-nowrap"
+                    title="Generates audio inside the clip — no separate SFX or voiceover needed."
+                    data-testid={`provider-native-audio-badge-selected-${selectedProvider.id}`}
+                  >
+                    <Volume2 className="w-3 h-3" />
+                    Native audio
+                  </span>
                 )}
                 {!compact && (
                   <span className="text-xs truncate hidden sm:inline" style={{ color: "var(--text-muted)" }}>{selectedProvider.capabilities.join(" · ")}</span>
@@ -126,6 +141,16 @@ export function ProviderCatalogSelector({ outputType, provider, onProviderChange
                               <span className="font-medium text-sm">{p.name}</span>
                               {p.highlight && (
                                 <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-500/20 text-purple-400 whitespace-nowrap">{p.highlight}</span>
+                              )}
+                              {providerSupportsNativeAudio(p.id) && (
+                                <span
+                                  className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 whitespace-nowrap"
+                                  title="Generates audio inside the clip — no separate SFX or voiceover needed."
+                                  data-testid={`provider-native-audio-badge-${p.id}`}
+                                >
+                                  <Volume2 className="w-3 h-3" />
+                                  Native audio
+                                </span>
                               )}
                               <span className="text-[10px] font-medium ml-auto" style={{ color: costInfo.color }}>{costInfo.label}</span>
                             </div>
