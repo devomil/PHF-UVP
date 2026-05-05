@@ -82,19 +82,31 @@ let seeded = false;
 export async function seedGenerationRatesIfNeeded(): Promise<void> {
   if (seeded) return;
   try {
-    const existing = await db.select().from(generationRates).limit(1);
-    if (existing.length > 0) {
-      seeded = true;
-      return;
-    }
+    // Ensure a unique constraint on the natural key so we can UPSERT.
+    // `quality` and `duration_s` are nullable (utility rows), and
+    // Postgres treats NULL as distinct in plain UNIQUE indexes — using
+    // COALESCE expressions yields a stable upsert key in all cases.
+    await db.execute(sql`
+      CREATE UNIQUE INDEX IF NOT EXISTS uq_gen_rates_natkey
+      ON generation_rates (provider, COALESCE(quality, ''), COALESCE(duration_s, -1))
+    `);
+
+    // Reconcile every canonical row on every boot — keeps prices in
+    // lockstep with the architecture doc when we add or reprice a row.
     for (const r of RATES) {
       await db.execute(sql`
         INSERT INTO generation_rates (provider, quality, duration_s, gc_cost, api_cost_usd, tier, is_active, updated_at)
         VALUES (${r.provider}, ${r.quality}, ${r.durationS}, ${r.gcCost}, ${r.apiCostUSD}, ${r.tier}, true, NOW())
-        ON CONFLICT DO NOTHING
+        ON CONFLICT (provider, COALESCE(quality, ''), COALESCE(duration_s, -1))
+        DO UPDATE SET
+          gc_cost = EXCLUDED.gc_cost,
+          api_cost_usd = EXCLUDED.api_cost_usd,
+          tier = EXCLUDED.tier,
+          is_active = true,
+          updated_at = NOW()
       `);
     }
-    console.log(`[Seed] Generation rates seeded: ${RATES.length} rows`);
+    console.log(`[Seed] Generation rates reconciled: ${RATES.length} rows`);
     seeded = true;
   } catch (err: any) {
     console.warn("[Seed] generation_rates seeding skipped:", err?.message);

@@ -466,13 +466,30 @@ export async function updateSubscriptionPlan(
   // plan change racing with a spend can briefly mis-cap the user's
   // remaining balance.
   await runInTx(outerTx, async (tx) => {
-    await tx.execute(sql`SELECT id FROM subscriptions WHERE user_id = ${userId} FOR UPDATE`);
+    // Read the prior plan + balance under FOR UPDATE so we can detect
+    // an upgrade and provision the new monthly budget atomically. Spec:
+    // "upgraded users get the new monthly budget immediately" — if the
+    // user moves to a richer plan we top currentGC up to the new
+    // monthlyGC (never down — mid-cycle balances are preserved).
+    const locked = await tx.execute(
+      sql`SELECT id, plan, monthly_gc, current_gc FROM subscriptions WHERE user_id = ${userId} FOR UPDATE`,
+    );
+    const rows = (locked && typeof locked === "object" && "rows" in locked)
+      ? (locked as { rows: Array<{ plan: PlanTier; monthly_gc: string | number; current_gc: string | number }> }).rows
+      : (locked as Array<{ plan: PlanTier; monthly_gc: string | number; current_gc: string | number }>);
+    const prior = Array.isArray(rows) ? rows[0] : undefined;
+    const priorMonthly = prior ? Number(prior.monthly_gc) : 0;
+    const priorCurrent = prior ? Number(prior.current_gc) : 0;
+    const isUpgrade = planCfg.monthlyGC > priorMonthly;
+    const newCurrent = isUpgrade ? Math.max(priorCurrent, planCfg.monthlyGC) : priorCurrent;
+
     await tx
       .update(subscriptions)
       .set({
         plan,
         status,
         monthlyGC: planCfg.monthlyGC,
+        currentGC: newCurrent,
         stripeCustomerId: customerId ?? undefined,
         stripeSubscriptionId: subscriptionId ?? undefined,
         billingCycleStart: periodStart ?? undefined,
@@ -480,5 +497,15 @@ export async function updateSubscriptionPlan(
         updatedAt: new Date(),
       })
       .where(eq(subscriptions.userId, userId));
+
+    if (isUpgrade && newCurrent > priorCurrent) {
+      await tx.insert(creditTransactions).values({
+        userId,
+        type: "MONTHLY_RESET",
+        gcAmount: newCurrent - priorCurrent,
+        gcBalance: newCurrent,
+        description: `Plan upgraded to ${plan} — credits topped up to ${planCfg.monthlyGC} GC`,
+      });
+    }
   });
 }
