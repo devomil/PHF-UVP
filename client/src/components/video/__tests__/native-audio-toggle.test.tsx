@@ -205,33 +205,12 @@ describe("NativeAudioToggle", () => {
     ];
 
     for (const veo of veoVariants) {
-      it(`is enabled for ${veo} when an image is attached (I2V)`, () => {
+      it(`is enabled for ${veo} (T2V + I2V — Task #139)`, () => {
         render(
           <NativeAudioToggle
             provider={veo}
             value={false}
             hasVoiceover={false}
-            hasImage={true}
-            onChange={vi.fn()}
-          />,
-        );
-        expect(
-          (screen.getByTestId("scene-native-audio-switch") as HTMLButtonElement)
-            .disabled,
-        ).toBe(false);
-        expect(
-          screen.queryByTestId("scene-native-audio-disabled-wrap"),
-        ).toBeNull();
-        cleanup();
-      });
-
-      it(`is also enabled for ${veo} when no image is attached (T2V — Task #139)`, () => {
-        render(
-          <NativeAudioToggle
-            provider={veo}
-            value={false}
-            hasVoiceover={false}
-            hasImage={false}
             onChange={vi.fn()}
           />,
         );
@@ -246,13 +225,12 @@ describe("NativeAudioToggle", () => {
       });
     }
 
-    it("shows the conflict warning for Veo I2V too", () => {
+    it("shows the conflict warning for Veo too", () => {
       render(
         <NativeAudioToggle
           provider="veo-3.1"
           value={true}
           hasVoiceover={true}
-          hasImage={true}
           onChange={vi.fn()}
         />,
       );
@@ -261,14 +239,13 @@ describe("NativeAudioToggle", () => {
       ).toBeTruthy();
     });
 
-    it("opens the mute-voiceover AlertDialog for Veo I2V too", async () => {
+    it("opens the mute-voiceover AlertDialog for Veo too", async () => {
       const onMute = vi.fn().mockResolvedValue(undefined);
       render(
         <NativeAudioToggle
           provider="veo-3.1"
           value={true}
           hasVoiceover={true}
-          hasImage={true}
           onChange={vi.fn()}
           onMuteVoiceover={onMute}
         />,

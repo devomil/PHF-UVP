@@ -8,7 +8,7 @@
 - **Lint Dialogs**: `npm run lint:dialogs`
 - **Health Check**: `GET /api/health`
 - **Codegen**: _Populate as you build_
-- **DB Push**: _Populate as you build_
+- **DB Push**: `drizzle-kit push:pg`
 - **Env Vars**: `SESSION_SECRET`, `AYRSHARE_API_KEY`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER`, `ADMIN_NOTIFICATION_EMAIL`, `ADMIN_NOTIFICATION_PHONE`, `SENDGRID_FROM_EMAIL`, `RECRAFT_API_KEY`
 
 ## Stack
@@ -22,17 +22,16 @@
 - **Video Composition**: Remotion
 
 ## Where things live
-- `client/`: Frontend source code
-- `server/`: Backend source code
-- `shared/`: Shared types and utilities
-- `drizzle/`: Database migrations and schema
-- `db/schema.ts`: Drizzle ORM database schema
-- `shared/video-types.ts`: Core video-related types and API contracts
-- `shared/config/visual-art-presets.ts`: Visual art style presets configuration
-- `.husky/`: Git hooks (pre-commit for dialog linting)
-- `.github/workflows/`: CI/CD configurations
-- **DB Schema**: `drizzle/schema.ts`
-- **API Contracts**: Defined implicitly by Express.js routes in `server/services/`
+- **Frontend Source**: `client/`
+- **Backend Source**: `server/`
+- **Shared Utilities/Types**: `shared/`
+- **DB Schema**: `db/schema.ts` (Drizzle ORM)
+- **API Routes**: `server/services/` (e.g., `universal-video-routes.ts`, `admin-routes.ts`)
+- **Remotion Root**: `remotion/Root.tsx`
+- **Native Dialog Linting Script**: `scripts/check-no-native-dialogs.sh`
+- **CI/CD Workflows**: `.github/workflows/`
+- **Husky Hooks**: `.husky/`
+- **Visual Art Presets**: `shared/config/visual-art-presets.ts`
 - **Theme Files**: `client/src/index.css`, `client/tailwind.config.js`
 
 ## Architecture decisions
@@ -42,6 +41,7 @@
 - **Two-Stage Rendering Optimization**: For "Studio Polish" projects, video rendering bypasses Remotion Lambda for raw uploaded clips when possible, significantly reducing render times.
 - **Intelligent Script Pipeline (4 Stages)**: A sophisticated AI pipeline handles script generation from creative strategy to cinematic prompt enhancement, incorporating brand guidelines, trend data, and Suzzie's 7-layer cinematic framework for transforming visual directions into production-grade AI video prompts.
 - **Text-Aware Image-to-Video**: Automatically detects text-heavy scenes and routes them through a GPT-Image-1 -> I2V pipeline to ensure accurate text rendering within AI-generated video.
+- **Two-Stage Rendering Pipeline**: FFmpeg pre-composes micro-scene clips for each scene, then Remotion renders these pre-assembled clips. This optimizes performance, especially for Studio Polish projects which can bypass Remotion Lambda almost entirely.
 
 ## Product
 - **AI Video Generation**: Utilizes multiple AI video providers with an intelligent selection system.
@@ -61,6 +61,7 @@
 - **Canva Integration**: OAuth-based integration for seamless rendering and asset synchronization to Canva.
 - **Social Publishing Hub**: Ayrshare-powered system for scheduling and publishing videos to social media with AI caption generation.
 - **Admin Portal**: Dashboard for user, project, cost, and activity management.
+- **Sound Design**: Advanced sound design capabilities and quality evaluation.
 
 ## User preferences
 - Focus on Video Production Platform only (no HR features)
@@ -76,6 +77,8 @@
 - **Concurrent Video Generation**: Race conditions are handled by atomic DB operations and specific retry/polling logic, but unexpected delays can occur.
 - **Cost Telemetry**: Storyboard batch generation includes cost tracking with budget caps and alerts for nearing the cap.
 - **Canva Integration**: Requires `canva_tokens` to be valid and active. Sync status should be monitored in the UI.
+- **Session Security:** `SESSION_SECRET` environment variable is critical in production; the app will fail fast if missing.
+- **Image Generation Policy:** Recraft is preferred for text-heavy/product scenes, while Nano Banana 2 is preferred for photorealistic/lifestyle scenes.
 
 ## Pointers
 - **Remotion Documentation**: [https://www.remotion.dev/docs](https://www.remotion.dev/docs)
@@ -83,7 +86,9 @@
 - **Tailwind CSS Documentation**: [https://tailwindcss.com/docs](https://tailwindcss.com/docs)
 - **shadcn/ui Documentation**: [https://ui.shadcn.com/docs](https://ui.shadcn.com/docs)
 - **Passport.js Documentation**: [http://www.passportjs.org/docs/](http://www.passportjs.org/docs/)
+- **@tanstack/react-query Documentation**: [https://tanstack.com/query/latest/docs/react/overview](https://tanstack.com/query/latest/docs/react/overview)
+- **Husky Hooks**: [https://typicode.github.io/husky/](https://typicode.github.io/husky/)
 - **PiAPI LLM Client**: Refer to `server/services/piapi-llm-client.ts` for Claude integration details.
 - **Image Generation Policy**: `server/utils/image-generation-policy.ts` for provider selection logic.
-- **Ayrshare API Documentation**: _Populate as you build_
-- **Canva API Documentation**: _Populate as you build_
+- **Ayrshare API Documentation**: [https://docs.ayrshare.com/](https://docs.ayrshare.com/)
+- **Canva API Documentation**: [https://www.canva.com/developers/api/](https://www.canva.com/developers/api/)

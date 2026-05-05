@@ -17,7 +17,7 @@ import { getVisualArtPreset, getAllVisualArtPresets } from "@shared/config/visua
 import { CharacterProfilesPanel } from "./character-profiles-panel";
 import { SceneDurationControl } from "./scene-duration-control";
 import { NativeAudioToggle } from "./native-audio-toggle";
-import { resolveSceneVideoProvider, sceneHasImage } from "./scene-provider-resolver";
+import { resolveSceneVideoProvider } from "./scene-provider-resolver";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import {
   AlertDialog,
@@ -2400,14 +2400,6 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
             provider={resolveSceneVideoProvider(scene, projectPreferredProvider)}
             value={editValues.generateNativeAudio}
             hasVoiceover={Boolean(editValues.narration.trim())}
-            // Task #137: Veo I2V audio capability requires an attached
-            // image. We use the shared sceneHasImage() helper here
-            // (rather than the editor-local `hasImage` from line ~166)
-            // so the toggle's enabled-state predicate stays in lockstep
-            // with the rest of the app — the editor-local one also
-            // counts the editor-only `textImageUrl` field which isn't
-            // a real I2V source for the scene-card / producer paths.
-            hasImage={sceneHasImage(scene)}
             disabled={!isEditing}
             onChange={(next) => {
               setEditValues({ ...editValues, generateNativeAudio: next });

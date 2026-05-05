@@ -38,11 +38,6 @@ interface Props {
   provider: string | undefined;
   value: boolean;
   hasVoiceover: boolean;
-  // Task #139: Veo now supports native audio in both T2V and I2V modes,
-  // matching Seedance 2. The toggle no longer requires an attached
-  // image, so this prop is kept only for backwards compatibility with
-  // existing call sites and is not used to gate the switch.
-  hasImage?: boolean;
   onChange: (next: boolean) => void | Promise<void>;
   // Called when the user confirms muting the voiceover from the conflict
   // warning. Implementations should clear `scene.narration` (PATCH with
@@ -55,7 +50,6 @@ export function NativeAudioToggle({
   provider,
   value,
   hasVoiceover,
-  hasImage: _hasImage = false,
   onChange,
   onMuteVoiceover,
   disabled,
