@@ -638,13 +638,23 @@ class AIVideoService {
         motionControl,
         isCharacterReference: options.isCharacterReference,
         artPresetId: options.artPresetId,
-        // Phase 20D (Task #126): forward the scene-level native-audio
-        // opt-in. Gated by the provider catalog's `supportsNativeAudio`
-        // flag (Task #136 — single source of truth). Veo I2V also
-        // reads `options.generateAudio` and would otherwise emit
-        // `generate_audio: true` to Google's API if a stale flag
-        // survived a provider switch in the UI. Belt-and-suspenders
-        // alongside the disabled toggle in the scene editor.
+        // Phase 20D (Task #126) + Tasks #136 / #137: forward the
+        // scene-level native-audio opt-in. Gated by the shared provider
+        // catalog's `supportsNativeAudio` flag (Task #136 — single
+        // source of truth). Today that catalog marks Seedance 2 (both
+        // variants) and every Veo variant as audio-capable; the piapi
+        // I2V branch reads `generate_audio` for both. Other I2V
+        // providers (Wan, Runway, Hunyuan, Sora, Kling, Hailuo, Luma,
+        // Pika, etc.) keep `supportsNativeAudio: false` and the field
+        // is omitted — a stale UI flag can't leak into the wrong
+        // payload after a provider switch. Belt-and-suspenders with
+        // the disabled toggle in the scene editor.
+        //
+        // Note: this gate fires only inside the I2V branch
+        // (`if (options.imageUrl)`), so the Veo T2V path — which
+        // hard-codes `generate_audio: false` in piapi-video-service.ts
+        // — is naturally never reached even though Veo's catalog flag
+        // is true at the provider level.
         ...(options.generateNativeAudio === true &&
           providerSupportsNativeAudio(providerKey)
           ? { generateAudio: true }

@@ -34,7 +34,7 @@ import { VoiceSelector } from "./voice-selector";
 import { QualityReport } from "./quality-report";
 import { SceneDurationControl } from "./scene-duration-control";
 import { NativeAudioToggle } from "./native-audio-toggle";
-import { resolveSceneVideoProvider } from "./scene-provider-resolver";
+import { resolveSceneVideoProvider, sceneHasImage } from "./scene-provider-resolver";
 import { BrandSettingsPanel, BrandSettings as UIBrandSettings } from "./brand-settings-panel";
 import { EndCardSettingsPanel, EndCardSettings, DEFAULT_END_CARD_SETTINGS } from "./video/EndCardSettingsPanel";
 import { SoundDesignSettingsPanel, SoundDesignSettings, DEFAULT_SOUND_DESIGN_SETTINGS } from "./video/SoundDesignSettingsPanel";
@@ -3725,6 +3725,11 @@ function ScenePreview({
                   const currentDuration = scene.duration || (isSeedance2 ? 8 : 5);
                   const currentAudio = scene.generateNativeAudio === true;
                   const hasVoiceover = !!(scene.narration && scene.narration.trim().length > 0);
+                  // Task #137: Veo I2V also supports native audio when an
+                  // image is attached. Use the shared sceneHasImage()
+                  // helper so this surface stays in lockstep with the
+                  // toggle's enabled-state predicate.
+                  const hasImage = sceneHasImage(scene);
                   return (
                     <div className="space-y-3" data-testid="scene-editor-duration-audio">
                       <SceneDurationControl
@@ -3744,6 +3749,7 @@ function ScenePreview({
                         provider={resolvedProvider}
                         value={currentAudio}
                         hasVoiceover={hasVoiceover}
+                        hasImage={hasImage}
                         onChange={async (next) => {
                           try {
                             await apiRequest('PATCH', `/api/universal-video/projects/${projectId}/scenes/${scene.id}`, { generateNativeAudio: next });
@@ -3751,7 +3757,7 @@ function ScenePreview({
                             toast({
                               title: next ? 'Native audio enabled' : 'Native audio disabled',
                               description: next
-                                ? 'Seedance 2 will generate ambient audio for this scene.'
+                                ? 'This model will generate native audio for this scene.'
                                 : 'This scene will use only its voiceover (if any).',
                             });
                           } catch (err) {

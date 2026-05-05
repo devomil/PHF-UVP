@@ -1,8 +1,11 @@
 // @vitest-environment jsdom
 //
-// Phase 20D (Task #126): NativeAudioToggle behavior matrix:
-//   • Disabled + tooltip wrap when provider isn't Seedance 2
-//   • Conflict warning shown only when (isSeedance2 && value && hasVoiceover)
+// NativeAudioToggle behavior matrix:
+//   • Disabled + tooltip wrap when provider isn't audio-capable
+//   • Seedance 2 (T2V or I2V) is always audio-capable
+//   • Veo I2V is audio-capable ONLY when an image is attached
+//     (Task #137 — Veo T2V hard-codes generate_audio:false on the wire)
+//   • Conflict warning shown only when (audio-capable && value && hasVoiceover)
 //   • "Mute voiceover" opens a themed AlertDialog (not window.confirm)
 //   • Confirming the AlertDialog calls onMuteVoiceover exactly once
 //
@@ -186,6 +189,98 @@ describe("NativeAudioToggle", () => {
     await waitFor(() => {
       expect(onChange).toHaveBeenCalledTimes(1);
       expect(onChange).toHaveBeenCalledWith(true);
+    });
+  });
+
+  // Task #137: Veo I2V audio capability
+  describe("Veo I2V audio capability (Task #137)", () => {
+    const veoVariants = [
+      "veo",
+      "veo-2",
+      "veo-3",
+      "veo-3.1",
+      "veo2",
+      "veo3",
+      "veo3.1",
+    ];
+
+    for (const veo of veoVariants) {
+      it(`is enabled for ${veo} when an image is attached`, () => {
+        render(
+          <NativeAudioToggle
+            provider={veo}
+            value={false}
+            hasVoiceover={false}
+            hasImage={true}
+            onChange={vi.fn()}
+          />,
+        );
+        expect(
+          (screen.getByTestId("scene-native-audio-switch") as HTMLButtonElement)
+            .disabled,
+        ).toBe(false);
+        expect(
+          screen.queryByTestId("scene-native-audio-disabled-wrap"),
+        ).toBeNull();
+        cleanup();
+      });
+
+      it(`is disabled for ${veo} when no image is attached (Veo T2V has no audio)`, () => {
+        render(
+          <NativeAudioToggle
+            provider={veo}
+            value={false}
+            hasVoiceover={false}
+            hasImage={false}
+            onChange={vi.fn()}
+          />,
+        );
+        expect(
+          (screen.getByTestId("scene-native-audio-switch") as HTMLButtonElement)
+            .disabled,
+        ).toBe(true);
+        expect(
+          screen.getByTestId("scene-native-audio-disabled-wrap"),
+        ).toBeTruthy();
+        cleanup();
+      });
+    }
+
+    it("shows the conflict warning for Veo I2V too", () => {
+      render(
+        <NativeAudioToggle
+          provider="veo-3.1"
+          value={true}
+          hasVoiceover={true}
+          hasImage={true}
+          onChange={vi.fn()}
+        />,
+      );
+      expect(
+        screen.queryByTestId("scene-native-audio-conflict"),
+      ).toBeTruthy();
+    });
+
+    it("opens the mute-voiceover AlertDialog for Veo I2V too", async () => {
+      const onMute = vi.fn().mockResolvedValue(undefined);
+      render(
+        <NativeAudioToggle
+          provider="veo-3.1"
+          value={true}
+          hasVoiceover={true}
+          hasImage={true}
+          onChange={vi.fn()}
+          onMuteVoiceover={onMute}
+        />,
+      );
+      fireEvent.click(screen.getByTestId("scene-native-audio-mute-voiceover"));
+      const action = await screen.findByTestId(
+        "scene-native-audio-mute-confirm-action",
+      );
+      fireEvent.click(action);
+      await waitFor(() => {
+        expect(onMute).toHaveBeenCalledTimes(1);
+      });
     });
   });
 });

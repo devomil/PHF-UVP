@@ -427,6 +427,12 @@ export const VIDEO_PROVIDER_CATALOG: ProviderCatalogEntry[] = [
     supportedModes: ['t2v', 'i2v'],
     aspectRatios: ['16:9', '9:16', '1:1'],
     highlight: 'Native Audio',
+    // Task #137: native audio is honored only by the Veo I2V branch
+    // (piapi-video-service.ts reads `generate_audio` there). The Veo
+    // T2V branch hard-codes `generate_audio: false`, so the toggle
+    // surface adds an extra `hasImage` gate on top of this flag for
+    // Veo specifically.
+    supportsNativeAudio: true,
   },
   {
     id: 'veo-2',
@@ -439,6 +445,7 @@ export const VIDEO_PROVIDER_CATALOG: ProviderCatalogEntry[] = [
     type: 'video',
     supportedModes: ['t2v', 'i2v'],
     aspectRatios: ['16:9', '9:16', '1:1'],
+    supportsNativeAudio: true,
   },
   {
     id: 'veo-3',
@@ -452,6 +459,7 @@ export const VIDEO_PROVIDER_CATALOG: ProviderCatalogEntry[] = [
     supportedModes: ['t2v', 'i2v'],
     aspectRatios: ['16:9', '9:16', '1:1'],
     highlight: 'Top Tier',
+    supportsNativeAudio: true,
   },
   {
     id: 'veo-3.1',
@@ -465,6 +473,7 @@ export const VIDEO_PROVIDER_CATALOG: ProviderCatalogEntry[] = [
     supportedModes: ['t2v', 'i2v'],
     aspectRatios: ['16:9', '9:16', '1:1'],
     highlight: 'Latest & Best',
+    supportsNativeAudio: true,
   },
   {
     id: 'veo2',
@@ -477,6 +486,7 @@ export const VIDEO_PROVIDER_CATALOG: ProviderCatalogEntry[] = [
     type: 'video',
     supportedModes: ['t2v', 'i2v'],
     aspectRatios: ['16:9', '9:16', '1:1'],
+    supportsNativeAudio: true,
   },
   {
     id: 'veo3',
@@ -489,6 +499,7 @@ export const VIDEO_PROVIDER_CATALOG: ProviderCatalogEntry[] = [
     type: 'video',
     supportedModes: ['t2v', 'i2v'],
     aspectRatios: ['16:9', '9:16', '1:1'],
+    supportsNativeAudio: true,
   },
   {
     id: 'veo3.1',
@@ -501,6 +512,7 @@ export const VIDEO_PROVIDER_CATALOG: ProviderCatalogEntry[] = [
     type: 'video',
     supportedModes: ['t2v', 'i2v'],
     aspectRatios: ['16:9', '9:16', '1:1'],
+    supportsNativeAudio: true,
   },
 ];
 

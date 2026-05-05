@@ -172,7 +172,7 @@ describe('Seedance I2V payload — generate_audio is an explicit boolean', () =>
   });
 });
 
-describe('ai-video-service generateAudio gate — catalog-driven (Tasks #126, #136)', () => {
+describe('ai-video-service generateAudio gate — catalog-driven (Tasks #126, #136, #137)', () => {
   // The forwarding gate in ai-video-service.ts MUST NOT pass
   // generateAudio=true to providers that don't advertise native audio
   // in the shared provider catalog (Veo I2V is the dangerous one — it
@@ -180,26 +180,40 @@ describe('ai-video-service generateAudio gate — catalog-driven (Tasks #126, #1
   // Google's API).
   //
   // Task #136 made the provider catalog (shared/provider-catalog.ts)
-  // the single source of truth via the `supportsNativeAudio` flag, so
-  // we assert two things:
-  //   1. The catalog correctly marks the audio-capable models.
+  // the single source of truth via the `supportsNativeAudio` flag.
+  // Task #137 then enabled the same flag on every Veo variant so the
+  // I2V branch can light up native audio there too.
+  //
+  // We assert two things:
+  //   1. The catalog correctly marks the audio-capable models
+  //      (Seedance 2 + every Veo variant), and the dangerous neighbors
+  //      stay false.
   //   2. The ai-video-service gate reads from the catalog helper —
   //      not from a hardcoded model-string allowlist.
-  it('catalog flag is set on Seedance 2 variants and not on dangerous neighbors', () => {
+  it('catalog flag is set on Seedance 2 + Veo and not on audio-oblivious neighbors', () => {
     // Positive: the models the runtime is currently routing audio to
     // must keep the flag — losing this would silently disable the UI.
     expect(providerSupportsNativeAudio('seedance-2.0')).toBe(true);
     expect(providerSupportsNativeAudio('seedance-2.0-fast')).toBe(true);
+    // Task #137: every Veo variant (canonical + alias) must be flagged
+    // so the I2V branch can forward generate_audio:true.
+    expect(providerSupportsNativeAudio('veo')).toBe(true);
+    expect(providerSupportsNativeAudio('veo-2')).toBe(true);
+    expect(providerSupportsNativeAudio('veo-3')).toBe(true);
+    expect(providerSupportsNativeAudio('veo-3.1')).toBe(true);
+    expect(providerSupportsNativeAudio('veo2')).toBe(true);
+    expect(providerSupportsNativeAudio('veo3')).toBe(true);
+    expect(providerSupportsNativeAudio('veo3.1')).toBe(true);
     // Negative spot-checks: these are the providers most likely to be
-    // mis-flagged in a future edit. Veo I2V in particular reads
-    // generate_audio downstream — flipping its flag would silently
-    // start emitting audio requests to Google's API and bill the user.
-    expect(providerSupportsNativeAudio('veo-3')).toBe(false);
-    expect(providerSupportsNativeAudio('veo-3.1')).toBe(false);
-    expect(providerSupportsNativeAudio('veo-2')).toBe(false);
+    // mis-flagged in a future edit. Their I2V branches don't read
+    // generate_audio at all and should never receive it on the wire.
     expect(providerSupportsNativeAudio('seedance-1.0')).toBe(false);
     expect(providerSupportsNativeAudio('kling-2.6')).toBe(false);
     expect(providerSupportsNativeAudio('runway-4.5')).toBe(false);
+    expect(providerSupportsNativeAudio('wan-2.6')).toBe(false);
+    expect(providerSupportsNativeAudio('hunyuan')).toBe(false);
+    expect(providerSupportsNativeAudio('sora-2')).toBe(false);
+    expect(providerSupportsNativeAudio('hailuo')).toBe(false);
     expect(providerSupportsNativeAudio(undefined)).toBe(false);
     expect(providerSupportsNativeAudio('not-a-real-model')).toBe(false);
     // Sanity: at least one model is flagged. Adding a NEW audio-capable
@@ -224,4 +238,92 @@ describe('ai-video-service generateAudio gate — catalog-driven (Tasks #126, #1
     expect(src).not.toMatch(/providerKey === ['"]seedance-2\.0['"]/);
     expect(src).not.toMatch(/providerKey === ['"]seedance-2\.0-fast['"]/);
   });
+});
+
+// ─────────────────────────────────────────────────────────────────────
+// Task #137: cross-provider I2V audio matrix.
+//
+// The toggle has to mean the same thing on both supported providers
+// AND must NEVER leak `generate_audio: true` onto an I2V branch that
+// doesn't have audio capability (or that would silently ignore the
+// field while still costing the user a render). We assert the wire
+// payload shape here — not just the gate — so a future refactor of
+// any individual I2V branch that accidentally adds/removes the field
+// fails loudly.
+// ─────────────────────────────────────────────────────────────────────
+describe('I2V cross-provider generate_audio matrix (Task #137)', () => {
+  // Providers that DO support native audio in I2V mode. Flipping the
+  // scene-level flag → `generate_audio: true` on the wire.
+  const audioCapable: Array<{ model: string; label: string }> = [
+    { model: 'seedance-2.0', label: 'Seedance 2.0' },
+    { model: 'seedance-2.0-fast', label: 'Seedance 2.0 Fast' },
+    { model: 'veo', label: 'Veo (default = Veo 3)' },
+    { model: 'veo-2', label: 'Veo 2' },
+    { model: 'veo-3', label: 'Veo 3' },
+    { model: 'veo-3.1', label: 'Veo 3.1' },
+  ];
+
+  for (const { model, label } of audioCapable) {
+    it(`${label} I2V emits generate_audio:true when flag is true`, () => {
+      const body = svc.buildI2VRequestBody(
+        baseI2V(model, { generateAudio: true }),
+        I2V_PROMPT,
+      );
+      expect(body.input.generate_audio).toBe(true);
+    });
+
+    it(`${label} I2V emits generate_audio:false when flag is false`, () => {
+      const body = svc.buildI2VRequestBody(
+        baseI2V(model, { generateAudio: false }),
+        I2V_PROMPT,
+      );
+      expect(body.input.generate_audio).toBe(false);
+    });
+  }
+
+  // Providers that have I2V support but DO NOT honor (or even know
+  // about) the audio flag. Per the task acceptance criteria, the
+  // effective audio for these providers must be `false` even when
+  // the upstream flag is true — i.e. they must NOT silently emit
+  // `generate_audio: true` on the wire, and they must NOT mistakenly
+  // forward an audio request to a model that doesn't support it.
+  //
+  // We assert the user-facing semantic ("audio off") via the
+  // coalescing form `field ?? false === false`. This both:
+  //   - matches the literal "false" in the acceptance criteria, and
+  //   - keeps the test honest if a provider branch later starts
+  //     emitting an explicit `false` instead of omitting the field
+  //     entirely (both behaviors are correct: audio stays off).
+  // The strict `toBeUndefined()` check still lives on the
+  // seedance-1.0 legacy case above, which guards the "field never
+  // appears at all" invariant for that specific branch.
+  const audioOblivious: Array<{ model: string; label: string }> = [
+    { model: 'wan-2.1', label: 'Wan 2.1' },
+    { model: 'wan-2.6', label: 'Wan 2.6' },
+    { model: 'runway', label: 'Runway' },
+    { model: 'hunyuan', label: 'Hunyuan' },
+    { model: 'sora-2', label: 'Sora 2' },
+    { model: 'kling-2.6', label: 'Kling 2.6' },
+    { model: 'hailuo', label: 'Hailuo / MiniMax' },
+  ];
+
+  for (const { model, label } of audioOblivious) {
+    it(`${label} I2V resolves audio to false even when flag=true`, () => {
+      const body = svc.buildI2VRequestBody(
+        baseI2V(model, { generateAudio: true }),
+        I2V_PROMPT,
+      );
+      // Must not be `true` — that would either waste a render or get
+      // rejected by a provider that doesn't know the field.
+      expect(body.input.generate_audio).not.toBe(true);
+      // Effective audio must be off.
+      expect(body.input.generate_audio ?? false).toBe(false);
+    });
+
+    it(`${label} I2V resolves audio to false when flag is undefined`, () => {
+      const body = svc.buildI2VRequestBody(baseI2V(model), I2V_PROMPT);
+      expect(body.input.generate_audio).not.toBe(true);
+      expect(body.input.generate_audio ?? false).toBe(false);
+    });
+  }
 });
