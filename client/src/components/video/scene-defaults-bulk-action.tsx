@@ -33,6 +33,10 @@ import {
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { formatUsd, getCostPerSecond } from "./scene-cost";
+import {
+  VIDEO_PROVIDER_CATALOG,
+  providerSupportsNativeAudio,
+} from "@shared/provider-catalog";
 
 const DURATION_PRESETS = [5, 8, 12] as const;
 
@@ -51,12 +55,23 @@ interface Props {
   scenes: MinimalScene[];
   onUpdated?: () => void;
   // Optional: if the project already exposes a preferred provider, we
-  // surface a warning when it isn't a Seedance 2 model (because no
-  // other provider honors `generateNativeAudio`).
+  // surface a warning when that provider doesn't honor
+  // `generateNativeAudio`. The list of audio-capable providers is
+  // derived from `shared/provider-catalog.ts` (`supportsNativeAudio`)
+  // — DO NOT hardcode model names here.
   projectPreferredProvider?: string;
 }
 
-const SEEDANCE_2 = new Set(["seedance-2.0", "seedance-2.0-fast"]);
+// Format a list of names with commas + "or". e.g.
+//   ["A"]            -> "A"
+//   ["A", "B"]       -> "A or B"
+//   ["A", "B", "C"]  -> "A, B, or C"
+function formatNameList(names: string[]): string {
+  if (names.length === 0) return "";
+  if (names.length === 1) return names[0];
+  if (names.length === 2) return `${names[0]} or ${names[1]}`;
+  return `${names.slice(0, -1).join(", ")}, or ${names[names.length - 1]}`;
+}
 
 // Pick the most common value in `values` (the modal/mode). On ties we
 // just take the first one we saw — good enough for "what looks like
@@ -144,8 +159,19 @@ export function SceneDefaultsBulkAction({
       setAudio &&
       audioValue &&
       !!projectPreferredProvider &&
-      !SEEDANCE_2.has(projectPreferredProvider),
+      !providerSupportsNativeAudio(projectPreferredProvider),
     [setAudio, audioValue, projectPreferredProvider],
+  );
+
+  // Names of every provider that honors `generateNativeAudio`, sourced
+  // from the catalog so adding a new audio-capable model never requires
+  // touching this string.
+  const audioCapableProviderNames = useMemo(
+    () =>
+      VIDEO_PROVIDER_CATALOG
+        .filter((p) => p.supportsNativeAudio)
+        .map((p) => p.name),
+    [],
   );
 
   const nothingSelected = duration === null && !setAudio;
@@ -394,8 +420,11 @@ export function SceneDefaultsBulkAction({
                 className="text-xs text-amber-600 dark:text-amber-400"
                 data-testid="scene-defaults-audio-warning"
               >
-                Heads up: native audio is only honored by Seedance 2. Your
-                current model is {projectPreferredProvider}.
+                Heads up: native audio is only honored by{" "}
+                {audioCapableProviderNames.length > 0
+                  ? `${formatNameList(audioCapableProviderNames)}.`
+                  : "models that support it."}{" "}
+                Your current model is {projectPreferredProvider}.
               </p>
             )}
           </div>
