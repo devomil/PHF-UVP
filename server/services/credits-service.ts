@@ -207,10 +207,34 @@ export async function consumeCredits(
   // first-write race inside the FOR UPDATE block.
   await ensureSubscription(userId);
 
-  return await db.transaction(async (tx) => {
-    // Idempotency: if a debit for (this user, this jobId) already exists,
-    // return its result. Scoped by userId so two users who happen to use
-    // the same jobId can never collide.
+  // Helper that returns the existing-debit no-op result. Used by both
+  // the pre-check fast path and the unique-violation race fallback so
+  // concurrent duplicate jobIds always converge to the same response.
+  const buildAlreadyConsumed = async (tx: TxOrDb): Promise<ConsumeResult> => {
+    const sub = (await tx.select().from(subscriptions).where(eq(subscriptions.userId, userId)))[0];
+    return {
+      ok: true,
+      alreadyConsumed: true,
+      source: "subscription",
+      consumedFromSubscription: 0,
+      consumedFromTopup: 0,
+      newSubscriptionGC: sub?.currentGC ?? 0,
+      newTopupGC: sub?.topupGC ?? 0,
+    };
+  };
+
+  try {
+    return await db.transaction(async (tx) => {
+    // Lock the subscription row FIRST so a concurrent duplicate (same
+    // userId, same jobId) blocks here and serializes behind us. Only
+    // after we hold the lock do we re-check for an existing debit —
+    // this closes the TOCTOU window where two callers both passed a
+    // pre-lock idempotency check and then raced to insert.
+    const locked0 = await tx.execute(
+      sql`SELECT id FROM subscriptions WHERE user_id = ${userId} FOR UPDATE`,
+    );
+    void locked0;
+
     const existing = await tx
       .select()
       .from(creditTransactions)
@@ -220,16 +244,7 @@ export async function consumeCredits(
         eq(creditTransactions.type, "GENERATION"),
       ));
     if (existing.length > 0) {
-      const sub = (await tx.select().from(subscriptions).where(eq(subscriptions.userId, userId)))[0];
-      return {
-        ok: true,
-        alreadyConsumed: true,
-        source: "subscription",
-        consumedFromSubscription: 0,
-        consumedFromTopup: 0,
-        newSubscriptionGC: sub.currentGC,
-        newTopupGC: sub.topupGC,
-      };
+      return await buildAlreadyConsumed(tx);
     }
 
     // Row-lock on the user's subscription row.
@@ -279,7 +294,19 @@ export async function consumeCredits(
       newSubscriptionGC: newSub,
       newTopupGC: newTop,
     };
-  });
+    });
+  } catch (err: unknown) {
+    // Race fallback: if a concurrent caller with the same (userId, jobId)
+    // committed first, our INSERT trips the uq_credit_tx_user_job_type
+    // constraint. Convert that into the same idempotent no-op the
+    // pre-check would have returned, so duplicate jobIds always converge.
+    const e = err as { code?: string; message?: string };
+    const isDup = e?.code === "23505" || /uq_credit_tx_user_job_type|duplicate key/i.test(String(e?.message ?? ""));
+    if (isDup) {
+      return await buildAlreadyConsumed(db);
+    }
+    throw err;
+  }
 }
 
 // Refund — returns credit to the same buckets it came from. Idempotent on

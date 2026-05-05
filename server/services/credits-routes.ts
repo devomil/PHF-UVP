@@ -17,7 +17,7 @@ import {
   updateSubscriptionPlan,
 } from "./credits-service";
 import { isAuthenticated } from "../auth";
-import { getActiveBillingProvider, BillingNotConfiguredError } from "./billing";
+import { getActiveBillingProvider, getBillingProviderByName, BillingNotConfiguredError } from "./billing";
 import { PLAN_CONFIG, PAID_PLANS, TOPUP_PACKS, getTopUpPack, type PlanTier } from "../config/plans";
 import { PROVIDER_PERMISSIONS } from "../config/providerPermissions";
 import { BILLING_CATALOG, getCatalogEntry, getStripePriceId, isCatalogEntryConfigured } from "../config/billing-catalog";
@@ -216,9 +216,13 @@ router.post("/api/credits/topup-checkout", isAuthenticated, async (req: Request,
 // Mounted in routes.ts with raw body capture (NOT JSON-parsed).
 router.post("/api/billing/webhook/:providerName", async (req: Request, res: Response) => {
   const providerName = req.params.providerName;
-  const provider = getActiveBillingProvider();
-  if (provider.name !== providerName) {
-    return res.status(400).send("provider mismatch");
+  // Look up the provider by URL parameter so multiple billing providers
+  // can be registered side-by-side and each one's webhook endpoint
+  // routes to the correct adapter — this is the multi-provider
+  // extensibility contract from NC-01. Unknown providers => 404.
+  const provider = getBillingProviderByName(providerName);
+  if (!provider) {
+    return res.status(404).json({ error: `Unknown billing provider: ${providerName}`, code: "UNKNOWN_PROVIDER" });
   }
 
   try {
