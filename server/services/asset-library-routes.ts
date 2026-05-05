@@ -662,13 +662,45 @@ async function saveCompletedJob(jobId: string, url: string, assetType: 'image' |
     tags: [],
     createdBy: data.userId,
   });
+
+  // Phase NC-01 — debit AFTER the asset is persisted. Idempotent on
+  // (userId, jobId) so any worker re-entry is safe.
+  try {
+    const { consumeCredits, getCreditCost } = await import('./credits-service');
+    const durS = data.duration ? Number(data.duration) : null;
+    const gcCost = await getCreditCost(data.provider, null, Number.isFinite(durS) ? durS : null);
+    await consumeCredits(data.userId, gcCost, {
+      provider: data.provider,
+      durationS: Number.isFinite(durS) ? (durS as number) : undefined,
+      jobId,
+      description: `Asset library ${assetType} generation`,
+    });
+  } catch (creditErr: any) {
+    console.error(`[AssetLibrary] Credit consume failed for job ${jobId}: ${creditErr.message}`);
+  }
 }
 
 async function failJob(jobId: string, errorMsg: string) {
+  // Look up the job so we can refund credits to the right user. Refund
+  // is idempotent and a no-op if no debit was ever recorded for this jobId.
+  const [jobRow] = await db.select().from(videoGenerationJobs).where(eq(videoGenerationJobs.jobId, jobId));
+
   await db
     .update(videoGenerationJobs)
     .set({ status: 'failed', errorMessage: errorMsg, completedAt: new Date(), updatedAt: new Date() })
     .where(eq(videoGenerationJobs.jobId, jobId));
+
+  if (jobRow?.triggeredBy) {
+    try {
+      const { refundCredits } = await import('./credits-service');
+      await refundCredits(jobRow.triggeredBy, Number.MAX_SAFE_INTEGER, {
+        jobId,
+        reason: `Asset generation failed: ${errorMsg}`,
+      });
+    } catch (creditErr: any) {
+      console.error(`[AssetLibrary] Credit refund failed for job ${jobId}: ${creditErr.message}`);
+    }
+  }
 }
 
 const STARTUP_RECOVERY_AGE_MS = 2 * 60 * 1000;

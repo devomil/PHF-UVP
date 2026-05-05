@@ -5896,17 +5896,42 @@ router.get('/projects/:projectId/render-status', isAuthenticated, async (req: Re
 router.post('/generate-image', isAuthenticated, requireCredits({
   provider: 'image-flux',
 }), async (req: Request, res: Response) => {
+  // Synthesize a stable jobId for credit idempotency since this endpoint
+  // does the work synchronously and never touches the video-generation
+  // jobs table. crypto.randomUUID() is sufficient because the response
+  // is emitted in the same request lifecycle — no retries can collide.
+  const jobId = `img_${crypto.randomUUID()}`;
+  const userId = (req.user as any).id as string;
+  const cost = req.creditCost!;
   try {
     const { prompt, sceneId, aspectRatio } = req.body;
-    
+
     if (!prompt) {
       return res.status(400).json({ success: false, error: 'Prompt required' });
     }
-    
+
     universalVideoService.clearNotifications();
     const result = await universalVideoService.generateImage(prompt, sceneId || 'standalone', false, 'content', aspectRatio || '16:9');
     const notifications = universalVideoService.getNotifications();
-    
+
+    if (result.success) {
+      // Phase NC-01 — debit on success only. If this throws (insufficient
+      // funds, DB hiccup) we surface it as a 402 instead of a silent
+      // unmetered image.
+      try {
+        const { consumeCredits } = await import('./credits-service');
+        await consumeCredits(userId, cost.gcCost, {
+          provider: cost.provider,
+          quality: cost.quality ?? undefined,
+          jobId,
+          description: 'Standalone image generation',
+        });
+      } catch (creditErr: any) {
+        console.error('[UniversalVideo] Credit consume failed:', creditErr.message);
+        return res.status(402).json({ success: false, error: 'Credit charge failed', code: 'CREDIT_CHARGE_FAILED' });
+      }
+    }
+
     res.json({
       success: result.success,
       url: result.url,

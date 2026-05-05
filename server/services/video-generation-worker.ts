@@ -856,9 +856,18 @@ class VideoGenerationWorker {
       if (videoUrl && job.triggeredBy) {
         try {
           const { consumeCredits, getCreditCost } = await import('./credits-service');
-          const gcCost = await getCreditCost(resolvedProvider || job.provider || 'kling-2.6', null, null);
+          const debitProvider = resolvedProvider || job.provider || 'kling-2.6';
+          // Use the job's actual duration + quality so charges match
+          // generation_rates (source of truth) instead of the cheapest
+          // tier. Falls through to the rate-table default if either is
+          // missing.
+          const debitDuration = typeof job.duration === 'number' ? job.duration : null;
+          const debitQuality = (job as any).quality ?? null;
+          const gcCost = await getCreditCost(debitProvider, debitQuality, debitDuration);
           await consumeCredits(job.triggeredBy, gcCost, {
-            provider: resolvedProvider || job.provider || 'unknown',
+            provider: debitProvider,
+            quality: debitQuality ?? undefined,
+            durationS: debitDuration ?? undefined,
             jobId: job.jobId,
             description: `Scene ${job.sceneId} video generation`,
           });
