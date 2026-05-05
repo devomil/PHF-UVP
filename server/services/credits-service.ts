@@ -68,10 +68,11 @@ export interface RefundContext {
 }
 
 // How long a user account can exist without a subscription row before we
-// stop granting a fresh 14-day trial. Without this guard the rollout of
-// NC-01 would retroactively credit every existing user with 50 GC + a
-// trial period, even ones who signed up months ago.
-const TRIAL_GRACE_WINDOW_MS = 24 * 60 * 60 * 1000;
+// stop granting a fresh trial. Aligned with the 14-day trial length so a
+// user who registered up to 14 days before NC-01 rollout still receives
+// their full trial on first credit-endpoint hit. Older accounts get a
+// zero-balance backfill row instead — no retroactive credits.
+const TRIAL_GRACE_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
 
 // Public: explicit subscription creation hook to be called at the end of
 // /api/register. Idempotent — if a row already exists (e.g. webhook beat
