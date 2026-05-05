@@ -52,6 +52,7 @@ afterEach(cleanup);
 
 import { SceneDefaultsBulkAction } from "../scene-defaults-bulk-action";
 import type { Scene } from "@shared/video-types";
+import { VIDEO_PROVIDER_CATALOG } from "@shared/provider-catalog";
 
 // Minimal Scene shapes for the bulk-action's contract — id + duration
 // + the new generateNativeAudio flag are all the component reads.
@@ -228,6 +229,51 @@ describe("SceneDefaultsBulkAction", () => {
     const body = apiRequestMock.mock.calls[0][2];
     expect(body.scenes.map((s: any) => s.id)).toEqual(["a", "b", "c"]);
     expect(body.scenes.every((s: any) => s.duration === 12)).toBe(true);
+  });
+
+  // Task #141: the "native audio is only honored by …" warning must
+  // derive its model list from VIDEO_PROVIDER_CATALOG (Task #138). If a
+  // future contributor reintroduces a hardcoded literal like
+  // "Seedance 2" — or drops a model from the rendered list — this
+  // test catches it. We trigger the warning with a non-audio provider
+  // (`pika`) and assert the rendered string contains every catalog
+  // entry whose `supportsNativeAudio === true`.
+  it("audio-ignored warning lists every catalog model with supportsNativeAudio", async () => {
+    render(
+      <SceneDefaultsBulkAction
+        projectId="p1"
+        scenes={SCENES as Scene[]}
+        projectPreferredProvider="pika"
+      />,
+    );
+    fireEvent.click(screen.getByTestId("scene-defaults-bulk-trigger"));
+    fireEvent.click(screen.getByTestId("scene-defaults-audio-set-switch"));
+    fireEvent.click(
+      await screen.findByTestId("scene-defaults-audio-value-switch"),
+    );
+
+    const warning = await screen.findByTestId("scene-defaults-audio-warning");
+    const audioCapable = VIDEO_PROVIDER_CATALOG.filter(
+      (p) => p.supportsNativeAudio,
+    );
+    // Sanity: the catalog must actually have audio-capable entries,
+    // otherwise this test would silently pass on a misconfigured catalog.
+    expect(audioCapable.length).toBeGreaterThan(0);
+    for (const entry of audioCapable) {
+      expect(warning.textContent).toContain(entry.name);
+    }
+    // And it must not contain a stale literal for any model that is
+    // NOT currently flagged as audio-capable in the catalog. We check
+    // "Seedance 2" specifically because that was the original
+    // hardcoded string Task #138 removed — but only if the catalog
+    // itself no longer marks any "Seedance 2"-named entry as
+    // audio-capable.
+    const seedance2StillAudio = audioCapable.some(
+      (p) => p.name === "Seedance 2",
+    );
+    if (!seedance2StillAudio) {
+      expect(warning.textContent).not.toContain("Seedance 2");
+    }
   });
 
   it("apply button is disabled when scope=selected and nothing is checked", async () => {
