@@ -44,7 +44,11 @@ export function requireCredits(opts: RequireCreditsOptions): RequestHandler {
     if (!req.isAuthenticated || !req.isAuthenticated() || !req.user) {
       return res.status(401).json({ error: "Authentication required", code: "UNAUTHENTICATED" });
     }
-    const userId = (req.user as any).id as string;
+    const reqUser = req.user as { id?: string } | undefined;
+    const userId = reqUser?.id;
+    if (!userId) {
+      return res.status(401).json({ error: "UNAUTHENTICATED" });
+    }
 
     const provider = resolveOpt(opts.provider, req);
     if (!provider) {

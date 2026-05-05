@@ -24,6 +24,16 @@ import { BILLING_CATALOG, getCatalogEntry, getStripePriceId, isCatalogEntryConfi
 
 const router = Router();
 
+// Typed shape of the authenticated user attached to req.user by Passport.
+// The repo's session deserializer returns the full row, but only id+email
+// are read in this module. Centralizing the narrowing here avoids leaking
+// `as any` across each route handler.
+interface AuthUser { id: string; email?: string | null }
+function authUser(req: Request): AuthUser | null {
+  const u = req.user as AuthUser | undefined;
+  return u && typeof u.id === "string" ? u : null;
+}
+
 // ===== Public catalog (no auth) =====
 router.get("/api/billing/catalog", (_req, res) => {
   res.json({
@@ -56,7 +66,7 @@ router.get("/api/billing/catalog", (_req, res) => {
 
 // ===== Credit balance + cost lookup =====
 router.get("/api/credits/balance", isAuthenticated, async (req: Request, res: Response) => {
-  const userId = (req.user as any).id;
+  const u = authUser(req); if (!u) return res.status(401).json({ error: "UNAUTHENTICATED" }); const userId = u.id;
   const snap = await getAvailableCredits(userId);
   res.json(snap);
 });
@@ -76,7 +86,7 @@ router.get("/api/credits/rates", async (_req, res) => {
 });
 
 router.get("/api/credits/transactions", isAuthenticated, async (req: Request, res: Response) => {
-  const userId = (req.user as any).id;
+  const u = authUser(req); if (!u) return res.status(401).json({ error: "UNAUTHENTICATED" }); const userId = u.id;
   const limit = Math.min(Number(req.query.limit) || 100, 500);
   const type = (req.query.type as string) || null;
   let q = db
@@ -91,7 +101,7 @@ router.get("/api/credits/transactions", isAuthenticated, async (req: Request, re
 
 // CSV export for transaction history.
 router.get("/api/credits/transactions.csv", isAuthenticated, async (req: Request, res: Response) => {
-  const userId = (req.user as any).id;
+  const u = authUser(req); if (!u) return res.status(401).json({ error: "UNAUTHENTICATED" }); const userId = u.id;
   const rows = await db
     .select()
     .from(creditTransactions)
@@ -124,15 +134,15 @@ router.get("/api/credits/transactions.csv", isAuthenticated, async (req: Request
 
 // ===== Subscription management =====
 router.get("/api/subscriptions/current", isAuthenticated, async (req: Request, res: Response) => {
-  const userId = (req.user as any).id;
+  const u = authUser(req); if (!u) return res.status(401).json({ error: "UNAUTHENTICATED" }); const userId = u.id;
   const snap = await getAvailableCredits(userId);
   res.json(snap);
 });
 
 router.post("/api/subscriptions/upgrade-checkout", isAuthenticated, async (req: Request, res: Response) => {
   try {
-    const userId = (req.user as any).id;
-    const userEmail = (req.user as any).email;
+    const u = authUser(req); if (!u) return res.status(401).json({ error: "UNAUTHENTICATED" }); const userId = u.id;
+    const userEmail = u.email ?? null;
     const { plan, period } = req.body as { plan: PlanTier; period: "monthly" | "annual" };
     if (!PAID_PLANS.includes(plan)) return res.status(400).json({ error: "Invalid plan", code: "INVALID_PLAN" });
     const cfg = PLAN_CONFIG[plan];
@@ -163,7 +173,7 @@ router.post("/api/subscriptions/upgrade-checkout", isAuthenticated, async (req: 
 
 router.post("/api/subscriptions/portal", isAuthenticated, async (req: Request, res: Response) => {
   try {
-    const userId = (req.user as any).id;
+    const u = authUser(req); if (!u) return res.status(401).json({ error: "UNAUTHENTICATED" }); const userId = u.id;
     const [sub] = await db.select().from(subscriptions).where(eq(subscriptions.userId, userId));
     if (!sub?.stripeCustomerId) return res.status(400).json({ error: "No billing customer on file yet" });
     const provider = getActiveBillingProvider();
@@ -183,8 +193,8 @@ router.post("/api/subscriptions/portal", isAuthenticated, async (req: Request, r
 // ===== Top-up =====
 router.post("/api/credits/topup-checkout", isAuthenticated, async (req: Request, res: Response) => {
   try {
-    const userId = (req.user as any).id;
-    const userEmail = (req.user as any).email;
+    const u = authUser(req); if (!u) return res.status(401).json({ error: "UNAUTHENTICATED" }); const userId = u.id;
+    const userEmail = u.email ?? null;
     const { packId } = req.body as { packId: string };
     const pack = getTopUpPack(packId);
     if (!pack) return res.status(400).json({ error: "Invalid pack", code: "INVALID_PACK" });
@@ -232,7 +242,7 @@ router.post("/api/billing/webhook/:providerName", async (req: Request, res: Resp
     // forge events when the real signature is missing.
     const headerName = provider.signatureHeader;
     const sig = (req.headers[headerName] as string) || "";
-    const rawBody = (req as any).rawBody as Buffer | undefined;
+    const rawBody = (req as Request & { rawBody?: Buffer }).rawBody;
     if (!rawBody) return res.status(400).send("missing raw body");
     if (!sig) return res.status(400).send(`missing ${headerName}`);
     const event = await provider.verifyAndParseWebhook(rawBody, sig);
@@ -268,7 +278,21 @@ router.post("/api/billing/webhook/:providerName", async (req: Request, res: Resp
       if (event.type === "subscription.activated" || event.type === "subscription.updated") {
         const userId = await resolveUserId(event.data.userId, event.data.customerId);
         if (userId) {
-          const tier = catalogKeyToPlanTier(event.data.catalogKey) ?? "STARTER";
+          // CRITICAL: never silently downgrade. If the catalog key is
+          // missing or unknown (price renamed, env drift, foreign-product
+          // event), preserve the user's existing plan and let the next
+          // well-formed event reconcile. We still record status changes.
+          const mapped = catalogKeyToPlanTier(event.data.catalogKey);
+          let tier: PlanTier;
+          if (mapped) {
+            tier = mapped;
+          } else {
+            const [existing] = await tx.select().from(subscriptions).where(eq(subscriptions.userId, userId));
+            tier = (existing?.plan as PlanTier | undefined) ?? "STARTER";
+            console.warn(
+              `[billing] subscription.${event.type} for user=${userId} had unknown catalogKey=${event.data.catalogKey ?? "null"}; preserving plan=${tier}`,
+            );
+          }
           const status = mapToInternalStatus(event.data.status);
           await updateSubscriptionPlan(
             userId,
