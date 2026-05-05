@@ -636,10 +636,15 @@ class AIVideoService {
         isCharacterReference: options.isCharacterReference,
         artPresetId: options.artPresetId,
         // Phase 20D (Task #126): forward the scene-level Seedance 2
-        // native-audio opt-in. The I2V handler only honors it when the
-        // resolved model is a Seedance 2 variant; every other branch
-        // (Veo, Wan, Hailuo, etc.) ignores this field.
-        ...(options.generateNativeAudio === true ? { generateAudio: true } : {}),
+        // native-audio opt-in. Gated to Seedance 2 variants ONLY — Veo
+        // I2V also reads `options.generateAudio` and would otherwise
+        // emit `generate_audio: true` to Google's API if a stale flag
+        // survived a provider switch in the UI. Belt-and-suspenders
+        // alongside the disabled toggle in the scene editor.
+        ...(options.generateNativeAudio === true &&
+          (providerKey === 'seedance-2.0' || providerKey === 'seedance-2.0-fast')
+          ? { generateAudio: true }
+          : {}),
       });
       
       return {

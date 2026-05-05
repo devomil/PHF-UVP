@@ -101,4 +101,92 @@ describe('Seedance I2V payload — generate_audio is an explicit boolean', () =>
     );
     expect(body.input.generate_audio).toBe(true);
   });
+
+  // Both Seedance I2V branches must clamp duration into [4, 15] — a
+  // stale 30 s scene from before Phase 20D would otherwise reach PiAPI
+  // and be rejected (or quietly truncated by the provider).
+  it('always clamps duration into [4, 15] (omni_reference branch)', () => {
+    const tooSmall = svc.buildI2VRequestBody(
+      baseI2V('seedance-2.0', { duration: 1 }),
+      I2V_PROMPT,
+    );
+    const tooBig = svc.buildI2VRequestBody(
+      baseI2V('seedance-2.0', { duration: 60 }),
+      I2V_PROMPT,
+    );
+    const inRange = svc.buildI2VRequestBody(
+      baseI2V('seedance-2.0', { duration: 10 }),
+      I2V_PROMPT,
+    );
+    expect(tooSmall.input.duration).toBe(4);
+    expect(tooBig.input.duration).toBe(15);
+    expect(inRange.input.duration).toBe(10);
+    // Sanity-check we're actually exercising the omni_reference branch.
+    expect(tooSmall.input.mode).toBe('omni_reference');
+  });
+
+  // The first_last_frames branch is reached when callers pass
+  // `i2vSettings.useFirstLastFrames === true` (used by the Seamless
+  // Transitions / Cinematic Flow path). It has its own payload shape
+  // (mode='first_last_frames', aspect_ratio='auto', image_urls array)
+  // and must independently honor both the audio flag and the clamp.
+  it('first_last_frames branch emits generate_audio + clamps duration', () => {
+    const flfOpts = baseI2V('seedance-2.0', {
+      duration: 99,
+      generateAudio: true,
+      i2vSettings: { useFirstLastFrames: true },
+    });
+    const body = svc.buildI2VRequestBody(flfOpts, I2V_PROMPT);
+    expect(body.input.mode).toBe('first_last_frames');
+    expect(body.input.aspect_ratio).toBe('auto');
+    expect(body.input.generate_audio).toBe(true);
+    expect(body.input.duration).toBe(15);
+  });
+
+  it('first_last_frames branch defaults generate_audio to false when flag is undefined', () => {
+    const body = svc.buildI2VRequestBody(
+      baseI2V('seedance-2.0', { i2vSettings: { useFirstLastFrames: true } }),
+      I2V_PROMPT,
+    );
+    expect(body.input.mode).toBe('first_last_frames');
+    expect(body.input.generate_audio).toBe(false);
+  });
+
+  // Cross-provider gate (defense in depth): even if a stale
+  // `generateAudio: true` ever reaches the I2V builder for a
+  // non-Seedance model, only Veo I2V reads the field at all — and the
+  // upstream gate in ai-video-service.ts already prevents it from
+  // arriving for non-Seedance providers. This test guards that gate
+  // by asserting the Seedance T2V/I2V builders never accidentally
+  // mutate the flag for the wrong model.
+  it('does not leak generate_audio onto seedance-1.0 (legacy I2V)', () => {
+    const body = svc.buildI2VRequestBody(
+      baseI2V('seedance-1.0', { generateAudio: true }),
+      I2V_PROMPT,
+    );
+    expect(body.input.generate_audio).toBeUndefined();
+  });
+});
+
+describe('ai-video-service generateAudio gate — Seedance only (Task #126)', () => {
+  // The forwarding gate in ai-video-service.ts MUST NOT pass
+  // generateAudio=true to non-Seedance providers (Veo I2V is the
+  // dangerous one — it reads options.generateAudio and would emit
+  // generate_audio:true to Google's API). We assert by inspecting the
+  // exact ternary used in the service file so a future refactor that
+  // accidentally drops the provider check fails this test.
+  it('only forwards generateAudio for seedance-2.0 / seedance-2.0-fast', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const src = fs.readFileSync(
+      path.resolve(__dirname, '..', 'ai-video-service.ts'),
+      'utf8',
+    );
+    // The gate must mention BOTH seedance variants and the
+    // generateNativeAudio === true check in the same I2V branch.
+    expect(src).toMatch(/generateNativeAudio === true/);
+    expect(src).toMatch(/providerKey === ['"]seedance-2\.0['"]/);
+    expect(src).toMatch(/providerKey === ['"]seedance-2\.0-fast['"]/);
+  });
 });
