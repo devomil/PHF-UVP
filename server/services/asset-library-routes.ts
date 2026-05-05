@@ -101,7 +101,9 @@ router.post('/generate', requireCredits({
     const p = (req.body?.provider as string | undefined)?.trim();
     if (p && p !== 'auto') return p;
     const mode = req.body?.mode as string | undefined;
-    return IMAGE_OUTPUT_MODES.includes(mode || '') ? 'flux-pro' : 'kling-2.6';
+    // Use IDs that exist in the seeded `generation_rates` table and the
+    // STARTER permission list, otherwise the affordability check 403s.
+    return IMAGE_OUTPUT_MODES.includes(mode || '') ? 'image-flux' : 'kling-2.6';
   },
   durationS: (req) => {
     const d = req.body?.duration;
@@ -643,6 +645,30 @@ async function saveCompletedJob(jobId: string, url: string, assetType: 'image' |
   width?: number; height?: number; duration?: string; qualityScore?: number;
   thumbnailUrl?: string;
 }) {
+  // Phase NC-01 fail-CLOSED — debit BEFORE we persist the asset or
+  // mark the job 'completed'. If the debit throws (insufficient
+  // balance, DB error) we mark the job failed and the caller never
+  // sees the artifact. Idempotent on (userId, jobId).
+  const { consumeCredits, getCreditCost } = await import('./credits-service');
+  const durS = data.duration ? Number(data.duration) : null;
+  const gcCost = await getCreditCost(data.provider, null, Number.isFinite(durS) ? durS : null);
+  try {
+    await consumeCredits(data.userId, gcCost, {
+      provider: data.provider,
+      durationS: Number.isFinite(durS) ? (durS as number) : undefined,
+      jobId,
+      description: `Asset library ${assetType} generation`,
+    });
+  } catch (creditErr: unknown) {
+    const msg = creditErr instanceof Error ? creditErr.message : String(creditErr);
+    console.error(`[AssetLibrary] Credit consume failed for job ${jobId}: ${msg} — marking job failed`);
+    await db
+      .update(videoGenerationJobs)
+      .set({ status: 'failed', errorMessage: `Credit charge failed: ${msg}`, completedAt: new Date(), updatedAt: new Date() })
+      .where(eq(videoGenerationJobs.jobId, jobId));
+    throw creditErr;
+  }
+
   await db
     .update(videoGenerationJobs)
     .set({ status: 'completed', videoUrl: url, progress: 100, completedAt: new Date(), updatedAt: new Date() })
@@ -662,22 +688,6 @@ async function saveCompletedJob(jobId: string, url: string, assetType: 'image' |
     tags: [],
     createdBy: data.userId,
   });
-
-  // Phase NC-01 — debit AFTER the asset is persisted. Idempotent on
-  // (userId, jobId) so any worker re-entry is safe.
-  try {
-    const { consumeCredits, getCreditCost } = await import('./credits-service');
-    const durS = data.duration ? Number(data.duration) : null;
-    const gcCost = await getCreditCost(data.provider, null, Number.isFinite(durS) ? durS : null);
-    await consumeCredits(data.userId, gcCost, {
-      provider: data.provider,
-      durationS: Number.isFinite(durS) ? (durS as number) : undefined,
-      jobId,
-      description: `Asset library ${assetType} generation`,
-    });
-  } catch (creditErr: any) {
-    console.error(`[AssetLibrary] Credit consume failed for job ${jobId}: ${creditErr.message}`);
-  }
 }
 
 async function failJob(jobId: string, errorMsg: string) {

@@ -22,6 +22,27 @@ import { eq, and } from "drizzle-orm";
 // Webhook flow passes its own `tx` so the business mutation + the
 // `billing_events` dedupe insert commit (or roll back) atomically.
 type TxOrDb = Parameters<Parameters<typeof db.transaction>[0]>[0] | typeof db;
+
+// Typed shape of a row returned by `SELECT … FOR UPDATE` against the
+// `subscriptions` table. Only fields we actually read are listed; numeric
+// columns arrive as strings under node-postgres so we Number() at use.
+interface LockedSubscriptionRow {
+  id: string;
+  current_gc: string | number;
+  topup_gc: string | number;
+  monthly_gc?: string | number;
+}
+
+// drizzle's `tx.execute()` returns `{ rows: T[] }` on Neon HTTP and a
+// bare array on some serverless drivers. This narrows both shapes
+// without leaking `any`.
+function firstLockedRow(result: unknown): LockedSubscriptionRow | undefined {
+  if (result && typeof result === "object" && "rows" in result) {
+    const rows = (result as { rows: unknown[] }).rows;
+    return Array.isArray(rows) ? (rows[0] as LockedSubscriptionRow | undefined) : undefined;
+  }
+  return Array.isArray(result) ? (result[0] as LockedSubscriptionRow | undefined) : undefined;
+}
 async function runInTx<T>(
   maybeTx: TxOrDb | undefined,
   fn: (tx: TxOrDb) => Promise<T>,
@@ -215,7 +236,7 @@ export async function consumeCredits(
     const locked = await tx.execute(
       sql`SELECT id, current_gc, topup_gc FROM subscriptions WHERE user_id = ${userId} FOR UPDATE`,
     );
-    const row = (locked.rows ?? locked)[0] as any;
+    const row = firstLockedRow(locked);
     if (!row) throw new Error(`consumeCredits: subscription row missing for user ${userId}`);
 
     const currentSub = Number(row.current_gc);
@@ -298,7 +319,7 @@ export async function refundCredits(userId: string, gcAmount: number, ctx: Refun
     const locked = await tx.execute(
       sql`SELECT id, current_gc, topup_gc, monthly_gc FROM subscriptions WHERE user_id = ${userId} FOR UPDATE`,
     );
-    const row = (locked.rows ?? locked)[0] as any;
+    const row = firstLockedRow(locked);
     if (!row) return;
 
     const currentSub = Number(row.current_gc);
@@ -333,7 +354,7 @@ export async function refundCredits(userId: string, gcAmount: number, ctx: Refun
       gcBalance: newSub + newTop,
       provider: ctx.provider ?? debit.provider,
       jobId: ctx.jobId,
-      source: debit.source as any,
+      source: debit.source as CreditSource,
       description: ctx.reason ?? "Generation failed — credits refunded",
     });
   });
@@ -357,7 +378,7 @@ export async function resetMonthlyCredits(
     const locked = await tx.execute(
       sql`SELECT id, current_gc FROM subscriptions WHERE user_id = ${userId} FOR UPDATE`,
     );
-    const row = (locked.rows ?? locked)[0] as any;
+    const row = firstLockedRow(locked);
     if (!row) return;
 
     const before = Number(row.current_gc);
@@ -411,7 +432,7 @@ export async function addTopUpCredits(
     const locked = await tx.execute(
       sql`SELECT id, topup_gc, current_gc FROM subscriptions WHERE user_id = ${userId} FOR UPDATE`,
     );
-    const row = (locked.rows ?? locked)[0] as any;
+    const row = firstLockedRow(locked);
     if (!row) return;
     const newTop = Number(row.topup_gc) + gcAmount;
     await tx.update(subscriptions).set({ topupGC: newTop, updatedAt: new Date() }).where(eq(subscriptions.userId, userId));

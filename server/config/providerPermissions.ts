@@ -15,6 +15,17 @@ const STARTER_PROVIDERS = [
   "wan-2.1",
   "wan-2.2",
   "frame-pack",
+  // Non-video utilities — included on every plan since the seeded
+  // rate table treats these as standard-tier (matches the IDs used
+  // by `/generate-image`, asset-library, voiceover & render paths).
+  "image-flux",
+  "image-recraft",
+  "image-nano-banana-2",
+  "i2i",
+  "elevenlabs-tts",
+  "openai-tts",
+  "ai-music",
+  "remotion-render",
 ] as const;
 
 const GROWTH_ADDITIONS = [
