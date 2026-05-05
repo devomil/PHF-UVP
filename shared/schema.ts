@@ -906,9 +906,11 @@ export const creditTransactions = pgTable("credit_transactions", {
   jobIdx: index("idx_credit_tx_job_id").on(table.jobId),
   typeIdx: index("idx_credit_tx_type").on(table.type),
   createdAtIdx: index("idx_credit_tx_created_at").on(table.createdAt),
-  // Idempotency: one GENERATION (or one REFUND) row per jobId. Allows
-  // multiple jobIds with type='ROLLOVER'/'MONTHLY_RESET' (jobId NULL).
-  uniqJobType: unique("uq_credit_tx_job_type").on(table.jobId, table.type),
+  // Idempotency: one GENERATION (or one REFUND) row per (user, jobId, type).
+  // Scoped to userId so two unrelated users can never collide on the same
+  // jobId — a real risk if jobIds are short, recycled, or if a future
+  // provider returns the same id namespace across tenants.
+  uniqUserJobType: unique("uq_credit_tx_user_job_type").on(table.userId, table.jobId, table.type),
 }));
 
 export type CreditTransaction = typeof creditTransactions.$inferSelect;

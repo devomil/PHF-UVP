@@ -11,6 +11,7 @@ import {
   subscriptions,
   creditTransactions,
   generationRates,
+  users,
   type Subscription,
 } from "../../shared/schema";
 import { PLAN_CONFIG, type PlanTier } from "../config/plans";
@@ -54,25 +55,41 @@ export interface RefundContext {
   provider?: string;
 }
 
-// Look up the user's subscription row, creating a FREE_TRIAL one on first
-// access. Returns the row.
+// How long a user account can exist without a subscription row before we
+// stop granting a fresh 14-day trial. Without this guard the rollout of
+// NC-01 would retroactively credit every existing user with 50 GC + a
+// trial period, even ones who signed up months ago.
+const TRIAL_GRACE_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+// Look up the user's subscription row. On first access:
+//  • New accounts (created within the last 24h) get a FREE_TRIAL with the
+//    full 50 GC bucket and a 14-day window — this is the intended UX.
+//  • Older "backfill" accounts get an ACTIVE-but-empty FREE_TRIAL row
+//    (0 GC, billingCycleEnd = now) so their balance reads as 0 and they
+//    must explicitly upgrade — they don't get retroactive trial credits.
 async function ensureSubscription(userId: string): Promise<Subscription> {
   const [existing] = await db.select().from(subscriptions).where(eq(subscriptions.userId, userId));
   if (existing) return existing;
 
   const now = new Date();
+  const [user] = await db.select({ createdAt: users.createdAt }).from(users).where(eq(users.id, userId));
+  const accountAgeMs = user?.createdAt ? now.getTime() - user.createdAt.getTime() : 0;
+  const isNewSignup = !user?.createdAt || accountAgeMs <= TRIAL_GRACE_WINDOW_MS;
+
+  const monthlyGC = PLAN_CONFIG.FREE_TRIAL.monthlyGC;
   const trialEnd = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
+
   const [created] = await db
     .insert(subscriptions)
     .values({
       userId,
       plan: "FREE_TRIAL",
-      status: "TRIALING",
-      monthlyGC: PLAN_CONFIG.FREE_TRIAL.monthlyGC,
-      currentGC: PLAN_CONFIG.FREE_TRIAL.monthlyGC,
+      status: isNewSignup ? "TRIALING" : "ACTIVE",
+      monthlyGC,
+      currentGC: isNewSignup ? monthlyGC : 0,
       topupGC: 0,
       billingCycleStart: now,
-      billingCycleEnd: trialEnd,
+      billingCycleEnd: isNewSignup ? trialEnd : now,
     })
     .returning();
   return created;
@@ -150,11 +167,17 @@ export async function consumeCredits(
   await ensureSubscription(userId);
 
   return await db.transaction(async (tx) => {
-    // Idempotency: if a debit for this jobId already exists, return its result.
+    // Idempotency: if a debit for (this user, this jobId) already exists,
+    // return its result. Scoped by userId so two users who happen to use
+    // the same jobId can never collide.
     const existing = await tx
       .select()
       .from(creditTransactions)
-      .where(and(eq(creditTransactions.jobId, ctx.jobId), eq(creditTransactions.type, "GENERATION")));
+      .where(and(
+        eq(creditTransactions.userId, userId),
+        eq(creditTransactions.jobId, ctx.jobId),
+        eq(creditTransactions.type, "GENERATION"),
+      ));
     if (existing.length > 0) {
       const sub = (await tx.select().from(subscriptions).where(eq(subscriptions.userId, userId)))[0];
       return {
@@ -224,19 +247,27 @@ export async function refundCredits(userId: string, gcAmount: number, ctx: Refun
   if (gcAmount <= 0) return;
 
   await db.transaction(async (tx) => {
-    // Idempotency: skip if already refunded.
+    // Idempotency: skip if already refunded — scoped by userId.
     const existing = await tx
       .select()
       .from(creditTransactions)
-      .where(and(eq(creditTransactions.jobId, ctx.jobId), eq(creditTransactions.type, "REFUND")));
+      .where(and(
+        eq(creditTransactions.userId, userId),
+        eq(creditTransactions.jobId, ctx.jobId),
+        eq(creditTransactions.type, "REFUND"),
+      ));
     if (existing.length > 0) return;
 
-    // Look up the original GENERATION debit for this jobId so we can
-    // route the refund back to the same buckets.
+    // Look up the original GENERATION debit for (this user, this jobId)
+    // so we can route the refund back to the same buckets.
     const debits = await tx
       .select()
       .from(creditTransactions)
-      .where(and(eq(creditTransactions.jobId, ctx.jobId), eq(creditTransactions.type, "GENERATION")));
+      .where(and(
+        eq(creditTransactions.userId, userId),
+        eq(creditTransactions.jobId, ctx.jobId),
+        eq(creditTransactions.type, "GENERATION"),
+      ));
     if (debits.length === 0) return; // nothing to refund
 
     const debit = debits[0];

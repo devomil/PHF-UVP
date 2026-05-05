@@ -818,6 +818,20 @@ class VideoGenerationWorker {
           this.notifyJobUpdate(failedJob);
           log.debug(` Job ${job.jobId} failed permanently`);
 
+          // Phase NC-01 — refund any credits we previously debited for this
+          // jobId. Idempotent: a no-op if we never charged it.
+          if (job.triggeredBy) {
+            try {
+              const { refundCredits } = await import('./credits-service');
+              await refundCredits(job.triggeredBy, Number.MAX_SAFE_INTEGER, {
+                jobId: job.jobId,
+                reason: 'Video generation failed after retries',
+              });
+            } catch (creditErr: any) {
+              log.warn(`[Credits] Job ${job.jobId} refund failed (non-fatal): ${creditErr.message}`);
+            }
+          }
+
           // Record regeneration history for failed video generation (max retries exhausted)
           await intelligentRegenerationService.recordVideoAttempt({
             sceneId: job.sceneId,
@@ -873,6 +887,22 @@ class VideoGenerationWorker {
         });
         this.notifyJobUpdate(completedJob);
         log.info(`[JOB_COMPLETE ${completionTimestamp}] Job ${job.jobId} status updated to 'succeeded' in storage`);
+
+        // Phase NC-01 — debit the credit ledger now that the clip actually
+        // landed. Idempotent on (userId, jobId) so retries are safe.
+        if (job.triggeredBy) {
+          try {
+            const { consumeCredits, getCreditCost } = await import('./credits-service');
+            const gcCost = await getCreditCost(resolvedProvider || job.provider || 'kling-2.6', null, null);
+            await consumeCredits(job.triggeredBy, gcCost, {
+              provider: resolvedProvider || job.provider || 'unknown',
+              jobId: job.jobId,
+              description: `Scene ${job.sceneId} video generation`,
+            });
+          } catch (creditErr: any) {
+            log.warn(`[Credits] Job ${job.jobId} consume failed (non-fatal): ${creditErr.message}`);
+          }
+        }
 
         // Record regeneration history for successful video generation
         await intelligentRegenerationService.recordVideoAttempt({
