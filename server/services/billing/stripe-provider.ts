@@ -26,10 +26,11 @@ class StripeProvider implements BillingProvider {
       if (!key) {
         throw new BillingNotConfiguredError("STRIPE_SECRET_KEY is not set");
       }
-      // The Stripe SDK pins types to the API version it ships with. We let
-      // the account default apply by casting; this keeps the file portable
-      // across SDK upgrades without forcing the team to bump the literal.
-      this.client = new Stripe(key, { apiVersion: "2024-06-20" as any });
+      // No `apiVersion` override: we want the Stripe SDK to use whichever
+      // version it was compiled against. Pinning a literal here would
+      // require a manual bump on every SDK upgrade and previously forced
+      // a `as any` type-escape — both bad for long-term maintenance.
+      this.client = new Stripe(key);
     }
     return this.client;
   }

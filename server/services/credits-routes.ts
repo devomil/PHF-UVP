@@ -233,62 +233,75 @@ router.post("/api/billing/webhook/:providerName", async (req: Request, res: Resp
     if (!sig) return res.status(400).send(`missing ${headerName}`);
     const event = await provider.verifyAndParseWebhook(rawBody, sig);
 
-    // Idempotency: skip if we've already processed this event id.
-    try {
-      await db.insert(billingEvents).values({ provider: providerName, eventId: event.eventId, eventType: (event as any).type ?? "ignored" });
-    } catch (e: any) {
-      // Unique constraint violation = already processed → no-op success.
-      if (String(e?.code) === "23505" || /duplicate key/i.test(String(e?.message))) {
-        return res.json({ ok: true, deduped: true });
-      }
-      throw e;
+    // Idempotency: pre-check whether we've already successfully processed
+    // this event. Unlike a write-first approach, we only persist the
+    // billing_events row AFTER business logic succeeds — so a failure
+    // mid-processing rolls back atomically and the event is retried by
+    // Stripe rather than silently swallowed.
+    const [already] = await db
+      .select({ id: billingEvents.id })
+      .from(billingEvents)
+      .where(and(eq(billingEvents.provider, providerName), eq(billingEvents.eventId, event.eventId)));
+    if (already) {
+      return res.json({ ok: true, deduped: true });
     }
 
     if (event.type === "ignored") {
+      // Still record ignored events so we don't reprocess them, but no
+      // business logic to apply — safe to write standalone.
+      try {
+        await db.insert(billingEvents).values({ provider: providerName, eventId: event.eventId, eventType: "ignored" });
+      } catch (e: any) {
+        if (!(String(e?.code) === "23505" || /duplicate key/i.test(String(e?.message)))) throw e;
+      }
       return res.json({ ok: true, ignored: event.nativeType });
     }
 
-    if (event.type === "subscription.activated" || event.type === "subscription.updated") {
-      const userId = await resolveUserId(event.data.userId, event.data.customerId);
-      if (!userId) return res.json({ ok: true, warn: "userId not resolvable" });
-      const tier = catalogKeyToPlanTier(event.data.catalogKey) ?? "STARTER";
-      const status = mapToInternalStatus(event.data.status);
-      await updateSubscriptionPlan(
-        userId,
-        tier,
-        status,
-        event.data.customerId,
-        event.data.subscriptionId,
-        event.data.currentPeriodStart,
-        event.data.currentPeriodEnd,
-      );
-      return res.json({ ok: true });
-    }
-
-    if (event.type === "subscription.deleted") {
-      const userId = await resolveUserId(event.data.userId, event.data.customerId);
-      if (userId) {
-        await db.update(subscriptions).set({ status: "CANCELED", updatedAt: new Date() }).where(eq(subscriptions.userId, userId));
+    // Run business logic + ledger insert in one transaction. If anything
+    // throws, the billing_events row is rolled back too, so Stripe's
+    // retry will re-attempt the full operation.
+    await db.transaction(async (tx) => {
+      if (event.type === "subscription.activated" || event.type === "subscription.updated") {
+        const userId = await resolveUserId(event.data.userId, event.data.customerId);
+        if (userId) {
+          const tier = catalogKeyToPlanTier(event.data.catalogKey) ?? "STARTER";
+          const status = mapToInternalStatus(event.data.status);
+          await updateSubscriptionPlan(
+            userId,
+            tier,
+            status,
+            event.data.customerId,
+            event.data.subscriptionId,
+            event.data.currentPeriodStart,
+            event.data.currentPeriodEnd,
+          );
+        }
+      } else if (event.type === "subscription.deleted") {
+        const userId = await resolveUserId(event.data.userId, event.data.customerId);
+        if (userId) {
+          await tx.update(subscriptions).set({ status: "CANCELED", updatedAt: new Date() }).where(eq(subscriptions.userId, userId));
+        }
+      } else if (event.type === "invoice.paid") {
+        const userId = await resolveUserId(event.data.userId, event.data.customerId);
+        if (userId) {
+          const [sub] = await tx.select().from(subscriptions).where(eq(subscriptions.userId, userId));
+          if (sub) {
+            await resetMonthlyCredits(userId, sub.plan as PlanTier, sub.billingCycleStart ?? new Date(), sub.billingCycleEnd ?? new Date());
+          }
+        }
+      } else if (event.type === "topup.paid") {
+        const userId = await resolveUserId(event.data.userId, event.data.customerId);
+        if (userId) {
+          await addTopUpCredits(userId, event.data.gcAmount, event.data.catalogKey);
+        }
       }
-      return res.json({ ok: true });
-    }
 
-    if (event.type === "invoice.paid") {
-      const userId = await resolveUserId(event.data.userId, event.data.customerId);
-      if (!userId) return res.json({ ok: true, warn: "userId not resolvable" });
-      const [sub] = await db.select().from(subscriptions).where(eq(subscriptions.userId, userId));
-      if (sub) {
-        await resetMonthlyCredits(userId, sub.plan as PlanTier, sub.billingCycleStart ?? new Date(), sub.billingCycleEnd ?? new Date());
-      }
-      return res.json({ ok: true });
-    }
-
-    if (event.type === "topup.paid") {
-      const userId = await resolveUserId(event.data.userId, event.data.customerId);
-      if (!userId) return res.json({ ok: true, warn: "userId not resolvable" });
-      await addTopUpCredits(userId, event.data.gcAmount, event.data.catalogKey);
-      return res.json({ ok: true });
-    }
+      // Mark processed LAST inside the same transaction. If a concurrent
+      // delivery raced us, the unique constraint on (provider, event_id)
+      // throws here and the whole transaction (including any work done
+      // above) rolls back — the other delivery wins, no double-apply.
+      await tx.insert(billingEvents).values({ provider: providerName, eventId: event.eventId, eventType: event.type });
+    });
 
     res.json({ ok: true });
   } catch (err: any) {

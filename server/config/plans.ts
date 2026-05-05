@@ -72,7 +72,7 @@ export const PLAN_CONFIG: Record<PlanTier, PlanConfig> = {
     annualPriceCents: 298800,
     rolloverPercent: 50,
     rolloverMax: 600,
-    overageRateCents: 8.5 as unknown as number,
+    overageRateCents: 8.5,
     maxResolution: "4k",
     maxClipDuration: 10,
     catalogKeyMonthly: "STUDIO_MONTHLY",

@@ -848,6 +848,33 @@ class VideoGenerationWorker {
         return;
       }
 
+      // Phase NC-01 — fail-CLOSED credit consumption. We debit BEFORE
+      // updating the scene or marking the job 'succeeded'. If the debit
+      // throws (insufficient balance, DB error, etc), we throw out of
+      // the success path so the outer catch marks the job 'failed' and
+      // the user does not receive an unmetered clip.
+      if (videoUrl && job.triggeredBy) {
+        try {
+          const { consumeCredits, getCreditCost } = await import('./credits-service');
+          const gcCost = await getCreditCost(resolvedProvider || job.provider || 'kling-2.6', null, null);
+          await consumeCredits(job.triggeredBy, gcCost, {
+            provider: resolvedProvider || job.provider || 'unknown',
+            jobId: job.jobId,
+            description: `Scene ${job.sceneId} video generation`,
+          });
+        } catch (creditErr: any) {
+          log.error(`[Credits] Job ${job.jobId} consume FAILED — withholding delivery: ${creditErr.message}`);
+          const failedJob = await storage.updateVideoGenerationJob(job.jobId, {
+            status: "failed",
+            completedAt: new Date(),
+            progress: 0,
+            errorMessage: `Credit charge failed: ${creditErr.message}`,
+          });
+          this.notifyJobUpdate(failedJob);
+          return;
+        }
+      }
+
       if (videoUrl) {
         const completionTimestamp = new Date().toISOString();
 
@@ -887,22 +914,6 @@ class VideoGenerationWorker {
         });
         this.notifyJobUpdate(completedJob);
         log.info(`[JOB_COMPLETE ${completionTimestamp}] Job ${job.jobId} status updated to 'succeeded' in storage`);
-
-        // Phase NC-01 — debit the credit ledger now that the clip actually
-        // landed. Idempotent on (userId, jobId) so retries are safe.
-        if (job.triggeredBy) {
-          try {
-            const { consumeCredits, getCreditCost } = await import('./credits-service');
-            const gcCost = await getCreditCost(resolvedProvider || job.provider || 'kling-2.6', null, null);
-            await consumeCredits(job.triggeredBy, gcCost, {
-              provider: resolvedProvider || job.provider || 'unknown',
-              jobId: job.jobId,
-              description: `Scene ${job.sceneId} video generation`,
-            });
-          } catch (creditErr: any) {
-            log.warn(`[Credits] Job ${job.jobId} consume failed (non-fatal): ${creditErr.message}`);
-          }
-        }
 
         // Record regeneration history for successful video generation
         await intelligentRegenerationService.recordVideoAttempt({
