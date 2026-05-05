@@ -701,8 +701,13 @@ class PiAPIVideoService {
         
       // Veo 3.1 (Google) - needs veo3.1 model with dot
       case 'veo-3.1':
-      case 'veo3.1':
-        console.log(`[PiAPI T2V] Using Veo 3.1 with motion-enhanced prompt`);
+      case 'veo3.1': {
+        // Task #139: Veo T2V now honors the per-scene generateNativeAudio
+        // flag, mirroring the Seedance T2V branches above. Always emit
+        // the field as an explicit boolean so we never inherit a
+        // server-side default.
+        const wantsAudio = options.generateNativeAudio === true;
+        console.log(`[PiAPI T2V] Using Veo 3.1 with motion-enhanced prompt (generate_audio=${wantsAudio})`);
         return {
           ...baseRequest,
           model: 'veo3.1',
@@ -713,17 +718,19 @@ class PiAPIVideoService {
             aspect_ratio: baseRequest.input.aspect_ratio,
             duration: `${Math.min(baseRequest.input.duration, 8)}s`,
             resolution: '1080p',
-            generate_audio: false,
+            generate_audio: wantsAudio,
           },
         };
-        
+      }
+
       // Veo 3.0 (Google) - uses veo3 model
       case 'veo':
       case 'veo-3':
       case 'veo-3.0':
       case 'veo3':
-      case 'veo3.0':
-        console.log(`[PiAPI T2V] Using Veo 3.0 with motion-enhanced prompt`);
+      case 'veo3.0': {
+        const wantsAudio = options.generateNativeAudio === true;
+        console.log(`[PiAPI T2V] Using Veo 3.0 with motion-enhanced prompt (generate_audio=${wantsAudio})`);
         return {
           ...baseRequest,
           model: 'veo3',
@@ -734,13 +741,15 @@ class PiAPIVideoService {
             aspect_ratio: baseRequest.input.aspect_ratio,
             duration: `${Math.min(baseRequest.input.duration, 8)}s`,
             resolution: '1080p',
-            generate_audio: false,
+            generate_audio: wantsAudio,
           },
         };
-        
+      }
+
       case 'veo-2':
-      case 'veo2':
-        console.log(`[PiAPI T2V] Using Veo 2 with motion-enhanced prompt`);
+      case 'veo2': {
+        const wantsAudio = options.generateNativeAudio === true;
+        console.log(`[PiAPI T2V] Using Veo 2 with motion-enhanced prompt (generate_audio=${wantsAudio})`);
         return {
           ...baseRequest,
           model: 'veo2',
@@ -751,9 +760,10 @@ class PiAPIVideoService {
             aspect_ratio: baseRequest.input.aspect_ratio,
             duration: `${Math.min(baseRequest.input.duration, 8)}s`,
             resolution: '1080p',
-            generate_audio: false,
+            generate_audio: wantsAudio,
           },
         };
+      }
         
       // Sora 2 (OpenAI)
       case 'sora-2':

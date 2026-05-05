@@ -251,6 +251,56 @@ describe('ai-video-service generateAudio gate — catalog-driven (Tasks #126, #1
 // any individual I2V branch that accidentally adds/removes the field
 // fails loudly.
 // ─────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────
+// Task #139: Veo T2V audio matrix.
+//
+// The Veo T2V branches (`veo-3.1`, `veo`/`veo-3`, `veo-2`) used to
+// hard-code `generate_audio: false` on the wire. Task #139 routes the
+// scene-level `generateNativeAudio` flag through these branches so an
+// editor on a text-only Veo scene can opt in to native audio. The
+// field MUST always be present as an explicit boolean so we never
+// inherit a server-side default.
+// ─────────────────────────────────────────────────────────────────────
+describe('Veo T2V payload — generate_audio is an explicit boolean (Task #139)', () => {
+  const veoT2VModels: Array<{ model: string; label: string }> = [
+    { model: 'veo-3.1', label: 'Veo 3.1' },
+    { model: 'veo3.1', label: 'Veo 3.1 (alias)' },
+    { model: 'veo', label: 'Veo (default = Veo 3)' },
+    { model: 'veo-3', label: 'Veo 3' },
+    { model: 'veo-3.0', label: 'Veo 3.0' },
+    { model: 'veo3', label: 'Veo 3 (alias)' },
+    { model: 'veo3.0', label: 'Veo 3.0 (alias)' },
+    { model: 'veo-2', label: 'Veo 2' },
+    { model: 'veo2', label: 'Veo 2 (alias)' },
+  ];
+
+  for (const { model, label } of veoT2VModels) {
+    it(`${label} T2V emits generate_audio:true when flag is true`, () => {
+      const body = svc.buildRequestBody(
+        baseT2V(model, { generateNativeAudio: true }),
+        { modelId: model, maxDuration: 8 },
+      );
+      expect(body.input.generate_audio).toBe(true);
+    });
+
+    it(`${label} T2V emits generate_audio:false when flag is false`, () => {
+      const body = svc.buildRequestBody(
+        baseT2V(model, { generateNativeAudio: false }),
+        { modelId: model, maxDuration: 8 },
+      );
+      expect(body.input.generate_audio).toBe(false);
+    });
+
+    it(`${label} T2V emits generate_audio:false when flag is undefined`, () => {
+      const body = svc.buildRequestBody(
+        baseT2V(model),
+        { modelId: model, maxDuration: 8 },
+      );
+      expect(body.input.generate_audio).toBe(false);
+    });
+  }
+});
+
 describe('I2V cross-provider generate_audio matrix (Task #137)', () => {
   // Providers that DO support native audio in I2V mode. Flipping the
   // scene-level flag → `generate_audio: true` on the wire.

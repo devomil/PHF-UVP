@@ -3,8 +3,8 @@
 // NativeAudioToggle behavior matrix:
 //   • Disabled + tooltip wrap when provider isn't audio-capable
 //   • Seedance 2 (T2V or I2V) is always audio-capable
-//   • Veo I2V is audio-capable ONLY when an image is attached
-//     (Task #137 — Veo T2V hard-codes generate_audio:false on the wire)
+//   • Veo (T2V or I2V) is always audio-capable (Task #139 — Veo T2V
+//     branches now forward generate_audio on the wire)
 //   • Conflict warning shown only when (audio-capable && value && hasVoiceover)
 //   • "Mute voiceover" opens a themed AlertDialog (not window.confirm)
 //   • Confirming the AlertDialog calls onMuteVoiceover exactly once
@@ -192,8 +192,8 @@ describe("NativeAudioToggle", () => {
     });
   });
 
-  // Task #137: Veo I2V audio capability
-  describe("Veo I2V audio capability (Task #137)", () => {
+  // Task #139: Veo audio capability in BOTH T2V and I2V modes.
+  describe("Veo audio capability (Task #139 — T2V + I2V)", () => {
     const veoVariants = [
       "veo",
       "veo-2",
@@ -205,7 +205,7 @@ describe("NativeAudioToggle", () => {
     ];
 
     for (const veo of veoVariants) {
-      it(`is enabled for ${veo} when an image is attached`, () => {
+      it(`is enabled for ${veo} when an image is attached (I2V)`, () => {
         render(
           <NativeAudioToggle
             provider={veo}
@@ -225,7 +225,7 @@ describe("NativeAudioToggle", () => {
         cleanup();
       });
 
-      it(`is disabled for ${veo} when no image is attached (Veo T2V has no audio)`, () => {
+      it(`is also enabled for ${veo} when no image is attached (T2V — Task #139)`, () => {
         render(
           <NativeAudioToggle
             provider={veo}
@@ -238,10 +238,10 @@ describe("NativeAudioToggle", () => {
         expect(
           (screen.getByTestId("scene-native-audio-switch") as HTMLButtonElement)
             .disabled,
-        ).toBe(true);
+        ).toBe(false);
         expect(
-          screen.getByTestId("scene-native-audio-disabled-wrap"),
-        ).toBeTruthy();
+          screen.queryByTestId("scene-native-audio-disabled-wrap"),
+        ).toBeNull();
         cleanup();
       });
     }

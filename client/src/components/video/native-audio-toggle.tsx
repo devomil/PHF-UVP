@@ -4,9 +4,9 @@
 //
 // Per-provider mode gates layered on top of the catalog flag:
 //   • Seedance 2 (T2V or I2V) — always supported.
-//   • Veo I2V (any Veo variant) — supported only when an image is
-//     attached. The piapi Veo T2V branch hard-codes generate_audio:false,
-//     so without an image the flag would never reach the wire.
+//   • Veo (any variant) — supported in both T2V and I2V (Task #139).
+//     The piapi Veo T2V and I2V branches both forward
+//     `generateNativeAudio` to `generate_audio` on the wire.
 //
 // When the scene also has a voiceover, surfaces a "Mute voiceover"
 // AlertDialog so the caller can clear the narration before the audio
@@ -34,25 +34,14 @@ import {
 } from "@/components/ui/alert-dialog";
 import { providerSupportsNativeAudio } from "@shared/provider-catalog";
 
-// Veo provider keys whose audio capability is I2V-only. Mirrors the
-// `options.model.includes('veo')` predicate used by the piapi I2V
-// branch (server/services/piapi-video-service.ts) and the `veo*` ids
-// in shared/provider-catalog.ts. Used to layer a `hasImage` gate on
-// top of the catalog's `supportsNativeAudio` flag for Veo specifically.
-function isVeoProvider(provider: string | undefined): boolean {
-  if (!provider) return false;
-  const p = provider.toLowerCase();
-  return p === "veo" || p.startsWith("veo-") || p.startsWith("veo2") || p.startsWith("veo3");
-}
-
 interface Props {
   provider: string | undefined;
   value: boolean;
   hasVoiceover: boolean;
-  // True when an image (product / scene reference / brand asset / text
-  // image) is attached to the scene. Required for Veo audio because the
-  // PiAPI Veo T2V branch always emits generate_audio:false; only the
-  // Veo I2V branch reads the flag.
+  // Task #139: Veo now supports native audio in both T2V and I2V modes,
+  // matching Seedance 2. The toggle no longer requires an attached
+  // image, so this prop is kept only for backwards compatibility with
+  // existing call sites and is not used to gate the switch.
   hasImage?: boolean;
   onChange: (next: boolean) => void | Promise<void>;
   // Called when the user confirms muting the voiceover from the conflict
@@ -66,7 +55,7 @@ export function NativeAudioToggle({
   provider,
   value,
   hasVoiceover,
-  hasImage = false,
+  hasImage: _hasImage = false,
   onChange,
   onMuteVoiceover,
   disabled,
@@ -76,13 +65,9 @@ export function NativeAudioToggle({
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   // Catalog says the provider supports audio at all (Task #136).
-  const catalogSupportsAudio = providerSupportsNativeAudio(provider);
-  const isVeo = isVeoProvider(provider);
-  // Task #137: Veo audio is honored only by the I2V branch. Even though
-  // the catalog flag is true for Veo, the toggle stays locked until an
-  // image is attached so users don't see a no-op affordance.
-  const veoNeedsImage = isVeo && !hasImage;
-  const supportsNativeAudio = catalogSupportsAudio && !veoNeedsImage;
+  // Task #139: Veo now supports native audio in both T2V and I2V, so
+  // the catalog flag alone is sufficient — no extra image gate.
+  const supportsNativeAudio = providerSupportsNativeAudio(provider);
   const effectivelyDisabled = disabled || !supportsNativeAudio;
   const showWarning = supportsNativeAudio && value && hasVoiceover;
 
@@ -109,15 +94,10 @@ export function NativeAudioToggle({
     }
   }
 
-  // Tooltip copy explains why the toggle is locked. Veo without an
-  // image is the most common surprising case ("I picked Veo, why is
-  // this still greyed out?") so we call it out explicitly.
+  // Tooltip copy explains why the toggle is locked.
   function disabledTooltip(): string {
     if (!provider) {
       return "Native audio requires a model that supports it.";
-    }
-    if (veoNeedsImage) {
-      return `Native audio on ${provider} requires an attached image (Veo I2V mode).`;
     }
     return `Native audio isn't supported on this model (current model: ${provider}).`;
   }
@@ -125,9 +105,6 @@ export function NativeAudioToggle({
   function helperText(): string {
     if (supportsNativeAudio) {
       return "When on, the model generates ambient audio inside the clip itself.";
-    }
-    if (veoNeedsImage) {
-      return "Attach an image to this scene to unlock Veo's native audio (I2V mode only).";
     }
     return "Switch to a model that supports native audio to enable this.";
   }
