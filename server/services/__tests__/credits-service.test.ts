@@ -27,7 +27,7 @@ async function ensureTestUser() {
       passwordHash: "x",
       firstName: "Test",
       lastName: "User",
-    } as any);
+    });
   }
 }
 
@@ -100,7 +100,7 @@ describe("credits-service", () => {
     await resetUser("GROWTH", 200, 0, 500); // 200 unused
     const start = new Date();
     const end = new Date(Date.now() + 30 * 24 * 3600 * 1000);
-    await resetMonthlyCredits(TEST_USER_ID, "GROWTH" as any, start, end);
+    await resetMonthlyCredits(TEST_USER_ID, "GROWTH", start, end);
     // GROWTH: 25% rollover capped at 125. 200 * 0.25 = 50 → newCurrent = 500 + 50.
     const snap = await getAvailableCredits(TEST_USER_ID);
     expect(snap.subscriptionGC).toBe(550);
@@ -110,7 +110,7 @@ describe("credits-service", () => {
     await resetUser("GROWTH", 1000, 0, 500); // huge unused balance
     const start = new Date();
     const end = new Date(Date.now() + 30 * 24 * 3600 * 1000);
-    await resetMonthlyCredits(TEST_USER_ID, "GROWTH" as any, start, end);
+    await resetMonthlyCredits(TEST_USER_ID, "GROWTH", start, end);
     // 1000 * 0.25 = 250 but max is 125 → newCurrent = 500 + 125 = 625
     const snap = await getAvailableCredits(TEST_USER_ID);
     expect(snap.subscriptionGC).toBe(625);

@@ -879,7 +879,11 @@ class VideoGenerationWorker {
           // tier. Falls through to the rate-table default if either is
           // missing.
           const debitDuration = typeof job.duration === 'number' ? job.duration : null;
-          const debitQuality = (job as any).quality ?? null;
+          // videoGenerationJobs schema doesn't carry an explicit quality
+          // tier today; let getCreditCost fall through to the rate
+          // table's default row for (provider, duration). When we add a
+          // quality column, plumb it in here as `job.quality`.
+          const debitQuality: string | null = null;
           const gcCost = await getCreditCost(debitProvider, debitQuality, debitDuration);
           await consumeCredits(job.triggeredBy, gcCost, {
             provider: debitProvider,
