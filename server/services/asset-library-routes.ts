@@ -646,10 +646,20 @@ async function saveCompletedJob(jobId: string, url: string, assetType: 'image' |
   thumbnailUrl?: string;
 }) {
   // Phase NC-01 fail-CLOSED — debit BEFORE we persist the asset or
-  // mark the job 'completed'. If the debit throws (insufficient
-  // balance, DB error) we mark the job failed and the caller never
-  // sees the artifact. Idempotent on (userId, jobId).
-  const { consumeCredits, getCreditCost } = await import('./credits-service');
+  // mark the job 'completed'. Re-verifies plan permission against the
+  // ACTUAL resolved provider (closes the auto-routing authz hole where
+  // the request-time fallback might not match what actually ran).
+  const { consumeCredits, getCreditCost, canAccessProvider } = await import('./credits-service');
+  const allowedActual = await canAccessProvider(data.userId, data.provider);
+  if (!allowedActual) {
+    const msg = `Provider ${data.provider} is not included in your plan`;
+    console.error(`[AssetLibrary] ${msg} (job ${jobId}) — withholding delivery`);
+    await db
+      .update(videoGenerationJobs)
+      .set({ status: 'failed', errorMessage: msg, completedAt: new Date(), updatedAt: new Date() })
+      .where(eq(videoGenerationJobs.jobId, jobId));
+    throw new Error(msg);
+  }
   const durS = data.duration ? Number(data.duration) : null;
   const gcCost = await getCreditCost(data.provider, null, Number.isFinite(durS) ? durS : null);
   try {

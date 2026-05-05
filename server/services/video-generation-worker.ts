@@ -855,8 +855,25 @@ class VideoGenerationWorker {
       // the user does not receive an unmetered clip.
       if (videoUrl && job.triggeredBy) {
         try {
-          const { consumeCredits, getCreditCost } = await import('./credits-service');
+          const { consumeCredits, getCreditCost, canAccessProvider } = await import('./credits-service');
           const debitProvider = resolvedProvider || job.provider || 'kling-2.6';
+          // Phase NC-01 — re-verify provider authorization against the
+          // ACTUAL resolved provider, not the request-time fallback. This
+          // closes the auto-routing authz hole: if the orchestrator
+          // upgraded a job to a provider outside the user's plan, refuse
+          // delivery and mark the job failed (no debit recorded).
+          const allowedActual = await canAccessProvider(job.triggeredBy, debitProvider);
+          if (!allowedActual) {
+            log.error(`[Credits] Job ${job.jobId} resolved to ${debitProvider} which is not in user's plan — withholding delivery`);
+            const failedJob = await storage.updateVideoGenerationJob(job.jobId, {
+              status: "failed",
+              completedAt: new Date(),
+              progress: 0,
+              errorMessage: `Provider ${debitProvider} is not included in your plan`,
+            });
+            this.notifyJobUpdate(failedJob);
+            return;
+          }
           // Use the job's actual duration + quality so charges match
           // generation_rates (source of truth) instead of the cheapest
           // tier. Falls through to the rate-table default if either is

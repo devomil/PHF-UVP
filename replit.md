@@ -10,7 +10,7 @@
 - **Codegen**: _Populate as you build_
 - **DB Push**: `drizzle-kit push:pg`
 - **Env Vars**: `SESSION_SECRET`, `AYRSHARE_API_KEY`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER`, `ADMIN_NOTIFICATION_EMAIL`, `ADMIN_NOTIFICATION_PHONE`, `SENDGRID_FROM_EMAIL`, `RECRAFT_API_KEY`
-- **Billing (NC-01)**: `BILLING_PROVIDER` (default `stripe`), `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, plus per-plan `STRIPE_PRICE_STARTER` / `STRIPE_PRICE_GROWTH` / `STRIPE_PRICE_STUDIO` / `STRIPE_PRICE_ENTERPRISE` and per-pack `STRIPE_PRICE_TOPUP_*`. Webhook endpoint: `POST /api/billing/webhook/:providerName` (raw body required). Catalog reports `configured:false` until prices are set.
+- **Billing (NC-01)**: `BILLING_PROVIDER` (default `stripe`), `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, plus catalog-key envs of the form `STRIPE_PRICE_<CATALOG_KEY>` (e.g. `STRIPE_PRICE_STARTER_MONTHLY`, `STRIPE_PRICE_STARTER_ANNUAL`, `STRIPE_PRICE_GROWTH_MONTHLY`, …, `STRIPE_PRICE_TOPUP_*`) — see `server/config/billing-catalog.ts` for the full key list. Webhook endpoint: `POST /api/billing/webhook/:providerName` (raw body required). Catalog reports `configured:false` until prices are set.
 
 ## Stack
 - **Frontend**: React 18, Vite, TypeScript, Tailwind CSS v4, shadcn/ui, wouter, @tanstack/react-query
