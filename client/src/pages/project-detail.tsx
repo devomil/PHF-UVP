@@ -3011,19 +3011,31 @@ export default function ProjectDetail({ params }: { params?: { id: string } }) {
   const [, setLocation] = useLocation();
   const [deleteProjectDialogOpen, setDeleteProjectDialogOpen] = useState(false);
 
-  const { data: project, isLoading, error } = useQuery({
+  const { data: project, isLoading, error } = useQuery<any, Error & { status?: number }>({
     queryKey: ["project", projectId],
     queryFn: async () => {
       const res = await fetch(`/api/projects/${projectId}`, { credentials: "include" });
       if (!res.ok) {
-        if (res.status === 404) throw new Error("Project not found");
-        throw new Error(`Server error (${res.status})`);
+        // Preserve the real HTTP status on the thrown error so the
+        // empty-state UI can distinguish "actually missing" (404) from
+        // "session expired" (401), "not your project" (403) and
+        // "server crashed" (500). Otherwise every failure looks like
+        // a deletion to the user, which is what motivated this fix.
+        let body: any = null;
+        try { body = await res.json(); } catch { /* non-JSON */ }
+        const err: Error & { status?: number } = new Error(
+          body?.error || body?.message || `Request failed (${res.status})`
+        );
+        err.status = res.status;
+        throw err;
       }
       return res.json();
     },
     enabled: !!projectId,
     retry: (failureCount, err) => {
-      if (err?.message === "Project not found") return false;
+      const status = (err as any)?.status;
+      // Don't retry on hard client errors — they won't fix themselves.
+      if (status === 404 || status === 403 || status === 401) return false;
       return failureCount < 3;
     },
     retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 10000),
@@ -3164,6 +3176,24 @@ export default function ProjectDetail({ params }: { params?: { id: string } }) {
   }
 
   if (!project && (error || !isLoading)) {
+    // Map the preserved HTTP status onto an honest empty state. The
+    // previous implementation always claimed "Project Not Found" which
+    // misled users whose session had simply expired or whose request
+    // 500ed transiently — they thought their work had been deleted.
+    const status = (error as any)?.status as number | undefined;
+    const errMsg = error?.message;
+    const heading =
+      status === 404 ? "Project Not Found"
+      : status === 403 ? "You don't have access to this project"
+      : status === 401 ? "Please log in again"
+      : status && status >= 500 ? "We couldn't load this project"
+      : "Couldn't load this project";
+    const detail =
+      status === 404 ? "The project you're looking for doesn't exist or has been deleted."
+      : status === 403 ? "This project belongs to a different account. Switch accounts or open it from that workspace."
+      : status === 401 ? "Your session expired while you were away. Log in to pick up where you left off."
+      : status && status >= 500 ? `Something went wrong on our end${errMsg ? ` (${errMsg})` : ""}. Try again in a moment — your project is safe.`
+      : `Something went wrong${errMsg ? `: ${errMsg}` : ""}. Check your connection and try again.`;
     return (
       <div className="p-6 lg:p-8">
         <Link href="/projects" className="text-sm inline-flex items-center gap-1 mb-6" style={{ color: "var(--text-muted)" }}>
@@ -3171,8 +3201,27 @@ export default function ProjectDetail({ params }: { params?: { id: string } }) {
         </Link>
         <div className="flex flex-col items-center justify-center min-h-[40vh] gap-4">
           <AlertCircle className="w-12 h-12 text-red-400" />
-          <h2 className="text-xl font-bold" style={{ color: "var(--text-primary)" }}>Project Not Found</h2>
-          <p style={{ color: "var(--text-secondary)" }}>The project you're looking for doesn't exist or has been deleted.</p>
+          <h2 className="text-xl font-bold" style={{ color: "var(--text-primary)" }}>{heading}</h2>
+          <p className="max-w-md text-center" style={{ color: "var(--text-secondary)" }}>{detail}</p>
+          <div className="flex items-center gap-2 mt-2">
+            {status === 401 ? (
+              <Button asChild variant="default">
+                <a href="/auth">Log in</a>
+              </Button>
+            ) : status !== 404 && status !== 403 ? (
+              <Button onClick={() => window.location.reload()} variant="default">
+                Try again
+              </Button>
+            ) : null}
+            <Link href="/projects">
+              <Button variant="outline">Back to Projects</Button>
+            </Link>
+          </div>
+          {projectId ? (
+            <p className="text-[10px] mt-4 font-mono opacity-60" style={{ color: "var(--text-muted)" }}>
+              {status ? `HTTP ${status} · ` : ""}id: {projectId}
+            </p>
+          ) : null}
         </div>
       </div>
     );

@@ -252,7 +252,15 @@ export async function registerRoutes(app: Express) {
   });
 
   app.get("/api/projects/:projectId", async (req, res) => {
+    // Targeted diagnostic logging for the user-reported "every project
+    // shows Project Not Found" bug. Logs the auth state, the requested
+    // id, what the DB lookup returned, and any owner mismatch — so the
+    // very next failing click leaves enough breadcrumbs to root-cause
+    // it without needing an in-browser repro from the agent side.
+    const sid = (req as any).sessionID?.slice(0, 8) || "no-sess";
+    const reqId = `${sid}/${req.params.projectId?.slice(0, 8) || "?"}`;
     if (!req.isAuthenticated() || !req.user) {
+      console.warn(`[ProjectGET ${reqId}] 401 — not authenticated (hasSession=${!!(req as any).session}, hasUser=${!!req.user})`);
       return res.status(401).json({ error: "Authentication required" });
     }
     try {
@@ -265,10 +273,12 @@ export async function registerRoutes(app: Express) {
         .limit(1);
 
       if (!project) {
+        console.warn(`[ProjectGET ${reqId}] 404 — projectId=${projectId} not in DB (user=${userId.slice(0, 8)})`);
         return res.status(404).json({ error: "Project not found" });
       }
 
       if (project.ownerId !== userId) {
+        console.warn(`[ProjectGET ${reqId}] 403 — project.ownerId=${project.ownerId.slice(0, 8)} != session.user=${userId.slice(0, 8)}`);
         return res.status(403).json({ error: "Access denied" });
       }
 
@@ -280,7 +290,7 @@ export async function registerRoutes(app: Express) {
 
       res.json({ ...project, jobs });
     } catch (error) {
-      console.error("Failed to fetch project:", error);
+      console.error(`[ProjectGET ${reqId}] 500 — query threw:`, error);
       res.status(500).json({ error: "Failed to fetch project" });
     }
   });
