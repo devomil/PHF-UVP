@@ -87,6 +87,9 @@ export default function BillingPage() {
           <p className="text-sm text-muted-foreground mt-1">Generation credits power every AI action. Upgrade or top up below.</p>
         </div>
         <div className="flex gap-2">
+          <Link href="/profile">
+            <Button variant="outline" data-testid="link-profile">Profile</Button>
+          </Link>
           <Link href="/billing/transactions">
             <Button variant="outline" data-testid="link-transactions">Transaction history</Button>
           </Link>

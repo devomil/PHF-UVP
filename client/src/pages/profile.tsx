@@ -1,4 +1,5 @@
-import { User, Lock, Bell } from "lucide-react";
+import { User, Lock, Bell, CreditCard } from "lucide-react";
+import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
 
@@ -16,14 +17,22 @@ export default function Profile() {
   return (
     <div className="p-6 lg:p-8" style={{ color: "var(--text-primary)" }}>
       <div className="max-w-3xl mx-auto">
-        <div className="flex items-center gap-3 mb-8">
-          <div className="p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/20">
-            <User className="w-6 h-6 text-purple-400" />
+        <div className="flex items-end justify-between gap-3 mb-8">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/20">
+              <User className="w-6 h-6 text-purple-400" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight">Profile</h1>
+              <p className="text-sm" style={{ color: "var(--text-secondary)" }}>View and manage your account</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">Profile</h1>
-            <p className="text-sm" style={{ color: "var(--text-secondary)" }}>View and manage your account</p>
-          </div>
+          <Link href="/billing">
+            <Button variant="outline" className="gap-2" data-testid="link-billing">
+              <CreditCard className="w-4 h-4" />
+              Plans &amp; billing
+            </Button>
+          </Link>
         </div>
 
         <div className="border rounded-xl p-6 mb-6 flex items-center gap-6" style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)" }}>
