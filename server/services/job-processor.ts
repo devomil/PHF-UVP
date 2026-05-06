@@ -175,6 +175,81 @@ export async function processVideoJob(jobId: string) {
     const assetsAfterGen = (projectAfterGen?.assets as any) || {};
 
     if (result.success && result.videoUrl) {
+      // Phase NC-01 — fail-CLOSED credit consumption per generation. Debit
+      // BEFORE we mark the job completed so an unrecoverable charge error
+      // surfaces as a failed job rather than an unmetered asset. Image
+      // (I2I) and video paths both flow through here, so this also
+      // satisfies the "image-generation paths also consume per call"
+      // requirement.
+      // Local helper: mirror the existing failure-path project update so
+      // fail-closed credit branches don't leave the parent project stuck
+      // in an in-progress state.
+      const markProjectFailed = async (failMsg: string) => {
+        await db
+          .update(universalVideoProjects)
+          .set({
+            status: "failed",
+            progress: { phase: "failed", percentage: 0, currentStep: failMsg },
+            assets: {
+              ...assetsAfterGen,
+              quickCreate: {
+                ...(assetsAfterGen.quickCreate || {}),
+                visual: {
+                  status: "failed",
+                  url: null,
+                  provider: job.provider || "auto",
+                  error: failMsg,
+                  updatedAt: new Date().toISOString(),
+                },
+              },
+            },
+            updatedAt: new Date(),
+          })
+          .where(eq(universalVideoProjects.projectId, job.projectId));
+      };
+
+      if (job.triggeredBy) {
+        try {
+          const { consumeCredits, getCreditCost, canAccessProvider } = await import('./credits-service');
+          const debitProvider = result.provider || job.provider || (isI2IJob ? 'image-flux' : 'kling-2.6');
+          const allowedActual = await canAccessProvider(job.triggeredBy, debitProvider);
+          if (!allowedActual) {
+            const denyMsg = `Provider ${debitProvider} is not included in your plan`;
+            console.error(`[JobProcessor] Job ${jobId} resolved to ${debitProvider} (not in plan) — withholding delivery`);
+            await db
+              .update(videoGenerationJobs)
+              .set({ status: "failed", errorMessage: denyMsg, completedAt: new Date(), updatedAt: new Date() })
+              .where(eq(videoGenerationJobs.jobId, jobId));
+            await markProjectFailed(denyMsg);
+            return;
+          }
+          const debitDuration = isI2IJob ? null : (typeof job.duration === 'number' ? job.duration : null);
+          const gcCost = await getCreditCost(debitProvider, null, debitDuration);
+          await consumeCredits(job.triggeredBy, gcCost, {
+            provider: debitProvider,
+            durationS: debitDuration ?? undefined,
+            jobId,
+            description: isI2IJob
+              ? `Quick Create I2I image generation`
+              : `Quick Create ${job.sceneType || 'video'} generation`,
+          });
+        } catch (creditErr: any) {
+          console.error(`[JobProcessor] Job ${jobId} consume FAILED — withholding delivery: ${creditErr.message}`);
+          const chargeErrMsg = `Credit charge failed: ${creditErr.message}`;
+          await db
+            .update(videoGenerationJobs)
+            .set({
+              status: "failed",
+              errorMessage: chargeErrMsg,
+              completedAt: new Date(),
+              updatedAt: new Date(),
+            })
+            .where(eq(videoGenerationJobs.jobId, jobId));
+          await markProjectFailed(chargeErrMsg);
+          return;
+        }
+      }
+
       await db
         .update(videoGenerationJobs)
         .set({
@@ -231,6 +306,20 @@ export async function processVideoJob(jobId: string) {
         })
         .where(eq(videoGenerationJobs.jobId, jobId));
 
+      // Phase NC-01 — refund any credits we previously debited for this
+      // jobId. Idempotent: a no-op if no debit was ever recorded.
+      if (job.triggeredBy) {
+        try {
+          const { refundCredits } = await import('./credits-service');
+          await refundCredits(job.triggeredBy, Number.MAX_SAFE_INTEGER, {
+            jobId,
+            reason: `Quick Create generation failed: ${errorMsg}`,
+          });
+        } catch (refundErr: any) {
+          console.error(`[JobProcessor] Job ${jobId} refund failed (non-fatal): ${refundErr.message}`);
+        }
+      }
+
       await db
         .update(universalVideoProjects)
         .set({
@@ -268,6 +357,20 @@ export async function processVideoJob(jobId: string) {
         updatedAt: new Date(),
       })
       .where(eq(videoGenerationJobs.jobId, jobId));
+
+    // Phase NC-01 — refund any credits previously debited for this jobId.
+    // Idempotent and a no-op if we never charged it.
+    if (job.triggeredBy) {
+      try {
+        const { refundCredits } = await import('./credits-service');
+        await refundCredits(job.triggeredBy, Number.MAX_SAFE_INTEGER, {
+          jobId,
+          reason: `Quick Create generation error: ${errorMsg}`,
+        });
+      } catch (refundErr: any) {
+        console.error(`[JobProcessor] Job ${jobId} refund failed (non-fatal): ${refundErr.message}`);
+      }
+    }
 
     const [projectOnError] = await db
       .select()

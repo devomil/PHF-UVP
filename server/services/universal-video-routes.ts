@@ -13579,6 +13579,35 @@ router.post('/generate-character-reference', isAuthenticated, async (req: Reques
       return res.status(500).json({ success: false, error: 'Image generation did not return a valid URL' });
     }
 
+    // Phase NC-01 — POST-success consume, fail-CLOSED on the delivery
+    // step. We charge only after a real image has been produced (matches
+    // task semantics: charge as generations happen). If the user cannot
+    // be charged, we refuse to return the URL so the asset is not
+    // delivered uncharged. Per-call jobId via UUID so each click bills
+    // exactly once but separate clicks each pay.
+    const { consumeCredits, getCreditCost, canAccessProvider } = await import('./credits-service');
+    const debitProvider = 'flux-1.1-pro';
+    const charJobId = `charref_std_${userId}_${crypto.randomUUID()}`;
+
+    const allowed = await canAccessProvider(userId, debitProvider);
+    if (!allowed) {
+      console.error(`[Characters] Standalone: provider ${debitProvider} not in plan for user ${userId} — withholding delivery`);
+      return res.status(403).json({ success: false, error: `Provider ${debitProvider} is not included in your plan` });
+    }
+
+    try {
+      const gcCost = await getCreditCost(debitProvider, 'premium', null);
+      await consumeCredits(userId, gcCost, {
+        provider: debitProvider,
+        quality: 'premium',
+        jobId: charJobId,
+        description: 'Standalone character reference image',
+      });
+    } catch (creditErr: any) {
+      console.error(`[Characters] Standalone consume FAILED — withholding delivery: ${creditErr.message}`);
+      return res.status(402).json({ success: false, error: `Credit charge failed: ${creditErr.message}` });
+    }
+
     let finalUrl = generated.url;
     try {
       const sharp = (await import('sharp')).default;
@@ -13690,6 +13719,47 @@ router.post('/projects/:projectId/characters/:characterId/generate-reference', i
         .set({ characters: updatedChars, updatedAt: new Date() })
         .where(eq(universalVideoProjects.projectId, projectId));
       return res.status(500).json({ success: false, error: errorMsg });
+    }
+
+    // Phase NC-01 — POST-success consume, fail-CLOSED on the delivery
+    // step. We charge only after a real image has been produced. If the
+    // user cannot be charged (provider not in plan, no balance), we
+    // refuse to attach the URL to the character or return it so no
+    // asset is delivered uncharged. Per-call jobId via UUID so each
+    // click bills exactly once.
+    const { consumeCredits, getCreditCost, canAccessProvider } = await import('./credits-service');
+    const debitProvider = 'flux-1.1-pro';
+    const charJobId = `charref_${projectId}_${characterId}_${crypto.randomUUID()}`;
+
+    const allowed = await canAccessProvider(userId, debitProvider);
+    if (!allowed) {
+      const denyMsg = `Provider ${debitProvider} is not included in your plan`;
+      const denyChars = [...characters];
+      denyChars[charIndex] = { ...character, generationStatus: 'failed', generationError: denyMsg };
+      await db.update(universalVideoProjects)
+        .set({ characters: denyChars, updatedAt: new Date() })
+        .where(eq(universalVideoProjects.projectId, projectId));
+      console.error(`[Characters] Project: provider ${debitProvider} not in plan for user ${userId} — withholding delivery`);
+      return res.status(403).json({ success: false, error: denyMsg });
+    }
+
+    try {
+      const gcCost = await getCreditCost(debitProvider, 'premium', null);
+      await consumeCredits(userId, gcCost, {
+        provider: debitProvider,
+        quality: 'premium',
+        jobId: charJobId,
+        description: `Project character reference image (${character.name})`,
+      });
+    } catch (creditErr: any) {
+      const msg = `Credit charge failed: ${creditErr.message}`;
+      const errChars = [...characters];
+      errChars[charIndex] = { ...character, generationStatus: 'failed', generationError: msg };
+      await db.update(universalVideoProjects)
+        .set({ characters: errChars, updatedAt: new Date() })
+        .where(eq(universalVideoProjects.projectId, projectId));
+      console.error(`[Characters] Project consume FAILED — withholding delivery: ${creditErr.message}`);
+      return res.status(402).json({ success: false, error: msg });
     }
 
     let finalUrl = generated.url;
