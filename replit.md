@@ -10,7 +10,7 @@
 - **Codegen**: _Populate as you build_
 - **DB Push**: `drizzle-kit push:pg`
 - **Env Vars**: `SESSION_SECRET`, `AYRSHARE_API_KEY`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER`, `ADMIN_NOTIFICATION_EMAIL`, `ADMIN_NOTIFICATION_PHONE`, `SENDGRID_FROM_EMAIL`, `RECRAFT_API_KEY`
-- **Billing (NC-01)**: `BILLING_PROVIDER` (default `stripe`), `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, plus catalog-key envs of the form `STRIPE_PRICE_<CATALOG_KEY>` (e.g. `STRIPE_PRICE_STARTER_MONTHLY`, `STRIPE_PRICE_STARTER_ANNUAL`, `STRIPE_PRICE_GROWTH_MONTHLY`, …, `STRIPE_PRICE_TOPUP_*`) — see `server/config/billing-catalog.ts` for the full key list. Webhook endpoint: `POST /api/billing/webhook/:providerName` (raw body required). Catalog reports `configured:false` until prices are set.
+- **Billing (NC-01)**: `BILLING_PROVIDER` (default `stripe`), `STRIPE_SECRET_KEY` (must be `sk_test_…`/`sk_live_…`, not the publishable key), `STRIPE_WEBHOOK_SECRET`. **Price IDs are NOT env vars** — each catalog entry is resolved by Stripe `lookup_key` (lowercased catalog key, e.g. `starter_monthly`, `growth_annual`, `pack_100`, `pack_2500`). See `server/config/billing-catalog.ts` for the full key list and `server/services/billing/stripe-provider.ts` for the cached `prices.list({ lookup_keys })` resolver. Webhook endpoint: `POST /api/billing/webhook/:providerName` (raw body required). Catalog reports `configured:false` for any lookup_key not found in Stripe.
 
 ## Stack
 - **Frontend**: React 18, Vite, TypeScript, Tailwind CSS v4, shadcn/ui, wouter, @tanstack/react-query
