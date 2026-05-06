@@ -118,12 +118,15 @@ class StripeProvider implements BillingProvider {
       kind: params.kind,
     };
 
+    // Stripe SDK types `customer_email` as `string | undefined`, not nullable.
+    const customerEmail = params.customerId ? undefined : params.userEmail ?? undefined;
+
     if (params.kind === "subscription") {
       const session = await stripe.checkout.sessions.create({
         mode: "subscription",
         line_items: [{ price: priceId, quantity: 1 }],
         customer: params.customerId || undefined,
-        customer_email: params.customerId ? undefined : params.userEmail,
+        customer_email: customerEmail,
         client_reference_id: params.userId,
         success_url: params.successUrl,
         cancel_url: params.cancelUrl,
@@ -138,7 +141,7 @@ class StripeProvider implements BillingProvider {
       mode: "payment",
       line_items: [{ price: priceId, quantity: 1 }],
       customer: params.customerId || undefined,
-      customer_email: params.customerId ? undefined : params.userEmail,
+      customer_email: customerEmail,
       client_reference_id: params.userId,
       success_url: params.successUrl,
       cancel_url: params.cancelUrl,
