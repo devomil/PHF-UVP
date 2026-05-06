@@ -20,7 +20,7 @@ import { isAuthenticated } from "../auth";
 import { getActiveBillingProvider, getBillingProviderByName, BillingNotConfiguredError } from "./billing";
 import { PLAN_CONFIG, PAID_PLANS, TOPUP_PACKS, getTopUpPack, type PlanTier } from "../config/plans";
 import { PROVIDER_PERMISSIONS } from "../config/providerPermissions";
-import { BILLING_CATALOG, getCatalogEntry, getStripePriceId, isCatalogEntryConfigured } from "../config/billing-catalog";
+import { BILLING_CATALOG, getCatalogEntry } from "../config/billing-catalog";
 
 const router = Router();
 
@@ -35,9 +35,23 @@ function authUser(req: Request): AuthUser | null {
 }
 
 // ===== Public catalog (no auth) =====
-router.get("/api/billing/catalog", (_req, res) => {
+router.get("/api/billing/catalog", async (_req, res) => {
+  const provider = getActiveBillingProvider();
+  const providerConfigured = provider.isConfigured();
+  // Resolve all configured-flags in parallel. When the provider isn't
+  // configured at all, `isCatalogConfigured` short-circuits to false
+  // without an API call.
+  const checkKey = (key: string) =>
+    providerConfigured ? provider.isCatalogConfigured(key).catch(() => false) : Promise.resolve(false);
+  const planFlags = await Promise.all(
+    PAID_PLANS.flatMap((tier) => {
+      const cfg = PLAN_CONFIG[tier];
+      return [checkKey(cfg.catalogKeyMonthly), checkKey(cfg.catalogKeyAnnual)];
+    }),
+  );
+  const packFlags = await Promise.all(TOPUP_PACKS.map((p) => checkKey(p.catalogKey)));
   res.json({
-    plans: PAID_PLANS.map((tier) => {
+    plans: PAID_PLANS.map((tier, i) => {
       const cfg = PLAN_CONFIG[tier];
       return {
         tier,
@@ -49,18 +63,18 @@ router.get("/api/billing/catalog", (_req, res) => {
         rolloverMax: cfg.rolloverMax,
         maxResolution: cfg.maxResolution,
         maxClipDuration: cfg.maxClipDuration,
-        monthlyConfigured: isCatalogEntryConfigured(cfg.catalogKeyMonthly),
-        annualConfigured: isCatalogEntryConfigured(cfg.catalogKeyAnnual),
+        monthlyConfigured: planFlags[i * 2],
+        annualConfigured: planFlags[i * 2 + 1],
       };
     }),
-    topupPacks: TOPUP_PACKS.map((p) => ({
+    topupPacks: TOPUP_PACKS.map((p, i) => ({
       id: p.id,
       gc: p.gc,
       priceCents: p.priceCents,
-      configured: isCatalogEntryConfigured(p.catalogKey),
+      configured: packFlags[i],
     })),
     permissions: PROVIDER_PERMISSIONS,
-    providerConfigured: getActiveBillingProvider().isConfigured(),
+    providerConfigured,
   });
 });
 
@@ -147,10 +161,10 @@ router.post("/api/subscriptions/upgrade-checkout", isAuthenticated, async (req: 
     if (!PAID_PLANS.includes(plan)) return res.status(400).json({ error: "Invalid plan", code: "INVALID_PLAN" });
     const cfg = PLAN_CONFIG[plan];
     const catalogKey = period === "annual" ? cfg.catalogKeyAnnual : cfg.catalogKeyMonthly;
-    if (!isCatalogEntryConfigured(catalogKey)) {
+    const provider = getActiveBillingProvider();
+    if (!(await provider.isCatalogConfigured(catalogKey))) {
       return res.status(502).json({ error: `Plan ${plan} ${period} is not yet configured`, code: "BILLING_NOT_CONFIGURED" });
     }
-    const provider = getActiveBillingProvider();
     const [sub] = await db.select().from(subscriptions).where(eq(subscriptions.userId, userId));
     const session = await provider.createCheckoutSession({
       kind: "subscription",
@@ -198,10 +212,10 @@ router.post("/api/credits/topup-checkout", isAuthenticated, async (req: Request,
     const { packId } = req.body as { packId: string };
     const pack = getTopUpPack(packId);
     if (!pack) return res.status(400).json({ error: "Invalid pack", code: "INVALID_PACK" });
-    if (!isCatalogEntryConfigured(pack.catalogKey)) {
+    const provider = getActiveBillingProvider();
+    if (!(await provider.isCatalogConfigured(pack.catalogKey))) {
       return res.status(502).json({ error: `Pack ${packId} is not yet configured`, code: "BILLING_NOT_CONFIGURED" });
     }
-    const provider = getActiveBillingProvider();
     const [sub] = await db.select().from(subscriptions).where(eq(subscriptions.userId, userId));
     const session = await provider.createCheckoutSession({
       kind: "topup",

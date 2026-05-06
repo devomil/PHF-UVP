@@ -12,13 +12,25 @@ import {
   type CustomerPortalResult,
   type ParsedBillingEvent,
 } from "./types";
-import { getCatalogEntry, getStripePriceId } from "../../config/billing-catalog";
+import {
+  getCatalogEntry,
+  catalogKeyToLookupKey,
+  lookupKeyToCatalogKey,
+  allLookupKeys,
+} from "../../config/billing-catalog";
 import { TOPUP_PACKS } from "../../config/plans";
 
 class StripeProvider implements BillingProvider {
   readonly name = "stripe";
   readonly signatureHeader = "stripe-signature";
   private client: Stripe | null = null;
+
+  // Price-ID cache resolved via `prices.list({ lookup_keys })`. Built
+  // lazily on first use and shared across concurrent calls via
+  // `priceCachePromise` so we never fire 13 parallel Stripe requests on a
+  // cold start.
+  private priceCache: Map<string, string> | null = null;
+  private priceCachePromise: Promise<Map<string, string>> | null = null;
 
   private getClient(): Stripe {
     if (!this.client) {
@@ -39,13 +51,65 @@ class StripeProvider implements BillingProvider {
     return !!process.env.STRIPE_SECRET_KEY;
   }
 
+  // Force the next call to re-fetch from Stripe. Useful when the user
+  // adds a new Price in the Dashboard mid-session.
+  refreshPriceCache(): void {
+    this.priceCache = null;
+    this.priceCachePromise = null;
+  }
+
+  private async loadPriceCache(): Promise<Map<string, string>> {
+    if (this.priceCache) return this.priceCache;
+    if (this.priceCachePromise) return this.priceCachePromise;
+    const stripe = this.getClient();
+    const lookups = allLookupKeys();
+    this.priceCachePromise = (async () => {
+      const out = new Map<string, string>();
+      // Stripe accepts up to 10 lookup_keys per call; chunk to be safe.
+      for (let i = 0; i < lookups.length; i += 10) {
+        const chunk = lookups.slice(i, i + 10);
+        const page = await stripe.prices.list({ lookup_keys: chunk, active: true, limit: 100 });
+        for (const price of page.data) {
+          if (!price.lookup_key) continue;
+          out.set(lookupKeyToCatalogKey(price.lookup_key), price.id);
+        }
+      }
+      this.priceCache = out;
+      return out;
+    })();
+    try {
+      return await this.priceCachePromise;
+    } finally {
+      this.priceCachePromise = null;
+    }
+  }
+
+  private async resolvePriceId(catalogKey: string): Promise<string | null> {
+    try {
+      const cache = await this.loadPriceCache();
+      return cache.get(catalogKey) ?? null;
+    } catch (err) {
+      if (err instanceof BillingNotConfiguredError) return null;
+      throw err;
+    }
+  }
+
+  async isCatalogConfigured(catalogKey: string): Promise<boolean> {
+    if (!this.isConfigured()) return false;
+    const id = await this.resolvePriceId(catalogKey);
+    return id !== null;
+  }
+
   async createCheckoutSession(params: CreateCheckoutParams): Promise<CheckoutSessionResult> {
     const stripe = this.getClient();
     const entry = getCatalogEntry(params.catalogKey);
     if (!entry) throw new BillingNotConfiguredError(`Unknown catalog key: ${params.catalogKey}`);
-    const priceId = getStripePriceId(params.catalogKey);
+    const priceId = await this.resolvePriceId(params.catalogKey);
     if (!priceId) {
-      throw new BillingNotConfiguredError(`Stripe price ID for ${params.catalogKey} is not set (env STRIPE_PRICE_${params.catalogKey})`);
+      const lookup = catalogKeyToLookupKey(params.catalogKey);
+      throw new BillingNotConfiguredError(
+        `Stripe Price with lookup_key="${lookup}" not found. Create one in the Stripe Dashboard (Products → Add Price → Lookup key) or set lookup_key on an existing price.`,
+      );
     }
 
     const sharedMetadata = {

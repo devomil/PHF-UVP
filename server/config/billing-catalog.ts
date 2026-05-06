@@ -1,10 +1,11 @@
 // Phase NC-01 — Processor-agnostic billing catalog.
 //
-// Catalog keys are stable internal identifiers ("STARTER_MONTHLY", "PACK_500", etc).
-// The active BillingProvider implementation maps them to its own price IDs
-// via env vars. Stripe uses STRIPE_PRICE_<KEY>; a future Paddle adapter
-// would use PADDLE_PRICE_<KEY>. The catalog itself does NOT import any
-// processor SDK — that lives in `server/services/billing/`.
+// Catalog keys are stable internal identifiers ("STARTER_MONTHLY", "PACK_500").
+// The active BillingProvider implementation maps them to its own SKU/price
+// records. Stripe resolves them via Price `lookup_key` (lowercase form of
+// the catalog key — see `catalogKeyToLookupKey`); a future Paddle adapter
+// would do the equivalent lookup with its own SDK. The catalog itself does
+// NOT import any processor SDK — that lives in `server/services/billing/`.
 
 import { PLAN_CONFIG, TOPUP_PACKS, type PlanTier, type PlanConfig, type TopUpPackConfig } from "./plans";
 
@@ -53,16 +54,21 @@ export function getCatalogEntry(key: string): CatalogEntry | undefined {
   return BILLING_CATALOG.find((e) => e.key === key);
 }
 
-// Convention: env-var name for a Stripe price ID for catalog key X is
-// `STRIPE_PRICE_X`. Returning `null` here means the user hasn't configured
-// that price yet — the route layer translates this into a 502
-// `BILLING_NOT_CONFIGURED` and the UI renders a "Coming soon" tile.
-export function getStripePriceId(catalogKey: string): string | null {
-  const envKey = `STRIPE_PRICE_${catalogKey}`;
-  const value = process.env[envKey];
-  return value && value.length > 0 ? value : null;
+// Convention shared by every provider adapter that needs a per-SKU
+// identifier on the processor side: the lookup key is the lowercase form
+// of the catalog key (STARTER_MONTHLY → starter_monthly). Stripe uses this
+// as the Price `lookup_key`; Paddle would use it the same way for a price
+// `name`. Defining this once here keeps providers consistent.
+export function catalogKeyToLookupKey(catalogKey: string): string {
+  return catalogKey.toLowerCase();
 }
 
-export function isCatalogEntryConfigured(catalogKey: string): boolean {
-  return getStripePriceId(catalogKey) !== null;
+export function lookupKeyToCatalogKey(lookupKey: string): string {
+  return lookupKey.toUpperCase();
+}
+
+// All catalog lookup keys, useful for batch prefetch (e.g. Stripe
+// `prices.list({ lookup_keys: [...] })`).
+export function allLookupKeys(): string[] {
+  return BILLING_CATALOG.map((e) => catalogKeyToLookupKey(e.key));
 }

@@ -11,7 +11,7 @@ export interface CreateCheckoutParams {
   kind: CheckoutKind;
   catalogKey: string; // STARTER_MONTHLY, PACK_500, etc.
   userId: string;
-  userEmail: string;
+  userEmail: string | null;
   // Optional existing customer id from a previous purchase. If absent, the
   // provider creates a new customer and writes back the id via the webhook.
   customerId?: string | null;
@@ -75,6 +75,12 @@ export interface BillingProvider {
   // verification under a different header name.
   readonly signatureHeader: string;
   isConfigured(): boolean;
+  // Returns whether the processor has a SKU/price provisioned for the given
+  // internal catalog key (e.g. STARTER_MONTHLY, PACK_500). Async because
+  // most processors resolve this via an API call (Stripe lookup_keys, etc).
+  // Returning `false` causes the catalog endpoint to mark the tile as
+  // "Coming soon" and the checkout call to 502 BILLING_NOT_CONFIGURED.
+  isCatalogConfigured(catalogKey: string): Promise<boolean>;
   createCheckoutSession(params: CreateCheckoutParams): Promise<CheckoutSessionResult>;
   createCustomerPortalSession(params: CustomerPortalParams): Promise<CustomerPortalResult>;
   // The handler is given the raw request body and the signature header.

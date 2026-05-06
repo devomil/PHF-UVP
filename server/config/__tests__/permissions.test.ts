@@ -3,7 +3,7 @@
 import { describe, it, expect } from "vitest";
 import { PLAN_CONFIG, TOPUP_PACKS, getTopUpPack } from "../plans";
 import { planAllowsProvider, minimumTierForProvider } from "../providerPermissions";
-import { BILLING_CATALOG, getCatalogEntry, getStripePriceId, isCatalogEntryConfigured } from "../billing-catalog";
+import { BILLING_CATALOG, getCatalogEntry, catalogKeyToLookupKey, lookupKeyToCatalogKey, allLookupKeys } from "../billing-catalog";
 
 describe("plans config", () => {
   it("has the required tiers with correct GC budgets", () => {
@@ -49,8 +49,18 @@ describe("billing catalog", () => {
     expect(getCatalogEntry("PACK_500")).toBeDefined();
     expect(BILLING_CATALOG.length).toBeGreaterThan(10);
   });
-  it("returns null for unconfigured Stripe price ids", () => {
-    expect(getStripePriceId("DOES_NOT_EXIST")).toBe(null);
-    expect(isCatalogEntryConfigured("DOES_NOT_EXIST")).toBe(false);
+  it("converts catalog keys to lookup keys (lowercase) and back", () => {
+    expect(catalogKeyToLookupKey("STARTER_MONTHLY")).toBe("starter_monthly");
+    expect(catalogKeyToLookupKey("PACK_500")).toBe("pack_500");
+    expect(lookupKeyToCatalogKey("growth_annual")).toBe("GROWTH_ANNUAL");
+  });
+  it("exposes all lookup keys for batch prefetch", () => {
+    const keys = allLookupKeys();
+    expect(keys).toContain("starter_monthly");
+    expect(keys).toContain("starter_annual");
+    expect(keys).toContain("pack_500");
+    expect(keys).toContain("enterprise_annual");
+    // FREE_TRIAL is excluded from the catalog (no checkout).
+    expect(keys).not.toContain("free_trial");
   });
 });
