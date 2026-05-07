@@ -17,6 +17,7 @@ import { UpgradeModal } from "./upgrade-modal";
 import { useToast } from "@/hooks/use-toast";
 import { registerCreditErrorHandler } from "@/lib/credit-error-bus";
 import { useCredits } from "@/hooks/use-credits";
+import { isAdminUnlimitedSnapshot } from "@/lib/admin-unlimited";
 
 interface TopUpContext {
   shortfall?: number;
@@ -54,7 +55,7 @@ export function CreditModalsProvider({ children }: { children: ReactNode }) {
   const [upgradeContext, setUpgradeContext] = useState<UpgradeContext | null>(null);
   const { toast } = useToast();
   const { data: credits } = useCredits();
-  const isUnlimited = !!credits?.unlimited;
+  const isUnlimited = isAdminUnlimitedSnapshot(credits);
 
   const openTopUp = useCallback((ctx?: TopUpContext) => {
     // Admin-unlimited posture: top-up flow is a no-op — there's nothing

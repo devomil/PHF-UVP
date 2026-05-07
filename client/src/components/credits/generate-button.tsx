@@ -15,6 +15,7 @@
 
 import { forwardRef, type ButtonHTMLAttributes, type MouseEvent } from "react";
 import { useCredits, useCreditCost } from "@/hooks/use-credits";
+import { isAdminUnlimitedSnapshot } from "@/lib/admin-unlimited";
 import { useCreditModals } from "@/components/credits/credit-modals-provider";
 import { Loader2, Sparkles, AlertTriangle, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -63,7 +64,7 @@ export const GenerateButton = forwardRef<HTMLButtonElement, GenerateButtonProps>
     // Admin-unlimited: every provider is allowed and balance is never
     // insufficient, so the button stays in READY regardless of caller-
     // supplied planLockedFor or cost vs balance comparisons.
-    if (bal?.unlimited) return { state: "ready", gcCost: cost?.gcCost ?? null, shortfall: 0 };
+    if (isAdminUnlimitedSnapshot(bal)) return { state: "ready", gcCost: cost?.gcCost ?? null, shortfall: 0 };
     if (planLockedFor) return { state: "plan-locked", gcCost: cost?.gcCost ?? null, shortfall: 0 };
     if (!cost || !bal) return { state: "ready", gcCost: cost?.gcCost ?? null, shortfall: 0 };
     if (bal.totalGC < cost.gcCost) {

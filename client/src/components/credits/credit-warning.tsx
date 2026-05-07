@@ -8,6 +8,7 @@
 
 import { useEffect, useState } from "react";
 import { useCredits } from "@/hooks/use-credits";
+import { isAdminUnlimitedSnapshot } from "@/lib/admin-unlimited";
 import { useCreditModals } from "@/components/credits/credit-modals-provider";
 import { X, AlertTriangle, AlertCircle, Zap } from "lucide-react";
 
@@ -49,8 +50,9 @@ export function CreditWarning() {
 
   if (!data) return null;
   // Admin-unlimited: no insufficient/low state ever applies, so the
-  // banner is suppressed entirely.
-  if (data.unlimited) return null;
+  // banner is suppressed entirely. Routed through the shared client
+  // predicate so future bypass sites stay in lockstep.
+  if (isAdminUnlimitedSnapshot(data)) return null;
   const level = data.warningLevel ?? "calm";
   if (level === "calm") return null;
   if (level === "warning" && dismissed) return null;

@@ -10,6 +10,7 @@
 import { Link } from "wouter";
 import { useEffect, useRef, useState } from "react";
 import { useCredits } from "@/hooks/use-credits";
+import { isAdminUnlimitedSnapshot } from "@/lib/admin-unlimited";
 import { useCreditModals } from "@/components/credits/credit-modals-provider";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { Button } from "@/components/ui/button";
@@ -76,7 +77,7 @@ export function CreditMeter() {
   // indigo "Unlimited · Admin" chip. Hover still surfaces the would-have
   // -been usage so admins can sanity-check what their generations would
   // cost a paying user.
-  if (data.unlimited) {
+  if (isAdminUnlimitedSnapshot(data)) {
     return (
       <HoverCard openDelay={120} closeDelay={80}>
         <HoverCardTrigger asChild>

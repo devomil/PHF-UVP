@@ -16,6 +16,7 @@
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCredits, useCreditCost } from "@/hooks/use-credits";
+import { isAdminUnlimitedSnapshot } from "@/lib/admin-unlimited";
 import { useCreditModals } from "@/components/credits/credit-modals-provider";
 import { Coins, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -68,7 +69,7 @@ export function CreditCost({
   // Admin-unlimited never goes insufficient, so the cost preview always
   // renders in the "calm" tone with the would-have-been cost shown for
   // visibility — no shortfall, no top-up CTA.
-  const isUnlimited = !!bal.unlimited;
+  const isUnlimited = isAdminUnlimitedSnapshot(bal);
   const remaining = isUnlimited ? cost.gcCost : Math.max(0, bal.totalGC - cost.gcCost);
   const insufficient = !isUnlimited && bal.totalGC < cost.gcCost;
   const shortfall = insufficient ? cost.gcCost - bal.totalGC : 0;
