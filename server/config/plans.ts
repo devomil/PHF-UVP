@@ -105,19 +105,21 @@ export function isPaidPlan(tier: PlanTier): boolean {
 }
 
 // Top-up packs — never expire; consumed after subscription credits.
+export type TopUpBadge = "POPULAR" | "BEST VALUE" | null;
 export interface TopUpPackConfig {
   id: string;
   gc: number;
   priceCents: number;
   catalogKey: string; // maps to env var via billing-catalog
+  badge?: TopUpBadge; // optional marketing badge surfaced on /pricing
 }
 
 export const TOPUP_PACKS: TopUpPackConfig[] = [
-  { id: "PACK_100", gc: 100, priceCents: 1100, catalogKey: "PACK_100" },
-  { id: "PACK_250", gc: 250, priceCents: 2500, catalogKey: "PACK_250" },
-  { id: "PACK_500", gc: 500, priceCents: 4500, catalogKey: "PACK_500" },
-  { id: "PACK_1000", gc: 1000, priceCents: 8000, catalogKey: "PACK_1000" },
-  { id: "PACK_2500", gc: 2500, priceCents: 17500, catalogKey: "PACK_2500" },
+  { id: "PACK_100", gc: 100, priceCents: 1100, catalogKey: "PACK_100", badge: null },
+  { id: "PACK_250", gc: 250, priceCents: 2500, catalogKey: "PACK_250", badge: null },
+  { id: "PACK_500", gc: 500, priceCents: 4500, catalogKey: "PACK_500", badge: "POPULAR" },
+  { id: "PACK_1000", gc: 1000, priceCents: 8000, catalogKey: "PACK_1000", badge: null },
+  { id: "PACK_2500", gc: 2500, priceCents: 17500, catalogKey: "PACK_2500", badge: "BEST VALUE" },
 ];
 
 export function getTopUpPack(id: string): TopUpPackConfig | undefined {

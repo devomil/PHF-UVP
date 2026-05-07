@@ -299,7 +299,7 @@ export default function Landing() {
           <div className="hidden md:flex items-center gap-6 text-sm" style={{ color: "var(--text-secondary)" }}>
             <a href="#features" className="hover:text-white transition-colors">Features</a>
             <a href="#capabilities" className="hover:text-white transition-colors">AI Models</a>
-            <a href="#pricing" className="hover:text-white transition-colors">Pricing</a>
+            <Link href="/pricing" className="hover:text-white transition-colors">Pricing</Link>
           </div>
           <div className="flex items-center gap-3">
             <Link href="/auth">
@@ -540,7 +540,8 @@ export default function Landing() {
             <div className="flex items-center gap-6 text-xs" style={{ color: "var(--text-muted)" }}>
               <a href="#features" className="hover:text-white transition-colors">Features</a>
               <a href="#capabilities" className="hover:text-white transition-colors">AI Models</a>
-              <a href="#pricing" className="hover:text-white transition-colors">Pricing</a>
+              <Link href="/pricing" className="hover:text-white transition-colors">Pricing</Link>
+              <Link href="/contact-sales" className="hover:text-white transition-colors">Talk to sales</Link>
               <Link href="/auth" className="hover:text-white transition-colors">Sign In</Link>
             </div>
             <p className="text-xs" style={{ color: "var(--text-muted)" }}>&copy; 2026 NeuralCut.AI. All rights reserved.</p>

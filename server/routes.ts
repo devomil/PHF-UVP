@@ -28,6 +28,7 @@ import studioPolishUploadRouter from "./services/studio-polish-upload";
 import { canvaAuthRouter } from "./services/canva-auth-routes";
 import { canvaSyncRouter } from "./services/canva-sync-routes";
 import creditsRouter from "./services/credits-routes";
+import salesInquiryRouter from "./services/sales-inquiry-routes";
 import { startCreditNotificationsTick } from "./services/credit-notifications-service";
 import { seedGenerationRatesIfNeeded } from "./scripts/seed-generation-rates";
 
@@ -111,6 +112,8 @@ export async function registerRoutes(app: Express) {
   // Phase NC-01 — Credits / subscriptions / billing webhooks. The router
   // owns its own /api/credits, /api/subscriptions, /api/billing/* paths.
   app.use(creditsRouter);
+  // Phase NC-03 — Public pricing-page projections + sales inquiries.
+  app.use(salesInquiryRouter);
   // Seed canonical rates on boot (idempotent — no-ops once rows exist).
   seedGenerationRatesIfNeeded().catch((e) => console.warn("[Routes] rate seed warn:", e?.message));
   // Phase NC-02 — start the daily credit-reset notification tick. Idempotent.

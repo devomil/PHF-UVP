@@ -160,12 +160,12 @@ export function UpgradeModal({ open, onOpenChange, context }: Props) {
 
         <DialogFooter className="flex-col sm:flex-row gap-2 sm:gap-0 sm:justify-between items-stretch sm:items-center">
           <Link
-            href="/billing#plans"
+            href="/pricing"
             onClick={() => onOpenChange(false)}
             className="text-xs text-purple-300 hover:text-purple-200 underline-offset-2 hover:underline"
             data-testid="upgrade-compare-link"
           >
-            See full plan comparison →
+            Compare plans →
           </Link>
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => onOpenChange(false)} data-testid="upgrade-cancel">

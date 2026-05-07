@@ -24,6 +24,8 @@ import Landing from "@/pages/landing";
 import NotFound from "@/pages/not-found";
 import BillingPage from "@/pages/billing";
 import BillingTransactionsPage from "@/pages/billing-transactions";
+import PricingPage from "@/pages/pricing";
+import ContactSalesPage from "@/pages/contact-sales";
 import AppLayout from "@/components/layout/app-layout";
 import AdminDashboard from "@/pages/admin/admin-dashboard";
 import AdminUsers from "@/pages/admin/admin-users";
@@ -56,6 +58,8 @@ function AuthenticatedApp() {
       <Route path="/admin/projects" component={() => <AdminGuard component={AdminProjects} />} />
       <Route path="/admin/costs" component={() => <AdminGuard component={AdminCosts} />} />
       <Route path="/admin/activity" component={() => <AdminGuard component={AdminActivity} />} />
+      <Route path="/pricing" component={PricingPage} />
+      <Route path="/contact-sales" component={ContactSalesPage} />
       <Route>
         <AppLayout>
           <Switch>
@@ -89,6 +93,8 @@ function UnauthenticatedApp() {
   return (
     <Switch>
       <Route path="/auth" component={AuthPage} />
+      <Route path="/pricing" component={PricingPage} />
+      <Route path="/contact-sales" component={ContactSalesPage} />
       <Route component={Landing} />
     </Switch>
   );

@@ -23,6 +23,7 @@ import {
   Share2,
   CalendarDays,
   Users,
+  Tag,
 } from "lucide-react";
 import neuralcutIcon from "@/assets/neuralcut-icon.png";
 import { CreditMeter } from "@/components/credits/credit-meter";
@@ -39,6 +40,7 @@ const navItems = [
   { label: "Render Queue", icon: Layers, path: "/render-queue" },
   { label: "AI Providers", icon: Cpu, path: "/providers" },
   { label: "API Testing", icon: FlaskConical, path: "/api-testing" },
+  { label: "Pricing", icon: Tag, path: "/pricing" },
 ];
 
 const socialNavItems = [
