@@ -57,10 +57,8 @@ export default function BillingPage() {
       .then((d) => setUsage(d.items || []))
       .catch(() => setUsage([]));
     const params = new URLSearchParams(window.location.search);
-    // NOTE: ?topup=1 auto-open is gated by the admin-aware effect below.
-    // We don't decide here because `snap` is usually undefined on first
-    // paint — gating on `!isAdminUnlimitedSnapshot(snap)` here would race-open the
-    // modal for admins.
+    // ?topup=1 auto-open is gated by the snap-aware effect below so we
+    // don't race-open the modal for admins before snap loads.
     const status = params.get("status");
     if (status === "success") toast({ title: "Subscription activated", description: "Your plan is being provisioned." });
     if (status === "topup_success") toast({ title: "Top-up successful", description: "Credits will arrive momentarily." });
@@ -75,14 +73,11 @@ export default function BillingPage() {
     }
   }, []);
 
-  // ?topup=1 deep-link handler. Runs whenever `snap` resolves so we
-  // never auto-open the modal for admin-unlimited accounts (server-
-  // derived `unlimited:true`). Tracked in a ref so a single visit can
-  // only auto-open once even if `snap` re-renders later.
+  // ?topup=1 deep-link: defer until snap loads, then no-op for admins.
   const topupAutoOpened = useRef(false);
   useEffect(() => {
     if (topupAutoOpened.current) return;
-    if (!snap) return; // wait until the snapshot is loaded so we know if admin
+    if (!snap) return;
     const params = new URLSearchParams(window.location.search);
     if (params.get("topup") !== "1") return;
     topupAutoOpened.current = true;
@@ -164,8 +159,6 @@ export default function BillingPage() {
           <Link href="/billing/transactions">
             <Button variant="outline" data-testid="link-transactions">Transaction history</Button>
           </Link>
-          {/* Admin-unlimited accounts have no Stripe subscription to manage,
-              so the portal CTA is hidden. */}
           {!isAdminUnlimitedSnapshot(snap) && (
             <Button variant="outline" onClick={openPortal} data-testid="open-portal">Manage subscription</Button>
           )}
@@ -178,9 +171,6 @@ export default function BillingPage() {
         </div>
       )}
 
-      {/* Admin-unlimited notice — replaces the upgrade/top-up CTAs while
-          keeping the rest of the page (transactions, usage strip) visible
-          so admins can still inspect their generation history. */}
       {isAdminUnlimitedSnapshot(snap) && (
         <div
           className="p-4 rounded-lg border border-indigo-400/30 bg-gradient-to-r from-indigo-500/10 via-purple-500/5 to-transparent text-indigo-100 text-sm flex items-start gap-3"
@@ -297,8 +287,6 @@ export default function BillingPage() {
         </section>
       )}
 
-      {/* Phase NC-02 — Plan comparison strip. Hidden for admin-unlimited
-          accounts since they can't (and don't need to) upgrade. */}
       {!isAdminUnlimitedSnapshot(snap) && (
       <section id="plans">
         <div className="flex items-center justify-between mb-4">

@@ -210,11 +210,6 @@ export async function getAvailableCredits(userId: string): Promise<CreditSnapsho
   const isAdmin = await isAdminUnlimitedById(userId);
 
   if (isAdmin) {
-    // Admin posture: balance fields stay populated for the transactions
-    // table but warningLevel is forced calm and the unlimited flag drives
-    // the UI. monthlyUsedGC sums the would-have-been spend from tagged
-    // admin_unlimited GENERATION rows in the current cycle so the
-    // admin dashboard can still show "spent X GC of unlimited".
     const since = sub.billingCycleStart ?? new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     const [usedRow] = await db
       .select({
@@ -261,9 +256,6 @@ export async function getAvailableCredits(userId: string): Promise<CreditSnapsho
 }
 
 export async function canAccessProvider(userId: string, providerId: string): Promise<boolean> {
-  // Admin-unlimited bypass: every provider is selectable for admins so the
-  // provider picker doesn't render plan-lock badges and the requireCredits
-  // middleware never produces a 403 PROVIDER_NOT_IN_PLAN envelope.
   if (await isAdminUnlimitedById(userId)) return true;
   const sub = await ensureSubscription(userId);
   return planAllowsProvider(sub.plan as PlanTier, providerId);
@@ -297,8 +289,6 @@ export interface CanAffordResult {
 
 export async function canAfford(userId: string, gcCost: number): Promise<CanAffordResult> {
   const snap = await getAvailableCredits(userId);
-  // Admin-unlimited bypass — never insufficient, source tagged so callers
-  // can detect the bypass if they care (most don't).
   if (snap.unlimited) {
     return { ok: true, required: gcCost, available: gcCost, shortfall: 0, source: "admin_unlimited" };
   }
@@ -326,12 +316,8 @@ export async function consumeCredits(
   // first-write race inside the FOR UPDATE block.
   await ensureSubscription(userId);
 
-  // Admin-unlimited short-circuit: log a tagged credit_transactions row
-  // (so cost telemetry, the admin Costs dashboard, and per-project
-  // rollups still see the would-have-been provider cost) but DO NOT
-  // touch the subscription balance. Idempotent on the same
-  // (userId, jobId, GENERATION) constraint as the regular path so a
-  // duplicate webhook/retry collapses to a no-op the same way.
+  // Admin-unlimited bypass: log a tagged transaction for analytics, skip
+  // the balance decrement. Idempotency uses the existing unique constraint.
   if (await isAdminUnlimitedById(userId)) {
     const [sub] = await db.select().from(subscriptions).where(eq(subscriptions.userId, userId));
     const balanceTotal = (sub?.currentGC ?? 0) + (sub?.topupGC ?? 0);
@@ -352,7 +338,6 @@ export async function consumeCredits(
       const e = err as { code?: string; message?: string };
       const isDup = e?.code === "23505" || /uq_credit_tx_user_job_type|duplicate key/i.test(String(e?.message ?? ""));
       if (!isDup) throw err;
-      // duplicate jobId: fall through and return idempotent success
     }
     return {
       ok: true,

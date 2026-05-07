@@ -61,9 +61,6 @@ export const GenerateButton = forwardRef<HTMLButtonElement, GenerateButtonProps>
   const { openTopUp, openUpgrade } = useCreditModals();
 
   const derived: DerivedState = (() => {
-    // Admin-unlimited: every provider is allowed and balance is never
-    // insufficient, so the button stays in READY regardless of caller-
-    // supplied planLockedFor or cost vs balance comparisons.
     if (isAdminUnlimitedSnapshot(bal)) return { state: "ready", gcCost: cost?.gcCost ?? null, shortfall: 0 };
     if (planLockedFor) return { state: "plan-locked", gcCost: cost?.gcCost ?? null, shortfall: 0 };
     if (!cost || !bal) return { state: "ready", gcCost: cost?.gcCost ?? null, shortfall: 0 };

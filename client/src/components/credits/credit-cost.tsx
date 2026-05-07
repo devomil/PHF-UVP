@@ -66,16 +66,11 @@ export function CreditCost({
     );
   }
 
-  // Admin-unlimited never goes insufficient, so the cost preview always
-  // renders in the "calm" tone with the would-have-been cost shown for
-  // visibility — no shortfall, no top-up CTA.
   const isUnlimited = isAdminUnlimitedSnapshot(bal);
   const remaining = isUnlimited ? cost.gcCost : Math.max(0, bal.totalGC - cost.gcCost);
   const insufficient = !isUnlimited && bal.totalGC < cost.gcCost;
   const shortfall = insufficient ? cost.gcCost - bal.totalGC : 0;
 
-  // Admin copy is intentionally distinct from the regular "X GC left"
-  // line so the admin doesn't read it as a balance about to be charged.
   if (isUnlimited) {
     return (
       <div

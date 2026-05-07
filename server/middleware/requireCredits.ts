@@ -59,9 +59,7 @@ export function requireCredits(opts: RequireCreditsOptions): RequestHandler {
     const durationS = resolveOpt(opts.durationS, req) ?? null;
 
     try {
-      // Admin-unlimited bypass — every provider is allowed, balance
-      // checks are skipped, and we still resolve the cost so downstream
-      // handlers can log the would-have-been spend.
+      // Admin-unlimited bypass — skip both checks; cost still resolved.
       if (isAdminUnlimited(req.user as { role?: string | null })) {
         const gcCost = await getCreditCost(provider, quality, durationS);
         req.creditCost = { provider, quality, durationS, gcCost };

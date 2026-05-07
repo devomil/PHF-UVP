@@ -73,10 +73,6 @@ export function CreditMeter() {
     return <div className="text-xs text-muted-foreground" data-testid="credit-meter-loading">…</div>;
   }
 
-  // Admin-unlimited posture — replace the four-tone meter with a single
-  // indigo "Unlimited · Admin" chip. Hover still surfaces the would-have
-  // -been usage so admins can sanity-check what their generations would
-  // cost a paying user.
   if (isAdminUnlimitedSnapshot(data)) {
     return (
       <HoverCard openDelay={120} closeDelay={80}>

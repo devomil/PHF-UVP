@@ -58,9 +58,6 @@ export function CreditModalsProvider({ children }: { children: ReactNode }) {
   const isUnlimited = isAdminUnlimitedSnapshot(credits);
 
   const openTopUp = useCallback((ctx?: TopUpContext) => {
-    // Admin-unlimited posture: top-up flow is a no-op — there's nothing
-    // to buy when generations don't charge a balance. Surface a toast
-    // so the click isn't silently ignored.
     if (isUnlimited) {
       toast({
         title: "Admin account",
