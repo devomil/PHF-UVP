@@ -31,15 +31,22 @@ import { CreditWarning } from "@/components/credits/credit-warning";
 import { NotificationsBell } from "@/components/credits/notifications-bell";
 import { CreditModalsProvider } from "@/components/credits/credit-modals-provider";
 
-const navItems = [
+interface NavItem {
+  label: string;
+  icon: typeof LayoutDashboard;
+  path: string;
+  adminOnly?: boolean;
+}
+
+const navItems: NavItem[] = [
   { label: "Home", icon: LayoutDashboard, path: "/" },
   { label: "Projects", icon: FolderOpen, path: "/projects" },
   { label: "Asset Library", icon: Images, path: "/assets" },
   { label: "Brand", icon: Palette, path: "/brand" },
   { label: "Trends", icon: TrendingUp, path: "/trends" },
   { label: "Render Queue", icon: Layers, path: "/render-queue" },
-  { label: "AI Providers", icon: Cpu, path: "/providers" },
-  { label: "API Testing", icon: FlaskConical, path: "/api-testing" },
+  { label: "AI Providers", icon: Cpu, path: "/providers", adminOnly: true },
+  { label: "API Testing", icon: FlaskConical, path: "/api-testing", adminOnly: true },
   { label: "Pricing", icon: Tag, path: "/pricing" },
 ];
 
@@ -111,7 +118,7 @@ function AppLayout({ children }: { children: ReactNode }) {
         </div>
 
         <nav className="flex-1 px-2 py-2 space-y-0.5 overflow-y-auto">
-          {navItems.map((item) => {
+          {navItems.filter((item) => !item.adminOnly || user?.role === "admin").map((item) => {
             const active = isActive(item.path);
             return (
               <Link

@@ -35,20 +35,32 @@ import AdminProjects from "@/pages/admin/admin-projects";
 import AdminCosts from "@/pages/admin/admin-costs";
 import AdminActivity from "@/pages/admin/admin-activity";
 
+function AccessDenied() {
+  return (
+    <div className="flex items-center justify-center h-full">
+      <div className="text-center p-8">
+        <h2 className="text-xl font-bold mb-2" style={{ color: "var(--text-primary)" }}>Access Denied</h2>
+        <p className="text-sm" style={{ color: "var(--text-muted)" }}>You don't have permission to access this page.</p>
+      </div>
+    </div>
+  );
+}
+
 function AdminGuard({ component: Component }: { component: React.ComponentType }) {
   const { user } = useAuth();
   if (user?.role !== "admin") {
     return (
       <AppLayout>
-        <div className="flex items-center justify-center h-full">
-          <div className="text-center p-8">
-            <h2 className="text-xl font-bold mb-2" style={{ color: "var(--text-primary)" }}>Access Denied</h2>
-            <p className="text-sm" style={{ color: "var(--text-muted)" }}>You don't have permission to access the admin portal.</p>
-          </div>
-        </div>
+        <AccessDenied />
       </AppLayout>
     );
   }
+  return <Component />;
+}
+
+function InlineAdminGuard({ component: Component }: { component: React.ComponentType }) {
+  const { user } = useAuth();
+  if (user?.role !== "admin") return <AccessDenied />;
   return <Component />;
 }
 
@@ -80,8 +92,8 @@ function AuthenticatedApp() {
             <Route path="/social/accounts" component={SocialAccounts} />
             <Route path="/social/new" component={SocialNewPost} />
             <Route path="/render-queue" component={RenderQueue} />
-            <Route path="/providers" component={Providers} />
-            <Route path="/api-testing" component={ApiTesting} />
+            <Route path="/providers" component={() => <InlineAdminGuard component={Providers} />} />
+            <Route path="/api-testing" component={() => <InlineAdminGuard component={ApiTesting} />} />
             <Route path="/profile" component={Profile} />
             <Route path="/billing" component={BillingPage} />
             <Route path="/billing/transactions" component={BillingTransactionsPage} />
