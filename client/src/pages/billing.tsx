@@ -2,7 +2,7 @@
 // Four metric tiles, usage-by-provider strip, notifications inbox, and
 // the plan comparison grid (deep-linkable via #plan-<TIER>).
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "wouter";
 import { useCredits } from "@/hooks/use-credits";
 import { useCreditNotifications } from "@/hooks/use-credit-notifications";
@@ -56,11 +56,10 @@ export default function BillingPage() {
       .then((d) => setUsage(d.items || []))
       .catch(() => setUsage([]));
     const params = new URLSearchParams(window.location.search);
-    // ?topup=1 auto-open is suppressed for admin-unlimited accounts so a
-    // stale link from elsewhere in the app doesn't pop a modal admins
-    // can't meaningfully use. snap may still be loading on first paint;
-    // re-evaluated below in an effect once snap arrives.
-    if (params.get("topup") === "1" && !snap?.unlimited) setTopupOpen(true);
+    // NOTE: ?topup=1 auto-open is gated by the admin-aware effect below.
+    // We don't decide here because `snap` is usually undefined on first
+    // paint — gating on `!snap?.unlimited` here would race-open the
+    // modal for admins.
     const status = params.get("status");
     if (status === "success") toast({ title: "Subscription activated", description: "Your plan is being provisioned." });
     if (status === "topup_success") toast({ title: "Top-up successful", description: "Credits will arrive momentarily." });
@@ -74,6 +73,27 @@ export default function BillingPage() {
       }, 200);
     }
   }, []);
+
+  // ?topup=1 deep-link handler. Runs whenever `snap` resolves so we
+  // never auto-open the modal for admin-unlimited accounts (server-
+  // derived `unlimited:true`). Tracked in a ref so a single visit can
+  // only auto-open once even if `snap` re-renders later.
+  const topupAutoOpened = useRef(false);
+  useEffect(() => {
+    if (topupAutoOpened.current) return;
+    if (!snap) return; // wait until the snapshot is loaded so we know if admin
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("topup") !== "1") return;
+    topupAutoOpened.current = true;
+    if (snap.unlimited) {
+      toast({
+        title: "Admin account",
+        description: "Top-ups are disabled — your generations don't charge a balance.",
+      });
+      return;
+    }
+    setTopupOpen(true);
+  }, [snap, toast]);
 
   async function startUpgrade(tier: PlanRow["tier"]) {
     try {
