@@ -9,7 +9,6 @@
 import { useEffect, useState } from "react";
 import { useCredits } from "@/hooks/use-credits";
 import { useCreditModals } from "@/components/credits/credit-modals-provider";
-import { Link } from "wouter";
 import { X, AlertTriangle, AlertCircle, Zap } from "lucide-react";
 
 const TONE: Record<string, { wrap: string; icon: typeof AlertTriangle; iconColor: string }> = {
@@ -34,7 +33,7 @@ const STORAGE_PREFIX = "creditWarning.dismissed.";
 
 export function CreditWarning() {
   const { data } = useCredits();
-  const { openTopUp } = useCreditModals();
+  const { openTopUp, openUpgrade } = useCreditModals();
   const [dismissed, setDismissed] = useState(false);
 
   // Restore dismissal scoped to the current billing cycle so a new
@@ -91,13 +90,13 @@ export function CreditWarning() {
         >
           Top up
         </button>
-        <Link
-          href="/billing"
+        <button
+          onClick={() => openUpgrade({ currentPlan: data?.plan ?? null })}
           className="px-3 py-1 text-xs font-medium rounded-md bg-gradient-to-r from-purple-600 to-indigo-600 text-white hover:from-purple-500 hover:to-indigo-500"
-          data-testid="credit-warning-link"
+          data-testid="credit-warning-upgrade"
         >
-          Manage plan
-        </Link>
+          Upgrade plan
+        </button>
         {dismissible && (
           <button
             onClick={handleDismiss}

@@ -196,6 +196,19 @@ export async function evaluateUsageThresholds(
   }
 }
 
+// Direct fire from `resetMonthlyCredits` on cycle rollover. Idempotent
+// because emailIfNew is keyed on (user, cycleStart, threshold) — even if
+// the webhook fires twice or the daily tick also catches it later, only
+// one notification is persisted.
+export async function emitResetToday(
+  userId: string,
+  cycleStart: Date,
+  remainingGC: number,
+  monthlyGC: number,
+): Promise<void> {
+  await emailIfNew(userId, cycleStart, "RESET_TODAY", 0, remainingGC, 0);
+}
+
 // Daily tick: scan active subscriptions for "reset is imminent" signals.
 // Cheap because we only look at users whose cycleEnd is within a 48h window.
 export async function evaluateResetSignals(now: Date = new Date()): Promise<void> {

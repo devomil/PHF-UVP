@@ -13609,10 +13609,14 @@ router.post('/generate-character-reference', isAuthenticated, async (req: Reques
     const allowed = await canAccessProvider(userId, debitProvider);
     if (!allowed) {
       console.error(`[Characters] Standalone: provider ${debitProvider} not in plan for user ${userId} — withholding delivery`);
-      // Phase NC-02 — canonical 403 envelope so the client can route
-      // straight to the upgrade flow.
+      // Phase NC-02 — canonical 403 envelope. Populate currentPlan +
+      // requiredPlan so the client can prefill the upgrade modal.
       const { ProviderNotInPlanError } = await import('./credit-errors');
-      return res.status(403).json(new ProviderNotInPlanError(debitProvider, null, null).toEnvelope());
+      const { minimumTierForProvider } = await import('../config/providerPermissions');
+      const { getAvailableCredits } = await import('./credits-service');
+      const snap = await getAvailableCredits(userId).catch(() => null);
+      const required = minimumTierForProvider(debitProvider);
+      return res.status(403).json(new ProviderNotInPlanError(debitProvider, snap?.plan ?? null, required).toEnvelope());
     }
 
     try {
@@ -13767,9 +13771,13 @@ router.post('/projects/:projectId/characters/:characterId/generate-reference', i
         .set({ characters: denyChars, updatedAt: new Date() })
         .where(eq(universalVideoProjects.projectId, projectId));
       console.error(`[Characters] Project: provider ${debitProvider} not in plan for user ${userId} — withholding delivery`);
-      // Phase NC-02 — canonical 403 envelope.
+      // Phase NC-02 — canonical 403 envelope with prefill context.
       const { ProviderNotInPlanError } = await import('./credit-errors');
-      return res.status(403).json(new ProviderNotInPlanError(debitProvider, null, null).toEnvelope());
+      const { minimumTierForProvider } = await import('../config/providerPermissions');
+      const { getAvailableCredits } = await import('./credits-service');
+      const snap = await getAvailableCredits(userId).catch(() => null);
+      const required = minimumTierForProvider(debitProvider);
+      return res.status(403).json(new ProviderNotInPlanError(debitProvider, snap?.plan ?? null, required).toEnvelope());
     }
 
     try {

@@ -503,6 +503,21 @@ export async function resetMonthlyCredits(
       })
       .where(eq(subscriptions.userId, userId));
 
+    // Phase NC-02 — fire RESET_TODAY exactly when the cycle actually
+    // rolls over. The 6h tick scan is a fallback for the rare case
+    // where this webhook path fails or is missed; firing here keeps
+    // the timing accurate even when the scan window misses the
+    // cycle-rollover moment. emailIfNew is idempotent on
+    // (user, cycleStart, threshold) so doing both is safe.
+    setImmediate(async () => {
+      try {
+        const { emitResetToday } = await import('./credit-notifications-service');
+        await emitResetToday(userId, periodStart, planCfg.monthlyGC, planCfg.monthlyGC);
+      } catch (err) {
+        console.error('[Credits] emitResetToday failed (non-fatal):', err);
+      }
+    });
+
     if (rolled > 0) {
       await tx.insert(creditTransactions).values({
         userId,

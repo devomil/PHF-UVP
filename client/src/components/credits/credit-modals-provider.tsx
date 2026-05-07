@@ -12,8 +12,8 @@
 //      criteria for a discoverable cross-surface entry point.
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { useLocation } from "wouter";
 import { TopUpModal } from "./topup-modal";
+import { UpgradeModal } from "./upgrade-modal";
 import { useToast } from "@/hooks/use-toast";
 import { registerCreditErrorHandler } from "@/lib/credit-error-bus";
 
@@ -26,6 +26,7 @@ interface TopUpContext {
 interface UpgradeContext {
   provider?: string | null;
   requiredPlan?: string | null;
+  currentPlan?: string | null;
 }
 
 interface CreditModalsValue {
@@ -47,9 +48,9 @@ export function useCreditModals(): CreditModalsValue {
 
 export function CreditModalsProvider({ children }: { children: ReactNode }) {
   const [topUpOpen, setTopUpOpen] = useState(false);
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [topUpContext, setTopUpContext] = useState<TopUpContext | null>(null);
   const [upgradeContext, setUpgradeContext] = useState<UpgradeContext | null>(null);
-  const [, setLocation] = useLocation();
   const { toast } = useToast();
 
   const openTopUp = useCallback((ctx?: TopUpContext) => {
@@ -58,18 +59,15 @@ export function CreditModalsProvider({ children }: { children: ReactNode }) {
   }, []);
   const closeTopUp = useCallback(() => setTopUpOpen(false), []);
 
-  // Upgrade flow: deep-link straight to /billing with the required-plan
-  // hash so the page can scroll the right plan into view. Keeps the
-  // upgrade UX in one place rather than duplicating a comparison modal.
-  const openUpgrade = useCallback(
-    (ctx?: UpgradeContext) => {
-      setUpgradeContext(ctx ?? null);
-      const hash = ctx?.requiredPlan ? `#plan-${ctx.requiredPlan}` : "";
-      setLocation(`/billing${hash}`);
-    },
-    [setLocation],
-  );
-  const closeUpgrade = useCallback(() => setUpgradeContext(null), []);
+  // Upgrade flow: open a true modal with the recommended plan
+  // pre-selected from `requiredPlan`. Keeps the upgrade context
+  // (provider name, current vs required tier) inside the dialog so the
+  // user doesn't lose context navigating away from their workflow.
+  const openUpgrade = useCallback((ctx?: UpgradeContext) => {
+    setUpgradeContext(ctx ?? null);
+    setUpgradeOpen(true);
+  }, []);
+  const closeUpgrade = useCallback(() => setUpgradeOpen(false), []);
 
   // Bridge for non-React call sites (apiRequest, queryClient default
   // queryFn, etc.) — they dispatch the envelope through the bus and
@@ -126,6 +124,7 @@ export function CreditModalsProvider({ children }: { children: ReactNode }) {
     <Ctx.Provider value={value}>
       {children}
       <TopUpModal open={topUpOpen} onOpenChange={setTopUpOpen} context={topUpContext ?? undefined} />
+      <UpgradeModal open={upgradeOpen} onOpenChange={setUpgradeOpen} context={upgradeContext ?? undefined} />
     </Ctx.Provider>
   );
 }
