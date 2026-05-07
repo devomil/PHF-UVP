@@ -3854,10 +3854,17 @@ router.post('/projects/:projectId/generate-storyboard', isAuthenticated, async (
     const estimate = estimateBatchCost(scenes as any, { skipExisting, numCandidates, resolution: effectiveResolution });
 
     if (estimate.overCap && !confirmOverCap) {
+      // Phase NC-02 — canonical 402 envelope shape: `code` + `error` are
+      // the contract the client's useGenerationErrorHandler reads on
+      // every 4xx, plus the structured `estimate` payload the storyboard
+      // confirm-dialog needs to ask the user to opt in.
       return res.status(402).json({
         success: false,
-        error: 'BUDGET_EXCEEDED',
-        message: `Storyboard estimate $${estimate.estimatedCost.toFixed(2)} at ${estimate.resolution} exceeds cap $${estimate.budgetCap.toFixed(2)}.`,
+        code: 'BUDGET_EXCEEDED',
+        error: `Storyboard estimate $${estimate.estimatedCost.toFixed(2)} at ${estimate.resolution} exceeds cap $${estimate.budgetCap.toFixed(2)}.`,
+        estimatedCost: estimate.estimatedCost,
+        budgetCap: estimate.budgetCap,
+        resolution: estimate.resolution,
         estimate,
       });
     }
@@ -5935,7 +5942,10 @@ router.post('/generate-image', isAuthenticated, requireCredits({
         if (isInsufficientCreditsLike(creditErr)) {
           return res.status(402).json(parseLegacyInsufficient(creditErr, { provider: cost.provider, quality: cost.quality ?? null }).toEnvelope());
         }
-        return res.status(402).json({ success: false, error: 'Credit charge failed', code: 'CREDIT_CHARGE_FAILED' });
+        // Not a credit-shortage failure — this is an infrastructure
+        // error (DB, network, etc.). Don't masquerade as 402 since the
+        // client would route it to the top-up modal incorrectly.
+        return res.status(500).json({ success: false, error: 'Credit charge failed', code: 'CREDIT_CHARGE_FAILED' });
       }
     }
 
@@ -13617,7 +13627,9 @@ router.post('/generate-character-reference', isAuthenticated, async (req: Reques
       if (isInsufficientCreditsLike(creditErr)) {
         return res.status(402).json(parseLegacyInsufficient(creditErr, { provider: debitProvider }).toEnvelope());
       }
-      return res.status(402).json({ success: false, error: `Credit charge failed: ${creditErr.message}`, code: 'CREDIT_CHARGE_FAILED' });
+      // Infrastructure failure (not a credit shortage) → 500 so the
+      // client doesn't pop the top-up modal for an unrelated DB error.
+      return res.status(500).json({ success: false, error: `Credit charge failed: ${creditErr.message}`, code: 'CREDIT_CHARGE_FAILED' });
     }
 
     let finalUrl = generated.url;
@@ -13776,7 +13788,8 @@ router.post('/projects/:projectId/characters/:characterId/generate-reference', i
       if (isInsufficientCreditsLike(creditErr)) {
         return res.status(402).json(parseLegacyInsufficient(creditErr, { provider: debitProvider }).toEnvelope());
       }
-      return res.status(402).json({ success: false, error: msg, code: 'CREDIT_CHARGE_FAILED' });
+      // Infrastructure failure (not a credit shortage) → 500.
+      return res.status(500).json({ success: false, error: msg, code: 'CREDIT_CHARGE_FAILED' });
     }
 
     let finalUrl = generated.url;
