@@ -125,7 +125,12 @@ async function linkOrCreateOAuthUser(input: LinkOrCreateInput) {
   }
 
   // 2. Existing user by verified email? Link a new oauth_accounts row.
-  const [matched] = await db.select().from(users).where(eq(users.email, normalizedEmail));
+  // Use case-insensitive match so a local account created with mixed-case
+  // email (e.g. "Foo@Bar.com") still links to the same row.
+  const [matched] = await db
+    .select()
+    .from(users)
+    .where(sql`lower(${users.email}) = ${normalizedEmail}`);
   if (matched) {
     try {
       await db.insert(oauthAccounts).values({
@@ -173,7 +178,10 @@ async function linkOrCreateOAuthUser(input: LinkOrCreateInput) {
     if (isUniqueViolation(err)) {
       // Another OAuth callback raced us and created the user (or a manual
       // /api/register hit at the same moment). Fall through to the linking path.
-      const [raced] = await db.select().from(users).where(eq(users.email, normalizedEmail));
+      const [raced] = await db
+        .select()
+        .from(users)
+        .where(sql`lower(${users.email}) = ${normalizedEmail}`);
       if (raced) {
         return linkOrCreateOAuthUser(input);
       }
@@ -241,7 +249,11 @@ passport.use(
     { usernameField: "email" },
     async (email, password, done) => {
       try {
-        const [user] = await db.select().from(users).where(eq(users.email, email));
+        const normalizedEmail = (email || "").toLowerCase();
+        const [user] = await db
+          .select()
+          .from(users)
+          .where(sql`lower(${users.email}) = ${normalizedEmail}`);
         if (!user) {
           return done(null, false, { message: "Invalid email or password" });
         }
@@ -427,12 +439,18 @@ export function setupAuth(app: Express) {
 
   app.post("/api/register", async (req: Request, res: Response) => {
     try {
-      const { email, password, firstName, lastName } = req.body;
-      if (!email || !password) {
+      const { email: rawEmail, password, firstName, lastName } = req.body;
+      if (!rawEmail || !password) {
         return res.status(400).json({ message: "Email and password are required" });
       }
+      // Normalize email casing on write so future lookups (local + OAuth
+      // linking) collide on the same canonical value.
+      const email = String(rawEmail).toLowerCase();
 
-      const [existing] = await db.select().from(users).where(eq(users.email, email));
+      const [existing] = await db
+        .select()
+        .from(users)
+        .where(sql`lower(${users.email}) = ${email}`);
       if (existing) {
         return res.status(400).json({ message: "Email already registered" });
       }
@@ -448,7 +466,7 @@ export function setupAuth(app: Express) {
           password: hashedPassword,
           firstName: firstName || null,
           lastName: lastName || null,
-          role: ADMIN_EMAILS.includes(email.toLowerCase()) ? "admin" : "employee",
+          role: ADMIN_EMAILS.includes(email) ? "admin" : "employee",
         })
         .returning();
 

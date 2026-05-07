@@ -73,7 +73,7 @@
 - Glassmorphism card surfaces, gradient thumbnails, visual project cards
 
 ## Gotchas
-- **OAuth account linking by email**: Social login (Google/Facebook) trusts the provider's verified-email claim and links to an existing `users` row when emails match. Do NOT enable a third-party provider that returns unverified emails without adding an explicit verification step, or different people could collide on the same account.
+- **OAuth account linking by email**: Social login (Google/Facebook) trusts the provider's verified-email claim and links to an existing `users` row when emails match (case-insensitive `lower(email)` lookup; `/api/register` and the local-login strategy both lowercase on write/read). Do NOT enable a third-party provider that returns unverified emails without adding an explicit verification step, or different people could collide on the same account.
 - **Native Browser Dialogs**: Avoid `window.alert`, `window.confirm`, `window.prompt` in `client/src`. Use `AlertDialog` or `useToast` for themed UI. `npm run lint:dialogs` enforces this.
 - **Husky Pre-commit Hook**: `npm install` is required after cloning to install the pre-commit hook which runs `lint:dialogs`. Set `HUSKY=0` to skip installation.
 - **Session Security**: `SESSION_SECRET` environment variable is mandatory in production.
