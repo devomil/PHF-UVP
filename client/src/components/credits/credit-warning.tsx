@@ -1,8 +1,12 @@
-// Phase NC-01 + NC-02 — Non-blocking app-wide banner driven by the
-// server-derived warningLevel. Dismissible per-session so the user
-// isn't yelled at on every navigation.
+// Phase NC-01 + NC-02 — App-wide warning banner driven by the
+// server-derived warningLevel.
+//
+// Per spec: only the WARNING tier (80–95% used) is dismissible, and
+// the dismissal is persisted per session+cycle so we don't pester the
+// user on every navigation. URGENT and EMPTY tiers are NEVER
+// dismissible — those are the levels where action is unavoidable.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useCredits } from "@/hooks/use-credits";
 import { useCreditModals } from "@/components/credits/credit-modals-provider";
 import { Link } from "wouter";
@@ -26,15 +30,31 @@ const TONE: Record<string, { wrap: string; icon: typeof AlertTriangle; iconColor
   },
 };
 
+const STORAGE_PREFIX = "creditWarning.dismissed.";
+
 export function CreditWarning() {
   const { data } = useCredits();
   const { openTopUp } = useCreditModals();
   const [dismissed, setDismissed] = useState(false);
+
+  // Restore dismissal scoped to the current billing cycle so a new
+  // cycle re-arms the warning banner automatically.
+  useEffect(() => {
+    if (!data?.cycleStart) return;
+    try {
+      setDismissed(sessionStorage.getItem(STORAGE_PREFIX + data.cycleStart) === "1");
+    } catch {
+      /* sessionStorage may be blocked — ignore */
+    }
+  }, [data?.cycleStart]);
+
   if (!data) return null;
   const level = data.warningLevel ?? "calm";
-  if (level === "calm" || dismissed) return null;
+  if (level === "calm") return null;
+  if (level === "warning" && dismissed) return null;
   const tone = TONE[level];
   const Icon = tone.icon;
+  const dismissible = level === "warning";
   const msg =
     level === "empty"
       ? "You're out of credits — generations are paused until you top up or upgrade."
@@ -42,10 +62,22 @@ export function CreditWarning() {
         ? `Only ${data.totalGC} GC left this cycle. Top up to keep shipping.`
         : `${data.totalGC} GC remaining this cycle (${data.percentUsed ?? 0}% used).`;
 
+  function handleDismiss() {
+    setDismissed(true);
+    if (data?.cycleStart) {
+      try {
+        sessionStorage.setItem(STORAGE_PREFIX + data.cycleStart, "1");
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
   return (
     <div
       className={`px-4 py-2.5 border-b text-sm flex items-center justify-between gap-3 ${tone.wrap}`}
       data-testid="credit-warning"
+      data-warning-level={level}
     >
       <div className="flex items-center gap-2 min-w-0">
         <Icon className={`w-4 h-4 shrink-0 ${tone.iconColor}`} />
@@ -66,14 +98,16 @@ export function CreditWarning() {
         >
           Manage plan
         </Link>
-        <button
-          onClick={() => setDismissed(true)}
-          className="p-1 rounded-md hover:bg-white/10 transition-colors"
-          aria-label="Dismiss"
-          data-testid="credit-warning-dismiss"
-        >
-          <X className="w-3.5 h-3.5" />
-        </button>
+        {dismissible && (
+          <button
+            onClick={handleDismiss}
+            className="p-1 rounded-md hover:bg-white/10 transition-colors"
+            aria-label="Dismiss until next cycle"
+            data-testid="credit-warning-dismiss"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        )}
       </div>
     </div>
   );

@@ -159,11 +159,32 @@ export default function BillingPage() {
             value={`${snap.totalGC} GC`}
             sub={`Subscription ${snap.subscriptionGC}${snap.topupGC > 0 ? ` · Top-up ${snap.topupGC}` : ""}`}
           >
-            <div className="mt-2 h-1.5 rounded-full bg-white/10 overflow-hidden">
-              <div
-                className={`h-full bg-gradient-to-r ${TONE_BAR[level]}`}
-                style={{ width: `${Math.max(pct, level === "empty" ? 100 : 4)}%` }}
-              />
+            {/* Split usage bar: subscription (left, tier-colored) + top-up
+                (right, indigo). Width is per-segment share of total GC. */}
+            <div
+              className="mt-2 flex h-1.5 rounded-full bg-white/10 overflow-hidden"
+              data-testid="metric-balance-split"
+            >
+              {snap.totalGC > 0 ? (
+                <>
+                  <div
+                    className={`h-full bg-gradient-to-r ${TONE_BAR[level]}`}
+                    style={{ width: `${Math.round((snap.subscriptionGC / snap.totalGC) * 100)}%` }}
+                    data-testid="metric-balance-split-sub"
+                  />
+                  <div
+                    className="h-full bg-gradient-to-r from-purple-400 to-indigo-500"
+                    style={{ width: `${Math.round((snap.topupGC / snap.totalGC) * 100)}%` }}
+                    data-testid="metric-balance-split-topup"
+                  />
+                </>
+              ) : (
+                <div className={`h-full w-full bg-gradient-to-r ${TONE_BAR.empty}`} />
+              )}
+            </div>
+            <div className="flex justify-between mt-1 text-[10px] text-muted-foreground">
+              <span>Subscription {snap.subscriptionGC}</span>
+              <span>Top-up {snap.topupGC}</span>
             </div>
           </MetricTile>
           <MetricTile

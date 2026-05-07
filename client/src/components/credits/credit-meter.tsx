@@ -1,11 +1,14 @@
 // Phase NC-01 + NC-02 — Persistent credit meter for the top app bar.
-// Reads server-derived warningLevel/percentUsed so the colors stay in
-// lockstep with the warning banner and notification engine.
 //
-// Hover reveals a richer breakdown via radix HoverCard. Honors
-// prefers-reduced-motion by skipping the gradient-shift animation.
+// - Reads server-derived warningLevel/percentUsed/daysUntilReset.
+// - Animated count-up on the visible balance (rAF, ~400ms, honors
+//   prefers-reduced-motion by snapping straight to the target).
+// - Trailing chip is contextual: "Add credits" when warning, "Low" /
+//   "Critical" / "Empty" at higher tiers.
+// - HoverCard popover shows a richer breakdown.
 
 import { Link } from "wouter";
+import { useEffect, useRef, useState } from "react";
 import { useCredits } from "@/hooks/use-credits";
 import { useCreditModals } from "@/components/credits/credit-modals-provider";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
@@ -24,10 +27,46 @@ const TONE_TEXT: Record<string, string> = {
   urgent: "text-orange-300",
   empty: "text-rose-300",
 };
+const CHIP: Record<string, { label: string; tone: string } | null> = {
+  calm: null,
+  warning: { label: "Low", tone: "bg-amber-500/20 text-amber-200" },
+  urgent: { label: "Critical", tone: "bg-orange-500/25 text-orange-100" },
+  empty: { label: "Empty", tone: "bg-rose-500/30 text-rose-100" },
+};
+
+function useCountUp(target: number, durationMs = 400): number {
+  const [value, setValue] = useState(target);
+  const fromRef = useRef(target);
+  const rafRef = useRef<number | null>(null);
+  useEffect(() => {
+    const reduced = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    if (reduced || target === fromRef.current) {
+      fromRef.current = target;
+      setValue(target);
+      return;
+    }
+    const start = performance.now();
+    const from = fromRef.current;
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - start) / durationMs);
+      // ease-out cubic
+      const eased = 1 - Math.pow(1 - t, 3);
+      setValue(Math.round(from + (target - from) * eased));
+      if (t < 1) rafRef.current = requestAnimationFrame(tick);
+      else fromRef.current = target;
+    };
+    rafRef.current = requestAnimationFrame(tick);
+    return () => {
+      if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
+    };
+  }, [target, durationMs]);
+  return value;
+}
 
 export function CreditMeter() {
   const { data, isLoading } = useCredits();
   const { openTopUp } = useCreditModals();
+  const animated = useCountUp(data?.subscriptionGC ?? 0);
 
   if (isLoading || !data) {
     return <div className="text-xs text-muted-foreground" data-testid="credit-meter-loading">…</div>;
@@ -45,6 +84,7 @@ export function CreditMeter() {
           : `Resets in ${days} days`
       : `Resets ${cycleEnd.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`
     : "";
+  const chip = CHIP[level];
 
   return (
     <HoverCard openDelay={120} closeDelay={80}>
@@ -59,12 +99,23 @@ export function CreditMeter() {
                 style={{ width: `${Math.max(pct, level === "empty" ? 100 : 4)}%` }}
               />
             </div>
-            <span className={`text-xs font-medium tabular-nums ${TONE_TEXT[level]}`} data-testid="credit-meter-balance">
-              {data.subscriptionGC} / {data.monthlyGC || 0} GC
+            <span
+              className={`text-xs font-medium tabular-nums ${TONE_TEXT[level]}`}
+              data-testid="credit-meter-balance"
+            >
+              {animated} / {data.monthlyGC || 0} GC
             </span>
             {data.topupGC > 0 && (
               <span className="text-[10px] text-purple-300/80 font-medium" data-testid="credit-meter-topup">
                 +{data.topupGC}
+              </span>
+            )}
+            {chip && (
+              <span
+                className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${chip.tone}`}
+                data-testid="credit-meter-chip"
+              >
+                {chip.label}
               </span>
             )}
           </div>
@@ -103,11 +154,21 @@ export function CreditMeter() {
             {resetCopy && <div className="text-muted-foreground pt-1">{resetCopy}</div>}
           </div>
           <div className="flex gap-2 pt-1">
-            <Button size="sm" variant="outline" className="flex-1" onClick={() => openTopUp()} data-testid="credit-meter-topup-cta">
-              Top up
+            <Button
+              size="sm"
+              variant="outline"
+              className="flex-1"
+              onClick={() => openTopUp()}
+              data-testid="credit-meter-topup-cta"
+            >
+              Add credits
             </Button>
             <Link href="/billing" className="flex-1">
-              <Button size="sm" className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500" data-testid="credit-meter-billing-cta">
+              <Button
+                size="sm"
+                className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500"
+                data-testid="credit-meter-billing-cta"
+              >
                 Billing <ArrowUpRight className="w-3 h-3 ml-1" />
               </Button>
             </Link>

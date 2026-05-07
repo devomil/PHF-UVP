@@ -1,8 +1,8 @@
-// Phase NC-01 + NC-02 — Credit balance hook with optimistic decrement and
-// server-derived warning fields (warningLevel/percentUsed/daysUntilReset).
+// Phase NC-01 + NC-02 — Credit balance hook with optimistic decrement.
 //
-// All meter colors / banner copy / topup CTAs read from these server fields
-// so the client never recomputes thresholds.
+// All warning thresholds (warningLevel/percentUsed/daysUntilReset) are
+// computed by the server (deriveWarning in credits-service) and shipped
+// in /api/credits/balance — the client trusts those fields verbatim.
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
@@ -18,31 +18,12 @@ export interface CreditSnapshot {
   status: string;
   cycleStart: string | null;
   cycleEnd: string | null;
-  // Phase NC-02 — server-derived. Older /api/credits/balance responses
-  // (mid-deploy) omit these so the hook backfills sensible defaults.
-  warningLevel?: CreditWarningLevel;
-  percentUsed?: number;
-  daysUntilReset?: number | null;
+  warningLevel: CreditWarningLevel;
+  percentUsed: number;
+  daysUntilReset: number | null;
 }
 
 const KEY = ["/api/credits/balance"];
-
-function backfillDerived(s: CreditSnapshot): CreditSnapshot {
-  if (s.warningLevel && s.percentUsed != null) return s;
-  const monthly = s.monthlyGC || 0;
-  const used = Math.max(0, monthly - s.subscriptionGC);
-  const pct = monthly > 0 ? Math.min(100, Math.round((used / monthly) * 100)) : 0;
-  let level: CreditWarningLevel = "calm";
-  if ((s.subscriptionGC + s.topupGC) <= 0) level = "empty";
-  else if (pct >= 95) level = "urgent";
-  else if (pct >= 80) level = "warning";
-  let days: number | null = null;
-  if (s.cycleEnd) {
-    const ms = new Date(s.cycleEnd).getTime() - Date.now();
-    days = ms <= 0 ? 0 : Math.floor(ms / (24 * 60 * 60 * 1000));
-  }
-  return { ...s, warningLevel: level, percentUsed: pct, daysUntilReset: days };
-}
 
 export function useCredits() {
   const qc = useQueryClient();
@@ -51,7 +32,6 @@ export function useCredits() {
     staleTime: 30_000,
     refetchInterval: 60_000,
     refetchOnWindowFocus: true,
-    select: backfillDerived,
   });
 
   const optimisticDecrement = useCallback(
