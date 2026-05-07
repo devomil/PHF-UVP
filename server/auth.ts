@@ -65,12 +65,23 @@ export function decodeAppleIdToken(idToken: string): AppleIdTokenPayload | null 
   }
 }
 
+// Preview-mode flag: forces /api/auth/providers to advertise every social
+// button as "available" so designers/PMs can see the UI without registering
+// real OAuth apps. Strategies are NOT actually registered, so clicking a
+// button while in preview mode will not produce a working sign-in flow.
+export function isOAuthPreviewMode() {
+  const v = (process.env.OAUTH_PREVIEW_MODE || "").toLowerCase();
+  return v === "1" || v === "true" || v === "yes";
+}
+
 export function getProvidersStatus() {
+  const preview = isOAuthPreviewMode();
   return {
-    google: isGoogleConfigured(),
-    facebook: isFacebookConfigured(),
-    apple: isAppleConfigured(),
-    canva: isCanvaLoginEnabled(),
+    google: isGoogleConfigured() || preview,
+    facebook: isFacebookConfigured() || preview,
+    apple: isAppleConfigured() || preview,
+    canva: isCanvaLoginEnabled() || preview,
+    preview,
   };
 }
 

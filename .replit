@@ -45,3 +45,8 @@ build = ["npm", "run", "build"]
 [postMerge]
 path = "scripts/post-merge.sh"
 timeoutMs = 180000
+
+[userenv]
+
+[userenv.shared]
+OAUTH_PREVIEW_MODE = "true"

@@ -11,6 +11,7 @@ interface ProviderConfig {
   facebook: boolean;
   apple: boolean;
   canva: boolean;
+  preview?: boolean;
 }
 
 const OAUTH_ERRORS: Record<string, string> = {
@@ -51,7 +52,7 @@ export default function AuthPage() {
   const [password, setPassword] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
-  const [providers, setProviders] = useState<ProviderConfig>({ google: false, facebook: false, apple: false, canva: false });
+  const [providers, setProviders] = useState<ProviderConfig>({ google: false, facebook: false, apple: false, canva: false, preview: false });
   const [oauthError, setOauthError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -165,6 +166,15 @@ export default function AuthPage() {
 
             {showSocial && (
               <div className="space-y-2 mb-6">
+                {providers.preview && (
+                  <div className="mb-2 px-3 py-2 rounded-xl text-xs flex items-start gap-2"
+                    style={{ backgroundColor: "rgba(234, 179, 8, 0.08)", border: "1px solid rgba(234, 179, 8, 0.25)", color: "rgb(250, 204, 21)" }}>
+                    <span className="font-semibold">Preview mode:</span>
+                    <span style={{ color: "var(--text-muted)" }}>
+                      Buttons shown for design review only. Set provider credentials (e.g. <code>GOOGLE_CLIENT_ID</code>) to enable real sign-in.
+                    </span>
+                  </div>
+                )}
                 {providers.google && (
                   <a
                     href="/api/auth/google"
