@@ -5928,6 +5928,13 @@ router.post('/generate-image', isAuthenticated, requireCredits({
         });
       } catch (creditErr: any) {
         console.error('[UniversalVideo] Credit consume failed:', creditErr.message);
+        // Phase NC-02 — emit canonical 402 envelope so the client's
+        // useGenerationErrorHandler can route to the topup modal.
+        const { sendCreditErrorIfTyped, parseLegacyInsufficient, isInsufficientCreditsLike } = await import('./credit-errors');
+        if (sendCreditErrorIfTyped(res, creditErr)) return;
+        if (isInsufficientCreditsLike(creditErr)) {
+          return res.status(402).json(parseLegacyInsufficient(creditErr, { provider: cost.provider, quality: cost.quality ?? null }).toEnvelope());
+        }
         return res.status(402).json({ success: false, error: 'Credit charge failed', code: 'CREDIT_CHARGE_FAILED' });
       }
     }
@@ -13605,7 +13612,12 @@ router.post('/generate-character-reference', isAuthenticated, async (req: Reques
       });
     } catch (creditErr: any) {
       console.error(`[Characters] Standalone consume FAILED — withholding delivery: ${creditErr.message}`);
-      return res.status(402).json({ success: false, error: `Credit charge failed: ${creditErr.message}` });
+      const { sendCreditErrorIfTyped, parseLegacyInsufficient, isInsufficientCreditsLike } = await import('./credit-errors');
+      if (sendCreditErrorIfTyped(res, creditErr)) return;
+      if (isInsufficientCreditsLike(creditErr)) {
+        return res.status(402).json(parseLegacyInsufficient(creditErr, { provider: debitProvider }).toEnvelope());
+      }
+      return res.status(402).json({ success: false, error: `Credit charge failed: ${creditErr.message}`, code: 'CREDIT_CHARGE_FAILED' });
     }
 
     let finalUrl = generated.url;
@@ -13759,7 +13771,12 @@ router.post('/projects/:projectId/characters/:characterId/generate-reference', i
         .set({ characters: errChars, updatedAt: new Date() })
         .where(eq(universalVideoProjects.projectId, projectId));
       console.error(`[Characters] Project consume FAILED — withholding delivery: ${creditErr.message}`);
-      return res.status(402).json({ success: false, error: msg });
+      const { sendCreditErrorIfTyped, parseLegacyInsufficient, isInsufficientCreditsLike } = await import('./credit-errors');
+      if (sendCreditErrorIfTyped(res, creditErr)) return;
+      if (isInsufficientCreditsLike(creditErr)) {
+        return res.status(402).json(parseLegacyInsufficient(creditErr, { provider: debitProvider }).toEnvelope());
+      }
+      return res.status(402).json({ success: false, error: msg, code: 'CREDIT_CHARGE_FAILED' });
     }
 
     let finalUrl = generated.url;

@@ -21,6 +21,13 @@ import { getActiveBillingProvider, getBillingProviderByName, BillingNotConfigure
 import { PLAN_CONFIG, PAID_PLANS, TOPUP_PACKS, getTopUpPack, type PlanTier } from "../config/plans";
 import { PROVIDER_PERMISSIONS } from "../config/providerPermissions";
 import { BILLING_CATALOG, getCatalogEntry } from "../config/billing-catalog";
+import {
+  listNotifications,
+  markNotificationRead,
+  markAllNotificationsRead,
+} from "./credit-notifications-service";
+import { creditNotifications } from "../../shared/schema";
+import { isNull } from "drizzle-orm";
 
 const router = Router();
 
@@ -144,6 +151,56 @@ router.get("/api/credits/transactions.csv", isAuthenticated, async (req: Request
   res.header("Content-Type", "text/csv");
   res.header("Content-Disposition", `attachment; filename="credit-transactions.csv"`);
   res.send(header + csv);
+});
+
+// ===== Phase NC-02 — credit notifications inbox =====
+router.get("/api/credits/notifications", isAuthenticated, async (req: Request, res: Response) => {
+  const u = authUser(req); if (!u) return res.status(401).json({ error: "UNAUTHENTICATED" });
+  const limit = Math.min(Number(req.query.limit) || 50, 200);
+  const rows = await listNotifications(u.id, limit);
+  const [unread] = await db
+    .select({ n: sql<number>`COUNT(*)::int` })
+    .from(creditNotifications)
+    .where(and(eq(creditNotifications.userId, u.id), isNull(creditNotifications.readAt)));
+  res.json({ items: rows, unreadCount: unread?.n ?? 0 });
+});
+
+router.post("/api/credits/notifications/:id/read", isAuthenticated, async (req: Request, res: Response) => {
+  const u = authUser(req); if (!u) return res.status(401).json({ error: "UNAUTHENTICATED" });
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id)) return res.status(400).json({ error: "Invalid id" });
+  const ok = await markNotificationRead(u.id, id);
+  res.json({ ok });
+});
+
+router.post("/api/credits/notifications/read-all", isAuthenticated, async (req: Request, res: Response) => {
+  const u = authUser(req); if (!u) return res.status(401).json({ error: "UNAUTHENTICATED" });
+  const updated = await markAllNotificationsRead(u.id);
+  res.json({ ok: true, updated });
+});
+
+// ===== Phase NC-02 — usage-by-provider summary for billing dashboard =====
+router.get("/api/credits/usage-by-provider", isAuthenticated, async (req: Request, res: Response) => {
+  const u = authUser(req); if (!u) return res.status(401).json({ error: "UNAUTHENTICATED" });
+  // Default window: current cycle if available, else trailing 30d. Returns
+  // negative-magnitude (consumed) GC summed by provider so the dashboard
+  // can render a simple bar chart without further client-side math.
+  const snap = await getAvailableCredits(u.id);
+  const since = snap.cycleStart ?? new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const rows = await db
+    .select({
+      provider: creditTransactions.provider,
+      consumedGC: sql<number>`COALESCE(SUM(CASE WHEN ${creditTransactions.gcAmount} < 0 THEN -${creditTransactions.gcAmount} ELSE 0 END), 0)::int`,
+      count: sql<number>`COUNT(*)::int`,
+    })
+    .from(creditTransactions)
+    .where(and(
+      eq(creditTransactions.userId, u.id),
+      sql`${creditTransactions.createdAt} >= ${since}`,
+      eq(creditTransactions.type, "GENERATION"),
+    ))
+    .groupBy(creditTransactions.provider);
+  res.json({ since, items: rows });
 });
 
 // ===== Subscription management =====

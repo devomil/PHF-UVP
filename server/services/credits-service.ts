@@ -17,6 +17,23 @@ import {
 import { PLAN_CONFIG, type PlanTier } from "../config/plans";
 import { planAllowsProvider } from "../config/providerPermissions";
 import { eq, and } from "drizzle-orm";
+import { InsufficientCreditsError } from "./credit-errors";
+// Lazy import to avoid a circular dependency: credit-notifications-service
+// imports `deriveWarning`/`deriveDaysUntilReset` from this module.
+type EvalUsageFn = (
+  userId: string,
+  newSub: number,
+  newTop: number,
+  monthlyGC: number,
+  cycleStart: Date | null,
+) => Promise<void>;
+let evalUsageThresholds: EvalUsageFn | null = null;
+async function loadEvaluator(): Promise<EvalUsageFn> {
+  if (evalUsageThresholds) return evalUsageThresholds;
+  const mod = await import("./credit-notifications-service");
+  evalUsageThresholds = mod.evaluateUsageThresholds;
+  return evalUsageThresholds;
+}
 
 // Caller-provided transaction handle, or `undefined` to open a fresh one.
 // Webhook flow passes its own `tx` so the business mutation + the
@@ -31,6 +48,7 @@ interface LockedSubscriptionRow {
   current_gc: string | number;
   topup_gc: string | number;
   monthly_gc?: string | number;
+  billing_cycle_start?: Date | string | null;
 }
 
 // drizzle's `tx.execute()` returns `{ rows: T[] }` on Neon HTTP and a
@@ -53,6 +71,10 @@ async function runInTx<T>(
 
 export type CreditSource = "subscription" | "topup" | "mixed";
 
+// Phase NC-02 — Server-derived warning level so the meter, banner, and
+// notification engine all read from the same source of truth.
+export type CreditWarningLevel = "calm" | "warning" | "urgent" | "empty";
+
 export interface CreditSnapshot {
   subscriptionGC: number;
   topupGC: number;
@@ -62,6 +84,37 @@ export interface CreditSnapshot {
   status: string;
   cycleStart: Date | null;
   cycleEnd: Date | null;
+  // Phase NC-02 additions — all derived server-side. The client never
+  // recomputes these so the meter, banner and email engine stay in lockstep.
+  warningLevel: CreditWarningLevel;
+  percentUsed: number; // 0-100, computed against monthlyGC budget
+  daysUntilReset: number | null; // floor of days from now → cycleEnd; null if no cycleEnd
+}
+
+// Pure helper exported for unit tests so the boundary cases (80, 95, 100, 0)
+// can be asserted without a DB round-trip. Keep in lockstep with the
+// notification engine thresholds.
+export function deriveWarning(
+  subscriptionGC: number,
+  topupGC: number,
+  monthlyGC: number,
+): { warningLevel: CreditWarningLevel; percentUsed: number } {
+  const total = subscriptionGC + topupGC;
+  if (total <= 0) return { warningLevel: "empty", percentUsed: 100 };
+  if (monthlyGC <= 0) return { warningLevel: "calm", percentUsed: 0 };
+  const used = Math.max(0, monthlyGC - subscriptionGC);
+  const pct = Math.min(100, Math.round((used / monthlyGC) * 100));
+  let level: CreditWarningLevel = "calm";
+  if (pct >= 95) level = "urgent";
+  else if (pct >= 80) level = "warning";
+  return { warningLevel: level, percentUsed: pct };
+}
+
+export function deriveDaysUntilReset(cycleEnd: Date | null, now: Date = new Date()): number | null {
+  if (!cycleEnd) return null;
+  const ms = cycleEnd.getTime() - now.getTime();
+  if (ms <= 0) return 0;
+  return Math.floor(ms / (24 * 60 * 60 * 1000));
 }
 
 export interface ConsumeContext {
@@ -138,6 +191,7 @@ async function ensureSubscription(userId: string): Promise<Subscription> {
 
 export async function getAvailableCredits(userId: string): Promise<CreditSnapshot> {
   const sub = await ensureSubscription(userId);
+  const { warningLevel, percentUsed } = deriveWarning(sub.currentGC, sub.topupGC, sub.monthlyGC);
   return {
     subscriptionGC: sub.currentGC,
     topupGC: sub.topupGC,
@@ -147,6 +201,9 @@ export async function getAvailableCredits(userId: string): Promise<CreditSnapsho
     status: sub.status,
     cycleStart: sub.billingCycleStart,
     cycleEnd: sub.billingCycleEnd,
+    warningLevel,
+    percentUsed,
+    daysUntilReset: deriveDaysUntilReset(sub.billingCycleEnd),
   };
 }
 
@@ -249,7 +306,7 @@ export async function consumeCredits(
 
     // Row-lock on the user's subscription row.
     const locked = await tx.execute(
-      sql`SELECT id, current_gc, topup_gc FROM subscriptions WHERE user_id = ${userId} FOR UPDATE`,
+      sql`SELECT id, current_gc, topup_gc, monthly_gc, billing_cycle_start FROM subscriptions WHERE user_id = ${userId} FOR UPDATE`,
     );
     const row = firstLockedRow(locked);
     if (!row) throw new Error(`consumeCredits: subscription row missing for user ${userId}`);
@@ -258,7 +315,15 @@ export async function consumeCredits(
     const currentTop = Number(row.topup_gc);
     const total = currentSub + currentTop;
     if (total < gcAmount) {
-      throw new Error(`INSUFFICIENT_CREDITS: required=${gcAmount} available=${total}`);
+      // Phase NC-02 — typed error so the route handler can surface the
+      // canonical 402 envelope without re-parsing a free-form string.
+      throw new InsufficientCreditsError({
+        required: gcAmount,
+        available: total,
+        provider: ctx.provider ?? null,
+        quality: ctx.quality ?? null,
+        durationS: ctx.durationS ?? null,
+      });
     }
 
     const fromSub = Math.min(gcAmount, currentSub);
@@ -284,6 +349,19 @@ export async function consumeCredits(
       jobId: ctx.jobId,
       source,
       description: ctx.description ?? null,
+    });
+
+    // Phase NC-02 — fire-and-forget threshold evaluator. Never blocks
+    // (or fails) the consume path; ledger is committed by the time
+    // we get here, so this only enqueues notifications.
+    const monthlyForEval = Number(row.monthly_gc ?? 0);
+    const cycleStartForEval = (row as { billing_cycle_start?: Date | string | null }).billing_cycle_start
+      ? new Date((row as { billing_cycle_start: Date | string }).billing_cycle_start as Date | string)
+      : null;
+    setImmediate(() => {
+      loadEvaluator()
+        .then((fn) => fn(userId, newSub, newTop, monthlyForEval, cycleStartForEval))
+        .catch((err) => console.warn("[credits-service] threshold eval failed:", err?.message ?? err));
     });
 
     return {

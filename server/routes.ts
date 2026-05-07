@@ -28,6 +28,7 @@ import studioPolishUploadRouter from "./services/studio-polish-upload";
 import { canvaAuthRouter } from "./services/canva-auth-routes";
 import { canvaSyncRouter } from "./services/canva-sync-routes";
 import creditsRouter from "./services/credits-routes";
+import { startCreditNotificationsTick } from "./services/credit-notifications-service";
 import { seedGenerationRatesIfNeeded } from "./scripts/seed-generation-rates";
 
 async function analyzeAndStoreProductMedia(projectId: string, mediaUrl: string, brief: string, userId: string, scriptPresets?: any) {
@@ -112,6 +113,8 @@ export async function registerRoutes(app: Express) {
   app.use(creditsRouter);
   // Seed canonical rates on boot (idempotent — no-ops once rows exist).
   seedGenerationRatesIfNeeded().catch((e) => console.warn("[Routes] rate seed warn:", e?.message));
+  // Phase NC-02 — start the daily credit-reset notification tick. Idempotent.
+  startCreditNotificationsTick();
   app.use('/uploads', express.static('uploads'));
   app.use('/test-images', express.static('public/test-images'));
   app.use('/test-videos', express.static('public/test-videos'));

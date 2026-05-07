@@ -27,6 +27,8 @@ import {
 import neuralcutIcon from "@/assets/neuralcut-icon.png";
 import { CreditMeter } from "@/components/credits/credit-meter";
 import { CreditWarning } from "@/components/credits/credit-warning";
+import { NotificationsBell } from "@/components/credits/notifications-bell";
+import { CreditModalsProvider } from "@/components/credits/credit-modals-provider";
 
 const navItems = [
   { label: "Home", icon: LayoutDashboard, path: "/" },
@@ -276,11 +278,14 @@ function AppLayout({ children }: { children: ReactNode }) {
       </aside>
 
       <main className="flex-1 overflow-y-auto flex flex-col">
-        <CreditWarning />
-        <div className="flex justify-end px-4 py-2 border-b" style={{ borderColor: "var(--border-subtle)" }}>
-          <CreditMeter />
-        </div>
-        <div className="flex-1">{children}</div>
+        <CreditModalsProvider>
+          <CreditWarning />
+          <div className="flex justify-end items-center gap-2 px-4 py-2 border-b" style={{ borderColor: "var(--border-subtle)" }}>
+            <NotificationsBell />
+            <CreditMeter />
+          </div>
+          <div className="flex-1">{children}</div>
+        </CreditModalsProvider>
       </main>
     </div>
   );

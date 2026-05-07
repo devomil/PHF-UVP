@@ -933,6 +933,33 @@ export const generationRates = pgTable("generation_rates", {
 
 export type GenerationRate = typeof generationRates.$inferSelect;
 
+// Phase NC-02 — Credit threshold notifications. One row per (user, cycleStart,
+// threshold) so the evaluator can fire as often as it likes without ever
+// double-notifying within the same billing cycle. `threshold` values:
+//   "USAGE_80" | "USAGE_95" | "USAGE_100" | "RESET_TOMORROW" | "RESET_TODAY"
+export const creditNotifications = pgTable("credit_notifications", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  cycleStart: timestamp("cycle_start").notNull(),
+  threshold: varchar("threshold", { length: 30 }).notNull(),
+  percentUsed: integer("percent_used"),
+  remainingGC: integer("remaining_gc"),
+  emailSent: boolean("email_sent").notNull().default(false),
+  readAt: timestamp("read_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  userIdx: index("idx_credit_notifications_user").on(table.userId),
+  unreadIdx: index("idx_credit_notifications_unread").on(table.userId, table.readAt),
+  uniqUserCycleThreshold: unique("uq_credit_notifications_user_cycle_threshold").on(
+    table.userId,
+    table.cycleStart,
+    table.threshold,
+  ),
+}));
+
+export type CreditNotification = typeof creditNotifications.$inferSelect;
+export type InsertCreditNotification = typeof creditNotifications.$inferInsert;
+
 // Idempotency ledger: store every billing-provider event id we've processed
 // so replays from Stripe (or any future provider) are no-ops.
 export const billingEvents = pgTable("billing_events", {
