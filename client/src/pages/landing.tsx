@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Link } from "wouter";
+import { useState, useEffect } from "react";
+import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import {
   ArrowRight,
@@ -285,8 +285,24 @@ function CapabilityAccordion({ cap, isOpen, onToggle }: { cap: Capability; isOpe
   );
 }
 
+const HASH_REDIRECTS: Record<string, string> = {
+  "#features": "/features",
+  "#capabilities": "/ai-models",
+  "#ai-models": "/ai-models",
+  "#models": "/ai-models",
+  "#pricing": "/pricing",
+};
+
 export default function Landing() {
   const [openAccordion, setOpenAccordion] = useState<number | null>(0);
+  const [, setLocation] = useLocation();
+
+  useEffect(() => {
+    const hash = typeof window !== "undefined" ? window.location.hash : "";
+    if (hash && HASH_REDIRECTS[hash]) {
+      setLocation(HASH_REDIRECTS[hash]);
+    }
+  }, [setLocation]);
 
   return (
     <div className="min-h-screen relative" style={{ backgroundColor: "#0a0a0f", color: "var(--text-primary)" }}>
