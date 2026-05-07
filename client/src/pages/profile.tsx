@@ -1,7 +1,183 @@
-import { User, Lock, Bell, CreditCard } from "lucide-react";
+import { useState } from "react";
+import { User, Lock, Bell, CreditCard, Link2, Unlink } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
+import { useToast } from "@/hooks/use-toast";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { queryClient, apiRequest } from "@/lib/queryClient";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+
+type OAuthProvider = "google" | "facebook";
+
+type ConnectionsResponse = {
+  hasPassword: boolean;
+  connections: Array<{ provider: string; email: string | null; createdAt: string | null }>;
+};
+
+const PROVIDER_LABELS: Record<OAuthProvider, string> = {
+  google: "Google",
+  facebook: "Facebook",
+};
+
+function ConnectedAccountsPanel() {
+  const { toast } = useToast();
+  const [pendingDisconnect, setPendingDisconnect] = useState<OAuthProvider | null>(null);
+
+  const { data, isLoading } = useQuery<ConnectionsResponse>({
+    queryKey: ["/api/auth/connections"],
+  });
+
+  const disconnectMutation = useMutation({
+    mutationFn: async (provider: OAuthProvider) => {
+      const res = await apiRequest("DELETE", `/api/auth/connections/${provider}`);
+      return res.json();
+    },
+    onSuccess: (_data, provider) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/connections"] });
+      toast({
+        title: "Disconnected",
+        description: `${PROVIDER_LABELS[provider]} sign-in has been removed from your account.`,
+      });
+      setPendingDisconnect(null);
+    },
+    onError: (err: Error, provider) => {
+      let description = err.message;
+      try {
+        const parsed = JSON.parse(err.message);
+        if (parsed?.message) description = parsed.message;
+      } catch {
+        // raw text
+      }
+      toast({
+        title: `Couldn't disconnect ${PROVIDER_LABELS[provider]}`,
+        description,
+        variant: "destructive",
+      });
+      setPendingDisconnect(null);
+    },
+  });
+
+  const providers: OAuthProvider[] = ["google", "facebook"];
+  const linksByProvider = new Map(
+    (data?.connections || []).map((c) => [c.provider, c]),
+  );
+  const linkedCount = data?.connections.length ?? 0;
+  const hasPassword = data?.hasPassword ?? false;
+
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-3">
+        <Link2 className="w-4 h-4" style={{ color: "var(--text-secondary)" }} />
+        <h2 className="text-sm font-medium uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
+          Connected Accounts
+        </h2>
+      </div>
+      <div
+        className="border rounded-xl p-5 space-y-3"
+        style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)" }}
+      >
+        {isLoading ? (
+          <p className="text-sm" style={{ color: "var(--text-muted)" }}>Loading…</p>
+        ) : (
+          providers.map((provider) => {
+            const link = linksByProvider.get(provider);
+            const isLinked = !!link;
+            const wouldLockOut = isLinked && !hasPassword && linkedCount <= 1;
+            return (
+              <div
+                key={provider}
+                className="flex items-center justify-between gap-3 py-2"
+                data-testid={`connection-row-${provider}`}
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                    {PROVIDER_LABELS[provider]}
+                  </p>
+                  <p className="text-xs truncate" style={{ color: "var(--text-muted)" }}>
+                    {isLinked
+                      ? link?.email
+                        ? `Linked as ${link.email}`
+                        : "Linked"
+                      : "Not connected"}
+                  </p>
+                  {wouldLockOut && (
+                    <p className="text-xs mt-1 text-amber-400">
+                      Set a password before disconnecting — this is your only sign-in method.
+                    </p>
+                  )}
+                </div>
+                {isLinked ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2 shrink-0"
+                    disabled={wouldLockOut || disconnectMutation.isPending}
+                    onClick={() => setPendingDisconnect(provider)}
+                    data-testid={`button-disconnect-${provider}`}
+                  >
+                    <Unlink className="w-3.5 h-3.5" />
+                    Disconnect
+                  </Button>
+                ) : (
+                  <a
+                    href={`/api/auth/${provider}`}
+                    className="text-xs px-3 py-1.5 rounded-md border shrink-0 hover:bg-purple-500/10 transition-colors"
+                    style={{ borderColor: "var(--border-subtle)", color: "var(--text-secondary)" }}
+                    data-testid={`link-connect-${provider}`}
+                  >
+                    Connect
+                  </a>
+                )}
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      <AlertDialog
+        open={!!pendingDisconnect}
+        onOpenChange={(open) => {
+          if (!open) setPendingDisconnect(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Disconnect {pendingDisconnect ? PROVIDER_LABELS[pendingDisconnect] : ""}?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              You won't be able to sign in with {pendingDisconnect ? PROVIDER_LABELS[pendingDisconnect] : "this provider"} after this.
+              You can reconnect any time from this page.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={disconnectMutation.isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                if (pendingDisconnect) disconnectMutation.mutate(pendingDisconnect);
+              }}
+              disabled={disconnectMutation.isPending}
+              data-testid="button-confirm-disconnect"
+            >
+              {disconnectMutation.isPending ? "Disconnecting…" : "Disconnect"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
 
 export default function Profile() {
   const { user } = useAuth();
@@ -84,6 +260,8 @@ export default function Profile() {
               </div>
             </div>
           </div>
+
+          <ConnectedAccountsPanel />
 
           <div>
             <div className="flex items-center gap-2 mb-3">

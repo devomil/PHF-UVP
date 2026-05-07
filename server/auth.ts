@@ -531,6 +531,65 @@ export function setupAuth(app: Express) {
     const { password: _, ...safeUser } = req.user as any;
     res.json(safeUser);
   });
+
+  // ---- Connected OAuth accounts (Task #165) ----
+  app.get("/api/auth/connections", async (req: Request, res: Response) => {
+    if (!req.isAuthenticated() || !req.user) {
+      return res.status(401).json({ message: "Not authenticated" });
+    }
+    const u = req.user as { id: string; password: string | null };
+    try {
+      const links = await db
+        .select({
+          provider: oauthAccounts.provider,
+          email: oauthAccounts.email,
+          createdAt: oauthAccounts.createdAt,
+        })
+        .from(oauthAccounts)
+        .where(eq(oauthAccounts.userId, u.id));
+      res.json({
+        hasPassword: !!u.password,
+        connections: links,
+      });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message || "Failed to load connections" });
+    }
+  });
+
+  app.delete("/api/auth/connections/:provider", async (req: Request, res: Response) => {
+    if (!req.isAuthenticated() || !req.user) {
+      return res.status(401).json({ message: "Not authenticated" });
+    }
+    const provider = String(req.params.provider || "").toLowerCase();
+    if (provider !== "google" && provider !== "facebook") {
+      return res.status(400).json({ message: "Unknown provider" });
+    }
+    const u = req.user as { id: string; password: string | null };
+    try {
+      const links = await db
+        .select()
+        .from(oauthAccounts)
+        .where(eq(oauthAccounts.userId, u.id));
+      const target = links.find((l) => l.provider === provider);
+      if (!target) {
+        return res.status(404).json({ message: `No ${provider} account is connected` });
+      }
+      const otherLinks = links.filter((l) => l.provider !== provider);
+      if (!u.password && otherLinks.length === 0) {
+        return res.status(400).json({
+          message:
+            "Set a password before disconnecting your only sign-in method, or you'll be locked out.",
+          code: "LAST_SIGN_IN_METHOD",
+        });
+      }
+      await db
+        .delete(oauthAccounts)
+        .where(and(eq(oauthAccounts.userId, u.id), eq(oauthAccounts.provider, provider)));
+      res.json({ ok: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message || "Failed to disconnect" });
+    }
+  });
 }
 
 export function isAuthenticated(req: Request, res: Response, next: NextFunction) {
