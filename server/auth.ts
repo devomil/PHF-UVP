@@ -14,6 +14,7 @@ import { users, sessions, oauthAccounts } from "../shared/schema";
 import { and, eq, sql } from "drizzle-orm";
 import crypto from "crypto";
 import { sendNewUserSignupNotification, sendWelcomeEmail } from "./services/notification-service";
+import { revokeAppleToken } from "./lib/apple-revoke";
 
 const ADMIN_EMAILS = [
   "ryan@pinehillfarm.co",
@@ -713,7 +714,7 @@ export function setupAuth(app: Express) {
       return res.status(401).json({ message: "Not authenticated" });
     }
     const provider = String(req.params.provider || "").toLowerCase();
-    if (provider !== "google" && provider !== "facebook") {
+    if (provider !== "google" && provider !== "facebook" && provider !== "apple") {
       return res.status(400).json({ message: "Unknown provider" });
     }
     const u = req.user as { id: string; password: string | null };
@@ -734,10 +735,37 @@ export function setupAuth(app: Express) {
           code: "LAST_SIGN_IN_METHOD",
         });
       }
+
+      // Apple's Sign in with Apple guidelines (and App Store review) require
+      // that disconnecting unlinks on Apple's side too. Best-effort: prefer
+      // the refresh token, fall back to the access token. If revoke fails we
+      // still drop the local link — otherwise users would be permanently
+      // unable to remove a stale Apple connection.
+      let appleRevokeWarning: string | undefined;
+      if (provider === "apple") {
+        const tokenToRevoke = target.refreshToken || target.accessToken;
+        if (tokenToRevoke) {
+          const result = await revokeAppleToken({
+            token: tokenToRevoke,
+            tokenTypeHint: target.refreshToken ? "refresh_token" : "access_token",
+          });
+          if (!result.ok) {
+            appleRevokeWarning =
+              "Removed locally, but Apple's revoke endpoint did not confirm. You may need to remove this app from appleid.apple.com.";
+            console.warn(
+              `[Auth] Apple token revoke failed for user ${u.id}: status=${result.status} error=${result.error || ""}`,
+            );
+          }
+        } else {
+          appleRevokeWarning =
+            "Removed locally — no Apple token was stored, so Apple may still list this app under your Apple ID.";
+        }
+      }
+
       await db
         .delete(oauthAccounts)
         .where(and(eq(oauthAccounts.userId, u.id), eq(oauthAccounts.provider, provider)));
-      res.json({ ok: true });
+      res.json({ ok: true, ...(appleRevokeWarning ? { warning: appleRevokeWarning } : {}) });
     } catch (err: any) {
       res.status(500).json({ message: err.message || "Failed to disconnect" });
     }

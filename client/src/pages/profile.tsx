@@ -17,7 +17,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-type OAuthProvider = "google" | "facebook";
+type OAuthProvider = "google" | "facebook" | "apple";
 
 type ConnectionsResponse = {
   hasPassword: boolean;
@@ -27,6 +27,7 @@ type ConnectionsResponse = {
 const PROVIDER_LABELS: Record<OAuthProvider, string> = {
   google: "Google",
   facebook: "Facebook",
+  apple: "Apple",
 };
 
 function ConnectedAccountsPanel() {
@@ -40,13 +41,15 @@ function ConnectedAccountsPanel() {
   const disconnectMutation = useMutation({
     mutationFn: async (provider: OAuthProvider) => {
       const res = await apiRequest("DELETE", `/api/auth/connections/${provider}`);
-      return res.json();
+      return res.json() as Promise<{ ok?: boolean; warning?: string }>;
     },
-    onSuccess: (_data, provider) => {
+    onSuccess: (data, provider) => {
       queryClient.invalidateQueries({ queryKey: ["/api/auth/connections"] });
       toast({
         title: "Disconnected",
-        description: `${PROVIDER_LABELS[provider]} sign-in has been removed from your account.`,
+        description:
+          data?.warning ||
+          `${PROVIDER_LABELS[provider]} sign-in has been removed from your account.`,
       });
       setPendingDisconnect(null);
     },
@@ -67,7 +70,7 @@ function ConnectedAccountsPanel() {
     },
   });
 
-  const providers: OAuthProvider[] = ["google", "facebook"];
+  const providers: OAuthProvider[] = ["google", "facebook", "apple"];
   const linksByProvider = new Map(
     (data?.connections || []).map((c) => [c.provider, c]),
   );
