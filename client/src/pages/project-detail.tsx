@@ -25,7 +25,7 @@ function normalizeProjectBrand(project: any): BrandSettings | undefined {
   return brand as BrandSettings;
 }
 import { useToast } from "@/hooks/use-toast";
-import { SceneDefaultsBulkAction } from "@/components/video/scene-defaults-bulk-action";
+import { ProjectSceneDefaultsSection } from "@/components/video/project-scene-defaults-section";
 import { EnhancedSceneEditor } from "@/components/video/enhanced-scene-editor";
 import { SceneOverlayEditor, SceneOverlayItem } from "@/components/video/scene-overlay-editor";
 import { SceneImageActions } from "@/components/video/scene-image-actions";
@@ -3289,20 +3289,17 @@ export default function ProjectDetail({ params }: { params?: { id: string } }) {
                   }}
                 />
               )}
-              {!isStudioPolish && scenes.length > 0 && (
-                <div className="mt-2">
-                  <SceneDefaultsBulkAction
-                    projectId={project.id}
-                    scenes={scenes}
-                    projectPreferredProvider={project.preferredProvider}
-                    onUpdated={() =>
-                      queryClient.invalidateQueries({
-                        queryKey: ["project", projectId],
-                      })
-                    }
-                  />
-                </div>
-              )}
+              <ProjectSceneDefaultsSection
+                isStudioPolish={isStudioPolish}
+                projectId={project.id}
+                scenes={scenes}
+                projectPreferredProvider={project.preferredProvider}
+                onUpdated={() =>
+                  queryClient.invalidateQueries({
+                    queryKey: ["project", projectId],
+                  })
+                }
+              />
             </div>
           </div>
           <div className="flex gap-2 flex-wrap">
