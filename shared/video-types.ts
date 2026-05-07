@@ -561,6 +561,49 @@ export interface Scene {
     selected: boolean;
     reason?: string;
   }>;
+  // Phase 23B (Task #174): record of the most recent render-system
+  // dispatch for this scene. Written by `render-system-router.ts` after
+  // the handler returns (success OR failure). Used by:
+  //   - "Rendered as" badge (with optional Fallback pill) in the scene
+  //     editor — compares `resolvedHandler` vs `renderSystemType` to
+  //     decide whether to show "fallback".
+  //   - "Re-render upgraded scenes" project action — picks scenes whose
+  //     `renderSystemType` changed since their last render.
+  //   - Manual-classified-fallback toast — fires when
+  //     `manualClassifiedFallback === true` and the user hasn't acked
+  //     this `renderedAt` timestamp yet.
+  // The write is non-fatal: the worker logs at WARN and never retries
+  // or fails the job if persistence fails.
+  lastRender?: SceneRenderRecord;
+}
+
+// Phase 23B (Task #174): persisted summary of the last render-system
+// dispatch for a scene.
+export interface SceneRenderRecord {
+  /** Render system the scene was classified as at dispatch time. */
+  renderSystemType: RenderSystemType;
+  /** Handler that actually ran. May differ from `renderSystemType` when
+   *  a stub or guard fell back (e.g. `title_card` → `ai_video`). */
+  resolvedHandler: RenderSystemType;
+  /** Present iff the dispatcher fell back to a different handler. */
+  fallback?: {
+    from: RenderSystemType;
+    to: RenderSystemType;
+    reason: string;
+  };
+  /** True iff `manuallyClassified === true` AND a fallback occurred —
+   *  surfaces the "your manual choice silently fell back" toast. */
+  manualClassifiedFallback?: boolean;
+  /** Provider returned by the underlying handler (e.g. `seedance-2.0`). */
+  provider?: string;
+  /** Final video URL written to the scene, or undefined on failure. */
+  videoUrl?: string;
+  /** Wall-clock duration of the dispatch (handler + retries). */
+  durationMs?: number;
+  /** Handler-reported error message when `success === false`. */
+  error?: string;
+  /** ISO timestamp the dispatch returned. */
+  renderedAt: string;
 }
 
 // Phase 8A: Scene analysis types

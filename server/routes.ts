@@ -132,6 +132,15 @@ export async function registerRoutes(app: Express) {
     console.warn("[Routes] Universal video routes not loaded:", err.message?.substring(0, 100));
   }
 
+  // Phase 23B (Task #174): register render-system handlers BEFORE the
+  // worker pulls its first job. Idempotent — safe under hot-reload.
+  try {
+    const { registerAllRenderHandlers } = await import("./services/render-handlers");
+    registerAllRenderHandlers();
+  } catch (err: any) {
+    console.warn("[Routes] Render handlers not registered:", err.message?.substring(0, 200));
+  }
+
   import("./services/video-worker-process")
     .then((mod) => {
       mod.startVideoWorkerLoop();

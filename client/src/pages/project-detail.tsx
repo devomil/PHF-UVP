@@ -53,6 +53,7 @@ import { CanvaSyncCard } from "@/components/canva/CanvaSyncCard";
 import {
   RenderTypeHistogram,
   RenderTypeBadge,
+  ReRenderUpgradedScenesButton,
 } from "@/components/video/render-type-badge";
 
 const statusDot: Record<string, string> = {
@@ -3287,6 +3288,17 @@ export default function ProjectDetail({ params }: { params?: { id: string } }) {
                       /* toast already fired in mutation onError */
                     }
                   }}
+                />
+              )}
+              {/* Phase 23B (Task #174): "Re-render upgraded scenes" — pick
+                  every scene whose current renderSystemType no longer
+                  matches the handler that ran last time, and enqueue
+                  fresh generation jobs for each. Hidden when no scenes
+                  qualify so the row stays clean. */}
+              {!isStudioPolish && (
+                <ReRenderUpgradedScenesButton
+                  scenes={scenes}
+                  projectId={project.id}
                 />
               )}
               <ProjectSceneDefaultsSection

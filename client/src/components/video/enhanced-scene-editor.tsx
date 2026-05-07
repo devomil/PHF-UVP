@@ -41,7 +41,13 @@ import {
 import { BrandReferencePanel } from "./brand-reference-panel";
 import type { BrandReferenceInput, Scene } from "@shared/video-types";
 import { RENDER_SYSTEM_TYPES, type RenderSystemType } from "@shared/video-types";
-import { RenderTypeBadge, RENDER_TYPE_LABELS } from "./render-type-badge";
+import {
+  RenderTypeBadge,
+  RENDER_TYPE_LABELS,
+  RenderRouterPreviewHint,
+  RenderedAsBadge,
+  ManualClassifiedFallbackToast,
+} from "./render-type-badge";
 import {
   Select as RsSelect,
   SelectContent as RsSelectContent,
@@ -2330,7 +2336,22 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                 }
               }}
             />
+            {/* Phase 23B (Task #174): "Will render as" hint for stub
+                handlers — surfaces that the visible classification is
+                not yet implemented and will silently fall back to the
+                AI Video pipeline at generate time. */}
+            <RenderRouterPreviewHint renderSystemType={(scene as Scene).renderSystemType} />
+            {/* Phase 23B (Task #174): "Rendered as" pill summarizing the
+                most recent dispatch for this scene. Shows the resolved
+                handler + a [Fallback] chip when the router fell back. */}
+            <RenderedAsBadge lastRender={(scene as Scene).lastRender} />
           </label>
+          {/* Phase 23B (Task #174): one-shot toast when a manually
+              classified scene's render fell back to a stub. */}
+          <ManualClassifiedFallbackToast
+            sceneId={sceneId}
+            lastRender={(scene as Scene).lastRender}
+          />
           <RsSelect
             value={(scene as Scene).renderSystemType || ""}
             onValueChange={(value: string) => {

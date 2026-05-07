@@ -8,6 +8,12 @@ import { db } from "../db";
 import { universalVideoProjects, videoGenerationJobs } from "@shared/schema";
 import { eq, sql } from "drizzle-orm";
 import { preparePromptForProvider, type SanitizedPrompt } from "./prompt-sanitizer";
+// Phase 23B (Task #174): Scene-type → render-system router. Replaces the
+// direct `aiVideoService.generateVideo` call in `processJob` so each
+// scene flows through the handler matching its `renderSystemType`.
+import { dispatchRender } from "./render-system-router";
+import type { RenderSystemType } from "../../shared/video-types";
+import type { SceneSnapshot } from "./render-handlers/types";
 
 const log = createLogger("VideoWorker");
 
@@ -549,6 +555,13 @@ class VideoGenerationWorker {
         let isCharacterRef = false;
         let charEnhancedPrompt = promptForGeneration;
         let projectQualityTier: string = 'standard';
+        // Phase 23B (Task #174): hoisted out of the try-block below so
+        // the dispatchRender call at the bottom of processJob can read
+        // the scene's render-system classification + a narrow snapshot
+        // of narration / visualDirection that handlers (brand_environment)
+        // need. Defaults to ai_video when the classifier hasn't run yet.
+        let resolvedRenderSystemType: RenderSystemType | undefined;
+        let sceneSnapshotForRouter: SceneSnapshot | undefined;
 
         const snapshotArtPresetId = (job.i2vSettings as any)?.snapshotArtPresetId as string | undefined;
 
@@ -560,6 +573,19 @@ class VideoGenerationWorker {
             const baseSceneId = isMicroScene ? job.sceneId.split('__micro_')[0] : job.sceneId;
             const scene = projectData.scenes?.find((s) => s.id === baseSceneId);
             if (scene) {
+              // Phase 23B (Task #174): capture render-system metadata for
+              // dispatchRender below. The scene reference is local to
+              // this try block, so we copy what the router needs.
+              resolvedRenderSystemType = (scene as any).renderSystemType as RenderSystemType | undefined;
+              sceneSnapshotForRouter = {
+                id: baseSceneId,
+                sceneType: (scene as any).type,
+                narration: (scene as any).narration,
+                visualDirection: (scene as any).visualDirection,
+                imagePrompt: (scene as any).imagePrompt,
+                renderSystemType: resolvedRenderSystemType,
+                manuallyClassified: !!(scene as any).manuallyClassified,
+              };
               const projectArtPreset = projectData.progress?.artPresetId || projectData.artPresetId;
               jobArtPresetId = snapshotArtPresetId || scene.artPresetId || projectArtPreset;
               if (snapshotArtPresetId) {
@@ -748,28 +774,50 @@ class VideoGenerationWorker {
           log.info(` Job ${job.jobId} using provider hint: ${provider} (soft preference with fallbacks)`);
         }
 
-        const result = await aiVideoService.generateVideo({
-          prompt: textImagePromptOverride || charEnhancedPrompt,
-          duration: job.duration || 6,
-          aspectRatio,
-          sceneType: job.sceneType || "hook",
-          preferredProvider: provider,
-          isProviderHint,
-          negativePrompt: textImageUrl ? (job.negativePrompt || "") : enhancedNegativePrompt,
-          visualStyle: job.style || "professional",
-          imageUrl: finalImageUrl,
-          imageUrls: finalImageUrls,
-          i2vSettings: jobI2vSettings || undefined,
-          qualityTier: projectQualityTier,
-          motionOverride: jobMotionControl ? {
-            camera_movement: jobMotionControl.camera_movement as any,
-            intensity: jobMotionControl.intensity,
-            description: `User override: ${jobMotionControl.camera_movement}`,
-            rationale: 'User selected via Motion Control UI',
-          } : undefined,
-          ...(jobArtPresetId ? { artPresetId: jobArtPresetId } : {}),
-          ...(jobContentTag ? { contentTag: jobContentTag } : {}),
-          ...((isCharacterRef || (jobI2vSettings as any)?.isCharacterReference) ? { isCharacterReference: true } : {}),
+        // Phase 23B (Task #174): dispatch through the render-system
+        // router. For `renderSystemType === 'ai_video'` (or unset) this
+        // is a 1:1 wrapper around the previous
+        // `aiVideoService.generateVideo` call; for other types it picks
+        // the matching handler (brand_environment / product_showcase) or
+        // falls back to ai_video for stubs (title_card, infographic,
+        // scientific_medical, ugc_avatar). The router also persists a
+        // `lastRender` record on the scene (non-fatal).
+        const baseSceneId = job.sceneId.includes('__micro_')
+          ? job.sceneId.split('__micro_')[0]
+          : job.sceneId;
+        const sceneForRouter: SceneSnapshot = sceneSnapshotForRouter ?? {
+          id: baseSceneId,
+          sceneType: job.sceneType ?? undefined,
+          renderSystemType: resolvedRenderSystemType,
+        };
+        const result = await dispatchRender({
+          scene: sceneForRouter,
+          projectId: job.projectId,
+          sceneId: job.sceneId,
+          jobId: job.jobId,
+          options: {
+            prompt: textImagePromptOverride || charEnhancedPrompt,
+            duration: job.duration || 6,
+            aspectRatio,
+            sceneType: job.sceneType || "hook",
+            preferredProvider: provider,
+            isProviderHint,
+            negativePrompt: textImageUrl ? (job.negativePrompt || "") : enhancedNegativePrompt,
+            visualStyle: job.style || "professional",
+            imageUrl: finalImageUrl,
+            imageUrls: finalImageUrls,
+            i2vSettings: jobI2vSettings || undefined,
+            qualityTier: projectQualityTier,
+            motionOverride: jobMotionControl ? {
+              camera_movement: jobMotionControl.camera_movement as any,
+              intensity: jobMotionControl.intensity,
+              description: `User override: ${jobMotionControl.camera_movement}`,
+              rationale: 'User selected via Motion Control UI',
+            } : undefined,
+            ...(jobArtPresetId ? { artPresetId: jobArtPresetId } : {}),
+            ...(jobContentTag ? { contentTag: jobContentTag } : {}),
+            ...((isCharacterRef || (jobI2vSettings as any)?.isCharacterReference) ? { isCharacterReference: true } : {}),
+          },
         });
 
 // Log which provider actually fulfilled the request

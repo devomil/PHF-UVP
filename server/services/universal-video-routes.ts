@@ -3649,6 +3649,94 @@ router.patch('/projects/:projectId/scenes/:sceneId', isAuthenticated, async (req
 // the top of the file with the other route-module imports.
 registerSceneClassifierRoutes(router, { isAuthenticated, getProjectFromDb });
 
+// ─── Phase 23B (Task #174): render-system router endpoints ─────────────
+// 1. Admin diagnostics — which handler types are registered + which
+//    declared types still have NO handler (Phase 24A/24B/25/27 work).
+// 2. Re-render upgraded scenes — finds scenes whose `renderSystemType`
+//    diverges from the handler that produced their last render and
+//    enqueues fresh generation jobs for each.
+router.get(
+  '/admin/render-router/registry',
+  isAuthenticated,
+  async (req: Request, res: Response) => {
+    const role = (req.user as { role?: string } | undefined)?.role;
+    if (role !== 'admin') {
+      return res.status(403).json({ success: false, error: 'Admin only' });
+    }
+    try {
+      const { getRegisteredHandlerTypes, getMissingHandlerTypes } = await import(
+        './render-system-router'
+      );
+      return res.json({
+        success: true,
+        registered: getRegisteredHandlerTypes(),
+        missing: getMissingHandlerTypes(),
+      });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  },
+);
+
+router.post(
+  '/projects/:projectId/re-render-upgraded-scenes',
+  isAuthenticated,
+  async (req: Request<{ projectId: string }>, res: Response) => {
+    try {
+      const userId = (req.user as { id?: string } | undefined)?.id;
+      const { projectId } = req.params;
+      const projectData = await getProjectFromDb(projectId);
+      if (!projectData) {
+        return res.status(404).json({ success: false, error: 'Project not found' });
+      }
+      if (projectData.ownerId !== userId) {
+        return res.status(403).json({ success: false, error: 'Access denied' });
+      }
+      const scenes = (projectData.scenes || []) as any[];
+
+      // A scene is "upgraded" iff it has been rendered before AND its
+      // current renderSystemType no longer matches the handler that
+      // actually ran last time. Scenes that have never been rendered
+      // are skipped (they'll get the right handler on first generate).
+      const upgraded = scenes.filter((s) => {
+        const last = s?.lastRender as { resolvedHandler?: string } | undefined;
+        if (!last?.resolvedHandler) return false;
+        const current = s?.renderSystemType ?? 'ai_video';
+        return current !== last.resolvedHandler;
+      });
+
+      if (upgraded.length === 0) {
+        return res.json({ success: true, queued: 0, scenes: [] });
+      }
+
+      const { videoGenerationWorker } = await import('./video-generation-worker');
+      const jobs: Array<{ sceneId: string; jobId: string }> = [];
+      for (const s of upgraded) {
+        try {
+          const job = await videoGenerationWorker.createJob({
+            projectId,
+            sceneId: s.id,
+            prompt: s.visualDirection || s.narration || '',
+            duration: s.duration || 6,
+            aspectRatio: (projectData as any).aspectRatio || '16:9',
+            sceneType: s.type || 'hook',
+            triggeredBy: userId,
+          });
+          jobs.push({ sceneId: s.id, jobId: job.jobId });
+        } catch (jobErr: any) {
+          console.warn(
+            `[ReRenderUpgraded] enqueue failed for project=${projectId} scene=${s.id}: ${jobErr.message}`,
+          );
+        }
+      }
+      return res.json({ success: true, queued: jobs.length, scenes: jobs });
+    } catch (err: any) {
+      console.error('[ReRenderUpgraded] error:', err);
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  },
+);
+
 
 // Task 61: Generate a cheap still-image thumbnail for the Creative Brief preview.
 // Uses Flux Schnell (~$0.003) so users can sanity-check style mix before paying

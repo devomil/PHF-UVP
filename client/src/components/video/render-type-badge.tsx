@@ -1,10 +1,11 @@
 // Phase 23A: badge for the Claude Haiku scene classifier output.
 // Inline reclassify with built-in spinner; "?" indicator when confidence < 0.6.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import type { RenderSystemType } from "../../../../shared/video-types";
+import type { RenderSystemType, SceneRenderRecord } from "../../../../shared/video-types";
+import { useToast } from "@/hooks/use-toast";
 
 interface RenderTypeBadgeProps {
   renderSystemType?: RenderSystemType | string;
@@ -371,5 +372,194 @@ export function RenderTypeHistogram({
         </button>
       ) : null}
     </div>
+  );
+}
+
+// ─── Phase 23B (Task #174): render-router UI helpers ──────────────────────
+//
+// Three small components consumed by `enhanced-scene-editor.tsx`:
+//  1. RenderRouterPreviewHint — "Will render as: AI Video (stub)" warning
+//     for scene types that don't have a real handler yet.
+//  2. RenderedAsBadge — "Rendered as: …" pill summarizing scene.lastRender,
+//     with an inline "Fallback" chip when the dispatcher fell back.
+//  3. ManualClassifiedFallbackToast — fires a one-shot toast (acked via
+//     localStorage by renderedAt) when a manually classified scene's
+//     render silently fell back to a stub.
+//
+// Kept in this file so the existing label/style maps can be reused.
+
+const STUB_TYPES: RenderSystemType[] = [
+  "title_card",
+  "infographic",
+  "scientific_medical",
+  "ugc_avatar",
+];
+
+export function RenderRouterPreviewHint({
+  renderSystemType,
+}: {
+  renderSystemType?: RenderSystemType | string;
+}) {
+  if (!renderSystemType) return null;
+  if (!STUB_TYPES.includes(renderSystemType as RenderSystemType)) return null;
+  return (
+    <span
+      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium uppercase tracking-wider"
+      style={{
+        color: "rgb(251,191,36)",
+        backgroundColor: "rgba(245,158,11,0.10)",
+        border: "1px solid rgba(245,158,11,0.35)",
+      }}
+      title="This render system is not yet implemented and will fall back to AI Video at generate time."
+      data-testid="render-router-preview-hint"
+    >
+      Will render as AI Video
+    </span>
+  );
+}
+
+export function RenderedAsBadge({
+  lastRender,
+}: {
+  lastRender?: SceneRenderRecord;
+}) {
+  if (!lastRender) return null;
+  const resolved = lastRender.resolvedHandler;
+  const style = (TYPE_STYLES as any)[resolved] ?? PENDING_STYLE;
+  const label = (TYPE_LABELS as any)[resolved] ?? resolved;
+  const fallback = lastRender.fallback;
+  const tooltip = fallback
+    ? `Fell back from ${(TYPE_LABELS as any)[fallback.from] ?? fallback.from}: ${fallback.reason}`
+    : `Last rendered ${new Date(lastRender.renderedAt).toLocaleString()}${lastRender.provider ? ` (${lastRender.provider})` : ""}`;
+  return (
+    <span className="inline-flex items-center gap-1" data-testid="rendered-as-badge">
+      <span
+        className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium uppercase tracking-wider"
+        style={{ color: style.fg, backgroundColor: style.bg, border: `1px solid ${style.border}` }}
+        title={tooltip}
+      >
+        Rendered: {label}
+      </span>
+      {fallback ? (
+        <span
+          className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium uppercase tracking-wider"
+          style={{
+            color: "rgb(248,113,113)",
+            backgroundColor: "rgba(239,68,68,0.10)",
+            border: "1px solid rgba(239,68,68,0.35)",
+          }}
+          title={tooltip}
+          data-testid="rendered-as-fallback-pill"
+        >
+          Fallback
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
+export function ManualClassifiedFallbackToast({
+  sceneId,
+  lastRender,
+}: {
+  sceneId: string;
+  lastRender?: SceneRenderRecord;
+}) {
+  const { toast } = useToast();
+  useEffect(() => {
+    if (!lastRender?.manualClassifiedFallback || !lastRender.fallback) return;
+    const ackKey = `manualFallbackAck:${sceneId}:${lastRender.renderedAt}`;
+    try {
+      if (typeof window === "undefined") return;
+      if (window.localStorage.getItem(ackKey)) return;
+      window.localStorage.setItem(ackKey, "1");
+    } catch {
+      // localStorage unavailable (private mode) — fall through and toast
+      // anyway. Worst case is duplicate toasts on remount.
+    }
+    const fromLabel =
+      (TYPE_LABELS as any)[lastRender.fallback.from] ?? lastRender.fallback.from;
+    const toLabel =
+      (TYPE_LABELS as any)[lastRender.fallback.to] ?? lastRender.fallback.to;
+    toast({
+      title: `Manual choice fell back: ${fromLabel} → ${toLabel}`,
+      description: lastRender.fallback.reason,
+    });
+  }, [sceneId, lastRender?.renderedAt, lastRender?.manualClassifiedFallback, lastRender?.fallback, toast]);
+  return null;
+}
+
+/** Phase 23B (Task #174): "Re-render upgraded scenes" — small inline
+ *  button that POSTs to /re-render-upgraded-scenes for the current
+ *  project. Hidden when no scenes qualify (none have been rendered yet,
+ *  or all classifications still match their last handler). */
+export function ReRenderUpgradedScenesButton({
+  scenes,
+  projectId,
+}: {
+  scenes: any[];
+  projectId: string;
+}) {
+  const { toast } = useToast();
+  const [isLoading, setIsLoading] = useState(false);
+
+  const upgradedCount = scenes.filter((s) => {
+    const last = s?.lastRender as { resolvedHandler?: string } | undefined;
+    if (!last?.resolvedHandler) return false;
+    const current = s?.renderSystemType ?? "ai_video";
+    return current !== last.resolvedHandler;
+  }).length;
+
+  if (upgradedCount === 0) return null;
+
+  return (
+    <button
+      type="button"
+      disabled={isLoading}
+      onClick={async () => {
+        setIsLoading(true);
+        try {
+          const res = await fetch(
+            `/api/universal-video/projects/${projectId}/re-render-upgraded-scenes`,
+            { method: "POST", credentials: "include" },
+          );
+          const body = await res.json().catch(() => ({}));
+          if (!res.ok || !body?.success) {
+            throw new Error(body?.error || `HTTP ${res.status}`);
+          }
+          toast({
+            title: `Queued ${body.queued} scene${body.queued === 1 ? "" : "s"}`,
+            description: "Upgraded scenes are re-rendering with their new handlers.",
+          });
+        } catch (err: any) {
+          toast({
+            title: "Re-render failed",
+            description: err?.message || String(err),
+            variant: "destructive",
+          });
+        } finally {
+          setIsLoading(false);
+        }
+      }}
+      className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-medium border transition-colors disabled:opacity-60"
+      style={{
+        color: "rgb(167,139,250)",
+        backgroundColor: "rgba(124,58,237,0.10)",
+        borderColor: "rgba(124,58,237,0.35)",
+      }}
+      data-testid="re-render-upgraded-scenes-button"
+    >
+      {isLoading ? (
+        <span
+          className="inline-block h-2.5 w-2.5 rounded-full border-[1.5px] border-current border-t-transparent animate-spin"
+          aria-hidden
+        />
+      ) : null}
+      <span>
+        {isLoading
+          ? "Re-rendering…"
+          : `Re-render ${upgradedCount} upgraded scene${upgradedCount === 1 ? "" : "s"}`}
+      </span>
+    </button>
   );
 }

@@ -19,7 +19,7 @@ import { getBrandContext, getBrandNameOrDefault } from './brand-settings-service
 import { getVisualArtPreset, VisualArtPreset, isStylizedPreset as isStylizedPresetCheck, getProviderHierarchy } from '../../shared/config/visual-art-presets';
 import { getSceneContentTag, SceneContentTag } from '../../shared/config/scene-content-tags';
 
-interface AIVideoResult {
+export interface AIVideoResult {
   success: boolean;
   videoUrl?: string;
   s3Url?: string;
@@ -36,7 +36,7 @@ interface I2VSettingsInput {
   motionStrength?: number; // 0-1: how much motion/animation
 }
 
-interface AIVideoOptions {
+export interface AIVideoOptions {
   prompt: string;
   duration: number;
   aspectRatio: '16:9' | '9:16' | '1:1';
