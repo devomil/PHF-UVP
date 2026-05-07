@@ -230,9 +230,13 @@ export async function evaluateResetSignals(now: Date = new Date()): Promise<void
 
     if (days === 1 && percentUsed > 60) {
       await emailIfNew(sub.userId, sub.billingCycleStart, "RESET_TOMORROW", percentUsed, remainingGC, days);
-    } else if (days === 0) {
-      await emailIfNew(sub.userId, sub.billingCycleStart, "RESET_TODAY", percentUsed, remainingGC, days);
     }
+    // RESET_TODAY is intentionally NOT fired here. Cycle rollover advances
+    // billingCycleStart, so the dedupe key (user, cycleStart, threshold)
+    // would be different between this scan (old cycle) and the actual
+    // rollover (new cycle), producing two RESET_TODAY notifications per
+    // event. Single source of truth: emitResetToday() called from
+    // resetMonthlyCredits() at the exact moment of rollover.
   }
 }
 

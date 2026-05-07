@@ -3,6 +3,7 @@ import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, us
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { CreditCost } from "@/components/credits/credit-cost";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -4227,6 +4228,17 @@ function ScenePreview({
                     </Select>
                   </div>
                   
+                  {/* Phase NC-02 — show estimated GC cost above the
+                      generate CTA so the user can decide before clicking.
+                      Insufficient state auto-routes to top-up modal. */}
+                  <CreditCost
+                    provider={selectedProviders[`video-${scene.id}`] || 'runway'}
+                    quality={null}
+                    durationS={typeof scene.duration === 'number' ? scene.duration : null}
+                    showDetail
+                    className="mb-2"
+                  />
+
                   {/* Generate Video Button */}
                   <Button
                     variant="destructive"

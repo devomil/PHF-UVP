@@ -6,6 +6,7 @@ import {
   RefreshCw, Trash2, BookOpen, Upload
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { CreditCost } from "@/components/credits/credit-cost";
 import type { CharacterProfile } from "@shared/video-types";
 
 interface CharacterProfilesPanelProps {
@@ -614,7 +615,16 @@ export function CharacterProfilesPanel({
                 </div>
               )}
 
-              <div className="mt-2 flex items-center gap-1.5 flex-wrap">
+              {/* Phase NC-02 — inline GC cost preview so users see the cost
+                  before clicking. Provider is the standalone-character-ref
+                  Flux model. The component handles its own insufficient-state
+                  routing to TopUp via the modals provider. */}
+              {!char.locked && (char.generationStatus !== "generating") && (
+                <div className="mt-2">
+                  <CreditCost provider="flux-1.1-pro" quality="premium" compact />
+                </div>
+              )}
+              <div className="mt-1 flex items-center gap-1.5 flex-wrap">
                 {!char.locked && !char.referenceImageUrl && char.generationStatus !== "generating" && (
                   <button
                     onClick={() => handleGenerateReference(char.id)}
