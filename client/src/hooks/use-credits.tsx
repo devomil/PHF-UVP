@@ -34,6 +34,11 @@ export function useCredits() {
     refetchOnWindowFocus: true,
   });
 
+  // Spec contract: callers asked for a derived `cycleEndDate` Date object
+  // alongside the raw ISO string from the server. We compute it on read so
+  // the source of truth (server-side cycleEnd) never gets stale.
+  const cycleEndDate = q.data?.cycleEnd ? new Date(q.data.cycleEnd) : null;
+
   const optimisticDecrement = useCallback(
     (gcAmount: number) => {
       qc.setQueryData<CreditSnapshot | undefined>(KEY, (old) => {
@@ -55,7 +60,7 @@ export function useCredits() {
     qc.invalidateQueries({ queryKey: KEY });
   }, [qc]);
 
-  return { ...q, optimisticDecrement, refresh };
+  return { ...q, optimisticDecrement, refresh, cycleEndDate };
 }
 
 export interface CreditCostInfo {

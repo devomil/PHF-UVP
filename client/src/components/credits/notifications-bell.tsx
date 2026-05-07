@@ -2,9 +2,11 @@
 // Renders the unread count + a popover-style inbox via radix HoverCard.
 
 import { Bell } from "lucide-react";
+import { useLocation } from "wouter";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { Button } from "@/components/ui/button";
 import { useCreditNotifications, type CreditNotification } from "@/hooks/use-credit-notifications";
+import { useCreditModals } from "@/components/credits/credit-modals-provider";
 
 const LABELS: Record<CreditNotification["threshold"], string> = {
   USAGE_80: "80% credits used",
@@ -33,8 +35,32 @@ function timeAgo(iso: string): string {
   return `${d}d ago`;
 }
 
+// Each threshold deep-links to the most actionable destination. USAGE
+// thresholds open the top-up modal in-place; reset notifications drop
+// the user on the billing page where the new cycle is summarized.
+function actionFor(threshold: CreditNotification["threshold"]) {
+  switch (threshold) {
+    case "USAGE_80":
+    case "USAGE_95":
+    case "USAGE_100":
+      return { label: "Top up", kind: "topup" as const };
+    case "RESET_TOMORROW":
+    case "RESET_TODAY":
+      return { label: "View billing", kind: "billing" as const };
+  }
+}
+
 export function NotificationsBell() {
   const { items, unreadCount, markRead, markAllRead } = useCreditNotifications();
+  const { openTopUp } = useCreditModals();
+  const [, setLocation] = useLocation();
+
+  function handleAction(n: CreditNotification) {
+    const action = actionFor(n.threshold);
+    if (!n.readAt) markRead(n.id);
+    if (action.kind === "topup") openTopUp({ shortfall: 0, provider: null });
+    else setLocation("/billing");
+  }
   return (
     <HoverCard openDelay={120} closeDelay={120}>
       <HoverCardTrigger asChild>
@@ -78,32 +104,40 @@ export function NotificationsBell() {
             </div>
           ) : (
             <ul className="divide-y divide-white/5">
-              {items.map((n) => (
-                <li
-                  key={n.id}
-                  className={`px-3 py-2.5 flex items-start gap-2 ${n.readAt ? "opacity-60" : ""}`}
-                  data-testid={`notification-${n.id}`}
-                >
-                  <span className={`mt-1 h-1.5 w-1.5 rounded-full shrink-0 ${n.readAt ? "bg-white/20" : "bg-gradient-to-r from-purple-400 to-indigo-400"}`} />
-                  <div className="flex-1 min-w-0">
-                    <div className={`text-xs font-medium ${TONE[n.threshold]}`}>{LABELS[n.threshold]}</div>
-                    <div className="text-[11px] text-muted-foreground mt-0.5">
-                      {n.percentUsed != null && `${n.percentUsed}% used · `}
-                      {n.remainingGC != null && `${n.remainingGC} GC left · `}
-                      {timeAgo(n.createdAt)}
-                    </div>
-                  </div>
-                  {!n.readAt && (
+              {items.map((n) => {
+                const action = actionFor(n.threshold);
+                return (
+                  <li
+                    key={n.id}
+                    className={`px-3 py-2.5 flex items-start gap-2 ${n.readAt ? "opacity-60" : ""}`}
+                    data-testid={`notification-${n.id}`}
+                  >
+                    <span className={`mt-1 h-1.5 w-1.5 rounded-full shrink-0 ${n.readAt ? "bg-white/20" : "bg-gradient-to-r from-purple-400 to-indigo-400"}`} />
                     <button
-                      onClick={() => markRead(n.id)}
-                      className="text-[10px] text-purple-300 hover:text-purple-200 shrink-0"
-                      data-testid={`notification-${n.id}-read`}
+                      onClick={() => handleAction(n)}
+                      className="flex-1 min-w-0 text-left hover:bg-white/5 -mx-1 px-1 py-0.5 rounded transition-colors"
+                      data-testid={`notification-${n.id}-action`}
                     >
-                      Read
+                      <div className={`text-xs font-medium ${TONE[n.threshold]}`}>{LABELS[n.threshold]}</div>
+                      <div className="text-[11px] text-muted-foreground mt-0.5">
+                        {n.percentUsed != null && `${n.percentUsed}% used · `}
+                        {n.remainingGC != null && `${n.remainingGC} GC left · `}
+                        {timeAgo(n.createdAt)}
+                      </div>
+                      <div className="text-[10px] text-purple-300 mt-1">{action.label} →</div>
                     </button>
-                  )}
-                </li>
-              ))}
+                    {!n.readAt && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); markRead(n.id); }}
+                        className="text-[10px] text-purple-300 hover:text-purple-200 shrink-0"
+                        data-testid={`notification-${n.id}-read`}
+                      >
+                        Read
+                      </button>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           )}
         </div>

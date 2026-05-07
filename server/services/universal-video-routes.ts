@@ -13609,7 +13609,10 @@ router.post('/generate-character-reference', isAuthenticated, async (req: Reques
     const allowed = await canAccessProvider(userId, debitProvider);
     if (!allowed) {
       console.error(`[Characters] Standalone: provider ${debitProvider} not in plan for user ${userId} — withholding delivery`);
-      return res.status(403).json({ success: false, error: `Provider ${debitProvider} is not included in your plan` });
+      // Phase NC-02 — canonical 403 envelope so the client can route
+      // straight to the upgrade flow.
+      const { ProviderNotInPlanError } = await import('./credit-errors');
+      return res.status(403).json(new ProviderNotInPlanError(debitProvider, null, null).toEnvelope());
     }
 
     try {
@@ -13764,7 +13767,9 @@ router.post('/projects/:projectId/characters/:characterId/generate-reference', i
         .set({ characters: denyChars, updatedAt: new Date() })
         .where(eq(universalVideoProjects.projectId, projectId));
       console.error(`[Characters] Project: provider ${debitProvider} not in plan for user ${userId} — withholding delivery`);
-      return res.status(403).json({ success: false, error: denyMsg });
+      // Phase NC-02 — canonical 403 envelope.
+      const { ProviderNotInPlanError } = await import('./credit-errors');
+      return res.status(403).json(new ProviderNotInPlanError(debitProvider, null, null).toEnvelope());
     }
 
     try {
