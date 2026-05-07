@@ -528,8 +528,39 @@ export function setupAuth(app: Express) {
     if (!req.isAuthenticated() || !req.user) {
       return res.status(401).json({ message: "Not authenticated" });
     }
-    const { password: _, ...safeUser } = req.user as any;
-    res.json(safeUser);
+    const { password, ...safeUser } = req.user as any;
+    res.json({ ...safeUser, hasPassword: !!password });
+  });
+
+  // Task #164 — let OAuth-only users add a password so they can also use
+  // local email + password sign-in as a backup credential.
+  app.post("/api/auth/set-password", async (req: Request, res: Response) => {
+    if (!req.isAuthenticated() || !req.user) {
+      return res.status(401).json({ message: "Not authenticated" });
+    }
+    const { password } = req.body ?? {};
+    if (typeof password !== "string" || password.length < 8) {
+      return res.status(400).json({ message: "Password must be at least 8 characters" });
+    }
+    if (password.length > 200) {
+      return res.status(400).json({ message: "Password is too long" });
+    }
+    const sessionUser = req.user as { id: string };
+    try {
+      const [current] = await db.select().from(users).where(eq(users.id, sessionUser.id));
+      if (!current) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      if (current.password) {
+        return res.status(409).json({ message: "Password is already set for this account" });
+      }
+      const hashed = await bcrypt.hash(password, 10);
+      await db.update(users).set({ password: hashed, updatedAt: new Date() }).where(eq(users.id, current.id));
+      return res.json({ ok: true, hasPassword: true });
+    } catch (err: any) {
+      console.error("[Auth] set-password failed:", err);
+      return res.status(500).json({ message: err?.message || "Failed to set password" });
+    }
   });
 
   // ---- Connected OAuth accounts (Task #165) ----

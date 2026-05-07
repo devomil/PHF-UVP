@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { User, Lock, Bell, CreditCard, Link2, Unlink } from "lucide-react";
+import { User, Lock, Bell, CreditCard, Link2, Unlink, KeyRound } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
@@ -181,6 +181,71 @@ function ConnectedAccountsPanel() {
 
 export default function Profile() {
   const { user } = useAuth();
+  const { toast } = useToast();
+  const [newPwd, setNewPwd] = useState("");
+  const [confirmPwd, setConfirmPwd] = useState("");
+
+  const setPasswordMutation = useMutation({
+    mutationFn: async (password: string) => {
+      const res = await apiRequest("POST", "/api/auth/set-password", { password });
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Password set",
+        description: "You can now sign in with your email and password.",
+      });
+      setNewPwd("");
+      setConfirmPwd("");
+      queryClient.invalidateQueries({ queryKey: ["/api/user"] });
+    },
+    onError: (err: any) => {
+      let description = "Please try again.";
+      const raw = err?.message;
+      if (typeof raw === "string" && raw.length > 0) {
+        const jsonStart = raw.indexOf("{");
+        if (jsonStart >= 0) {
+          try {
+            const parsed = JSON.parse(raw.slice(jsonStart));
+            if (parsed?.message && typeof parsed.message === "string") {
+              description = parsed.message;
+            }
+          } catch {
+            description = raw;
+          }
+        } else {
+          description = raw;
+        }
+      }
+      toast({
+        title: "Could not set password",
+        description,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleSetPassword = () => {
+    if (newPwd.length < 8) {
+      toast({
+        title: "Password too short",
+        description: "Use at least 8 characters.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (newPwd !== confirmPwd) {
+      toast({
+        title: "Passwords don't match",
+        description: "Re-type the same password in both fields.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setPasswordMutation.mutate(newPwd);
+  };
+
+  const needsPassword = user ? user.hasPassword === false : false;
 
   const initials = user
     ? `${(user.firstName || user.email[0] || "").charAt(0)}${(user.lastName || "").charAt(0)}`.toUpperCase()
@@ -225,6 +290,57 @@ export default function Profile() {
         </div>
 
         <div className="space-y-6">
+          {needsPassword && (
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <KeyRound className="w-4 h-4" style={{ color: "var(--text-secondary)" }} />
+                <h2 className="text-sm font-medium uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>Set a password</h2>
+              </div>
+              <div className="border rounded-xl p-5 space-y-4" style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)" }}>
+                <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
+                  You signed up using a social account. Add a password so you can also sign in with your email
+                  {user?.email ? ` (${user.email})` : ""}.
+                </p>
+                <div>
+                  <label className="block text-sm font-medium mb-1.5" style={{ color: "var(--text-secondary)" }}>New Password</label>
+                  <input
+                    type="password"
+                    placeholder="At least 8 characters"
+                    value={newPwd}
+                    onChange={(e) => setNewPwd(e.target.value)}
+                    autoComplete="new-password"
+                    data-testid="input-new-password"
+                    className="w-full border rounded-lg px-3.5 py-2.5 placeholder-gray-500 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/20 transition-colors"
+                    style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)", color: "var(--text-primary)" }}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1.5" style={{ color: "var(--text-secondary)" }}>Confirm New Password</label>
+                  <input
+                    type="password"
+                    placeholder="Re-enter password"
+                    value={confirmPwd}
+                    onChange={(e) => setConfirmPwd(e.target.value)}
+                    autoComplete="new-password"
+                    data-testid="input-confirm-password"
+                    className="w-full border rounded-lg px-3.5 py-2.5 placeholder-gray-500 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/20 transition-colors"
+                    style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)", color: "var(--text-primary)" }}
+                  />
+                </div>
+                <div className="flex justify-end">
+                  <Button
+                    onClick={handleSetPassword}
+                    disabled={setPasswordMutation.isPending || !newPwd || !confirmPwd}
+                    data-testid="button-set-password"
+                    className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white px-6 py-2 rounded-lg font-medium shadow-lg shadow-purple-500/20"
+                  >
+                    {setPasswordMutation.isPending ? "Setting…" : "Set password"}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div>
             <div className="flex items-center gap-2 mb-3">
               <Lock className="w-4 h-4" style={{ color: "var(--text-secondary)" }} />

@@ -9,6 +9,7 @@ type User = {
   firstName?: string;
   lastName?: string;
   role: string;
+  hasPassword?: boolean;
   [key: string]: unknown;
 };
 
