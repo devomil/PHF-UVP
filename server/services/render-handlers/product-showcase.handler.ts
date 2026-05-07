@@ -71,6 +71,17 @@ export class ProductShowcaseHandler implements SceneRenderHandler {
       };
     }
 
+    // Seedance omni_reference accepts up to 9 reference images per call;
+    // anything beyond that is silently dropped by PiAPI. Cap explicitly
+    // and warn so unexpected truncation is visible in logs.
+    const SEEDANCE_REF_CAP = 9;
+    if (resolvedRefs.length > SEEDANCE_REF_CAP) {
+      console.warn(
+        `[ProductShowcase] job=${ctx.jobId} scene=${ctx.sceneId} ${resolvedRefs.length} refs supplied — capping to first ${SEEDANCE_REF_CAP} for Seedance omni_reference`,
+      );
+      resolvedRefs = resolvedRefs.slice(0, SEEDANCE_REF_CAP);
+    }
+
     const seedance = pickSeedanceVariant(options.qualityTier);
     console.log(
       `[ProductShowcase] job=${ctx.jobId} scene=${ctx.sceneId} forcing provider=${seedance} (omni_reference) with ${resolvedRefs.length} reference image(s) [source=${refSource}]`,

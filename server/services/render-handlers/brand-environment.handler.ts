@@ -40,10 +40,33 @@ function asAspect(a?: string): '16:9' | '9:16' | '1:1' {
 export class BrandEnvironmentHandler implements SceneRenderHandler {
   readonly type = 'brand_environment' as const;
 
+  /** Available only when the Recraft API key is configured. The
+   *  `/api/render-router/handlers` endpoint surfaces this so the editor
+   *  preview chip can warn that brand_environment will degrade to
+   *  ai_video on unconfigured deploys. */
+  isAvailable(): boolean {
+    return !!process.env.RECRAFT_API_KEY;
+  }
+
   async render(
     options: RenderOptions,
     ctx: RenderHandlerContext,
   ): Promise<RenderHandlerResult> {
+    // Recraft not configured — short-circuit to ai_video with a clear
+    // reason so ops can wire the key when ready.
+    if (!process.env.RECRAFT_API_KEY) {
+      const result = await aiVideoHandler.render(options, ctx);
+      return {
+        ...result,
+        resolvedHandler: 'ai_video',
+        fallback: {
+          from: this.type,
+          to: 'ai_video',
+          reason: 'RECRAFT_API_KEY not configured — cannot generate branded still',
+        },
+      };
+    }
+
     // Caller already has an anchor — don't double-spend on Recraft. Fall
     // through to ai_video and record a fallback so the UI shows the
     // "Rendered as: AI Video [Fallback]" pill.

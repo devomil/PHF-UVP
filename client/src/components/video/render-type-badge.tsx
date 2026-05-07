@@ -467,29 +467,43 @@ export function RenderedAsBadge({
     ? `Fell back from ${labelFor(fallback.from)}: ${fallback.reason}`
     : `Last rendered ${new Date(lastRender.renderedAt).toLocaleString()}${lastRender.provider ? ` (${lastRender.provider})` : ""}`;
   return (
-    <span className="inline-flex items-center gap-1" data-testid="rendered-as-badge">
-      <span
-        className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium uppercase tracking-wider"
-        style={{ color: style.fg, backgroundColor: style.bg, border: `1px solid ${style.border}` }}
-        title={tooltip}
-      >
-        Rendered: {label}
+    <TooltipProvider delayDuration={200}>
+      <span className="inline-flex items-center gap-1" data-testid="rendered-as-badge">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span
+              className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium uppercase tracking-wider cursor-default"
+              style={{
+                color: style.fg,
+                backgroundColor: style.bg,
+                border: `1px solid ${style.border}`,
+              }}
+            >
+              Rendered: {label}
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>{tooltip}</TooltipContent>
+        </Tooltip>
+        {fallback ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span
+                className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium uppercase tracking-wider cursor-default"
+                style={{
+                  color: "rgb(248,113,113)",
+                  backgroundColor: "rgba(239,68,68,0.10)",
+                  border: "1px solid rgba(239,68,68,0.35)",
+                }}
+                data-testid="rendered-as-fallback-pill"
+              >
+                Fallback
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>{tooltip}</TooltipContent>
+          </Tooltip>
+        ) : null}
       </span>
-      {fallback ? (
-        <span
-          className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium uppercase tracking-wider"
-          style={{
-            color: "rgb(248,113,113)",
-            backgroundColor: "rgba(239,68,68,0.10)",
-            border: "1px solid rgba(239,68,68,0.35)",
-          }}
-          title={tooltip}
-          data-testid="rendered-as-fallback-pill"
-        >
-          Fallback
-        </span>
-      ) : null}
-    </span>
+    </TooltipProvider>
   );
 }
 
@@ -555,13 +569,26 @@ export function ReRenderUpgradedScenesButton({
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const handlers = useHandlerAvailability();
+  const availabilityMap = new Map(handlers.map((h) => [h.type, h.available]));
 
+  // A scene is "upgraded" only if re-rendering today would actually
+  // produce a different handler than last time. If the current
+  // renderSystemType is still unavailable (stub), re-rendering would
+  // just fall back to ai_video again — exclude those to avoid
+  // repeatedly charging the user for an identical fallback render.
   const upgradedRows: ReRenderUpgradeRow[] = scenes
     .filter((s) => {
       const last = s?.lastRender;
       if (!last?.resolvedHandler) return false;
       const current = s?.renderSystemType ?? "ai_video";
-      return current !== last.resolvedHandler;
+      if (current === last.resolvedHandler) return false;
+      // Only flag if the current type has an available handler — i.e.
+      // re-rendering will actually upgrade away from the previous
+      // fallback rather than re-trigger the same fallback chain.
+      const available = availabilityMap.get(current as RenderSystemType);
+      if (available === false) return false;
+      return true;
     })
     .map((s) => ({
       sceneId: s.id ?? "",
