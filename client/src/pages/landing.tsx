@@ -297,8 +297,8 @@ export default function Landing() {
             <img src={neuralcutFullLogo} alt="NeuralCut.AI" className="h-40 object-contain" />
           </div>
           <div className="hidden md:flex items-center gap-6 text-sm" style={{ color: "var(--text-secondary)" }}>
-            <a href="#features" className="hover:text-white transition-colors">Features</a>
-            <a href="#capabilities" className="hover:text-white transition-colors">AI Models</a>
+            <Link href="/features" className="hover:text-white transition-colors">Features</Link>
+            <Link href="/ai-models" className="hover:text-white transition-colors">AI Models</Link>
             <Link href="/pricing" className="hover:text-white transition-colors">Pricing</Link>
           </div>
           <div className="flex items-center gap-3">
@@ -538,8 +538,8 @@ export default function Landing() {
               <img src={neuralcutFullLogo} alt="NeuralCut.AI" className="h-40 object-contain" />
             </div>
             <div className="flex items-center gap-6 text-xs" style={{ color: "var(--text-muted)" }}>
-              <a href="#features" className="hover:text-white transition-colors">Features</a>
-              <a href="#capabilities" className="hover:text-white transition-colors">AI Models</a>
+              <Link href="/features" className="hover:text-white transition-colors">Features</Link>
+              <Link href="/ai-models" className="hover:text-white transition-colors">AI Models</Link>
               <Link href="/pricing" className="hover:text-white transition-colors">Pricing</Link>
               <Link href="/contact-sales" className="hover:text-white transition-colors">Talk to sales</Link>
               <Link href="/auth" className="hover:text-white transition-colors">Sign In</Link>

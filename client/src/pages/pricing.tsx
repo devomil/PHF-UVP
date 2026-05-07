@@ -228,6 +228,9 @@ export default function PricingPage() {
           )}
         </section>
 
+        {/* Included in every plan */}
+        <IncludedInEveryPlan />
+
         {/* GC explainer */}
         <GCExplainer rates={generationRates} />
 
@@ -537,6 +540,60 @@ function GCExplainer({ rates }: { rates: PublicGenerationRates | null }) {
   );
 }
 
+const INCLUDED_FEATURES: { title: string; description: string }[] = [
+  { title: "60+ AI models", description: "Kling, Runway, Veo, Sora, Luma, Hailuo, Wan, Flux, ElevenLabs and more." },
+  { title: "Image-first I2V pipeline", description: "Style-locked hero images, then animation — every scene stays on-brand." },
+  { title: "Micro-scene editing", description: "Regenerate any beat without touching the rest of your video." },
+  { title: "Brand asset management", description: "Logos, colors, fonts, intros and outros baked into every render." },
+  { title: "Per-scene voiceover & captions", description: "ElevenLabs voiceovers with word-level captions and audio ducking." },
+  { title: "Sound design & music", description: "AI-composed scores with quality evaluation before you render." },
+  { title: "9 visual art presets", description: "Cinematic, 3D, watercolor, neon and more — with per-scene overrides." },
+  { title: "Ask Suzzie AI assistant", description: "Conversational creative partner trained on our cinematic framework." },
+  { title: "Asset library", description: "Centralized, searchable storage for everything you generate or upload." },
+  { title: "Social publishing hub", description: "Schedule and post to TikTok, Reels, Shorts, LinkedIn and more." },
+  { title: "Canva sync", description: "OAuth sync renders straight into your team's Canva workspace." },
+  { title: "Cost telemetry & alerts", description: "Spend dashboards, budget caps, and 80/95/100% credit warnings." },
+];
+
+function IncludedInEveryPlan() {
+  return (
+    <section className="max-w-6xl mx-auto px-6 py-14" aria-labelledby="included-heading">
+      <div className="text-center mb-8">
+        <p className="text-[11px] uppercase tracking-[0.2em] text-purple-300 mb-2">Included in every plan</p>
+        <h2
+          id="included-heading"
+          className="text-3xl font-bold mb-3 bg-gradient-to-r from-white to-purple-200 bg-clip-text text-transparent"
+        >
+          The full studio. Every plan.
+        </h2>
+        <p className="text-sm max-w-2xl mx-auto" style={{ color: "var(--text-secondary, #94a3b8)" }}>
+          We don't gate features by tier. The only thing that scales with your plan is your credit budget and the premium models you unlock.
+        </p>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3" data-testid="included-grid">
+        {INCLUDED_FEATURES.map((f) => (
+          <div
+            key={f.title}
+            className="flex items-start gap-3 p-4 rounded-xl border bg-gradient-to-br from-slate-950/80 to-purple-950/10"
+            style={{ borderColor: "rgba(255,255,255,0.06)" }}
+            data-testid={`included-${f.title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}
+          >
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-600 to-indigo-600 flex items-center justify-center shrink-0">
+              <Check className="h-4 w-4 text-white" />
+            </div>
+            <div>
+              <div className="text-sm font-semibold text-white">{f.title}</div>
+              <div className="text-xs mt-0.5" style={{ color: "var(--text-secondary, #94a3b8)" }}>
+                {f.description}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function TopUpPacksSection({
   topupPacks,
   onCta,
@@ -756,8 +813,8 @@ function PricingNav() {
           <img src={neuralcutFullLogo} alt="NeuralCut.AI" className="h-24 object-contain" />
         </Link>
         <div className="hidden md:flex items-center gap-6 text-sm" style={{ color: "var(--text-secondary, #94a3b8)" }}>
-          <Link href="/#features" className="hover:text-white transition-colors">Features</Link>
-          <Link href="/#capabilities" className="hover:text-white transition-colors">AI Models</Link>
+          <Link href="/features" className="hover:text-white transition-colors">Features</Link>
+          <Link href="/ai-models" className="hover:text-white transition-colors">AI Models</Link>
           <Link href="/pricing" className="text-white">Pricing</Link>
         </div>
         <div className="flex items-center gap-3">
