@@ -1,10 +1,37 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useTheme } from "@/contexts/ThemeContext";
 import { Button } from "@/components/ui/button";
 import { Sun, Moon } from "lucide-react";
 import neuralcutFullLogo from "@/assets/neuralcut-full-logo.png";
 import neuralcutIcon from "@/assets/neuralcut-icon.png";
+
+interface ProviderConfig {
+  google: boolean;
+  facebook: boolean;
+  canva: boolean;
+}
+
+const OAUTH_ERRORS: Record<string, string> = {
+  oauth_google: "Sign-in with Google didn't complete. Please try again.",
+  oauth_facebook: "Sign-in with Facebook didn't complete. Please try again.",
+};
+
+function GoogleIcon() {
+  return (
+    <svg className="w-4 h-4" viewBox="0 0 24 24" aria-hidden="true">
+      <path fill="#EA4335" d="M12 11v3.2h5.3c-.2 1.4-1.6 4-5.3 4-3.2 0-5.8-2.6-5.8-5.9s2.6-5.9 5.8-5.9c1.8 0 3 .8 3.7 1.5l2.5-2.4C16.6 4 14.5 3 12 3 6.9 3 2.8 7.1 2.8 12.3S6.9 21.6 12 21.6c6.9 0 11.5-4.9 11.5-11.7 0-.8-.1-1.4-.2-2H12z"/>
+    </svg>
+  );
+}
+
+function FacebookIcon() {
+  return (
+    <svg className="w-4 h-4" viewBox="0 0 24 24" aria-hidden="true">
+      <path fill="#1877F2" d="M22 12a10 10 0 10-11.6 9.9v-7H7.9V12h2.5V9.8c0-2.5 1.5-3.9 3.8-3.9 1.1 0 2.2.2 2.2.2v2.5h-1.3c-1.2 0-1.6.8-1.6 1.6V12h2.8l-.5 2.9h-2.4v7A10 10 0 0022 12z"/>
+    </svg>
+  );
+}
 
 export default function AuthPage() {
   const { loginMutation, registerMutation } = useAuth();
@@ -14,6 +41,25 @@ export default function AuthPage() {
   const [password, setPassword] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
+  const [providers, setProviders] = useState<ProviderConfig>({ google: false, facebook: false, canva: false });
+  const [oauthError, setOauthError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/auth/providers")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data) setProviders(data);
+      })
+      .catch(() => {});
+
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const errCode = params.get("error");
+      if (errCode && OAUTH_ERRORS[errCode]) {
+        setOauthError(OAUTH_ERRORS[errCode]);
+      }
+    }
+  }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,6 +72,7 @@ export default function AuthPage() {
 
   const error = isLogin ? loginMutation.error : registerMutation.error;
   const isPending = loginMutation.isPending || registerMutation.isPending;
+  const showSocial = providers.google || providers.facebook;
 
   return (
     <div className="min-h-screen flex relative" style={{ backgroundColor: "var(--app-bg)" }}>
@@ -94,9 +141,49 @@ export default function AuthPage() {
               </button>
             </div>
 
+            {oauthError && (
+              <div className="mb-4 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+                {oauthError}
+              </div>
+            )}
+
             {error && (
               <div className="mb-6 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
                 {error.message || "An error occurred"}
+              </div>
+            )}
+
+            {showSocial && (
+              <div className="space-y-2 mb-6">
+                {providers.google && (
+                  <a
+                    href="/api/auth/google"
+                    className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-sm font-medium transition-colors"
+                    style={{ backgroundColor: "var(--input-bg)", border: "1px solid var(--input-border)", color: "var(--text-primary)" }}
+                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--surface-hover)")}
+                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "var(--input-bg)")}
+                  >
+                    <GoogleIcon />
+                    <span>Continue with Google</span>
+                  </a>
+                )}
+                {providers.facebook && (
+                  <a
+                    href="/api/auth/facebook"
+                    className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-sm font-medium transition-colors"
+                    style={{ backgroundColor: "var(--input-bg)", border: "1px solid var(--input-border)", color: "var(--text-primary)" }}
+                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--surface-hover)")}
+                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "var(--input-bg)")}
+                  >
+                    <FacebookIcon />
+                    <span>Continue with Facebook</span>
+                  </a>
+                )}
+                <div className="flex items-center gap-3 pt-2">
+                  <div className="flex-1 h-px" style={{ backgroundColor: "var(--border-subtle)" }} />
+                  <span className="text-xs uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>or</span>
+                  <div className="flex-1 h-px" style={{ backgroundColor: "var(--border-subtle)" }} />
+                </div>
               </div>
             )}
 

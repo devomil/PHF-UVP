@@ -69,6 +69,28 @@ export const insertUserSchema = createInsertSchema(users).omit({
 export type UpsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 
+export const oauthAccounts = pgTable(
+  "oauth_accounts",
+  {
+    id: varchar("id").primaryKey().notNull(),
+    userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    provider: varchar("provider").notNull(),
+    providerAccountId: varchar("provider_account_id").notNull(),
+    email: varchar("email"),
+    accessToken: text("access_token"),
+    refreshToken: text("refresh_token"),
+    expiresAt: timestamp("expires_at"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    providerIdx: unique("uq_oauth_provider_account").on(table.provider, table.providerAccountId),
+    userIdx: index("idx_oauth_accounts_user").on(table.userId),
+  }),
+);
+
+export type OAuthAccount = typeof oauthAccounts.$inferSelect;
+
 export const mediaAssets = pgTable("media_assets", {
   id: serial("id").primaryKey(),
   type: varchar("type").notNull(),

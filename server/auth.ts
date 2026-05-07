@@ -1,19 +1,207 @@
 import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
+import { Strategy as GoogleStrategy } from "passport-google-oauth20";
+import { Strategy as FacebookStrategy } from "passport-facebook";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
 import { type Express, type Request, type Response, type NextFunction } from "express";
 import { runWithUserContext } from "./services/user-context";
 import bcrypt from "bcrypt";
 import { db, pool } from "./db";
-import { users, sessions } from "../shared/schema";
-import { eq } from "drizzle-orm";
+import { users, sessions, oauthAccounts } from "../shared/schema";
+import { and, eq, sql } from "drizzle-orm";
 import crypto from "crypto";
 import { sendNewUserSignupNotification, sendWelcomeEmail } from "./services/notification-service";
 
 const ADMIN_EMAILS = [
   "ryan@pinehillfarm.co",
 ];
+
+type OAuthProviderName = "google" | "facebook";
+
+function isGoogleConfigured() {
+  return !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
+}
+
+function isFacebookConfigured() {
+  return !!(process.env.FACEBOOK_APP_ID && process.env.FACEBOOK_APP_SECRET);
+}
+
+function callbackUrl(envVar: string | undefined, fallbackPath: string) {
+  if (envVar) return envVar;
+  const base = process.env.APP_URL || process.env.PUBLIC_URL || "";
+  return base ? `${base.replace(/\/+$/, "")}${fallbackPath}` : fallbackPath;
+}
+
+interface LinkOrCreateInput {
+  provider: OAuthProviderName;
+  providerAccountId: string;
+  email: string | null;
+  emailVerified: boolean;
+  firstName: string | null;
+  lastName: string | null;
+  profileImageUrl: string | null;
+  accessToken?: string | null;
+  refreshToken?: string | null;
+  expiresAt?: Date | null;
+}
+
+function isUniqueViolation(err: any): boolean {
+  return err?.code === "23505" || /duplicate key|unique constraint/i.test(err?.message || "");
+}
+
+async function findOAuthLink(provider: string, providerAccountId: string) {
+  const [row] = await db
+    .select()
+    .from(oauthAccounts)
+    .where(and(eq(oauthAccounts.provider, provider), eq(oauthAccounts.providerAccountId, providerAccountId)));
+  return row;
+}
+
+async function linkOrCreateOAuthUser(input: LinkOrCreateInput) {
+  const { provider, providerAccountId, email, emailVerified, firstName, lastName, profileImageUrl } = input;
+  const normalizedEmail = email ? email.toLowerCase() : null;
+
+  // 1. Existing oauth_account row?
+  const existingLink = await findOAuthLink(provider, providerAccountId);
+  if (existingLink) {
+    await db
+      .update(oauthAccounts)
+      .set({
+        accessToken: input.accessToken ?? existingLink.accessToken,
+        refreshToken: input.refreshToken ?? existingLink.refreshToken,
+        expiresAt: input.expiresAt ?? existingLink.expiresAt,
+        email: normalizedEmail ?? existingLink.email,
+        updatedAt: new Date(),
+      })
+      .where(eq(oauthAccounts.id, existingLink.id));
+    const [user] = await db.select().from(users).where(eq(users.id, existingLink.userId));
+    if (!user) throw new Error("Linked OAuth account references missing user");
+    return promoteAdminIfAllowlisted(user);
+  }
+
+  if (!normalizedEmail) {
+    throw new Error(`${provider} account did not return an email — cannot sign in`);
+  }
+
+  // Refuse to link by email unless the provider says it's verified — prevents
+  // a hijack where someone registers an OAuth account with someone else's
+  // unverified email and lands inside their account.
+  if (!emailVerified) {
+    throw new Error(
+      `${provider} did not confirm this email is verified. Please verify your email with ${provider} and try again.`,
+    );
+  }
+
+  // 2. Existing user by verified email? Link a new oauth_accounts row.
+  const [matched] = await db.select().from(users).where(eq(users.email, normalizedEmail));
+  if (matched) {
+    try {
+      await db.insert(oauthAccounts).values({
+        id: crypto.randomUUID(),
+        userId: matched.id,
+        provider,
+        providerAccountId,
+        email: normalizedEmail,
+        accessToken: input.accessToken ?? null,
+        refreshToken: input.refreshToken ?? null,
+        expiresAt: input.expiresAt ?? null,
+      });
+    } catch (err) {
+      // Concurrent callback for same (provider, providerAccountId) — re-fetch the winner.
+      if (isUniqueViolation(err)) {
+        const winner = await findOAuthLink(provider, providerAccountId);
+        if (winner) {
+          const [user] = await db.select().from(users).where(eq(users.id, winner.userId));
+          if (user) return promoteAdminIfAllowlisted(user);
+        }
+      }
+      throw err;
+    }
+    return promoteAdminIfAllowlisted(matched);
+  }
+
+  // 3. Brand new user.
+  const userId = crypto.randomUUID();
+  const role = ADMIN_EMAILS.includes(normalizedEmail) ? "admin" : "employee";
+  let newUser;
+  try {
+    [newUser] = await db
+      .insert(users)
+      .values({
+        id: userId,
+        email: normalizedEmail,
+        password: null,
+        firstName: firstName || null,
+        lastName: lastName || null,
+        profileImageUrl: profileImageUrl || null,
+        role,
+      })
+      .returning();
+  } catch (err) {
+    if (isUniqueViolation(err)) {
+      // Another OAuth callback raced us and created the user (or a manual
+      // /api/register hit at the same moment). Fall through to the linking path.
+      const [raced] = await db.select().from(users).where(eq(users.email, normalizedEmail));
+      if (raced) {
+        return linkOrCreateOAuthUser(input);
+      }
+    }
+    throw err;
+  }
+
+  try {
+    await db.insert(oauthAccounts).values({
+      id: crypto.randomUUID(),
+      userId: newUser.id,
+      provider,
+      providerAccountId,
+      email: normalizedEmail,
+      accessToken: input.accessToken ?? null,
+      refreshToken: input.refreshToken ?? null,
+      expiresAt: input.expiresAt ?? null,
+    });
+  } catch (err) {
+    if (isUniqueViolation(err)) {
+      const winner = await findOAuthLink(provider, providerAccountId);
+      if (winner) {
+        const [user] = await db.select().from(users).where(eq(users.id, winner.userId));
+        if (user) return promoteAdminIfAllowlisted(user);
+      }
+    }
+    throw err;
+  }
+
+  try {
+    const { createInitialTrialForNewUser } = await import("./services/credits-service");
+    await createInitialTrialForNewUser(newUser.id);
+  } catch (creditErr) {
+    console.error("[Auth/OAuth] Failed to provision trial subscription:", creditErr);
+  }
+
+  sendNewUserSignupNotification({
+    email: newUser.email,
+    firstName: newUser.firstName,
+    lastName: newUser.lastName,
+  }).catch((err) => console.error("[Auth/OAuth] Notification error:", err));
+
+  sendWelcomeEmail({
+    email: newUser.email,
+    firstName: newUser.firstName,
+    lastName: newUser.lastName,
+  }).catch((err) => console.error("[Auth/OAuth] Welcome email error:", err));
+
+  return newUser;
+}
+
+async function promoteAdminIfAllowlisted(user: any) {
+  if (ADMIN_EMAILS.includes((user.email || "").toLowerCase()) && user.role !== "admin") {
+    await db.update(users).set({ role: "admin" }).where(eq(users.id, user.id));
+    user.role = "admin";
+    console.log(`[Auth] Auto-promoted ${user.email} to admin role`);
+  }
+  return user;
+}
 
 const PgSession = connectPgSimple(session);
 
@@ -27,6 +215,11 @@ passport.use(
           return done(null, false, { message: "Invalid email or password" });
         }
         if (!user.password) {
+          const links = await db.select().from(oauthAccounts).where(eq(oauthAccounts.userId, user.id));
+          if (links.length > 0) {
+            const providerLabel = links.map((l) => l.provider.charAt(0).toUpperCase() + l.provider.slice(1)).join(" or ");
+            return done(null, false, { message: `This account uses ${providerLabel} sign-in` });
+          }
           return done(null, false, { message: "Account has no password set" });
         }
         const isValid = await bcrypt.compare(password, user.password);
@@ -87,6 +280,103 @@ export function setupAuth(app: Express) {
 
   app.use(passport.initialize());
   app.use(passport.session());
+
+  // ---- Google OAuth ----
+  if (isGoogleConfigured()) {
+    passport.use(
+      new GoogleStrategy(
+        {
+          clientID: process.env.GOOGLE_CLIENT_ID!,
+          clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+          callbackURL: callbackUrl(process.env.GOOGLE_CALLBACK_URL, "/api/auth/google/callback"),
+        },
+        async (accessToken, refreshToken, profile, done) => {
+          try {
+            const email = profile.emails?.[0]?.value || null;
+            // Google's userinfo includes email_verified on the raw profile json.
+            const emailVerified = (profile as any)._json?.email_verified === true;
+            const user = await linkOrCreateOAuthUser({
+              provider: "google",
+              providerAccountId: profile.id,
+              email,
+              emailVerified,
+              firstName: profile.name?.givenName || null,
+              lastName: profile.name?.familyName || null,
+              profileImageUrl: profile.photos?.[0]?.value || null,
+              accessToken: accessToken || null,
+              refreshToken: refreshToken || null,
+            });
+            done(null, user);
+          } catch (err) {
+            done(err as Error);
+          }
+        },
+      ),
+    );
+    app.get("/api/auth/google", passport.authenticate("google", { scope: ["profile", "email"] }));
+    app.get(
+      "/api/auth/google/callback",
+      passport.authenticate("google", { failureRedirect: "/auth?error=oauth_google" }),
+      (_req, res) => res.redirect("/"),
+    );
+    console.log("[Auth] Google OAuth strategy registered");
+  } else {
+    console.log("[Auth] Google OAuth disabled (set GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET to enable)");
+  }
+
+  // ---- Facebook OAuth ----
+  if (isFacebookConfigured()) {
+    passport.use(
+      new FacebookStrategy(
+        {
+          clientID: process.env.FACEBOOK_APP_ID!,
+          clientSecret: process.env.FACEBOOK_APP_SECRET!,
+          callbackURL: callbackUrl(process.env.FACEBOOK_CALLBACK_URL, "/api/auth/facebook/callback"),
+          profileFields: ["id", "emails", "name", "picture.type(large)"],
+        },
+        async (accessToken, refreshToken, profile, done) => {
+          try {
+            const email = profile.emails?.[0]?.value || null;
+            const photo = (profile.photos?.[0] as any)?.value || null;
+            // Facebook only returns the email field for accounts that have
+            // verified the address; we treat presence as confirmation.
+            const emailVerified = !!email;
+            const user = await linkOrCreateOAuthUser({
+              provider: "facebook",
+              providerAccountId: profile.id,
+              email,
+              emailVerified,
+              firstName: (profile.name as any)?.givenName || null,
+              lastName: (profile.name as any)?.familyName || null,
+              profileImageUrl: photo,
+              accessToken: accessToken || null,
+              refreshToken: refreshToken || null,
+            });
+            done(null, user);
+          } catch (err) {
+            done(err as Error);
+          }
+        },
+      ),
+    );
+    app.get("/api/auth/facebook", passport.authenticate("facebook", { scope: ["email"] }));
+    app.get(
+      "/api/auth/facebook/callback",
+      passport.authenticate("facebook", { failureRedirect: "/auth?error=oauth_facebook" }),
+      (_req, res) => res.redirect("/"),
+    );
+    console.log("[Auth] Facebook OAuth strategy registered");
+  } else {
+    console.log("[Auth] Facebook OAuth disabled (set FACEBOOK_APP_ID + FACEBOOK_APP_SECRET to enable)");
+  }
+
+  app.get("/api/auth/providers", (_req, res) => {
+    res.json({
+      google: isGoogleConfigured(),
+      facebook: isFacebookConfigured(),
+      canva: false,
+    });
+  });
 
   app.post("/api/register", async (req: Request, res: Response) => {
     try {
