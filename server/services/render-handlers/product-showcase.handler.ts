@@ -32,9 +32,32 @@ export class ProductShowcaseHandler implements SceneRenderHandler {
     options: RenderOptions,
     ctx: RenderHandlerContext,
   ): Promise<RenderHandlerResult> {
-    const hasRef = !!options.imageUrl || (options.imageUrls?.length ?? 0) > 0;
+    // Resolve a reference image set in priority order:
+    //   1. options.imageUrls / imageUrl supplied by the worker (text-image,
+    //      char-ref, or studio-polish anchor).
+    //   2. scene.brandReferences[] flattened by the worker into
+    //      ctx.scene.brandReferenceUrls — the canonical source for
+    //      product-showcase scenes that have brand-kit references attached.
+    //   3. project brand kit's product images (ctx.scene.productImageUrls).
+    // Without ANY of those we cannot use Seedance omni_reference and fall
+    // back to ai_video with a recorded reason.
+    let resolvedRefs: string[] | undefined =
+      options.imageUrls && options.imageUrls.length > 0
+        ? options.imageUrls
+        : options.imageUrl
+        ? [options.imageUrl]
+        : undefined;
+    let refSource = 'options';
+    if (!resolvedRefs && ctx.scene.brandReferenceUrls?.length) {
+      resolvedRefs = ctx.scene.brandReferenceUrls;
+      refSource = 'scene.brandReferences';
+    }
+    if (!resolvedRefs && ctx.scene.productImageUrls?.length) {
+      resolvedRefs = ctx.scene.productImageUrls;
+      refSource = 'project.brandAssets.productImages';
+    }
 
-    if (!hasRef) {
+    if (!resolvedRefs || resolvedRefs.length === 0) {
       const result = await aiVideoHandler.render(options, ctx);
       return {
         ...result,
@@ -42,19 +65,22 @@ export class ProductShowcaseHandler implements SceneRenderHandler {
         fallback: {
           from: this.type,
           to: 'ai_video',
-          reason: 'No product reference image — cannot use Seedance omni_reference',
+          reason:
+            'No product reference image (options, scene.brandReferences, or project.productImages) — cannot use Seedance omni_reference',
         },
       };
     }
 
     const seedance = pickSeedanceVariant(options.qualityTier);
     console.log(
-      `[ProductShowcase] job=${ctx.jobId} scene=${ctx.sceneId} forcing provider=${seedance} (omni_reference) with ${options.imageUrls?.length ?? 1} reference image(s)`,
+      `[ProductShowcase] job=${ctx.jobId} scene=${ctx.sceneId} forcing provider=${seedance} (omni_reference) with ${resolvedRefs.length} reference image(s) [source=${refSource}]`,
     );
 
     const result = await aiVideoHandler.render(
       {
         ...options,
+        imageUrls: resolvedRefs,
+        imageUrl: resolvedRefs[0],
         preferredProvider: seedance,
         // Explicit hint=false so the orchestrator treats it as a hard
         // pick rather than a soft preference (we WANT Seedance 2 for

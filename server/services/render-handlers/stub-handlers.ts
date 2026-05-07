@@ -19,6 +19,12 @@ class StubHandler implements SceneRenderHandler {
     private readonly futurePhase: string,
   ) {}
 
+  /** Stubs are explicitly NOT available — surfaces a stable signal to
+   *  the editor preview chip and the diagnostics endpoint. */
+  isAvailable(): boolean {
+    return false;
+  }
+
   async render(
     options: RenderOptions,
     ctx: RenderHandlerContext,

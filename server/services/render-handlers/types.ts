@@ -28,7 +28,9 @@ export interface RenderOptions extends AIVideoOptions {
 
 /** Subset of scene fields handlers actually read. Kept narrow on purpose
  *  so the worker doesn't have to plumb the entire 60-field Scene shape
- *  through dispatch. */
+ *  through dispatch. `brandReferenceUrls` and `productImageUrls` are
+ *  flattened on the worker side so handlers don't have to reach back
+ *  into the project / brand asset graph. */
 export interface SceneSnapshot {
   id: string;
   sceneType?: string;
@@ -37,6 +39,14 @@ export interface SceneSnapshot {
   imagePrompt?: string;
   renderSystemType?: RenderSystemType;
   manuallyClassified?: boolean;
+  classifierConfidence?: number;
+  /** S3 URLs from `scene.brandReferences[]` — used by ProductShowcase
+   *  when `options.imageUrls` is empty so omni_reference can still
+   *  activate without forcing an upstream prep step. */
+  brandReferenceUrls?: string[];
+  /** S3 URLs from the project's brand kit product images — used as the
+   *  same fallback source for ProductShowcase. */
+  productImageUrls?: string[];
 }
 
 export interface RenderHandlerContext {
@@ -61,6 +71,12 @@ export interface RenderHandlerResult extends AIVideoResult {
 
 export interface SceneRenderHandler {
   readonly type: RenderSystemType;
+  /** Self-reported availability. Stub handlers return false; real
+   *  handlers default to true. The router consults this both for the
+   *  `GET /api/render-router/handlers` editor-preview endpoint and to
+   *  decide whether to record a fallback even before invoking the
+   *  handler. Defaults to `true` when omitted. */
+  isAvailable?(): boolean;
   render(
     options: RenderOptions,
     ctx: RenderHandlerContext,

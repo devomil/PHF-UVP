@@ -3655,6 +3655,24 @@ registerSceneClassifierRoutes(router, { isAuthenticated, getProjectFromDb });
 // 2. Re-render upgraded scenes — finds scenes whose `renderSystemType`
 //    diverges from the handler that produced their last render and
 //    enqueues fresh generation jobs for each.
+// Public-ish endpoint (auth-only, no admin gate): returns per-handler
+// availability so the scene editor's "Will render as" preview chip can
+// flag stub types from server data instead of a hardcoded list.
+router.get(
+  '/render-router/handlers',
+  isAuthenticated,
+  async (_req: Request, res: Response) => {
+    try {
+      const { getHandlerAvailability } = await import('./render-system-router');
+      return res.json({ success: true, handlers: getHandlerAvailability() });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  },
+);
+
+// Admin-only diagnostics: registry, missing handlers, and the most-recent
+// dispatch decisions ring buffer.
 router.get(
   '/admin/render-router/registry',
   isAuthenticated,
@@ -3664,13 +3682,18 @@ router.get(
       return res.status(403).json({ success: false, error: 'Admin only' });
     }
     try {
-      const { getRegisteredHandlerTypes, getMissingHandlerTypes } = await import(
-        './render-system-router'
-      );
+      const {
+        getRegisteredHandlerTypes,
+        getMissingHandlerTypes,
+        getHandlerAvailability,
+        getRecentDecisions,
+      } = await import('./render-system-router');
       return res.json({
         success: true,
         registered: getRegisteredHandlerTypes(),
         missing: getMissingHandlerTypes(),
+        handlers: getHandlerAvailability(),
+        recentDecisions: getRecentDecisions(),
       });
     } catch (err: any) {
       return res.status(500).json({ success: false, error: err.message });
@@ -3705,8 +3728,16 @@ router.post(
         return current !== last.resolvedHandler;
       });
 
+      // Per-type breakdown for the UI confirmation summary, computed from
+      // the *upgrade direction* (was-handler → now-classified-as).
+      const breakdown: Record<string, number> = {};
+      for (const s of upgraded) {
+        const key = `${s?.lastRender?.resolvedHandler ?? 'unknown'}→${s?.renderSystemType ?? 'ai_video'}`;
+        breakdown[key] = (breakdown[key] ?? 0) + 1;
+      }
+
       if (upgraded.length === 0) {
-        return res.json({ success: true, queued: 0, scenes: [] });
+        return res.json({ success: true, queued: 0, scenes: [], breakdown: {} });
       }
 
       const { videoGenerationWorker } = await import('./video-generation-worker');
@@ -3729,7 +3760,7 @@ router.post(
           );
         }
       }
-      return res.json({ success: true, queued: jobs.length, scenes: jobs });
+      return res.json({ success: true, queued: jobs.length, scenes: jobs, breakdown });
     } catch (err: any) {
       console.error('[ReRenderUpgraded] error:', err);
       return res.status(500).json({ success: false, error: err.message });

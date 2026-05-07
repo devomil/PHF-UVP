@@ -57,6 +57,54 @@ export function getMissingHandlerTypes(): RenderSystemType[] {
   return RENDER_SYSTEM_TYPES.filter((t) => !registry.has(t));
 }
 
+/** Reports availability for the editor preview-chip endpoint. Real
+ *  handlers default to true; stub handlers explicitly return false via
+ *  their own `isAvailable()` override. */
+export function getHandlerAvailability(): Array<{
+  type: RenderSystemType;
+  registered: boolean;
+  available: boolean;
+}> {
+  return RENDER_SYSTEM_TYPES.map((type) => {
+    const h = registry.get(type);
+    if (!h) return { type, registered: false, available: false };
+    const available = typeof h.isAvailable === 'function' ? h.isAvailable() : true;
+    return { type, registered: true, available };
+  });
+}
+
+// ─── Decision ring buffer ─────────────────────────────────────────────
+// Keeps the last N dispatch decisions in memory so the admin diagnostics
+// endpoint can show "what happened recently". Bounded so a busy worker
+// doesn't grow unbounded heap; ops can rerun the endpoint to refresh.
+interface DecisionRecord {
+  timestamp: string;
+  jobId: string;
+  projectId: string;
+  sceneId: string;
+  requested: RenderSystemType;
+  resolved: RenderSystemType;
+  fallbackReason?: string;
+  durationMs: number;
+  success: boolean;
+}
+const DECISION_BUFFER_CAP = 100;
+const decisionBuffer: DecisionRecord[] = [];
+function recordDecision(d: DecisionRecord): void {
+  decisionBuffer.push(d);
+  if (decisionBuffer.length > DECISION_BUFFER_CAP) {
+    decisionBuffer.splice(0, decisionBuffer.length - DECISION_BUFFER_CAP);
+  }
+}
+export function getRecentDecisions(): DecisionRecord[] {
+  // Return a copy in newest-first order so callers don't accidentally
+  // mutate the buffer.
+  return decisionBuffer.slice().reverse();
+}
+export function __resetDecisionsForTests(): void {
+  decisionBuffer.length = 0;
+}
+
 function resolveHandler(rst: RenderSystemType | undefined): {
   handler: SceneRenderHandler;
   resolvedFrom: RenderSystemType;
@@ -94,12 +142,25 @@ export async function dispatchRender(
 ): Promise<RenderHandlerResult> {
   const { scene, projectId, sceneId, jobId, options } = args;
 
-  const requested: RenderSystemType =
+  // Type guard against an arbitrary string slipping through. Also: when
+  // the classifier failed and stamped `classifierConfidence === 0`, do
+  // NOT trust the type field — fall through to ai_video. The classifier
+  // service uses confidence=0 as its documented "I errored, ignore me"
+  // sentinel.
+  let requested: RenderSystemType =
     scene.renderSystemType && (RENDER_SYSTEM_TYPES as readonly string[]).includes(scene.renderSystemType)
-      ? scene.renderSystemType
+      ? (scene.renderSystemType as RenderSystemType)
       : 'ai_video';
+  let classifierErrorPassthrough = false;
+  if (scene.classifierConfidence === 0 && !scene.manuallyClassified && requested !== 'ai_video') {
+    console.log(
+      `[RenderRouter] job=${jobId} scene=${sceneId} classifierConfidence=0 (classifier errored) — passthrough to ai_video`,
+    );
+    classifierErrorPassthrough = true;
+    requested = 'ai_video';
+  }
 
-  const { handler, resolvedFrom, unknownFallback } = resolveHandler(requested);
+  const { handler, unknownFallback } = resolveHandler(requested);
   const ctx: RenderHandlerContext = { projectId, sceneId, jobId, scene };
 
   console.log(
@@ -115,17 +176,20 @@ export async function dispatchRender(
     console.error(
       `[RenderRouter] job=${jobId} scene=${sceneId} handler=${handler.type} threw: ${msg}`,
     );
-    // Build a failure result + persist `lastRender` for the badge before
-    // re-throwing so the worker's existing retry/fail-job logic still
-    // owns the lifecycle.
-    const failureRecord = buildLastRender({
+    // Per spec: persist `lastRender` only on the success path. On throw
+    // we just record the decision in the ring buffer + re-throw so the
+    // worker's existing retry/fail-job lifecycle owns the failure write.
+    recordDecision({
+      timestamp: new Date().toISOString(),
+      jobId,
+      projectId,
+      sceneId,
       requested,
-      result: { resolvedHandler: handler.type, success: false, error: msg },
-      manuallyClassified: !!scene.manuallyClassified,
+      resolved: handler.type,
+      fallbackReason: `handler-throw: ${msg}`,
       durationMs: Date.now() - startedAt,
-      unknownFallback,
+      success: false,
     });
-    await persistLastRender(projectId, scene.id, failureRecord, jobId);
     throw err;
   }
 
@@ -150,7 +214,22 @@ export async function dispatchRender(
     durationMs: Date.now() - startedAt,
     unknownFallback,
   });
-  await persistLastRender(projectId, scene.id, record, jobId);
+  if (result.success !== false) {
+    await persistLastRender(projectId, scene.id, record, jobId);
+  }
+  recordDecision({
+    timestamp: record.renderedAt,
+    jobId,
+    projectId,
+    sceneId,
+    requested,
+    resolved: result.resolvedHandler,
+    fallbackReason: classifierErrorPassthrough
+      ? 'classifierConfidence=0 passthrough'
+      : result.fallback?.reason,
+    durationMs: record.durationMs ?? 0,
+    success: result.success !== false,
+  });
 
   return result;
 }

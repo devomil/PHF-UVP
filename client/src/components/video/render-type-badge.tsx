@@ -379,7 +379,9 @@ export function RenderTypeHistogram({
 //
 // Three small components consumed by `enhanced-scene-editor.tsx`:
 //  1. RenderRouterPreviewHint — "Will render as: AI Video (stub)" warning
-//     for scene types that don't have a real handler yet.
+//     for scene types that don't have a real handler yet. Sources the
+//     stub list from the server via /api/universal-video/render-router/handlers
+//     (cached by react-query) so it stays in sync as new handlers ship.
 //  2. RenderedAsBadge — "Rendered as: …" pill summarizing scene.lastRender,
 //     with an inline "Fallback" chip when the dispatcher fell back.
 //  3. ManualClassifiedFallbackToast — fires a one-shot toast (acked via
@@ -388,20 +390,53 @@ export function RenderTypeHistogram({
 //
 // Kept in this file so the existing label/style maps can be reused.
 
-const STUB_TYPES: RenderSystemType[] = [
-  "title_card",
-  "infographic",
-  "scientific_medical",
-  "ugc_avatar",
-];
+import { useQuery } from "@tanstack/react-query";
+
+interface RenderHandlerAvailability {
+  type: RenderSystemType;
+  registered: boolean;
+  available: boolean;
+}
+
+function useHandlerAvailability(): RenderHandlerAvailability[] {
+  const { data } = useQuery<{ success: boolean; handlers: RenderHandlerAvailability[] }>({
+    queryKey: ["render-router/handlers"],
+    queryFn: async () => {
+      const res = await fetch("/api/universal-video/render-router/handlers", {
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.json();
+    },
+    staleTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
+  });
+  return data?.handlers ?? [];
+}
+
+function isKnownRenderType(t: string | undefined): t is RenderSystemType {
+  return !!t && t in TYPE_LABELS;
+}
+function labelFor(t: string | undefined): string {
+  return isKnownRenderType(t) ? TYPE_LABELS[t] : t ?? "Unknown";
+}
+function styleFor(t: string | undefined) {
+  return isKnownRenderType(t) ? TYPE_STYLES[t] : PENDING_STYLE;
+}
 
 export function RenderRouterPreviewHint({
   renderSystemType,
 }: {
   renderSystemType?: RenderSystemType | string;
 }) {
+  const handlers = useHandlerAvailability();
   if (!renderSystemType) return null;
-  if (!STUB_TYPES.includes(renderSystemType as RenderSystemType)) return null;
+  const entry = handlers.find((h) => h.type === renderSystemType);
+  // Hide while the catalog is still loading — avoid a brief flash of
+  // "Will render as AI Video" on real handlers when react-query hasn't
+  // resolved yet.
+  if (handlers.length === 0) return null;
+  if (!entry || entry.available) return null;
   return (
     <span
       className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium uppercase tracking-wider"
@@ -425,11 +460,11 @@ export function RenderedAsBadge({
 }) {
   if (!lastRender) return null;
   const resolved = lastRender.resolvedHandler;
-  const style = (TYPE_STYLES as any)[resolved] ?? PENDING_STYLE;
-  const label = (TYPE_LABELS as any)[resolved] ?? resolved;
+  const style = styleFor(resolved);
+  const label = labelFor(resolved);
   const fallback = lastRender.fallback;
   const tooltip = fallback
-    ? `Fell back from ${(TYPE_LABELS as any)[fallback.from] ?? fallback.from}: ${fallback.reason}`
+    ? `Fell back from ${labelFor(fallback.from)}: ${fallback.reason}`
     : `Last rendered ${new Date(lastRender.renderedAt).toLocaleString()}${lastRender.provider ? ` (${lastRender.provider})` : ""}`;
   return (
     <span className="inline-flex items-center gap-1" data-testid="rendered-as-badge">
@@ -477,10 +512,8 @@ export function ManualClassifiedFallbackToast({
       // localStorage unavailable (private mode) — fall through and toast
       // anyway. Worst case is duplicate toasts on remount.
     }
-    const fromLabel =
-      (TYPE_LABELS as any)[lastRender.fallback.from] ?? lastRender.fallback.from;
-    const toLabel =
-      (TYPE_LABELS as any)[lastRender.fallback.to] ?? lastRender.fallback.to;
+    const fromLabel = labelFor(lastRender.fallback.from);
+    const toLabel = labelFor(lastRender.fallback.to);
     toast({
       title: `Manual choice fell back: ${fromLabel} → ${toLabel}`,
       description: lastRender.fallback.reason,
@@ -491,75 +524,149 @@ export function ManualClassifiedFallbackToast({
 
 /** Phase 23B (Task #174): "Re-render upgraded scenes" — small inline
  *  button that POSTs to /re-render-upgraded-scenes for the current
- *  project. Hidden when no scenes qualify (none have been rendered yet,
- *  or all classifications still match their last handler). */
+ *  project after the user confirms a per-type breakdown in the
+ *  AlertDialog (shadcn-themed; no native confirm). Hidden when no
+ *  scenes qualify (none have been rendered yet, or all classifications
+ *  still match their last handler). */
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+
+interface ReRenderUpgradeRow {
+  sceneId: string;
+  from: string;
+  to: string;
+}
+
 export function ReRenderUpgradedScenesButton({
   scenes,
   projectId,
 }: {
-  scenes: any[];
+  scenes: Array<{ id?: string; renderSystemType?: string; lastRender?: SceneRenderRecord }>;
   projectId: string;
 }) {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
-  const upgradedCount = scenes.filter((s) => {
-    const last = s?.lastRender as { resolvedHandler?: string } | undefined;
-    if (!last?.resolvedHandler) return false;
-    const current = s?.renderSystemType ?? "ai_video";
-    return current !== last.resolvedHandler;
-  }).length;
+  const upgradedRows: ReRenderUpgradeRow[] = scenes
+    .filter((s) => {
+      const last = s?.lastRender;
+      if (!last?.resolvedHandler) return false;
+      const current = s?.renderSystemType ?? "ai_video";
+      return current !== last.resolvedHandler;
+    })
+    .map((s) => ({
+      sceneId: s.id ?? "",
+      from: s.lastRender?.resolvedHandler ?? "unknown",
+      to: s.renderSystemType ?? "ai_video",
+    }));
 
-  if (upgradedCount === 0) return null;
+  if (upgradedRows.length === 0) return null;
+
+  const breakdown = upgradedRows.reduce<Record<string, number>>((acc, r) => {
+    const key = `${labelFor(r.from)} → ${labelFor(r.to)}`;
+    acc[key] = (acc[key] ?? 0) + 1;
+    return acc;
+  }, {});
+
+  const handleConfirm = async () => {
+    setIsLoading(true);
+    try {
+      const res = await fetch(
+        `/api/universal-video/projects/${projectId}/re-render-upgraded-scenes`,
+        { method: "POST", credentials: "include" },
+      );
+      const body = (await res.json().catch(() => ({}))) as {
+        success?: boolean;
+        queued?: number;
+        breakdown?: Record<string, number>;
+        error?: string;
+      };
+      if (!res.ok || !body?.success) {
+        throw new Error(body?.error || `HTTP ${res.status}`);
+      }
+      toast({
+        title: `Queued ${body.queued ?? 0} scene${body.queued === 1 ? "" : "s"}`,
+        description: "Upgraded scenes are re-rendering with their new handlers.",
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      toast({ title: "Re-render failed", description: msg, variant: "destructive" });
+    } finally {
+      setIsLoading(false);
+      setConfirmOpen(false);
+    }
+  };
 
   return (
-    <button
-      type="button"
-      disabled={isLoading}
-      onClick={async () => {
-        setIsLoading(true);
-        try {
-          const res = await fetch(
-            `/api/universal-video/projects/${projectId}/re-render-upgraded-scenes`,
-            { method: "POST", credentials: "include" },
-          );
-          const body = await res.json().catch(() => ({}));
-          if (!res.ok || !body?.success) {
-            throw new Error(body?.error || `HTTP ${res.status}`);
-          }
-          toast({
-            title: `Queued ${body.queued} scene${body.queued === 1 ? "" : "s"}`,
-            description: "Upgraded scenes are re-rendering with their new handlers.",
-          });
-        } catch (err: any) {
-          toast({
-            title: "Re-render failed",
-            description: err?.message || String(err),
-            variant: "destructive",
-          });
-        } finally {
-          setIsLoading(false);
-        }
-      }}
-      className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-medium border transition-colors disabled:opacity-60"
-      style={{
-        color: "rgb(167,139,250)",
-        backgroundColor: "rgba(124,58,237,0.10)",
-        borderColor: "rgba(124,58,237,0.35)",
-      }}
-      data-testid="re-render-upgraded-scenes-button"
-    >
-      {isLoading ? (
-        <span
-          className="inline-block h-2.5 w-2.5 rounded-full border-[1.5px] border-current border-t-transparent animate-spin"
-          aria-hidden
-        />
-      ) : null}
-      <span>
-        {isLoading
-          ? "Re-rendering…"
-          : `Re-render ${upgradedCount} upgraded scene${upgradedCount === 1 ? "" : "s"}`}
-      </span>
-    </button>
+    <>
+      <button
+        type="button"
+        disabled={isLoading}
+        onClick={() => setConfirmOpen(true)}
+        className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-medium border transition-colors disabled:opacity-60"
+        style={{
+          color: "rgb(167,139,250)",
+          backgroundColor: "rgba(124,58,237,0.10)",
+          borderColor: "rgba(124,58,237,0.35)",
+        }}
+        data-testid="re-render-upgraded-scenes-button"
+      >
+        {isLoading ? (
+          <span
+            className="inline-block h-2.5 w-2.5 rounded-full border-[1.5px] border-current border-t-transparent animate-spin"
+            aria-hidden
+          />
+        ) : null}
+        <span>
+          {isLoading
+            ? "Re-rendering…"
+            : `Re-render ${upgradedRows.length} upgraded scene${upgradedRows.length === 1 ? "" : "s"}`}
+        </span>
+      </button>
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Re-render {upgradedRows.length} upgraded scene
+              {upgradedRows.length === 1 ? "" : "s"}?
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3">
+                <p>
+                  Each scene below will be re-rendered with its new render system.
+                  This consumes credits per scene.
+                </p>
+                <ul
+                  className="text-xs space-y-1 mt-2"
+                  data-testid="re-render-upgraded-breakdown"
+                >
+                  {Object.entries(breakdown).map(([k, v]) => (
+                    <li key={k}>
+                      <span className="font-medium">{v}</span>
+                      <span className="opacity-70"> · {k}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isLoading}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirm} disabled={isLoading}>
+              {isLoading ? "Queuing…" : "Re-render"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }

@@ -577,6 +577,23 @@ class VideoGenerationWorker {
               // dispatchRender below. The scene reference is local to
               // this try block, so we copy what the router needs.
               resolvedRenderSystemType = (scene as any).renderSystemType as RenderSystemType | undefined;
+              // Flatten brand/product references into the snapshot so
+              // ProductShowcaseHandler can resolve omni_reference inputs
+              // without reaching back into the project graph.
+              const sceneBrandRefs: string[] = Array.isArray((scene as any).brandReferences)
+                ? ((scene as any).brandReferences as Array<{ url?: string; imageUrl?: string }>)
+                    .map((r) => r?.url || r?.imageUrl)
+                    .filter((u): u is string => typeof u === 'string' && u.length > 0)
+                : [];
+              const projectBrandKit: any =
+                (projectData as any).brand?.assets?.productImages ??
+                (projectData as any).brandAssets?.productImages ??
+                [];
+              const productImgUrls: string[] = Array.isArray(projectBrandKit)
+                ? projectBrandKit
+                    .map((p: any) => (typeof p === 'string' ? p : p?.url || p?.imageUrl))
+                    .filter((u: any): u is string => typeof u === 'string' && u.length > 0)
+                : [];
               sceneSnapshotForRouter = {
                 id: baseSceneId,
                 sceneType: (scene as any).type,
@@ -585,6 +602,9 @@ class VideoGenerationWorker {
                 imagePrompt: (scene as any).imagePrompt,
                 renderSystemType: resolvedRenderSystemType,
                 manuallyClassified: !!(scene as any).manuallyClassified,
+                classifierConfidence: (scene as any).classifierConfidence,
+                brandReferenceUrls: sceneBrandRefs.length > 0 ? sceneBrandRefs : undefined,
+                productImageUrls: productImgUrls.length > 0 ? productImgUrls : undefined,
               };
               const projectArtPreset = projectData.progress?.artPresetId || projectData.artPresetId;
               jobArtPresetId = snapshotArtPresetId || scene.artPresetId || projectArtPreset;

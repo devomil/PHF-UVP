@@ -192,7 +192,7 @@ describe('dispatchRender', () => {
     );
   });
 
-  it('still persists lastRender + re-throws when handler throws', async () => {
+  it('does NOT persist lastRender on handler throw — worker lifecycle owns the failure write', async () => {
     const throwing: SceneRenderHandler = {
       type: 'ai_video',
       render: vi.fn().mockRejectedValue(new Error('provider down')),
@@ -209,17 +209,55 @@ describe('dispatchRender', () => {
       }),
     ).rejects.toThrow('provider down');
 
-    expect(patchSceneAtomicMock).toHaveBeenCalledWith(
-      'p1',
-      's1',
-      expect.objectContaining({
-        lastRender: expect.objectContaining({
-          renderSystemType: 'ai_video',
-          resolvedHandler: 'ai_video',
-          error: 'provider down',
-        }),
-      }),
-    );
+    // Per Phase 23B spec: throws bypass lastRender persistence.
+    expect(patchSceneAtomicMock).not.toHaveBeenCalled();
+  });
+
+  it('passes through to ai_video when classifierConfidence is 0 (classifier-error sentinel)', async () => {
+    const ai = makeHandler('ai_video');
+    const product = makeHandler('product_showcase');
+    registerRenderHandler(ai);
+    registerRenderHandler(product);
+
+    const result = await dispatchRender({
+      scene: {
+        id: 's1',
+        renderSystemType: 'product_showcase',
+        classifierConfidence: 0,
+        manuallyClassified: false,
+      },
+      projectId: 'p1',
+      sceneId: 's1',
+      jobId: 'j1',
+      options: baseOptions,
+    });
+
+    expect(product.calls.length).toBe(0);
+    expect(ai.calls.length).toBe(1);
+    expect(result.resolvedHandler).toBe('ai_video');
+  });
+
+  it('respects manually-classified scenes even when classifierConfidence is 0', async () => {
+    const ai = makeHandler('ai_video');
+    const product = makeHandler('product_showcase');
+    registerRenderHandler(ai);
+    registerRenderHandler(product);
+
+    await dispatchRender({
+      scene: {
+        id: 's1',
+        renderSystemType: 'product_showcase',
+        classifierConfidence: 0,
+        manuallyClassified: true,
+      },
+      projectId: 'p1',
+      sceneId: 's1',
+      jobId: 'j1',
+      options: baseOptions,
+    });
+
+    expect(product.calls.length).toBe(1);
+    expect(ai.calls.length).toBe(0);
   });
 
   it('lastRender write failure is non-fatal — handler result still returned', async () => {
