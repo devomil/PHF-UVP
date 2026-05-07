@@ -2,9 +2,11 @@ import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
 import { Strategy as GoogleStrategy } from "passport-google-oauth20";
 import { Strategy as FacebookStrategy } from "passport-facebook";
+// @ts-ignore — no type definitions published for passport-apple
+import { Strategy as AppleStrategy } from "passport-apple";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
-import { type Express, type Request, type Response, type NextFunction } from "express";
+import { type Express, type Request, type Response, type NextFunction, urlencoded } from "express";
 import { runWithUserContext } from "./services/user-context";
 import bcrypt from "bcrypt";
 import { db, pool } from "./db";
@@ -17,7 +19,7 @@ const ADMIN_EMAILS = [
   "ryan@pinehillfarm.co",
 ];
 
-type OAuthProviderName = "google" | "facebook";
+type OAuthProviderName = "google" | "facebook" | "apple";
 
 function isGoogleConfigured() {
   return !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
@@ -25,6 +27,41 @@ function isGoogleConfigured() {
 
 function isFacebookConfigured() {
   return !!(process.env.FACEBOOK_APP_ID && process.env.FACEBOOK_APP_SECRET);
+}
+
+function isAppleConfigured() {
+  return !!(
+    process.env.APPLE_CLIENT_ID &&
+    process.env.APPLE_TEAM_ID &&
+    process.env.APPLE_KEY_ID &&
+    process.env.APPLE_PRIVATE_KEY
+  );
+}
+
+// Apple distributes the .p8 key as a multiline PEM. When that's stuffed into
+// an env var, newlines are commonly escaped as `\n`. Restore real newlines
+// so passport-apple's JWT signer can parse the key.
+function appleNormalizedPrivateKey(): string {
+  const raw = process.env.APPLE_PRIVATE_KEY || "";
+  return raw.includes("\\n") ? raw.replace(/\\n/g, "\n") : raw;
+}
+
+interface AppleIdTokenPayload {
+  sub?: string;
+  email?: string;
+  email_verified?: boolean | string;
+  is_private_email?: boolean | string;
+}
+
+function decodeAppleIdToken(idToken: string): AppleIdTokenPayload | null {
+  try {
+    const parts = idToken.split(".");
+    if (parts.length < 2) return null;
+    const payload = Buffer.from(parts[1].replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8");
+    return JSON.parse(payload);
+  } catch {
+    return null;
+  }
 }
 
 function isCanvaLoginEnabled() {
@@ -429,10 +466,94 @@ export function setupAuth(app: Express) {
     console.log("[Auth] Facebook OAuth disabled (set FACEBOOK_APP_ID + FACEBOOK_APP_SECRET to enable)");
   }
 
+  // ---- Apple OAuth (Sign in with Apple) ----
+  if (isAppleConfigured()) {
+    passport.use(
+      new AppleStrategy(
+        {
+          clientID: process.env.APPLE_CLIENT_ID!,
+          teamID: process.env.APPLE_TEAM_ID!,
+          keyID: process.env.APPLE_KEY_ID!,
+          privateKeyString: appleNormalizedPrivateKey(),
+          callbackURL: callbackUrl(process.env.APPLE_CALLBACK_URL, "/api/auth/apple/callback"),
+          passReqToCallback: true,
+          scope: ["name", "email"],
+        },
+        async (
+          req: Request,
+          _accessToken: string,
+          _refreshToken: string,
+          idToken: string,
+          _profile: unknown,
+          done: (err: Error | null, user?: unknown, info?: { message?: string }) => void,
+        ) => {
+          try {
+            const decoded = decodeAppleIdToken(idToken);
+            if (!decoded?.sub) {
+              return done(null, false, { message: "Apple did not return an account identifier" });
+            }
+            const email = decoded.email || null;
+            // Apple's id_token only includes claims for accounts they've verified;
+            // `email_verified` arrives as the string "true" (or boolean) per Apple's spec.
+            // Private-relay addresses (`@privaterelay.appleid.com`) are also Apple-verified.
+            const emailVerified =
+              decoded.email_verified === true ||
+              decoded.email_verified === "true" ||
+              decoded.is_private_email === true ||
+              decoded.is_private_email === "true";
+
+            // Apple sends the user's name only on the very first authorization, in
+            // the form_post body as a JSON-encoded `user` field. passport-apple
+            // pre-parses this onto req.appleProfile.
+            const appleProfile = (req as Request & { appleProfile?: { name?: { firstName?: string; lastName?: string } } })
+              .appleProfile;
+            const firstName = appleProfile?.name?.firstName || null;
+            const lastName = appleProfile?.name?.lastName || null;
+
+            const user = await linkOrCreateOAuthUser({
+              provider: "apple",
+              providerAccountId: decoded.sub,
+              email,
+              emailVerified,
+              firstName,
+              lastName,
+              profileImageUrl: null,
+              accessToken: _accessToken || null,
+              refreshToken: _refreshToken || null,
+            });
+            done(null, user);
+          } catch (err) {
+            if (err instanceof OAuthUserError) {
+              return done(null, false, { message: err.message });
+            }
+            done(err as Error);
+          }
+        },
+      ),
+    );
+    // Apple posts the callback as application/x-www-form-urlencoded; ensure the
+    // body parser is wired before passport reads `code`/`state`/`user` fields.
+    const appleBodyParser = urlencoded({ extended: false });
+    app.get(
+      "/api/auth/apple",
+      passport.authenticate("apple", { state: true }),
+    );
+    app.post(
+      "/api/auth/apple/callback",
+      appleBodyParser,
+      passport.authenticate("apple", { failureRedirect: "/auth?error=oauth_apple", state: true }),
+      (_req, res) => res.redirect("/"),
+    );
+    console.log("[Auth] Apple OAuth strategy registered");
+  } else {
+    console.log("[Auth] Apple OAuth disabled (set APPLE_CLIENT_ID + APPLE_TEAM_ID + APPLE_KEY_ID + APPLE_PRIVATE_KEY to enable)");
+  }
+
   app.get("/api/auth/providers", (_req, res) => {
     res.json({
       google: isGoogleConfigured(),
       facebook: isFacebookConfigured(),
+      apple: isAppleConfigured(),
       canva: isCanvaLoginEnabled(),
     });
   });

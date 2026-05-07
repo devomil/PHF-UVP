@@ -9,12 +9,14 @@ import neuralcutIcon from "@/assets/neuralcut-icon.png";
 interface ProviderConfig {
   google: boolean;
   facebook: boolean;
+  apple: boolean;
   canva: boolean;
 }
 
 const OAUTH_ERRORS: Record<string, string> = {
   oauth_google: "Sign-in with Google didn't complete. Please try again.",
   oauth_facebook: "Sign-in with Facebook didn't complete. Please try again.",
+  oauth_apple: "Sign-in with Apple didn't complete. Please try again.",
 };
 
 function GoogleIcon() {
@@ -33,6 +35,14 @@ function FacebookIcon() {
   );
 }
 
+function AppleIcon() {
+  return (
+    <svg className="w-4 h-4" viewBox="0 0 24 24" aria-hidden="true">
+      <path fill="currentColor" d="M16.365 12.71c-.02-2.04 1.66-3.02 1.74-3.07-.95-1.39-2.43-1.58-2.96-1.6-1.26-.13-2.46.74-3.1.74-.65 0-1.63-.72-2.69-.7-1.38.02-2.66.81-3.37 2.05-1.44 2.5-.37 6.18 1.04 8.2.69 1 1.5 2.11 2.57 2.07 1.04-.04 1.43-.67 2.69-.67 1.25 0 1.61.67 2.7.65 1.12-.02 1.82-1.01 2.5-2.01.79-1.16 1.11-2.28 1.13-2.34-.03-.01-2.16-.83-2.18-3.31zM14.36 6.4c.57-.69.95-1.65.85-2.6-.82.03-1.81.55-2.4 1.24-.53.61-.99 1.59-.86 2.52.91.07 1.84-.46 2.41-1.16z"/>
+    </svg>
+  );
+}
+
 export default function AuthPage() {
   const { loginMutation, registerMutation } = useAuth();
   const { theme, toggleTheme } = useTheme();
@@ -41,7 +51,7 @@ export default function AuthPage() {
   const [password, setPassword] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
-  const [providers, setProviders] = useState<ProviderConfig>({ google: false, facebook: false, canva: false });
+  const [providers, setProviders] = useState<ProviderConfig>({ google: false, facebook: false, apple: false, canva: false });
   const [oauthError, setOauthError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -72,7 +82,7 @@ export default function AuthPage() {
 
   const error = isLogin ? loginMutation.error : registerMutation.error;
   const isPending = loginMutation.isPending || registerMutation.isPending;
-  const showSocial = providers.google || providers.facebook;
+  const showSocial = providers.google || providers.facebook || providers.apple;
 
   return (
     <div className="min-h-screen flex relative" style={{ backgroundColor: "var(--app-bg)" }}>
@@ -177,6 +187,18 @@ export default function AuthPage() {
                   >
                     <FacebookIcon />
                     <span>Continue with Facebook</span>
+                  </a>
+                )}
+                {providers.apple && (
+                  <a
+                    href="/api/auth/apple"
+                    className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-sm font-medium transition-colors"
+                    style={{ backgroundColor: "var(--input-bg)", border: "1px solid var(--input-border)", color: "var(--text-primary)" }}
+                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--surface-hover)")}
+                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "var(--input-bg)")}
+                  >
+                    <AppleIcon />
+                    <span>Continue with Apple</span>
                   </a>
                 )}
                 <div className="flex items-center gap-3 pt-2">
