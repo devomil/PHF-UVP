@@ -27,6 +27,26 @@ function isFacebookConfigured() {
   return !!(process.env.FACEBOOK_APP_ID && process.env.FACEBOOK_APP_SECRET);
 }
 
+function isCanvaLoginEnabled() {
+  // Exploratory feature flag — Canva login is not implemented yet, but the
+  // /api/auth/providers contract surfaces the flag so the client can opt in
+  // once the strategy lands.
+  const v = (process.env.ENABLE_CANVA_LOGIN || "").toLowerCase();
+  return v === "1" || v === "true" || v === "yes";
+}
+
+interface GoogleProfileJson {
+  email_verified?: boolean;
+  picture?: string;
+}
+interface FacebookProfileName {
+  givenName?: string;
+  familyName?: string;
+}
+interface FacebookProfilePhoto {
+  value?: string;
+}
+
 function callbackUrl(envVar: string | undefined, fallbackPath: string) {
   if (envVar) return envVar;
   const base = process.env.APP_URL || process.env.PUBLIC_URL || "";
@@ -46,8 +66,9 @@ interface LinkOrCreateInput {
   expiresAt?: Date | null;
 }
 
-function isUniqueViolation(err: any): boolean {
-  return err?.code === "23505" || /duplicate key|unique constraint/i.test(err?.message || "");
+function isUniqueViolation(err: unknown): boolean {
+  const e = err as { code?: string; message?: string } | null;
+  return e?.code === "23505" || /duplicate key|unique constraint/i.test(e?.message || "");
 }
 
 async function findOAuthLink(provider: string, providerAccountId: string) {
@@ -194,7 +215,7 @@ async function linkOrCreateOAuthUser(input: LinkOrCreateInput) {
   return newUser;
 }
 
-async function promoteAdminIfAllowlisted(user: any) {
+async function promoteAdminIfAllowlisted<T extends { id: string; email: string | null; role: string | null }>(user: T): Promise<T> {
   if (ADMIN_EMAILS.includes((user.email || "").toLowerCase()) && user.role !== "admin") {
     await db.update(users).set({ role: "admin" }).where(eq(users.id, user.id));
     user.role = "admin";
@@ -294,7 +315,8 @@ export function setupAuth(app: Express) {
           try {
             const email = profile.emails?.[0]?.value || null;
             // Google's userinfo includes email_verified on the raw profile json.
-            const emailVerified = (profile as any)._json?.email_verified === true;
+            const json = (profile as { _json?: GoogleProfileJson })._json;
+            const emailVerified = json?.email_verified === true;
             const user = await linkOrCreateOAuthUser({
               provider: "google",
               providerAccountId: profile.id,
@@ -313,10 +335,15 @@ export function setupAuth(app: Express) {
         },
       ),
     );
-    app.get("/api/auth/google", passport.authenticate("google", { scope: ["profile", "email"] }));
+    // `state: true` enables Passport's session-backed CSRF-state validation
+    // on both the initiate and callback routes, preventing login-CSRF.
+    app.get(
+      "/api/auth/google",
+      passport.authenticate("google", { scope: ["profile", "email"], state: true }),
+    );
     app.get(
       "/api/auth/google/callback",
-      passport.authenticate("google", { failureRedirect: "/auth?error=oauth_google" }),
+      passport.authenticate("google", { failureRedirect: "/auth?error=oauth_google", state: true }),
       (_req, res) => res.redirect("/"),
     );
     console.log("[Auth] Google OAuth strategy registered");
@@ -337,17 +364,18 @@ export function setupAuth(app: Express) {
         async (accessToken, refreshToken, profile, done) => {
           try {
             const email = profile.emails?.[0]?.value || null;
-            const photo = (profile.photos?.[0] as any)?.value || null;
+            const photo = (profile.photos?.[0] as FacebookProfilePhoto | undefined)?.value || null;
             // Facebook only returns the email field for accounts that have
             // verified the address; we treat presence as confirmation.
             const emailVerified = !!email;
+            const name = profile.name as FacebookProfileName | undefined;
             const user = await linkOrCreateOAuthUser({
               provider: "facebook",
               providerAccountId: profile.id,
               email,
               emailVerified,
-              firstName: (profile.name as any)?.givenName || null,
-              lastName: (profile.name as any)?.familyName || null,
+              firstName: name?.givenName || null,
+              lastName: name?.familyName || null,
               profileImageUrl: photo,
               accessToken: accessToken || null,
               refreshToken: refreshToken || null,
@@ -359,10 +387,13 @@ export function setupAuth(app: Express) {
         },
       ),
     );
-    app.get("/api/auth/facebook", passport.authenticate("facebook", { scope: ["email"] }));
+    app.get(
+      "/api/auth/facebook",
+      passport.authenticate("facebook", { scope: ["email"], state: true }),
+    );
     app.get(
       "/api/auth/facebook/callback",
-      passport.authenticate("facebook", { failureRedirect: "/auth?error=oauth_facebook" }),
+      passport.authenticate("facebook", { failureRedirect: "/auth?error=oauth_facebook", state: true }),
       (_req, res) => res.redirect("/"),
     );
     console.log("[Auth] Facebook OAuth strategy registered");
@@ -374,7 +405,7 @@ export function setupAuth(app: Express) {
     res.json({
       google: isGoogleConfigured(),
       facebook: isFacebookConfigured(),
-      canva: false,
+      canva: isCanvaLoginEnabled(),
     });
   });
 
