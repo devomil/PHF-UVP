@@ -1,6 +1,108 @@
 import { useQuery } from "@tanstack/react-query";
 import { AdminLayout } from "./admin-layout";
-import { Users, FolderKanban, Video, DollarSign, TrendingUp, AlertCircle, CheckCircle, Clock } from "lucide-react";
+import { Users, FolderKanban, Video, DollarSign, TrendingUp, AlertCircle, CheckCircle, Clock, RefreshCw, Cpu } from "lucide-react";
+
+function RenderRouterPanel() {
+  const { data, isLoading, isFetching, refetch, error } = useQuery({
+    queryKey: ["admin-render-router-registry"],
+    queryFn: async () => {
+      const res = await fetch("/api/universal-video/admin/render-router/registry", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to load render-router registry");
+      return res.json() as Promise<{ success: boolean; registered: string[]; missing: string[] }>;
+    },
+    refetchOnMount: "always",
+  });
+
+  const registered = data?.registered ?? [];
+  const missing = data?.missing ?? [];
+
+  return (
+    <div
+      className="rounded-xl p-5 border mt-6"
+      style={{ background: "var(--bg-secondary)", borderColor: "var(--border-subtle)" }}
+      data-testid="admin-render-router-panel"
+    >
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <Cpu className="w-4 h-4" style={{ color: "#8b5cf6" }} />
+          <h3 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+            Render Router Status
+          </h3>
+        </div>
+        <button
+          type="button"
+          onClick={() => refetch()}
+          disabled={isFetching}
+          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border transition-opacity disabled:opacity-50"
+          style={{ background: "var(--bg-tertiary)", borderColor: "var(--border-subtle)", color: "var(--text-secondary)" }}
+          data-testid="admin-render-router-refresh"
+        >
+          <RefreshCw className={`w-3 h-3 ${isFetching ? "animate-spin" : ""}`} />
+          Refresh
+        </button>
+      </div>
+
+      {isLoading ? (
+        <div className="h-24 animate-pulse rounded-md" style={{ background: "var(--bg-tertiary)" }} />
+      ) : error ? (
+        <p className="text-sm text-red-500">Failed to load render-router registry.</p>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <CheckCircle className="w-4 h-4 text-green-500" />
+              <span className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
+                Registered handlers ({registered.length})
+              </span>
+            </div>
+            {registered.length === 0 ? (
+              <p className="text-xs" style={{ color: "var(--text-muted)" }}>None registered.</p>
+            ) : (
+              <div className="flex flex-wrap gap-1.5" data-testid="admin-render-router-registered">
+                {registered.map((t) => (
+                  <span
+                    key={t}
+                    className="px-2 py-0.5 rounded text-xs font-mono"
+                    style={{ background: "#10b98120", color: "#10b981" }}
+                  >
+                    {t}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <AlertCircle className="w-4 h-4 text-yellow-500" />
+              <span className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
+                Missing handlers ({missing.length})
+              </span>
+            </div>
+            <p className="text-[11px] mb-2" style={{ color: "var(--text-muted)" }}>
+              These scene types fall back to AI Video until a handler ships.
+            </p>
+            {missing.length === 0 ? (
+              <p className="text-xs" style={{ color: "var(--text-muted)" }}>All declared types have handlers.</p>
+            ) : (
+              <div className="flex flex-wrap gap-1.5" data-testid="admin-render-router-missing">
+                {missing.map((t) => (
+                  <span
+                    key={t}
+                    className="px-2 py-0.5 rounded text-xs font-mono"
+                    style={{ background: "#f59e0b20", color: "#f59e0b" }}
+                  >
+                    {t}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function StatCard({ label, value, sub, icon: Icon, color }: { label: string; value: string | number; sub?: string; icon: any; color: string }) {
   return (
@@ -149,6 +251,8 @@ export default function AdminDashboard() {
       ) : (
         <p style={{ color: "var(--text-muted)" }}>Failed to load dashboard data.</p>
       )}
+
+      <RenderRouterPanel />
     </AdminLayout>
   );
 }
