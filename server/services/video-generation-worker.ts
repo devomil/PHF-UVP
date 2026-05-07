@@ -594,6 +594,13 @@ class VideoGenerationWorker {
                     .map((p: any) => (typeof p === 'string' ? p : p?.url || p?.imageUrl))
                     .filter((u: any): u is string => typeof u === 'string' && u.length > 0)
                 : [];
+              // Phase 24A (Task #175): TitleCardHandler reads brand
+              // colors / heading font / logo from the snapshot so the
+              // Remotion composition can render on-brand without
+              // reaching back into the project graph.
+              const projectBrand: any = (projectData as any).brand || {};
+              const projectBrandColors: any = projectBrand.colors || {};
+              const projectBrandFonts: any = projectBrand.fonts || {};
               sceneSnapshotForRouter = {
                 id: baseSceneId,
                 sceneType: (scene as any).type,
@@ -605,6 +612,11 @@ class VideoGenerationWorker {
                 classifierConfidence: (scene as any).classifierConfidence,
                 brandReferenceUrls: sceneBrandRefs.length > 0 ? sceneBrandRefs : undefined,
                 productImageUrls: productImgUrls.length > 0 ? productImgUrls : undefined,
+                brandPrimaryColor: typeof projectBrandColors.primary === 'string' ? projectBrandColors.primary : undefined,
+                brandSecondaryColor: typeof projectBrandColors.secondary === 'string' ? projectBrandColors.secondary : undefined,
+                brandTextColor: typeof projectBrandColors.text === 'string' ? projectBrandColors.text : undefined,
+                brandHeadingFont: typeof projectBrandFonts.heading === 'string' ? projectBrandFonts.heading : undefined,
+                brandLogoUrl: typeof projectBrand.logoUrl === 'string' && projectBrand.logoUrl.length > 0 ? projectBrand.logoUrl : undefined,
               };
               const projectArtPreset = projectData.progress?.artPresetId || projectData.artPresetId;
               jobArtPresetId = snapshotArtPresetId || scene.artPresetId || projectArtPreset;

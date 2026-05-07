@@ -6,8 +6,8 @@ import { registerRenderHandler } from '../render-system-router';
 import { aiVideoHandler } from './ai-video.handler';
 import { brandEnvironmentHandler } from './brand-environment.handler';
 import { productShowcaseHandler } from './product-showcase.handler';
+import { titleCardHandler } from './title-card.handler';
 import {
-  titleCardStubHandler,
   infographicStubHandler,
   scientificMedicalStubHandler,
   ugcAvatarStubHandler,
@@ -24,19 +24,19 @@ export function registerAllRenderHandlers(): void {
   registerRenderHandler(aiVideoHandler);
   registerRenderHandler(brandEnvironmentHandler);
   registerRenderHandler(productShowcaseHandler);
-  registerRenderHandler(titleCardStubHandler);
+  registerRenderHandler(titleCardHandler);
   registerRenderHandler(infographicStubHandler);
   registerRenderHandler(scientificMedicalStubHandler);
   registerRenderHandler(ugcAvatarStubHandler);
 
-  console.log('[RenderRouter] Registered 7 render handlers (3 real + 4 stubs)');
+  console.log('[RenderRouter] Registered 7 render handlers (4 real + 3 stubs)');
 }
 
 export {
   aiVideoHandler,
   brandEnvironmentHandler,
   productShowcaseHandler,
-  titleCardStubHandler,
+  titleCardHandler,
   infographicStubHandler,
   scientificMedicalStubHandler,
   ugcAvatarStubHandler,

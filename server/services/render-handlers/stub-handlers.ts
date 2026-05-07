@@ -45,6 +45,10 @@ class StubHandler implements SceneRenderHandler {
   }
 }
 
+// Note: titleCardStubHandler was promoted to a real handler in Task #175
+// (see ./title-card.handler.ts). Kept here intentionally as a deprecated
+// export — currently unused by index.ts but available for tests that
+// want to pin the stub behaviour.
 export const titleCardStubHandler = new StubHandler('title_card', 'Phase 24A');
 export const infographicStubHandler = new StubHandler('infographic', 'Phase 24B');
 export const scientificMedicalStubHandler = new StubHandler('scientific_medical', 'Phase 25');

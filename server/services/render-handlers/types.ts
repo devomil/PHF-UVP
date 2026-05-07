@@ -47,6 +47,14 @@ export interface SceneSnapshot {
   /** S3 URLs from the project's brand kit product images — used as the
    *  same fallback source for ProductShowcase. */
   productImageUrls?: string[];
+  /** Phase 24A (Task #175): brand-kit fields used by the title-card
+   *  handler to render an on-brand animated title. All optional —
+   *  handler falls back to neutral defaults when any field is absent. */
+  brandPrimaryColor?: string;
+  brandSecondaryColor?: string;
+  brandTextColor?: string;
+  brandHeadingFont?: string;
+  brandLogoUrl?: string;
 }
 
 export interface RenderHandlerContext {

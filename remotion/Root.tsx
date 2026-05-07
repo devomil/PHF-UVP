@@ -4,8 +4,23 @@ import type { VideoCompositionProps } from "./VideoComposition";
 import { UniversalVideoComposition } from "./UniversalVideoComposition";
 import type { UniversalVideoProps } from "./UniversalVideoComposition";
 import { BroadcastVideoComposition, BroadcastInputProps } from "./BroadcastVideoComposition";
+import {
+  TitleCardComposition,
+  DEFAULT_TITLE_CARD_PROPS,
+  type TitleCardInputProps,
+} from "./compositions/TitleCardComposition";
 import { PINE_HILL_FARM_BRAND, OUTPUT_FORMATS } from "../shared/video-types";
 import { calculateEffectiveDurationInFrames } from "../shared/config/duration-math";
+
+const calculateTitleCardMetadata: CalculateMetadataFunction<
+  TitleCardInputProps & { durationSeconds?: number }
+> = async ({ props }) => {
+  const seconds = Math.max(1, Math.min(20, props.durationSeconds ?? 4));
+  return {
+    durationInFrames: Math.round(seconds * 30),
+    props,
+  };
+};
 
 const defaultUniversalProps: UniversalVideoProps = {
   scenes: [],
@@ -170,6 +185,42 @@ export const RemotionRoot: React.FC = () => {
         calculateMetadata={calculateBroadcastMetadata}
       />
       
+      {/* ═══════════════════════════════════════════════════════════════ */}
+      {/* TITLE CARD COMPOSITIONS (Phase 24A — Task #175)                 */}
+      {/* Rendered by the title_card render handler when a scene is       */}
+      {/* classified as an animated title / chapter card.                 */}
+      {/* ═══════════════════════════════════════════════════════════════ */}
+      <Composition
+        id="TitleCard"
+        component={TitleCardComposition}
+        durationInFrames={120}
+        fps={30}
+        width={1920}
+        height={1080}
+        defaultProps={DEFAULT_TITLE_CARD_PROPS}
+        calculateMetadata={calculateTitleCardMetadata}
+      />
+      <Composition
+        id="TitleCardVertical"
+        component={TitleCardComposition}
+        durationInFrames={120}
+        fps={30}
+        width={1080}
+        height={1920}
+        defaultProps={DEFAULT_TITLE_CARD_PROPS}
+        calculateMetadata={calculateTitleCardMetadata}
+      />
+      <Composition
+        id="TitleCardSquare"
+        component={TitleCardComposition}
+        durationInFrames={120}
+        fps={30}
+        width={1080}
+        height={1080}
+        defaultProps={DEFAULT_TITLE_CARD_PROPS}
+        calculateMetadata={calculateTitleCardMetadata}
+      />
+
       {/* Legacy Marketing Video Compositions */}
       <Composition
         id="MarketingVideo"
