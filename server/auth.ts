@@ -22,15 +22,15 @@ const ADMIN_EMAILS = [
 
 type OAuthProviderName = "google" | "facebook" | "apple";
 
-function isGoogleConfigured() {
+export function isGoogleConfigured() {
   return !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
 }
 
-function isFacebookConfigured() {
+export function isFacebookConfigured() {
   return !!(process.env.FACEBOOK_APP_ID && process.env.FACEBOOK_APP_SECRET);
 }
 
-function isAppleConfigured() {
+export function isAppleConfigured() {
   return !!(
     process.env.APPLE_CLIENT_ID &&
     process.env.APPLE_TEAM_ID &&
@@ -54,7 +54,7 @@ interface AppleIdTokenPayload {
   is_private_email?: boolean | string;
 }
 
-function decodeAppleIdToken(idToken: string): AppleIdTokenPayload | null {
+export function decodeAppleIdToken(idToken: string): AppleIdTokenPayload | null {
   try {
     const parts = idToken.split(".");
     if (parts.length < 2) return null;
@@ -65,7 +65,16 @@ function decodeAppleIdToken(idToken: string): AppleIdTokenPayload | null {
   }
 }
 
-function isCanvaLoginEnabled() {
+export function getProvidersStatus() {
+  return {
+    google: isGoogleConfigured(),
+    facebook: isFacebookConfigured(),
+    apple: isAppleConfigured(),
+    canva: isCanvaLoginEnabled(),
+  };
+}
+
+export function isCanvaLoginEnabled() {
   // Exploratory feature flag — Canva login is not implemented yet, but the
   // /api/auth/providers contract surfaces the flag so the client can opt in
   // once the strategy lands.
@@ -107,7 +116,7 @@ interface LinkOrCreateInput {
 // Thrown by linkOrCreateOAuthUser for expected validation failures (missing
 // email, unverified email). Strategy verify callbacks translate these into
 // `done(null, false, …)` so passport hits `failureRedirect` instead of 500.
-class OAuthUserError extends Error {
+export class OAuthUserError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "OAuthUserError";
@@ -127,7 +136,7 @@ async function findOAuthLink(provider: string, providerAccountId: string) {
   return row;
 }
 
-async function linkOrCreateOAuthUser(input: LinkOrCreateInput) {
+export async function linkOrCreateOAuthUser(input: LinkOrCreateInput) {
   const { provider, providerAccountId, email, emailVerified, firstName, lastName, profileImageUrl } = input;
   const normalizedEmail = email ? email.toLowerCase() : null;
 
@@ -551,12 +560,7 @@ export function setupAuth(app: Express) {
   }
 
   app.get("/api/auth/providers", (_req, res) => {
-    res.json({
-      google: isGoogleConfigured(),
-      facebook: isFacebookConfigured(),
-      apple: isAppleConfigured(),
-      canva: isCanvaLoginEnabled(),
-    });
+    res.json(getProvidersStatus());
   });
 
   app.post("/api/register", async (req: Request, res: Response) => {
