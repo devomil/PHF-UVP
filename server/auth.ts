@@ -66,6 +66,16 @@ interface LinkOrCreateInput {
   expiresAt?: Date | null;
 }
 
+// Thrown by linkOrCreateOAuthUser for expected validation failures (missing
+// email, unverified email). Strategy verify callbacks translate these into
+// `done(null, false, …)` so passport hits `failureRedirect` instead of 500.
+class OAuthUserError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "OAuthUserError";
+  }
+}
+
 function isUniqueViolation(err: unknown): boolean {
   const e = err as { code?: string; message?: string } | null;
   return e?.code === "23505" || /duplicate key|unique constraint/i.test(e?.message || "");
@@ -102,14 +112,14 @@ async function linkOrCreateOAuthUser(input: LinkOrCreateInput) {
   }
 
   if (!normalizedEmail) {
-    throw new Error(`${provider} account did not return an email — cannot sign in`);
+    throw new OAuthUserError(`${provider} account did not return an email — cannot sign in`);
   }
 
   // Refuse to link by email unless the provider says it's verified — prevents
   // a hijack where someone registers an OAuth account with someone else's
   // unverified email and lands inside their account.
   if (!emailVerified) {
-    throw new Error(
+    throw new OAuthUserError(
       `${provider} did not confirm this email is verified. Please verify your email with ${provider} and try again.`,
     );
   }
@@ -330,6 +340,9 @@ export function setupAuth(app: Express) {
             });
             done(null, user);
           } catch (err) {
+            if (err instanceof OAuthUserError) {
+              return done(null, false, { message: err.message });
+            }
             done(err as Error);
           }
         },
@@ -382,6 +395,9 @@ export function setupAuth(app: Express) {
             });
             done(null, user);
           } catch (err) {
+            if (err instanceof OAuthUserError) {
+              return done(null, false, { message: err.message });
+            }
             done(err as Error);
           }
         },
