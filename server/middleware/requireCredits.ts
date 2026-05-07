@@ -8,6 +8,7 @@
 import type { Request, Response, NextFunction, RequestHandler } from "express";
 import { canAccessProvider, canAfford, getCreditCost } from "../services/credits-service";
 import { minimumTierForProvider } from "../config/providerPermissions";
+import { isAdminUnlimited } from "../lib/admin";
 
 export interface RequireCreditsOptions {
   // Either a static provider id, or a function that derives it from the request.
@@ -58,6 +59,15 @@ export function requireCredits(opts: RequireCreditsOptions): RequestHandler {
     const durationS = resolveOpt(opts.durationS, req) ?? null;
 
     try {
+      // Admin-unlimited bypass — every provider is allowed, balance
+      // checks are skipped, and we still resolve the cost so downstream
+      // handlers can log the would-have-been spend.
+      if (isAdminUnlimited(req.user as { role?: string | null })) {
+        const gcCost = await getCreditCost(provider, quality, durationS);
+        req.creditCost = { provider, quality, durationS, gcCost };
+        return next();
+      }
+
       const allowed = await canAccessProvider(userId, provider);
       if (!allowed) {
         const required = minimumTierForProvider(provider);

@@ -13,7 +13,7 @@ import { useCredits } from "@/hooks/use-credits";
 import { useCreditModals } from "@/components/credits/credit-modals-provider";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { Button } from "@/components/ui/button";
-import { Sparkles, ArrowUpRight } from "lucide-react";
+import { Sparkles, ArrowUpRight, Infinity as InfinityIcon } from "lucide-react";
 
 const TONE_BAR: Record<string, string> = {
   calm: "from-emerald-400 to-emerald-500",
@@ -71,6 +71,54 @@ export function CreditMeter() {
   if (isLoading || !data) {
     return <div className="text-xs text-muted-foreground" data-testid="credit-meter-loading">…</div>;
   }
+
+  // Admin-unlimited posture — replace the four-tone meter with a single
+  // indigo "Unlimited · Admin" chip. Hover still surfaces the would-have
+  // -been usage so admins can sanity-check what their generations would
+  // cost a paying user.
+  if (data.unlimited) {
+    return (
+      <HoverCard openDelay={120} closeDelay={80}>
+        <HoverCardTrigger asChild>
+          <Link href="/billing" data-testid="credit-meter-link">
+            <div
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg border bg-gradient-to-br from-indigo-950/60 via-purple-950/40 to-slate-900/60 border-indigo-400/30 hover:border-indigo-300/60 hover:shadow-[0_0_24px_-8px] hover:shadow-indigo-400/40 transition-all cursor-pointer"
+              data-testid="credit-meter-unlimited"
+            >
+              <InfinityIcon className="w-3.5 h-3.5 text-indigo-300" />
+              <span className="text-xs font-semibold tabular-nums bg-clip-text text-transparent bg-gradient-to-r from-indigo-200 to-purple-200">
+                Unlimited
+              </span>
+              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-indigo-500/25 text-indigo-100">
+                Admin
+              </span>
+            </div>
+          </Link>
+        </HoverCardTrigger>
+        <HoverCardContent
+          side="bottom"
+          align="end"
+          className="w-72 p-4 border border-indigo-400/30 bg-gradient-to-b from-slate-950 to-indigo-950/40 backdrop-blur"
+        >
+          <div className="text-sm font-semibold flex items-center gap-1.5">
+            <InfinityIcon className="w-4 h-4 text-indigo-300" />
+            <span className="bg-clip-text text-transparent bg-gradient-to-r from-indigo-200 to-purple-200">
+              Admin · Unlimited credits
+            </span>
+          </div>
+          <p className="text-xs text-muted-foreground mt-2">
+            Generations don't charge your balance. Costs are still logged
+            for analytics so platform-wide spend stays accurate.
+          </p>
+          <div className="mt-3 text-xs flex justify-between">
+            <span className="text-muted-foreground">Spend this cycle</span>
+            <span className="tabular-nums">{data.monthlyUsedGC ?? 0} GC</span>
+          </div>
+        </HoverCardContent>
+      </HoverCard>
+    );
+  }
+
   const level = data.warningLevel ?? "calm";
   const pct = data.percentUsed ?? 0;
   const days = data.daysUntilReset;

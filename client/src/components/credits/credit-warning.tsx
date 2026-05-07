@@ -48,6 +48,9 @@ export function CreditWarning() {
   }, [data?.cycleStart]);
 
   if (!data) return null;
+  // Admin-unlimited: no insufficient/low state ever applies, so the
+  // banner is suppressed entirely.
+  if (data.unlimited) return null;
   const level = data.warningLevel ?? "calm";
   if (level === "calm") return null;
   if (level === "warning" && dismissed) return null;

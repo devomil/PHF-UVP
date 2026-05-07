@@ -21,6 +21,14 @@ export interface CreditSnapshot {
   warningLevel: CreditWarningLevel;
   percentUsed: number;
   daysUntilReset: number | null;
+  // Admin-unlimited posture (server-derived from user.role === "admin").
+  // When true the meter renders an "Unlimited · Admin" chip, the cost
+  // preview and generate button skip their insufficient/locked states,
+  // the warning banner hides entirely, and the upgrade/topup modals
+  // become no-ops. monthlyUsedGC is the would-have-been spend for the
+  // current cycle so the admin dashboard can still show usage.
+  unlimited?: boolean;
+  monthlyUsedGC?: number;
 }
 
 const KEY = ["/api/credits/balance"];
@@ -43,6 +51,12 @@ export function useCredits() {
     (gcAmount: number) => {
       qc.setQueryData<CreditSnapshot | undefined>(KEY, (old) => {
         if (!old) return old;
+        // Admin-unlimited: never decrement the displayed balance — the
+        // server doesn't either. Bumping monthlyUsedGC keeps the admin
+        // dashboard's "spent X GC of unlimited" honest between refetches.
+        if (old.unlimited) {
+          return { ...old, monthlyUsedGC: (old.monthlyUsedGC ?? 0) + gcAmount };
+        }
         const subSpend = Math.min(gcAmount, old.subscriptionGC);
         const topSpend = gcAmount - subSpend;
         return {

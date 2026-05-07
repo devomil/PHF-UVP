@@ -18,6 +18,7 @@ import { PLAN_CONFIG, type PlanTier } from "../config/plans";
 import { planAllowsProvider } from "../config/providerPermissions";
 import { eq, and } from "drizzle-orm";
 import { InsufficientCreditsError } from "./credit-errors";
+import { isAdminUnlimitedById } from "../lib/admin";
 // Lazy import to avoid a circular dependency: credit-notifications-service
 // imports `deriveWarning`/`deriveDaysUntilReset` from this module.
 type EvalUsageFn = (
@@ -69,7 +70,7 @@ async function runInTx<T>(
   return db.transaction(fn);
 }
 
-export type CreditSource = "subscription" | "topup" | "mixed";
+export type CreditSource = "subscription" | "topup" | "mixed" | "admin_unlimited";
 
 // Phase NC-02 — Server-derived warning level so the meter, banner, and
 // notification engine all read from the same source of truth.
@@ -89,6 +90,15 @@ export interface CreditSnapshot {
   warningLevel: CreditWarningLevel;
   percentUsed: number; // 0-100, computed against monthlyGC budget
   daysUntilReset: number | null; // floor of days from now → cycleEnd; null if no cycleEnd
+  // Admin-unlimited posture (set only for users with role="admin"). Drives
+  // the "Unlimited · Admin" chip and hides upgrade/topup CTAs in the UI.
+  // For non-admins these fields are absent so the existing four-tone
+  // meter behavior is unchanged.
+  unlimited?: boolean;
+  // Would-have-been GC consumed this cycle by the admin (sum of negative
+  // admin_unlimited GENERATION rows). Lets the admin dashboard still
+  // render "spent X GC of unlimited".
+  monthlyUsedGC?: number;
 }
 
 // Pure helper exported for unit tests so the boundary cases (80, 95, 100, 0)
@@ -133,6 +143,12 @@ export interface ConsumeResult {
   consumedFromTopup: number;
   newSubscriptionGC: number;
   newTopupGC: number;
+  // Admin-unlimited bookkeeping. `chargedGC` is what we actually deducted
+  // from the user's balance (always 0 for admins). `wouldHaveChargedGC`
+  // is the real provider cost we logged for analytics. Non-admin callers
+  // can ignore both fields.
+  chargedGC?: number;
+  wouldHaveChargedGC?: number;
 }
 
 export interface RefundContext {
@@ -191,6 +207,43 @@ async function ensureSubscription(userId: string): Promise<Subscription> {
 
 export async function getAvailableCredits(userId: string): Promise<CreditSnapshot> {
   const sub = await ensureSubscription(userId);
+  const isAdmin = await isAdminUnlimitedById(userId);
+
+  if (isAdmin) {
+    // Admin posture: balance fields stay populated for the transactions
+    // table but warningLevel is forced calm and the unlimited flag drives
+    // the UI. monthlyUsedGC sums the would-have-been spend from tagged
+    // admin_unlimited GENERATION rows in the current cycle so the
+    // admin dashboard can still show "spent X GC of unlimited".
+    const since = sub.billingCycleStart ?? new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const [usedRow] = await db
+      .select({
+        used: sql<number>`COALESCE(SUM(CASE WHEN ${creditTransactions.gcAmount} < 0 THEN -${creditTransactions.gcAmount} ELSE 0 END), 0)::int`,
+      })
+      .from(creditTransactions)
+      .where(and(
+        eq(creditTransactions.userId, userId),
+        eq(creditTransactions.type, "GENERATION"),
+        eq(creditTransactions.source, "admin_unlimited"),
+        sql`${creditTransactions.createdAt} >= ${since}`,
+      ));
+    return {
+      subscriptionGC: sub.currentGC,
+      topupGC: sub.topupGC,
+      totalGC: sub.currentGC + sub.topupGC,
+      monthlyGC: sub.monthlyGC,
+      plan: sub.plan as PlanTier,
+      status: sub.status,
+      cycleStart: sub.billingCycleStart,
+      cycleEnd: sub.billingCycleEnd,
+      warningLevel: "calm",
+      percentUsed: 0,
+      daysUntilReset: deriveDaysUntilReset(sub.billingCycleEnd),
+      unlimited: true,
+      monthlyUsedGC: Number(usedRow?.used ?? 0),
+    };
+  }
+
   const { warningLevel, percentUsed } = deriveWarning(sub.currentGC, sub.topupGC, sub.monthlyGC);
   return {
     subscriptionGC: sub.currentGC,
@@ -208,6 +261,10 @@ export async function getAvailableCredits(userId: string): Promise<CreditSnapsho
 }
 
 export async function canAccessProvider(userId: string, providerId: string): Promise<boolean> {
+  // Admin-unlimited bypass: every provider is selectable for admins so the
+  // provider picker doesn't render plan-lock badges and the requireCredits
+  // middleware never produces a 403 PROVIDER_NOT_IN_PLAN envelope.
+  if (await isAdminUnlimitedById(userId)) return true;
   const sub = await ensureSubscription(userId);
   return planAllowsProvider(sub.plan as PlanTier, providerId);
 }
@@ -240,6 +297,11 @@ export interface CanAffordResult {
 
 export async function canAfford(userId: string, gcCost: number): Promise<CanAffordResult> {
   const snap = await getAvailableCredits(userId);
+  // Admin-unlimited bypass — never insufficient, source tagged so callers
+  // can detect the bypass if they care (most don't).
+  if (snap.unlimited) {
+    return { ok: true, required: gcCost, available: gcCost, shortfall: 0, source: "admin_unlimited" };
+  }
   const total = snap.totalGC;
   if (total >= gcCost) {
     let source: CreditSource;
@@ -263,6 +325,46 @@ export async function consumeCredits(
   // Make sure the row exists OUTSIDE the transaction so we don't fight a
   // first-write race inside the FOR UPDATE block.
   await ensureSubscription(userId);
+
+  // Admin-unlimited short-circuit: log a tagged credit_transactions row
+  // (so cost telemetry, the admin Costs dashboard, and per-project
+  // rollups still see the would-have-been provider cost) but DO NOT
+  // touch the subscription balance. Idempotent on the same
+  // (userId, jobId, GENERATION) constraint as the regular path so a
+  // duplicate webhook/retry collapses to a no-op the same way.
+  if (await isAdminUnlimitedById(userId)) {
+    const [sub] = await db.select().from(subscriptions).where(eq(subscriptions.userId, userId));
+    const balanceTotal = (sub?.currentGC ?? 0) + (sub?.topupGC ?? 0);
+    try {
+      await db.insert(creditTransactions).values({
+        userId,
+        type: "GENERATION",
+        gcAmount: -gcAmount,
+        gcBalance: balanceTotal,
+        provider: ctx.provider,
+        quality: ctx.quality ?? null,
+        durationS: ctx.durationS ?? null,
+        jobId: ctx.jobId,
+        source: "admin_unlimited",
+        description: ctx.description ?? "Admin unlimited — no balance decrement",
+      });
+    } catch (err: unknown) {
+      const e = err as { code?: string; message?: string };
+      const isDup = e?.code === "23505" || /uq_credit_tx_user_job_type|duplicate key/i.test(String(e?.message ?? ""));
+      if (!isDup) throw err;
+      // duplicate jobId: fall through and return idempotent success
+    }
+    return {
+      ok: true,
+      source: "admin_unlimited",
+      consumedFromSubscription: 0,
+      consumedFromTopup: 0,
+      newSubscriptionGC: sub?.currentGC ?? 0,
+      newTopupGC: sub?.topupGC ?? 0,
+      chargedGC: 0,
+      wouldHaveChargedGC: gcAmount,
+    };
+  }
 
   // Helper that returns the existing-debit no-op result. Used by both
   // the pre-check fast path and the unique-violation race fallback so

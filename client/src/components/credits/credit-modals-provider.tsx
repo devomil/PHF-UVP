@@ -16,6 +16,7 @@ import { TopUpModal } from "./topup-modal";
 import { UpgradeModal } from "./upgrade-modal";
 import { useToast } from "@/hooks/use-toast";
 import { registerCreditErrorHandler } from "@/lib/credit-error-bus";
+import { useCredits } from "@/hooks/use-credits";
 
 interface TopUpContext {
   shortfall?: number;
@@ -52,11 +53,23 @@ export function CreditModalsProvider({ children }: { children: ReactNode }) {
   const [topUpContext, setTopUpContext] = useState<TopUpContext | null>(null);
   const [upgradeContext, setUpgradeContext] = useState<UpgradeContext | null>(null);
   const { toast } = useToast();
+  const { data: credits } = useCredits();
+  const isUnlimited = !!credits?.unlimited;
 
   const openTopUp = useCallback((ctx?: TopUpContext) => {
+    // Admin-unlimited posture: top-up flow is a no-op — there's nothing
+    // to buy when generations don't charge a balance. Surface a toast
+    // so the click isn't silently ignored.
+    if (isUnlimited) {
+      toast({
+        title: "Admin account",
+        description: "Top-ups are disabled — your generations don't charge a balance.",
+      });
+      return;
+    }
     setTopUpContext(ctx ?? null);
     setTopUpOpen(true);
-  }, []);
+  }, [isUnlimited, toast]);
   const closeTopUp = useCallback(() => setTopUpOpen(false), []);
 
   // Upgrade flow: open a true modal with the recommended plan
@@ -64,9 +77,16 @@ export function CreditModalsProvider({ children }: { children: ReactNode }) {
   // (provider name, current vs required tier) inside the dialog so the
   // user doesn't lose context navigating away from their workflow.
   const openUpgrade = useCallback((ctx?: UpgradeContext) => {
+    if (isUnlimited) {
+      toast({
+        title: "Admin account",
+        description: "Plan upgrades are disabled — every provider is already unlocked.",
+      });
+      return;
+    }
     setUpgradeContext(ctx ?? null);
     setUpgradeOpen(true);
-  }, []);
+  }, [isUnlimited, toast]);
   const closeUpgrade = useCallback(() => setUpgradeOpen(false), []);
 
   // Bridge for non-React call sites (apiRequest, queryClient default

@@ -9,7 +9,7 @@ import { useCreditNotifications } from "@/hooks/use-credit-notifications";
 import { Button } from "@/components/ui/button";
 import { TopUpModal } from "@/components/credits/topup-modal";
 import { useToast } from "@/hooks/use-toast";
-import { Coins, TrendingUp, Calendar, Sparkles, BellRing } from "lucide-react";
+import { Coins, TrendingUp, Calendar, Sparkles, BellRing, Infinity as InfinityIcon } from "lucide-react";
 
 interface PlanRow {
   tier: "STARTER" | "GROWTH" | "STUDIO" | "ENTERPRISE";
@@ -56,7 +56,11 @@ export default function BillingPage() {
       .then((d) => setUsage(d.items || []))
       .catch(() => setUsage([]));
     const params = new URLSearchParams(window.location.search);
-    if (params.get("topup") === "1") setTopupOpen(true);
+    // ?topup=1 auto-open is suppressed for admin-unlimited accounts so a
+    // stale link from elsewhere in the app doesn't pop a modal admins
+    // can't meaningfully use. snap may still be loading on first paint;
+    // re-evaluated below in an effect once snap arrives.
+    if (params.get("topup") === "1" && !snap?.unlimited) setTopupOpen(true);
     const status = params.get("status");
     if (status === "success") toast({ title: "Subscription activated", description: "Your plan is being provisioned." });
     if (status === "topup_success") toast({ title: "Top-up successful", description: "Credits will arrive momentarily." });
@@ -139,13 +143,37 @@ export default function BillingPage() {
           <Link href="/billing/transactions">
             <Button variant="outline" data-testid="link-transactions">Transaction history</Button>
           </Link>
-          <Button variant="outline" onClick={openPortal} data-testid="open-portal">Manage subscription</Button>
+          {/* Admin-unlimited accounts have no Stripe subscription to manage,
+              so the portal CTA is hidden. */}
+          {!snap?.unlimited && (
+            <Button variant="outline" onClick={openPortal} data-testid="open-portal">Manage subscription</Button>
+          )}
         </div>
       </header>
 
       {!billingConfigured && (
         <div className="p-4 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-200 text-sm" data-testid="billing-notconfigured">
           Billing is being configured. Pricing is final but checkout is temporarily unavailable.
+        </div>
+      )}
+
+      {/* Admin-unlimited notice — replaces the upgrade/top-up CTAs while
+          keeping the rest of the page (transactions, usage strip) visible
+          so admins can still inspect their generation history. */}
+      {snap?.unlimited && (
+        <div
+          className="p-4 rounded-lg border border-indigo-400/30 bg-gradient-to-r from-indigo-500/10 via-purple-500/5 to-transparent text-indigo-100 text-sm flex items-start gap-3"
+          data-testid="billing-admin-notice"
+        >
+          <InfinityIcon className="w-5 h-5 mt-0.5 text-indigo-300 shrink-0" />
+          <div>
+            <div className="font-semibold">Admin account — billing controls disabled.</div>
+            <div className="text-xs text-indigo-200/80 mt-0.5">
+              Generations don't charge your balance. You've logged{" "}
+              <span className="tabular-nums font-medium">{snap.monthlyUsedGC ?? 0} GC</span>{" "}
+              of would-have-been spend this cycle.
+            </div>
+          </div>
         </div>
       )}
 
@@ -208,9 +236,11 @@ export default function BillingPage() {
             value={snap.plan.replace("_", " ")}
             sub={`${snap.monthlyGC} GC / month`}
             cta={
-              <Button size="sm" onClick={() => setTopupOpen(true)} data-testid="open-topup" className="bg-gradient-to-r from-purple-600 to-indigo-600">
-                Buy top-up
-              </Button>
+              snap.unlimited ? undefined : (
+                <Button size="sm" onClick={() => setTopupOpen(true)} data-testid="open-topup" className="bg-gradient-to-r from-purple-600 to-indigo-600">
+                  Buy top-up
+                </Button>
+              )
             }
           />
         </section>
@@ -246,7 +276,9 @@ export default function BillingPage() {
         </section>
       )}
 
-      {/* Phase NC-02 — Plan comparison strip */}
+      {/* Phase NC-02 — Plan comparison strip. Hidden for admin-unlimited
+          accounts since they can't (and don't need to) upgrade. */}
+      {!snap?.unlimited && (
       <section id="plans">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold">Choose a plan</h2>
@@ -304,6 +336,7 @@ export default function BillingPage() {
           })}
         </div>
       </section>
+      )}
 
       {/* Phase NC-02 — Notifications inbox */}
       <section
