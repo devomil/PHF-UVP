@@ -276,24 +276,24 @@ const AUDIENCE_GUIDANCE: Record<string, { name: string; keep: string; tone: stri
   },
   investor: {
     name: 'investor / stakeholder presentation video',
-    keep: 'Mark "usable": true for any substantive slide that carries the concept, vision, market, traction, data, or financials — EVEN IF it contains significant text, charts, or diagrams. Mark "usable": false ONLY for true boilerplate: covers, agendas/TOC, legal/disclaimer, contact pages, and decorative dividers.',
+    keep: 'This is an INVESTOR video — substance matters far more than visual polish, and the default is to KEEP. Mark "usable": true for EVERY slide that conveys the business, INCLUDING dense slides made mostly of text, tables, charts, or diagrams: the concept/product, problem, solution, vision, market size (TAM/SAM/SOM), competition, traction, KPIs/metrics, financial projections, revenue, P&L, unit economics, pricing, business model, go-to-market, roadmap, milestones, use of funds, the ask, partnerships, and the team. Financial-projection, data, and metrics slides are exactly what investors want to see — KEEP them even if they are wall-to-wall numbers. Mark "usable": false ONLY for true boilerplate that carries NO business substance: the cover/title slide, agenda/table-of-contents, pure section dividers, legal/disclaimer, and contact/thank-you pages. When in doubt, KEEP the slide. Never exclude a slide merely because it is text-heavy or chart-heavy.',
     tone: 'confident, substantive, credible, visionary',
     duration: 'Aim longer: 45-90 seconds.',
-    mixedSlides: 'A slide that mixes a strong image, rendering, chart, or diagram with supporting text IS usable — it anchors the scene and conveys substance.',
+    mixedSlides: 'A slide that mixes an image, rendering, chart, table, or diagram with supporting text IS usable — it anchors the scene and conveys substance. Text-heavy data slides are still usable.',
   },
   internal: {
     name: 'internal video for employees & team knowledge',
-    keep: 'Mark "usable": true for slides that explain the concept, process, roles, or plans so the team gets the full picture — even if text-heavy. Mark "usable": false ONLY for covers, agendas/TOC, legal, and contact/boilerplate pages.',
+    keep: 'This is an INTERNAL team video — the goal is shared understanding, so the default is to KEEP. Mark "usable": true for any slide that explains the concept, product, process, roles, responsibilities, plans, goals, metrics, or timelines — INCLUDING text-heavy, table, or diagram slides. When in doubt, KEEP the slide. Mark "usable": false ONLY for true boilerplate: the cover/title slide, agenda/table-of-contents, pure section dividers, legal/disclaimer, and contact/thank-you pages. Never exclude a slide merely because it is text-heavy.',
     tone: 'clear, informative, straightforward, on-brand',
     duration: 'Aim medium: 40-75 seconds.',
-    mixedSlides: 'A slide that mixes a strong image or diagram with supporting text IS usable — the image region anchors the scene.',
+    mixedSlides: 'A slide that mixes an image, chart, table, or diagram with supporting text IS usable — it anchors the scene.',
   },
   educational: {
     name: 'educational / training video',
-    keep: 'Mark "usable": true for slides that teach: step-by-step content, explanations, diagrams, and worked examples — even if text-heavy. Mark "usable": false ONLY for covers, agendas/TOC, legal, and contact/boilerplate pages.',
+    keep: 'This is an EDUCATIONAL / training video — anything that teaches stays, so the default is to KEEP. Mark "usable": true for slides that teach: step-by-step content, explanations, definitions, frameworks, diagrams, charts, tables, and worked examples — INCLUDING text-heavy slides. When in doubt, KEEP the slide. Mark "usable": false ONLY for true boilerplate: the cover/title slide, agenda/table-of-contents, pure section dividers, legal/disclaimer, and contact/thank-you pages. Never exclude a slide merely because it is text-heavy.',
     tone: 'clear, instructional, well-structured, easy to follow',
     duration: 'Aim longer & structured: 45-90 seconds.',
-    mixedSlides: 'A slide that mixes an illustration, diagram, or chart with explanatory text IS usable — it anchors the lesson.',
+    mixedSlides: 'A slide that mixes an illustration, diagram, chart, or table with explanatory text IS usable — it anchors the lesson.',
   },
 };
 

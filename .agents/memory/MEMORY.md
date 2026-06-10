@@ -1,1 +1,2 @@
+- [Server has no hot-reload](server-no-hot-reload.md) — `tsx` server runs stale code until you restart_workflow; only the client HMRs. Backend edits silently no-op otherwise.
 - [Deck analysis test LLM routing](deck-analysis-test-prompt-coupling.md) — test stubs route by a system-prompt substring; rewording the analysis prompt throws "Unexpected LLM systemPrompt".

@@ -273,7 +273,7 @@ describe('deck-analysis-service — buildAnalysisSystemPrompt() audience steerin
     expect(investor).not.toBe(marketing);
     // Investor framing + a relaxed keep rule that explicitly keeps text/data slides.
     expect(investor).toContain('investor');
-    expect(investor.toLowerCase()).toContain('financials');
+    expect(investor.toLowerCase()).toContain('financial');
     expect(investor).toContain('45-90 seconds');
   });
 

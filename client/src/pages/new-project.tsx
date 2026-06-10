@@ -3,7 +3,7 @@ import { useLocation, Link } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Sparkles, FileText, Zap, ArrowLeft, Video, Image, Info, Plus, Trash2, ChevronUp, ChevronDown, GripVertical, Palette, Users, UserCheck, Upload, X, ImagePlus, Film, Loader2, AlertCircle, FileUp, BookOpen, TrendingUp, CheckCircle2, FolderOpen, Target, ShieldCheck, Megaphone, CalendarCheck, Share2, ShoppingBag, RefreshCw, Presentation } from "lucide-react";
+import { Sparkles, FileText, Zap, ArrowLeft, Video, Image, Info, Plus, Trash2, ChevronUp, ChevronDown, ChevronRight, GripVertical, Palette, Users, UserCheck, Upload, X, ImagePlus, Film, Loader2, AlertCircle, FileUp, BookOpen, TrendingUp, CheckCircle2, FolderOpen, Target, ShieldCheck, Megaphone, CalendarCheck, Share2, ShoppingBag, RefreshCw, Presentation } from "lucide-react";
 import { ProviderCatalogSelector } from "@/components/video/provider-catalog-selector";
 import { CharacterProfilesPanel } from "@/components/video/character-profiles-panel";
 import { AssetSuzzieChat } from "@/components/video/AssetSuzzieChat";
@@ -2860,6 +2860,7 @@ export function DeckToVideoForm({ onBack, onSubmit, isLoading }: { onBack: () =>
   };
 
   const usableImages = (analysis?.images || []).filter((i: any) => i.usable && i.url);
+  const excludedImages = (analysis?.images || []).filter((i: any) => !i.usable);
 
   return (
     <div className="max-w-2xl">
@@ -3031,9 +3032,27 @@ export function DeckToVideoForm({ onBack, onSubmit, isLoading }: { onBack: () =>
                     <p className="text-sm" style={{ color: "var(--text-muted)" }}>No strong images found — your video will use AI-generated visuals.</p>
                   )}
                   {analysis.excludedCount > 0 && (
-                    <p className="text-xs mt-2" style={{ color: "var(--text-muted)" }}>
-                      {analysis.excludedCount} text-heavy or boilerplate page{analysis.excludedCount === 1 ? "" : "s"} excluded.
-                    </p>
+                    <details className="mt-2 group">
+                      <summary className="text-xs cursor-pointer list-none flex items-center gap-1" style={{ color: "var(--text-muted)" }}>
+                        <ChevronRight className="w-3 h-3 transition-transform group-open:rotate-90" />
+                        {analysis.excludedCount} page{analysis.excludedCount === 1 ? "" : "s"} left out of the video — tap to see why
+                      </summary>
+                      <p className="text-xs mt-1.5 mb-1" style={{ color: "var(--text-muted)" }}>
+                        For a <span style={{ color: "var(--text-secondary)" }}>{getDeckAudience(analyzedAudience || audience).label.toLowerCase()}</span> video we kept the slides that carry the story and left out covers, agendas, dividers, legal, and contact pages. If something important is missing, switch the audience above and re-analyze.
+                      </p>
+                      <ul className="mt-1 space-y-1">
+                        {excludedImages.map((img: any) => (
+                          <li key={img.id} className="text-xs flex gap-2" style={{ color: "var(--text-muted)" }}>
+                            <span className="flex-shrink-0 font-medium" style={{ color: "var(--text-secondary)" }}>p.{img.pageNumber}</span>
+                            <span className="min-w-0">
+                              {img.label ? <span style={{ color: "var(--text-secondary)" }}>{img.label}</span> : null}
+                              {img.label && img.reason ? " — " : ""}
+                              {img.reason || (!img.label ? "Excluded" : "")}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
                   )}
                 </div>
               </CardContent>
