@@ -26,6 +26,7 @@ const STARTER_PROVIDERS = [
   "openai-tts",
   "ai-music",
   "remotion-render",
+  "deck-analysis",
 ] as const;
 
 const GROWTH_ADDITIONS = [

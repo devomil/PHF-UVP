@@ -6,9 +6,16 @@
 //     ai-script project via POST /api/projects/create with the `deck` field.
 
 import { Router, Request, Response, NextFunction } from 'express';
+import { randomUUID } from 'crypto';
 import multer from 'multer';
 import { isAuthenticated } from '../auth';
 import { analyzeDeck } from './deck-analysis-service';
+import { requireCredits } from '../middleware/requireCredits';
+import { consumeCredits, getCreditCost } from './credits-service';
+
+// Provider id metered through the credit pipeline (see seed-generation-rates.ts
+// and providerPermissions.ts). One /analyze request == one charge.
+const DECK_ANALYSIS_PROVIDER = 'deck-analysis';
 
 const router = Router();
 
@@ -57,7 +64,7 @@ function uploadDeck(req: Request, res: Response, next: NextFunction) {
   });
 }
 
-router.post('/analyze', uploadDeck, async (req: Request, res: Response) => {
+router.post('/analyze', uploadDeck, requireCredits({ provider: DECK_ANALYSIS_PROVIDER }), async (req: Request, res: Response) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No PDF provided' });
@@ -79,6 +86,25 @@ router.post('/analyze', uploadDeck, async (req: Request, res: Response) => {
     console.log(
       `[DeckToVideo] Analysis complete: ${analysis.pageCount} pages, ${analysis.usableCount} usable, ${analysis.excludedCount} excluded`,
     );
+
+    // Meter the analysis through the credit pipeline (Task #186). Charge only
+    // AFTER the work lands so failed analyses aren't billed. requireCredits has
+    // already verified affordability + plan access (and bypassed admins). For
+    // admin-unlimited users consumeCredits records a `source="admin_unlimited"`
+    // ledger row (visible in the Costs dashboard) without decrementing balance.
+    const gcCost = req.creditCost?.gcCost ?? (await getCreditCost(DECK_ANALYSIS_PROVIDER, null, null));
+    try {
+      await consumeCredits(String(userId), gcCost, {
+        provider: DECK_ANALYSIS_PROVIDER,
+        quality: 'per-deck',
+        jobId: `deck-analyze-${randomUUID()}`,
+        description: `Deck analysis (${analysis.pageCount} pages, ${analysis.usableCount} usable)`,
+      });
+    } catch (creditErr: any) {
+      // Work is already delivered; never fail the response on a post-hoc
+      // accounting hiccup (affordability was checked up front by middleware).
+      console.error(`[DeckToVideo] Credit consume failed for user ${userId}: ${creditErr?.message}`);
+    }
 
     return res.status(200).json({ analysis });
   } catch (error: any) {

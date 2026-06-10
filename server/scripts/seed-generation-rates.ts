@@ -76,6 +76,9 @@ const RATES: RateRow[] = [
   { provider: "openai-tts", quality: "per-1k", durationS: null, gcCost: 1, apiCostUSD: 0.015, tier: "standard" },
   { provider: "ai-music", quality: "per-track", durationS: null, gcCost: 1, apiCostUSD: 0.02, tier: "standard" },
   { provider: "remotion-render", quality: "per-min", durationS: 60, gcCost: 2, apiCostUSD: 0.10, tier: "standard" },
+  // Deck-to-Video analysis (Task #186) — one expensive multimodal LLM call
+  // (up to ~24 rendered page images) plus durable image hosting per request.
+  { provider: "deck-analysis", quality: "per-deck", durationS: null, gcCost: 3, apiCostUSD: 0.12, tier: "standard" },
 ];
 
 let seeded = false;
