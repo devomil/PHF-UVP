@@ -154,6 +154,38 @@ describe('deck-analysis-service — analyzeDeck() + mapDeckImagesToScenes()', ()
     expect(analysis.brief.length).toBeGreaterThan(0);
   });
 
+  it('recovers gracefully when the LLM analysis JSON is truncated mid-array (max_tokens cut)', async () => {
+    // Simulate the real production failure: the model hit its output-token cap
+    // partway through the `pages` array, returning invalid (unterminated) JSON.
+    // The repair path should salvage the pages that fully arrived (1 & 2) and the
+    // top-level metadata, and silently drop the half-written trailing page (3).
+    const fullJson = JSON.stringify(ANALYSIS_JSON);
+    const cutAtPage3 = fullJson.indexOf('{"pageNumber":3'); // drop the 3rd page entirely
+    const truncated = fullJson.slice(0, cutAtPage3); // ends with a dangling comma
+    expect(() => JSON.parse(truncated)).toThrow(); // sanity: genuinely invalid
+
+    createChatCompletionMock.mockImplementation(async (options: any) => {
+      const sys: string = options?.systemPrompt || '';
+      if (sys.includes('senior marketing video strategist')) return { text: truncated };
+      return routeLlm(options);
+    });
+
+    const { analyzeDeck } = await import('../deck-analysis-service');
+    const analysis = await analyzeDeck(pdfBuffer, 'sample-deck.pdf');
+
+    // Top-level brief/title survived the truncation.
+    expect(analysis.suggestedTitle).toBe('The Book & The Residence');
+    expect(analysis.brief.length).toBeGreaterThan(0);
+
+    // All 3 pages still render; metadata applied for the 2 that fully arrived,
+    // and the dropped page-3 falls back to excluded (default) rather than crashing.
+    expect(analysis.images).toHaveLength(3);
+    const page2 = analysis.images.find((i) => i.pageNumber === 2)!;
+    expect(page2.usable).toBe(true);
+    expect(analysis.usableCount).toBe(1);
+    expect(analysis.excludedCount).toBe(2);
+  });
+
   it('maps usable deck images onto scenes, one anchor per mappable scene', async () => {
     const { analyzeDeck, mapDeckImagesToScenes } = await import('../deck-analysis-service');
 

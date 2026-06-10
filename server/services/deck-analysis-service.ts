@@ -80,21 +80,95 @@ export interface DeckAnalysis {
   excludedCount: number;
 }
 
-/** Strip ```json fences and parse the first JSON object/array found. */
+/**
+ * Repair a truncated JSON string (the common failure when an LLM hits its
+ * max_tokens limit mid-array). Single pass tracking string + bracket state,
+ * remembering the last position where appending the right closers yields a
+ * complete value, then cuts there and closes the open containers. Any partial
+ * trailing element (half-written object, number, key) is dropped.
+ */
+function repairTruncatedJson(s: string): string | null {
+  const stack: string[] = [];
+  let inStr = false;
+  let esc = false;
+  let bestEnd = -1;
+  let bestClosers = '';
+  // Whether the next scalar/string is a VALUE (true) or an object KEY (false).
+  // A closed key string is NOT a safe cut point ("reason"} is invalid JSON).
+  let expectValue = true;
+  const record = (end: number) => {
+    bestEnd = end;
+    bestClosers = stack.slice().reverse().join('');
+  };
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (inStr) {
+      if (esc) esc = false;
+      else if (c === '\\') esc = true;
+      else if (c === '"') {
+        inStr = false;
+        if (expectValue) {
+          record(i + 1); // a complete string VALUE is a safe cut point
+          expectValue = false;
+        }
+      }
+      continue;
+    }
+    if (c === '"') inStr = true;
+    else if (c === '{') {
+      stack.push('}');
+      expectValue = false; // objects expect a key first
+    } else if (c === '[') {
+      stack.push(']');
+      expectValue = true; // arrays expect a value first
+    } else if (c === '}' || c === ']') {
+      stack.pop();
+      record(i + 1); // a closed container is a safe cut point
+      expectValue = false;
+    } else if (c === ':') {
+      expectValue = true;
+    } else if (c === ',') {
+      record(i); // cut BEFORE the comma, dropping any incomplete next element
+      expectValue = stack[stack.length - 1] === ']';
+    }
+  }
+  if (bestEnd === -1) return null;
+  return s.slice(0, bestEnd) + bestClosers;
+}
+
+/** Strip ```json fences and parse the first JSON object/array found, tolerating truncation. */
 function parseJsonFromLLM(raw: string): any {
   let s = (raw || '').trim();
   const fence = s.match(/```(?:json)?\s*([\s\S]*?)```/i);
   if (fence) s = fence[1].trim();
+  // 1. Direct parse.
   try {
     return JSON.parse(s);
   } catch {
-    const start = s.search(/[{[]/);
-    const end = Math.max(s.lastIndexOf('}'), s.lastIndexOf(']'));
-    if (start !== -1 && end !== -1 && end > start) {
-      return JSON.parse(s.slice(start, end + 1));
-    }
-    throw new Error('LLM did not return valid JSON');
+    /* fall through */
   }
+  // 2. Trim to the outermost brackets and retry.
+  const start = s.search(/[{[]/);
+  if (start === -1) throw new Error('LLM did not return valid JSON');
+  s = s.slice(start);
+  const end = Math.max(s.lastIndexOf('}'), s.lastIndexOf(']'));
+  if (end > 0) {
+    try {
+      return JSON.parse(s.slice(0, end + 1));
+    } catch {
+      /* fall through */
+    }
+  }
+  // 3. Repair a truncated response (max_tokens cut off mid-array).
+  const repaired = repairTruncatedJson(s);
+  if (repaired) {
+    try {
+      return JSON.parse(repaired);
+    } catch {
+      /* fall through */
+    }
+  }
+  throw new Error('LLM did not return valid JSON');
 }
 
 interface RenderedPage {
@@ -209,7 +283,8 @@ Rules:
 - For EVERY page provided, include one entry in "pages".
 - "usable": true ONLY when the slide is dominated by a photograph or rich illustration that would make a strong real-image anchor for a video scene.
 - "usable": false for text-heavy slides, title/cover slides, agenda/table-of-contents, legal/disclaimer/footer/contact/boilerplate pages, and slides that are mostly logos or charts of text.
-- "label" should be a short, concrete caption of the imagery (e.g. "close-up of a latte being poured").`;
+- "label" should be a short, concrete caption of the imagery (e.g. "close-up of a latte being poured").
+- Keep your output compact so it is never truncated: "label" max 12 words, "reason" max 12 words, and "brief" max ~220 words.`;
 
 /** Analyze a deck PDF buffer end-to-end. */
 export async function analyzeDeck(
@@ -251,7 +326,9 @@ export async function analyzeDeck(
   const completion = await llmClient.createChatCompletion({
     systemPrompt: ANALYSIS_SYSTEM_PROMPT,
     messages: [{ role: 'user', content: contentParts }],
-    maxTokens: 2500,
+    // Headroom for the brief + one entry per page (up to MAX_ANALYZE_PAGES).
+    // Too small a budget truncates the JSON mid-array and fails parsing.
+    maxTokens: 4096,
     temperature: 0.4,
     timeoutMs: 120_000,
   });

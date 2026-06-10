@@ -2756,6 +2756,7 @@ export function DeckToVideoForm({ onBack, onSubmit, isLoading }: { onBack: () =>
   const [file, setFile] = useState<File | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [analysis, setAnalysis] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [projectTypeId, setProjectTypeId] = useState("youtube-ad");
   const [dragOver, setDragOver] = useState(false);
@@ -2774,6 +2775,7 @@ export function DeckToVideoForm({ onBack, onSubmit, isLoading }: { onBack: () =>
     }
     setFile(f);
     setAnalysis(null);
+    setError(null);
     setAnalyzing(true);
     try {
       const formData = new FormData();
@@ -2784,12 +2786,15 @@ export function DeckToVideoForm({ onBack, onSubmit, isLoading }: { onBack: () =>
         // shared top-up / upgrade flow instead of a generic error toast.
         const handled = await handleGenerationError(res, "Analysis failed");
         if (!handled) {
-          let msg = "Analysis failed";
+          let msg = "We couldn't analyze this deck. Please try again.";
           try {
             const data = await res.clone().json();
-            msg = data.error || msg;
+            if (data.error) msg = data.error;
           } catch {}
           toast({ title: "Analysis failed", description: msg, variant: "destructive" });
+          // Keep a persistent banner so the failure is visible even after the
+          // toast dismisses (analysis can take a minute, users miss the toast).
+          setError(msg);
         }
         setFile(null);
         return;
@@ -2798,7 +2803,9 @@ export function DeckToVideoForm({ onBack, onSubmit, isLoading }: { onBack: () =>
       setAnalysis(data.analysis);
       setTitle(data.analysis?.suggestedTitle || f.name.replace(/\.pdf$/i, ""));
     } catch (err: any) {
-      toast({ title: "Analysis failed", description: err.message, variant: "destructive" });
+      const msg = err?.message || "Something went wrong while analyzing your deck.";
+      toast({ title: "Analysis failed", description: msg, variant: "destructive" });
+      setError(msg);
       setFile(null);
     } finally {
       setAnalyzing(false);
@@ -2808,6 +2815,7 @@ export function DeckToVideoForm({ onBack, onSubmit, isLoading }: { onBack: () =>
   const reset = () => {
     setFile(null);
     setAnalysis(null);
+    setError(null);
     setTitle("");
   };
 
@@ -2854,6 +2862,21 @@ export function DeckToVideoForm({ onBack, onSubmit, isLoading }: { onBack: () =>
           </div>
         )}
 
+        {!analysis && error && !analyzing && (
+          <div
+            className="flex items-start gap-2.5 rounded-lg px-3.5 py-3"
+            style={{ backgroundColor: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.35)" }}
+            data-testid="error-deck-analyze"
+          >
+            <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0 text-red-400" />
+            <div className="min-w-0">
+              <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>Analysis failed</p>
+              <p className="text-sm" style={{ color: "var(--text-secondary)" }}>{error}</p>
+              <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>Drop your deck again below to retry.</p>
+            </div>
+          </div>
+        )}
+
         {!analysis && (
           <div
             role="button"
@@ -2888,7 +2911,7 @@ export function DeckToVideoForm({ onBack, onSubmit, isLoading }: { onBack: () =>
               <div className="flex flex-col items-center gap-3">
                 <Loader2 className="w-10 h-10 text-pink-400 animate-spin" />
                 <p className="font-medium" style={{ color: "var(--text-primary)" }}>Analyzing your deck…</p>
-                <p className="text-sm" style={{ color: "var(--text-muted)" }}>Reading text and visuals — this can take up to a minute.</p>
+                <p className="text-sm" style={{ color: "var(--text-muted)" }}>Reading text and visuals — this can take a minute or two for large decks.</p>
               </div>
             ) : (
               <div className="flex flex-col items-center gap-3">
