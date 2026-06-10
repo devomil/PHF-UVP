@@ -20,7 +20,7 @@ const FIXTURE_PATH = path.join(__dirname, 'fixtures', 'sample-deck.pdf');
 // --- Stub the LLM transport -------------------------------------------------
 // The real client would hit PiAPI/Anthropic. We hoist a mock so the SUT picks
 // it up via dynamic import below, and route by systemPrompt: the analysis call
-// (the "marketing video strategist" prompt) gets canned page metadata; the
+// (the "senior video strategist" prompt) gets canned page metadata; the
 // image→scene mapping call ("assign real deck images") gets canned assignments.
 const createChatCompletionMock = vi.fn();
 vi.mock('../piapi-llm-client', () => ({
@@ -60,7 +60,7 @@ const ANALYSIS_JSON = {
 
 function routeLlm(options: any): { text: string } {
   const sys: string = options?.systemPrompt || '';
-  if (sys.includes('senior marketing video strategist')) {
+  if (sys.includes('senior video strategist')) {
     return { text: JSON.stringify(ANALYSIS_JSON) };
   }
   if (sys.includes('assign real deck images')) {
@@ -116,7 +116,7 @@ describe('deck-analysis-service — analyzeDeck() + mapDeckImagesToScenes()', ()
     // contains "THE BOOK" — assert it reached the LLM call (proves pdf-parse ran
     // and its output was forwarded), and that rendered page images were attached.
     const analysisCall = createChatCompletionMock.mock.calls.find((c) =>
-      (c[0]?.systemPrompt || '').includes('senior marketing video strategist'),
+      (c[0]?.systemPrompt || '').includes('senior video strategist'),
     );
     expect(analysisCall).toBeDefined();
     const contentParts = analysisCall![0].messages[0].content as any[];
@@ -166,7 +166,7 @@ describe('deck-analysis-service — analyzeDeck() + mapDeckImagesToScenes()', ()
 
     createChatCompletionMock.mockImplementation(async (options: any) => {
       const sys: string = options?.systemPrompt || '';
-      if (sys.includes('senior marketing video strategist')) return { text: truncated };
+      if (sys.includes('senior video strategist')) return { text: truncated };
       return routeLlm(options);
     });
 
@@ -240,5 +240,51 @@ describe('deck-analysis-service — analyzeDeck() + mapDeckImagesToScenes()', ()
     );
 
     expect(result).toEqual([]);
+  });
+});
+
+// The audience/intent picker is the whole point of this feature: the chosen
+// audience must change the keep-rule, tone, and duration guidance baked into the
+// analysis system prompt. These are pure string assertions — no LLM, no PDF — so
+// they run in microseconds and guard the steering contract from regressions.
+describe('deck-analysis-service — buildAnalysisSystemPrompt() audience steering', () => {
+  it('defaults to the marketing lens for missing/unknown audiences', async () => {
+    const { buildAnalysisSystemPrompt } = await import('../deck-analysis-service');
+
+    const fallback = buildAnalysisSystemPrompt('not-a-real-audience');
+    const empty = buildAnalysisSystemPrompt();
+    const marketing = buildAnalysisSystemPrompt('marketing');
+
+    // Unknown + undefined both resolve to the marketing prompt verbatim.
+    expect(fallback).toBe(marketing);
+    expect(empty).toBe(marketing);
+    // Marketing keeps its strict, image-only keep rule and short duration.
+    expect(marketing).toContain('marketing video');
+    expect(marketing).toContain('15-40 seconds');
+  });
+
+  it('relaxes the keep-rule and lengthens duration for investor decks', async () => {
+    const { buildAnalysisSystemPrompt } = await import('../deck-analysis-service');
+
+    const investor = buildAnalysisSystemPrompt('investor');
+    const marketing = buildAnalysisSystemPrompt('marketing');
+
+    // Each audience produces a distinct prompt.
+    expect(investor).not.toBe(marketing);
+    // Investor framing + a relaxed keep rule that explicitly keeps text/data slides.
+    expect(investor).toContain('investor');
+    expect(investor.toLowerCase()).toContain('financials');
+    expect(investor).toContain('45-90 seconds');
+  });
+
+  it('keeps teaching slides for the educational lens and stays in the valid duration band', async () => {
+    const { buildAnalysisSystemPrompt } = await import('../deck-analysis-service');
+
+    const educational = buildAnalysisSystemPrompt('educational');
+
+    expect(educational.toLowerCase()).toContain('educational');
+    expect(educational.toLowerCase()).toContain('step-by-step');
+    // The hard clamp instruction is always present regardless of audience.
+    expect(educational).toContain('between 15 and 90');
   });
 });

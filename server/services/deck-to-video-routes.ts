@@ -81,8 +81,9 @@ router.post('/analyze', uploadDeck, requireCredits({ provider: DECK_ANALYSIS_PRO
       return res.status(429).json({ error: 'Too many deck analyses — please wait a minute and try again.' });
     }
 
-    console.log(`[DeckToVideo] Analyzing "${req.file.originalname}" (${req.file.size} bytes) for user ${userId}`);
-    const analysis = await analyzeDeck(req.file.buffer, req.file.originalname);
+    const audience = typeof req.body?.audience === 'string' ? req.body.audience : undefined;
+    console.log(`[DeckToVideo] Analyzing "${req.file.originalname}" (${req.file.size} bytes) for user ${userId}, audience=${audience || 'default'}`);
+    const analysis = await analyzeDeck(req.file.buffer, req.file.originalname, audience);
     console.log(
       `[DeckToVideo] Analysis complete: ${analysis.pageCount} pages, ${analysis.usableCount} usable, ${analysis.excludedCount} excluded`,
     );

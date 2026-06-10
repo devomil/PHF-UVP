@@ -263,7 +263,46 @@ async function hostJpegBuffer(buffer: Buffer, filename: string): Promise<string 
   }
 }
 
-const ANALYSIS_SYSTEM_PROMPT = `You are a senior marketing video strategist. You are given the full text of a slide deck (PDF) and a rendered image of each page (labelled "Page N"). Your job is to plan how to turn this deck into a short, punchy marketing video using an AI video engine.
+// Per-audience steering for the analysis. The chosen audience changes which
+// slides count as "usable" anchors, the brief's tone, and the suggested
+// duration. Keys MUST match DeckAudienceId in shared/config/deck-audiences.ts.
+const AUDIENCE_GUIDANCE: Record<string, { name: string; keep: string; tone: string; duration: string; mixedSlides: string }> = {
+  marketing: {
+    name: 'short, punchy marketing video for customers & social media',
+    keep: '"usable": true ONLY when the slide is dominated by a photograph or rich illustration that would make a strong real-image anchor. "usable": false for text-heavy slides, covers, agendas/TOC, legal/disclaimer/footer/contact/boilerplate, and slides that are mostly logos or charts of text.',
+    tone: 'punchy, emotional, benefit-driven, fast-paced',
+    duration: 'Aim short: 15-40 seconds.',
+    mixedSlides: 'Prioritize visually striking imagery over dense text.',
+  },
+  investor: {
+    name: 'investor / stakeholder presentation video',
+    keep: 'Mark "usable": true for any substantive slide that carries the concept, vision, market, traction, data, or financials — EVEN IF it contains significant text, charts, or diagrams. Mark "usable": false ONLY for true boilerplate: covers, agendas/TOC, legal/disclaimer, contact pages, and decorative dividers.',
+    tone: 'confident, substantive, credible, visionary',
+    duration: 'Aim longer: 45-90 seconds.',
+    mixedSlides: 'A slide that mixes a strong image, rendering, chart, or diagram with supporting text IS usable — it anchors the scene and conveys substance.',
+  },
+  internal: {
+    name: 'internal video for employees & team knowledge',
+    keep: 'Mark "usable": true for slides that explain the concept, process, roles, or plans so the team gets the full picture — even if text-heavy. Mark "usable": false ONLY for covers, agendas/TOC, legal, and contact/boilerplate pages.',
+    tone: 'clear, informative, straightforward, on-brand',
+    duration: 'Aim medium: 40-75 seconds.',
+    mixedSlides: 'A slide that mixes a strong image or diagram with supporting text IS usable — the image region anchors the scene.',
+  },
+  educational: {
+    name: 'educational / training video',
+    keep: 'Mark "usable": true for slides that teach: step-by-step content, explanations, diagrams, and worked examples — even if text-heavy. Mark "usable": false ONLY for covers, agendas/TOC, legal, and contact/boilerplate pages.',
+    tone: 'clear, instructional, well-structured, easy to follow',
+    duration: 'Aim longer & structured: 45-90 seconds.',
+    mixedSlides: 'A slide that mixes an illustration, diagram, or chart with explanatory text IS usable — it anchors the lesson.',
+  },
+};
+
+const DEFAULT_AUDIENCE = 'marketing';
+
+/** Build the analysis system prompt, steered by the chosen audience/intent. */
+export function buildAnalysisSystemPrompt(audienceId?: string | null): string {
+  const g = AUDIENCE_GUIDANCE[audienceId || ''] || AUDIENCE_GUIDANCE[DEFAULT_AUDIENCE];
+  return `You are a senior video strategist. You are given the full text of a slide deck (PDF) and a rendered image of each page (labelled "Page N"). Your job is to plan how to turn this deck into a ${g.name} using an AI video engine.
 
 Return ONLY a JSON object with this exact shape (no markdown, no commentary):
 {
@@ -274,22 +313,28 @@ Return ONLY a JSON object with this exact shape (no markdown, no commentary):
   "suggestedDurationSec": 30,
   "brief": "A rich multi-paragraph creative brief written for an AI script engine. Capture the narrative arc, the key selling points in order, the desired tone, and a suggested scene-by-scene beat list. Do NOT include legal disclaimers, page numbers, or boilerplate.",
   "pages": [
-    { "pageNumber": 1, "usable": true, "label": "short caption of what the slide depicts", "reason": "why it is or isn't a good real-image anchor" }
+    { "pageNumber": 1, "usable": true, "label": "short caption of what the slide depicts", "reason": "why it is or isn't a good anchor" }
   ]
 }
 
+This video is for: ${g.name}.
+Desired tone: ${g.tone}.
+${g.duration}
+
 Rules:
-- suggestedDurationSec must be between 15 and 90.
+- suggestedDurationSec must be between 15 and 90, consistent with the duration guidance above.
 - For EVERY page provided, include one entry in "pages".
-- "usable": true ONLY when the slide is dominated by a photograph or rich illustration that would make a strong real-image anchor for a video scene.
-- "usable": false for text-heavy slides, title/cover slides, agenda/table-of-contents, legal/disclaimer/footer/contact/boilerplate pages, and slides that are mostly logos or charts of text.
-- "label" should be a short, concrete caption of the imagery (e.g. "close-up of a latte being poured").
+- Decide "usable" for THIS audience: ${g.keep}
+- ${g.mixedSlides}
+- "label" should be a short, concrete caption of the slide (e.g. "watercolor rendering of the main dining room").
 - Keep your output compact so it is never truncated: "label" max 12 words, "reason" max 12 words, and "brief" max ~220 words.`;
+}
 
 /** Analyze a deck PDF buffer end-to-end. */
 export async function analyzeDeck(
   pdfBuffer: Buffer,
   originalFilename?: string,
+  audienceId?: string | null,
 ): Promise<DeckAnalysis> {
   if (!llmClient.isAvailable()) {
     throw new Error('No LLM API configured — set PIAPI_API_KEY or ANTHROPIC_API_KEY');
@@ -324,7 +369,7 @@ export async function analyzeDeck(
   }
 
   const completion = await llmClient.createChatCompletion({
-    systemPrompt: ANALYSIS_SYSTEM_PROMPT,
+    systemPrompt: buildAnalysisSystemPrompt(audienceId),
     messages: [{ role: 'user', content: contentParts }],
     // Headroom for the brief + one entry per page (up to MAX_ANALYZE_PAGES).
     // Too small a budget truncates the JSON mid-array and fails parsing.

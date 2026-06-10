@@ -10,6 +10,7 @@ import { AssetSuzzieChat } from "@/components/video/AssetSuzzieChat";
 import { getAvailableStyles } from "@shared/visual-style-config";
 import { getAllVisualArtPresets, isStylizedPreset, type VisualArtPreset } from "@shared/config/visual-art-presets";
 import { getAllProjectTypes, getProjectType, CONTENT_STRUCTURES, LONG_STORY_DEFAULT_ART_PRESET_IDS, getAllProjectPurposes } from "@shared/config/project-types";
+import { DECK_AUDIENCES, DEFAULT_DECK_AUDIENCE_ID, getDeckAudience } from "@shared/config/deck-audiences";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -2759,6 +2760,8 @@ export function DeckToVideoForm({ onBack, onSubmit, isLoading }: { onBack: () =>
   const [error, setError] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [projectTypeId, setProjectTypeId] = useState("youtube-ad");
+  const [audience, setAudience] = useState<string>(DEFAULT_DECK_AUDIENCE_ID);
+  const [analyzedAudience, setAnalyzedAudience] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -2773,12 +2776,17 @@ export function DeckToVideoForm({ onBack, onSubmit, isLoading }: { onBack: () =>
       toast({ title: "File too large", description: "Decks must be under 50MB.", variant: "destructive" });
       return;
     }
+    // Re-analyze (audience changed) keeps the existing, already-paid-for results
+    // visible while it runs and restores them if it fails — LLM transient errors
+    // are common here, and we don't want to discard a successful prior analysis.
+    const isReanalyze = !!analysis;
     setFile(f);
-    setAnalysis(null);
+    if (!isReanalyze) setAnalysis(null);
     setError(null);
     setAnalyzing(true);
     try {
       const formData = new FormData();
+      formData.append("audience", audience);
       formData.append("file", f);
       const res = await fetch("/api/deck-to-video/analyze", { method: "POST", body: formData, credentials: "include" });
       if (!res.ok) {
@@ -2792,21 +2800,26 @@ export function DeckToVideoForm({ onBack, onSubmit, isLoading }: { onBack: () =>
             if (data.error) msg = data.error;
           } catch {}
           toast({ title: "Analysis failed", description: msg, variant: "destructive" });
-          // Keep a persistent banner so the failure is visible even after the
-          // toast dismisses (analysis can take a minute, users miss the toast).
-          setError(msg);
+          // On a first analysis, keep a persistent banner so the failure stays
+          // visible after the toast dismisses. On a re-analyze the prior results
+          // remain on screen, so the toast alone is enough.
+          if (!isReanalyze) setError(msg);
         }
-        setFile(null);
+        if (!isReanalyze) setFile(null);
         return;
       }
       const data = await res.json();
       setAnalysis(data.analysis);
+      setAnalyzedAudience(audience);
+      setProjectTypeId(getDeckAudience(audience).defaultFormat);
       setTitle(data.analysis?.suggestedTitle || f.name.replace(/\.pdf$/i, ""));
     } catch (err: any) {
       const msg = err?.message || "Something went wrong while analyzing your deck.";
       toast({ title: "Analysis failed", description: msg, variant: "destructive" });
-      setError(msg);
-      setFile(null);
+      if (!isReanalyze) {
+        setError(msg);
+        setFile(null);
+      }
     } finally {
       setAnalyzing(false);
     }
@@ -2815,9 +2828,12 @@ export function DeckToVideoForm({ onBack, onSubmit, isLoading }: { onBack: () =>
   const reset = () => {
     setFile(null);
     setAnalysis(null);
+    setAnalyzedAudience(null);
     setError(null);
     setTitle("");
   };
+
+  const audienceChanged = !!analysis && analyzedAudience !== null && audience !== analyzedAudience;
 
   const handleConfirm = () => {
     if (!analysis) return;
@@ -2853,6 +2869,54 @@ export function DeckToVideoForm({ onBack, onSubmit, isLoading }: { onBack: () =>
       </div>
 
       <div className="space-y-5">
+        <div>
+          <Label style={{ color: "var(--text-secondary)" }}>Audience / Intent</Label>
+          <p className="text-xs mt-0.5 mb-2" style={{ color: "var(--text-muted)" }}>
+            Who is this video for? This steers which slides we keep and the script's tone and length.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2" role="radiogroup" aria-label="Audience / Intent">
+            {DECK_AUDIENCES.map((a) => {
+              const selected = audience === a.id;
+              return (
+                <button
+                  key={a.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={selected}
+                  onClick={() => setAudience(a.id)}
+                  className="text-left rounded-lg p-3 transition-all"
+                  style={{
+                    backgroundColor: selected ? "rgba(139,92,246,0.12)" : "var(--surface)",
+                    border: selected ? "1px solid rgb(139,92,246)" : "1px solid var(--border-subtle)",
+                  }}
+                  data-testid={`audience-${a.id}`}
+                >
+                  <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>{a.label}</p>
+                  <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>{a.description}</p>
+                </button>
+              );
+            })}
+          </div>
+          {audienceChanged && (
+            <div className="flex items-center justify-between gap-3 mt-2 px-3 py-2 rounded-lg" style={{ backgroundColor: "rgba(99,102,241,0.08)", border: "1px solid rgba(99,102,241,0.25)" }}>
+              <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
+                Audience changed — re-analyze to update the kept slides and script direction (uses credits again).
+              </p>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={analyzing || !file}
+                onClick={() => file && analyzeFile(file)}
+                style={{ borderColor: "var(--border-medium)", color: "var(--text-secondary)" }}
+                data-testid="button-deck-reanalyze"
+              >
+                {analyzing ? "Re-analyzing…" : "Re-analyze"}
+              </Button>
+            </div>
+          )}
+        </div>
+
         {!analysis && (
           <div className="space-y-1.5">
             <p className="text-xs" style={{ color: "var(--text-muted)" }}>
@@ -2997,7 +3061,7 @@ export function DeckToVideoForm({ onBack, onSubmit, isLoading }: { onBack: () =>
             <div className="flex items-start gap-2 px-3 py-2 rounded-lg" style={{ backgroundColor: "rgba(99,102,241,0.08)", border: "1px solid rgba(99,102,241,0.25)" }}>
               <Info className="w-4 h-4 mt-0.5 flex-shrink-0 text-indigo-300" />
               <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
-                We'll draft a ~{analysis.suggestedDurationSec || 30}s marketing video using the AI script engine, anchoring your deck's images to matching scenes. Generation uses AI credits based on your selected providers.
+                We'll draft a ~{analysis.suggestedDurationSec || 30}s {getDeckAudience(analyzedAudience || audience).label.toLowerCase()} video using the AI script engine, anchoring your deck's images to matching scenes. Generation uses AI credits based on your selected providers.
               </p>
             </div>
           </>
