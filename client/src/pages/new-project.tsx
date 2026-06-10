@@ -2750,7 +2750,7 @@ function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () => void; 
   );
 }
 
-function DeckToVideoForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onSubmit: (data: any) => void; isLoading: boolean }) {
+export function DeckToVideoForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onSubmit: (data: any) => void; isLoading: boolean }) {
   const { toast } = useToast();
   const { handle: handleGenerationError } = useGenerationErrorHandler();
   const [file, setFile] = useState<File | null>(null);
