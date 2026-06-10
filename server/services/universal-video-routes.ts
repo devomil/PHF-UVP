@@ -2037,6 +2037,86 @@ router.patch('/projects/:projectId/scenes/:sceneId/brand-assets', isAuthenticate
   }
 });
 
+// Task #185: Deck-to-Video — let the user manually choose which deck slide
+// image anchors a given scene (or remove it so the scene falls back to AI
+// visuals). Persists BOTH the live scene.brandReferences AND a durable
+// override in progress.deckImageAssignments (keyed by scene INDEX, since scene
+// ids are index-derived and not stable across regeneration). The
+// generate-script anchoring step applies these overrides first so manual
+// choices win over the automatic mapping and survive script regeneration.
+//   Body: { imageId: string | null }  (null clears the anchor → AI visuals)
+router.patch('/projects/:projectId/scenes/:sceneId/deck-image', isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const userId = (req.user as any)?.id;
+    const { projectId, sceneId } = req.params;
+    const { imageId } = req.body as { imageId?: string | null };
+
+    const projectData = await getProjectFromDb(projectId);
+    if (!projectData) {
+      return res.status(404).json({ success: false, error: 'Project not found' });
+    }
+    if (projectData.ownerId !== userId) {
+      return res.status(403).json({ success: false, error: 'Access denied' });
+    }
+
+    const scenes = projectData.scenes || [];
+    const sceneIndex = scenes.findIndex((s: any) => s.id === sceneId);
+    if (sceneIndex === -1) {
+      return res.status(404).json({ success: false, error: 'Scene not found' });
+    }
+
+    const deckImages = (projectData.progress as any)?.deckImages;
+    if (!Array.isArray(deckImages) || deckImages.length === 0) {
+      return res.status(400).json({ success: false, error: 'This project has no deck images to assign' });
+    }
+
+    // Resolve the chosen image (null/empty = explicit removal → AI visuals).
+    let chosen: any = null;
+    const wantsRemoval = imageId === null || imageId === undefined || imageId === '';
+    if (!wantsRemoval) {
+      chosen = deckImages.find((d: any) => String(d.id) === String(imageId));
+      if (!chosen) {
+        return res.status(400).json({ success: false, error: 'Unknown deck image id' });
+      }
+    }
+
+    const scene = scenes[sceneIndex] as any;
+    if (chosen) {
+      scene.brandReferences = [{ assetUrl: String(chosen.url), tag: 'image1', label: chosen.label || 'Deck slide' }];
+      scene.useOmniReference = true;
+    } else {
+      delete scene.brandReferences;
+      scene.useOmniReference = false;
+    }
+
+    // Record the durable override keyed by scene index. A null imageId means
+    // "user explicitly removed the slide" — we still store it so the auto-mapper
+    // leaves this scene AI-only on regeneration instead of re-anchoring.
+    const progress: any = { ...(projectData.progress as any) };
+    const prior = Array.isArray(progress.deckImageAssignments) ? progress.deckImageAssignments : [];
+    progress.deckImageAssignments = [
+      ...prior.filter((a: any) => Number(a?.sceneIndex) !== sceneIndex),
+      { sceneIndex, imageId: chosen ? String(chosen.id) : null },
+    ];
+
+    projectData.progress = progress;
+    projectData.scenes = scenes;
+    projectData.updatedAt = new Date().toISOString();
+    await saveProjectToDb(projectData, projectData.ownerId);
+
+    console.log(`[DeckToVideo] Scene ${sceneId} (idx ${sceneIndex}) deck image set to ${chosen ? chosen.id : 'none (AI visuals)'}`);
+
+    res.json({
+      success: true,
+      scene,
+      deckImageAssignments: progress.deckImageAssignments,
+    });
+  } catch (error: any) {
+    console.error('[DeckToVideo] Error setting deck image for scene:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Phase 20C: Bulk-attach the project's primary product image as a brand
 // reference (`@image1`) to every product/solution scene that does not yet
 // have any brandReferences. Idempotent — scenes with existing references are
@@ -3280,12 +3360,6 @@ router.post('/projects/:projectId/generate-script', isAuthenticated, async (req:
     if (Array.isArray(deckImages) && deckImages.length > 0 && scenes.length > 0) {
       try {
         const { mapDeckImagesToScenes } = await import('./deck-analysis-service');
-        const sceneInputs = scenes.map((s: any, idx: number) => ({
-          index: idx,
-          type: s.type || s.contentType,
-          narration: s.narration,
-          visualDirection: s.visualDirection,
-        }));
         const normalizedImages = deckImages.map((img: any) => ({
           id: String(img.id || ''),
           url: String(img.url || ''),
@@ -3294,17 +3368,57 @@ router.post('/projects/:projectId/generate-script', isAuthenticated, async (req:
           label: typeof img.label === 'string' ? img.label : '',
           reason: '',
         }));
-        const assignments = await mapDeckImagesToScenes(sceneInputs, normalizedImages);
+        const imageById = new Map(normalizedImages.map((i: any) => [i.id, i]));
+
+        // Task #185: apply the user's MANUAL deck-image→scene overrides first
+        // (keyed by scene index) so they win over the automatic mapping and
+        // survive regeneration. A null imageId is an explicit "no slide here"
+        // removal — we claim the scene so auto-mapping leaves it AI-only.
+        const manualAssignments = Array.isArray((projectData.progress as any)?.deckImageAssignments)
+          ? (projectData.progress as any).deckImageAssignments
+          : [];
+        const claimedScenes = new Set<number>();
+        const usedImages = new Set<string>();
         let anchored = 0;
-        for (const a of assignments) {
-          const scene = scenes[a.sceneIndex] as any;
-          if (!scene) continue;
-          if (Array.isArray(scene.brandReferences) && scene.brandReferences.length > 0) continue;
-          scene.brandReferences = [{ assetUrl: a.url, tag: 'image1', label: a.label || 'Deck image' }];
+        let manualCount = 0;
+        for (const a of manualAssignments) {
+          const sIdx = Number(a?.sceneIndex);
+          if (!Number.isInteger(sIdx) || sIdx < 0 || sIdx >= scenes.length) continue;
+          if (claimedScenes.has(sIdx)) continue;
+          claimedScenes.add(sIdx);
+          const overrideId = a?.imageId == null ? null : String(a.imageId);
+          if (overrideId === null) continue; // explicit removal → leave AI-only
+          const img: any = imageById.get(overrideId);
+          if (!img || !img.url) continue;
+          const scene = scenes[sIdx] as any;
+          scene.brandReferences = [{ assetUrl: img.url, tag: 'image1', label: img.label || 'Deck slide' }];
           scene.useOmniReference = true;
+          usedImages.add(overrideId);
           anchored++;
+          manualCount++;
         }
-        console.log(`[GenerateScript] Deck-to-Video: anchored ${anchored}/${normalizedImages.length} deck image(s) to scenes`);
+
+        // Auto-map the remaining images onto the remaining (unclaimed) scenes.
+        const remainingImages = normalizedImages.filter((i: any) => !usedImages.has(i.id));
+        if (remainingImages.length > 0) {
+          const sceneInputs = scenes.map((s: any, idx: number) => ({
+            index: idx,
+            type: s.type || s.contentType,
+            narration: s.narration,
+            visualDirection: s.visualDirection,
+          }));
+          const assignments = await mapDeckImagesToScenes(sceneInputs, remainingImages);
+          for (const a of assignments) {
+            if (claimedScenes.has(a.sceneIndex)) continue;
+            const scene = scenes[a.sceneIndex] as any;
+            if (!scene) continue;
+            if (Array.isArray(scene.brandReferences) && scene.brandReferences.length > 0) continue;
+            scene.brandReferences = [{ assetUrl: a.url, tag: 'image1', label: a.label || 'Deck slide' }];
+            scene.useOmniReference = true;
+            anchored++;
+          }
+        }
+        console.log(`[GenerateScript] Deck-to-Video: anchored ${anchored}/${normalizedImages.length} deck image(s) to scenes (${manualCount} manual override(s))`);
       } catch (deckErr: any) {
         console.warn(`[GenerateScript] Deck image anchoring failed (non-fatal): ${deckErr?.message}`);
       }

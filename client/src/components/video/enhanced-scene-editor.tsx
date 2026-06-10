@@ -39,6 +39,7 @@ import {
   RoleAwareReferenceSlots,
 } from "./scene-routing-ui";
 import { BrandReferencePanel } from "./brand-reference-panel";
+import { DeckSlidePicker } from "./deck-slide-picker";
 import type { BrandReferenceInput, Scene } from "@shared/video-types";
 import { RENDER_SYSTEM_TYPES, type RenderSystemType } from "@shared/video-types";
 import {
@@ -143,9 +144,11 @@ interface EnhancedSceneEditorProps {
   brand?: import("@shared/video-types").BrandSettings;
   projectMode?: string;
   projectPreferredProvider?: string;
+  /** Task #185: Deck-to-Video slide images (progress.deckImages), if any. */
+  deckImages?: Array<{ id: string; url: string; pageNumber?: number; label?: string }>;
 }
 
-export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, aspectRatio = "16:9", artPresetId, characters = [], onCharactersChange, brandColors, brand, projectMode, projectPreferredProvider }: EnhancedSceneEditorProps) {
+export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, aspectRatio = "16:9", artPresetId, characters = [], onCharactersChange, brandColors, brand, projectMode, projectPreferredProvider, deckImages = [] }: EnhancedSceneEditorProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -1631,6 +1634,19 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
               Upload your own image (AI adds motion via I2V) or video to use directly
             </p>
           </div>
+
+          {/* Task #185: Deck-to-Video — per-scene deck slide picker (only for
+              deck projects). Lets the user choose/swap/remove which slide
+              anchors this scene; persists an override that survives regen. */}
+          {deckImages.length > 0 && (
+            <DeckSlidePicker
+              projectId={projectId}
+              sceneId={sceneId}
+              deckImages={deckImages}
+              currentAnchorUrl={brandReferences[0]?.assetUrl || null}
+              onChanged={() => queryClient.invalidateQueries({ queryKey: ['project', projectId] })}
+            />
+          )}
 
           {/* Phase 20C: Brand References (Seedance 2 omni_reference) */}
           <div className="mb-3">

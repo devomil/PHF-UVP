@@ -2422,6 +2422,7 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
                         onCharactersChange={setProjectCharacters}
                         projectMode={(project?.progress as any)?.projectMode}
                         projectPreferredProvider={project?.preferredProvider}
+                        deckImages={(project?.progress as any)?.deckImages || []}
                         brandColors={(() => {
                           const bc = project?.brand?.colors;
                           if (bc && typeof bc === 'object' && !Array.isArray(bc)) {
