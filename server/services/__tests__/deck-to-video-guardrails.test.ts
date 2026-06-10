@@ -18,7 +18,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import express from "express";
 import request from "supertest";
 import { db } from "../../db";
-import { subscriptions, creditTransactions, users } from "../../../shared/schema";
+import { subscriptions, creditTransactions, users, rateLimitHits } from "../../../shared/schema";
 import { eq, and } from "drizzle-orm";
 
 // isAuthenticated → passthrough; the per-request user is injected by the
@@ -41,6 +41,7 @@ const PROVIDER = "deck-analysis";
 const TYPE_USER_ID = "test-deck-guardrails-type-190";
 const SIZE_USER_ID = "test-deck-guardrails-size-190";
 const RATE_USER_ID = "test-deck-guardrails-rate-190";
+const CONCURRENCY_USER_ID = "test-deck-guardrails-concurrency-196";
 const ANALYZE_RATE_LIMIT = 6;
 
 function makeApp(user: { id: string; role?: string | null } | null) {
@@ -148,6 +149,9 @@ describe("POST /api/deck-to-video/analyze — upload guardrails", () => {
     await ensureUser(RATE_USER_ID, "employee");
     // Plenty of credits so the cap, not affordability, is what stops us.
     await resetSubscription(RATE_USER_ID, 100_000);
+    // The limiter is now DB-backed (Task #196) and survives across runs, so
+    // clear any leftover hits for this subject to start from an empty window.
+    await db.delete(rateLimitHits).where(eq(rateLimitHits.subject, RATE_USER_ID));
     const app = makeApp({ id: RATE_USER_ID, role: "employee" });
 
     // The first ANALYZE_RATE_LIMIT (6) requests in the window all succeed.
@@ -177,5 +181,36 @@ describe("POST /api/deck-to-video/analyze — upload guardrails", () => {
     // ...and it neither ran the analysis nor wrote an extra ledger row.
     expect(analyzeDeckMock).toHaveBeenCalledTimes(ANALYZE_RATE_LIMIT);
     expect(await generationTxCount(RATE_USER_ID)).toBe(ANALYZE_RATE_LIMIT);
+  });
+
+  it("does not let parallel requests overshoot the cap (Task #196 concurrency)", async () => {
+    await ensureUser(CONCURRENCY_USER_ID, "employee");
+    await resetSubscription(CONCURRENCY_USER_ID, 100_000);
+    await db.delete(rateLimitHits).where(eq(rateLimitHits.subject, CONCURRENCY_USER_ID));
+    const app = makeApp({ id: CONCURRENCY_USER_ID, role: "employee" });
+
+    // Fire many requests at once for the SAME user. The DB-backed limiter must
+    // serialize the check/insert so no more than ANALYZE_RATE_LIMIT succeed —
+    // a naive count-then-insert would let several races slip through here.
+    const PARALLEL = 20;
+    const results = await Promise.all(
+      Array.from({ length: PARALLEL }, () =>
+        request(app)
+          .post("/api/deck-to-video/analyze")
+          .attach("file", Buffer.from("%PDF-1.4 fake deck bytes"), {
+            filename: "deck.pdf",
+            contentType: "application/pdf",
+          }),
+      ),
+    );
+
+    const ok = results.filter((r) => r.status === 200).length;
+    const throttled = results.filter((r) => r.status === 429).length;
+
+    expect(ok).toBe(ANALYZE_RATE_LIMIT);
+    expect(throttled).toBe(PARALLEL - ANALYZE_RATE_LIMIT);
+    // Exactly the allowed number ran the analysis and were charged — no overshoot.
+    expect(analyzeDeckMock).toHaveBeenCalledTimes(ANALYZE_RATE_LIMIT);
+    expect(await generationTxCount(CONCURRENCY_USER_ID)).toBe(ANALYZE_RATE_LIMIT);
   });
 });

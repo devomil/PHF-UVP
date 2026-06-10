@@ -12,6 +12,7 @@ import { isAuthenticated } from '../auth';
 import { analyzeDeck } from './deck-analysis-service';
 import { requireCredits } from '../middleware/requireCredits';
 import { consumeCredits, getCreditCost } from './credits-service';
+import { consumeRateLimit } from '../lib/rate-limit';
 
 // Provider id metered through the credit pipeline (see seed-generation-rates.ts
 // and providerPermissions.ts). One /analyze request == one charge.
@@ -33,21 +34,20 @@ const memUpload = multer({
 
 router.use(isAuthenticated);
 
-// Lightweight per-user in-memory rate limit — /analyze runs an expensive
-// multimodal LLM call, so cap each user to a handful of analyses per minute.
+// Per-user rate limit — /analyze runs an expensive multimodal LLM call, so cap
+// each user to a handful of analyses per minute. Backed by the persistent
+// `rate_limit_hits` table (Task #196) so the cap survives restarts/redeploys
+// and is shared across instances instead of living in process memory.
 const ANALYZE_RATE_LIMIT = 6;
 const ANALYZE_WINDOW_MS = 60_000;
-const analyzeHits = new Map<string, number[]>();
-function rateLimited(userId: string): boolean {
-  const now = Date.now();
-  const hits = (analyzeHits.get(userId) || []).filter((t) => now - t < ANALYZE_WINDOW_MS);
-  if (hits.length >= ANALYZE_RATE_LIMIT) {
-    analyzeHits.set(userId, hits);
-    return true;
-  }
-  hits.push(now);
-  analyzeHits.set(userId, hits);
-  return false;
+const ANALYZE_RATE_BUCKET = 'deck-analyze';
+function rateLimited(userId: string): Promise<boolean> {
+  return consumeRateLimit({
+    bucket: ANALYZE_RATE_BUCKET,
+    subject: userId,
+    limit: ANALYZE_RATE_LIMIT,
+    windowMs: ANALYZE_WINDOW_MS,
+  });
 }
 
 // Surface multer errors (oversized file, wrong mimetype) as JSON instead of
@@ -77,7 +77,7 @@ router.post('/analyze', uploadDeck, requireCredits({ provider: DECK_ANALYSIS_PRO
     if (!userId) {
       return res.status(401).json({ error: 'Not authenticated' });
     }
-    if (rateLimited(String(userId))) {
+    if (await rateLimited(String(userId))) {
       return res.status(429).json({ error: 'Too many deck analyses — please wait a minute and try again.' });
     }
 

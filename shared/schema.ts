@@ -993,3 +993,23 @@ export const billingEvents = pgTable("billing_events", {
 }, (table) => ({
   providerEventUnique: unique("uq_billing_events_provider_event").on(table.provider, table.eventId),
 }));
+
+// Persistent sliding-window rate limiter (Task #196). One row per request hit,
+// keyed by an arbitrary bucket (e.g. "deck-analyze") and subject (e.g. userId).
+// Survives restarts/redeploys and is shared across instances, unlike the old
+// in-memory Map. Expired rows are pruned opportunistically during checks.
+export const rateLimitHits = pgTable("rate_limit_hits", {
+  id: serial("id").primaryKey(),
+  bucket: varchar("bucket", { length: 100 }).notNull(),
+  subject: varchar("subject", { length: 200 }).notNull(),
+  hitAt: timestamp("hit_at").notNull().defaultNow(),
+}, (table) => ({
+  bucketSubjectHitAtIdx: index("idx_rate_limit_hits_bucket_subject_hit_at").on(
+    table.bucket,
+    table.subject,
+    table.hitAt,
+  ),
+}));
+
+export type RateLimitHit = typeof rateLimitHits.$inferSelect;
+export type InsertRateLimitHit = typeof rateLimitHits.$inferInsert;
