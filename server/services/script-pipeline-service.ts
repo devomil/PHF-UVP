@@ -34,6 +34,10 @@ export interface PipelineContext {
   contentStructure?: string | null;
   trendHooks?: string[] | null;
   projectPurpose?: string | null;
+  // Deck-to-Video: slides the user flagged as essential. Stage 2 must create a
+  // dedicated scene per slide and echo the slide id back as `deckSlideId` on that
+  // narrative scene so the route can anchor the real slide image deterministically.
+  requiredDeckSlides?: Array<{ id: string; label: string }> | null;
   // Phase 20D (Task #126): seed default per-scene durations from the
   // project's visual style id (`hero`, `social`, `educational`, …)
   // when the LLM doesn't supply an explicit duration. Falls back to
@@ -66,6 +70,9 @@ interface NarrativeScene {
   duration: number;
   emotionalBeat: string;
   keyMessage: string;
+  // Deck-to-Video: when this scene was created to cover a user-flagged deck
+  // slide, the slide's id is echoed here so the route can anchor its image.
+  deckSlideId?: string;
 }
 
 export interface PipelineResult {
@@ -432,6 +439,22 @@ async function stageTwoNarrative(
   const brandDesc = brand.brandName || "the brand";
   const platformRules = buildPlatformRules(ctx.projectType, ctx.platform, ctx.contentStructure);
 
+  // Deck-to-Video: when the user flagged specific deck slides as essential, force
+  // a dedicated scene per slide (woven into the flow, not bolted on) and have the
+  // LLM echo the slide id as `deckSlideId` so the route can anchor the real image.
+  const requiredSlides = Array.isArray(ctx.requiredDeckSlides) ? ctx.requiredDeckSlides : [];
+  const requiredBlock = requiredSlides.length > 0
+    ? `
+
+MANDATORY SLIDE COVERAGE (HIGHEST PRIORITY):
+The user has flagged the following ${requiredSlides.length} deck slide(s) as ESSENTIAL. You MUST create at least one dedicated scene for EACH of them, woven cohesively into the narrative arc (not all clustered at the end). For each such scene, set its "keyMessage" to communicate that slide's topic and set "deckSlideId" to the EXACT id shown in brackets below. Do NOT skip any of these:
+${requiredSlides.map((s, i) => `${i + 1}. [${s.id}] ${s.label}`).join('\n')}
+For every other (non-mandatory) scene, omit "deckSlideId" or set it to null.`
+    : '';
+
+  const baseSceneCount = Math.max(4, Math.min(12, Math.ceil(ctx.targetDuration / 8)));
+  const sceneCount = requiredSlides.length > 0 ? baseSceneCount + requiredSlides.length : baseSceneCount;
+
   const systemPrompt = `You are a narrative architect for short-form video. You take a creative strategy and turn it into a precise scene-by-scene structure with duration budgets.
 
 You return ONLY valid JSON. No markdown, no explanation outside the JSON.`;
@@ -456,6 +479,7 @@ SOURCE CONTENT:
 """
 ${ctx.description}
 """
+${requiredBlock}
 
 Return a JSON object:
 {
@@ -466,7 +490,8 @@ Return a JSON object:
       "purpose": "Why this scene exists in the narrative",
       "duration": 5,
       "emotionalBeat": "What the viewer should feel during this scene",
-      "keyMessage": "The key point this scene must communicate"
+      "keyMessage": "The key point this scene must communicate",
+      "deckSlideId": null
     }
   ],
   "totalDuration": ${ctx.targetDuration},
@@ -479,7 +504,7 @@ DURATION RULES:
 - Hook scenes: 3-5 seconds
 - CTA scenes: 5-8 seconds
 - Content scenes: 5-15 seconds each
-- Create ${Math.max(4, Math.min(12, Math.ceil(ctx.targetDuration / 8)))} scenes`;
+- Create ${sceneCount} scenes`;
 
   const raw = await callLLMWithRetry(systemPrompt, userPrompt, 3000, "Stage 2: Narrative Architecture");
   const parsed = extractJSON(raw);
@@ -496,6 +521,7 @@ DURATION RULES:
         duration: s.duration || fallbackDuration,
         emotionalBeat: s.emotionalBeat || "",
         keyMessage: s.keyMessage || "",
+        deckSlideId: typeof s.deckSlideId === "string" && s.deckSlideId.trim() ? s.deckSlideId.trim() : undefined,
       }))
     : [];
 

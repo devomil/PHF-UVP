@@ -3073,7 +3073,7 @@ router.post('/projects/:projectId/generate-script', isAuthenticated, async (req:
     }
 
     const platform = projectData.outputFormat?.platform || 'YouTube';
-    const targetDuration = projectData.totalDuration || 60;
+    let targetDuration = projectData.totalDuration || 60;
     const visualStyle = (projectData as any).visualStyle || req.body?.visualStyle || 'lifestyle';
     const numScenes = req.body?.numScenes || undefined;
 
@@ -3116,6 +3116,48 @@ router.post('/projects/:projectId/generate-script', isAuthenticated, async (req:
     const projectType = (projectData.progress as any)?.projectType || null;
     const contentStructure = (projectData.progress as any)?.contentStructure || null;
     const approvedOutline = (projectData.progress as any)?.approvedOutline || null;
+
+    // Deck-to-Video (one-shot, NOT persisted): the user can flag specific deck
+    // slides as essential via req.body.requiredDeckImageIds when regenerating.
+    // We resolve them to {id,label}, force a dedicated scene per slide in Stage 2,
+    // grow the video so each slide gets room (~5s), and anchor the real slide
+    // image deterministically after generation. A plain "Regenerate Script"
+    // (empty body) won't keep forcing them.
+    const isChapterBasedReq = Array.isArray(approvedOutline) && approvedOutline.length > 0;
+    let requiredDeckSlides: Array<{ id: string; label: string }> = [];
+    {
+      const bodyRequiredIds = Array.isArray(req.body?.requiredDeckImageIds)
+        ? (req.body.requiredDeckImageIds as any[]).map((x) => String(x)).filter(Boolean)
+        : [];
+      if (bodyRequiredIds.length > 0) {
+        const di = (projectData.progress as any)?.deckImages;
+        if (Array.isArray(di)) {
+          const byId = new Map(di.map((d: any) => [String(d.id), d]));
+          const seen = new Set<string>();
+          for (const id of bodyRequiredIds) {
+            if (seen.has(id)) continue;
+            seen.add(id);
+            const img: any = byId.get(id);
+            if (img) {
+              requiredDeckSlides.push({
+                id: String(img.id),
+                label: (typeof img.label === 'string' && img.label.trim())
+                  ? img.label.trim()
+                  : `Slide ${img.pageNumber || ''}`.trim(),
+              });
+            }
+          }
+        }
+        if (requiredDeckSlides.length > 0 && isChapterBasedReq) {
+          console.warn(`[GenerateScript] Deck-to-Video: ignoring ${requiredDeckSlides.length} required slide(s) on chapter-based project`);
+          requiredDeckSlides = [];
+        }
+        if (requiredDeckSlides.length > 0) {
+          targetDuration = targetDuration + requiredDeckSlides.length * 5;
+          console.log(`[GenerateScript] Deck-to-Video: ${requiredDeckSlides.length} required slide(s) flagged — grew target duration to ${targetDuration}s`);
+        }
+      }
+    }
 
     if (approvedOutline && Array.isArray(approvedOutline) && approvedOutline.length > 0) {
       const chapterDirective = approvedOutline.map((ch: any, idx: number) =>
@@ -3216,6 +3258,8 @@ router.post('/projects/:projectId/generate-script', isAuthenticated, async (req:
         contentStructure,
         trendHooks,
         projectPurpose,
+        // Deck-to-Video: force a dedicated scene per user-flagged slide.
+        requiredDeckSlides,
         // Phase 20D (Task #126): seed per-scene defaults from the
         // project's visual style when the LLM omits a duration.
         visualStyle,
@@ -3374,9 +3418,14 @@ router.post('/projects/:projectId/generate-script', isAuthenticated, async (req:
         // (keyed by scene index) so they win over the automatic mapping and
         // survive regeneration. A null imageId is an explicit "no slide here"
         // removal — we claim the scene so auto-mapping leaves it AI-only.
-        const manualAssignments = Array.isArray((projectData.progress as any)?.deckImageAssignments)
-          ? (projectData.progress as any).deckImageAssignments
-          : [];
+        // Deck-to-Video required-slide regen ignores stale manual overrides: they
+        // are keyed by the OLD scene indices and would mis-anchor after a full
+        // rebuild (they're also cleared from progress below).
+        const manualAssignments = requiredDeckSlides.length > 0
+          ? []
+          : (Array.isArray((projectData.progress as any)?.deckImageAssignments)
+              ? (projectData.progress as any).deckImageAssignments
+              : []);
         const claimedScenes = new Set<number>();
         const usedImages = new Set<string>();
         let anchored = 0;
@@ -3396,6 +3445,52 @@ router.post('/projects/:projectId/generate-script', isAuthenticated, async (req:
           usedImages.add(overrideId);
           anchored++;
           manualCount++;
+        }
+
+        // Deck-to-Video: deterministically anchor the user's REQUIRED slides onto
+        // the scenes Stage 2 generated for them. Stage 2 echoes the slide id as
+        // narrative.deckSlideId; when the final scene count matches the narrative
+        // we align by index, otherwise we force each still-unanchored required
+        // slide onto the first scene that still lacks a slide. This guarantees
+        // every flagged slide appears, rather than trusting the best-effort mapper.
+        if (requiredDeckSlides.length > 0) {
+          const narrativeScenes = Array.isArray((pipelineNarrative as any)?.scenes)
+            ? (pipelineNarrative as any).scenes
+            : [];
+          const stillNeeded = new Set(requiredDeckSlides.map((s) => s.id));
+          const anchorRequired = (sceneIdx: number, imgId: string): boolean => {
+            if (!Number.isInteger(sceneIdx) || sceneIdx < 0 || sceneIdx >= scenes.length) return false;
+            if (claimedScenes.has(sceneIdx)) return false;
+            const img: any = imageById.get(imgId);
+            if (!img || !img.url) return false;
+            const scene = scenes[sceneIdx] as any;
+            scene.brandReferences = [{ assetUrl: img.url, tag: 'image1', label: img.label || 'Deck slide' }];
+            scene.useOmniReference = true;
+            claimedScenes.add(sceneIdx);
+            usedImages.add(imgId);
+            anchored++;
+            return true;
+          };
+          // 1) index-aligned anchoring when the narrative lines up 1:1 with scenes
+          if (narrativeScenes.length === scenes.length) {
+            for (let i = 0; i < narrativeScenes.length; i++) {
+              const sid = narrativeScenes[i]?.deckSlideId ? String(narrativeScenes[i].deckSlideId) : '';
+              if (sid && stillNeeded.has(sid) && anchorRequired(i, sid)) {
+                stillNeeded.delete(sid);
+              }
+            }
+          }
+          // 2) force-attach any still-unanchored required slide to the first free scene
+          if (stillNeeded.size > 0) {
+            for (const sid of Array.from(stillNeeded)) {
+              const freeIdx = scenes.findIndex((s: any, idx: number) =>
+                !claimedScenes.has(idx) && !(Array.isArray(s.brandReferences) && s.brandReferences.length > 0));
+              if (freeIdx !== -1 && anchorRequired(freeIdx, sid)) {
+                stillNeeded.delete(sid);
+              }
+            }
+          }
+          console.log(`[GenerateScript] Deck-to-Video: anchored ${requiredDeckSlides.length - stillNeeded.size}/${requiredDeckSlides.length} required slide(s)${stillNeeded.size > 0 ? ` (${stillNeeded.size} could not be placed — no free scenes)` : ''}`);
         }
 
         // Auto-map the remaining images onto the remaining (unclaimed) scenes.
@@ -3440,6 +3535,13 @@ router.post('/projects/:projectId/generate-script', isAuthenticated, async (req:
         assembly: { status: 'pending', progress: 0, message: '' },
       },
     };
+
+    // Deck-to-Video: required-slide regeneration replaces all scenes, so stale
+    // per-scene manual deck-image overrides (keyed by old scene index) must be
+    // cleared or they'd hijack the wrong scenes on the next plain regeneration.
+    if (requiredDeckSlides.length > 0) {
+      delete (projectData.progress as any).deckImageAssignments;
+    }
 
     const dbUpdate: any = {
       scenes: projectData.scenes,
