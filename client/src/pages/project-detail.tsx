@@ -27,6 +27,7 @@ function normalizeProjectBrand(project: any): BrandSettings | undefined {
 import { useToast } from "@/hooks/use-toast";
 import { ProjectSceneDefaultsSection } from "@/components/video/project-scene-defaults-section";
 import { EnhancedSceneEditor } from "@/components/video/enhanced-scene-editor";
+import { DeckSlideOverview } from "@/components/video/deck-slide-overview";
 import { SceneOverlayEditor, SceneOverlayItem } from "@/components/video/scene-overlay-editor";
 import { SceneImageActions } from "@/components/video/scene-image-actions";
 import { S3BackgroundPicker } from "@/components/video/S3BackgroundPicker";
@@ -1787,6 +1788,24 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
               </div>
             </div>
 
+            {/* Task #195: Deck slide coverage overview (Deck-to-Video only) */}
+            {scriptReady && !isStudioPolish && ((project?.progress as any)?.deckImages?.length > 0) && (
+              <DeckSlideOverview
+                deckImages={(project?.progress as any)?.deckImages || []}
+                scenes={scenes}
+                onOpenScene={(id) => {
+                  setExpandedSceneId(id);
+                  if (typeof window !== 'undefined') {
+                    requestAnimationFrame(() => {
+                      document
+                        .getElementById(`scene-card-${id}`)
+                        ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    });
+                  }
+                }}
+              />
+            )}
+
             {/* Scene Cards */}
             <div className="space-y-3">
               {scenes.map((scene: any, index: number) => {
@@ -1827,7 +1846,7 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
                 );
 
                 return (
-                  <div key={sceneId}>
+                  <div key={sceneId} id={`scene-card-${sceneId}`}>
                     {showChapterHeader && (
                       <div className="flex items-center gap-2 mb-2 mt-3 first:mt-0">
                         <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg" style={{ backgroundColor: "rgba(139, 92, 246, 0.12)" }}>
