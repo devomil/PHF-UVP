@@ -146,9 +146,11 @@ interface EnhancedSceneEditorProps {
   projectPreferredProvider?: string;
   /** Task #185: Deck-to-Video slide images (progress.deckImages), if any. */
   deckImages?: Array<{ id: string; url: string; pageNumber?: number; label?: string }>;
+  /** Task #198: all project scenes, used to show deck-slide usage hints in the picker. */
+  allScenes?: any[];
 }
 
-export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, aspectRatio = "16:9", artPresetId, characters = [], onCharactersChange, brandColors, brand, projectMode, projectPreferredProvider, deckImages = [] }: EnhancedSceneEditorProps) {
+export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, aspectRatio = "16:9", artPresetId, characters = [], onCharactersChange, brandColors, brand, projectMode, projectPreferredProvider, deckImages = [], allScenes = [] }: EnhancedSceneEditorProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -1644,6 +1646,8 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
               sceneId={sceneId}
               deckImages={deckImages}
               currentAnchorUrl={brandReferences[0]?.assetUrl || null}
+              allScenes={allScenes}
+              currentSceneIndex={sceneIndex}
               onChanged={() => queryClient.invalidateQueries({ queryKey: ['project', projectId] })}
             />
           )}

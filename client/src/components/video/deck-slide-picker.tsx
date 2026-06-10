@@ -9,8 +9,9 @@
 // regeneration. The parent re-fetches the project on success.
 
 import { useState } from 'react';
-import { Presentation, Check, Sparkles, Loader2 } from 'lucide-react';
+import { Presentation, Check, Sparkles, Loader2, AlertCircle, Copy, MapPin } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { sceneIndicesUsingUrl } from './deck-usage';
 
 export interface DeckImage {
   id: string;
@@ -25,6 +26,14 @@ interface DeckSlidePickerProps {
   deckImages: DeckImage[];
   /** Current anchor URL on the scene (scene.brandReferences[0]?.assetUrl). */
   currentAnchorUrl?: string | null;
+  /**
+   * Task #198: all scenes in the project, used to derive per-slide usage hints
+   * (placed elsewhere / unused) inside the picker. Same derivation as the
+   * project-level overview — no new persistence.
+   */
+  allScenes?: any[];
+  /** 0-based index of the scene this picker belongs to (to exclude self). */
+  currentSceneIndex?: number;
   /** Invoked after a successful save so the parent can refetch the project. */
   onChanged?: () => void;
 }
@@ -34,6 +43,8 @@ export function DeckSlidePicker({
   sceneId,
   deckImages,
   currentAnchorUrl,
+  allScenes,
+  currentSceneIndex,
   onChanged,
 }: DeckSlidePickerProps) {
   const { toast } = useToast();
@@ -122,6 +133,35 @@ export function DeckSlidePicker({
         {deckImages.map((img) => {
           const selected = !isAiSelected && norm(img.url) === anchored;
           const isBusy = busyId === img.id;
+
+          // Task #198: derive where else this slide is placed. Exclude the
+          // current scene so the badge reflects usage *elsewhere*.
+          const otherScenes = sceneIndicesUsingUrl(allScenes || [], img.url)
+            .filter((idx) => idx !== currentSceneIndex)
+            .map((idx) => idx + 1);
+          const usedElsewhere = otherScenes.length > 0;
+
+          // Only show the unplaced/used-elsewhere hint when this slide isn't the
+          // current scene's anchor (the selected one already reads as "on this
+          // scene" via its check mark).
+          const showHint = !selected;
+          const hintUnused = showHint && !usedElsewhere;
+          const hintLabel = usedElsewhere
+            ? otherScenes.length > 1
+              ? `On ${otherScenes.length} scenes`
+              : `On scene ${otherScenes[0]}`
+            : 'Unused';
+          const HintIcon = usedElsewhere ? (otherScenes.length > 1 ? Copy : MapPin) : AlertCircle;
+          const hintStyle = usedElsewhere
+            ? { backgroundColor: 'rgba(99,102,241,0.85)', color: 'rgb(224,231,255)' }
+            : { backgroundColor: 'rgba(245,158,11,0.85)', color: 'rgb(255,251,235)' };
+
+          const titleText = selected
+            ? 'Click to remove this slide'
+            : usedElsewhere
+              ? `Already placed on scene${otherScenes.length > 1 ? 's' : ''} ${otherScenes.join(', ')} — click to also use it here`
+              : `Unused slide — click to place it on this scene`;
+
           return (
             <button
               key={img.id}
@@ -130,17 +170,31 @@ export function DeckSlidePicker({
               disabled={busyId !== null}
               className="relative group rounded-md overflow-hidden aspect-video transition-all disabled:opacity-60"
               style={{
-                border: selected ? '2px solid rgb(244 114 182)' : '1px solid var(--border-subtle)',
+                border: selected
+                  ? '2px solid rgb(244 114 182)'
+                  : hintUnused
+                    ? '1px dashed rgba(245,158,11,0.55)'
+                    : '1px solid var(--border-subtle)',
               }}
-              title={selected ? 'Click to remove this slide' : img.label || `Page ${img.pageNumber || ''}`}
+              title={titleText}
               data-testid={`deck-slide-${img.id}`}
             >
               <img
                 src={img.url}
                 alt={img.label || `Slide ${img.pageNumber || ''}`}
-                className="w-full h-full object-cover"
+                className={`w-full h-full object-cover ${hintUnused ? 'opacity-70 group-hover:opacity-95 transition-opacity' : ''}`}
                 loading="lazy"
               />
+              {showHint && !isBusy && (
+                <span
+                  className="absolute bottom-1 left-1 inline-flex items-center gap-0.5 text-[8px] leading-none px-1 py-0.5 rounded-full font-medium"
+                  style={hintStyle}
+                  data-testid={`deck-slide-usage-${img.id}`}
+                >
+                  <HintIcon className="w-2 h-2" />
+                  {hintLabel}
+                </span>
+              )}
               {isBusy && (
                 <span className="absolute inset-0 flex items-center justify-center bg-black/40">
                   <Loader2 className="w-4 h-4 animate-spin text-white" />

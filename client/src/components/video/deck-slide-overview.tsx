@@ -13,22 +13,13 @@
 
 import { Presentation, AlertCircle, CheckCircle2, Copy } from 'lucide-react';
 import type { DeckImage } from './deck-slide-picker';
+import { sceneUsesUrl } from './deck-usage';
 
 interface DeckSlideOverviewProps {
   deckImages: DeckImage[];
   scenes: any[];
   /** Open/expand and scroll to a scene by its id. */
   onOpenScene: (sceneId: string) => void;
-}
-
-const norm = (u?: string | null) => (u || '').trim();
-
-function refMatchesUrl(ref: any, url: string): boolean {
-  const target = norm(url);
-  if (!target) return false;
-  return [ref?.assetUrl, ref?.url, ref?.imageUrl].some(
-    (v) => norm(v) === target,
-  );
 }
 
 export function DeckSlideOverview({ deckImages, scenes, onOpenScene }: DeckSlideOverviewProps) {
@@ -41,11 +32,7 @@ export function DeckSlideOverview({ deckImages, scenes, onOpenScene }: DeckSlide
   const usage = deckImages.map((img) => {
     const usedBy = sceneList
       .map((s, idx) => ({ s, idx }))
-      .filter(
-        ({ s }) =>
-          Array.isArray(s?.brandReferences) &&
-          s.brandReferences.some((r: any) => refMatchesUrl(r, img.url)),
-      );
+      .filter(({ s }) => sceneUsesUrl(s, img.url));
     return { img, usedBy };
   });
 
