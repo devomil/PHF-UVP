@@ -18,6 +18,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { CreditCost } from "@/components/credits/credit-cost";
+import { useGenerationErrorHandler } from "@/hooks/use-generation-error-handler";
 
 type Mode = null | "ai-script" | "custom-script" | "quick-create" | "studio-polish" | "deck-to-video";
 
@@ -2750,6 +2752,7 @@ function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () => void; 
 
 function DeckToVideoForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onSubmit: (data: any) => void; isLoading: boolean }) {
   const { toast } = useToast();
+  const { handle: handleGenerationError } = useGenerationErrorHandler();
   const [file, setFile] = useState<File | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [analysis, setAnalysis] = useState<any>(null);
@@ -2776,8 +2779,22 @@ function DeckToVideoForm({ onBack, onSubmit, isLoading }: { onBack: () => void; 
       const formData = new FormData();
       formData.append("file", f);
       const res = await fetch("/api/deck-to-video/analyze", { method: "POST", body: formData, credentials: "include" });
+      if (!res.ok) {
+        // Surface 402/403 envelopes (insufficient credits / plan) through the
+        // shared top-up / upgrade flow instead of a generic error toast.
+        const handled = await handleGenerationError(res, "Analysis failed");
+        if (!handled) {
+          let msg = "Analysis failed";
+          try {
+            const data = await res.clone().json();
+            msg = data.error || msg;
+          } catch {}
+          toast({ title: "Analysis failed", description: msg, variant: "destructive" });
+        }
+        setFile(null);
+        return;
+      }
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Analysis failed");
       setAnalysis(data.analysis);
       setTitle(data.analysis?.suggestedTitle || f.name.replace(/\.pdf$/i, ""));
     } catch (err: any) {
@@ -2828,6 +2845,15 @@ function DeckToVideoForm({ onBack, onSubmit, isLoading }: { onBack: () => void; 
       </div>
 
       <div className="space-y-5">
+        {!analysis && (
+          <div className="space-y-1.5">
+            <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+              Analyzing a deck costs credits. Here's what it'll cost before you upload:
+            </p>
+            <CreditCost provider="deck-analysis" showDetail />
+          </div>
+        )}
+
         {!analysis && (
           <div
             role="button"
