@@ -2983,10 +2983,12 @@ export function DeckToVideoForm({ onBack, onSubmit, isLoading }: { onBack: () =>
             <div>
               <Label style={{ color: "var(--text-secondary)" }}>Video Format</Label>
               <Select value={projectTypeId} onValueChange={setProjectTypeId}>
-                <SelectTrigger className="mt-1.5" style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }} data-testid="select-deck-projecttype"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="mt-1.5" style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }} data-testid="select-deck-projecttype"><SelectValue placeholder="Choose a format" /></SelectTrigger>
                 <SelectContent style={{ backgroundColor: "var(--menu-bg)", borderColor: "var(--border-medium)" }}>
                   {projectTypes.map((pt: any) => (
-                    <SelectItem key={pt.id} value={pt.id} style={{ color: "var(--text-primary)" }}>{pt.name}</SelectItem>
+                    <SelectItem key={pt.id} value={pt.id} style={{ color: "var(--text-primary)" }}>
+                      {pt.label}{pt.subtitle ? ` · ${pt.subtitle}` : ""}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
