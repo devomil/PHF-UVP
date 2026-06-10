@@ -1641,19 +1641,21 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
               deck projects). Lets the user choose/swap/remove which slide
               anchors this scene; persists an override that survives regen. */}
           {deckImages.length > 0 && (
-            <DeckSlidePicker
-              projectId={projectId}
-              sceneId={sceneId}
-              deckImages={deckImages}
-              currentAnchorUrl={brandReferences[0]?.assetUrl || null}
-              allScenes={allScenes}
-              currentSceneIndex={sceneIndex}
-              onChanged={() => queryClient.invalidateQueries({ queryKey: ['project', projectId] })}
-            />
+            <div className="col-span-3">
+              <DeckSlidePicker
+                projectId={projectId}
+                sceneId={sceneId}
+                deckImages={deckImages}
+                currentAnchorUrl={brandReferences[0]?.assetUrl || null}
+                allScenes={allScenes}
+                currentSceneIndex={sceneIndex}
+                onChanged={() => queryClient.invalidateQueries({ queryKey: ['project', projectId] })}
+              />
+            </div>
           )}
 
           {/* Phase 20C: Brand References (Seedance 2 omni_reference) */}
-          <div className="mb-3">
+          <div className="mb-3 col-span-3">
             <BrandReferencePanel
               references={brandReferences}
               onChange={handleBrandReferencesChange}
