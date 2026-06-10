@@ -581,8 +581,8 @@ class VideoGenerationWorker {
               // ProductShowcaseHandler can resolve omni_reference inputs
               // without reaching back into the project graph.
               const sceneBrandRefs: string[] = Array.isArray((scene as any).brandReferences)
-                ? ((scene as any).brandReferences as Array<{ url?: string; imageUrl?: string }>)
-                    .map((r) => r?.url || r?.imageUrl)
+                ? ((scene as any).brandReferences as Array<{ assetUrl?: string; url?: string; imageUrl?: string }>)
+                    .map((r) => r?.assetUrl || r?.url || r?.imageUrl)
                     .filter((u): u is string => typeof u === 'string' && u.length > 0)
                 : [];
               const projectBrandKit: any =

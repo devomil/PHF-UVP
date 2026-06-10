@@ -3272,6 +3272,44 @@ router.post('/projects/:projectId/generate-script', isAuthenticated, async (req:
       }
     }
 
+    // Task #184: Deck-to-Video — anchor the deck's real slide images onto the
+    // most relevant generated scenes via scene.brandReferences[]. Gated on
+    // progress.deckImages so normal ai-script projects are unaffected. Entirely
+    // best-effort: any failure must NOT block the scenes from saving.
+    const deckImages = (projectData.progress as any)?.deckImages;
+    if (Array.isArray(deckImages) && deckImages.length > 0 && scenes.length > 0) {
+      try {
+        const { mapDeckImagesToScenes } = await import('./deck-analysis-service');
+        const sceneInputs = scenes.map((s: any, idx: number) => ({
+          index: idx,
+          type: s.type || s.contentType,
+          narration: s.narration,
+          visualDirection: s.visualDirection,
+        }));
+        const normalizedImages = deckImages.map((img: any) => ({
+          id: String(img.id || ''),
+          url: String(img.url || ''),
+          pageNumber: Number(img.pageNumber) || 0,
+          usable: true,
+          label: typeof img.label === 'string' ? img.label : '',
+          reason: '',
+        }));
+        const assignments = await mapDeckImagesToScenes(sceneInputs, normalizedImages);
+        let anchored = 0;
+        for (const a of assignments) {
+          const scene = scenes[a.sceneIndex] as any;
+          if (!scene) continue;
+          if (Array.isArray(scene.brandReferences) && scene.brandReferences.length > 0) continue;
+          scene.brandReferences = [{ assetUrl: a.url, tag: 'image1', label: a.label || 'Deck image' }];
+          scene.useOmniReference = true;
+          anchored++;
+        }
+        console.log(`[GenerateScript] Deck-to-Video: anchored ${anchored}/${normalizedImages.length} deck image(s) to scenes`);
+      } catch (deckErr: any) {
+        console.warn(`[GenerateScript] Deck image anchoring failed (non-fatal): ${deckErr?.message}`);
+      }
+    }
+
     projectData.scenes = scenes;
     projectData.progress = {
       ...projectData.progress,

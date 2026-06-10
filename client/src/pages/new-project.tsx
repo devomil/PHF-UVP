@@ -3,7 +3,7 @@ import { useLocation, Link } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Sparkles, FileText, Zap, ArrowLeft, Video, Image, Info, Plus, Trash2, ChevronUp, ChevronDown, GripVertical, Palette, Users, UserCheck, Upload, X, ImagePlus, Film, Loader2, AlertCircle, FileUp, BookOpen, TrendingUp, CheckCircle2, FolderOpen, Target, ShieldCheck, Megaphone, CalendarCheck, Share2, ShoppingBag, RefreshCw } from "lucide-react";
+import { Sparkles, FileText, Zap, ArrowLeft, Video, Image, Info, Plus, Trash2, ChevronUp, ChevronDown, GripVertical, Palette, Users, UserCheck, Upload, X, ImagePlus, Film, Loader2, AlertCircle, FileUp, BookOpen, TrendingUp, CheckCircle2, FolderOpen, Target, ShieldCheck, Megaphone, CalendarCheck, Share2, ShoppingBag, RefreshCw, Presentation } from "lucide-react";
 import { ProviderCatalogSelector } from "@/components/video/provider-catalog-selector";
 import { CharacterProfilesPanel } from "@/components/video/character-profiles-panel";
 import { AssetSuzzieChat } from "@/components/video/AssetSuzzieChat";
@@ -19,7 +19,7 @@ import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 
-type Mode = null | "ai-script" | "custom-script" | "quick-create" | "studio-polish";
+type Mode = null | "ai-script" | "custom-script" | "quick-create" | "studio-polish" | "deck-to-video";
 
 const DEFAULT_ALLOWED_TYPES: readonly ('video' | 'image')[] = ['image'] as const;
 
@@ -357,13 +357,24 @@ function ModeSelection({ onSelect }: { onSelect: (mode: Mode) => void }) {
       glow: "hover:shadow-amber-500/10",
       iconColor: "text-amber-400",
     },
+    {
+      id: "deck-to-video" as const,
+      icon: Presentation,
+      title: "Deck to Video",
+      description: "Upload a PDF pitch or concept deck and we'll analyze its message and visuals to auto-draft a brand-consistent marketing video",
+      bestFor: "Pitch decks, concept decks, sales one-pagers, marketing slides",
+      gradient: "from-pink-500/20 to-rose-600/5",
+      border: "hover:border-pink-500/50",
+      glow: "hover:shadow-pink-500/10",
+      iconColor: "text-pink-400",
+    },
   ];
 
   return (
     <div>
       <h1 className="text-3xl font-bold mb-2" style={{ color: "var(--text-primary)" }}>Create New Project</h1>
       <p className="mb-8" style={{ color: "var(--text-secondary)" }}>Choose how you want to create your video or image</p>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
         {modes.map((mode) => {
           const Icon = mode.icon;
           return (
@@ -2737,6 +2748,225 @@ function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () => void; 
   );
 }
 
+function DeckToVideoForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onSubmit: (data: any) => void; isLoading: boolean }) {
+  const { toast } = useToast();
+  const [file, setFile] = useState<File | null>(null);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [analysis, setAnalysis] = useState<any>(null);
+  const [title, setTitle] = useState("");
+  const [projectTypeId, setProjectTypeId] = useState("youtube-ad");
+  const [dragOver, setDragOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const projectTypes = getAllProjectTypes().filter((pt: any) => pt.id !== "long-story");
+
+  const analyzeFile = async (f: File) => {
+    if (f.type !== "application/pdf") {
+      toast({ title: "PDF required", description: "Please upload a PDF deck.", variant: "destructive" });
+      return;
+    }
+    if (f.size > 50 * 1024 * 1024) {
+      toast({ title: "File too large", description: "Decks must be under 50MB.", variant: "destructive" });
+      return;
+    }
+    setFile(f);
+    setAnalysis(null);
+    setAnalyzing(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", f);
+      const res = await fetch("/api/deck-to-video/analyze", { method: "POST", body: formData, credentials: "include" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Analysis failed");
+      setAnalysis(data.analysis);
+      setTitle(data.analysis?.suggestedTitle || f.name.replace(/\.pdf$/i, ""));
+    } catch (err: any) {
+      toast({ title: "Analysis failed", description: err.message, variant: "destructive" });
+      setFile(null);
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
+  const reset = () => {
+    setFile(null);
+    setAnalysis(null);
+    setTitle("");
+  };
+
+  const handleConfirm = () => {
+    if (!analysis) return;
+    const ptConfig = getProjectType(projectTypeId);
+    const usableImages = (analysis.images || []).filter((i: any) => i.usable && i.url);
+    onSubmit({
+      mode: "ai-script",
+      title: title || analysis.suggestedTitle || "Deck Video",
+      description: analysis.brief || analysis.coreMessage || "",
+      targetAudience: analysis.targetAudience || undefined,
+      duration: ptConfig?.defaultDuration || 60,
+      platform: ptConfig?.platform || "YouTube",
+      aspectRatio: ptConfig?.aspectRatio || "16:9",
+      qualityTier: ptConfig?.qualityTier || "premium",
+      artPresetId: "auto",
+      projectType: projectTypeId,
+      deck: {
+        images: usableImages,
+        coreMessage: analysis.coreMessage,
+        theme: analysis.theme,
+        suggestedDurationSec: analysis.suggestedDurationSec,
+      },
+    });
+  };
+
+  const usableImages = (analysis?.images || []).filter((i: any) => i.usable && i.url);
+
+  return (
+    <div className="max-w-2xl">
+      <div className="flex items-center gap-3 mb-6">
+        <Presentation className="w-6 h-6 text-pink-400" />
+        <h2 className="text-2xl font-bold" style={{ color: "var(--text-primary)" }}>Deck to Video</h2>
+      </div>
+
+      <div className="space-y-5">
+        {!analysis && (
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={() => !analyzing && fileInputRef.current?.click()}
+            onKeyDown={(e) => { if ((e.key === "Enter" || e.key === " ") && !analyzing) fileInputRef.current?.click(); }}
+            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setDragOver(false);
+              if (analyzing) return;
+              const f = e.dataTransfer.files?.[0];
+              if (f) analyzeFile(f);
+            }}
+            className="rounded-xl border-2 border-dashed p-10 text-center cursor-pointer transition-all"
+            style={{
+              borderColor: dragOver ? "rgb(244 114 182)" : "var(--border-medium)",
+              backgroundColor: dragOver ? "rgba(244,114,182,0.06)" : "var(--surface)",
+            }}
+            data-testid="dropzone-deck"
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="application/pdf"
+              className="hidden"
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) analyzeFile(f); e.target.value = ""; }}
+              data-testid="input-deck-file"
+            />
+            {analyzing ? (
+              <div className="flex flex-col items-center gap-3">
+                <Loader2 className="w-10 h-10 text-pink-400 animate-spin" />
+                <p className="font-medium" style={{ color: "var(--text-primary)" }}>Analyzing your deck…</p>
+                <p className="text-sm" style={{ color: "var(--text-muted)" }}>Reading text and visuals — this can take up to a minute.</p>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center gap-3">
+                <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-pink-500/20 to-rose-600/5 flex items-center justify-center">
+                  <FileUp className="w-7 h-7 text-pink-400" />
+                </div>
+                <p className="font-medium" style={{ color: "var(--text-primary)" }}>Drop your PDF deck here, or click to browse</p>
+                <p className="text-sm" style={{ color: "var(--text-muted)" }}>Pitch decks, concept decks, sales slides · PDF up to 50MB</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {analysis && (
+          <>
+            <div className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg" style={{ backgroundColor: "var(--surface)", border: "1px solid var(--border-subtle)" }}>
+              <div className="flex items-center gap-2 min-w-0">
+                <CheckCircle2 className="w-4 h-4 text-green-400 flex-shrink-0" />
+                <span className="text-sm truncate" style={{ color: "var(--text-secondary)" }}>{file?.name}</span>
+              </div>
+              <Button type="button" variant="ghost" size="sm" onClick={reset} style={{ color: "var(--text-muted)" }} data-testid="button-deck-reset">
+                <X className="w-4 h-4 mr-1" /> Replace
+              </Button>
+            </div>
+
+            <Card style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)" }}>
+              <CardContent className="pt-5 space-y-4">
+                {analysis.coreMessage && (
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide mb-1" style={{ color: "var(--text-muted)" }}>Core message</p>
+                    <p className="text-sm" style={{ color: "var(--text-primary)" }} data-testid="text-deck-coremessage">{analysis.coreMessage}</p>
+                  </div>
+                )}
+                {analysis.theme && (
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide mb-1" style={{ color: "var(--text-muted)" }}>Theme</p>
+                    <p className="text-sm" style={{ color: "var(--text-secondary)" }}>{analysis.theme}</p>
+                  </div>
+                )}
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: "var(--text-muted)" }}>
+                    Usable images ({usableImages.length})
+                  </p>
+                  {usableImages.length > 0 ? (
+                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                      {usableImages.map((img: any) => (
+                        <div key={img.id} className="relative group rounded-lg overflow-hidden aspect-video" style={{ border: "1px solid var(--border-subtle)" }} title={img.label}>
+                          <img src={img.url} alt={img.label || `Page ${img.pageNumber}`} className="w-full h-full object-cover" loading="lazy" />
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm" style={{ color: "var(--text-muted)" }}>No strong images found — your video will use AI-generated visuals.</p>
+                  )}
+                  {analysis.excludedCount > 0 && (
+                    <p className="text-xs mt-2" style={{ color: "var(--text-muted)" }}>
+                      {analysis.excludedCount} text-heavy or boilerplate page{analysis.excludedCount === 1 ? "" : "s"} excluded.
+                    </p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            <div>
+              <Label style={{ color: "var(--text-secondary)" }}>Project Title *</Label>
+              <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Enter project title" className="mt-1.5" style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }} data-testid="input-deck-title" />
+            </div>
+
+            <div>
+              <Label style={{ color: "var(--text-secondary)" }}>Video Format</Label>
+              <Select value={projectTypeId} onValueChange={setProjectTypeId}>
+                <SelectTrigger className="mt-1.5" style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }} data-testid="select-deck-projecttype"><SelectValue /></SelectTrigger>
+                <SelectContent style={{ backgroundColor: "var(--menu-bg)", borderColor: "var(--border-medium)" }}>
+                  {projectTypes.map((pt: any) => (
+                    <SelectItem key={pt.id} value={pt.id} style={{ color: "var(--text-primary)" }}>{pt.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex items-start gap-2 px-3 py-2 rounded-lg" style={{ backgroundColor: "rgba(99,102,241,0.08)", border: "1px solid rgba(99,102,241,0.25)" }}>
+              <Info className="w-4 h-4 mt-0.5 flex-shrink-0 text-indigo-300" />
+              <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
+                We'll draft a ~{analysis.suggestedDurationSec || 30}s marketing video using the AI script engine, anchoring your deck's images to matching scenes. Generation uses AI credits based on your selected providers.
+              </p>
+            </div>
+          </>
+        )}
+
+        <div className="flex gap-3 pt-2">
+          <Button type="button" variant="outline" onClick={onBack} style={{ borderColor: "var(--border-medium)", color: "var(--text-secondary)" }}>
+            <ArrowLeft className="w-4 h-4 mr-2" /> Back
+          </Button>
+          {analysis && (
+            <Button type="button" onClick={handleConfirm} className="bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-500 hover:to-rose-500" disabled={isLoading || !title} data-testid="button-deck-create">
+              {isLoading ? "Creating…" : "Create Video Project"}
+            </Button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function NewProject() {
   const [mode, setMode] = useState<Mode>(null);
   const [, setLocation] = useLocation();
@@ -2773,6 +3003,7 @@ export default function NewProject() {
       {mode === "custom-script" && <CustomScriptForm onBack={() => setMode(null)} onSubmit={handleSubmit} isLoading={createMutation.isPending} />}
       {mode === "quick-create" && <QuickCreateForm onBack={() => setMode(null)} onSubmit={handleSubmit} isLoading={createMutation.isPending} />}
       {mode === "studio-polish" && <StudioPolishForm onBack={() => setMode(null)} onSubmit={handleSubmit} isLoading={createMutation.isPending} />}
+      {mode === "deck-to-video" && <DeckToVideoForm onBack={() => setMode(null)} onSubmit={handleSubmit} isLoading={createMutation.isPending} />}
     </div>
   );
 }

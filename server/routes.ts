@@ -14,6 +14,7 @@ import brandMediaRouter from "./services/brand-media-routes";
 import mediaAssetRouter from "./services/media-asset-routes";
 import assetLibraryRouter from "./services/asset-library-routes";
 import uploadRouter from "./services/upload-routes";
+import deckToVideoRouter from "./services/deck-to-video-routes";
 import brandSettingsRouter from "./services/brand-settings-routes";
 import trendIntelligenceRouter from "./services/trend-intelligence-routes";
 import socialPublishingRouter from "./services/social-publishing-routes";
@@ -103,6 +104,7 @@ export async function registerRoutes(app: Express) {
   app.use("/api/media-assets", mediaAssetRouter);
   app.use("/api/asset-library", assetLibraryRouter);
   app.use("/api/videos", uploadRouter);
+  app.use("/api/deck-to-video", deckToVideoRouter);
   app.use("/api/brand-settings", brandSettingsRouter);
   app.use("/api/studio-polish", studioPolishUploadRouter);
   app.use("/api/trend-intelligence", trendIntelligenceRouter);
@@ -323,7 +325,7 @@ export async function registerRoutes(app: Express) {
         return res.status(401).json({ error: "Not authenticated" });
       }
 
-      const { mode, title, description, targetAudience, duration, platform, aspectRatio, mediaMode, videoGenerationMode, qualityTier, script, numScenes, visualStyle, voiceStyle, outputType, prompt, imageStyle, provider, saveToLibrary, customScenes, artPresetId, artPresetIds, characterConsistency, characters, characterReferenceUrl, characterName, characterDescription, generationMode, negativePrompt, sourceImageUrl, referenceVideoUrl, imageFidelity, productMediaUrl, scriptPresets, projectType, contentStructure, projectPurpose, productVisualDescription, i2iTransformType, i2iStrength, projectName } = req.body;
+      const { mode, title, description, targetAudience, duration, platform, aspectRatio, mediaMode, videoGenerationMode, qualityTier, script, numScenes, visualStyle, voiceStyle, outputType, prompt, imageStyle, provider, saveToLibrary, customScenes, artPresetId, artPresetIds, characterConsistency, characters, characterReferenceUrl, characterName, characterDescription, generationMode, negativePrompt, sourceImageUrl, referenceVideoUrl, imageFidelity, productMediaUrl, scriptPresets, projectType, contentStructure, projectPurpose, productVisualDescription, i2iTransformType, i2iStrength, projectName, deck } = req.body;
 
       const projectId = crypto.randomUUID();
 
@@ -393,6 +395,30 @@ export async function registerRoutes(app: Express) {
         if (productVisualDescription && typeof productVisualDescription === 'string' && productVisualDescription.trim().length > 0) {
           progressData.productVisualDescription = productVisualDescription.trim();
         }
+        // Task #184: Deck-to-Video — stash the deck's usable anchor images and a
+        // small analysis summary in progress. The generate-script route reads
+        // progress.deckImages to anchor specific real images onto scenes. We do
+        // NOT put these in assets.productImages (that would smear every image
+        // onto every product scene).
+        if (mode === "ai-script" && deck && typeof deck === 'object') {
+          const usableImages = Array.isArray((deck as any).images)
+            ? (deck as any).images.filter(
+                (img: any) => img && img.usable && typeof img.url === 'string' && img.url.trim().length > 0,
+              )
+            : [];
+          progressData.deckImages = usableImages.map((img: any) => ({
+            id: String(img.id || ''),
+            url: String(img.url),
+            pageNumber: Number(img.pageNumber) || 0,
+            label: typeof img.label === 'string' ? img.label : '',
+          }));
+          progressData.deckAnalysis = {
+            coreMessage: typeof (deck as any).coreMessage === 'string' ? (deck as any).coreMessage : '',
+            theme: typeof (deck as any).theme === 'string' ? (deck as any).theme : '',
+            usableCount: usableImages.length,
+          };
+          console.log(`[Routes] Deck-to-Video project with ${usableImages.length} anchor image(s)`);
+        }
         if (scriptPresets) {
           progressData.scriptPresets = scriptPresets;
         }
@@ -426,7 +452,9 @@ export async function registerRoutes(app: Express) {
           title: title || "Untitled Project",
           description: description || script || "",
           targetAudience: targetAudience || null,
-          totalDuration: derivedDuration,
+          totalDuration: (mode === "ai-script" && deck && Number((deck as any).suggestedDurationSec))
+            ? Math.min(90, Math.max(15, Math.round(Number((deck as any).suggestedDurationSec))))
+            : derivedDuration,
           fps: 30,
           outputFormat: { aspectRatio: derivedAspectRatio, resolution, platform: derivedPlatform },
           brand: brandData.brandName ? { name: brandData.brandName, tagline: brandData.tagline, website: brandData.website, colors: { primary: brandData.primaryColor, secondary: brandData.secondaryColor, accent: brandData.accentColor }, logoUrl: brandData.logoUrl, guidelines: brandData.guidelines } : {},

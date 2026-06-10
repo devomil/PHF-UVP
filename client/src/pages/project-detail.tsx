@@ -483,6 +483,20 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
     }
   }, [isLongStory, chapterOutline, outlinePhase, scenes.length]);
 
+  // Task #184: Deck-to-Video projects auto-draft their script on first open
+  // (the deck analysis already lives in progress; the generate-script route
+  // anchors the deck images onto the resulting scenes).
+  const deckScriptAutoTriggered = useRef(false);
+  const deckAnalysisPresent = !!(project.progress as any)?.deckAnalysis;
+
+  useEffect(() => {
+    const alreadyHasScript = outlinePhase === 'script_ready' || scenes.length > 0;
+    if (deckAnalysisPresent && !isLongStory && !alreadyHasScript && !generateScriptMutation.isPending && !deckScriptAutoTriggered.current) {
+      deckScriptAutoTriggered.current = true;
+      generateScriptMutation.mutate();
+    }
+  }, [deckAnalysisPresent, isLongStory, outlinePhase, scenes.length]);
+
   const approveOutlineMutation = useMutation({
     mutationFn: async (chapters: any[]) => {
       const res = await fetch(`/api/universal-video/projects/${projectId}/approve-outline`, {
