@@ -8,7 +8,8 @@
 //   1. Render each PDF page to a clean composited JPEG via Poppler `pdftoppm`
 //      (one image per slide — far more reliable than extracting embedded
 //      rasters, which are noisy: backgrounds, soft-masks, tiny logos, dups).
-//   2. Extract the deck's full text via pdf-parse.
+//   2. Extract the deck's full text via Poppler pdftotext (a child process, run
+//      in parallel with page rendering to keep the event loop free).
 //   3. Send text + page thumbnails to a multimodal LLM → a marketing brief plus
 //      per-page usability (photo/illustration-dominant slides are "usable"
 //      anchors; text-heavy / legal / footer / title / TOC pages are excluded).
@@ -27,7 +28,6 @@ import path from 'path';
 import crypto from 'crypto';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { llmClient } from './piapi-llm-client';
-import { extractTextFromBuffer } from './document-extraction-service';
 
 const execFileAsync = promisify(execFile);
 
@@ -176,18 +176,47 @@ interface RenderedPage {
   buffer: Buffer;
 }
 
-/** Render PDF pages to JPEG buffers via Poppler pdftoppm, then sample evenly. */
-async function renderPdfPages(pdfBuffer: Buffer): Promise<RenderedPage[]> {
+/**
+ * Render PDF pages to JPEG buffers via Poppler pdftoppm AND extract the deck's
+ * text via Poppler pdftotext, then sample pages evenly.
+ *
+ * Both steps run as Poppler *child processes* (in parallel) so the Node event
+ * loop stays free. The previous design extracted text in-process via `pdf-parse`
+ * on the full (often 20MB+) buffer, which stalls the event loop for long enough
+ * to drop the Vite dev HMR websocket; Vite then force-reloads the page mid-
+ * analysis, wiping the user's in-memory deck workflow and dumping them back to
+ * the workflow picker. Keeping the heavy work off the loop prevents that.
+ */
+async function renderPdfPages(pdfBuffer: Buffer): Promise<{ pages: RenderedPage[]; text: string }> {
   const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'deck-'));
   const pdfPath = path.join(workDir, 'deck.pdf');
   const prefix = path.join(workDir, 'page');
+  const txtPath = path.join(workDir, 'deck.txt');
   try {
     fs.writeFileSync(pdfPath, pdfBuffer);
-    await execFileAsync(
-      'pdftoppm',
-      ['-jpeg', '-r', RENDER_DPI, '-f', '1', '-l', String(MAX_RENDER_PAGES), pdfPath, prefix],
-      { timeout: 90_000, maxBuffer: 1024 * 1024 * 64 },
-    );
+    await Promise.all([
+      execFileAsync(
+        'pdftoppm',
+        ['-jpeg', '-r', RENDER_DPI, '-f', '1', '-l', String(MAX_RENDER_PAGES), pdfPath, prefix],
+        { timeout: 90_000, maxBuffer: 1024 * 1024 * 64 },
+      ),
+      // Text extraction is best-effort: a scanned/image-only deck yields no text,
+      // which is fine — the multimodal page images carry the analysis.
+      execFileAsync(
+        'pdftotext',
+        ['-enc', 'UTF-8', '-f', '1', '-l', String(MAX_RENDER_PAGES), pdfPath, txtPath],
+        { timeout: 60_000, maxBuffer: 1024 * 1024 * 64 },
+      ).catch((err: any) => {
+        console.warn(`[DeckToVideo] pdftotext failed (${err?.message}); continuing without deck text`);
+      }),
+    ]);
+
+    let text = '';
+    try {
+      text = fs.readFileSync(txtPath, 'utf8');
+    } catch {
+      /* no text file (image-only deck or pdftotext failed) — best effort */
+    }
 
     const files = fs
       .readdirSync(workDir)
@@ -213,10 +242,13 @@ async function renderPdfPages(pdfBuffer: Buffer): Promise<RenderedPage[]> {
       selected = picked;
     }
 
-    return selected.map((x) => ({
-      pageNumber: x.page,
-      buffer: fs.readFileSync(path.join(workDir, x.file)),
-    }));
+    return {
+      pages: selected.map((x) => ({
+        pageNumber: x.page,
+        buffer: fs.readFileSync(path.join(workDir, x.file)),
+      })),
+      text,
+    };
   } finally {
     try {
       fs.rmSync(workDir, { recursive: true, force: true });
@@ -340,23 +372,17 @@ export async function analyzeDeck(
     throw new Error('No LLM API configured — set PIAPI_API_KEY or ANTHROPIC_API_KEY');
   }
 
-  const [pages, extracted] = await Promise.all([
-    renderPdfPages(pdfBuffer),
-    extractTextFromBuffer(pdfBuffer, 'application/pdf', originalFilename).catch(() => ({
-      text: '',
-      wordCount: 0,
-      sourceFormat: 'pdf' as const,
-      title: undefined,
-    })),
-  ]);
+  // Page rendering AND text extraction both run as Poppler child processes
+  // (see renderPdfPages) so the event loop stays free during analysis.
+  const { pages, text: rawDeckText } = await renderPdfPages(pdfBuffer);
 
   // Truncate very long decks' text so the prompt stays bounded.
-  const deckText = (extracted.text || '').slice(0, 18_000);
+  const deckText = (rawDeckText || '').replace(/\f/g, '\n').trim().slice(0, 18_000);
 
   const contentParts: any[] = [
     {
       type: 'text',
-      text: `DECK TITLE (from file): ${extracted.title || originalFilename || 'Untitled'}\n\nDECK TEXT:\n${deckText || '(no extractable text)'}\n\nBelow are the rendered pages in order. Plan the marketing video.`,
+      text: `DECK TITLE (from file): ${originalFilename || 'Untitled'}\n\nDECK TEXT:\n${deckText || '(no extractable text)'}\n\nBelow are the rendered pages in order. Plan the marketing video.`,
     },
   ];
   for (const p of pages) {
@@ -424,7 +450,7 @@ export async function analyzeDeck(
   return {
     suggestedTitle: typeof parsed.suggestedTitle === 'string' && parsed.suggestedTitle.trim()
       ? parsed.suggestedTitle.trim()
-      : extracted.title || originalFilename || 'Deck Video',
+      : (originalFilename ? originalFilename.replace(/\.pdf$/i, '').trim() : '') || 'Deck Video',
     coreMessage: typeof parsed.coreMessage === 'string' ? parsed.coreMessage.trim() : '',
     theme: typeof parsed.theme === 'string' ? parsed.theme.trim() : '',
     targetAudience: typeof parsed.targetAudience === 'string' ? parsed.targetAudience.trim() : '',

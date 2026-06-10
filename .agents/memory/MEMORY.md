@@ -1,2 +1,8 @@
 - [Server has no hot-reload](server-no-hot-reload.md) — `tsx` server runs stale code until you restart_workflow; only the client HMRs. Backend edits silently no-op otherwise.
+- [Dev HMR reload wipes state](dev-hmr-reload-wipes-state.md) — event-loop-blocking dev request drops Vite's HMR socket → page reload wipes in-memory React state (looks like a redirect home). Dev-only.
 - [Deck analysis test LLM routing](deck-analysis-test-prompt-coupling.md) — test stubs route by a system-prompt substring; rewording the analysis prompt throws "Unexpected LLM systemPrompt".
+- [pdf-parse breaks under Vitest](pdf-parse-vitest-debug-mode.md) — pdf-parse's debug entry throws ENOENT on import in tests; mock to the internal lib build. (Deck path no longer uses pdf-parse.)
+- [Deck-to-Video image anchoring](deck-to-video-anchoring.md) — deck slide→scene overrides persist by scene INDEX (ids regenerate each script run); apply overrides first, auto-map the rest.
+- [LLM JSON truncation](llm-json-truncation.md) — LLM JSON silently truncates at max_tokens; put the longest array last, give max_tokens headroom, and repair the truncated tail before throwing.
+- [Scene brand references](scene-brand-references.md) — brandReferences use `assetUrl` as the canonical URL; some legacy readers only read `url`/`imageUrl` — read `assetUrl` first when flattening.
+- [Testing long pipelines](testing-long-pipelines.md) — bash caps at 120s and reaps background procs; shrink input (pdfseparate/pdfunite) and run the real pipeline synchronously in one tsx call.

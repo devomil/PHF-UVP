@@ -1,14 +1,14 @@
-// Task #187 — Automated coverage for the "Deck to Video" analysis pipeline.
+// Automated coverage for the "Deck to Video" analysis pipeline.
 //
 // analyzeDeck() and mapDeckImagesToScenes() were only ever smoke-tested by hand
 // on a trimmed slice of a real PDF, because the full multi-page pipeline blows
 // past the environment's command time limit. This test exercises the real
 // pipeline end-to-end against a small committed fixture PDF (3 pages, trimmed
-// from a real marketing deck so Poppler renders it and pdf-parse extracts text)
+// from a real marketing deck so Poppler renders it and extracts its text)
 // while stubbing the only two external dependencies — the multimodal LLM and
 // the image host — so the run is fast and deterministic.
 //
-// We deliberately do NOT mock Poppler (`pdftoppm`) or `pdf-parse`: rendering and
+// We deliberately do NOT mock Poppler (`pdftoppm` / `pdftotext`): rendering and
 // text extraction are core behaviours we want guarded against regressions.
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -29,18 +29,6 @@ vi.mock('../piapi-llm-client', () => ({
     createChatCompletion: createChatCompletionMock,
   },
 }));
-
-// pdf-parse's index.js runs a debug harness when `module.parent` is falsy — which
-// it is under Vitest — and tries to read a sample PDF that doesn't exist, throwing
-// ENOENT before our code runs. The real runtime (tsx/esbuild) never hits this. We
-// redirect the import to pdf-parse's real lib build so genuine PDF text extraction
-// still runs (this is NOT a stub of the extraction logic, only a bypass of the
-// broken debug entrypoint).
-vi.mock('pdf-parse', async () => {
-  // @ts-expect-error — pdf-parse ships no types for its internal lib build.
-  const real = await import('pdf-parse/lib/pdf-parse.js');
-  return { default: (real as any).default || real };
-});
 
 // Canned LLM analysis: page 1 is the text-heavy cover (excluded), pages 2 and 3
 // are rich images (usable). Pages are numbered 1..3 to match the fixture.
@@ -113,7 +101,7 @@ describe('deck-analysis-service — analyzeDeck() + mapDeckImagesToScenes()', ()
     expect(analysis.images.map((i) => i.pageNumber).sort()).toEqual([1, 2, 3]);
 
     // Text extraction is wired into the multimodal prompt. The fixture cover
-    // contains "THE BOOK" — assert it reached the LLM call (proves pdf-parse ran
+    // contains "THE BOOK" — assert it reached the LLM call (proves pdftotext ran
     // and its output was forwarded), and that rendered page images were attached.
     const analysisCall = createChatCompletionMock.mock.calls.find((c) =>
       (c[0]?.systemPrompt || '').includes('senior video strategist'),
@@ -184,6 +172,24 @@ describe('deck-analysis-service — analyzeDeck() + mapDeckImagesToScenes()', ()
     expect(page2.usable).toBe(true);
     expect(analysis.usableCount).toBe(1);
     expect(analysis.excludedCount).toBe(2);
+  });
+
+  it('falls back to the filename (sans .pdf) for the title when the LLM omits suggestedTitle', async () => {
+    // The repair path can return valid JSON that simply lacks suggestedTitle
+    // (e.g. the model dropped the field). The previous pdf-parse metadata title
+    // no longer exists, so the title must derive from the uploaded filename with
+    // its .pdf extension stripped — never crash on a missing binding.
+    const { suggestedTitle, ...withoutTitle } = ANALYSIS_JSON;
+    createChatCompletionMock.mockImplementation(async (options: any) => {
+      const sys: string = options?.systemPrompt || '';
+      if (sys.includes('senior video strategist')) return { text: JSON.stringify(withoutTitle) };
+      return routeLlm(options);
+    });
+
+    const { analyzeDeck } = await import('../deck-analysis-service');
+    const analysis = await analyzeDeck(pdfBuffer, 'Investor Deck Q3.pdf');
+
+    expect(analysis.suggestedTitle).toBe('Investor Deck Q3');
   });
 
   it('maps usable deck images onto scenes, one anchor per mappable scene', async () => {

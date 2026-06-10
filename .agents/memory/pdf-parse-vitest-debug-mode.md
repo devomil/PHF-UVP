@@ -26,7 +26,8 @@ vi.mock('pdf-parse', async () => {
 This keeps genuine PDF parsing (real text extraction) — it is NOT a stub of the
 parsing logic, only a bypass of the broken debug shim.
 
-**Why it matters:** `document-extraction-service.ts` (and therefore
-`deck-analysis-service.ts` `analyzeDeck`) depend on pdf-parse. Any test that
-exercises real PDF text extraction must apply this mock or it will assert against
-empty text.
+**Why it matters:** `document-extraction-service.ts` depends on pdf-parse. NOTE:
+the Deck-to-Video `analyzeDeck` path NO LONGER uses pdf-parse — it now extracts
+text with Poppler `pdftotext` as a child process to keep the event loop free, so
+only tests that exercise real pdf-parse extraction (document ingestion) need this
+mock, or they will assert against empty text.

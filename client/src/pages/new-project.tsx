@@ -24,6 +24,32 @@ import { useGenerationErrorHandler } from "@/hooks/use-generation-error-handler"
 
 type Mode = null | "ai-script" | "custom-script" | "quick-create" | "studio-polish" | "deck-to-video";
 
+// Deck-to-Video draft persistence.
+//
+// Deck analysis is a long (~30-50s) request. In the dev preview, the Vite HMR
+// websocket can briefly drop during it; on reconnect Vite force-reloads the page,
+// which would wipe the in-memory deck workflow (selected mode + completed
+// analysis) and dump the user back to the workflow picker — the "refreshes back
+// to home" the user reported. We persist the *completed* analysis to
+// sessionStorage so any reload restores the user to their results. The raw
+// uploaded File can't be persisted, but it isn't needed once analysis is done —
+// project creation is built entirely from the analysis payload.
+const DECK_DRAFT_KEY = "np:deck-draft";
+function readDeckDraft(): any | null {
+  try {
+    return JSON.parse(sessionStorage.getItem(DECK_DRAFT_KEY) || "null");
+  } catch {
+    return null;
+  }
+}
+function clearDeckDraft() {
+  try {
+    sessionStorage.removeItem(DECK_DRAFT_KEY);
+  } catch {
+    /* sessionStorage unavailable (private mode / SSR) — non-fatal */
+  }
+}
+
 const DEFAULT_ALLOWED_TYPES: readonly ('video' | 'image')[] = ['image'] as const;
 
 function AssetLibraryPicker({ onSelect, allowedTypes }: { onSelect: (asset: any) => void; allowedTypes?: ('video' | 'image')[] }) {
@@ -2754,16 +2780,35 @@ function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () => void; 
 export function DeckToVideoForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onSubmit: (data: any) => void; isLoading: boolean }) {
   const { toast } = useToast();
   const { handle: handleGenerationError } = useGenerationErrorHandler();
+  // Rehydrate from a persisted draft (set after a successful analysis) so an
+  // unexpected reload returns the user to their results instead of the picker.
   const [file, setFile] = useState<File | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
-  const [analysis, setAnalysis] = useState<any>(null);
+  const [analysis, setAnalysis] = useState<any>(() => readDeckDraft()?.analysis ?? null);
   const [error, setError] = useState<string | null>(null);
-  const [title, setTitle] = useState("");
-  const [projectTypeId, setProjectTypeId] = useState("youtube-ad");
-  const [audience, setAudience] = useState<string>(DEFAULT_DECK_AUDIENCE_ID);
-  const [analyzedAudience, setAnalyzedAudience] = useState<string | null>(null);
+  const [title, setTitle] = useState(() => readDeckDraft()?.title ?? "");
+  const [projectTypeId, setProjectTypeId] = useState(() => readDeckDraft()?.projectTypeId ?? "youtube-ad");
+  const [audience, setAudience] = useState<string>(() => readDeckDraft()?.audience ?? DEFAULT_DECK_AUDIENCE_ID);
+  const [analyzedAudience, setAnalyzedAudience] = useState<string | null>(() => readDeckDraft()?.analyzedAudience ?? null);
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Persist the completed analysis (and the user's choices) so a reload can
+  // restore it; clear the draft whenever there's no analysis to recover.
+  useEffect(() => {
+    try {
+      if (analysis) {
+        sessionStorage.setItem(
+          DECK_DRAFT_KEY,
+          JSON.stringify({ analysis, title, projectTypeId, audience, analyzedAudience }),
+        );
+      } else {
+        sessionStorage.removeItem(DECK_DRAFT_KEY);
+      }
+    } catch {
+      /* sessionStorage unavailable / quota — non-fatal, drop the safety net */
+    }
+  }, [analysis, title, projectTypeId, audience, analyzedAudience]);
 
   const projectTypes = getAllProjectTypes().filter((pt: any) => pt.id !== "long-story");
 
@@ -3102,7 +3147,9 @@ export function DeckToVideoForm({ onBack, onSubmit, isLoading }: { onBack: () =>
 }
 
 export default function NewProject() {
-  const [mode, setMode] = useState<Mode>(null);
+  // Resume an interrupted Deck-to-Video flow after an unexpected reload: if a
+  // completed analysis draft was persisted, drop the user straight back into it.
+  const [mode, setMode] = useState<Mode>(() => (readDeckDraft() ? "deck-to-video" : null));
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -3113,6 +3160,7 @@ export default function NewProject() {
       return res.json();
     },
     onSuccess: (data: any) => {
+      clearDeckDraft();
       queryClient.invalidateQueries({ queryKey: ["projects"] });
       toast({ title: "Project created", description: "Your project has been created successfully." });
       setLocation(`/projects/${data.projectId}`);
@@ -3137,7 +3185,7 @@ export default function NewProject() {
       {mode === "custom-script" && <CustomScriptForm onBack={() => setMode(null)} onSubmit={handleSubmit} isLoading={createMutation.isPending} />}
       {mode === "quick-create" && <QuickCreateForm onBack={() => setMode(null)} onSubmit={handleSubmit} isLoading={createMutation.isPending} />}
       {mode === "studio-polish" && <StudioPolishForm onBack={() => setMode(null)} onSubmit={handleSubmit} isLoading={createMutation.isPending} />}
-      {mode === "deck-to-video" && <DeckToVideoForm onBack={() => setMode(null)} onSubmit={handleSubmit} isLoading={createMutation.isPending} />}
+      {mode === "deck-to-video" && <DeckToVideoForm onBack={() => { clearDeckDraft(); setMode(null); }} onSubmit={handleSubmit} isLoading={createMutation.isPending} />}
     </div>
   );
 }
