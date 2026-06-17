@@ -1,5 +1,6 @@
 import { VIDEO_PROVIDER_CATALOG, IMAGE_PROVIDER_CATALOG } from '../../shared/provider-catalog';
 import { getAllVisualArtPresets } from '../../shared/config/visual-art-presets';
+import { getMultiImageSupport } from '../../shared/provider-config';
 
 interface SuzzieSceneContext {
   narration?: string;
@@ -116,6 +117,8 @@ export function buildSuzzieSystemPrompt(context: SuzzieSceneContext): string {
   const providerKnowledge = buildProviderKnowledge();
   const artStyleKnowledge = buildArtStyleKnowledge();
 
+  const multiImageSupport = context.provider ? getMultiImageSupport(context.provider) : null;
+
   let sceneContext = '';
   if (context.narration || context.sceneType || context.artPresetName) {
     sceneContext = `\n## Current Scene Context`;
@@ -127,6 +130,27 @@ export function buildSuzzieSystemPrompt(context: SuzzieSceneContext): string {
     if (context.narration) sceneContext += `\nNarration: "${context.narration}"`;
     if (context.visualDirection) sceneContext += `\nCurrent Visual Direction: "${context.visualDirection}"`;
   }
+
+  const multiImageGuidance = multiImageSupport ? `
+
+## @imageN Syntax — Multi-Image References
+The selected provider (${context.provider}) supports up to ${multiImageSupport.maxImages} reference images using **@imageN** syntax directly inside the visual direction prompt.
+
+**How it works:**
+- The user uploads multiple reference images to the scene (image1, image2, …)
+- They reference each one in the prompt using @image1, @image2, @image3, etc.
+- The AI uses them as anchors, morphing sources, or character references within a single generated clip
+
+**Example prompts to suggest:**
+- "@image1 morphs into @image2 with a liquid dissolve transition, slow and cinematic"
+- "@image1 as the opening frame — camera slowly orbits right to reveal @image2 in the same golden-hour environment"
+- "A woman (@image1) walks toward the camera; @image2 fades in beside her, same warm studio lighting"
+- "@image1 dissolves into @image2 like watercolor paint bleeding through wet canvas — dreamy, slow"
+- "Start on @image1 product, sweep the camera right, blend to @image2 product with a warm light transition"
+
+**Tip:** ${multiImageSupport.hint}
+
+When the user asks about using multiple images, combining subjects, or creating morphing transitions, proactively suggest the @imageN pattern and offer to write an optimized prompt using it.` : '';
 
   const i2vGuidance = context.hasReferenceImage ? `
 
@@ -163,6 +187,7 @@ ${providerKnowledge}
 ## Art Style Presets
 ${artStyleKnowledge}
 ${sceneContext}
+${multiImageGuidance}
 ${i2vGuidance}
 
 ## Image Analysis
@@ -305,6 +330,9 @@ The negative prompt is for ADDITIONAL safety rails not covered in the main promp
 export function buildAssetLibrarySuzziePrompt(context: SuzzieAssetLibraryContext): string {
   const providerKnowledge = buildProviderKnowledge();
 
+  const resolvedProvider = context.provider && context.provider !== 'auto' ? context.provider : null;
+  const multiImageSupportAsset = resolvedProvider ? getMultiImageSupport(resolvedProvider) : null;
+
   const modeLabels: Record<string, string> = {
     't2i': 'Text-to-Image',
     't2v': 'Text-to-Video',
@@ -314,12 +342,33 @@ export function buildAssetLibrarySuzziePrompt(context: SuzzieAssetLibraryContext
 
   let currentContext = `\n## Current Asset Creator Context`;
   currentContext += `\nMode: ${modeLabels[context.mode] || context.mode}`;
-  if (context.provider && context.provider !== 'auto') currentContext += `\nSelected Provider: ${context.provider}`;
+  if (resolvedProvider) currentContext += `\nSelected Provider: ${resolvedProvider}`;
   if (context.prompt) currentContext += `\nCurrent Prompt Draft: "${context.prompt}"`;
   if (context.hasReferenceImage) currentContext += `\nReference Image: Yes (user has uploaded a reference image)`;
   if (context.aspectRatio) currentContext += `\nAspect Ratio: ${context.aspectRatio}`;
   if (context.duration) currentContext += `\nDuration: ${context.duration}s`;
   if (context.style) currentContext += `\nStyle: ${context.style}`;
+
+  const multiImageGuidanceAsset = multiImageSupportAsset ? `
+
+## @imageN Syntax — Multi-Image References
+The selected provider (${resolvedProvider}) supports up to ${multiImageSupportAsset.maxImages} reference images using **@imageN** syntax directly in the prompt.
+
+**How it works:**
+- The user uploads multiple reference images (image slots in the asset creator)
+- Reference them as @image1, @image2, @image3, etc. in the prompt text
+- The AI treats each tagged reference as an anchor, character, or morph source within a single generated clip
+
+**Example prompts to suggest:**
+- "@image1 morphs into @image2 with a liquid dissolve transition, slow and cinematic"
+- "@image1 as the opening frame — camera slowly orbits right to reveal @image2 in the same golden-hour environment"
+- "A woman (@image1) walks toward the camera; @image2 fades in beside her, same warm studio lighting"
+- "@image1 dissolves into @image2 like watercolor paint bleeding through wet canvas — dreamy, slow"
+- "Start on @image1 product, sweep the camera right, blend to @image2 product with a warm light transition"
+
+**Tip:** ${multiImageSupportAsset.hint}
+
+When the user wants to combine multiple images, create morphing effects, or introduce multiple subjects, proactively suggest the @imageN pattern and write a prompt that demonstrates it.` : '';
 
   const creativeSeed = Math.floor(Math.random() * 10000);
   const creativeAngles = [
@@ -354,6 +403,7 @@ ${ASSET_LIBRARY_PROMPT_GUIDANCE}
 
 ${providerKnowledge}
 ${currentContext}
+${multiImageGuidanceAsset}
 
 ## Response Format (CRITICAL — follow exactly)
 When you have a prompt suggestion, include ALL relevant suggestions in a SINGLE JSON block. Always include a negative prompt for I2V and T2V modes — but NEVER duplicate terms already stated in the main prompt. The negative prompt should only contain ADDITIONAL safety rails. Include suggestedCfgScale for I2V when the user has a product/object that needs source frame preservation.
