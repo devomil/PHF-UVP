@@ -9,6 +9,7 @@ import { CharacterProfilesPanel } from "@/components/video/character-profiles-pa
 import { AssetSuzzieChat } from "@/components/video/AssetSuzzieChat";
 import { getAvailableStyles } from "@shared/visual-style-config";
 import { getAllVisualArtPresets, isStylizedPreset, type VisualArtPreset } from "@shared/config/visual-art-presets";
+import { VIDEO_PROVIDERS as SHARED_VIDEO_PROVIDERS } from "@shared/provider-config";
 import { getAllProjectTypes, getProjectType, CONTENT_STRUCTURES, LONG_STORY_DEFAULT_ART_PRESET_IDS, getAllProjectPurposes } from "@shared/config/project-types";
 import { DECK_AUDIENCES, DEFAULT_DECK_AUDIENCE_ID, getDeckAudience } from "@shared/config/deck-audiences";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -1639,41 +1640,42 @@ const QC_MODE_CONFIG: Record<QuickCreateMode, { label: string; shortLabel: strin
 };
 
 const QC_VIDEO_PROVIDERS = [
-  { id: 'auto', name: 'Auto (Best Match)' },
+  { id: 'auto', name: 'Auto (Best Match)', description: 'Automatically picks the best provider for your prompt and style' },
   // Kling family
-  { id: 'kling-2.6', name: 'Kling 2.6' },
-  { id: 'kling-2.6-pro', name: 'Kling 2.6 Pro' },
-  { id: 'kling-2.1-master', name: 'Kling 2.1 Master' },
-  { id: 'kling-2.6-motion-control-pro', name: 'Kling 2.6 Motion Control Pro' },
-  { id: 'kling-effects', name: 'Kling Effects (VFX)' },
+  { id: 'kling-2.6', name: 'Kling 2.6', description: 'Cinematic motion control, character consistency, and native audio' },
+  { id: 'kling-2.6-pro', name: 'Kling 2.6 Pro', description: 'Premium audio fidelity with broadcast-ready dialogue and visuals' },
+  { id: 'kling-2.1-master', name: 'Kling 2.1 Master', description: 'Premium quality rendering for hero shots and cinematic content' },
+  { id: 'kling-2.6-motion-control-pro', name: 'Kling 2.6 Motion Control Pro', description: 'Motion transfer for professional choreography and dance sequences' },
+  { id: 'kling-effects', name: 'Kling Effects (VFX)', description: 'VFX overlays, particle effects, and visual transitions' },
   // Veo
-  { id: 'veo-3.1', name: 'Veo 3.1' },
+  { id: 'veo-3.1', name: 'Veo 3.1', description: '4K cinematic quality with advanced physics and native audio/dialogue' },
   // Luma
-  { id: 'luma', name: 'Luma Dream Machine' },
+  { id: 'luma', name: 'Luma Dream Machine', description: 'Product reveals, smooth 3D transitions, object-focused shots' },
   // Hailuo
-  { id: 'hailuo', name: 'Hailuo MiniMax' },
+  { id: 'hailuo', name: 'Hailuo MiniMax', description: 'Cost-effective b-roll, nature scenes, and high-volume generation' },
   // Wan
-  { id: 'wan-2.6', name: 'Wan 2.6' },
+  { id: 'wan-2.6', name: 'Wan 2.6', description: 'Text rendering, character consistency, conceptual visuals' },
   // Pika
-  { id: 'pika', name: 'Pika' },
+  { id: 'pika', name: 'Pika', description: 'Artistic stylization, bold visual effects, creative interpretation' },
   // Seedance
-  { id: 'seedance-1.0', name: 'Seedance 1.0' },
-  { id: 'seedance-2.0', name: 'Seedance 2' },
-  { id: 'seedance-2.0-fast', name: 'Seedance 2 Fast' },
+  { id: 'seedance-1.0', name: 'Seedance 1.0', description: 'Dance and rhythmic motion with fluid body movement' },
+  { id: 'seedance-2.0', name: 'Seedance 2', description: 'Multi-image morphing via @imageN syntax, 1080p, up to 15s' },
+  { id: 'seedance-2.0-fast', name: 'Seedance 2 Fast', description: 'Fast multi-image generation, budget-friendly, 1080p output' },
   // Sora
-  { id: 'sora-2', name: 'Sora 2' },
-  { id: 'sora-2-pro', name: 'Sora 2 Pro' },
+  { id: 'sora-2', name: 'Sora 2', description: 'Consistent visual style with strong prompt understanding' },
+  { id: 'sora-2-pro', name: 'Sora 2 Pro', description: 'Premium Sora with enhanced fidelity and extended generation control' },
   // Hunyuan
-  { id: 'hunyuan', name: 'Hunyuan' },
+  { id: 'hunyuan', name: 'Hunyuan', description: 'Complex nature scenes, abstract visuals, multi-element compositions' },
   // Runway
-  { id: 'runway', name: 'Runway Gen-3' },
-  { id: 'runway-4.5', name: 'Runway 4.5' },
-  { id: 'runway-gen4', name: 'Runway Gen-4' },
-  { id: 'runway-gen4-aleph', name: 'Runway Gen-4 Aleph' },
+  { id: 'runway', name: 'Runway Gen-3', description: 'Cinematic storytelling with dramatic lighting and smooth motion' },
+  { id: 'runway-4.5', name: 'Runway 4.5', description: 'Top-tier photorealism with advanced camera control and multi-image support' },
+  { id: 'runway-gen4', name: 'Runway Gen-4', description: 'Advanced motion manipulation and dramatic storytelling' },
+  { id: 'runway-gen4-aleph', name: 'Runway Gen-4 Aleph', description: 'Creative visual effects, artistic interpretation, superior transitions' },
+  { id: 'runway-act-two', name: 'Runway Act Two', description: 'Character performance, acting, facial expression, and emotional control' },
   // Avatar / Talking Photo
-  { id: 'kling-avatar', name: 'Kling AI Avatar' },
-  { id: 'omniavatar', name: 'OmniAvatar' },
-  { id: 'omni-human-1.5', name: 'OmniHuman 1.5 (Talking Photo)' },
+  { id: 'kling-avatar', name: 'Kling AI Avatar', description: 'Lip-sync talking heads, long-form presenter and spokesperson content' },
+  { id: 'omniavatar', name: 'OmniAvatar', description: 'AI avatar generation with consistent identity and expression' },
+  { id: 'omni-human-1.5', name: 'OmniHuman 1.5 (Talking Photo)', description: 'Animate a portrait with audio — realistic lip-sync and head motion' },
 ];
 
 interface UploadedFile {
@@ -2126,24 +2128,24 @@ function StudioPolishForm({ onBack, onSubmit, isLoading }: { onBack: () => void;
 }
 
 const QC_IMAGE_PROVIDERS = [
-  { id: 'auto', name: 'Auto (Best Match)' },
-  { id: 'flux', name: 'Flux Schnell' },
-  { id: 'flux-1-dev', name: 'Flux Dev' },
-  { id: 'ideogram', name: 'Ideogram' },
+  { id: 'auto', name: 'Auto (Best Match)', description: 'Automatically picks the best image provider for your prompt' },
+  { id: 'flux', name: 'Flux Schnell', description: 'Product shots, clean compositions, commercial quality images' },
+  { id: 'flux-1-dev', name: 'Flux Dev', description: 'Experimental Flux variant with additional creative flexibility' },
+  { id: 'ideogram', name: 'Ideogram', description: 'Text-heavy images, typography, logos, and graphic design' },
 ];
 
 const QC_I2I_PROVIDERS = [
-  { id: 'auto', name: 'Auto (Best Match)' },
-  { id: 'nano-banana-pro', name: 'Nano Banana Pro' },
-  { id: 'flux-kontext', name: 'Flux Kontext' },
-  { id: 'flux-1.1-pro', name: 'Flux 1.1 Pro' },
-  { id: 'ideogram', name: 'Ideogram' },
+  { id: 'auto', name: 'Auto (Best Match)', description: 'Automatically selects the best image-to-image transformation provider' },
+  { id: 'nano-banana-pro', name: 'Nano Banana Pro', description: 'Advanced style transfer and photorealistic scene integration' },
+  { id: 'flux-kontext', name: 'Flux Kontext', description: 'Edit images with contextual understanding of existing content' },
+  { id: 'flux-1.1-pro', name: 'Flux 1.1 Pro', description: 'High-fidelity image editing with professional-grade output' },
+  { id: 'ideogram', name: 'Ideogram', description: 'Text-accurate image transformation with graphic design capabilities' },
 ];
 
 const QC_V2V_PROVIDERS = [
-  { id: 'auto', name: 'Auto (Kling Object Replace)' },
-  { id: 'kling-2.6', name: 'Kling 2.6 (Object Replace)' },
-  { id: 'runway-gen4-aleph', name: 'Runway Gen-4 Aleph (V2V)' },
+  { id: 'auto', name: 'Auto (Kling Object Replace)', description: 'Automatically uses Kling for seamless object replacement' },
+  { id: 'kling-2.6', name: 'Kling 2.6 (Object Replace)', description: 'Replace objects in video with AI-generated content' },
+  { id: 'runway-gen4-aleph', name: 'Runway Gen-4 Aleph (V2V)', description: 'Transform video content with creative Gen-4 Aleph processing' },
 ];
 
 function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onSubmit: (data: any) => void; isLoading: boolean }) {
@@ -2177,10 +2179,16 @@ function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () => void; 
   const refImageSectionRef = useRef<HTMLDivElement>(null);
   const refVideoSectionRef = useRef<HTMLDivElement>(null);
   const audioInputRef = useRef<HTMLInputElement>(null);
+  const additionalRefInputRef = useRef<HTMLInputElement>(null);
+  const [additionalRefImages, setAdditionalRefImages] = useState<Array<{ url: string; preview: string }>>([]);
+  const [isUploadingAdditionalRef, setIsUploadingAdditionalRef] = useState(false);
 
   const allPresets = getAllVisualArtPresets();
   const cfg = QC_MODE_CONFIG[genMode];
   const outputType = cfg.outputType;
+  const i2vMultiImageSupport = genMode === 'i2v'
+    ? (SHARED_VIDEO_PROVIDERS[provider]?.multiImageSupport ?? null)
+    : null;
 
   const showCharacterSelector = outputType === "video" && artPresetId === "3d-illustration" && genMode !== 'v2v';
 
@@ -2217,6 +2225,7 @@ function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () => void; 
     if (provider !== "auto" && !newValidIds.includes(provider)) {
       setProvider("auto");
     }
+    setAdditionalRefImages([]);
     setValidationError(null);
   }, [genMode]);
 
@@ -2293,6 +2302,9 @@ function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () => void; 
       i2iTransformType: genMode === "i2i" ? i2iTransformType : undefined,
       i2iStrength: genMode === "i2i" ? i2iStrength : undefined,
       audioUrl: (genMode === 'i2v' && provider === 'omni-human-1.5' && audioUrl) ? audioUrl : undefined,
+      referenceImages: (genMode === 'i2v' && additionalRefImages.length > 0)
+        ? additionalRefImages.map(i => i.url)
+        : undefined,
     };
     if (selectedCharacter && selectedCharacter.referenceImageUrl) {
       payload.characterReferenceUrl = selectedCharacter.referenceImageUrl;
@@ -2402,6 +2414,84 @@ function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () => void; 
           </div>
         )}
 
+        {genMode === 'i2v' && i2vMultiImageSupport && (
+          <div>
+            <Label style={{ color: "var(--text-secondary)" }}>
+              Additional Reference Images{' '}
+              <span className="font-normal text-xs ml-1" style={{ color: "var(--text-tertiary)" }}>
+                ({additionalRefImages.length}/{i2vMultiImageSupport.maxImages - 1})
+              </span>
+            </Label>
+            <p className="text-[11px] mt-0.5 mb-2" style={{ color: "var(--text-tertiary)" }}>
+              Upload extra images to reference as @image2, @image3, etc. in your prompt.
+            </p>
+            {additionalRefImages.length > 0 && (
+              <div className="flex gap-2 mb-2 flex-wrap">
+                {additionalRefImages.map((img, idx) => (
+                  <div key={idx} className="relative rounded-lg overflow-hidden border w-16 h-16" style={{ borderColor: "var(--border-medium)" }}>
+                    <img src={img.preview} alt={`Ref ${idx + 2}`} className="w-full h-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        URL.revokeObjectURL(img.preview);
+                        setAdditionalRefImages(prev => prev.filter((_, i) => i !== idx));
+                      }}
+                      className="absolute top-0.5 right-0.5 p-0.5 rounded-full bg-black/70 text-white hover:bg-red-600"
+                    >
+                      <X className="w-2.5 h-2.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {additionalRefImages.length < (i2vMultiImageSupport.maxImages - 1) && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => additionalRefInputRef.current?.click()}
+                  disabled={isUploadingAdditionalRef}
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg border border-dashed text-xs transition-all hover:border-purple-500/50"
+                  style={{ borderColor: "var(--border-medium)", color: "var(--text-secondary)" }}
+                >
+                  {isUploadingAdditionalRef ? <Loader2 className="w-3 h-3 animate-spin" /> : <ImagePlus className="w-3 h-3" />}
+                  {isUploadingAdditionalRef ? "Uploading…" : "Add Image"}
+                </button>
+                <input
+                  ref={additionalRefInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      const preview = URL.createObjectURL(file);
+                      setIsUploadingAdditionalRef(true);
+                      const formData = new FormData();
+                      formData.append('file', file);
+                      fetch('/api/videos/uploads', { method: 'POST', body: formData, credentials: 'include' })
+                        .then(res => { if (!res.ok) throw new Error('Upload failed'); return res.json(); })
+                        .then(data => {
+                          if (data.url) {
+                            setAdditionalRefImages(prev => [...prev, { url: data.url, preview }]);
+                          } else {
+                            URL.revokeObjectURL(preview);
+                            toast({ title: 'Upload failed', description: 'No URL returned', variant: 'destructive' });
+                          }
+                        })
+                        .catch(() => {
+                          URL.revokeObjectURL(preview);
+                          toast({ title: 'Upload failed', description: 'Could not upload image', variant: 'destructive' });
+                        })
+                        .finally(() => setIsUploadingAdditionalRef(false));
+                    }
+                    if (additionalRefInputRef.current) additionalRefInputRef.current.value = '';
+                  }}
+                />
+              </>
+            )}
+          </div>
+        )}
+
         {genMode === 'i2v' && provider === 'omni-human-1.5' && (
           <div>
             <Label style={{ color: "var(--text-secondary)" }}>Speech Audio * <span className="text-xs font-normal text-violet-400">(required for OmniHuman)</span></Label>
@@ -2504,6 +2594,11 @@ function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () => void; 
             />
           </div>
           <Textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder={genMode === 'i2i' ? "Describe the transformation you want (e.g. 'Place this person in a modern office holding a laptop' or 'Show this product on a marble countertop with warm lighting')..." : "Describe the video clip or image you want to create..."} rows={4} required className="mt-1.5" style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }} />
+          {genMode === 'i2v' && i2vMultiImageSupport && (
+            <p className="mt-1.5 text-[11px] px-2 py-1.5 rounded" style={{ backgroundColor: "rgba(139,92,246,0.08)", color: "var(--text-secondary)", borderLeft: "2px solid rgba(139,92,246,0.4)" }}>
+              {i2vMultiImageSupport.hint}
+            </p>
+          )}
         </div>
 
         {(genMode === 't2v' || genMode === 'i2v' || genMode === 'v2v' || genMode === 'i2i') && (
@@ -2742,11 +2837,20 @@ function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () => void; 
 
         <div>
           <Label style={{ color: "var(--text-secondary)" }}>Provider</Label>
-          <Select value={provider} onValueChange={setProvider}>
-            <SelectTrigger className="mt-1.5" style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }}><SelectValue /></SelectTrigger>
+          <Select value={provider} onValueChange={(val) => { setProvider(val); setAdditionalRefImages([]); }}>
+            <SelectTrigger className="mt-1.5" style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }}>
+              <span>{getProviders().find(p => p.id === provider)?.name ?? 'Select provider'}</span>
+            </SelectTrigger>
             <SelectContent style={{ backgroundColor: "var(--menu-bg)", borderColor: "var(--border-medium)" }}>
               {getProviders().map((p) => (
-                <SelectItem key={p.id} value={p.id} style={{ color: "var(--text-primary)" }}>{p.name}</SelectItem>
+                <SelectItem key={p.id} value={p.id} className="py-2" style={{ color: "var(--text-primary)" }}>
+                  <div>
+                    <div className="font-medium text-sm">{p.name}</div>
+                    {(p as any).description && (
+                      <div className="text-[11px] mt-0.5 leading-tight opacity-60">{(p as any).description}</div>
+                    )}
+                  </div>
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>

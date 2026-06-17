@@ -29,6 +29,7 @@ import {
   ChevronDown,
 } from 'lucide-react';
 import { AssetSuzzieChat } from './AssetSuzzieChat';
+import { VIDEO_PROVIDERS as SHARED_VIDEO_PROVIDERS } from '@shared/provider-config';
 
 type GenerationMode =
   | 't2i' | 't2v' | 'i2v' | 'i2i' | 'v2v'
@@ -46,42 +47,42 @@ interface AssetCreatorDialogProps {
 }
 
 const VIDEO_PROVIDERS = [
-  { id: 'auto', name: 'Auto (Best Match)' },
+  { id: 'auto', name: 'Auto (Best Match)', description: 'Automatically picks the best provider for your prompt and style' },
   // Kling family
-  { id: 'kling-2.6', name: 'Kling 2.6' },
-  { id: 'kling-2.6-pro', name: 'Kling 2.6 Pro' },
-  { id: 'kling-2.1-master', name: 'Kling 2.1 Master' },
-  { id: 'kling-2.6-motion-control-pro', name: 'Kling 2.6 Motion Control Pro' },
-  { id: 'kling-effects', name: 'Kling Effects (VFX)' },
+  { id: 'kling-2.6', name: 'Kling 2.6', description: 'Cinematic motion control, character consistency, and native audio' },
+  { id: 'kling-2.6-pro', name: 'Kling 2.6 Pro', description: 'Premium audio fidelity with broadcast-ready dialogue and visuals' },
+  { id: 'kling-2.1-master', name: 'Kling 2.1 Master', description: 'Premium quality rendering for hero shots and cinematic content' },
+  { id: 'kling-2.6-motion-control-pro', name: 'Kling 2.6 Motion Control Pro', description: 'Motion transfer for professional choreography and dance sequences' },
+  { id: 'kling-effects', name: 'Kling Effects (VFX)', description: 'VFX overlays, particle effects, and visual transitions' },
   // Veo
-  { id: 'veo-3.1', name: 'Veo 3.1' },
+  { id: 'veo-3.1', name: 'Veo 3.1', description: '4K cinematic quality with advanced physics and native audio/dialogue' },
   // Luma
-  { id: 'luma', name: 'Luma Dream Machine' },
+  { id: 'luma', name: 'Luma Dream Machine', description: 'Product reveals, smooth 3D transitions, object-focused shots' },
   // Hailuo
-  { id: 'hailuo', name: 'Hailuo MiniMax' },
+  { id: 'hailuo', name: 'Hailuo MiniMax', description: 'Cost-effective b-roll, nature scenes, and high-volume generation' },
   // Wan
-  { id: 'wan-2.6', name: 'Wan 2.6' },
+  { id: 'wan-2.6', name: 'Wan 2.6', description: 'Text rendering, character consistency, conceptual visuals' },
   // Pika
-  { id: 'pika', name: 'Pika' },
+  { id: 'pika', name: 'Pika', description: 'Artistic stylization, bold visual effects, creative interpretation' },
   // Seedance
-  { id: 'seedance-1.0', name: 'Seedance 1.0' },
-  { id: 'seedance-2.0', name: 'Seedance 2' },
-  { id: 'seedance-2.0-fast', name: 'Seedance 2 Fast' },
+  { id: 'seedance-1.0', name: 'Seedance 1.0', description: 'Dance and rhythmic motion with fluid body movement' },
+  { id: 'seedance-2.0', name: 'Seedance 2', description: 'Multi-image morphing via @imageN syntax, 1080p, up to 15s' },
+  { id: 'seedance-2.0-fast', name: 'Seedance 2 Fast', description: 'Fast multi-image generation, budget-friendly, 1080p output' },
   // Sora
-  { id: 'sora-2', name: 'Sora 2' },
-  { id: 'sora-2-pro', name: 'Sora 2 Pro' },
+  { id: 'sora-2', name: 'Sora 2', description: 'Consistent visual style with strong prompt understanding' },
+  { id: 'sora-2-pro', name: 'Sora 2 Pro', description: 'Premium Sora with enhanced fidelity and extended generation control' },
   // Hunyuan
-  { id: 'hunyuan', name: 'Hunyuan' },
+  { id: 'hunyuan', name: 'Hunyuan', description: 'Complex nature scenes, abstract visuals, multi-element compositions' },
   // Runway
-  { id: 'runway', name: 'Runway Gen-3' },
-  { id: 'runway-4.5', name: 'Runway 4.5' },
-  { id: 'runway-gen4', name: 'Runway Gen-4' },
-  { id: 'runway-gen4-aleph', name: 'Runway Gen-4 Aleph' },
-  { id: 'runway-act-two', name: 'Runway Act Two' },
+  { id: 'runway', name: 'Runway Gen-3', description: 'Cinematic storytelling with dramatic lighting and smooth motion' },
+  { id: 'runway-4.5', name: 'Runway 4.5', description: 'Top-tier photorealism with advanced camera control and multi-image support' },
+  { id: 'runway-gen4', name: 'Runway Gen-4', description: 'Advanced motion manipulation and dramatic storytelling' },
+  { id: 'runway-gen4-aleph', name: 'Runway Gen-4 Aleph', description: 'Creative visual effects, artistic interpretation, superior transitions' },
+  { id: 'runway-act-two', name: 'Runway Act Two', description: 'Character performance, acting, facial expression, and emotional control' },
   // Avatar / Talking Photo
-  { id: 'kling-avatar', name: 'Kling AI Avatar' },
-  { id: 'omniavatar', name: 'OmniAvatar' },
-  { id: 'omni-human-1.5', name: 'OmniHuman 1.5 (Talking Photo)' },
+  { id: 'kling-avatar', name: 'Kling AI Avatar', description: 'Lip-sync talking heads, long-form presenter and spokesperson content' },
+  { id: 'omniavatar', name: 'OmniAvatar', description: 'AI avatar generation with consistent identity and expression' },
+  { id: 'omni-human-1.5', name: 'OmniHuman 1.5 (Talking Photo)', description: 'Animate a portrait with audio — realistic lip-sync and head motion' },
 ];
 
 const IMAGE_PROVIDERS = [
@@ -210,6 +211,9 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
   const [additionalImages, setAdditionalImages] = useState<Array<{ url: string; preview: string }>>([]);
   const [isUploadingAdditional, setIsUploadingAdditional] = useState(false);
   const additionalImageInputRef = useRef<HTMLInputElement>(null);
+  const [i2vAdditionalImages, setI2vAdditionalImages] = useState<Array<{ url: string; preview: string }>>([]);
+  const [isUploadingI2VAdditional, setIsUploadingI2VAdditional] = useState(false);
+  const i2vAdditionalInputRef = useRef<HTMLInputElement>(null);
   const [scaleFactor, setScaleFactor] = useState(2);
   const [bodyControl, setBodyControl] = useState(false);
   const [referenceImageUrl, setReferenceImageUrl] = useState('');
@@ -238,6 +242,9 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
   const [showCharPreview, setShowCharPreview] = useState(false);
 
   const cfg = MODE_CONFIG[mode];
+  const i2vMultiImageSupport = mode === 'i2v'
+    ? (SHARED_VIDEO_PROVIDERS[provider]?.multiImageSupport ?? null)
+    : null;
 
   const needsReplacementForV2V = mode === 'v2v' && !isRunwayV2V(provider);
 
@@ -454,6 +461,9 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
           body.additionalImageUrls = additionalImages.map(img => img.url);
         }
       }
+      if (mode === 'i2v' && i2vAdditionalImages.length > 0) {
+        body.referenceImages = i2vAdditionalImages.map(img => img.url);
+      }
       if (mode === 'upscale-image' || mode === 'upscale-video') {
         body.scaleFactor = scaleFactor;
       }
@@ -480,6 +490,8 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
       setReplacementImageUrl('');
       setReplacementImagePreview(null);
       setAdditionalImages([]);
+      i2vAdditionalImages.forEach(img => URL.revokeObjectURL(img.preview));
+      setI2vAdditionalImages([]);
     } catch (err: any) {
       toast({ title: 'Generation failed', description: err.message || 'Could not start.', variant: 'destructive' });
     } finally {
@@ -502,7 +514,7 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
   };
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) { setShowCharPreview(false); setCharGeneratedImageUrl(null); setCharSavedToLibrary(false); additionalImages.forEach(img => URL.revokeObjectURL(img.preview)); setAdditionalImages([]); } onOpenChange(v); }}>
+    <Dialog open={open} onOpenChange={(v) => { if (!v) { setShowCharPreview(false); setCharGeneratedImageUrl(null); setCharSavedToLibrary(false); additionalImages.forEach(img => URL.revokeObjectURL(img.preview)); setAdditionalImages([]); i2vAdditionalImages.forEach(img => URL.revokeObjectURL(img.preview)); setI2vAdditionalImages([]); } onOpenChange(v); }}>
       {showCharPreview && charGeneratedImageUrl ? (
         <DialogContent className="sm:max-w-2xl bg-gray-950 border-gray-800 text-white p-0 overflow-hidden">
           <div className="p-4 border-b border-gray-800">
@@ -651,6 +663,11 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
               <div className="flex justify-end mt-1">
                 <span className="text-xs text-gray-600">{prompt.length}/2000</span>
               </div>
+              {mode === 'i2v' && i2vMultiImageSupport && (
+                <p className="mt-1.5 text-[11px] px-2 py-1.5 rounded border-l-2 border-purple-500/40 bg-purple-500/[0.06] text-gray-400">
+                  {i2vMultiImageSupport.hint}
+                </p>
+              )}
             </div>
           )}
 
@@ -692,6 +709,87 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
                     onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadFile(f, setReferenceImageUrl, setReferenceImagePreview, setIsUploadingRef, 'Image'); }}
                   />
                 </div>
+              )}
+            </div>
+          )}
+
+          {mode === 'i2v' && i2vMultiImageSupport && (
+            <div>
+              <Label className="text-sm text-gray-400 mb-1.5 block">
+                Additional Reference Images{' '}
+                <span className="font-normal text-[10px] ml-1 text-gray-600">
+                  ({i2vAdditionalImages.length}/{i2vMultiImageSupport.maxImages - 1})
+                </span>
+              </Label>
+              <p className="text-[10px] text-gray-500 mb-2">
+                Upload extra images to reference as @image2, @image3, etc. in your prompt.
+              </p>
+              {i2vAdditionalImages.length > 0 && (
+                <div className="flex gap-2 mb-2 flex-wrap">
+                  {i2vAdditionalImages.map((img, idx) => (
+                    <div key={idx} className="relative rounded-lg overflow-hidden border border-gray-700 w-16 h-16">
+                      <img src={img.preview} alt={`Ref ${idx + 2}`} className="w-full h-full object-cover" />
+                      <button
+                        onClick={() => {
+                          URL.revokeObjectURL(img.preview);
+                          setI2vAdditionalImages(prev => prev.filter((_, i) => i !== idx));
+                        }}
+                        className="absolute top-0.5 right-0.5 p-0.5 rounded-full bg-black/70 text-white hover:bg-red-600"
+                      >
+                        <X className="h-2.5 w-2.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {i2vAdditionalImages.length < (i2vMultiImageSupport.maxImages - 1) && (
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => i2vAdditionalInputRef.current?.click()}
+                    disabled={isUploadingI2VAdditional}
+                    className="w-full border-dashed border-gray-600 text-gray-400 hover:text-white hover:border-purple-500 h-8 text-xs"
+                  >
+                    {isUploadingI2VAdditional ? (
+                      <Loader2 className="h-3 w-3 animate-spin mr-1.5" />
+                    ) : (
+                      <ImagePlus className="h-3 w-3 mr-1.5" />
+                    )}
+                    Add Image
+                  </Button>
+                  <input
+                    ref={i2vAdditionalInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) {
+                        setIsUploadingI2VAdditional(true);
+                        const preview = URL.createObjectURL(f);
+                        const formData = new FormData();
+                        formData.append('file', f);
+                        fetch('/api/videos/uploads', { method: 'POST', body: formData, credentials: 'include' })
+                          .then(res => { if (!res.ok) throw new Error('Upload failed'); return res.json(); })
+                          .then(data => {
+                            if (data.url) {
+                              setI2vAdditionalImages(prev => [...prev, { url: data.url, preview }]);
+                            } else {
+                              URL.revokeObjectURL(preview);
+                              toast({ title: 'Upload failed', description: 'No URL returned', variant: 'destructive' });
+                            }
+                          })
+                          .catch(() => {
+                            URL.revokeObjectURL(preview);
+                            toast({ title: 'Upload failed', description: 'Could not upload image', variant: 'destructive' });
+                          })
+                          .finally(() => setIsUploadingI2VAdditional(false));
+                      }
+                      if (i2vAdditionalInputRef.current) i2vAdditionalInputRef.current.value = '';
+                    }}
+                  />
+                </>
               )}
             </div>
           )}
@@ -1176,14 +1274,19 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
             <div className={mode === 'i2i' ? '' : 'grid grid-cols-2 gap-4'}>
               <div>
                 <Label className="text-sm text-gray-400 mb-1.5 block">Provider</Label>
-                <Select value={provider} onValueChange={setProvider}>
+                <Select value={provider} onValueChange={(val) => { setProvider(val); setI2vAdditionalImages([]); }}>
                   <SelectTrigger className="bg-gray-900 border-gray-700 text-white">
-                    <SelectValue />
+                    <span>{getProviders().find(p => p.id === provider)?.name ?? 'Select provider'}</span>
                   </SelectTrigger>
                   <SelectContent className="bg-gray-900 border-gray-700">
                     {getProviders().map((p) => (
-                      <SelectItem key={p.id} value={p.id} className="text-white hover:bg-gray-800">
-                        {p.name}
+                      <SelectItem key={p.id} value={p.id} className="text-white hover:bg-gray-800 py-2">
+                        <div>
+                          <div className="font-medium text-sm">{p.name}</div>
+                          {(p as any).description && (
+                            <div className="text-[11px] mt-0.5 leading-tight text-gray-500">{(p as any).description}</div>
+                          )}
+                        </div>
                       </SelectItem>
                     ))}
                   </SelectContent>
