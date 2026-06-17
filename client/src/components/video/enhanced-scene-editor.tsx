@@ -1290,7 +1290,14 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
   };
 
   const [multiImageTipDismissed, setMultiImageTipDismissed] = useState(false);
-  const [showMultiRefExpander, setShowMultiRefExpander] = useState(false);
+  const [showMultiRefExpander, setShowMultiRefExpander] = useState(() => {
+    const existing = scene.assets?.referenceImages || [];
+    const initialImages =
+      scene.brandAssetUrl && !existing.includes(scene.brandAssetUrl)
+        ? [scene.brandAssetUrl, ...existing]
+        : existing;
+    return initialImages.length > 0;
+  });
 
   const addReferenceImage = useCallback((url: string) => {
     setReferenceImageUrls(prev => {
