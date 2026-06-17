@@ -242,6 +242,11 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
   const [msModalShowLibrary, setMsModalShowLibrary] = useState(false);
   const [msModalShowMultiRefExpander, setMsModalShowMultiRefExpander] = useState(false);
   const msModalFileRef = useRef<HTMLInputElement>(null);
+  const [msInlineRefImages, setMsInlineRefImages] = useState<Record<number, string[]>>({});
+  const [msInlineShowExpander, setMsInlineShowExpander] = useState<Record<number, boolean>>({});
+  const [msInlineShowLibrary, setMsInlineShowLibrary] = useState<Record<number, boolean>>({});
+  const msInlineFileRef = useRef<HTMLInputElement>(null);
+  const msInlineUploadTarget = useRef<number | null>(null);
   const overlayDebounceRef = useRef<NodeJS.Timeout | null>(null);
   const msOverlayDebounceRefs = useRef<Record<number, NodeJS.Timeout>>({});
   const [msOverlayState, setMsOverlayState] = useState<Record<number, MicroSceneOverlayItem[]>>({});
@@ -515,6 +520,13 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
       queryClient.refetchQueries({ queryKey: ["project", projectId] });
     }
   }, [fullscreenMicroScene]);
+
+  useEffect(() => {
+    if (expandedMicroScene !== null && scene.microScenes?.[expandedMicroScene]) {
+      const ms = scene.microScenes[expandedMicroScene];
+      setMsInlineRefImages(prev => ({ ...prev, [expandedMicroScene]: (ms as any).referenceImages || [] }));
+    }
+  }, [expandedMicroScene]);
 
   useEffect(() => {
     if (regeneratingMicroScenes.size > 0 && scene.microScenes) {
@@ -1177,6 +1189,32 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
             persistMsRefImages(fullscreenMicroScene, next);
           }
           return next;
+        });
+        toast({ title: "Reference image added", description: "Image will be used for I2V generation." });
+      }
+    } catch (err: any) {
+      toast({ title: "Upload failed", description: err.message, variant: "destructive" });
+    }
+    e.target.value = "";
+  };
+
+  const handleMsInlineRefUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const msIdx = msInlineUploadTarget.current;
+    if (msIdx === null) return;
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append("file", file);
+    try {
+      const res = await fetch("/api/videos/uploads", { method: "POST", credentials: "include", body: formData });
+      if (!res.ok) throw new Error("Upload failed");
+      const data = await res.json();
+      const url = data.url || data.fileUrl;
+      if (url) {
+        setMsInlineRefImages(prev => {
+          const next = [...(prev[msIdx] || []), url];
+          persistMsRefImages(msIdx, next);
+          return { ...prev, [msIdx]: next };
         });
         toast({ title: "Reference image added", description: "Image will be used for I2V generation." });
       }
@@ -3345,6 +3383,138 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                           </div>
                         )}
 
+                        {(() => {
+                          const inlineProv = (provider !== 'auto' ? provider : '').toLowerCase();
+                          const inlineMultiRefName = inlineProv.startsWith('seedance-2') ? 'Seedance 2' : inlineProv.startsWith('kling-2') ? 'Kling 2.x' : null;
+                          if (!inlineMultiRefName) return null;
+                          const inlineMaxImages = getMultiImageSupport(provider !== 'auto' ? provider : '')?.maxImages || 4;
+                          const inlineRefs = msInlineRefImages[msIdx] || [];
+                          const inlineOpen = !!msInlineShowExpander[msIdx];
+                          return (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => setMsInlineShowExpander(prev => ({ ...prev, [msIdx]: !prev[msIdx] }))}
+                                className="w-full flex items-center justify-between px-3 py-2 rounded-lg border text-left transition-colors"
+                                style={{
+                                  borderColor: inlineOpen ? 'rgba(124,58,237,0.45)' : 'var(--border-subtle)',
+                                  backgroundColor: inlineOpen ? 'rgba(124,58,237,0.06)' : 'transparent',
+                                }}
+                              >
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <ImagePlus className="w-3.5 h-3.5 shrink-0" style={{ color: 'rgb(167,139,250)' }} />
+                                  <span className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Additional reference images</span>
+                                  {inlineRefs.length > 0 && (
+                                    <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-purple-500/20 border border-purple-500/30 font-medium text-purple-300">
+                                      {inlineRefs.length}/{inlineMaxImages}
+                                    </span>
+                                  )}
+                                  <span className="text-[10px]" style={{ color: 'var(--text-muted)', opacity: 0.5 }}>@image_1, @image_2… — {inlineMultiRefName}</span>
+                                </div>
+                                {inlineOpen
+                                  ? <ChevronUp className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--text-muted)' }} />
+                                  : <ChevronDown className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--text-muted)' }} />}
+                              </button>
+
+                              {inlineOpen && (
+                                <div className="rounded-lg border p-3 space-y-2.5" style={{ borderColor: 'rgba(124,58,237,0.25)', backgroundColor: 'rgba(124,58,237,0.04)' }}>
+                                  <div className="flex flex-wrap gap-2 items-start">
+                                    {inlineRefs.map((url, i) => (
+                                      <div key={i} className="relative w-14 h-14 rounded-lg overflow-hidden border group" style={{ borderColor: 'rgba(124,58,237,0.35)' }}>
+                                        <img src={url} alt="" className="w-full h-full object-cover transition-transform group-hover:scale-[1.03]" />
+                                        <div className="absolute top-0.5 left-0.5 w-[16px] h-[16px] rounded-full bg-purple-600 text-white flex items-center justify-center text-[8px] font-bold pointer-events-none shadow-sm">
+                                          {i + 1}
+                                        </div>
+                                        <div className="absolute bottom-0 left-0 right-0 text-[7px] text-center py-0.5 bg-black/60 text-white font-mono pointer-events-none">
+                                          @image_{i + 1}
+                                        </div>
+                                        <button
+                                          onClick={() => {
+                                            const next = inlineRefs.filter((_, idx) => idx !== i);
+                                            setMsInlineRefImages(prev => ({ ...prev, [msIdx]: next }));
+                                            persistMsRefImages(msIdx, next);
+                                          }}
+                                          className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-red-500 text-white flex items-center justify-center text-[8px] opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                                        >
+                                          <X className="w-2.5 h-2.5" />
+                                        </button>
+                                      </div>
+                                    ))}
+                                    <div className="flex flex-col gap-1.5">
+                                      <input type="file" ref={msInlineFileRef} className="hidden" accept="image/*" onChange={handleMsInlineRefUpload} />
+                                      <button
+                                        onClick={() => { msInlineUploadTarget.current = msIdx; msInlineFileRef.current?.click(); }}
+                                        disabled={inlineRefs.length >= inlineMaxImages}
+                                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-dashed text-[11px] transition-colors hover:border-purple-500/40 disabled:opacity-50"
+                                        style={{ borderColor: 'var(--border-subtle)', color: 'var(--text-muted)' }}
+                                      >
+                                        <Upload className="w-3 h-3" />
+                                        Upload{inlineRefs.length > 0 ? ` (${inlineRefs.length}/${inlineMaxImages})` : ''}
+                                      </button>
+                                      <button
+                                        onClick={() => setMsInlineShowLibrary(prev => ({ ...prev, [msIdx]: !prev[msIdx] }))}
+                                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-dashed text-[11px] transition-colors hover:border-purple-500/40"
+                                        style={{
+                                          borderColor: msInlineShowLibrary[msIdx] ? 'rgba(124,58,237,0.5)' : 'var(--border-subtle)',
+                                          color: msInlineShowLibrary[msIdx] ? 'rgb(124,58,237)' : 'var(--text-muted)',
+                                        }}
+                                      >
+                                        <FolderOpen className="w-3 h-3" />
+                                        Library
+                                      </button>
+                                    </div>
+                                  </div>
+
+                                  {msInlineShowLibrary[msIdx] && (
+                                    <div className="border rounded-lg p-2 max-h-32 overflow-y-auto" style={{ borderColor: 'var(--border-subtle)', backgroundColor: 'rgba(0,0,0,0.2)' }}>
+                                      {libraryQuery.isLoading ? (
+                                        <div className="flex items-center justify-center py-3"><Loader2 className="w-4 h-4 animate-spin" style={{ color: 'var(--text-muted)' }} /></div>
+                                      ) : !libraryQuery.data || libraryQuery.data.length === 0 ? (
+                                        <p className="text-xs text-center py-3" style={{ color: 'var(--text-muted)' }}>No images in library</p>
+                                      ) : (
+                                        <div className="grid grid-cols-8 gap-1.5">
+                                          {libraryQuery.data.slice(0, 24).map((asset: any) => {
+                                            const assetUrl = asset.url || asset.thumbnailUrl;
+                                            if (asset.type === 'video') return null;
+                                            return (
+                                              <button
+                                                key={asset.id}
+                                                onClick={() => {
+                                                  if (assetUrl) {
+                                                    setMsInlineRefImages(prev => {
+                                                      const next = [...(prev[msIdx] || []), assetUrl];
+                                                      persistMsRefImages(msIdx, next);
+                                                      return { ...prev, [msIdx]: next };
+                                                    });
+                                                    setMsInlineShowLibrary(prev => ({ ...prev, [msIdx]: false }));
+                                                    toast({ title: 'Reference Added' });
+                                                  }
+                                                }}
+                                                className="aspect-square rounded overflow-hidden border hover:border-purple-500/50 transition-colors"
+                                                style={{ borderColor: 'var(--border-subtle)' }}
+                                              >
+                                                <img src={asset.thumbnailUrl || assetUrl} alt={asset.name || ''} className="w-full h-full object-cover" />
+                                              </button>
+                                            );
+                                          })}
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+
+                                  <p className="text-[10px]" style={{ color: 'var(--text-muted)', opacity: 0.6 }}>
+                                    Use{' '}
+                                    <code className="px-1 py-0.5 rounded bg-purple-500/10 text-purple-300 font-mono text-[9px]">@image_1</code>,{' '}
+                                    <code className="px-1 py-0.5 rounded bg-purple-500/10 text-purple-300 font-mono text-[9px]">@image_2</code>{' '}
+                                    etc. in your visual direction to anchor specific images.{' '}
+                                    {inlineMultiRefName} supports up to {inlineMaxImages} reference images.
+                                  </p>
+                                </div>
+                              )}
+                            </>
+                          );
+                        })()}
+
                         {ms.videoUrl ? (
                           <div className="relative group">
                             <video
@@ -3365,7 +3535,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                                 <Expand className="w-3 h-3" />
                               </button>
                               <button
-                                onClick={() => regenMicroSceneVideo(msIdx)}
+                                onClick={() => { const refs = msInlineRefImages[msIdx] || []; regenMicroSceneVideo(msIdx, { sourceImageUrl: refs.length > 0 ? refs[0] : undefined, sourceImageUrls: refs.length > 0 ? refs : undefined }); }}
                                 disabled={regeneratingMicroScenes.has(msIdx)}
                                 className="text-[10px] px-2 py-1.5 rounded-lg bg-black/70 text-white font-medium flex items-center gap-1 hover:bg-black/90 disabled:opacity-50 backdrop-blur-sm"
                               >
@@ -3376,7 +3546,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                           </div>
                         ) : (
                           <button
-                            onClick={() => regenMicroSceneVideo(msIdx)}
+                            onClick={() => { const refs = msInlineRefImages[msIdx] || []; regenMicroSceneVideo(msIdx, { sourceImageUrl: refs.length > 0 ? refs[0] : undefined, sourceImageUrls: refs.length > 0 ? refs : undefined }); }}
                             disabled={regeneratingMicroScenes.has(msIdx)}
                             className="w-full flex items-center justify-center gap-2 py-3 rounded-lg border-2 border-dashed transition-colors hover:border-purple-500/40 hover:bg-purple-500/05 disabled:opacity-50"
                             style={{ borderColor: "var(--border-subtle)", color: "var(--text-muted)" }}
