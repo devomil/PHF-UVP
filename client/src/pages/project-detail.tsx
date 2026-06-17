@@ -414,12 +414,14 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
   };
 
   const generateScriptMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (vars: { requiredDeckImageIds?: string[] } | void) => {
+      const slideIds = vars && 'requiredDeckImageIds' in vars ? vars.requiredDeckImageIds : undefined;
+      const body = slideIds?.length ? { requiredDeckImageIds: slideIds } : {};
       const res = await fetch(`/api/universal-video/projects/${projectId}/generate-script`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({}),
+        body: JSON.stringify(body),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -427,9 +429,19 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
       }
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (_data, vars) => {
       queryClient.invalidateQueries({ queryKey: ["project", projectId] });
-      toast({ title: "Script Generated", description: "Review and edit your scenes below, then generate assets." });
+      const slideCount = (vars && typeof vars === 'object' && 'requiredDeckImageIds' in vars)
+        ? (vars.requiredDeckImageIds?.length ?? 0)
+        : 0;
+      if (slideCount > 0) {
+        toast({
+          title: "Script Rebuilt",
+          description: `All scenes rebuilt with ${slideCount} selected slide${slideCount !== 1 ? 's' : ''} woven in.`,
+        });
+      } else {
+        toast({ title: "Script Generated", description: "Review and edit your scenes below, then generate assets." });
+      }
     },
     onError: (err: Error) => {
       toast({ title: "Error", description: err.message, variant: "destructive" });
@@ -1803,6 +1815,10 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
                     });
                   }
                 }}
+                onRegenerateWithSlides={(ids) =>
+                  generateScriptMutation.mutate({ requiredDeckImageIds: ids })
+                }
+                isRegenerating={generateScriptMutation.isPending}
               />
             )}
 

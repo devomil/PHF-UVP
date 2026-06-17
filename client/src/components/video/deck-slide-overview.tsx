@@ -10,8 +10,13 @@
 // Clicking a slide jumps to a scene: the scene that uses it (first one, for
 // reused slides) or — for an unused slide — the first scene, so the user can
 // open the per-scene Deck slide picker and place it.
+//
+// Task #185 extension: when `onRegenerateWithSlides` is provided, unused slides
+// show a checkbox (top-right). Selecting one or more and clicking "Rebuild script"
+// passes their ids to the parent for a full one-shot script regeneration.
 
-import { Presentation, AlertCircle, CheckCircle2, Copy } from 'lucide-react';
+import { useState, useCallback, useEffect } from 'react';
+import { Presentation, AlertCircle, CheckCircle2, Copy, Sparkles, RefreshCw } from 'lucide-react';
 import type { DeckImage } from './deck-slide-picker';
 import { sceneUsesUrl } from './deck-usage';
 
@@ -20,34 +25,81 @@ interface DeckSlideOverviewProps {
   scenes: any[];
   /** Open/expand and scroll to a scene by its id. */
   onOpenScene: (sceneId: string) => void;
+  /** Called with selected unused slide ids to trigger a full script rebuild. */
+  onRegenerateWithSlides?: (ids: string[]) => void;
+  /** True while the parent is running the regenerate mutation. */
+  isRegenerating?: boolean;
 }
 
-export function DeckSlideOverview({ deckImages, scenes, onOpenScene }: DeckSlideOverviewProps) {
-  if (!Array.isArray(deckImages) || deckImages.length === 0) return null;
+export function DeckSlideOverview({
+  deckImages,
+  scenes,
+  onOpenScene,
+  onRegenerateWithSlides,
+  isRegenerating = false,
+}: DeckSlideOverviewProps) {
+  // ── ALL HOOKS FIRST (Rules of Hooks — no early returns before hooks) ──────
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
+  const safeImages = Array.isArray(deckImages) ? deckImages : [];
   const sceneList = Array.isArray(scenes) ? scenes : [];
-  const sceneId = (s: any, idx: number) => s?.id || `scene-${idx}`;
+  const sceneIdOf = (s: any, idx: number) => s?.id || `scene-${idx}`;
 
-  // For each deck image, the list of scene indices that anchor it.
-  const usage = deckImages.map((img) => {
+  const usage = safeImages.map((img) => {
     const usedBy = sceneList
       .map((s, idx) => ({ s, idx }))
       .filter(({ s }) => sceneUsesUrl(s, img.url));
     return { img, usedBy };
   });
 
+  const unusedIds = new Set(
+    usage.filter((u) => u.usedBy.length === 0).map((u) => u.img.id)
+  );
+
+  // Prune stale selections when scenes change (a regen may move slides to placed).
+  useEffect(() => {
+    setSelected((prev) => {
+      const pruned = new Set(Array.from(prev).filter((id) => unusedIds.has(id)));
+      return pruned.size === prev.size ? prev : pruned;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scenes]);
+
+  const toggleSelect = useCallback((id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  // ── EARLY RETURN after all hooks ─────────────────────────────────────────
+  if (safeImages.length === 0) return null;
+
+  // ── DERIVED DISPLAY VALUES ────────────────────────────────────────────────
   const placedCount = usage.filter((u) => u.usedBy.length > 0).length;
   const unusedCount = usage.filter((u) => u.usedBy.length === 0).length;
   const reusedCount = usage.filter((u) => u.usedBy.length > 1).length;
 
+  const selectionCount = Array.from(selected).filter((id) => unusedIds.has(id)).length;
+
   const handleClick = (usedBy: { idx: number }[]) => {
     if (usedBy.length > 0) {
       const target = sceneList[usedBy[0].idx];
-      if (target) onOpenScene(sceneId(target, usedBy[0].idx));
+      if (target) onOpenScene(sceneIdOf(target, usedBy[0].idx));
       return;
     }
-    // Unused slide: open the first scene so the user can place it.
-    if (sceneList.length > 0) onOpenScene(sceneId(sceneList[0], 0));
+    if (sceneList.length > 0) onOpenScene(sceneIdOf(sceneList[0], 0));
+  };
+
+  const handleRegenerate = () => {
+    if (!onRegenerateWithSlides) return;
+    const ids = Array.from(selected).filter((id) => unusedIds.has(id));
+    if (ids.length === 0) return;
+    onRegenerateWithSlides(ids);
+    setSelected(new Set());
   };
 
   return (
@@ -65,7 +117,7 @@ export function DeckSlideOverview({ deckImages, scenes, onOpenScene }: DeckSlide
         </div>
         <div className="flex items-center gap-2 flex-wrap text-[11px]" style={{ color: 'var(--text-muted)' }}>
           <span data-testid="deck-overview-summary">
-            {placedCount}/{deckImages.length} placed
+            {placedCount}/{safeImages.length} placed
           </span>
           {unusedCount > 0 && (
             <span className="text-amber-400" data-testid="deck-overview-unused-count">
@@ -80,8 +132,9 @@ export function DeckSlideOverview({ deckImages, scenes, onOpenScene }: DeckSlide
         </div>
       </div>
       <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
-        Every slide from your deck and where it's placed. Click a slide to jump to its scene — or
-        an unused one to find a spot for it.
+        {unusedCount > 0 && onRegenerateWithSlides
+          ? 'Every slide from your deck. Click a slide to jump to its scene, or select unused slides to weave them into a fully rebuilt script.'
+          : "Every slide from your deck and where it's placed. Click a slide to jump to its scene — or an unused one to find a spot for it."}
       </p>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
@@ -90,6 +143,7 @@ export function DeckSlideOverview({ deckImages, scenes, onOpenScene }: DeckSlide
           const unused = count === 0;
           const reused = count > 1;
           const sceneNumbers = usedBy.map((u) => u.idx + 1);
+          const isSelected = selected.has(img.id);
 
           const badgeLabel = unused
             ? 'Unused'
@@ -106,7 +160,9 @@ export function DeckSlideOverview({ deckImages, scenes, onOpenScene }: DeckSlide
           const BadgeIcon = unused ? AlertCircle : reused ? Copy : CheckCircle2;
 
           const titleText = unused
-            ? 'Not placed on any scene — click to open a scene and place it'
+            ? (onRegenerateWithSlides
+                ? 'Unused — check to select for rebuild, or click the image to jump to a scene'
+                : 'Not placed on any scene — click to open a scene and place it')
             : reused
               ? `Reused on scenes ${sceneNumbers.join(', ')} — click to jump to scene ${sceneNumbers[0]}`
               : `Placed on scene ${sceneNumbers[0]} — click to jump there`;
@@ -116,10 +172,14 @@ export function DeckSlideOverview({ deckImages, scenes, onOpenScene }: DeckSlide
               key={img.id}
               type="button"
               onClick={() => handleClick(usedBy)}
-              className="group text-left rounded-lg overflow-hidden transition-all hover:ring-2 hover:ring-pink-500/40"
+              className="group text-left rounded-lg overflow-hidden transition-all hover:ring-2 hover:ring-pink-500/40 relative"
               style={{
-                border: unused ? '1px dashed rgba(245,158,11,0.5)' : '1px solid var(--border-subtle)',
-                backgroundColor: 'var(--input-bg)',
+                border: isSelected
+                  ? '2px solid rgba(139,92,246,0.8)'
+                  : unused
+                    ? '1px dashed rgba(245,158,11,0.5)'
+                    : '1px solid var(--border-subtle)',
+                backgroundColor: isSelected ? 'rgba(139,92,246,0.08)' : 'var(--input-bg)',
               }}
               title={titleText}
               data-testid={`deck-overview-slide-${img.id}`}
@@ -128,14 +188,36 @@ export function DeckSlideOverview({ deckImages, scenes, onOpenScene }: DeckSlide
                 <img
                   src={img.url}
                   alt={img.label || `Slide ${img.pageNumber || ''}`}
-                  className={`w-full h-full object-cover ${unused ? 'opacity-60 group-hover:opacity-90' : ''} transition-opacity`}
+                  className={`w-full h-full object-cover transition-opacity ${
+                    unused && !isSelected ? 'opacity-60 group-hover:opacity-85' : ''
+                  }`}
                   loading="lazy"
                 />
-                <span
-                  className="absolute top-1 left-1 text-[9px] px-1.5 py-0.5 rounded-full font-medium bg-black/55 text-white/90"
-                >
+                <span className="absolute top-1 left-1 text-[9px] px-1.5 py-0.5 rounded-full font-medium bg-black/55 text-white/90">
                   {img.label || `Page ${img.pageNumber ?? '?'}`}
                 </span>
+                {/* Checkbox for unused slides when the rebuild action is wired */}
+                {unused && onRegenerateWithSlides && (
+                  <span
+                    role="checkbox"
+                    aria-checked={isSelected}
+                    onClick={(e) => toggleSelect(img.id, e)}
+                    className="absolute top-1 right-1 w-5 h-5 rounded flex items-center justify-center cursor-pointer transition-all
+                      opacity-0 group-hover:opacity-100"
+                    style={{
+                      opacity: isSelected ? 1 : undefined,
+                      backgroundColor: isSelected ? 'rgba(139,92,246,0.9)' : 'rgba(0,0,0,0.6)',
+                      border: isSelected ? '2px solid rgb(167,139,250)' : '2px solid rgba(255,255,255,0.45)',
+                    }}
+                    data-testid={`deck-overview-checkbox-${img.id}`}
+                  >
+                    {isSelected && (
+                      <svg className="w-3 h-3 text-white" viewBox="0 0 12 12" fill="none">
+                        <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    )}
+                  </span>
+                )}
               </div>
               <div className="px-1.5 py-1.5">
                 <span
@@ -151,6 +233,39 @@ export function DeckSlideOverview({ deckImages, scenes, onOpenScene }: DeckSlide
           );
         })}
       </div>
+
+      {/* Action bar — visible when at least one unused slide is selected */}
+      {selectionCount > 0 && (
+        <div
+          className="flex items-center justify-between gap-3 rounded-lg px-3 py-2.5"
+          style={{ backgroundColor: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.35)' }}
+          data-testid="deck-overview-action-bar"
+        >
+          <div className="min-w-0">
+            <p className="text-[12px] font-semibold" style={{ color: 'rgb(196,181,253)' }}>
+              {selectionCount} slide{selectionCount !== 1 ? 's' : ''} selected
+            </p>
+            <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
+              Rebuilds all scenes &amp; extends the video — manual edits are replaced
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={handleRegenerate}
+            disabled={isRegenerating}
+            className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-opacity disabled:opacity-60"
+            style={{ backgroundColor: 'rgb(139,92,246)', color: 'white' }}
+            data-testid="deck-overview-regenerate-btn"
+          >
+            {isRegenerating ? (
+              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <Sparkles className="w-3.5 h-3.5" />
+            )}
+            {isRegenerating ? 'Rebuilding…' : 'Rebuild script'}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
