@@ -27,9 +27,12 @@ import {
   Save,
   Check,
   ChevronDown,
+  Images,
 } from 'lucide-react';
 import { AssetSuzzieChat } from './AssetSuzzieChat';
-import { VIDEO_PROVIDERS as SHARED_VIDEO_PROVIDERS } from '@shared/provider-config';
+import { VIDEO_PROVIDERS as SHARED_VIDEO_PROVIDERS, getMultiImageSupport } from '@shared/provider-config';
+import { providerSupportsMultiImage } from '@shared/provider-catalog';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 type GenerationMode =
   | 't2i' | 't2v' | 'i2v' | 'i2i' | 'v2v'
@@ -1282,7 +1285,28 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
                     {getProviders().map((p) => (
                       <SelectItem key={p.id} value={p.id} className="text-white hover:bg-gray-800 py-2">
                         <div>
-                          <div className="font-medium text-sm">{p.name}</div>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-medium text-sm">{p.name}</span>
+                            {providerSupportsMultiImage(p.id) && (() => {
+                              const support = getMultiImageSupport(p.id);
+                              const hint = support?.hint ?? "Supports multiple image references via @image_N syntax in your prompt.";
+                              return (
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-blue-500/20 text-blue-400 whitespace-nowrap cursor-default">
+                                        <Images className="w-3 h-3" />
+                                        Multi-image
+                                      </span>
+                                    </TooltipTrigger>
+                                    <TooltipContent className="max-w-xs text-left" side="right">
+                                      {hint}
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              );
+                            })()}
+                          </div>
                           {(p as any).description && (
                             <div className="text-[11px] mt-0.5 leading-tight text-gray-500">{(p as any).description}</div>
                           )}

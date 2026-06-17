@@ -3,13 +3,15 @@ import { useLocation, Link } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Sparkles, FileText, Zap, ArrowLeft, Video, Image, Info, Plus, Trash2, ChevronUp, ChevronDown, ChevronRight, GripVertical, Palette, Users, UserCheck, Upload, X, ImagePlus, Film, Loader2, AlertCircle, FileUp, BookOpen, TrendingUp, CheckCircle2, FolderOpen, Target, ShieldCheck, Megaphone, CalendarCheck, Share2, ShoppingBag, RefreshCw, Presentation } from "lucide-react";
+import { Sparkles, FileText, Zap, ArrowLeft, Video, Image, Info, Plus, Trash2, ChevronUp, ChevronDown, ChevronRight, GripVertical, Palette, Users, UserCheck, Upload, X, ImagePlus, Film, Loader2, AlertCircle, FileUp, BookOpen, TrendingUp, CheckCircle2, FolderOpen, Target, ShieldCheck, Megaphone, CalendarCheck, Share2, ShoppingBag, RefreshCw, Presentation, Images } from "lucide-react";
 import { ProviderCatalogSelector } from "@/components/video/provider-catalog-selector";
 import { CharacterProfilesPanel } from "@/components/video/character-profiles-panel";
 import { AssetSuzzieChat } from "@/components/video/AssetSuzzieChat";
 import { getAvailableStyles } from "@shared/visual-style-config";
 import { getAllVisualArtPresets, isStylizedPreset, type VisualArtPreset } from "@shared/config/visual-art-presets";
-import { VIDEO_PROVIDERS as SHARED_VIDEO_PROVIDERS } from "@shared/provider-config";
+import { VIDEO_PROVIDERS as SHARED_VIDEO_PROVIDERS, getMultiImageSupport } from "@shared/provider-config";
+import { providerSupportsMultiImage } from "@shared/provider-catalog";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { getAllProjectTypes, getProjectType, CONTENT_STRUCTURES, LONG_STORY_DEFAULT_ART_PRESET_IDS, getAllProjectPurposes } from "@shared/config/project-types";
 import { DECK_AUDIENCES, DEFAULT_DECK_AUDIENCE_ID, getDeckAudience } from "@shared/config/deck-audiences";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -2845,7 +2847,28 @@ function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () => void; 
               {getProviders().map((p) => (
                 <SelectItem key={p.id} value={p.id} className="py-2" style={{ color: "var(--text-primary)" }}>
                   <div>
-                    <div className="font-medium text-sm">{p.name}</div>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="font-medium text-sm">{p.name}</span>
+                      {providerSupportsMultiImage(p.id) && (() => {
+                        const support = getMultiImageSupport(p.id);
+                        const hint = support?.hint ?? "Supports multiple image references via @image_N syntax in your prompt.";
+                        return (
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-blue-500/20 text-blue-400 whitespace-nowrap cursor-default">
+                                  <Images className="w-3 h-3" />
+                                  Multi-image
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent className="max-w-xs text-left" side="right">
+                                {hint}
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        );
+                      })()}
+                    </div>
                     {(p as any).description && (
                       <div className="text-[11px] mt-0.5 leading-tight opacity-60">{(p as any).description}</div>
                     )}
