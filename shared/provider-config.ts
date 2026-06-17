@@ -745,6 +745,7 @@ export interface ImageProvider {
   costPerImage: number;
   strengths: string[];
   bestFor: string[];
+  multiImageSupport?: MultiImageSupport;
 }
 
 export const IMAGE_PROVIDERS: Record<string, ImageProvider> = {

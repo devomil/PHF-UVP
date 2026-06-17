@@ -3,15 +3,33 @@ import {
   buildSuzzieSystemPrompt,
   buildAssetLibrarySuzziePrompt,
 } from "../suzzie-knowledge-base";
-import { VIDEO_PROVIDERS } from "../../../shared/provider-config";
+import { VIDEO_PROVIDERS, IMAGE_PROVIDERS } from "../../../shared/provider-config";
 
-const multiImageProviders = Object.values(VIDEO_PROVIDERS).filter(
+const videoMultiImageProviders = Object.values(VIDEO_PROVIDERS).filter(
+  (p) => p.multiImageSupport != null,
+);
+
+const imageMultiImageProviders = Object.values(IMAGE_PROVIDERS).filter(
   (p) => p.multiImageSupport != null,
 );
 
 describe("buildSuzzieSystemPrompt — @imageN guidance injection", () => {
-  it.each(multiImageProviders)(
-    "includes the @imageN block for provider $id (multiImageSupport)",
+  it.each(videoMultiImageProviders)(
+    "includes the @imageN block for video provider $id (multiImageSupport)",
+    ({ id }) => {
+      const prompt = buildSuzzieSystemPrompt({ provider: id });
+      expect(prompt).toContain("@imageN Syntax");
+      expect(prompt).toContain(id);
+      expect(prompt).toContain("@imageN");
+      expect(prompt).toMatch(/supports up to \d+ reference images/);
+      const idx = prompt.indexOf("@imageN Syntax");
+      expect(idx).toBeGreaterThanOrEqual(0);
+      expect(prompt.slice(idx)).toContain(id);
+    },
+  );
+
+  it.each(imageMultiImageProviders)(
+    "includes the @imageN block for image provider $id (multiImageSupport)",
     ({ id }) => {
       const prompt = buildSuzzieSystemPrompt({ provider: id });
       expect(prompt).toContain("@imageN Syntax");
@@ -44,10 +62,23 @@ describe("buildSuzzieSystemPrompt — @imageN guidance injection", () => {
 });
 
 describe("buildAssetLibrarySuzziePrompt — @imageN guidance injection", () => {
-  it.each(multiImageProviders)(
-    "includes the @imageN block for provider $id (multiImageSupport)",
+  it.each(videoMultiImageProviders)(
+    "includes the @imageN block for video provider $id (multiImageSupport)",
     ({ id }) => {
       const prompt = buildAssetLibrarySuzziePrompt({ mode: "i2v", provider: id });
+      expect(prompt).toContain("@imageN Syntax");
+      expect(prompt).toContain(id);
+      expect(prompt).toContain("@imageN");
+      expect(prompt).toMatch(/supports up to \d+ reference images/);
+      expect(prompt).toContain("@image1");
+      expect(prompt).toContain("@image2");
+    },
+  );
+
+  it.each(imageMultiImageProviders)(
+    "includes the @imageN block for image provider $id (multiImageSupport)",
+    ({ id }) => {
+      const prompt = buildAssetLibrarySuzziePrompt({ mode: "t2i", provider: id });
       expect(prompt).toContain("@imageN Syntax");
       expect(prompt).toContain(id);
       expect(prompt).toContain("@imageN");
