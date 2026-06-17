@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { Sparkles, Video, Image, Volume2 } from "lucide-react";
+import { Sparkles, Video, Image, Volume2, Images } from "lucide-react";
 import {
   getVideoProviders,
   getImageProviders,
   COST_TIER_LABELS,
   providerSupportsNativeAudio,
+  providerSupportsMultiImage,
 } from "@shared/provider-catalog";
 
 interface ProviderCatalogSelectorProps {
@@ -58,6 +59,16 @@ export function ProviderCatalogSelector({ outputType, provider, onProviderChange
                   >
                     <Volume2 className="w-3 h-3" />
                     Native audio
+                  </span>
+                )}
+                {providerSupportsMultiImage(selectedProvider.id) && (
+                  <span
+                    className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-blue-500/20 text-blue-400 whitespace-nowrap"
+                    title="Supports multiple image references via @image_1, @image_2, … syntax in your prompt."
+                    data-testid={`provider-multi-image-badge-selected-${selectedProvider.id}`}
+                  >
+                    <Images className="w-3 h-3" />
+                    Multi-image
                   </span>
                 )}
                 {!compact && (
@@ -150,6 +161,16 @@ export function ProviderCatalogSelector({ outputType, provider, onProviderChange
                                 >
                                   <Volume2 className="w-3 h-3" />
                                   Native audio
+                                </span>
+                              )}
+                              {providerSupportsMultiImage(p.id) && (
+                                <span
+                                  className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-blue-500/20 text-blue-400 whitespace-nowrap"
+                                  title="Supports multiple image references via @image_1, @image_2, … syntax in your prompt."
+                                  data-testid={`provider-multi-image-badge-${p.id}`}
+                                >
+                                  <Images className="w-3 h-3" />
+                                  Multi-image
                                 </span>
                               )}
                               <span className="text-[10px] font-medium ml-auto" style={{ color: costInfo.color }}>{costInfo.label}</span>
