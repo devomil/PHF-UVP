@@ -2841,7 +2841,28 @@ function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () => void; 
           <Label style={{ color: "var(--text-secondary)" }}>Provider</Label>
           <Select value={provider} onValueChange={(val) => { setProvider(val); setAdditionalRefImages([]); }}>
             <SelectTrigger className="mt-1.5" style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }}>
-              <span>{getProviders().find(p => p.id === provider)?.name ?? 'Select provider'}</span>
+              <span className="flex items-center gap-1.5 flex-wrap">
+                <span>{getProviders().find(p => p.id === provider)?.name ?? 'Select provider'}</span>
+                {providerSupportsMultiImage(provider) && (() => {
+                  const support = getMultiImageSupport(provider);
+                  const hint = support?.hint ?? "Supports multiple image references via @image_N syntax in your prompt.";
+                  return (
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-blue-500/20 text-blue-400 whitespace-nowrap cursor-default">
+                            <Images className="w-3 h-3" />
+                            Multi-image
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent className="max-w-xs text-left" side="bottom">
+                          {hint}
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  );
+                })()}
+              </span>
             </SelectTrigger>
             <SelectContent style={{ backgroundColor: "var(--menu-bg)", borderColor: "var(--border-medium)" }}>
               {getProviders().map((p) => (
