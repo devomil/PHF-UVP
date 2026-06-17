@@ -59,14 +59,22 @@ export function ProviderCatalogSelector({ outputType, provider, onProviderChange
                   <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-500/20 text-purple-400 whitespace-nowrap">{selectedProvider.highlight}</span>
                 )}
                 {providerSupportsNativeAudio(selectedProvider.id) && (
-                  <span
-                    className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 whitespace-nowrap"
-                    title="Generates audio inside the clip — no separate SFX or voiceover needed."
-                    data-testid={`provider-native-audio-badge-selected-${selectedProvider.id}`}
-                  >
-                    <Volume2 className="w-3 h-3" />
-                    Native audio
-                  </span>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span
+                          className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 whitespace-nowrap cursor-default"
+                          data-testid={`provider-native-audio-badge-selected-${selectedProvider.id}`}
+                        >
+                          <Volume2 className="w-3 h-3" />
+                          Native audio
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-xs text-left" side="bottom">
+                        Generates audio inside the clip — no separate SFX or voiceover needed.
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 )}
                 {providerSupportsMultiImage(selectedProvider.id) && (() => {
                   const support = getMultiImageSupport(selectedProvider.id);
@@ -173,14 +181,22 @@ export function ProviderCatalogSelector({ outputType, provider, onProviderChange
                                 <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-500/20 text-purple-400 whitespace-nowrap">{p.highlight}</span>
                               )}
                               {providerSupportsNativeAudio(p.id) && (
-                                <span
-                                  className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 whitespace-nowrap"
-                                  title="Generates audio inside the clip — no separate SFX or voiceover needed."
-                                  data-testid={`provider-native-audio-badge-${p.id}`}
-                                >
-                                  <Volume2 className="w-3 h-3" />
-                                  Native audio
-                                </span>
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <span
+                                        className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 whitespace-nowrap cursor-default"
+                                        data-testid={`provider-native-audio-badge-${p.id}`}
+                                      >
+                                        <Volume2 className="w-3 h-3" />
+                                        Native audio
+                                      </span>
+                                    </TooltipTrigger>
+                                    <TooltipContent className="max-w-xs text-left" side="top">
+                                      Generates audio inside the clip — no separate SFX or voiceover needed.
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
                               )}
                               {providerSupportsMultiImage(p.id) && (() => {
                                 const support = getMultiImageSupport(p.id);
