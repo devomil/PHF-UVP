@@ -240,6 +240,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
   const [msModalMode, setMsModalMode] = useState("auto");
   const [msModalRefImages, setMsModalRefImages] = useState<string[]>([]);
   const [msModalShowLibrary, setMsModalShowLibrary] = useState(false);
+  const [msModalShowMultiRefExpander, setMsModalShowMultiRefExpander] = useState(false);
   const msModalFileRef = useRef<HTMLInputElement>(null);
   const overlayDebounceRef = useRef<NodeJS.Timeout | null>(null);
   const msOverlayDebounceRefs = useRef<Record<number, NodeJS.Timeout>>({});
@@ -508,8 +509,9 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
       setMsModalEditingPrompt(false);
       setMsModalProvider("auto");
       setMsModalMode("auto");
-      setMsModalRefImages([]);
+      setMsModalRefImages((ms as any).referenceImages || []);
       setMsModalShowLibrary(false);
+      setMsModalShowMultiRefExpander(false);
       queryClient.refetchQueries({ queryKey: ["project", projectId] });
     }
   }, [fullscreenMicroScene]);
@@ -867,6 +869,22 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
     }
   };
 
+  const persistMsRefImages = async (msIdx: number, images: string[]) => {
+    try {
+      const updatedMicroScenes = [...(scene.microScenes || [])];
+      updatedMicroScenes[msIdx] = { ...updatedMicroScenes[msIdx], referenceImages: images };
+      await fetch(`/api/universal-video/projects/${projectId}/scenes/${sceneId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ microScenes: updatedMicroScenes }),
+      });
+      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+    } catch (err) {
+      console.error("[MsRefImages] Failed to persist micro-scene reference images:", err);
+    }
+  };
+
   const persistReferenceVideo = async (videoUrl: string) => {
     try {
       await fetch(`/api/universal-video/projects/${projectId}/scenes/${sceneId}`, {
@@ -1045,7 +1063,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
     }
   };
 
-  const regenMicroSceneVideo = async (msIdx: number, opts?: { query?: string; provider?: string; generationMode?: string; sourceImageUrl?: string; skipProviderFallback?: boolean }) => {
+  const regenMicroSceneVideo = async (msIdx: number, opts?: { query?: string; provider?: string; generationMode?: string; sourceImageUrl?: string; sourceImageUrls?: string[]; skipProviderFallback?: boolean }) => {
     if (!(msIdx in prevMicroSceneVideos.current)) {
       prevMicroSceneVideos.current[msIdx] = scene.microScenes?.[msIdx]?.videoUrl;
     }
@@ -1070,6 +1088,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
           query: opts?.query,
           generationMode: opts?.generationMode,
           sourceImageUrl: opts?.sourceImageUrl,
+          sourceImageUrls: opts?.sourceImageUrls,
         }),
       });
       if (!res.ok) {
@@ -1152,7 +1171,13 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
       const data = await res.json();
       const url = data.url || data.fileUrl;
       if (url) {
-        setMsModalRefImages(prev => [...prev, url]);
+        setMsModalRefImages(prev => {
+          const next = [...prev, url];
+          if (fullscreenMicroScene !== null) {
+            persistMsRefImages(fullscreenMicroScene, next);
+          }
+          return next;
+        });
         toast({ title: "Reference image added", description: "Image will be used for I2V generation." });
       }
     } catch (err: any) {
@@ -3598,55 +3623,174 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                       </div>
 
                       <div className="mt-3 pt-3" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-[11px] font-medium text-white/50 flex items-center gap-1">
-                            <Image className="w-3 h-3" /> Reference Images
-                            <span className="text-[10px] text-white/30">For I2V (image-to-video)</span>
-                          </span>
-                        </div>
-                        {msModalRefImages.length > 0 && (
-                          <div className="mb-2 space-y-1.5">
-                            {msModalRefImages.map((url, i) => (
-                              <div key={i} className="relative rounded-lg overflow-hidden border group" style={{ borderColor: "rgba(124,58,237,0.3)" }}>
-                                <img src={url} alt={`Reference ${i + 1}`} className="w-full h-24 object-cover" />
-                                <div className="absolute bottom-0 left-0 right-0 px-2 py-1 bg-gradient-to-t from-black/70 to-transparent">
-                                  <span className="text-[10px] text-white/70">Reference {i + 1}</span>
+                        {(() => {
+                          const msProv = (msModalProvider !== 'auto' ? msModalProvider : '').toLowerCase();
+                          const msMultiRefName = msProv.startsWith('seedance-2') ? 'Seedance 2' : msProv.startsWith('kling-2') ? 'Kling 2.x' : null;
+                          const msMaxImages = getMultiImageSupport(msModalProvider !== 'auto' ? msModalProvider : '')?.maxImages || 4;
+                          if (msMultiRefName) {
+                            return (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => setMsModalShowMultiRefExpander(v => !v)}
+                                  className="w-full flex items-center justify-between px-3 py-2 rounded-lg border text-left transition-colors"
+                                  style={{
+                                    borderColor: msModalShowMultiRefExpander ? 'rgba(124,58,237,0.45)' : 'rgba(255,255,255,0.12)',
+                                    backgroundColor: msModalShowMultiRefExpander ? 'rgba(124,58,237,0.08)' : 'transparent',
+                                  }}
+                                >
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <ImagePlus className="w-3.5 h-3.5 shrink-0" style={{ color: 'rgb(167,139,250)' }} />
+                                    <span className="text-xs font-medium text-white/60">Additional reference images</span>
+                                    {msModalRefImages.length > 0 && (
+                                      <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-purple-500/20 border border-purple-500/30 font-medium text-purple-300">
+                                        {msModalRefImages.length}/{msMaxImages}
+                                      </span>
+                                    )}
+                                    <span className="text-[10px] text-white/30">@image_1, @image_2… — {msMultiRefName}</span>
+                                  </div>
+                                  {msModalShowMultiRefExpander
+                                    ? <ChevronUp className="w-3.5 h-3.5 shrink-0 text-white/40" />
+                                    : <ChevronDown className="w-3.5 h-3.5 shrink-0 text-white/40" />}
+                                </button>
+
+                                {msModalShowMultiRefExpander && (
+                                  <div className="mt-2 rounded-lg border p-3 space-y-2.5" style={{ borderColor: 'rgba(124,58,237,0.25)', backgroundColor: 'rgba(124,58,237,0.04)' }}>
+                                    <div className="flex flex-wrap gap-2 items-start">
+                                      {msModalRefImages.map((url, i) => (
+                                        <div key={i} className="relative w-16 h-16 rounded-lg overflow-hidden border group" style={{ borderColor: 'rgba(124,58,237,0.35)' }}>
+                                          <img src={url} alt="" className="w-full h-full object-cover transition-transform group-hover:scale-[1.03]" />
+                                          <div className="absolute top-0.5 left-0.5 w-[18px] h-[18px] rounded-full bg-purple-600 text-white flex items-center justify-center text-[9px] font-bold pointer-events-none shadow-sm">
+                                            {i + 1}
+                                          </div>
+                                          <div className="absolute bottom-0 left-0 right-0 text-[7px] text-center py-0.5 bg-black/60 text-white font-mono pointer-events-none">
+                                            @image_{i + 1}
+                                          </div>
+                                          <button
+                                            onClick={() => {
+                                              const next = msModalRefImages.filter((_, idx) => idx !== i);
+                                              setMsModalRefImages(next);
+                                              if (fullscreenMicroScene !== null) persistMsRefImages(fullscreenMicroScene, next);
+                                            }}
+                                            className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-red-500 text-white flex items-center justify-center text-[8px] opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                                          >
+                                            <X className="w-2.5 h-2.5" />
+                                          </button>
+                                        </div>
+                                      ))}
+                                      <div className="flex flex-col gap-1.5">
+                                        <input type="file" ref={msModalFileRef} className="hidden" accept="image/*,video/*" onChange={handleMsModalRefUpload} />
+                                        <button
+                                          onClick={() => msModalFileRef.current?.click()}
+                                          disabled={msModalRefImages.length >= msMaxImages}
+                                          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-dashed text-[11px] transition-colors hover:border-purple-500/40 disabled:opacity-50"
+                                          style={{ borderColor: 'rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.5)' }}
+                                        >
+                                          <Upload className="w-3 h-3" />
+                                          Upload{msModalRefImages.length > 0 ? ` (${msModalRefImages.length}/${msMaxImages})` : ''}
+                                        </button>
+                                        <button
+                                          onClick={() => setMsModalShowLibrary(v => !v)}
+                                          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-dashed text-[11px] transition-colors hover:border-purple-500/40"
+                                          style={{
+                                            borderColor: msModalShowLibrary ? 'rgba(124,58,237,0.5)' : 'rgba(255,255,255,0.2)',
+                                            color: msModalShowLibrary ? 'rgb(124,58,237)' : 'rgba(255,255,255,0.5)',
+                                          }}
+                                        >
+                                          <FolderOpen className="w-3 h-3" />
+                                          Library
+                                        </button>
+                                      </div>
+                                    </div>
+
+                                    {msModalShowLibrary && (
+                                      <div className="border rounded-lg p-2 max-h-32 overflow-y-auto" style={{ borderColor: 'rgba(255,255,255,0.1)', backgroundColor: 'rgba(0,0,0,0.3)' }}>
+                                        {libraryQuery.isLoading ? (
+                                          <div className="flex items-center justify-center py-3"><Loader2 className="w-4 h-4 animate-spin text-white/40" /></div>
+                                        ) : !libraryQuery.data || libraryQuery.data.length === 0 ? (
+                                          <p className="text-xs text-center py-3 text-white/30">No images in library</p>
+                                        ) : (
+                                          <div className="grid grid-cols-8 gap-1.5">
+                                            {libraryQuery.data.slice(0, 24).map((asset: any) => {
+                                              const assetUrl = asset.url || asset.thumbnailUrl;
+                                              if (asset.type === 'video') return null;
+                                              return (
+                                                <button key={asset.id} onClick={() => { if (assetUrl) { setMsModalRefImages(prev => { const next = [...prev, assetUrl]; if (fullscreenMicroScene !== null) persistMsRefImages(fullscreenMicroScene, next); return next; }); setMsModalShowLibrary(false); toast({ title: 'Reference Added' }); } }} className="aspect-square rounded overflow-hidden border hover:border-purple-500/50 transition-colors" style={{ borderColor: 'rgba(255,255,255,0.1)' }}>
+                                                  <img src={asset.thumbnailUrl || assetUrl} alt={asset.name || ''} className="w-full h-full object-cover" />
+                                                </button>
+                                              );
+                                            })}
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
+
+                                    <p className="text-[10px] text-white/30">
+                                      Use{' '}
+                                      <code className="px-1 py-0.5 rounded bg-purple-500/10 text-purple-300 font-mono text-[9px]">@image_1</code>,{' '}
+                                      <code className="px-1 py-0.5 rounded bg-purple-500/10 text-purple-300 font-mono text-[9px]">@image_2</code>{' '}
+                                      etc. in your visual direction to anchor specific images.{' '}
+                                      {msMultiRefName} supports up to {msMaxImages} reference images.
+                                    </p>
+                                  </div>
+                                )}
+                              </>
+                            );
+                          }
+                          return (
+                            <>
+                              <div className="flex items-center justify-between mb-2">
+                                <span className="text-[11px] font-medium text-white/50 flex items-center gap-1">
+                                  <Image className="w-3 h-3" /> Reference Images
+                                  <span className="text-[10px] text-white/30">For I2V (image-to-video)</span>
+                                </span>
+                              </div>
+                              {msModalRefImages.length > 0 && (
+                                <div className="mb-2 space-y-1.5">
+                                  {msModalRefImages.map((url, i) => (
+                                    <div key={i} className="relative rounded-lg overflow-hidden border group" style={{ borderColor: "rgba(124,58,237,0.3)" }}>
+                                      <img src={url} alt={`Reference ${i + 1}`} className="w-full h-24 object-cover" />
+                                      <div className="absolute bottom-0 left-0 right-0 px-2 py-1 bg-gradient-to-t from-black/70 to-transparent">
+                                        <span className="text-[10px] text-white/70">Reference {i + 1}</span>
+                                      </div>
+                                      <button onClick={() => setMsModalRefImages(prev => prev.filter((_, idx) => idx !== i))} className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500">
+                                        <X className="w-3 h-3" />
+                                      </button>
+                                    </div>
+                                  ))}
                                 </div>
-                                <button onClick={() => setMsModalRefImages(prev => prev.filter((_, idx) => idx !== i))} className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500">
-                                  <X className="w-3 h-3" />
+                              )}
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <input type="file" ref={msModalFileRef} className="hidden" accept="image/*,video/*" onChange={handleMsModalRefUpload} />
+                                <button onClick={() => msModalFileRef.current?.click()} className="flex-1 text-[11px] px-3 py-2 rounded-lg border border-dashed flex items-center justify-center gap-1.5 transition-colors hover:border-purple-500/40 hover:bg-purple-500/5" style={{ borderColor: "rgba(255,255,255,0.15)", color: "rgba(255,255,255,0.5)" }} title="Upload reference image">
+                                  <Upload className="w-3.5 h-3.5" />
+                                  Upload Image
+                                </button>
+                                <button onClick={() => setMsModalShowLibrary(!msModalShowLibrary)} className="flex-1 text-[11px] px-3 py-2 rounded-lg border border-dashed flex items-center justify-center gap-1.5 transition-colors hover:border-purple-500/40 hover:bg-purple-500/5" style={{ borderColor: msModalShowLibrary ? "rgba(124,58,237,0.4)" : "rgba(255,255,255,0.15)", color: msModalShowLibrary ? "rgb(124,58,237)" : "rgba(255,255,255,0.5)" }} title="Browse asset library">
+                                  <FolderOpen className="w-3.5 h-3.5" />
+                                  Library
                                 </button>
                               </div>
-                            ))}
-                          </div>
-                        )}
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <input type="file" ref={msModalFileRef} className="hidden" accept="image/*,video/*" onChange={handleMsModalRefUpload} />
-                          <button onClick={() => msModalFileRef.current?.click()} className="flex-1 text-[11px] px-3 py-2 rounded-lg border border-dashed flex items-center justify-center gap-1.5 transition-colors hover:border-purple-500/40 hover:bg-purple-500/5" style={{ borderColor: "rgba(255,255,255,0.15)", color: "rgba(255,255,255,0.5)" }} title="Upload reference image">
-                            <Upload className="w-3.5 h-3.5" />
-                            Upload Image
-                          </button>
-                          <button onClick={() => setMsModalShowLibrary(!msModalShowLibrary)} className="flex-1 text-[11px] px-3 py-2 rounded-lg border border-dashed flex items-center justify-center gap-1.5 transition-colors hover:border-purple-500/40 hover:bg-purple-500/5" style={{ borderColor: msModalShowLibrary ? "rgba(124,58,237,0.4)" : "rgba(255,255,255,0.15)", color: msModalShowLibrary ? "rgb(124,58,237)" : "rgba(255,255,255,0.5)" }} title="Browse asset library">
-                            <FolderOpen className="w-3.5 h-3.5" />
-                            Library
-                          </button>
-                        </div>
-                        {msModalShowLibrary && (
-                          <div className="border rounded-lg p-2 mt-2 max-h-32 overflow-y-auto" style={{ borderColor: "rgba(255,255,255,0.1)", backgroundColor: "rgba(0,0,0,0.3)" }}>
-                            {libraryQuery.isLoading ? (
-                              <div className="flex items-center justify-center py-3"><Loader2 className="w-4 h-4 animate-spin text-white/40" /></div>
-                            ) : !libraryQuery.data || libraryQuery.data.length === 0 ? (
-                              <p className="text-xs text-center py-3 text-white/30">No images in library</p>
-                            ) : (
-                              <div className="grid grid-cols-8 gap-1.5">
-                                {libraryQuery.data.slice(0, 24).map((asset: any) => (
-                                  <button key={asset.id} onClick={() => { const url = asset.url || asset.thumbnailUrl; if (url) { setMsModalRefImages(prev => [...prev, url]); setMsModalShowLibrary(false); toast({ title: "Reference Added" }); } }} className="aspect-square rounded overflow-hidden border hover:border-purple-500/50 transition-colors" style={{ borderColor: "rgba(255,255,255,0.1)" }}>
-                                    <img src={asset.url || asset.thumbnailUrl} alt={asset.name || ""} className="w-full h-full object-cover" />
-                                  </button>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        )}
+                              {msModalShowLibrary && (
+                                <div className="border rounded-lg p-2 mt-2 max-h-32 overflow-y-auto" style={{ borderColor: "rgba(255,255,255,0.1)", backgroundColor: "rgba(0,0,0,0.3)" }}>
+                                  {libraryQuery.isLoading ? (
+                                    <div className="flex items-center justify-center py-3"><Loader2 className="w-4 h-4 animate-spin text-white/40" /></div>
+                                  ) : !libraryQuery.data || libraryQuery.data.length === 0 ? (
+                                    <p className="text-xs text-center py-3 text-white/30">No images in library</p>
+                                  ) : (
+                                    <div className="grid grid-cols-8 gap-1.5">
+                                      {libraryQuery.data.slice(0, 24).map((asset: any) => (
+                                        <button key={asset.id} onClick={() => { const url = asset.url || asset.thumbnailUrl; if (url) { setMsModalRefImages(prev => [...prev, url]); setMsModalShowLibrary(false); toast({ title: "Reference Added" }); } }} className="aspect-square rounded overflow-hidden border hover:border-purple-500/50 transition-colors" style={{ borderColor: "rgba(255,255,255,0.1)" }}>
+                                          <img src={asset.url || asset.thumbnailUrl} alt={asset.name || ""} className="w-full h-full object-cover" />
+                                        </button>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </>
+                          );
+                        })()}
                       </div>
 
                       <div className="mt-3 pt-3" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
@@ -3745,6 +3889,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                                 provider: msModalProvider === "auto" ? undefined : msModalProvider,
                                 generationMode: msModalMode === "auto" ? undefined : msModalMode,
                                 sourceImageUrl: msModalRefImages.length > 0 ? msModalRefImages[0] : undefined,
+                                sourceImageUrls: msModalRefImages.length > 1 ? msModalRefImages : undefined,
                               });
                             }}
                             disabled={regeneratingMicroScenes.has(fullscreenMicroScene)}

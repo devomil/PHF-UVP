@@ -7853,7 +7853,7 @@ router.post('/:projectId/scenes/:sceneId/micro-scene/:microSceneIndex/regenerate
   try {
     const userId = (req.user as any)?.id;
     const { projectId, sceneId, microSceneIndex } = req.params;
-    const { provider, generationMode, query, sourceImageUrl } = req.body;
+    const { provider, generationMode, query, sourceImageUrl, sourceImageUrls: reqSourceImageUrls } = req.body;
     const msIdx = parseInt(microSceneIndex, 10);
 
     const projectData = await getProjectFromDb(projectId);
@@ -7879,12 +7879,26 @@ router.post('/:projectId/scenes/:sceneId/micro-scene/:microSceneIndex/regenerate
     console.log(`[MicroScene-Regen] Regenerating micro-scene ${msIdx} for scene ${sceneId}, prompt: ${prompt.substring(0, 100)}`);
 
     let finalSourceImageUrl: string | undefined = undefined;
-    if (sourceImageUrl && generationMode !== 't2v') {
-      const projectAspectRatio = (projectData as any).outputFormat?.aspectRatio || (projectData as any).settings?.aspectRatio || '16:9';
-      const publicUrl = await getPublicUrlForBrandAsset(sourceImageUrl, projectAspectRatio);
-      if (publicUrl) {
-        finalSourceImageUrl = publicUrl;
-        console.log(`[MicroScene-Regen] I2V mode with user-provided source image`);
+    let finalSourceImageUrls: string[] | undefined = undefined;
+    const projectAspectRatioForImages = (projectData as any).outputFormat?.aspectRatio || (projectData as any).settings?.aspectRatio || '16:9';
+    if (generationMode !== 't2v') {
+      // Priority: explicit multi-image body > single sourceImageUrl body > micro-scene persisted referenceImages
+      const msStoredRefImages = (ms as any).referenceImages as string[] | undefined;
+      const allReqImages = (reqSourceImageUrls && Array.isArray(reqSourceImageUrls) && reqSourceImageUrls.length > 0)
+        ? reqSourceImageUrls
+        : (sourceImageUrl ? [sourceImageUrl] : (msStoredRefImages && msStoredRefImages.length > 0 ? msStoredRefImages : []));
+      if (allReqImages.length > 0) {
+        const resolvedUrls = await Promise.all(
+          allReqImages.map((url: string) => getPublicUrlForBrandAsset(url, projectAspectRatioForImages))
+        );
+        const validUrls = resolvedUrls.filter((u): u is string => !!u);
+        if (validUrls.length > 0) {
+          finalSourceImageUrl = validUrls[0];
+          if (validUrls.length > 1) {
+            finalSourceImageUrls = validUrls;
+          }
+          console.log(`[MicroScene-Regen] I2V mode with ${validUrls.length} source image(s) (${reqSourceImageUrls?.length ? 'from request' : sourceImageUrl ? 'single from request' : 'from persisted ms.referenceImages'})`);
+        }
       }
     }
 
@@ -8001,6 +8015,7 @@ router.post('/:projectId/scenes/:sceneId/micro-scene/:microSceneIndex/regenerate
       style: (projectData as any).settings?.visualStyle || 'professional',
       triggeredBy: userId,
       sourceImageUrl: finalSourceImageUrl,
+      sourceImageUrls: finalSourceImageUrls,
       i2vSettings: msI2vWithHint,
       sceneType: scene.type || 'content',
     });
