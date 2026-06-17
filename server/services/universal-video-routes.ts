@@ -7361,7 +7361,7 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, req
   try {
     const userId = (req.user as any)?.id;
     const { projectId, sceneId } = req.params;
-    const { query, provider, sourceImageUrl, sourceImageUrls: reqImageUrls, i2vSettings, motionControl, forceRegenerate, generationMode, strongAnchor } = req.body;
+    const { query, provider, sourceImageUrl, sourceImageUrls: reqImageUrls, referenceImages: reqReferenceImages, i2vSettings, motionControl, forceRegenerate, generationMode, strongAnchor } = req.body;
     
     console.log(`[Phase9B-Async] Creating async video generation job for scene ${sceneId} with provider: ${provider || 'default'}${sourceImageUrl ? ', using I2V with source image' : ''}${i2vSettings ? ', with I2V settings' : ''}${forceRegenerate ? ', FORCE REGENERATE' : ''}`);
     console.log(`[Phase9B-Async] Generation mode: ${generationMode || 'auto'}`);
@@ -7582,9 +7582,12 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, req
 
     let finalSourceImageUrls: string[] | undefined = undefined;
     const sceneRefImages = (scene as any).assets?.referenceImages as string[] | undefined;
-    const allRefImages = (reqImageUrls && Array.isArray(reqImageUrls) && reqImageUrls.length > 0)
-      ? reqImageUrls
-      : (sceneRefImages && sceneRefImages.length > 0 ? sceneRefImages : undefined);
+    // Priority: explicit referenceImages body param > sourceImageUrls body param > scene.assets.referenceImages from DB
+    const allRefImages = (reqReferenceImages && Array.isArray(reqReferenceImages) && reqReferenceImages.length > 0)
+      ? reqReferenceImages
+      : (reqImageUrls && Array.isArray(reqImageUrls) && reqImageUrls.length > 0)
+        ? reqImageUrls
+        : (sceneRefImages && sceneRefImages.length > 0 ? sceneRefImages : undefined);
     if (allRefImages && allRefImages.length > 0 && !forceT2V) {
       const projectAR = (projectData as any).outputFormat?.aspectRatio || (projectData as any).settings?.aspectRatio || '16:9';
       const resolvedUrls = await Promise.all(

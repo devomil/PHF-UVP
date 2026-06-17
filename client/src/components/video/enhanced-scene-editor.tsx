@@ -1007,6 +1007,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
           provider: provider === "auto" ? undefined : provider,
           sourceImageUrl: useSourceImage ? sourceImage : undefined,
           sourceImageUrls: useSourceImage && referenceImageUrls.length > 1 ? referenceImageUrls : undefined,
+          referenceImages: referenceImageUrls.length > 0 ? referenceImageUrls : undefined,
           generationMode: activeMode,
         }),
       });
@@ -1289,6 +1290,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
   };
 
   const [multiImageTipDismissed, setMultiImageTipDismissed] = useState(false);
+  const [showMultiRefExpander, setShowMultiRefExpander] = useState(false);
 
   const addReferenceImage = useCallback((url: string) => {
     setReferenceImageUrls(prev => {
@@ -1714,209 +1716,383 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
           </div>
 
           {/* Reference Images — col-span-3 so it spans the full grid width and the tiles flow horizontally */}
-          <div className="col-span-3">
-            <p className="text-[11px] font-medium flex items-center gap-1 mb-1" style={{ color: "var(--text-secondary)" }}>
-              <Image className="w-3 h-3" /> Reference Images
-              {brandAssetUrl && (
-                <span className="ml-1 text-[9px] px-1.5 py-0.5 rounded-full bg-green-500/15 text-green-400 border border-green-500/20">
-                  Product Image Attached
-                </span>
-              )}
-            </p>
-            {isProductScene && !brandAssetUrl && referenceImageUrls.length === 0 && !imageUrl && (
-              <div 
-                className="mb-2 px-2.5 py-2 rounded-lg border border-dashed cursor-pointer transition-colors hover:border-amber-500/40 hover:bg-amber-500/5"
-                style={{ borderColor: "rgba(245,158,11,0.3)", backgroundColor: "rgba(245,158,11,0.03)" }}
-                onClick={() => refFileInputRef.current?.click()}
-              >
-                <p className="text-[10px] font-medium flex items-center gap-1.5" style={{ color: "rgb(245,158,11)" }}>
-                  <ImagePlus className="w-3 h-3 flex-shrink-0" />
-                  Upload your product image for this scene
-                </p>
-                <p className="text-[9px] mt-0.5 ml-[18px]" style={{ color: "var(--text-muted)" }}>
-                  This scene is designed to showcase your product. Upload a photo to use as the starting frame for AI video generation (I2V).
-                </p>
-              </div>
-            )}
-            <p className="text-[10px] mb-1.5" style={{ color: "var(--text-muted)" }}>For I2V (image-to-video)</p>
+          {(() => {
+            const resolvedProv = (videoProviderLock || (provider !== 'auto' ? provider : null) || scene.assets?.videoProvider || '').toString().toLowerCase();
+            const multiRefProviderName = resolvedProv.startsWith('seedance-2') ? 'Seedance 2' : resolvedProv.startsWith('kling-2') ? 'Kling 2.x' : null;
+            const isMultiRefProvider = multiRefProviderName !== null;
+            const maxImages = getMultiImageSupport(provider === 'auto' ? '' : provider)?.maxImages || 4;
 
-            {/* Task 56: role-aware overview row (Product / Character / Logo) — reconciled with local state */}
-            {routingPreview && (() => {
-              // Hide the product slot when user dismissed it locally OR removed it from referenceImageUrls.
-              const serverProduct = routingPreview.references.product;
-              const productStillLocal = serverProduct
-                ? (!brandAssetDismissed && (referenceImageUrls.includes(serverProduct) || serverProduct === scene.brandAssetUrl))
-                : false;
-              const effectiveProductUrl = productStillLocal ? serverProduct : null;
-              const serverCharacter = routingPreview.references.character;
-              const characterStillLocal = serverCharacter
-                ? (referenceImageUrls.includes(serverCharacter) || serverCharacter === scene.characterRefImageUrl)
-                : false;
-              const effectiveCharacterUrl = characterStillLocal ? serverCharacter : null;
+            if (isMultiRefProvider) {
               return (
-              <div className="mb-2 p-2 rounded-lg border" style={{ borderColor: "var(--border-subtle)", backgroundColor: "rgba(255,255,255,0.02)" }}>
-                <RoleAwareReferenceSlots
-                  productUrl={effectiveProductUrl}
-                  characterUrl={effectiveCharacterUrl}
-                  brandLogoUrl={routingPreview.references.brandLogo}
-                  hasLogoIntent={routingPreview.routing.needsLogoComposition}
-                  hasLogoGap={routingPreview.references.hasLogoGap}
-                  uploads={referenceImageUrls.filter(u => u !== effectiveProductUrl && u !== effectiveCharacterUrl)}
-                  onPreview={(u) => setRefLightboxUrl(u)}
-                  onRemoveUpload={(url) => {
-                    const newImages = referenceImageUrls.filter(u => u !== url);
-                    setReferenceImageUrls(newImages);
-                    persistReferenceImages(newImages);
-                  }}
-                  onAddUpload={() => refFileInputRef.current?.click()}
-                  onRemoveProduct={() => {
-                    setBrandAssetDismissed(true);
-                    const newImages = referenceImageUrls.filter(u => u !== routingPreview.references.product);
-                    setReferenceImageUrls(newImages);
-                    persistReferenceImages(newImages);
-                  }}
-                />
-              </div>
-              );
-            })()}
+                <div className="col-span-3">
+                  {/* Additional reference images expander — Seedance 2.x / Kling 2.x */}
+                  <button
+                    type="button"
+                    onClick={() => setShowMultiRefExpander(v => !v)}
+                    className="w-full flex items-center justify-between px-3 py-2 rounded-lg border text-left transition-colors hover:border-purple-500/30"
+                    style={{
+                      borderColor: showMultiRefExpander ? 'rgba(124,58,237,0.35)' : 'var(--border-subtle)',
+                      backgroundColor: showMultiRefExpander ? 'rgba(124,58,237,0.04)' : 'transparent',
+                    }}
+                  >
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <ImagePlus className="w-3.5 h-3.5 shrink-0" style={{ color: 'rgb(167,139,250)' }} />
+                      <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
+                        Additional reference images
+                      </span>
+                      {referenceImageUrls.length > 0 && (
+                        <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-purple-500/15 border border-purple-500/20 font-medium" style={{ color: 'rgb(167,139,250)' }}>
+                          {referenceImageUrls.length}/{maxImages}
+                        </span>
+                      )}
+                      <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                        @image_1, @image_2&hellip; &mdash; {multiRefProviderName}
+                      </span>
+                    </div>
+                    {showMultiRefExpander
+                      ? <ChevronUp className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--text-muted)' }} />
+                      : <ChevronDown className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--text-muted)' }} />}
+                  </button>
 
-            <div className="flex items-center gap-1.5 flex-wrap">
-              {imageUrl && (
-                <div className="relative w-16 h-16 rounded-md overflow-hidden border group" style={{ borderColor: "var(--border-subtle)" }}>
-                  <button
-                    type="button"
-                    onClick={() => setRefLightboxUrl(imageUrl)}
-                    className="block w-full h-full"
-                    title="Click to expand"
-                    aria-label="Open reference image full size"
-                  >
-                    <img src={imageUrl} alt="Reference" className="w-full h-full object-cover transition-transform group-hover:scale-[1.03]" />
-                    <span className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/40 transition-colors">
-                      <Maximize2 className="w-4 h-4 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-                    </span>
-                  </button>
-                  <button
-                    onClick={() => {
-                      updateSceneMutation.mutate({ clearImage: true });
-                    }}
-                    className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white flex items-center justify-center text-[8px] opacity-0 group-hover:opacity-100 transition-opacity z-10"
-                    title="Remove reference image"
-                  >
-                    <X className="w-2.5 h-2.5" />
-                  </button>
-                </div>
-              )}
-              {referenceImageUrls.map((url, i) => (
-                <div key={i} className="relative w-16 h-16 rounded-md overflow-hidden border group" style={{ borderColor: "rgba(124,58,237,0.3)" }}>
-                  <button
-                    type="button"
-                    onClick={() => setRefLightboxUrl(url)}
-                    className="block w-full h-full"
-                    title="Click to expand"
-                    aria-label={`Open reference image ${i + 1} full size`}
-                  >
-                    <img src={url} alt={`Reference ${i + 1}`} className="w-full h-full object-cover transition-transform group-hover:scale-[1.03]" />
-                    <span className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/40 transition-colors">
-                      <Maximize2 className="w-4 h-4 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-                    </span>
-                  </button>
-                  <div className="absolute top-0 left-0 w-3.5 h-3.5 rounded-full bg-purple-600 text-white flex items-center justify-center text-[7px] font-bold pointer-events-none">
-                    {i + 1}
-                  </div>
-                  <button
-                    onClick={() => {
-                      if (url === scene.brandAssetUrl) {
-                        setBrandAssetDismissed(true);
-                      }
-                      const newImages = referenceImageUrls.filter((_, idx) => idx !== i);
-                      setReferenceImageUrls(newImages);
-                      persistReferenceImages(newImages);
-                    }}
-                    className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white flex items-center justify-center text-[8px] opacity-0 group-hover:opacity-100 transition-opacity z-10"
-                  >
-                    <X className="w-2.5 h-2.5" />
-                  </button>
-                </div>
-              ))}
-              <button
-                type="button"
-                onClick={() => refFileInputRef.current?.click()}
-                className="w-16 h-16 rounded-md border border-dashed flex items-center justify-center transition-colors hover:border-purple-500/40"
-                style={{ borderColor: "var(--border-subtle)", color: "var(--text-muted)" }}
-                title="Upload from computer"
-              >
-                <Upload className="w-3.5 h-3.5" />
-              </button>
-              <button
-                type="button"
-                onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowLibrary(!showLibrary); }}
-                className="w-16 h-16 rounded-md border border-dashed flex items-center justify-center transition-colors hover:border-purple-500/40"
-                style={{ borderColor: showLibrary ? "rgba(124,58,237,0.4)" : "var(--border-subtle)", color: showLibrary ? "rgb(124,58,237)" : "var(--text-muted)" }}
-                title="Browse asset library"
-              >
-                <FolderOpen className="w-3.5 h-3.5" />
-              </button>
-              <button
-                type="button"
-                onClick={() => regenImageMutation.mutate()}
-                disabled={isRegenerating}
-                className="w-16 h-16 rounded-md border border-dashed flex flex-col items-center justify-center gap-0.5 transition-colors hover:border-purple-500/40 disabled:opacity-50"
-                style={{ borderColor: "rgba(124,58,237,0.3)", color: "rgb(192,132,252)" }}
-                title="Generate a new reference image with AI from the visual direction"
-              >
-                {regenImageMutation.isPending ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <Sparkles className="w-3.5 h-3.5" />
-                )}
-                <span className="text-[8px] font-medium leading-none">AI {imageUrl || referenceImageUrls.length > 0 ? "Regen" : "Gen"}</span>
-              </button>
-            </div>
-            {showLibrary && (
-              <div className="border rounded-lg p-2 mt-2 max-h-32 overflow-y-auto" style={{ borderColor: "var(--border-subtle)", backgroundColor: "var(--surface)" }}>
-                {libraryQuery.isLoading ? (
-                  <div className="flex items-center justify-center py-3">
-                    <Loader2 className="w-4 h-4 animate-spin" style={{ color: "var(--text-muted)" }} />
-                  </div>
-                ) : !libraryQuery.data || libraryQuery.data.length === 0 ? (
-                  <p className="text-xs text-center py-3" style={{ color: "var(--text-muted)" }}>No images in library</p>
-                ) : (
-                  <div className="grid grid-cols-6 gap-1.5">
-                    {libraryQuery.data.slice(0, 18).map((asset: any) => {
-                      const assetUrl = asset.url || asset.thumbnailUrl;
-                      const isVid = asset.type === 'video';
-                      return (
-                        <button
-                          key={asset.id}
-                          onClick={() => {
-                            if (assetUrl) {
-                              addReferenceImage(assetUrl);
-                              setShowLibrary(false);
-                              toast({ title: "Reference Added" });
-                            }
-                          }}
-                          className="relative aspect-square rounded overflow-hidden border hover:border-purple-500/50 transition-colors"
-                          style={{ borderColor: "var(--border-subtle)" }}
-                          title={asset.name || ''}
+                  {showMultiRefExpander && (
+                    <div
+                      className="mt-2 rounded-lg border p-3 space-y-2.5"
+                      style={{ borderColor: 'rgba(124,58,237,0.2)', backgroundColor: 'rgba(124,58,237,0.03)' }}
+                    >
+                      {isProductScene && !brandAssetUrl && referenceImageUrls.length === 0 && !imageUrl && (
+                        <div
+                          className="px-2.5 py-2 rounded-lg border border-dashed cursor-pointer transition-colors hover:border-amber-500/40 hover:bg-amber-500/5"
+                          style={{ borderColor: 'rgba(245,158,11,0.3)', backgroundColor: 'rgba(245,158,11,0.03)' }}
+                          onClick={() => refFileInputRef.current?.click()}
                         >
-                          {isVid ? (
-                            <video src={assetUrl} className="w-full h-full object-cover" muted />
+                          <p className="text-[10px] font-medium flex items-center gap-1.5" style={{ color: 'rgb(245,158,11)' }}>
+                            <ImagePlus className="w-3 h-3 shrink-0" />
+                            Upload your product image for this scene
+                          </p>
+                          <p className="text-[9px] mt-0.5 ml-[18px]" style={{ color: 'var(--text-muted)' }}>
+                            Becomes @image_1 — the anchor image for AI video generation.
+                          </p>
+                        </div>
+                      )}
+
+                      <div className="flex flex-wrap gap-2 items-start">
+                        {referenceImageUrls.map((url, i) => (
+                          <div
+                            key={`multi-ref-${i}`}
+                            className="relative w-16 h-16 rounded-lg overflow-hidden border group"
+                            style={{ borderColor: 'rgba(124,58,237,0.3)' }}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => setRefLightboxUrl(url)}
+                              className="block w-full h-full"
+                              title="Click to expand"
+                              aria-label={`Open reference image ${i + 1}`}
+                            >
+                              <img src={url} alt="" className="w-full h-full object-cover transition-transform group-hover:scale-[1.03]" />
+                              <span className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/40 transition-colors">
+                                <Maximize2 className="w-3.5 h-3.5 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                              </span>
+                            </button>
+                            <div className="absolute top-0.5 left-0.5 w-[18px] h-[18px] rounded-full bg-purple-600 text-white flex items-center justify-center text-[9px] font-bold pointer-events-none shadow-sm">
+                              {i + 1}
+                            </div>
+                            <div className="absolute bottom-0 left-0 right-0 text-[7px] text-center py-0.5 bg-black/60 text-white font-mono pointer-events-none">
+                              @image_{i + 1}
+                            </div>
+                            <button
+                              onClick={() => {
+                                if (url === scene.brandAssetUrl) setBrandAssetDismissed(true);
+                                const newImages = referenceImageUrls.filter((_, idx) => idx !== i);
+                                setReferenceImageUrls(newImages);
+                                persistReferenceImages(newImages);
+                              }}
+                              className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-red-500 text-white flex items-center justify-center text-[8px] opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                            >
+                              <X className="w-2.5 h-2.5" />
+                            </button>
+                          </div>
+                        ))}
+
+                        <div className="flex flex-col gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => refFileInputRef.current?.click()}
+                            disabled={referenceImageUrls.length >= maxImages}
+                            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-dashed text-[11px] transition-colors hover:border-purple-500/40 disabled:opacity-50"
+                            style={{ borderColor: 'var(--border-subtle)', color: 'var(--text-muted)' }}
+                          >
+                            <Upload className="w-3 h-3" />
+                            Upload{referenceImageUrls.length > 0 ? ` (${referenceImageUrls.length}/${maxImages})` : ''}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowLibrary(!showLibrary); }}
+                            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-dashed text-[11px] transition-colors hover:border-purple-500/40"
+                            style={{
+                              borderColor: showLibrary ? 'rgba(124,58,237,0.4)' : 'var(--border-subtle)',
+                              color: showLibrary ? 'rgb(124,58,237)' : 'var(--text-muted)',
+                            }}
+                          >
+                            <FolderOpen className="w-3 h-3" />
+                            Library
+                          </button>
+                        </div>
+                      </div>
+
+                      {showLibrary && (
+                        <div
+                          className="border rounded-lg p-2 max-h-32 overflow-y-auto"
+                          style={{ borderColor: 'var(--border-subtle)', backgroundColor: 'var(--surface)' }}
+                        >
+                          {libraryQuery.isLoading ? (
+                            <div className="flex items-center justify-center py-3">
+                              <Loader2 className="w-4 h-4 animate-spin" style={{ color: 'var(--text-muted)' }} />
+                            </div>
+                          ) : !libraryQuery.data || libraryQuery.data.length === 0 ? (
+                            <p className="text-xs text-center py-3" style={{ color: 'var(--text-muted)' }}>No images in library</p>
                           ) : (
-                            <img src={asset.thumbnailUrl || assetUrl} alt={asset.name || ""} className="w-full h-full object-cover" />
-                          )}
-                          {isVid && (
-                            <div className="absolute top-0.5 left-0.5">
-                              <span className="text-[7px] px-0.5 rounded bg-black/60 text-white">VID</span>
+                            <div className="grid grid-cols-6 gap-1.5">
+                              {libraryQuery.data.slice(0, 18).map((asset: any) => {
+                                const assetUrl = asset.url || asset.thumbnailUrl;
+                                if (asset.type === 'video') return null;
+                                return (
+                                  <button
+                                    key={asset.id}
+                                    onClick={() => {
+                                      if (assetUrl) {
+                                        addReferenceImage(assetUrl);
+                                        setShowLibrary(false);
+                                        toast({ title: 'Reference Added' });
+                                      }
+                                    }}
+                                    className="relative aspect-square rounded overflow-hidden border hover:border-purple-500/50 transition-colors"
+                                    style={{ borderColor: 'var(--border-subtle)' }}
+                                    title={asset.name || ''}
+                                  >
+                                    <img src={asset.thumbnailUrl || assetUrl} alt={asset.name || ''} className="w-full h-full object-cover" />
+                                  </button>
+                                );
+                              })}
                             </div>
                           )}
-                        </button>
-                      );
-                    })}
+                        </div>
+                      )}
+
+                      <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                        Use{' '}
+                        <code className="px-1 py-0.5 rounded bg-purple-500/10 text-purple-300 font-mono text-[9px]">@image_1</code>,{' '}
+                        <code className="px-1 py-0.5 rounded bg-purple-500/10 text-purple-300 font-mono text-[9px]">@image_2</code>{' '}
+                        etc. in your visual direction to anchor specific images.{' '}
+                        {multiRefProviderName} supports up to {maxImages} reference images.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              );
+            }
+
+            return (
+              <div className="col-span-3">
+                <p className="text-[11px] font-medium flex items-center gap-1 mb-1" style={{ color: "var(--text-secondary)" }}>
+                  <Image className="w-3 h-3" /> Reference Images
+                  {brandAssetUrl && (
+                    <span className="ml-1 text-[9px] px-1.5 py-0.5 rounded-full bg-green-500/15 text-green-400 border border-green-500/20">
+                      Product Image Attached
+                    </span>
+                  )}
+                </p>
+                {isProductScene && !brandAssetUrl && referenceImageUrls.length === 0 && !imageUrl && (
+                  <div
+                    className="mb-2 px-2.5 py-2 rounded-lg border border-dashed cursor-pointer transition-colors hover:border-amber-500/40 hover:bg-amber-500/5"
+                    style={{ borderColor: "rgba(245,158,11,0.3)", backgroundColor: "rgba(245,158,11,0.03)" }}
+                    onClick={() => refFileInputRef.current?.click()}
+                  >
+                    <p className="text-[10px] font-medium flex items-center gap-1.5" style={{ color: "rgb(245,158,11)" }}>
+                      <ImagePlus className="w-3 h-3 flex-shrink-0" />
+                      Upload your product image for this scene
+                    </p>
+                    <p className="text-[9px] mt-0.5 ml-[18px]" style={{ color: "var(--text-muted)" }}>
+                      This scene is designed to showcase your product. Upload a photo to use as the starting frame for AI video generation (I2V).
+                    </p>
+                  </div>
+                )}
+                <p className="text-[10px] mb-1.5" style={{ color: "var(--text-muted)" }}>For I2V (image-to-video)</p>
+
+                {/* Task 56: role-aware overview row (Product / Character / Logo) — reconciled with local state */}
+                {routingPreview && (() => {
+                  const serverProduct = routingPreview.references.product;
+                  const productStillLocal = serverProduct
+                    ? (!brandAssetDismissed && (referenceImageUrls.includes(serverProduct) || serverProduct === scene.brandAssetUrl))
+                    : false;
+                  const effectiveProductUrl = productStillLocal ? serverProduct : null;
+                  const serverCharacter = routingPreview.references.character;
+                  const characterStillLocal = serverCharacter
+                    ? (referenceImageUrls.includes(serverCharacter) || serverCharacter === scene.characterRefImageUrl)
+                    : false;
+                  const effectiveCharacterUrl = characterStillLocal ? serverCharacter : null;
+                  return (
+                    <div className="mb-2 p-2 rounded-lg border" style={{ borderColor: "var(--border-subtle)", backgroundColor: "rgba(255,255,255,0.02)" }}>
+                      <RoleAwareReferenceSlots
+                        productUrl={effectiveProductUrl}
+                        characterUrl={effectiveCharacterUrl}
+                        brandLogoUrl={routingPreview.references.brandLogo}
+                        hasLogoIntent={routingPreview.routing.needsLogoComposition}
+                        hasLogoGap={routingPreview.references.hasLogoGap}
+                        uploads={referenceImageUrls.filter(u => u !== effectiveProductUrl && u !== effectiveCharacterUrl)}
+                        onPreview={(u) => setRefLightboxUrl(u)}
+                        onRemoveUpload={(url) => {
+                          const newImages = referenceImageUrls.filter(u => u !== url);
+                          setReferenceImageUrls(newImages);
+                          persistReferenceImages(newImages);
+                        }}
+                        onAddUpload={() => refFileInputRef.current?.click()}
+                        onRemoveProduct={() => {
+                          setBrandAssetDismissed(true);
+                          const newImages = referenceImageUrls.filter(u => u !== routingPreview.references.product);
+                          setReferenceImageUrls(newImages);
+                          persistReferenceImages(newImages);
+                        }}
+                      />
+                    </div>
+                  );
+                })()}
+
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {imageUrl && (
+                    <div className="relative w-16 h-16 rounded-md overflow-hidden border group" style={{ borderColor: "var(--border-subtle)" }}>
+                      <button
+                        type="button"
+                        onClick={() => setRefLightboxUrl(imageUrl)}
+                        className="block w-full h-full"
+                        title="Click to expand"
+                        aria-label="Open reference image full size"
+                      >
+                        <img src={imageUrl} alt="Reference" className="w-full h-full object-cover transition-transform group-hover:scale-[1.03]" />
+                        <span className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/40 transition-colors">
+                          <Maximize2 className="w-4 h-4 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                        </span>
+                      </button>
+                      <button
+                        onClick={() => { updateSceneMutation.mutate({ clearImage: true }); }}
+                        className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white flex items-center justify-center text-[8px] opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                        title="Remove reference image"
+                      >
+                        <X className="w-2.5 h-2.5" />
+                      </button>
+                    </div>
+                  )}
+                  {referenceImageUrls.map((url, i) => (
+                    <div key={i} className="relative w-16 h-16 rounded-md overflow-hidden border group" style={{ borderColor: "rgba(124,58,237,0.3)" }}>
+                      <button
+                        type="button"
+                        onClick={() => setRefLightboxUrl(url)}
+                        className="block w-full h-full"
+                        title="Click to expand"
+                        aria-label={`Open reference image ${i + 1} full size`}
+                      >
+                        <img src={url} alt={`Reference ${i + 1}`} className="w-full h-full object-cover transition-transform group-hover:scale-[1.03]" />
+                        <span className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/40 transition-colors">
+                          <Maximize2 className="w-4 h-4 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                        </span>
+                      </button>
+                      <div className="absolute top-0 left-0 w-3.5 h-3.5 rounded-full bg-purple-600 text-white flex items-center justify-center text-[7px] font-bold pointer-events-none">
+                        {i + 1}
+                      </div>
+                      <button
+                        onClick={() => {
+                          if (url === scene.brandAssetUrl) setBrandAssetDismissed(true);
+                          const newImages = referenceImageUrls.filter((_, idx) => idx !== i);
+                          setReferenceImageUrls(newImages);
+                          persistReferenceImages(newImages);
+                        }}
+                        className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white flex items-center justify-center text-[8px] opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                      >
+                        <X className="w-2.5 h-2.5" />
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => refFileInputRef.current?.click()}
+                    className="w-16 h-16 rounded-md border border-dashed flex items-center justify-center transition-colors hover:border-purple-500/40"
+                    style={{ borderColor: "var(--border-subtle)", color: "var(--text-muted)" }}
+                    title="Upload from computer"
+                  >
+                    <Upload className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowLibrary(!showLibrary); }}
+                    className="w-16 h-16 rounded-md border border-dashed flex items-center justify-center transition-colors hover:border-purple-500/40"
+                    style={{ borderColor: showLibrary ? "rgba(124,58,237,0.4)" : "var(--border-subtle)", color: showLibrary ? "rgb(124,58,237)" : "var(--text-muted)" }}
+                    title="Browse asset library"
+                  >
+                    <FolderOpen className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => regenImageMutation.mutate()}
+                    disabled={isRegenerating}
+                    className="w-16 h-16 rounded-md border border-dashed flex flex-col items-center justify-center gap-0.5 transition-colors hover:border-purple-500/40 disabled:opacity-50"
+                    style={{ borderColor: "rgba(124,58,237,0.3)", color: "rgb(192,132,252)" }}
+                    title="Generate a new reference image with AI from the visual direction"
+                  >
+                    {regenImageMutation.isPending ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Sparkles className="w-3.5 h-3.5" />
+                    )}
+                    <span className="text-[8px] font-medium leading-none">AI {imageUrl || referenceImageUrls.length > 0 ? "Regen" : "Gen"}</span>
+                  </button>
+                </div>
+                {showLibrary && (
+                  <div className="border rounded-lg p-2 mt-2 max-h-32 overflow-y-auto" style={{ borderColor: "var(--border-subtle)", backgroundColor: "var(--surface)" }}>
+                    {libraryQuery.isLoading ? (
+                      <div className="flex items-center justify-center py-3">
+                        <Loader2 className="w-4 h-4 animate-spin" style={{ color: "var(--text-muted)" }} />
+                      </div>
+                    ) : !libraryQuery.data || libraryQuery.data.length === 0 ? (
+                      <p className="text-xs text-center py-3" style={{ color: "var(--text-muted)" }}>No images in library</p>
+                    ) : (
+                      <div className="grid grid-cols-6 gap-1.5">
+                        {libraryQuery.data.slice(0, 18).map((asset: any) => {
+                          const assetUrl = asset.url || asset.thumbnailUrl;
+                          const isVid = asset.type === 'video';
+                          return (
+                            <button
+                              key={asset.id}
+                              onClick={() => {
+                                if (assetUrl) {
+                                  addReferenceImage(assetUrl);
+                                  setShowLibrary(false);
+                                  toast({ title: "Reference Added" });
+                                }
+                              }}
+                              className="relative aspect-square rounded overflow-hidden border hover:border-purple-500/50 transition-colors"
+                              style={{ borderColor: "var(--border-subtle)" }}
+                              title={asset.name || ''}
+                            >
+                              {isVid ? (
+                                <video src={assetUrl} className="w-full h-full object-cover" muted />
+                              ) : (
+                                <img src={asset.thumbnailUrl || assetUrl} alt={asset.name || ""} className="w-full h-full object-cover" />
+                              )}
+                              {isVid && (
+                                <div className="absolute top-0.5 left-0.5">
+                                  <span className="text-[7px] px-0.5 rounded bg-black/60 text-white">VID</span>
+                                </div>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
-            )}
-          </div>
+            );
+          })()}
 
           {projectMode !== 'studio-polish' && (
           <div className="col-span-3 flex flex-col items-end gap-2">
