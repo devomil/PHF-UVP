@@ -16,6 +16,17 @@ export interface MultiImageSupport {
   hint: string;
 }
 
+export interface VoiceCloneSupport {
+  maxVoices: number;
+  promptSyntax: string | null;
+  hint: string;
+}
+
+export interface ReferenceAudioSupport {
+  promptSyntax: string | null;
+  hint: string;
+}
+
 export interface VideoProvider {
   id: string;
   name: string;
@@ -804,6 +815,8 @@ export interface SoundProvider {
   costPerTrack?: number;
   costPerEffect?: number;
   multiImageSupport?: MultiImageSupport;
+  voiceCloneSupport?: VoiceCloneSupport;
+  referenceAudioSupport?: ReferenceAudioSupport;
 }
 
 export const SOUND_PROVIDERS: Record<string, SoundProvider> = {
@@ -870,6 +883,16 @@ export function getAllImageProviders(): ImageProvider[] {
 
 export function getSoundProvider(id: string): SoundProvider | undefined {
   return SOUND_PROVIDERS[id];
+}
+
+export function getVoiceCloneSupport(providerId: string): VoiceCloneSupport | null {
+  const provider = SOUND_PROVIDERS[providerId];
+  return provider?.voiceCloneSupport || null;
+}
+
+export function getReferenceAudioSupport(providerId: string): ReferenceAudioSupport | null {
+  const provider = SOUND_PROVIDERS[providerId];
+  return provider?.referenceAudioSupport || null;
 }
 
 export function getMultiImageSupport(providerId: string): MultiImageSupport | null {

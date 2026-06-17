@@ -1,6 +1,6 @@
 import { VIDEO_PROVIDER_CATALOG, IMAGE_PROVIDER_CATALOG } from '../../shared/provider-catalog';
 import { getAllVisualArtPresets } from '../../shared/config/visual-art-presets';
-import { getMultiImageSupport } from '../../shared/provider-config';
+import { getMultiImageSupport, getVoiceCloneSupport, getReferenceAudioSupport } from '../../shared/provider-config';
 
 interface SuzzieSceneContext {
   narration?: string;
@@ -118,6 +118,8 @@ export function buildSuzzieSystemPrompt(context: SuzzieSceneContext): string {
   const artStyleKnowledge = buildArtStyleKnowledge();
 
   const multiImageSupport = context.provider ? getMultiImageSupport(context.provider) : null;
+  const voiceCloneSupport = context.provider ? getVoiceCloneSupport(context.provider) : null;
+  const referenceAudioSupport = context.provider ? getReferenceAudioSupport(context.provider) : null;
 
   let sceneContext = '';
   if (context.narration || context.sceneType || context.artPresetName) {
@@ -151,6 +153,34 @@ The selected provider (${context.provider}) supports up to ${multiImageSupport.m
 **Tip:** ${multiImageSupport.hint}
 
 When the user asks about using multiple images, combining subjects, or creating morphing transitions, proactively suggest the @imageN pattern and offer to write an optimized prompt using it.` : '';
+
+  const voiceCloneGuidance = voiceCloneSupport ? `
+
+## Voice Clone Syntax — Voice Cloning
+The selected provider (${context.provider}) supports voice cloning with up to ${voiceCloneSupport.maxVoices} voice(s) using **${voiceCloneSupport.promptSyntax ?? '@voiceN'}** syntax in the voiceover prompt.
+
+**How it works:**
+- The user uploads or selects reference voice samples (voice1, voice2, …)
+- Reference each voice in the prompt using the provider's clone syntax (e.g. @voice1, @voice2)
+- The AI generates speech that matches the timbre, pacing, and emotion of the cloned voice
+
+**Tip:** ${voiceCloneSupport.hint}
+
+When the user asks about reusing a specific voice, cloning a speaker, or maintaining voice consistency across scenes, proactively suggest the voice clone syntax and offer to write an optimized voiceover prompt.` : '';
+
+  const referenceAudioGuidance = referenceAudioSupport ? `
+
+## Reference Audio Syntax — Style Matching
+The selected provider (${context.provider}) accepts a reference audio file to guide the output style using **${referenceAudioSupport.promptSyntax ?? '@refAudio'}** syntax.
+
+**How it works:**
+- The user uploads a reference audio clip that captures the desired mood, tempo, or sonic texture
+- The provider analyzes the reference and steers the generated audio toward that style
+- The reference audio is not reproduced verbatim — it acts as a creative direction signal
+
+**Tip:** ${referenceAudioSupport.hint}
+
+When the user asks about matching a sonic mood, recreating a vibe, or steering audio style with an example clip, proactively suggest the reference audio syntax.` : '';
 
   const i2vGuidance = context.hasReferenceImage ? `
 
@@ -188,6 +218,8 @@ ${providerKnowledge}
 ${artStyleKnowledge}
 ${sceneContext}
 ${multiImageGuidance}
+${voiceCloneGuidance}
+${referenceAudioGuidance}
 ${i2vGuidance}
 
 ## Image Analysis
@@ -332,6 +364,8 @@ export function buildAssetLibrarySuzziePrompt(context: SuzzieAssetLibraryContext
 
   const resolvedProvider = context.provider && context.provider !== 'auto' ? context.provider : null;
   const multiImageSupportAsset = resolvedProvider ? getMultiImageSupport(resolvedProvider) : null;
+  const voiceCloneSupportAsset = resolvedProvider ? getVoiceCloneSupport(resolvedProvider) : null;
+  const referenceAudioSupportAsset = resolvedProvider ? getReferenceAudioSupport(resolvedProvider) : null;
 
   const modeLabels: Record<string, string> = {
     't2i': 'Text-to-Image',
@@ -370,6 +404,34 @@ The selected provider (${resolvedProvider}) supports up to ${multiImageSupportAs
 
 When the user wants to combine multiple images, create morphing effects, or introduce multiple subjects, proactively suggest the @imageN pattern and write a prompt that demonstrates it.` : '';
 
+  const voiceCloneGuidanceAsset = voiceCloneSupportAsset ? `
+
+## Voice Clone Syntax — Voice Cloning
+The selected provider (${resolvedProvider}) supports voice cloning with up to ${voiceCloneSupportAsset.maxVoices} voice(s) using **${voiceCloneSupportAsset.promptSyntax ?? '@voiceN'}** syntax in the voiceover prompt.
+
+**How it works:**
+- The user uploads or selects reference voice samples (voice1, voice2, …)
+- Reference each voice in the prompt using the provider's clone syntax (e.g. @voice1, @voice2)
+- The AI generates speech that matches the timbre, pacing, and emotion of the cloned voice
+
+**Tip:** ${voiceCloneSupportAsset.hint}
+
+When the user asks about reusing a specific voice, cloning a speaker, or maintaining voice consistency across scenes, proactively suggest the voice clone syntax and offer to write an optimized voiceover prompt.` : '';
+
+  const referenceAudioGuidanceAsset = referenceAudioSupportAsset ? `
+
+## Reference Audio Syntax — Style Matching
+The selected provider (${resolvedProvider}) accepts a reference audio file to guide the output style using **${referenceAudioSupportAsset.promptSyntax ?? '@refAudio'}** syntax.
+
+**How it works:**
+- The user uploads a reference audio clip that captures the desired mood, tempo, or sonic texture
+- The provider analyzes the reference and steers the generated audio toward that style
+- The reference audio is not reproduced verbatim — it acts as a creative direction signal
+
+**Tip:** ${referenceAudioSupportAsset.hint}
+
+When the user asks about matching a sonic mood, recreating a vibe, or steering audio style with an example clip, proactively suggest the reference audio syntax.` : '';
+
   const creativeSeed = Math.floor(Math.random() * 10000);
   const creativeAngles = [
     'Focus on unexpected camera movements and atmospheric lighting this time.',
@@ -404,6 +466,8 @@ ${ASSET_LIBRARY_PROMPT_GUIDANCE}
 ${providerKnowledge}
 ${currentContext}
 ${multiImageGuidanceAsset}
+${voiceCloneGuidanceAsset}
+${referenceAudioGuidanceAsset}
 
 ## Response Format (CRITICAL — follow exactly)
 When you have a prompt suggestion, include ALL relevant suggestions in a SINGLE JSON block. Always include a negative prompt for I2V and T2V modes — but NEVER duplicate terms already stated in the main prompt. The negative prompt should only contain ADDITIONAL safety rails. Include suggestedCfgScale for I2V when the user has a product/object that needs source frame preservation.
