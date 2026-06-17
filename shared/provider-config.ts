@@ -803,6 +803,7 @@ export interface SoundProvider {
   costPerSecond?: number;
   costPerTrack?: number;
   costPerEffect?: number;
+  multiImageSupport?: MultiImageSupport;
 }
 
 export const SOUND_PROVIDERS: Record<string, SoundProvider> = {

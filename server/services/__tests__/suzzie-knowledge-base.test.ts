@@ -3,13 +3,17 @@ import {
   buildSuzzieSystemPrompt,
   buildAssetLibrarySuzziePrompt,
 } from "../suzzie-knowledge-base";
-import { VIDEO_PROVIDERS, IMAGE_PROVIDERS } from "../../../shared/provider-config";
+import { VIDEO_PROVIDERS, IMAGE_PROVIDERS, SOUND_PROVIDERS } from "../../../shared/provider-config";
 
 const videoMultiImageProviders = Object.values(VIDEO_PROVIDERS).filter(
   (p) => p.multiImageSupport != null,
 );
 
 const imageMultiImageProviders = Object.values(IMAGE_PROVIDERS).filter(
+  (p) => p.multiImageSupport != null,
+);
+
+const soundMultiImageProviders = Object.values(SOUND_PROVIDERS).filter(
   (p) => p.multiImageSupport != null,
 );
 
@@ -116,6 +120,52 @@ describe("buildAssetLibrarySuzziePrompt — @imageN guidance injection", () => {
     const prompt = buildAssetLibrarySuzziePrompt({
       mode: "t2v",
       provider: "runway-4.5",
+    });
+    expect(prompt.length).toBeGreaterThan(100);
+    expect(prompt).toContain("Suzzie");
+  });
+});
+
+describe("buildSuzzieSystemPrompt — @imageN guidance injection for sound providers", () => {
+  it.each(soundMultiImageProviders)(
+    "includes the @imageN block for sound provider $id (multiImageSupport)",
+    ({ id }) => {
+      const prompt = buildSuzzieSystemPrompt({ provider: id });
+      expect(prompt).toContain("@imageN Syntax");
+      expect(prompt).toContain(id);
+      expect(prompt).toContain("@imageN");
+      expect(prompt).toMatch(/supports up to \d+ reference images/);
+      const idx = prompt.indexOf("@imageN Syntax");
+      expect(idx).toBeGreaterThanOrEqual(0);
+      expect(prompt.slice(idx)).toContain(id);
+    },
+  );
+
+  it("still builds a non-empty prompt string for elevenlabs (no multiImageSupport)", () => {
+    const prompt = buildSuzzieSystemPrompt({ provider: "elevenlabs" });
+    expect(prompt.length).toBeGreaterThan(100);
+    expect(prompt).toContain("Suzzie");
+  });
+});
+
+describe("buildAssetLibrarySuzziePrompt — @imageN guidance injection for sound providers", () => {
+  it.each(soundMultiImageProviders)(
+    "includes the @imageN block for sound provider $id (multiImageSupport)",
+    ({ id }) => {
+      const prompt = buildAssetLibrarySuzziePrompt({ mode: "t2v", provider: id });
+      expect(prompt).toContain("@imageN Syntax");
+      expect(prompt).toContain(id);
+      expect(prompt).toContain("@imageN");
+      expect(prompt).toMatch(/supports up to \d+ reference images/);
+      expect(prompt).toContain("@image1");
+      expect(prompt).toContain("@image2");
+    },
+  );
+
+  it("still builds a non-empty prompt string for elevenlabs (no multiImageSupport)", () => {
+    const prompt = buildAssetLibrarySuzziePrompt({
+      mode: "t2v",
+      provider: "elevenlabs",
     });
     expect(prompt.length).toBeGreaterThan(100);
     expect(prompt).toContain("Suzzie");
