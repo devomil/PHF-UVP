@@ -2150,7 +2150,7 @@ const QC_V2V_PROVIDERS = [
   { id: 'runway-gen4-aleph', name: 'Runway Gen-4 Aleph (V2V)', description: 'Transform video content with creative Gen-4 Aleph processing' },
 ];
 
-function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onSubmit: (data: any) => void; isLoading: boolean }) {
+export function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onSubmit: (data: any) => void; isLoading: boolean }) {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
@@ -2877,7 +2877,7 @@ function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () => void; 
                           <TooltipProvider>
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-blue-500/20 text-blue-400 whitespace-nowrap cursor-default">
+                                <span data-testid={`provider-multi-image-badge-${p.id}`} className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-blue-500/20 text-blue-400 whitespace-nowrap cursor-default">
                                   <Images className="w-3 h-3" />
                                   Multi-image
                                 </span>

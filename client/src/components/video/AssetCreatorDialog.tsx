@@ -1315,7 +1315,7 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
                                 <TooltipProvider>
                                   <Tooltip>
                                     <TooltipTrigger asChild>
-                                      <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-blue-500/20 text-blue-400 whitespace-nowrap cursor-default">
+                                      <span data-testid={`provider-multi-image-badge-${p.id}`} className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-blue-500/20 text-blue-400 whitespace-nowrap cursor-default">
                                         <Images className="w-3 h-3" />
                                         Multi-image
                                       </span>
