@@ -37,6 +37,26 @@ describe("buildSuzzieSystemPrompt — @imageN guidance injection", () => {
     expect(block).toContain("seedance-2.0");
   });
 
+  it("includes the @imageN block when provider is seedance-2.0-fast (multiImageSupport)", () => {
+    const prompt = buildSuzzieSystemPrompt({ provider: "seedance-2.0-fast" });
+    expect(prompt).toContain("@imageN Syntax");
+    expect(prompt).toContain("seedance-2.0-fast");
+    expect(prompt).toContain("@imageN");
+  });
+
+  it("surfaces the correct maxImages from the provider config for seedance-2.0-fast", () => {
+    const prompt = buildSuzzieSystemPrompt({ provider: "seedance-2.0-fast" });
+    expect(prompt).toMatch(/supports up to \d+ reference images/);
+  });
+
+  it("includes the provider name inside the @imageN guidance block for seedance-2.0-fast", () => {
+    const prompt = buildSuzzieSystemPrompt({ provider: "seedance-2.0-fast" });
+    const idx = prompt.indexOf("@imageN Syntax");
+    expect(idx).toBeGreaterThanOrEqual(0);
+    const block = prompt.slice(idx);
+    expect(block).toContain("seedance-2.0-fast");
+  });
+
   it("still builds a non-empty prompt string when provider lacks multiImageSupport", () => {
     const prompt = buildSuzzieSystemPrompt({ provider: "runway-4.5" });
     expect(prompt.length).toBeGreaterThan(100);
@@ -91,6 +111,33 @@ describe("buildAssetLibrarySuzziePrompt — @imageN guidance injection", () => {
     const prompt = buildAssetLibrarySuzziePrompt({
       mode: "i2v",
       provider: "seedance-2.0",
+    });
+    expect(prompt).toContain("@image1");
+    expect(prompt).toContain("@image2");
+  });
+
+  it("includes the @imageN block when provider is seedance-2.0-fast (multiImageSupport)", () => {
+    const prompt = buildAssetLibrarySuzziePrompt({
+      mode: "i2v",
+      provider: "seedance-2.0-fast",
+    });
+    expect(prompt).toContain("@imageN Syntax");
+    expect(prompt).toContain("seedance-2.0-fast");
+    expect(prompt).toContain("@imageN");
+  });
+
+  it("surfaces the correct maxImages from the provider config for seedance-2.0-fast", () => {
+    const prompt = buildAssetLibrarySuzziePrompt({
+      mode: "i2v",
+      provider: "seedance-2.0-fast",
+    });
+    expect(prompt).toMatch(/supports up to \d+ reference images/);
+  });
+
+  it("includes example @imageN prompts in the guidance block for seedance-2.0-fast", () => {
+    const prompt = buildAssetLibrarySuzziePrompt({
+      mode: "i2v",
+      provider: "seedance-2.0-fast",
     });
     expect(prompt).toContain("@image1");
     expect(prompt).toContain("@image2");
