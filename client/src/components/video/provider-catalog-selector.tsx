@@ -7,6 +7,13 @@ import {
   providerSupportsNativeAudio,
   providerSupportsMultiImage,
 } from "@shared/provider-catalog";
+import { getMultiImageSupport } from "@shared/provider-config";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface ProviderCatalogSelectorProps {
   outputType: "video" | "image";
@@ -61,16 +68,28 @@ export function ProviderCatalogSelector({ outputType, provider, onProviderChange
                     Native audio
                   </span>
                 )}
-                {providerSupportsMultiImage(selectedProvider.id) && (
-                  <span
-                    className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-blue-500/20 text-blue-400 whitespace-nowrap"
-                    title="Supports multiple image references via @image_1, @image_2, … syntax in your prompt."
-                    data-testid={`provider-multi-image-badge-selected-${selectedProvider.id}`}
-                  >
-                    <Images className="w-3 h-3" />
-                    Multi-image
-                  </span>
-                )}
+                {providerSupportsMultiImage(selectedProvider.id) && (() => {
+                  const support = getMultiImageSupport(selectedProvider.id);
+                  const hint = support?.hint ?? "Supports multiple image references via @image_N syntax in your prompt.";
+                  return (
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span
+                            className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-blue-500/20 text-blue-400 whitespace-nowrap cursor-default"
+                            data-testid={`provider-multi-image-badge-selected-${selectedProvider.id}`}
+                          >
+                            <Images className="w-3 h-3" />
+                            Multi-image
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent className="max-w-xs text-left" side="bottom">
+                          {hint}
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  );
+                })()}
                 {!compact && (
                   <span className="text-xs truncate hidden sm:inline" style={{ color: "var(--text-muted)" }}>{selectedProvider.capabilities.join(" · ")}</span>
                 )}
@@ -163,16 +182,28 @@ export function ProviderCatalogSelector({ outputType, provider, onProviderChange
                                   Native audio
                                 </span>
                               )}
-                              {providerSupportsMultiImage(p.id) && (
-                                <span
-                                  className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-blue-500/20 text-blue-400 whitespace-nowrap"
-                                  title="Supports multiple image references via @image_1, @image_2, … syntax in your prompt."
-                                  data-testid={`provider-multi-image-badge-${p.id}`}
-                                >
-                                  <Images className="w-3 h-3" />
-                                  Multi-image
-                                </span>
-                              )}
+                              {providerSupportsMultiImage(p.id) && (() => {
+                                const support = getMultiImageSupport(p.id);
+                                const hint = support?.hint ?? "Supports multiple image references via @image_N syntax in your prompt.";
+                                return (
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <span
+                                          className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-blue-500/20 text-blue-400 whitespace-nowrap cursor-default"
+                                          data-testid={`provider-multi-image-badge-${p.id}`}
+                                        >
+                                          <Images className="w-3 h-3" />
+                                          Multi-image
+                                        </span>
+                                      </TooltipTrigger>
+                                      <TooltipContent className="max-w-xs text-left" side="top">
+                                        {hint}
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                );
+                              })()}
                               <span className="text-[10px] font-medium ml-auto" style={{ color: costInfo.color }}>{costInfo.label}</span>
                             </div>
                             <p className="text-xs mt-0.5 leading-relaxed" style={{ color: "var(--text-muted)" }}>
