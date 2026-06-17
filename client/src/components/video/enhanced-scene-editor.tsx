@@ -2321,7 +2321,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
           </div>
         )}
 
-        {showMultiImageTip && referenceImageUrls.length >= 2 && !isEditing && (
+        {showMultiImageTip && referenceImageUrls.length >= 2 && !isEditing && !!getMultiImageSupport(provider === "auto" ? "" : provider) && (
           <div
             className="mt-3 rounded-xl border p-3.5 relative animate-in slide-in-from-top-2 duration-300"
             style={{
@@ -2910,6 +2910,21 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
               </button>
             </div>
 
+            {(() => {
+              const resolvedProvider = provider === "auto" ? "" : provider;
+              const multiSupport = getMultiImageSupport(resolvedProvider);
+              if (referenceImageUrls.length >= 2 && multiSupport) {
+                const tags = referenceImageUrls.map((_, i) => `@image${i + 1}`).join(', ');
+                return (
+                  <div className="mt-2 flex items-start gap-1.5 rounded-md px-2.5 py-2 text-[11px]" style={{ backgroundColor: "rgba(124,58,237,0.08)", color: "var(--text-secondary)" }}>
+                    <Info className="w-3.5 h-3.5 mt-0.5 shrink-0" style={{ color: "rgb(124,58,237)" }} />
+                    <span>This provider supports {tags} syntax — reference them in your visual direction.</span>
+                  </div>
+                );
+              }
+              return null;
+            })()}
+
             {showEditLibrary && (
               <div className="border rounded-lg p-2 mt-2 max-h-32 overflow-y-auto" style={{ borderColor: "var(--border-subtle)", backgroundColor: "var(--surface)" }}>
                 {libraryQuery.isLoading ? (
@@ -2976,7 +2991,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
             )}
           </div>
 
-          {showMultiImageTip && referenceImageUrls.length >= 2 && (
+          {showMultiImageTip && referenceImageUrls.length >= 2 && !!getMultiImageSupport(provider === "auto" ? "" : provider) && (
             <div
               className="mt-3 rounded-xl border p-4 relative animate-in slide-in-from-top-2 duration-300"
               style={{
