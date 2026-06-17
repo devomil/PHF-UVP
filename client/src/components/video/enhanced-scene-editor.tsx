@@ -1324,6 +1324,14 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
     return initialImages.length > 0;
   });
 
+  useEffect(() => {
+    const resolvedProv = (videoProviderLock || (provider !== 'auto' ? provider : null) || scene.assets?.videoProvider || '').toString().toLowerCase();
+    const isMultiRef = resolvedProv.startsWith('seedance-2') || resolvedProv.startsWith('kling-2');
+    if (isMultiRef && referenceImageUrls.length > 0) {
+      setShowMultiRefExpander(true);
+    }
+  }, [videoProviderLock, provider, scene.assets?.videoProvider, referenceImageUrls.length]);
+
   const addReferenceImage = useCallback((url: string) => {
     setReferenceImageUrls(prev => {
       const newImages = [...prev, url];
