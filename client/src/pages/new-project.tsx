@@ -10,7 +10,7 @@ import { AssetSuzzieChat } from "@/components/video/AssetSuzzieChat";
 import { getAvailableStyles } from "@shared/visual-style-config";
 import { getAllVisualArtPresets, isStylizedPreset, type VisualArtPreset } from "@shared/config/visual-art-presets";
 import { VIDEO_PROVIDERS as SHARED_VIDEO_PROVIDERS, getMultiImageSupport } from "@shared/provider-config";
-import { providerSupportsMultiImage } from "@shared/provider-catalog";
+import { providerSupportsMultiImage, getDropdownVideoProviders } from "@shared/provider-catalog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { getAllProjectTypes, getProjectType, CONTENT_STRUCTURES, LONG_STORY_DEFAULT_ART_PRESET_IDS, getAllProjectPurposes } from "@shared/config/project-types";
 import { DECK_AUDIENCES, DEFAULT_DECK_AUDIENCE_ID, getDeckAudience } from "@shared/config/deck-audiences";
@@ -1641,44 +1641,10 @@ const QC_MODE_CONFIG: Record<QuickCreateMode, { label: string; shortLabel: strin
   'v2v': { label: 'Video to Video', shortLabel: 'V2V', icon: Film, description: 'Transform an existing video', outputType: 'video', needsRefImage: false, needsRefVideo: true },
 };
 
-const QC_VIDEO_PROVIDERS = [
-  { id: 'auto', name: 'Auto (Best Match)', description: 'Automatically picks the best provider for your prompt and style' },
-  // Kling family
-  { id: 'kling-2.6', name: 'Kling 2.6', description: 'Cinematic motion control, character consistency, and native audio' },
-  { id: 'kling-2.6-pro', name: 'Kling 2.6 Pro', description: 'Premium audio fidelity with broadcast-ready dialogue and visuals' },
-  { id: 'kling-2.1-master', name: 'Kling 2.1 Master', description: 'Premium quality rendering for hero shots and cinematic content' },
-  { id: 'kling-2.6-motion-control-pro', name: 'Kling 2.6 Motion Control Pro', description: 'Motion transfer for professional choreography and dance sequences' },
-  { id: 'kling-effects', name: 'Kling Effects (VFX)', description: 'VFX overlays, particle effects, and visual transitions' },
-  // Veo
-  { id: 'veo-3.1', name: 'Veo 3.1', description: '4K cinematic quality with advanced physics and native audio/dialogue' },
-  // Luma
-  { id: 'luma', name: 'Luma Dream Machine', description: 'Product reveals, smooth 3D transitions, object-focused shots' },
-  // Hailuo
-  { id: 'hailuo', name: 'Hailuo MiniMax', description: 'Cost-effective b-roll, nature scenes, and high-volume generation' },
-  // Wan
-  { id: 'wan-2.6', name: 'Wan 2.6', description: 'Text rendering, character consistency, conceptual visuals' },
-  // Pika
-  { id: 'pika', name: 'Pika', description: 'Artistic stylization, bold visual effects, creative interpretation' },
-  // Seedance
-  { id: 'seedance-1.0', name: 'Seedance 1.0', description: 'Dance and rhythmic motion with fluid body movement' },
-  { id: 'seedance-2.0', name: 'Seedance 2', description: 'Multi-image morphing via @imageN syntax, 1080p, up to 15s' },
-  { id: 'seedance-2.0-fast', name: 'Seedance 2 Fast', description: 'Fast multi-image generation, budget-friendly, 1080p output' },
-  // Sora
-  { id: 'sora-2', name: 'Sora 2', description: 'Consistent visual style with strong prompt understanding' },
-  { id: 'sora-2-pro', name: 'Sora 2 Pro', description: 'Premium Sora with enhanced fidelity and extended generation control' },
-  // Hunyuan
-  { id: 'hunyuan', name: 'Hunyuan', description: 'Complex nature scenes, abstract visuals, multi-element compositions' },
-  // Runway
-  { id: 'runway', name: 'Runway Gen-3', description: 'Cinematic storytelling with dramatic lighting and smooth motion' },
-  { id: 'runway-4.5', name: 'Runway 4.5', description: 'Top-tier photorealism with advanced camera control and multi-image support' },
-  { id: 'runway-gen4', name: 'Runway Gen-4', description: 'Advanced motion manipulation and dramatic storytelling' },
-  { id: 'runway-gen4-aleph', name: 'Runway Gen-4 Aleph', description: 'Creative visual effects, artistic interpretation, superior transitions' },
-  { id: 'runway-act-two', name: 'Runway Act Two', description: 'Character performance, acting, facial expression, and emotional control' },
-  // Avatar / Talking Photo
-  { id: 'kling-avatar', name: 'Kling AI Avatar', description: 'Lip-sync talking heads, long-form presenter and spokesperson content' },
-  { id: 'omniavatar', name: 'OmniAvatar', description: 'AI avatar generation with consistent identity and expression' },
-  { id: 'omni-human-1.5', name: 'OmniHuman 1.5 (Talking Photo)', description: 'Animate a portrait with audio — realistic lip-sync and head motion' },
-];
+// QC_VIDEO_PROVIDERS is computed dynamically inside the component by calling
+// getDropdownVideoProviders(genMode) so providers are filtered to the current
+// mode (e.g. omni-human-1.5 is i2v-only and should not appear in t2v mode).
+// The module-level constant has been intentionally removed.
 
 interface UploadedFile {
   fileId: string;
@@ -2213,7 +2179,7 @@ export function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () =>
     if (genMode === 'v2v') return QC_V2V_PROVIDERS;
     if (genMode === 't2i') return QC_IMAGE_PROVIDERS;
     if (genMode === 'i2i') return QC_I2I_PROVIDERS;
-    return QC_VIDEO_PROVIDERS;
+    return getDropdownVideoProviders(genMode as 't2v' | 'i2v');
   };
   const validProviderIds = getProviders().map(p => p.id);
 
@@ -2222,7 +2188,7 @@ export function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () =>
       if (genMode === 'v2v') return QC_V2V_PROVIDERS.map(p => p.id);
       if (genMode === 't2i') return QC_IMAGE_PROVIDERS.map(p => p.id);
       if (genMode === 'i2i') return QC_I2I_PROVIDERS.map(p => p.id);
-      return QC_VIDEO_PROVIDERS.map(p => p.id);
+      return getDropdownVideoProviders(genMode as 't2v' | 'i2v').map(p => p.id);
     })();
     if (provider !== "auto" && !newValidIds.includes(provider)) {
       setProvider("auto");

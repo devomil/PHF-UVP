@@ -11,6 +11,11 @@
 // The Radix-UI Select is mocked so SelectContent always renders its children
 // (no pointer interaction needed to open the dropdown), letting us directly
 // query the rendered badge spans.
+//
+// The WITH_BADGE / WITHOUT_BADGE lists are derived from the shared catalog so
+// they stay in sync automatically whenever a provider is added or removed.
+// Mode-filtering assertions verify that providers restricted to a single
+// generation mode don't bleed into incompatible dropdowns.
 
 import React from 'react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
@@ -106,6 +111,7 @@ vi.mock('@/assets/neuralcut-full-logo.png', () => ({ default: 'logo.png' }));
 
 import { QuickCreateForm } from '@/pages/new-project';
 import { AssetCreatorDialog } from '@/components/video/AssetCreatorDialog';
+import { getDropdownVideoProviders, providerSupportsMultiImage } from '@shared/provider-catalog';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -135,11 +141,41 @@ function makeAC() {
   );
 }
 
-// Providers expected to show Multi-image badge in both dropdowns
-const WITH_BADGE = ['kling-2.6', 'kling-2.6-pro', 'kling-2.1-master', 'seedance-2.0', 'seedance-2.0-fast'];
+// Default (t2v) dropdown — derived at runtime so badge tests stay in sync.
+const allDropdown = getDropdownVideoProviders('t2v');
+const WITH_BADGE = allDropdown.filter(p => providerSupportsMultiImage(p.id)).map(p => p.id);
+const WITHOUT_BADGE = allDropdown.filter(p => !providerSupportsMultiImage(p.id)).map(p => p.id);
 
-// Providers that must NOT show the badge in both dropdowns
-const WITHOUT_BADGE = ['auto', 'kling-effects', 'veo-3.1', 'luma', 'runway', 'runway-4.5', 'seedance-1.0'];
+// ---------------------------------------------------------------------------
+// Catalog mode-filtering unit tests
+// ---------------------------------------------------------------------------
+
+describe('getDropdownVideoProviders — mode filtering', () => {
+  it('includes omni-human-1.5 in i2v mode', () => {
+    const ids = getDropdownVideoProviders('i2v').map(p => p.id);
+    expect(ids).toContain('omni-human-1.5');
+  });
+
+  it('excludes omni-human-1.5 from t2v mode', () => {
+    const ids = getDropdownVideoProviders('t2v').map(p => p.id);
+    expect(ids).not.toContain('omni-human-1.5');
+  });
+
+  it('always includes auto regardless of mode', () => {
+    expect(getDropdownVideoProviders('t2v')[0].id).toBe('auto');
+    expect(getDropdownVideoProviders('i2v')[0].id).toBe('auto');
+    expect(getDropdownVideoProviders()[0].id).toBe('auto');
+  });
+
+  it('includes standard t2v+i2v providers in both modes', () => {
+    const t2vIds = getDropdownVideoProviders('t2v').map(p => p.id);
+    const i2vIds = getDropdownVideoProviders('i2v').map(p => p.id);
+    for (const id of ['kling-2.6', 'seedance-2.0', 'runway', 'veo-3.1']) {
+      expect(t2vIds).toContain(id);
+      expect(i2vIds).toContain(id);
+    }
+  });
+});
 
 // ---------------------------------------------------------------------------
 // Quick Create provider Select

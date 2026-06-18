@@ -25,6 +25,12 @@ export interface ProviderCatalogEntry {
   // "supports the *toggleable* per-scene audio opt-in". Adding a new
   // audio-toggleable model is a one-line change here.
   supportsNativeAudio?: boolean;
+  // When true, this provider appears in the Quick Create and Asset Creator
+  // video provider dropdowns. Set to true for every provider that should
+  // surface in the UI without any other code change. The
+  // getDropdownVideoProviders() helper reads this flag — it is the single
+  // place to control which providers appear in both dropdowns.
+  showInDropdown?: boolean;
 }
 
 export const VIDEO_PROVIDER_CATALOG: ProviderCatalogEntry[] = [
@@ -88,6 +94,7 @@ export const VIDEO_PROVIDER_CATALOG: ProviderCatalogEntry[] = [
     supportedModes: ['t2v', 'i2v'],
     aspectRatios: ['16:9', '9:16', '1:1'],
     highlight: 'Premium Quality',
+    showInDropdown: true,
   },
   {
     id: 'kling-2.5',
@@ -126,6 +133,7 @@ export const VIDEO_PROVIDER_CATALOG: ProviderCatalogEntry[] = [
     supportedModes: ['t2v', 'i2v'],
     aspectRatios: ['16:9', '9:16', '1:1'],
     highlight: 'Recommended',
+    showInDropdown: true,
   },
   {
     id: 'kling-2.6-pro',
@@ -138,6 +146,7 @@ export const VIDEO_PROVIDER_CATALOG: ProviderCatalogEntry[] = [
     type: 'video',
     supportedModes: ['t2v', 'i2v'],
     aspectRatios: ['16:9', '9:16', '1:1'],
+    showInDropdown: true,
   },
   {
     id: 'kling-2.6-motion-control',
@@ -163,10 +172,11 @@ export const VIDEO_PROVIDER_CATALOG: ProviderCatalogEntry[] = [
     type: 'video',
     supportedModes: ['t2v', 'i2v', 'v2v'],
     aspectRatios: ['16:9', '9:16', '1:1'],
+    showInDropdown: true,
   },
   {
     id: 'kling-avatar',
-    name: 'Kling Avatar',
+    name: 'Kling AI Avatar',
     family: 'Kling',
     description: 'Specialized for talking-head and avatar videos. Native lip-sync, consistent character identity, and natural expressions — perfect for presenters and spokespersons.',
     capabilities: ['T2V', 'I2V', 'Lip-Sync'],
@@ -176,10 +186,11 @@ export const VIDEO_PROVIDER_CATALOG: ProviderCatalogEntry[] = [
     supportedModes: ['t2v', 'i2v'],
     aspectRatios: ['16:9', '9:16', '1:1'],
     highlight: 'Lip-Sync',
+    showInDropdown: true,
   },
   {
     id: 'kling-effects',
-    name: 'Kling Effects',
+    name: 'Kling Effects (VFX)',
     family: 'Kling',
     description: 'Quick special effects and visual transformations. Generate short VFX clips, particle effects, and stylized transitions at low cost.',
     capabilities: ['T2V', 'I2V'],
@@ -188,10 +199,11 @@ export const VIDEO_PROVIDER_CATALOG: ProviderCatalogEntry[] = [
     type: 'video',
     supportedModes: ['t2v', 'i2v'],
     aspectRatios: ['16:9', '9:16', '1:1'],
+    showInDropdown: true,
   },
   {
     id: 'luma',
-    name: 'Luma',
+    name: 'Luma Dream Machine',
     family: 'Luma',
     description: 'Luma AI\'s Dream Machine model. Excels at photorealistic scenes with natural lighting, atmospheric depth, and smooth camera motion.',
     capabilities: ['T2V', 'I2V'],
@@ -200,6 +212,7 @@ export const VIDEO_PROVIDER_CATALOG: ProviderCatalogEntry[] = [
     type: 'video',
     supportedModes: ['t2v', 'i2v'],
     aspectRatios: ['16:9', '9:16', '1:1'],
+    showInDropdown: true,
   },
   {
     id: 'luma-dream-machine',
@@ -225,6 +238,7 @@ export const VIDEO_PROVIDER_CATALOG: ProviderCatalogEntry[] = [
     supportedModes: ['t2v', 'i2v'],
     aspectRatios: ['16:9', '9:16', '1:1'],
     highlight: 'Industry Standard',
+    showInDropdown: true,
   },
   {
     id: 'runway-4.5',
@@ -238,6 +252,7 @@ export const VIDEO_PROVIDER_CATALOG: ProviderCatalogEntry[] = [
     supportedModes: ['t2v', 'i2v'],
     aspectRatios: ['16:9', '9:16', '1:1'],
     highlight: 'Latest Runway',
+    showInDropdown: true,
   },
   {
     id: 'runway-gen4',
@@ -250,6 +265,7 @@ export const VIDEO_PROVIDER_CATALOG: ProviderCatalogEntry[] = [
     type: 'video',
     supportedModes: ['t2v', 'i2v'],
     aspectRatios: ['16:9', '9:16', '1:1'],
+    showInDropdown: true,
   },
   {
     id: 'runway-gen4-aleph',
@@ -263,6 +279,7 @@ export const VIDEO_PROVIDER_CATALOG: ProviderCatalogEntry[] = [
     supportedModes: ['t2v', 'i2v'],
     aspectRatios: ['16:9', '9:16', '1:1'],
     highlight: 'Creative Control',
+    showInDropdown: true,
   },
   {
     id: 'runway-act-two',
@@ -276,10 +293,11 @@ export const VIDEO_PROVIDER_CATALOG: ProviderCatalogEntry[] = [
     supportedModes: ['t2v', 'i2v'],
     aspectRatios: ['16:9', '9:16', '1:1'],
     highlight: 'Character Acting',
+    showInDropdown: true,
   },
   {
     id: 'hailuo',
-    name: 'Hailuo',
+    name: 'Hailuo MiniMax',
     family: 'Hailuo',
     description: 'MiniMax\'s Hailuo model with strong motion dynamics and vivid colors. Great value for social media content with eye-catching visual style.',
     capabilities: ['T2V', 'I2V'],
@@ -288,6 +306,7 @@ export const VIDEO_PROVIDER_CATALOG: ProviderCatalogEntry[] = [
     type: 'video',
     supportedModes: ['t2v', 'i2v'],
     aspectRatios: ['16:9', '9:16', '1:1'],
+    showInDropdown: true,
   },
   {
     id: 'hailuo-minimax',
@@ -314,6 +333,7 @@ export const VIDEO_PROVIDER_CATALOG: ProviderCatalogEntry[] = [
     supportedModes: ['t2v', 'i2v'],
     aspectRatios: ['16:9', '9:16', '1:1'],
     highlight: 'Dance & Motion',
+    showInDropdown: true,
   },
   {
     id: 'seedance-2.0',
@@ -329,6 +349,7 @@ export const VIDEO_PROVIDER_CATALOG: ProviderCatalogEntry[] = [
     highlight: 'Primary Provider',
     multiImageSupport: true,
     supportsNativeAudio: true,
+    showInDropdown: true,
   },
   {
     id: 'seedance-2.0-fast',
@@ -344,6 +365,7 @@ export const VIDEO_PROVIDER_CATALOG: ProviderCatalogEntry[] = [
     highlight: 'Fast Generation',
     multiImageSupport: true,
     supportsNativeAudio: true,
+    showInDropdown: true,
   },
   {
     id: 'pika',
@@ -356,6 +378,7 @@ export const VIDEO_PROVIDER_CATALOG: ProviderCatalogEntry[] = [
     type: 'video',
     supportedModes: ['t2v', 'i2v'],
     aspectRatios: ['16:9', '9:16', '1:1'],
+    showInDropdown: true,
   },
   {
     id: 'genmo',
@@ -380,6 +403,7 @@ export const VIDEO_PROVIDER_CATALOG: ProviderCatalogEntry[] = [
     type: 'video',
     supportedModes: ['t2v', 'i2v'],
     aspectRatios: ['16:9', '9:16', '1:1'],
+    showInDropdown: true,
   },
   {
     id: 'skyreels',
@@ -416,6 +440,61 @@ export const VIDEO_PROVIDER_CATALOG: ProviderCatalogEntry[] = [
     type: 'video',
     supportedModes: ['t2v', 'i2v'],
     aspectRatios: ['16:9', '9:16', '1:1'],
+    showInDropdown: true,
+  },
+  {
+    id: 'sora-2',
+    name: 'Sora 2',
+    family: 'Sora',
+    description: 'OpenAI Sora 2 with consistent visual style and strong prompt understanding. Produces smooth cinematic motion with natural physics.',
+    capabilities: ['T2V', 'I2V'],
+    maxDuration: 10,
+    costTier: 'premium',
+    type: 'video',
+    supportedModes: ['t2v', 'i2v'],
+    aspectRatios: ['16:9', '9:16', '1:1'],
+    showInDropdown: true,
+  },
+  {
+    id: 'sora-2-pro',
+    name: 'Sora 2 Pro',
+    family: 'Sora',
+    description: 'Premium OpenAI Sora 2 with enhanced fidelity, extended generation control, and top-tier cinematic output. Best for hero content.',
+    capabilities: ['T2V', 'I2V'],
+    maxDuration: 10,
+    costTier: 'ultra',
+    type: 'video',
+    supportedModes: ['t2v', 'i2v'],
+    aspectRatios: ['16:9', '9:16', '1:1'],
+    highlight: 'Premium Sora',
+    showInDropdown: true,
+  },
+  {
+    id: 'omniavatar',
+    name: 'OmniAvatar',
+    family: 'OmniAvatar',
+    description: 'AI avatar generation with consistent identity and expression. Great for branded spokespersons and consistent presenter content.',
+    capabilities: ['T2V', 'I2V'],
+    maxDuration: 30,
+    costTier: 'standard',
+    type: 'video',
+    supportedModes: ['t2v', 'i2v'],
+    aspectRatios: ['16:9', '9:16', '1:1'],
+    showInDropdown: true,
+  },
+  {
+    id: 'omni-human-1.5',
+    name: 'OmniHuman 1.5 (Talking Photo)',
+    family: 'OmniHuman',
+    description: 'Animate a portrait with audio — realistic lip-sync and head motion. Perfect for turning a single image into a speaking presenter clip.',
+    capabilities: ['I2V', 'Lip-Sync'],
+    maxDuration: 30,
+    costTier: 'standard',
+    type: 'video',
+    supportedModes: ['i2v'],
+    aspectRatios: ['16:9', '9:16', '1:1'],
+    highlight: 'Talking Photo',
+    showInDropdown: true,
   },
   {
     id: 'veo',
@@ -476,6 +555,7 @@ export const VIDEO_PROVIDER_CATALOG: ProviderCatalogEntry[] = [
     aspectRatios: ['16:9', '9:16', '1:1'],
     highlight: 'Latest & Best',
     supportsNativeAudio: true,
+    showInDropdown: true,
   },
   {
     id: 'veo2',
@@ -623,6 +703,29 @@ export function getVideoProviders(excludeAliases = true): ProviderCatalogEntry[]
 
 export function getImageProviders(): ProviderCatalogEntry[] {
   return IMAGE_PROVIDER_CATALOG;
+}
+
+// Returns the list of video providers for the Quick Create and Asset Creator
+// dropdowns. The auto-select entry is always prepended. Any provider added to
+// VIDEO_PROVIDER_CATALOG with `showInDropdown: true` will automatically appear
+// here — no other code change required.
+//
+// Pass `mode` to restrict the list to providers that support that generation
+// mode (e.g. 'i2v' will exclude providers whose supportedModes only includes
+// 't2v'). When mode is omitted, all showInDropdown providers are returned.
+export function getDropdownVideoProviders(
+  mode?: 't2v' | 'i2v' | 'v2v',
+): Array<{ id: string; name: string; description: string }> {
+  const auto = {
+    id: 'auto',
+    name: 'Auto (Best Match)',
+    description: 'Automatically picks the best provider for your prompt and style',
+  };
+  const providers = VIDEO_PROVIDER_CATALOG
+    .filter(p => p.showInDropdown === true)
+    .filter(p => !mode || p.supportedModes.includes(mode))
+    .map(p => ({ id: p.id, name: p.name, description: p.description }));
+  return [auto, ...providers];
 }
 
 // Phase 20D (Task #136): single source of truth for the per-scene
