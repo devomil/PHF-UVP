@@ -1,6 +1,14 @@
-import { VIDEO_PROVIDER_CATALOG, IMAGE_PROVIDER_CATALOG } from '../../shared/provider-catalog';
 import { getAllVisualArtPresets } from '../../shared/config/visual-art-presets';
-import { getMultiImageSupport, getVoiceCloneSupport, getReferenceAudioSupport, getCfgControlSupport, getIpAdapterSupport } from '../../shared/provider-config';
+import {
+  VIDEO_PROVIDERS,
+  IMAGE_PROVIDERS,
+  SOUND_PROVIDERS,
+  getMultiImageSupport,
+  getVoiceCloneSupport,
+  getReferenceAudioSupport,
+  getCfgControlSupport,
+  getIpAdapterSupport,
+} from '../../shared/provider-config';
 
 interface SuzzieSceneContext {
   narration?: string;
@@ -24,21 +32,54 @@ export interface SuzzieAssetLibraryContext {
 }
 
 function buildProviderKnowledge(): string {
-  const videoProviders = VIDEO_PROVIDER_CATALOG
-    .filter((p: any) => !p.deprecated)
-    .map((p: any) => {
-      const strengths = p.strengths?.join(', ') || p.capabilities?.join(', ') || p.description || '';
-      const bestFor = p.bestFor?.join(', ') || p.supportedModes?.join(', ') || '';
-      return `- **${p.name}** (${p.id}): ${strengths}. Best for: ${bestFor}. Cost: ${p.costTier}. Max duration: ${p.maxDuration}s.${p.multiImageSupport ? ' Supports multi-image references.' : ''}`;
+  const videoProviders = Object.values(VIDEO_PROVIDERS)
+    .map((p) => {
+      const strengths = p.strengths?.join(', ') || p.description || '';
+      const bestFor = p.bestFor?.join(', ') || '';
+      const caps: string[] = [];
+      if (p.multiImageSupport) {
+        caps.push(`multi-image @imageN (up to ${p.multiImageSupport.maxImages}, syntax: ${p.multiImageSupport.promptSyntax})`);
+      }
+      if (p.cfgControlSupport) {
+        caps.push(`cfg_scale ${p.cfgControlSupport.minCfg}–${p.cfgControlSupport.maxCfg} (source-frame fidelity)`);
+      }
+      if (p.ipAdapterSupport) {
+        caps.push(`IP-Adapter style conditioning (syntax: ${p.ipAdapterSupport.promptSyntax})`);
+      }
+      const capStr = caps.length ? ` Special capabilities: ${caps.join('; ')}.` : '';
+      return `- **${p.displayName}** (${p.id}): ${strengths}. Best for: ${bestFor}. Tier: ${p.tier ?? 'standard'}. Max duration: ${p.maxDuration}s.${capStr}`;
     })
     .join('\n');
 
-  const imageProviders = IMAGE_PROVIDER_CATALOG
-    .filter((p: any) => !p.deprecated)
-    .map((p: any) => {
-      const strengths = p.strengths?.join(', ') || p.capabilities?.join(', ') || p.description || '';
-      const bestFor = p.bestFor?.join(', ') || p.supportedModes?.join(', ') || '';
-      return `- **${p.name}** (${p.id}): ${strengths}. Best for: ${bestFor}. Cost: ${p.costTier}.`;
+  const imageProviders = Object.values(IMAGE_PROVIDERS)
+    .map((p) => {
+      const strengths = p.strengths?.join(', ') || '';
+      const bestFor = p.bestFor?.join(', ') || '';
+      const caps: string[] = [];
+      if (p.multiImageSupport) {
+        caps.push(`multi-image @imageN (up to ${p.multiImageSupport.maxImages}, syntax: ${p.multiImageSupport.promptSyntax})`);
+      }
+      if (p.cfgControlSupport) {
+        caps.push(`cfg_scale ${p.cfgControlSupport.minCfg}–${p.cfgControlSupport.maxCfg}`);
+      }
+      if (p.ipAdapterSupport) {
+        caps.push(`IP-Adapter style conditioning (syntax: ${p.ipAdapterSupport.promptSyntax})`);
+      }
+      const capStr = caps.length ? ` Special capabilities: ${caps.join('; ')}.` : '';
+      return `- **${p.displayName}** (${p.id}): ${strengths}. Best for: ${bestFor}.${capStr}`;
+    })
+    .join('\n');
+
+  const soundProviders = Object.values(SOUND_PROVIDERS)
+    .map((p) => {
+      const caps: string[] = [p.type];
+      if (p.voiceCloneSupport) {
+        caps.push(`voice cloning up to ${p.voiceCloneSupport.maxVoices} voice(s) (syntax: ${p.voiceCloneSupport.promptSyntax})`);
+      }
+      if (p.referenceAudioSupport) {
+        caps.push(`reference audio style matching (syntax: ${p.referenceAudioSupport.promptSyntax})`);
+      }
+      return `- **${p.displayName}** (${p.id}): ${caps.join(', ')}.`;
     })
     .join('\n');
 
@@ -46,7 +87,63 @@ function buildProviderKnowledge(): string {
 ${videoProviders}
 
 ## AI Image Providers
-${imageProviders}`;
+${imageProviders}
+
+## AI Sound Providers
+${soundProviders}`;
+}
+
+function buildCapabilityMatrix(): string {
+  const multiImageVideo = Object.values(VIDEO_PROVIDERS)
+    .filter((p) => p.multiImageSupport)
+    .map((p) => `${p.displayName} (${p.multiImageSupport!.promptSyntax}, max ${p.multiImageSupport!.maxImages})`)
+    .join(', ');
+
+  const multiImageImage = Object.values(IMAGE_PROVIDERS)
+    .filter((p) => p.multiImageSupport)
+    .map((p) => `${p.displayName} (${p.multiImageSupport!.promptSyntax}, max ${p.multiImageSupport!.maxImages})`)
+    .join(', ');
+
+  const cfgVideo = Object.values(VIDEO_PROVIDERS)
+    .filter((p) => p.cfgControlSupport)
+    .map((p) => `${p.displayName} (range ${p.cfgControlSupport!.minCfg}–${p.cfgControlSupport!.maxCfg}, default ${p.cfgControlSupport!.defaultCfg})`)
+    .join(', ');
+
+  const ipAdapterImage = Object.values(IMAGE_PROVIDERS)
+    .filter((p) => p.ipAdapterSupport)
+    .map((p) => `${p.displayName} (syntax: ${p.ipAdapterSupport!.promptSyntax})`)
+    .join(', ');
+
+  const ipAdapterVideo = Object.values(VIDEO_PROVIDERS)
+    .filter((p) => p.ipAdapterSupport)
+    .map((p) => `${p.displayName} (syntax: ${p.ipAdapterSupport!.promptSyntax})`)
+    .join(', ');
+
+  const voiceClone = Object.values(SOUND_PROVIDERS)
+    .filter((p) => p.voiceCloneSupport)
+    .map((p) => `${p.displayName} (syntax: ${p.voiceCloneSupport!.promptSyntax}, up to ${p.voiceCloneSupport!.maxVoices} voice(s))`)
+    .join(', ');
+
+  const refAudio = Object.values(SOUND_PROVIDERS)
+    .filter((p) => p.referenceAudioSupport)
+    .map((p) => `${p.displayName} (syntax: ${p.referenceAudioSupport!.promptSyntax})`)
+    .join(', ');
+
+  const rows: string[] = [];
+  if (multiImageVideo) rows.push(`- **Multi-image @imageN (video):** ${multiImageVideo}`);
+  if (multiImageImage) rows.push(`- **Multi-image @imageN (image):** ${multiImageImage}`);
+  if (cfgVideo) rows.push(`- **CFG scale / source-frame fidelity (video):** ${cfgVideo}`);
+  if (ipAdapterImage || ipAdapterVideo) {
+    const parts = [ipAdapterImage, ipAdapterVideo].filter(Boolean).join(', ');
+    rows.push(`- **IP-Adapter style conditioning:** ${parts}`);
+  }
+  if (voiceClone) rows.push(`- **Voice cloning:** ${voiceClone}`);
+  if (refAudio) rows.push(`- **Reference audio style matching:** ${refAudio}`);
+
+  return `## Provider Capability Matrix
+The following advanced capabilities are available — derived automatically from the provider registry. When a user asks "which provider supports X?", use this table.
+
+${rows.join('\n')}`;
 }
 
 function buildArtStyleKnowledge(): string {
@@ -115,6 +212,7 @@ const WORKFLOW_GUIDANCE = `## Workflow Guidance
 
 export function buildSuzzieSystemPrompt(context: SuzzieSceneContext): string {
   const providerKnowledge = buildProviderKnowledge();
+  const capabilityMatrix = buildCapabilityMatrix();
   const artStyleKnowledge = buildArtStyleKnowledge();
 
   const multiImageSupport = context.provider ? getMultiImageSupport(context.provider) : null;
@@ -259,6 +357,8 @@ ${PLATFORM_FEATURES}
 ${WORKFLOW_GUIDANCE}
 
 ${providerKnowledge}
+
+${capabilityMatrix}
 
 ## Art Style Presets
 ${artStyleKnowledge}
