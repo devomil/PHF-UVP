@@ -188,7 +188,103 @@ Enable character consistency to extract a reference frame from Scene 1's video a
 ### Sound Design & Music
 Background music can be AI-generated or uploaded. Volume auto-ducks during voiceover. Per-scene sound effects can be added in the render settings.`;
 
-const WORKFLOW_GUIDANCE = `## Workflow Guidance
+function buildProviderSelectionTips(): string {
+  const providers = Object.values(VIDEO_PROVIDERS);
+
+  const isGeneralSpec = (p: { specialization?: string }) =>
+    !p.specialization || p.specialization === 'general';
+
+  const categories: Array<{ label: string; filter: (p: typeof providers[number]) => boolean }> = [
+    {
+      label: 'human subjects / natural motion',
+      filter: (p) =>
+        isGeneralSpec(p) &&
+        (p.visualCategory?.includes('human_subjects') ||
+          p.bestFor?.some((b) => ['person', 'people', 'human-subject'].includes(b))),
+    },
+    {
+      label: 'character performance & acting',
+      filter: (p) => p.specialization === 'character-performance',
+    },
+    {
+      label: 'talking head / lip-sync',
+      filter: (p) =>
+        p.specialization === 'talking-head' || p.specialization === 'talking-photo',
+    },
+    {
+      label: 'native audio & dialogue',
+      filter: (p) => p.specialization === 'native-audio',
+    },
+    {
+      label: 'dance / motion transfer',
+      filter: (p) =>
+        p.specialization === 'motion-transfer' ||
+        p.specialization === 'dance' ||
+        (isGeneralSpec(p) && p.bestFor?.some((b) => ['dance', 'choreography'].includes(b))),
+    },
+    {
+      label: 'product reveals (I2V)',
+      filter: (p) =>
+        isGeneralSpec(p) &&
+        p.bestFor?.some((b) => ['product-reveal', 'product-shot'].includes(b)),
+    },
+    {
+      label: 'cinematic / premium quality',
+      filter: (p) =>
+        p.tier === 'premium' &&
+        isGeneralSpec(p) &&
+        p.bestFor?.some((b) => ['cinematic', 'hero-shots', 'premium-content'].includes(b)),
+    },
+    {
+      label: 'artistic / stylized',
+      filter: (p) =>
+        isGeneralSpec(p) &&
+        p.bestFor?.some((b) => ['artistic', 'stylized'].includes(b)),
+    },
+    {
+      label: 'motion graphics & infographics',
+      filter: (p) => p.specialization === 'motion-graphics',
+    },
+    {
+      label: 'fast iteration / drafts',
+      filter: (p) =>
+        p.tier === 'budget' &&
+        isGeneralSpec(p) &&
+        p.bestFor?.some((b) =>
+          ['general', 'fast-iteration', 'draft', 'broll', 'b-roll'].includes(b),
+        ),
+    },
+    {
+      label: 'budget-friendly b-roll & nature',
+      filter: (p) =>
+        p.tier === 'budget' &&
+        isGeneralSpec(p) &&
+        p.bestFor?.some((b) => ['broll', 'b-roll', 'nature', 'landscape'].includes(b)) &&
+        !p.bestFor?.some((b) => ['general', 'fast-iteration', 'draft'].includes(b)),
+    },
+  ];
+
+  const lines: string[] = [];
+  for (const { label, filter } of categories) {
+    const matches = providers.filter(filter);
+    if (matches.length === 0) continue;
+    const seen = new Set<string>();
+    const names = matches
+      .filter((p) => {
+        if (seen.has(p.displayName)) return false;
+        seen.add(p.displayName);
+        return true;
+      })
+      .map((p) => p.displayName)
+      .join(', ');
+    lines.push(`- For ${label}: ${names}`);
+  }
+
+  return lines.join('\n');
+}
+
+function buildWorkflowGuidance(): string {
+  return `## Workflow Guidance
 
 ### When to use Text-to-Video (T2V) vs Image-to-Video (I2V)
 - **T2V**: Best for scenes without specific brand assets — nature b-roll, lifestyle shots, conceptual visuals
@@ -203,12 +299,8 @@ const WORKFLOW_GUIDANCE = `## Workflow Guidance
 - Keep it 2-4 sentences (40-80 words) for best results
 
 ### Provider Selection Tips
-- For human subjects with natural motion: Kling 2.6 or Runway 4.5
-- For dance/music content: Seedance 2.0
-- For product reveals with I2V: Kling 2.6 Pro
-- For fast iteration/drafts: Hailuo or Seedance 2.0 Fast
-- For cinematic quality: Veo 3.1 or Runway 4.5
-- For budget-friendly: Wan 2.1 or Hunyuan`;
+${buildProviderSelectionTips()}`;
+}
 
 export function buildSuzzieSystemPrompt(context: SuzzieSceneContext): string {
   const providerKnowledge = buildProviderKnowledge();
@@ -354,7 +446,7 @@ CRITICAL: NEVER include text overlays, titles, captions, or on-screen text in an
 
 ${PLATFORM_FEATURES}
 
-${WORKFLOW_GUIDANCE}
+${buildWorkflowGuidance()}
 
 ${providerKnowledge}
 
