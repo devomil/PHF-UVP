@@ -842,6 +842,11 @@ export const IMAGE_PROVIDERS: Record<string, ImageProvider> = {
     costPerImage: 0.05,
     strengths: ['Artistic excellence', 'Premium aesthetics', 'Creative compositions', 'Photorealistic'],
     bestFor: ['hero-shots', 'artistic', 'premium-content', 'lifestyle', 'cinematic'],
+    multiImageSupport: {
+      maxImages: 5,
+      promptSyntax: '@imageN',
+      hint: 'Upload up to 5 reference images and tag them as @image1, @image2, … in your prompt. Midjourney blends their style, composition, and content to guide the generated image.',
+    },
   },
 };
 
@@ -952,8 +957,10 @@ export function getReferenceAudioSupport(providerId: string): ReferenceAudioSupp
 }
 
 export function getMultiImageSupport(providerId: string): MultiImageSupport | null {
-  const provider = VIDEO_PROVIDERS[providerId];
-  return provider?.multiImageSupport || null;
+  const vprovider = VIDEO_PROVIDERS[providerId];
+  if (vprovider?.multiImageSupport) return vprovider.multiImageSupport;
+  const iprovider = IMAGE_PROVIDERS[providerId];
+  return iprovider?.multiImageSupport ?? null;
 }
 
 export function getCfgControlSupport(providerId: string): CfgControlSupport | null {
