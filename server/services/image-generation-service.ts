@@ -107,8 +107,10 @@ interface ImageGenerationOptions {
   style?: ImageStyle;
   qualityTier?: QualityTier;
   aspectRatio?: string;
-  /** Optional URLs of reference images. Currently only consumed by
-   *  Nano Banana 2 (Gemini-conditioned). Capped at 14 images. */
+  /** Optional URLs of reference images. Consumed by Nano Banana 2
+   *  (Gemini-conditioned, capped at 14), Flux (PiAPI ip_adapter, capped at
+   *  multiImageSupport.maxImages), and fal.ai (reference_images, capped at
+   *  multiImageSupport.maxImages). Excess images are silently dropped. */
   referenceImages?: string[];
   /** Optional explicit text-layout hints forwarded only to Recraft V3
    *  (typography-accurate). Other providers ignore this field. */
@@ -699,6 +701,16 @@ class ImageGenerationService {
       height = newH;
     }
     
+    // Build ip_adapter array for multi-image reference support (capped at maxImages)
+    const rawReferenceImages = options.referenceImages || [];
+    const maxFluxImages = usedProvider.multiImageSupport?.maxImages ?? 4;
+    let fluxReferenceImages = rawReferenceImages;
+    if (rawReferenceImages.length > maxFluxImages) {
+      console.warn(`[ImageGen] Flux: ${rawReferenceImages.length} reference images supplied but provider cap is ${maxFluxImages} — dropping ${rawReferenceImages.length - maxFluxImages} excess image(s)`);
+      fluxReferenceImages = rawReferenceImages.slice(0, maxFluxImages);
+    }
+    const ipAdapterEntries = fluxReferenceImages.map(url => ({ image_url: url, weight: 0.8 }));
+
     try {
       const apiKey = process.env.PIAPI_API_KEY;
       if (!apiKey) {
@@ -722,6 +734,7 @@ class ImageGenerationService {
             num_inference_steps: 4,
             ...(usedProvider.defaultParams?.output_format ? { output_format: usedProvider.defaultParams.output_format } : {}),
             ...(options.aspectRatio ? { aspect_ratio: options.aspectRatio } : {}),
+            ...(ipAdapterEntries.length > 0 ? { ip_adapter: ipAdapterEntries } : {}),
           },
         }),
       });
@@ -783,6 +796,16 @@ class ImageGenerationService {
     const width = options.width || 1280;
     const height = options.height || 720;
     const usedProvider = provider || IMAGE_PROVIDERS['falai'];
+
+    // Build reference_images array for multi-image support (capped at maxImages)
+    const rawReferenceImages = options.referenceImages || [];
+    const maxFalImages = usedProvider.multiImageSupport?.maxImages ?? 4;
+    let falReferenceImages = rawReferenceImages;
+    if (rawReferenceImages.length > maxFalImages) {
+      console.warn(`[ImageGen] fal.ai: ${rawReferenceImages.length} reference images supplied but provider cap is ${maxFalImages} — dropping ${rawReferenceImages.length - maxFalImages} excess image(s)`);
+      falReferenceImages = rawReferenceImages.slice(0, maxFalImages);
+    }
+    const hasReferenceImages = falReferenceImages.length > 0;
     
     try {
       const apiKey = process.env.FAL_KEY || process.env.FAL_API_KEY;
@@ -796,20 +819,33 @@ class ImageGenerationService {
           height,
         };
       }
-      
-      const response = await fetch('https://fal.run/fal-ai/flux/schnell', {
+
+      // When reference images are supplied use flux-pro/v1.1 which supports reference_images;
+      // otherwise fall back to the cheaper flux/schnell endpoint.
+      const endpoint = hasReferenceImages
+        ? 'https://fal.run/fal-ai/flux-pro/v1.1'
+        : 'https://fal.run/fal-ai/flux/schnell';
+
+      const body: Record<string, any> = {
+        prompt: options.prompt,
+        image_size: { width, height },
+        num_inference_steps: hasReferenceImages ? 28 : 4,
+        num_images: 1,
+        enable_safety_checker: true,
+      };
+
+      if (hasReferenceImages) {
+        body.reference_images = falReferenceImages.map(url => ({ url }));
+        console.log(`[ImageGen] fal.ai: sending ${falReferenceImages.length} reference image(s) to flux-pro/v1.1`);
+      }
+
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Authorization': `Key ${apiKey}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          prompt: options.prompt,
-          image_size: { width, height },
-          num_inference_steps: 4,
-          num_images: 1,
-          enable_safety_checker: true,
-        }),
+        body: JSON.stringify(body),
       });
       
       if (!response.ok) {
