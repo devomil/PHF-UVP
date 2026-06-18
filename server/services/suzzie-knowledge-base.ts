@@ -201,7 +201,13 @@ The selected provider (${context.provider}) supports cfg_scale tuning in the ran
 
 **Tip:** ${cfgControlSupport.hint}
 
-When the user wants tight source-image preservation (e.g. product label stays sharp, character identity locked), recommend a high cfg_scale and include a \`suggestedCfgScale\` value in your JSON response.` : '';
+**When to emit \`suggestedCfgScale\` in your JSON response:**
+- **Product with a visible label, logo, or on-product text** → range 0.85–0.95. Always include \`suggestedCfgScale\`. Trigger phrases: "the label is warping", "text is distorting", "keep the bottle stable", "logo is blurring".
+- **Character whose face or costume identity must stay locked** → range 0.6–0.75. Include \`suggestedCfgScale\` when the user asks to preserve a specific person's likeness or a character's consistent appearance across clips.
+- **Creative / abstract / atmospheric shot** → range 0.4–0.6 or omit entirely. Only include \`suggestedCfgScale\` if the user explicitly asks for tighter adherence.
+- **Pure environment or nature b-roll (no anchor subject)** → omit \`suggestedCfgScale\` unless the user asks.
+
+Proactively suggest a \`suggestedCfgScale\` whenever the scene contains a product with a label, a character whose identity must stay locked, or the user asks "how do I stop the label from warping?" / "how do I keep the face consistent?".` : '';
 
   const ipAdapterGuidance = ipAdapterSupport ? `
 
@@ -274,12 +280,14 @@ When the user attaches an image (photo of a location, store, product, etc.), ana
 ## Response Format
 When generating a visual direction or prompt, ALWAYS include a recommended art style AND the prompt itself. Combine them into a single JSON block at the end of your response:
 \`\`\`json
-{"suggestedPrompt": "your visual direction here", "suggestedArtStyle": {"id": "preset-id", "name": "Preset Name"}, "suggestedProvider": "provider-id-here"}
+{"suggestedPrompt": "your visual direction here", "suggestedArtStyle": {"id": "preset-id", "name": "Preset Name"}, "suggestedProvider": "provider-id-here", "suggestedNegativePrompt": "negative terms here", "suggestedCfgScale": 0.85}
 \`\`\`
 
 - **suggestedPrompt** (required when you have a prompt): The visual direction text
 - **suggestedArtStyle** (required when you have a prompt): The art style preset that best matches this prompt. Pick from the available presets listed above. Consider the scene content, narration, and brand — e.g., clinical/health content pairs well with "scientific-medical", product showcases with "cinematic-realism", playful/fun brands with "3d-illustration" or "claymation", etc. If the user already has an art style selected, recommend keeping it unless a different one would be clearly better.
 - **suggestedProvider** (optional): Include when you have a specific provider recommendation
+- **suggestedNegativePrompt** (optional): Include for I2V and T2V modes — additional safety rails NOT already covered by the main prompt. Keep to 5-8 terms max.
+- **suggestedCfgScale** (optional, number 0–1): Include when the selected provider supports cfg_scale AND the scene warrants source-frame preservation (see the cfg_scale guidance block above when present). Decision rule: product/label/text scenes → 0.85–0.95; character identity-lock scenes → 0.6–0.75; creative/abstract → 0.4–0.6 or omit. Omit entirely for environment/nature b-roll with no anchor subject.
 
 You can also recommend just a provider separately if the user asks about providers:
 \`\`\`json
@@ -493,7 +501,13 @@ The selected provider (${resolvedProvider}) supports cfg_scale tuning in the ran
 
 **Tip:** ${cfgControlSupportAsset.hint}
 
-When the user wants tight source-image preservation (e.g. product label stays sharp, character identity locked), recommend a high cfg_scale and include a \`suggestedCfgScale\` value in your JSON response.` : '';
+**When to emit \`suggestedCfgScale\` in your JSON response:**
+- **Product with a visible label, logo, or on-product text** → range 0.85–0.95. Always include \`suggestedCfgScale\`. Trigger phrases: "the label is warping", "text is distorting", "keep the bottle stable", "logo is blurring".
+- **Character whose face or costume identity must stay locked** → range 0.6–0.75. Include \`suggestedCfgScale\` when the user asks to preserve a specific person's likeness or a character's consistent appearance across clips.
+- **Creative / abstract / atmospheric shot** → range 0.4–0.6 or omit entirely. Only include \`suggestedCfgScale\` if the user explicitly asks for tighter adherence.
+- **Pure environment or nature b-roll (no anchor subject)** → omit \`suggestedCfgScale\` unless the user asks.
+
+Proactively suggest a \`suggestedCfgScale\` whenever the scene contains a product with a label, a character whose identity must stay locked, or the user asks "how do I stop the label from warping?" / "how do I keep the face consistent?".` : '';
 
   const ipAdapterGuidanceAsset = ipAdapterSupportAsset ? `
 

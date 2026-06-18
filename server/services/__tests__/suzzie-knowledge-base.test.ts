@@ -370,6 +370,110 @@ describe("buildAssetLibrarySuzziePrompt — CFG scale guidance injection for vid
   });
 });
 
+describe("buildSuzzieSystemPrompt — CFG scale decision-tree instruction text", () => {
+  it.each(videoCfgControlProviders)(
+    "includes the product/label decision-tree branch for video provider $id",
+    ({ id }) => {
+      const prompt = buildSuzzieSystemPrompt({ provider: id });
+      expect(prompt).toContain("suggestedCfgScale");
+      expect(prompt).toContain("0.85–0.95");
+      expect(prompt).toContain("Product with a visible label");
+    },
+  );
+
+  it.each(imageCfgControlProviders)(
+    "includes the product/label decision-tree branch for image provider $id",
+    ({ id }) => {
+      const prompt = buildSuzzieSystemPrompt({ provider: id });
+      expect(prompt).toContain("suggestedCfgScale");
+      expect(prompt).toContain("0.85–0.95");
+      expect(prompt).toContain("Product with a visible label");
+    },
+  );
+
+  it.each(videoCfgControlProviders)(
+    "includes the character identity-lock decision-tree branch for video provider $id",
+    ({ id }) => {
+      const prompt = buildSuzzieSystemPrompt({ provider: id });
+      expect(prompt).toContain("0.6–0.75");
+      expect(prompt).toContain("Character whose face or costume identity must stay locked");
+    },
+  );
+
+  it.each(videoCfgControlProviders)(
+    "includes the proactive suggestion sentence for video provider $id",
+    ({ id }) => {
+      const prompt = buildSuzzieSystemPrompt({ provider: id });
+      expect(prompt).toContain("Proactively suggest a");
+      expect(prompt).toContain("how do I stop the label from warping");
+    },
+  );
+
+  it.each(videoCfgControlProviders)(
+    "includes suggestedCfgScale in the response-format section for video provider $id",
+    ({ id }) => {
+      const prompt = buildSuzzieSystemPrompt({ provider: id });
+      const formatIdx = prompt.indexOf("## Response Format");
+      expect(formatIdx).toBeGreaterThanOrEqual(0);
+      const formatSection = prompt.slice(formatIdx);
+      expect(formatSection).toContain("suggestedCfgScale");
+      expect(formatSection).toContain("product/label/text scenes");
+      expect(formatSection).toContain("character identity-lock scenes");
+    },
+  );
+});
+
+describe("buildAssetLibrarySuzziePrompt — CFG scale decision-tree instruction text", () => {
+  it.each(videoCfgControlProviders)(
+    "includes the product/label decision-tree branch for video provider $id",
+    ({ id }) => {
+      const prompt = buildAssetLibrarySuzziePrompt({ mode: "i2v", provider: id });
+      expect(prompt).toContain("suggestedCfgScale");
+      expect(prompt).toContain("0.85–0.95");
+      expect(prompt).toContain("Product with a visible label");
+    },
+  );
+
+  it.each(imageCfgControlProviders)(
+    "includes the product/label decision-tree branch for image provider $id",
+    ({ id }) => {
+      const prompt = buildAssetLibrarySuzziePrompt({ mode: "t2i", provider: id });
+      expect(prompt).toContain("suggestedCfgScale");
+      expect(prompt).toContain("0.85–0.95");
+      expect(prompt).toContain("Product with a visible label");
+    },
+  );
+
+  it.each(videoCfgControlProviders)(
+    "includes the character identity-lock decision-tree branch for video provider $id",
+    ({ id }) => {
+      const prompt = buildAssetLibrarySuzziePrompt({ mode: "i2v", provider: id });
+      expect(prompt).toContain("0.6–0.75");
+      expect(prompt).toContain("Character whose face or costume identity must stay locked");
+    },
+  );
+
+  it.each(videoCfgControlProviders)(
+    "includes the proactive suggestion sentence for video provider $id",
+    ({ id }) => {
+      const prompt = buildAssetLibrarySuzziePrompt({ mode: "i2v", provider: id });
+      expect(prompt).toContain("Proactively suggest a");
+      expect(prompt).toContain("how do I stop the label from warping");
+    },
+  );
+
+  it.each(videoCfgControlProviders)(
+    "includes suggestedCfgScale in the response-format section for video provider $id",
+    ({ id }) => {
+      const prompt = buildAssetLibrarySuzziePrompt({ mode: "i2v", provider: id });
+      const formatIdx = prompt.indexOf("## Response Format");
+      expect(formatIdx).toBeGreaterThanOrEqual(0);
+      const formatSection = prompt.slice(formatIdx);
+      expect(formatSection).toContain("suggestedCfgScale");
+    },
+  );
+});
+
 describe("buildSuzzieSystemPrompt — IP-Adapter guidance injection for image providers", () => {
   it.each(imageIpAdapterProviders)(
     "includes the IP-Adapter block for image provider $id (ipAdapterSupport)",
