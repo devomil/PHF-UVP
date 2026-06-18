@@ -2628,7 +2628,25 @@ export function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () =>
         {genMode === 'i2v' && (
           <div>
             <div className="flex items-center justify-between">
-              <Label style={{ color: "var(--text-secondary)" }}>Image Fidelity</Label>
+              <div className="flex items-center gap-1">
+                <Label style={{ color: "var(--text-secondary)" }}>Image Fidelity</Label>
+                <TooltipProvider delayDuration={200}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Info className="w-3.5 h-3.5 cursor-help" style={{ color: "var(--text-tertiary)" }} />
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="max-w-[240px] text-left space-y-1.5 p-3">
+                      <p className="font-medium text-xs">CFG Scale (Image Fidelity)</p>
+                      <p className="text-xs opacity-90">Controls how closely the video follows the reference image. Higher = product label stays sharper. Lower = more creative movement.</p>
+                      <div className="text-[10px] opacity-75 space-y-0.5 pt-0.5 border-t border-white/20">
+                        <p>🏷️ Product / label scenes: 85–95%</p>
+                        <p>👤 Character identity: 60–75%</p>
+                        <p>🎨 Creative / abstract: 40–60%</p>
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
               <span className="text-xs font-medium" style={{ color: "var(--text-tertiary)" }}>{Math.round(imageFidelity * 100)}%</span>
             </div>
             <Slider

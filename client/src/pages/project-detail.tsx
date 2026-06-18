@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
-import { ArrowLeft, Settings, Play, RefreshCw, Clock, Target, Monitor, BarChart3, Loader2, AlertCircle, AlertTriangle, Zap, Video, Image, Image as ImageIcon, Download, RotateCcw, Save, Trash2, ExternalLink, CheckCircle2, XCircle, X, Type, Film, ChevronDown, ChevronUp, CloudUpload, Mic, Music, Volume2, Palette, Shuffle, Sliders, Wand2, Sparkles, ImagePlus, Upload, Edit2, FileText, Plus, GripVertical, Eye, EyeOff, Layers, Maximize2, BookOpen, GripHorizontal, Star } from "lucide-react";
+import { ArrowLeft, Settings, Play, RefreshCw, Clock, Target, Monitor, BarChart3, Loader2, AlertCircle, AlertTriangle, Zap, Video, Image, Image as ImageIcon, Download, RotateCcw, Save, Trash2, ExternalLink, CheckCircle2, XCircle, X, Type, Film, ChevronDown, ChevronUp, CloudUpload, Mic, Music, Volume2, Palette, Shuffle, Sliders, Wand2, Sparkles, ImagePlus, Upload, Edit2, FileText, Plus, GripVertical, Eye, EyeOff, Layers, Maximize2, BookOpen, GripHorizontal, Star, Info } from "lucide-react";
 import { getVisualArtPreset, getAllVisualArtPresets } from "@shared/config/visual-art-presets";
 import { SCENE_CONTENT_TAGS } from "@shared/config/scene-content-tags";
 // Task #111: shared NB2 price source — same helper the server's estimator
@@ -32,6 +32,7 @@ import { SceneOverlayEditor, SceneOverlayItem } from "@/components/video/scene-o
 import { SceneImageActions } from "@/components/video/scene-image-actions";
 import { S3BackgroundPicker } from "@/components/video/S3BackgroundPicker";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -6983,7 +6984,25 @@ export function QuickCreateAssetPanel({ projectId, project }: { projectId: strin
                   {imageFidelity != null && (
                     <div>
                       <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>Image Fidelity</span>
+                        <div className="flex items-center gap-1">
+                          <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>Image Fidelity</span>
+                          <TooltipProvider delayDuration={200}>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Info className="w-3 h-3 cursor-help" style={{ color: "var(--text-muted)" }} />
+                              </TooltipTrigger>
+                              <TooltipContent side="top" className="max-w-[240px] text-left space-y-1.5 p-3">
+                                <p className="font-medium text-xs">CFG Scale (Image Fidelity)</p>
+                                <p className="text-xs opacity-90">Controls how closely the video follows the reference image. Higher = product label stays sharper. Lower = more creative movement.</p>
+                                <div className="text-[10px] opacity-75 space-y-0.5 pt-0.5 border-t border-white/20">
+                                  <p>🏷️ Product / label scenes: 85–95%</p>
+                                  <p>👤 Character identity: 60–75%</p>
+                                  <p>🎨 Creative / abstract: 40–60%</p>
+                                </div>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        </div>
                         <span className="text-xs font-bold" style={{ color: "var(--text-secondary)" }}>{Math.round(imageFidelity * 100)}%</span>
                       </div>
                       <input

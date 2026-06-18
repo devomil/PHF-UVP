@@ -28,6 +28,7 @@ import {
   Check,
   ChevronDown,
   Images,
+  Info,
 } from 'lucide-react';
 import { AssetSuzzieChat } from './AssetSuzzieChat';
 import { VIDEO_PROVIDERS as SHARED_VIDEO_PROVIDERS, getMultiImageSupport } from '@shared/provider-config';
@@ -1366,9 +1367,27 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
 
           {mode === 'i2v' && (
             <div>
-              <Label className="text-sm text-gray-400 mb-1.5 block">
-                Image Fidelity: {Math.round(imageFidelity * 100)}%
-              </Label>
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <Label className="text-sm text-gray-400">
+                  Image Fidelity: {Math.round(imageFidelity * 100)}%
+                </Label>
+                <TooltipProvider delayDuration={200}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Info className="w-3.5 h-3.5 text-gray-500 cursor-help flex-shrink-0" />
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="max-w-[240px] text-left space-y-1.5 p-3">
+                      <p className="font-medium text-xs">CFG Scale (Image Fidelity)</p>
+                      <p className="text-xs opacity-90">Controls how closely the video follows the reference image. Higher = product label stays sharper. Lower = more creative movement.</p>
+                      <div className="text-[10px] opacity-75 space-y-0.5 pt-0.5 border-t border-white/20">
+                        <p>🏷️ Product / label scenes: 85–95%</p>
+                        <p>👤 Character identity: 60–75%</p>
+                        <p>🎨 Creative / abstract: 40–60%</p>
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
               <Slider
                 value={[imageFidelity]}
                 onValueChange={([v]) => setImageFidelity(v)}
