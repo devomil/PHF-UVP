@@ -851,6 +851,23 @@ export const SOUND_PROVIDERS: Record<string, SoundProvider> = {
     type: 'sfx',
     costPerEffect: 0.02,
   },
+
+  playht: {
+    id: 'playht',
+    name: 'PlayHT',
+    displayName: 'Play.ht Voice Cloning',
+    type: 'voiceover',
+    costPerSecond: 0.02,
+    voiceCloneSupport: {
+      maxVoices: 5,
+      promptSyntax: '@voice',
+      hint: 'Upload a short audio sample (≥10 s) to clone a voice; reference it with @voice1, @voice2, … in the voiceover prompt.',
+    },
+    referenceAudioSupport: {
+      promptSyntax: '@refAudio',
+      hint: 'Attach a reference audio file so Play.ht matches its speaking style, pace, and tone in the generated voiceover.',
+    },
+  },
 };
 
 export function getVideoProvider(id: string): VideoProvider | undefined {
