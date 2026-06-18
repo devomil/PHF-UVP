@@ -32,7 +32,7 @@ import {
 } from 'lucide-react';
 import { AssetSuzzieChat } from './AssetSuzzieChat';
 import { VIDEO_PROVIDERS as SHARED_VIDEO_PROVIDERS, getMultiImageSupport } from '@shared/provider-config';
-import { providerSupportsMultiImage, getDropdownVideoProviders } from '@shared/provider-catalog';
+import { providerSupportsMultiImage, getDropdownVideoProviders, getDropdownImageProviders } from '@shared/provider-catalog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 type GenerationMode =
@@ -54,13 +54,9 @@ interface AssetCreatorDialogProps {
 // getDropdownVideoProviders(mode) so providers are filtered to the current
 // generation mode. The module-level constant has been intentionally removed.
 
-const IMAGE_PROVIDERS = [
-  { id: 'auto', name: 'Auto (Best Match)' },
-  { id: 'flux', name: 'Flux Schnell' },
-  { id: 'flux-1-dev', name: 'Flux Dev' },
-  { id: 'ideogram', name: 'Ideogram' },
-  { id: 'nano-banana-pro', name: 'Nano Banana Pro' },
-];
+// IMAGE_PROVIDERS is derived from IMAGE_PROVIDER_CATALOG (showInDropdown: true
+// entries) so new image providers only need a one-line catalog change.
+const IMAGE_PROVIDERS = getDropdownImageProviders();
 
 const V2V_PROVIDERS = [
   { id: 'auto', name: 'Auto (Kling Object Replace)' },

@@ -10,7 +10,7 @@ import { AssetSuzzieChat } from "@/components/video/AssetSuzzieChat";
 import { getAvailableStyles } from "@shared/visual-style-config";
 import { getAllVisualArtPresets, isStylizedPreset, type VisualArtPreset } from "@shared/config/visual-art-presets";
 import { VIDEO_PROVIDERS as SHARED_VIDEO_PROVIDERS, getMultiImageSupport } from "@shared/provider-config";
-import { providerSupportsMultiImage, getDropdownVideoProviders } from "@shared/provider-catalog";
+import { providerSupportsMultiImage, getDropdownVideoProviders, getDropdownImageProviders } from "@shared/provider-catalog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { getAllProjectTypes, getProjectType, CONTENT_STRUCTURES, LONG_STORY_DEFAULT_ART_PRESET_IDS, getAllProjectPurposes } from "@shared/config/project-types";
 import { DECK_AUDIENCES, DEFAULT_DECK_AUDIENCE_ID, getDeckAudience } from "@shared/config/deck-audiences";
@@ -2095,12 +2095,9 @@ function StudioPolishForm({ onBack, onSubmit, isLoading }: { onBack: () => void;
   );
 }
 
-const QC_IMAGE_PROVIDERS = [
-  { id: 'auto', name: 'Auto (Best Match)', description: 'Automatically picks the best image provider for your prompt' },
-  { id: 'flux', name: 'Flux Schnell', description: 'Product shots, clean compositions, commercial quality images' },
-  { id: 'flux-1-dev', name: 'Flux Dev', description: 'Experimental Flux variant with additional creative flexibility' },
-  { id: 'ideogram', name: 'Ideogram', description: 'Text-heavy images, typography, logos, and graphic design' },
-];
+// QC_IMAGE_PROVIDERS is derived from IMAGE_PROVIDER_CATALOG (showInDropdown:
+// true entries) so new image providers only need a one-line catalog change.
+const QC_IMAGE_PROVIDERS = getDropdownImageProviders();
 
 const QC_I2I_PROVIDERS = [
   { id: 'auto', name: 'Auto (Best Match)', description: 'Automatically selects the best image-to-image transformation provider' },

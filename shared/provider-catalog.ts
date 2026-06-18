@@ -601,7 +601,7 @@ export const VIDEO_PROVIDER_CATALOG: ProviderCatalogEntry[] = [
 export const IMAGE_PROVIDER_CATALOG: ProviderCatalogEntry[] = [
   {
     id: 'flux',
-    name: 'Flux',
+    name: 'Flux Schnell',
     family: 'Flux',
     description: 'Black Forest Labs\' Flux model. Fast, high-quality image generation with excellent prompt adherence and photorealistic output.',
     capabilities: ['T2I'],
@@ -611,10 +611,11 @@ export const IMAGE_PROVIDER_CATALOG: ProviderCatalogEntry[] = [
     supportedModes: ['t2i'],
     aspectRatios: ['16:9', '9:16', '1:1'],
     highlight: 'Recommended',
+    showInDropdown: true,
   },
   {
     id: 'flux-1-dev',
-    name: 'Flux 1 Dev',
+    name: 'Flux Dev',
     family: 'Flux',
     description: 'Developer variant of Flux with lower cost. Great for rapid prototyping and bulk image generation at a budget-friendly price.',
     capabilities: ['T2I'],
@@ -623,6 +624,7 @@ export const IMAGE_PROVIDER_CATALOG: ProviderCatalogEntry[] = [
     type: 'image',
     supportedModes: ['t2i'],
     aspectRatios: ['16:9', '9:16', '1:1'],
+    showInDropdown: true,
   },
   {
     id: 'stability',
@@ -648,6 +650,21 @@ export const IMAGE_PROVIDER_CATALOG: ProviderCatalogEntry[] = [
     supportedModes: ['t2i'],
     aspectRatios: ['16:9', '9:16', '1:1'],
     highlight: 'Best Text',
+    showInDropdown: true,
+  },
+  {
+    id: 'nano-banana-pro',
+    name: 'Nano Banana Pro',
+    family: 'Nano Banana',
+    description: 'Photorealistic and lifestyle image generation. Preferred for natural scenes, people, and product shots requiring organic, lifelike quality.',
+    capabilities: ['T2I'],
+    maxDuration: 0,
+    costTier: 'standard',
+    type: 'image',
+    supportedModes: ['t2i'],
+    aspectRatios: ['16:9', '9:16', '1:1'],
+    highlight: 'Photorealistic',
+    showInDropdown: true,
   },
   {
     id: 'midjourney',
@@ -703,6 +720,22 @@ export function getVideoProviders(excludeAliases = true): ProviderCatalogEntry[]
 
 export function getImageProviders(): ProviderCatalogEntry[] {
   return IMAGE_PROVIDER_CATALOG;
+}
+
+// Returns the list of image providers for the Quick Create and Asset Creator
+// dropdowns. The auto-select entry is always prepended. Any provider added to
+// IMAGE_PROVIDER_CATALOG with `showInDropdown: true` will automatically appear
+// here — no other code change required.
+export function getDropdownImageProviders(): Array<{ id: string; name: string; description: string }> {
+  const auto = {
+    id: 'auto',
+    name: 'Auto (Best Match)',
+    description: 'Automatically picks the best image provider for your prompt and style',
+  };
+  const providers = IMAGE_PROVIDER_CATALOG
+    .filter(p => p.showInDropdown === true)
+    .map(p => ({ id: p.id, name: p.name, description: p.description }));
+  return [auto, ...providers];
 }
 
 // Returns the list of video providers for the Quick Create and Asset Creator
