@@ -2667,11 +2667,16 @@ export function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () =>
             <Select value={duration} onValueChange={setDuration}>
               <SelectTrigger className="mt-1.5" style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }}><SelectValue /></SelectTrigger>
               <SelectContent style={{ backgroundColor: "var(--menu-bg)", borderColor: "var(--border-medium)" }}>
-                {["4", "5", "6", "8", "10"].map((d) => (
-                  <SelectItem key={d} value={d} style={{ color: "var(--text-primary)" }}>{d}s</SelectItem>
+                {[
+                  { v: "4", label: "4s" }, { v: "5", label: "5s" }, { v: "6", label: "6s" },
+                  { v: "8", label: "8s" }, { v: "10", label: "10s" }, { v: "15", label: "15s" },
+                  { v: "20", label: "20s" }, { v: "30", label: "30s" }, { v: "60", label: "1 min" },
+                ].map(({ v, label }) => (
+                  <SelectItem key={v} value={v} style={{ color: "var(--text-primary)" }}>{label}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
+            <p className="text-[10px] mt-1" style={{ color: "var(--text-tertiary)" }}>Longer durations require a compatible provider (Seedance 2 → 15s, Motion Control → 30s, Kling Avatar → 1 min). Output is capped at the provider's max.</p>
           </div>
         )}
 

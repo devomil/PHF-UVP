@@ -81,6 +81,9 @@ const DURATIONS = [
   { value: 6, label: '6s' },
   { value: 8, label: '8s' },
   { value: 10, label: '10s' },
+  { value: 15, label: '15s' },
+  { value: 30, label: '30s' },
+  { value: 60, label: '1 min' },
 ];
 
 const IMAGE_STYLES = [
@@ -1327,12 +1330,12 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
           {cfg.outputType === 'video' && cfg.category !== 'toolkit' && mode !== 'character-performance' && mode !== 'character' && (
             <div>
               <Label className="text-sm text-gray-400 mb-1.5 block">Duration</Label>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 {DURATIONS.map((d) => (
                   <button
                     key={d.value}
                     onClick={() => setDuration(d.value)}
-                    className={`px-4 py-1.5 rounded text-sm font-medium border transition-all ${
+                    className={`px-3 py-1.5 rounded text-sm font-medium border transition-all ${
                       duration === d.value
                         ? 'border-purple-500 bg-purple-500/10 text-purple-300'
                         : 'border-gray-700 bg-gray-900 text-gray-500 hover:border-gray-600'
@@ -1342,6 +1345,7 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
                   </button>
                 ))}
               </div>
+              <p className="text-[10px] text-gray-600 mt-1.5">Longer durations require a provider that supports them (e.g. Seedance 2 → 15s, Motion Control → 30s, Kling Avatar → 60s).</p>
             </div>
           )}
 
