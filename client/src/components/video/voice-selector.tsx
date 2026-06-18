@@ -4,7 +4,8 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2, Play, Pause, Check, Volume2 } from "lucide-react";
+import { Loader2, Play, Pause, Check, Volume2, Mic, ChevronDown, ChevronUp } from "lucide-react";
+import { VoiceCloneManager } from "./voice-clone-manager";
 
 interface Voice {
   voice_id: string;
@@ -18,6 +19,13 @@ interface Voice {
     gender?: string;
     use_case?: string;
   };
+}
+
+interface ClonedVoice {
+  id: number;
+  name: string;
+  providerVoiceId: string | null;
+  status: string;
 }
 
 interface VoiceSelectorProps {
@@ -35,13 +43,23 @@ const RECOMMENDED_VOICES = [
 
 export function VoiceSelector({ selectedVoiceId, onSelect }: VoiceSelectorProps) {
   const [playingVoiceId, setPlayingVoiceId] = useState<string | null>(null);
+  const [showCloneManager, setShowCloneManager] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const { data: voicesData, isLoading } = useQuery<{ success: boolean; voices: Voice[] }>({
     queryKey: ['/api/universal-video/voices'],
   });
 
+  const { data: clonedData } = useQuery<{ success: boolean; voices: ClonedVoice[] }>({
+    queryKey: ['/api/voice-cloning'],
+    refetchInterval: (query) => {
+      const voices = query.state.data?.voices ?? [];
+      return voices.some((v) => v.status === "pending") ? 4000 : false;
+    },
+  });
+
   const voices = voicesData?.voices || [];
+  const clonedVoices = (clonedData?.voices || []).filter((v) => v.status === "ready");
 
   const playPreview = (voice: Voice) => {
     if (!voice.preview_url) return;
@@ -85,11 +103,44 @@ export function VoiceSelector({ selectedVoiceId, onSelect }: VoiceSelectorProps)
   }
 
   return (
-    <div className="space-y-3" data-testid="voice-selector">
+    <div className="space-y-4" data-testid="voice-selector">
       <Label className="flex items-center gap-2">
         <Volume2 className="w-4 h-4" />
         Voiceover Voice
       </Label>
+
+      {clonedVoices.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-xs text-muted-foreground font-medium flex items-center gap-1">
+            <Mic className="w-3 h-3" /> Your Cloned Voices:
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            {clonedVoices.map((cv) => {
+              const voiceId = `cloned:${cv.id}`;
+              const isSelected = selectedVoiceId === voiceId;
+              return (
+                <div
+                  key={cv.id}
+                  data-testid={`cloned-voice-option-${cv.id}`}
+                  className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-colors ${
+                    isSelected ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"
+                  }`}
+                  onClick={() => onSelect(voiceId, cv.name)}
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium truncate">{cv.name}</span>
+                      {isSelected && <Check className="w-4 h-4 text-primary shrink-0" />}
+                    </div>
+                    <p className="text-xs text-muted-foreground">Your cloned voice</p>
+                  </div>
+                  <Badge variant="secondary" className="text-[10px] ml-2 shrink-0">Cloned</Badge>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
       
       <div className="space-y-2">
         <p className="text-xs text-muted-foreground font-medium">Recommended for Health & Wellness:</p>
@@ -197,6 +248,30 @@ export function VoiceSelector({ selectedVoiceId, onSelect }: VoiceSelectorProps)
           </div>
         </ScrollArea>
       </details>
+
+      <div className="border-t border-border pt-3">
+        <button
+          type="button"
+          className="flex w-full items-center justify-between text-sm text-muted-foreground hover:text-foreground transition-colors"
+          onClick={() => setShowCloneManager((v) => !v)}
+          data-testid="toggle-voice-clone-manager"
+        >
+          <span className="flex items-center gap-1.5">
+            <Mic className="w-4 h-4" />
+            Clone your own voice
+          </span>
+          {showCloneManager ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+        </button>
+
+        {showCloneManager && (
+          <div className="mt-3">
+            <VoiceCloneManager
+              selectedVoiceId={selectedVoiceId}
+              onSelectVoice={onSelect}
+            />
+          </div>
+        )}
+      </div>
     </div>
   );
 }

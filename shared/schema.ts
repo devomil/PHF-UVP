@@ -1013,3 +1013,35 @@ export const rateLimitHits = pgTable("rate_limit_hits", {
 
 export type RateLimitHit = typeof rateLimitHits.$inferSelect;
 export type InsertRateLimitHit = typeof rateLimitHits.$inferInsert;
+
+// Cloned voices: audio samples uploaded by users and turned into
+// provider-side voice IDs via Play.ht (or future providers).
+// status: 'pending' | 'ready' | 'failed'
+export const clonedVoices = pgTable("cloned_voices", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  name: varchar("name", { length: 255 }).notNull(),
+  sampleUrl: text("sample_url").notNull(),
+  provider: varchar("provider", { length: 50 }).notNull().default("playht"),
+  providerVoiceId: varchar("provider_voice_id", { length: 500 }),
+  status: varchar("status", { length: 20 }).notNull().default("pending"),
+  errorMessage: text("error_message"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => ({
+  userIdx: index("idx_cloned_voices_user").on(table.userId),
+  userStatusIdx: index("idx_cloned_voices_user_status").on(table.userId, table.status),
+}));
+
+export const clonedVoicesRelations = relations(clonedVoices, ({ one }) => ({
+  user: one(users, { fields: [clonedVoices.userId], references: [users.id] }),
+}));
+
+export const insertClonedVoiceSchema = createInsertSchema(clonedVoices).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type ClonedVoice = typeof clonedVoices.$inferSelect;
+export type InsertClonedVoice = z.infer<typeof insertClonedVoiceSchema>;

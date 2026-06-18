@@ -34,6 +34,7 @@ import { detectTextOverlayRequirements, TextOverlayRequirement } from "./text-ov
 import { generateTextOverlays, RemotionTextOverlay } from "./text-overlay-generator";
 import { sanitizePromptForAI, SanitizedPrompt } from "./prompt-sanitizer";
 import { motionGraphicsRouter } from "./motion-graphics-router";
+import { resolveClonedVoice, generatePlayhtSpeech } from "./voice-clone-routes";
 import { motionGraphicsGenerator } from "./motion-graphics-generator";
 import { MotionGraphicConfig, RoutingDecision } from "../../shared/types/motion-graphics-types";
 import { 
@@ -2266,6 +2267,93 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
     return processedText;
   }
 
+  /**
+   * Parse a narration string for an inline @voice:<id> tag and return
+   * the extracted voiceId plus the cleaned narration text.
+   * Supports: "@voice:cloned:42" or "@voice:someElevenLabsId".
+   * If no tag is present, voiceId is undefined and narration is unchanged.
+   */
+  private parseVoiceFromNarration(text: string): { voiceId?: string; narration: string } {
+    const match = text.match(/@voice:([^\s,]+)/i);
+    if (!match) return { narration: text };
+    const voiceId = match[1];
+    const narration = text.replace(match[0], '').trim();
+    return { voiceId, narration };
+  }
+
+  /**
+   * Generate TTS audio for a cloned voice via Play.ht, then upload to S3 and
+   * return a VoiceoverResult. Falls back to ElevenLabs on error.
+   * `userId` must be the owner of the cloned voice record (enforces ownership).
+   */
+  private async generateVoiceoverForClonedVoice(
+    text: string,
+    clonedVoiceRef: string,
+    fallbackVoiceId?: string,
+    options?: { stability?: number; similarityBoost?: number; style?: number },
+    userId?: string,
+  ): Promise<VoiceoverResult | null> {
+    try {
+      const voiceIdNum = parseInt(clonedVoiceRef.replace('cloned:', ''), 10);
+      if (isNaN(voiceIdNum)) return null;
+
+      const { db: dbInstance } = await import('../db');
+      const { clonedVoices: cvTable } = await import('../../shared/schema');
+      const { eq, and } = await import('drizzle-orm');
+
+      // Enforce ownership unconditionally — a missing userId is an authorization failure.
+      if (!userId) {
+        console.error(`[ClonedVoice] Cannot resolve cloned voice ${clonedVoiceRef}: no userId in context (access denied).`);
+        return null;
+      }
+
+      const [row] = await dbInstance
+        .select()
+        .from(cvTable)
+        .where(and(eq(cvTable.id, voiceIdNum), eq(cvTable.userId, userId))!)
+        .limit(1);
+
+      if (!row) {
+        console.error(`[ClonedVoice] Voice ${clonedVoiceRef} not found or not owned by user ${userId} (access denied).`);
+        return null;
+      }
+
+      if (row.status !== 'ready') {
+        console.warn(`[ClonedVoice] Voice ${clonedVoiceRef} not ready (status=${row.status}), falling back to default`);
+        return null;
+      }
+
+      if (!row.providerVoiceId) {
+        console.warn(`[ClonedVoice] Voice ${clonedVoiceRef} has no providerVoiceId (Play.ht not configured?), falling back`);
+        return null;
+      }
+
+      console.log(`[ClonedVoice] Generating speech via Play.ht for voice ${row.name} (${row.providerVoiceId})`);
+      const audioBuffer = await generatePlayhtSpeech(text, row.providerVoiceId);
+      if (!audioBuffer) return null;
+
+      let actualDuration = 0;
+      try {
+        const mm = await import('music-metadata');
+        const metadata = await mm.parseBuffer(audioBuffer, { mimeType: 'audio/mpeg' });
+        actualDuration = metadata.format.duration || 0;
+      } catch {
+        const wordCount = text.trim().split(/\s+/).length;
+        actualDuration = Math.ceil(wordCount / 2.5);
+      }
+
+      const fileName = `voiceover_cloned_${Date.now()}_${Math.random().toString(36).substring(7)}.mp3`;
+      const s3Url = await this.uploadToS3(audioBuffer, fileName, 'audio/mpeg');
+      const url = s3Url || `data:audio/mpeg;base64,${audioBuffer.toString('base64')}`;
+
+      console.log(`[ClonedVoice] Speech generated: ${actualDuration.toFixed(1)}s`);
+      return { url, duration: actualDuration, success: true };
+    } catch (err: any) {
+      console.error('[ClonedVoice] Play.ht TTS failed:', err.message);
+      return null;
+    }
+  }
+
   async generateVoiceover(
     text: string, 
     voiceId?: string,
@@ -2274,11 +2362,23 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
       similarityBoost?: number;
       style?: number;
       provider?: string;
-    }
+    },
+    context?: { userId?: string },
   ): Promise<VoiceoverResult> {
     // --- Play.ht dispatch ---
     if (options?.provider === 'playht') {
       return this.generateVoiceoverPlayHT(text, voiceId, options);
+    }
+
+    // Extract inline @voice:<id> tag from narration text if present.
+    const { voiceId: inlineVoiceId, narration: cleanedText } = this.parseVoiceFromNarration(text);
+    const resolvedVoiceId = inlineVoiceId || voiceId;
+
+    // Route cloned voices through Play.ht (before the ElevenLabs key check).
+    if (resolvedVoiceId?.startsWith('cloned:')) {
+      const result = await this.generateVoiceoverForClonedVoice(cleanedText, resolvedVoiceId, undefined, options, context?.userId);
+      if (result) return result;
+      // Fall through to ElevenLabs default on failure.
     }
 
     const elevenLabsKey = process.env.ELEVENLABS_API_KEY;
@@ -2292,9 +2392,9 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
     }
 
     // Preprocess text for natural speech (minimal cleanup only)
-    const processedText = this.preprocessNarrationForTTS(text);
+    const processedText = this.preprocessNarrationForTTS(cleanedText);
     console.log('[TTS] Text preprocessing complete');
-    console.log('[TTS] Text changed?:', text !== processedText);
+    console.log('[TTS] Text changed?:', cleanedText !== processedText);
 
     // RECOMMENDED VOICES FOR HEALTH/WELLNESS:
     // - Rachel (21m00Tcm4TlvDq8ikWAM) - Warm, calm, American female - BEST for wellness
@@ -2302,7 +2402,7 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
     // - Charlotte (XB0fDUnXU5powFXDhCwa) - Warm British female
     // - Matilda (XrExE9yKIg1WjnnlVkGX) - Warm, friendly female
     // - Thomas (GBv7mTt0atIp3Br8iCZE) - Calm, professional male
-    const selectedVoiceId = voiceId || '21m00Tcm4TlvDq8ikWAM'; // Rachel - best for wellness
+    const selectedVoiceId = (resolvedVoiceId?.startsWith('cloned:') ? undefined : resolvedVoiceId) || '21m00Tcm4TlvDq8ikWAM'; // Rachel - best for wellness
 
     // IMPROVED VOICE SETTINGS for natural sound:
     const voiceSettings = {
@@ -2481,7 +2581,8 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
       similarityBoost?: number;
       style?: number;
       provider?: string;
-    }
+    },
+    context?: { userId?: string },
   ): Promise<VoiceoverResult> {
     // Play.ht does not expose word-level timestamps; fall back to the standard
     // generateVoiceoverPlayHT path (Whisper will add timestamps if needed).
@@ -2489,13 +2590,24 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
       return this.generateVoiceoverPlayHT(narration, voiceId, options);
     }
 
+    // Extract inline @voice:<id> tag from narration text if present.
+    const { voiceId: inlineVoiceId, narration: cleanNarration } = this.parseVoiceFromNarration(narration);
+    const resolvedVoiceId = inlineVoiceId || voiceId;
+
+    // Route cloned voices through Play.ht (no ElevenLabs key needed).
+    if (resolvedVoiceId?.startsWith('cloned:')) {
+      const result = await this.generateVoiceoverForClonedVoice(cleanNarration, resolvedVoiceId, undefined, options, context?.userId);
+      if (result) return result;
+      // Fall through to ElevenLabs on failure.
+    }
+
     const elevenLabsKey = process.env.ELEVENLABS_API_KEY;
     if (!elevenLabsKey) {
       return { url: '', duration: 0, success: false, error: 'ELEVENLABS_API_KEY not configured' };
     }
 
-    const processedText = this.preprocessNarrationForTTS(narration);
-    const selectedVoiceId = voiceId || '21m00Tcm4TlvDq8ikWAM';
+    const processedText = this.preprocessNarrationForTTS(cleanNarration);
+    const selectedVoiceId = (resolvedVoiceId?.startsWith('cloned:') ? undefined : resolvedVoiceId) || '21m00Tcm4TlvDq8ikWAM';
     const voiceSettings = {
       stability: options?.stability ?? 0.65,
       similarity_boost: options?.similarityBoost ?? 0.75,
@@ -2526,7 +2638,7 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
         const errText = await response.text();
         console.error(`[PerSceneVoiceover] ElevenLabs with-timestamps error: ${response.status}`, errText);
         console.log('[PerSceneVoiceover] Falling back to standard voiceover generation...');
-        return this.generateVoiceover(narration, voiceId, options);
+        return this.generateVoiceover(narration, voiceId, options, context);
       }
 
       const result = await response.json();
@@ -2536,7 +2648,7 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
 
       if (!audioBase64) {
         console.error('[PerSceneVoiceover] No audio_base64 in response');
-        return this.generateVoiceover(narration, voiceId, options);
+        return this.generateVoiceover(narration, voiceId, options, context);
       }
 
       const audioBuffer = Buffer.from(audioBase64, 'base64');
@@ -2581,7 +2693,7 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
       }
     } catch (e: any) {
       console.error('[PerSceneVoiceover] Error:', e);
-      return this.generateVoiceover(narration, voiceId, options);
+      return this.generateVoiceover(narration, voiceId, options, context);
     }
   }
 
@@ -3576,7 +3688,7 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
       await saveProgress();
 
       const voiceoverProvider = (project as any).voiceoverSettings?.provider;
-      const result = await this.generateSceneVoiceover(narration, project.voiceId, { provider: voiceoverProvider });
+      const result = await this.generateSceneVoiceover(narration, project.voiceId, { provider: voiceoverProvider }, { userId: (project as any).ownerId });
       perSceneResults.push(result);
 
       if (result.success) {
@@ -3625,7 +3737,7 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
       console.log('[PerSceneVoiceover] All scenes failed, falling back to legacy full-track voiceover...');
       const fullNarration = scenes.map(s => s.narration).filter(Boolean).join(' ... ');
       const voiceoverProviderFallback = (project as any).voiceoverSettings?.provider;
-      const fullTrackResult = await this.generateVoiceover(fullNarration, project.voiceId, { provider: voiceoverProviderFallback });
+      const fullTrackResult = await this.generateVoiceover(fullNarration, project.voiceId, { provider: voiceoverProviderFallback }, { userId: (project as any).ownerId });
       
       if (fullTrackResult.success) {
         updatedProject.assets.voiceover.fullTrackUrl = fullTrackResult.url;
@@ -6983,7 +7095,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
     console.log(`[UniversalVideoService] Regenerating voiceover for ${scenesToProcess.length} scenes with voice: ${voiceId || 'default'}${options?.provider ? ` via ${options.provider}` : ''}`);
 
     try {
-      const result = await this.generateVoiceover(fullNarration, voiceId, { provider: options?.provider });
+      const result = await this.generateVoiceover(fullNarration, voiceId, { provider: options?.provider }, { userId: (project as any).ownerId });
 
       if (result.success && result.url) {
         // Update project assets

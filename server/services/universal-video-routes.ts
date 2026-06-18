@@ -6347,7 +6347,8 @@ router.post('/generate-voiceover', isAuthenticated, async (req: Request, res: Re
     }
     
     universalVideoService.clearNotifications();
-    const result = await universalVideoService.generateVoiceover(text, voiceId, { provider });
+    const userId = (req.user as any)?.id?.toString();
+    const result = await universalVideoService.generateVoiceover(text, voiceId, { provider }, { userId });
     const notifications = universalVideoService.getNotifications();
     
     res.json({
