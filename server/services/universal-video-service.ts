@@ -1,6 +1,7 @@
 import { llmClient } from "./piapi-llm-client";
 import { fal } from "@fal-ai/client";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { playHTClient } from "./playht-client";
 import {
   VideoProject,
   Scene,
@@ -2272,8 +2273,14 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
       stability?: number;
       similarityBoost?: number;
       style?: number;
+      provider?: string;
     }
   ): Promise<VoiceoverResult> {
+    // --- Play.ht dispatch ---
+    if (options?.provider === 'playht') {
+      return this.generateVoiceoverPlayHT(text, voiceId, options);
+    }
+
     const elevenLabsKey = process.env.ELEVENLABS_API_KEY;
     if (!elevenLabsKey) {
       this.addNotification({
@@ -2384,6 +2391,88 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
     }
   }
 
+  /**
+   * Play.ht voiceover generation path.
+   * Fetches audio from the Play.ht CDN URL and re-uploads to S3 so the rest
+   * of the pipeline always gets an S3-backed (or base64) URL — no Play.ht CDN
+   * dependencies downstream.
+   */
+  private async generateVoiceoverPlayHT(
+    text: string,
+    voiceId?: string,
+    options?: { speed?: number; temperature?: number },
+  ): Promise<VoiceoverResult> {
+    if (!playHTClient.isAvailable()) {
+      this.addNotification({
+        type: 'error',
+        service: 'Play.ht',
+        message: 'PLAYHT_API_KEY or PLAYHT_USER_ID not configured — voiceover unavailable',
+      });
+      return { url: '', duration: 0, success: false, error: 'Play.ht not configured' };
+    }
+
+    const processedText = this.preprocessNarrationForTTS(text);
+
+    let resolvedVoiceId: string | undefined;
+    try {
+      resolvedVoiceId = await playHTClient.resolveVoiceId(voiceId);
+    } catch (err: any) {
+      console.error('[Play.ht] Voice ID resolution failed:', err.message);
+      this.addNotification({
+        type: 'error',
+        service: 'Play.ht',
+        message: `Voice ID resolution failed: ${err.message}`,
+      });
+      return { url: '', duration: 0, success: false, error: err.message };
+    }
+
+    const ttsResult = await playHTClient.generateSpeech({
+      text: processedText,
+      voice: resolvedVoiceId,
+      speed: (options as any)?.speed,
+      temperature: (options as any)?.temperature,
+    });
+
+    if (!ttsResult.success || !ttsResult.audioUrl) {
+      this.addNotification({
+        type: 'error',
+        service: 'Play.ht',
+        message: `TTS failed: ${ttsResult.error || 'unknown error'}`,
+      });
+      return { url: '', duration: 0, success: false, error: ttsResult.error };
+    }
+
+    try {
+      const audioResponse = await fetch(ttsResult.audioUrl);
+      if (!audioResponse.ok) {
+        throw new Error(`Failed to download Play.ht audio (${audioResponse.status})`);
+      }
+      const audioBuffer = Buffer.from(await audioResponse.arrayBuffer());
+
+      const wordCount = text.split(/\s+/).length;
+      const estimatedDuration = Math.ceil(wordCount / 2.5);
+
+      const fileName = `voiceover_playht_${Date.now()}_${Math.random().toString(36).substring(7)}.mp3`;
+      const s3Url = await this.uploadToS3(audioBuffer, fileName, 'audio/mpeg');
+
+      if (s3Url) {
+        console.log(`[Play.ht] Voiceover uploaded to S3: ${s3Url} (${estimatedDuration}s)`);
+        return { url: s3Url, duration: estimatedDuration, success: true };
+      }
+
+      const base64Audio = `data:audio/mpeg;base64,${audioBuffer.toString('base64')}`;
+      return { url: base64Audio, duration: estimatedDuration, success: true };
+    } catch (err: any) {
+      console.error('[Play.ht] Audio download/upload error:', err);
+      this.addNotification({
+        type: 'error',
+        service: 'Play.ht',
+        message: `Audio download failed: ${err.message}`,
+      });
+      return { url: '', duration: 0, success: false, error: err.message };
+    }
+  }
+
   async generateSceneVoiceover(
     narration: string,
     voiceId?: string,
@@ -2391,8 +2480,15 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
       stability?: number;
       similarityBoost?: number;
       style?: number;
+      provider?: string;
     }
   ): Promise<VoiceoverResult> {
+    // Play.ht does not expose word-level timestamps; fall back to the standard
+    // generateVoiceoverPlayHT path (Whisper will add timestamps if needed).
+    if (options?.provider === 'playht') {
+      return this.generateVoiceoverPlayHT(narration, voiceId, options);
+    }
+
     const elevenLabsKey = process.env.ELEVENLABS_API_KEY;
     if (!elevenLabsKey) {
       return { url: '', duration: 0, success: false, error: 'ELEVENLABS_API_KEY not configured' };
@@ -3479,7 +3575,8 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
       updatedProject.progress.steps.voiceover.message = `Generating scene ${i + 1}/${scenes.length}...`;
       await saveProgress();
 
-      const result = await this.generateSceneVoiceover(narration, project.voiceId);
+      const voiceoverProvider = (project as any).voiceoverSettings?.provider;
+      const result = await this.generateSceneVoiceover(narration, project.voiceId, { provider: voiceoverProvider });
       perSceneResults.push(result);
 
       if (result.success) {
@@ -3527,7 +3624,8 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
     } else {
       console.log('[PerSceneVoiceover] All scenes failed, falling back to legacy full-track voiceover...');
       const fullNarration = scenes.map(s => s.narration).filter(Boolean).join(' ... ');
-      const fullTrackResult = await this.generateVoiceover(fullNarration, project.voiceId);
+      const voiceoverProviderFallback = (project as any).voiceoverSettings?.provider;
+      const fullTrackResult = await this.generateVoiceover(fullNarration, project.voiceId, { provider: voiceoverProviderFallback });
       
       if (fullTrackResult.success) {
         updatedProject.assets.voiceover.fullTrackUrl = fullTrackResult.url;
@@ -6856,6 +6954,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
     options?: {
       voiceId?: string;
       sceneIds?: string[];
+      provider?: string;
     }
   ): Promise<{ success: boolean; voiceoverUrl?: string; duration?: number; error?: string }> {
     const voiceId = options?.voiceId || project.voiceId;
@@ -6881,10 +6980,10 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
       return { success: false, error: 'No narration text found' };
     }
 
-    console.log(`[UniversalVideoService] Regenerating voiceover for ${scenesToProcess.length} scenes with voice: ${voiceId || 'default'}`);
+    console.log(`[UniversalVideoService] Regenerating voiceover for ${scenesToProcess.length} scenes with voice: ${voiceId || 'default'}${options?.provider ? ` via ${options.provider}` : ''}`);
 
     try {
-      const result = await this.generateVoiceover(fullNarration, voiceId);
+      const result = await this.generateVoiceover(fullNarration, voiceId, { provider: options?.provider });
 
       if (result.success && result.url) {
         // Update project assets

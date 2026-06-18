@@ -4569,7 +4569,7 @@ router.post('/projects/:projectId/generate-assets', isAuthenticated, requireCred
   try {
     const userId = (req.user as any)?.id;
     const { projectId } = req.params;
-    const { skipMusic, skipAnalysis, voiceId, referenceImages, videoProvider, seamlessTransitions } = req.body || {};
+    const { skipMusic, skipAnalysis, voiceId, soundProvider, referenceImages, videoProvider, seamlessTransitions } = req.body || {};
     
     const projectData = await getProjectFromDb(projectId);
     if (!projectData) {
@@ -4594,12 +4594,15 @@ router.post('/projects/:projectId/generate-assets', isAuthenticated, requireCred
       });
     }
 
-    if (voiceId) {
-      (projectData as any).voiceId = voiceId;
+    if (voiceId || soundProvider) {
+      if (voiceId) {
+        (projectData as any).voiceId = voiceId;
+      }
       (projectData as any).voiceoverSettings = {
         ...((projectData as any).voiceoverSettings || {}),
         enabled: true,
-        voiceId,
+        ...(voiceId ? { voiceId } : {}),
+        ...(soundProvider ? { provider: soundProvider } : {}),
       };
     }
     if (referenceImages && Array.isArray(referenceImages) && referenceImages.length > 0) {
@@ -4614,7 +4617,7 @@ router.post('/projects/:projectId/generate-assets', isAuthenticated, requireCred
       (projectData as any).seamlessTransitions = seamlessTransitions;
     }
 
-    console.log('[UniversalVideo] Queuing asset generation for project:', projectId, skipMusic ? '(music disabled)' : '', voiceId ? `voice: ${voiceId}` : '', (projectData as any).seamlessTransitions ? '✨seamlessTransitions=ON' : '');
+    console.log('[UniversalVideo] Queuing asset generation for project:', projectId, skipMusic ? '(music disabled)' : '', voiceId ? `voice: ${voiceId}` : '', soundProvider ? `soundProvider: ${soundProvider}` : '', (projectData as any).seamlessTransitions ? '✨seamlessTransitions=ON' : '');
     
     projectData.status = 'queued';
     if (!projectData.progress) {
@@ -6337,14 +6340,14 @@ router.post('/generate-image', isAuthenticated, requireCredits({
 
 router.post('/generate-voiceover', isAuthenticated, async (req: Request, res: Response) => {
   try {
-    const { text, voiceId } = req.body;
+    const { text, voiceId, provider } = req.body;
     
     if (!text) {
       return res.status(400).json({ success: false, error: 'Text required' });
     }
     
     universalVideoService.clearNotifications();
-    const result = await universalVideoService.generateVoiceover(text, voiceId);
+    const result = await universalVideoService.generateVoiceover(text, voiceId, { provider });
     const notifications = universalVideoService.getNotifications();
     
     res.json({
@@ -8799,7 +8802,7 @@ router.post('/:projectId/regenerate-voiceover', isAuthenticated, async (req: Req
   try {
     const userId = (req.user as any)?.id;
     const { projectId } = req.params;
-    const { voiceId, sceneIds } = req.body;
+    const { voiceId, sceneIds, provider } = req.body;
     
     const projectData = await getProjectFromDb(projectId);
     if (!projectData) {
@@ -8810,11 +8813,12 @@ router.post('/:projectId/regenerate-voiceover', isAuthenticated, async (req: Req
       return res.status(403).json({ success: false, error: 'Access denied' });
     }
     
-    console.log(`[UniversalVideo] Regenerating voiceover for project ${projectId}, voice: ${voiceId || 'default'}`);
+    console.log(`[UniversalVideo] Regenerating voiceover for project ${projectId}, voice: ${voiceId || 'default'}${provider ? `, provider: ${provider}` : ''}`);
     
     const result = await universalVideoService.regenerateVoiceover(projectData, {
       voiceId,
       sceneIds,
+      provider,
     });
     
     if (result.success) {
