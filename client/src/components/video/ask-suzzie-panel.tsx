@@ -24,6 +24,7 @@ interface ChatMessage {
   content: string;
   suggestedPrompt?: string;
   suggestedProvider?: string;
+  suggestedProviderRationale?: string;
   suggestedArtStyle?: { id: string; name: string };
   suggestedCfgScale?: number;
   imagePreviewUrl?: string;
@@ -166,6 +167,7 @@ export function AskSuzziePanel({ sceneContext, onApplyVisualDirection, onApplyPr
           content: data.message,
           suggestedPrompt: data.suggestedPrompt,
           suggestedProvider: data.suggestedProvider,
+          suggestedProviderRationale: data.suggestedProviderRationale,
           suggestedArtStyle: data.suggestedArtStyle,
           suggestedCfgScale: typeof data.suggestedCfgScale === "number" ? data.suggestedCfgScale : undefined,
         };
@@ -372,19 +374,34 @@ export function AskSuzziePanel({ sceneContext, onApplyVisualDirection, onApplyPr
                 </div>
               )}
 
-              {msg.suggestedProvider && onApplyProvider && (
-                <button
-                  onClick={() => onApplyProvider(msg.suggestedProvider!)}
-                  className="mt-2 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-semibold transition-all hover:scale-[1.02]"
+              {msg.suggestedProvider && (
+                <div
+                  className="mt-2 rounded-lg p-2.5"
                   style={{
-                    background: "linear-gradient(135deg, rgba(34,197,94,0.3), rgba(16,185,129,0.2))",
-                    color: "rgba(167,243,208,0.9)",
+                    background: "linear-gradient(135deg, rgba(34,197,94,0.12), rgba(16,185,129,0.08))",
                     border: "1px solid rgba(34,197,94,0.25)",
                   }}
                 >
-                  <Zap className="w-3 h-3" />
-                  Apply Provider
-                </button>
+                  <p className="text-[9px] font-semibold uppercase tracking-wider mb-0.5" style={{ color: "rgba(134,239,172,0.7)" }}>Suggested Provider</p>
+                  <p className="text-[11px] font-semibold mb-1" style={{ color: "rgba(167,243,208,0.95)" }}>{msg.suggestedProvider}</p>
+                  {msg.suggestedProviderRationale && (
+                    <p className="text-[10px] leading-relaxed mb-1.5" style={{ color: "rgba(167,243,208,0.7)" }}>{msg.suggestedProviderRationale}</p>
+                  )}
+                  {onApplyProvider && (
+                    <button
+                      onClick={() => onApplyProvider(msg.suggestedProvider!)}
+                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-semibold transition-all hover:scale-[1.02]"
+                      style={{
+                        background: "linear-gradient(135deg, rgba(34,197,94,0.3), rgba(16,185,129,0.2))",
+                        color: "rgba(167,243,208,0.9)",
+                        border: "1px solid rgba(34,197,94,0.25)",
+                      }}
+                    >
+                      <Zap className="w-3 h-3" />
+                      Apply Provider
+                    </button>
+                  )}
+                </div>
               )}
 
               {msg.suggestedCfgScale !== undefined && onApplyCfgScale && (

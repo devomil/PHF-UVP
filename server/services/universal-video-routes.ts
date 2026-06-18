@@ -888,6 +888,7 @@ router.post('/ask-suzzie', isAuthenticated, async (req: Request, res: Response) 
       
       let suggestedPrompt: string | undefined;
       let suggestedProvider: string | undefined;
+      let suggestedProviderRationale: string | undefined;
       let suggestedArtStyle: { id: string; name: string } | undefined;
       
       const jsonBlocks = text.match(/```json\s*([\s\S]*?)```/g) || [];
@@ -897,6 +898,7 @@ router.post('/ask-suzzie', isAuthenticated, async (req: Request, res: Response) 
           const parsed = JSON.parse(jsonStr);
           if (parsed.suggestedPrompt && !suggestedPrompt) suggestedPrompt = parsed.suggestedPrompt;
           if (parsed.suggestedProvider && !suggestedProvider) suggestedProvider = parsed.suggestedProvider;
+          if (parsed.suggestedProviderRationale && !suggestedProviderRationale) suggestedProviderRationale = parsed.suggestedProviderRationale;
           if (parsed.suggestedArtStyle && !suggestedArtStyle && parsed.suggestedArtStyle.id && parsed.suggestedArtStyle.name) {
             suggestedArtStyle = { id: parsed.suggestedArtStyle.id, name: parsed.suggestedArtStyle.name };
           }
@@ -910,6 +912,7 @@ router.post('/ask-suzzie', isAuthenticated, async (req: Request, res: Response) 
         message: cleanMessage,
         suggestedPrompt,
         suggestedProvider,
+        suggestedProviderRationale,
         suggestedArtStyle,
       });
     }
@@ -1110,6 +1113,7 @@ router.post('/ask-suzzie/asset-library', isAuthenticated, async (req: Request, r
 
     let suggestedPrompt: string | undefined;
     let suggestedProvider: string | undefined;
+    let suggestedProviderRationale: string | undefined;
     let suggestedNegativePrompt: string | undefined;
     let suggestedCfgScale: number | undefined;
 
@@ -1120,6 +1124,7 @@ router.post('/ask-suzzie/asset-library', isAuthenticated, async (req: Request, r
         const parsed = JSON.parse(jsonStr);
         if (parsed.suggestedPrompt && !suggestedPrompt) suggestedPrompt = parsed.suggestedPrompt;
         if (parsed.suggestedProvider && !suggestedProvider) suggestedProvider = parsed.suggestedProvider;
+        if (parsed.suggestedProviderRationale && !suggestedProviderRationale) suggestedProviderRationale = parsed.suggestedProviderRationale;
         if (parsed.suggestedNegativePrompt && !suggestedNegativePrompt) suggestedNegativePrompt = parsed.suggestedNegativePrompt;
         if (parsed.suggestedCfgScale !== undefined && suggestedCfgScale === undefined) {
           const val = parseFloat(parsed.suggestedCfgScale);
@@ -1135,6 +1140,7 @@ router.post('/ask-suzzie/asset-library', isAuthenticated, async (req: Request, r
       message: cleanMessage,
       suggestedPrompt,
       suggestedProvider,
+      suggestedProviderRationale,
       suggestedNegativePrompt,
       suggestedCfgScale,
     });

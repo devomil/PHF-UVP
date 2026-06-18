@@ -18,6 +18,7 @@ interface ChatMessage {
   content: string;
   suggestedPrompt?: string;
   suggestedProvider?: string;
+  suggestedProviderRationale?: string;
   suggestedNegativePrompt?: string;
   suggestedCfgScale?: number;
 }
@@ -115,6 +116,7 @@ export function AssetSuzzieChat({
           content: data.message,
           suggestedPrompt: data.suggestedPrompt,
           suggestedProvider: data.suggestedProvider,
+          suggestedProviderRationale: data.suggestedProviderRationale,
           suggestedNegativePrompt: data.suggestedNegativePrompt,
           suggestedCfgScale: data.suggestedCfgScale,
         };
@@ -303,22 +305,27 @@ export function AssetSuzzieChat({
               )}
 
               {msg.suggestedProvider && (
-                <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-2 flex items-center justify-between">
-                  <div>
-                    <p className="text-[10px] text-blue-400 font-medium uppercase tracking-wider">Suggested Provider</p>
-                    <p className="text-xs text-blue-200">{msg.suggestedProvider}</p>
+                <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-2.5">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[10px] text-blue-400 font-medium uppercase tracking-wider">Suggested Provider</p>
+                      <p className="text-xs text-blue-200 font-semibold">{msg.suggestedProvider}</p>
+                      {msg.suggestedProviderRationale && (
+                        <p className="text-[10px] text-blue-300/70 leading-relaxed mt-1">{msg.suggestedProviderRationale}</p>
+                      )}
+                    </div>
+                    {onApplyProvider && isValidProvider(msg.suggestedProvider) && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => handleApplyProvider(msg.suggestedProvider!)}
+                        className="h-6 px-2.5 text-[11px] bg-blue-600 hover:bg-blue-700 text-white gap-1 shrink-0 mt-0.5"
+                      >
+                        <ArrowRight className="h-3 w-3" />
+                        Apply
+                      </Button>
+                    )}
                   </div>
-                  {onApplyProvider && isValidProvider(msg.suggestedProvider) && (
-                    <Button
-                      type="button"
-                      size="sm"
-                      onClick={() => handleApplyProvider(msg.suggestedProvider!)}
-                      className="h-6 px-2.5 text-[11px] bg-blue-600 hover:bg-blue-700 text-white gap-1"
-                    >
-                      <ArrowRight className="h-3 w-3" />
-                      Apply
-                    </Button>
-                  )}
                 </div>
               )}
 

@@ -47,7 +47,9 @@ function buildProviderKnowledge(): string {
         caps.push(`IP-Adapter style conditioning (syntax: ${p.ipAdapterSupport.promptSyntax})`);
       }
       const capStr = caps.length ? ` Special capabilities: ${caps.join('; ')}.` : '';
-      return `- **${p.displayName}** (${p.id}): ${strengths}. Best for: ${bestFor}. Tier: ${p.tier ?? 'standard'}. Max duration: ${p.maxDuration}s.${capStr}`;
+      const specializationStr = p.specialization && p.specialization !== 'general' ? ` Specialization: ${p.specialization}.` : '';
+      const qualityStr = p.qualityNotes ? ` Quality notes: ${p.qualityNotes}.` : '';
+      return `- **${p.displayName}** (${p.id}): ${strengths}. Best for: ${bestFor}. Tier: ${p.tier ?? 'standard'}. Max duration: ${p.maxDuration}s.${specializationStr}${qualityStr}${capStr}`;
     })
     .join('\n');
 
@@ -472,18 +474,19 @@ When the user attaches an image (photo of a location, store, product, etc.), ana
 ## Response Format
 When generating a visual direction or prompt, ALWAYS include a recommended art style AND the prompt itself. Combine them into a single JSON block at the end of your response:
 \`\`\`json
-{"suggestedPrompt": "your visual direction here", "suggestedArtStyle": {"id": "preset-id", "name": "Preset Name"}, "suggestedProvider": "provider-id-here", "suggestedNegativePrompt": "negative terms here", "suggestedCfgScale": 0.85}
+{"suggestedPrompt": "your visual direction here", "suggestedArtStyle": {"id": "preset-id", "name": "Preset Name"}, "suggestedProvider": "provider-id-here", "suggestedProviderRationale": "1-2 sentence explanation of why this provider fits the scene", "suggestedNegativePrompt": "negative terms here", "suggestedCfgScale": 0.85}
 \`\`\`
 
 - **suggestedPrompt** (required when you have a prompt): The visual direction text
 - **suggestedArtStyle** (required when you have a prompt): The art style preset that best matches this prompt. Pick from the available presets listed above. Consider the scene content, narration, and brand — e.g., clinical/health content pairs well with "scientific-medical", product showcases with "cinematic-realism", playful/fun brands with "3d-illustration" or "claymation", etc. If the user already has an art style selected, recommend keeping it unless a different one would be clearly better.
 - **suggestedProvider** (optional): Include when you have a specific provider recommendation
+- **suggestedProviderRationale** (required whenever suggestedProvider is included): A 1-2 sentence explanation of WHY this provider is the right pick for this scene. Ground it in the provider's specific strengths, specialization, and quality notes — e.g., "I'm suggesting Kling 2.6 because your scene has dialogue and benefits from its native-audio specialization." or "Runway 4.5 is ideal here — it excels at top-tier cinematic quality and advanced camera manipulation, which your hero shot needs." Be concrete and specific, not generic.
 - **suggestedNegativePrompt** (optional): Include for I2V and T2V modes — additional safety rails NOT already covered by the main prompt. Keep to 5-8 terms max.
 - **suggestedCfgScale** (optional, number 0–1): Include when the selected provider supports cfg_scale AND the scene warrants source-frame preservation (see the cfg_scale guidance block above when present). Decision rule: product/label/text scenes → 0.85–0.95; character identity-lock scenes → 0.6–0.75; creative/abstract → 0.4–0.6 or omit. Omit entirely for environment/nature b-roll with no anchor subject.
 
 You can also recommend just a provider separately if the user asks about providers:
 \`\`\`json
-{"suggestedProvider": "provider-id-here"}
+{"suggestedProvider": "provider-id-here", "suggestedProviderRationale": "1-2 sentence explanation of why this provider fits"}
 \`\`\`
 
 When giving step-by-step instructions, number them clearly.
@@ -766,11 +769,14 @@ When you have a prompt suggestion, include ALL relevant suggestions in a SINGLE 
   "suggestedPrompt": "your full production-quality prompt here (4-6 sentences for video, 3-4 for images)",
   "suggestedNegativePrompt": "negative prompt terms separated by commas",
   "suggestedProvider": "provider-id-here",
+  "suggestedProviderRationale": "1-2 sentence explanation of why this provider fits this scene",
   "suggestedCfgScale": 0.85
 }
 \`\`\`
 
 Only include fields that are relevant. suggestedCfgScale is a number 0-1 where higher = more source image preservation (0.85-0.95 for products with labels, 0.5-0.7 for creative/artistic shots).
+
+**suggestedProviderRationale** (required whenever suggestedProvider is included): A 1-2 sentence explanation grounded in the provider's specific strengths, specialization, and quality notes. Be concrete — e.g., "Kling 2.6 Pro excels at stable product I2V with strong compositional control, which is ideal for keeping your supplement bottle sharp while the environment builds around it." Not generic phrases like "this is a good provider".
 
 Only include JSON blocks when you have a specific suggestion — not for follow-up questions.
 
