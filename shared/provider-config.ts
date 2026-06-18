@@ -796,6 +796,11 @@ export const IMAGE_PROVIDERS: Record<string, ImageProvider> = {
     costPerImage: 0.03,
     strengths: ['Product shots', 'Clean compositions', 'Commercial quality'],
     bestFor: ['product', 'food', 'object', 'still-life'],
+    multiImageSupport: {
+      maxImages: 4,
+      promptSyntax: '@imageN',
+      hint: 'Upload up to 4 reference images and tag them as @image1, @image2, … in your prompt. Flux blends their style, composition, and content to guide the generated image.',
+    },
     ipAdapterSupport: {
       maxAdapters: 1,
       promptSyntax: '@ipRef',
@@ -810,6 +815,11 @@ export const IMAGE_PROVIDERS: Record<string, ImageProvider> = {
     costPerImage: 0.025,
     strengths: ['Development version', 'Experimental features'],
     bestFor: ['testing', 'experimental'],
+    multiImageSupport: {
+      maxImages: 4,
+      promptSyntax: '@imageN',
+      hint: 'Upload up to 4 reference images and tag them as @image1, @image2, … in your prompt. Flux Dev uses them as style and content references for image generation.',
+    },
     ipAdapterSupport: {
       maxAdapters: 1,
       promptSyntax: '@ipRef',
@@ -824,6 +834,11 @@ export const IMAGE_PROVIDERS: Record<string, ImageProvider> = {
     costPerImage: 0.02,
     strengths: ['Lifestyle images', 'Natural feel', 'People'],
     bestFor: ['lifestyle', 'person', 'scene', 'environment'],
+    multiImageSupport: {
+      maxImages: 4,
+      promptSyntax: '@imageN',
+      hint: 'Upload up to 4 reference images and tag them as @image1, @image2, … in your prompt. fal.ai uses them as visual references to guide style, subject, and composition.',
+    },
   },
 
   'stable-diffusion-3': {
