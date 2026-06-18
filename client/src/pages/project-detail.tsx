@@ -7199,6 +7199,7 @@ export function QuickCreateAssetPanel({ projectId, project }: { projectId: strin
                   onApplyVisualDirection={(newPrompt) => setPromptText(newPrompt)}
                   onApplyProvider={(providerId) => setSelectedProvider(providerId)}
                   onApplyArtStyle={(artStyleId) => setArtPresetId(artStyleId)}
+                  onApplyCfgScale={(val) => setImageFidelity(val)}
                 />
               </div>
 

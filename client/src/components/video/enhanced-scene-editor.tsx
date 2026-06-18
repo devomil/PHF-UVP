@@ -234,10 +234,12 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
   const reconcileInFlight = useRef(false);
   const [expandedMicroScene, setExpandedMicroScene] = useState<number | null>(null);
   const [fullscreenMicroScene, setFullscreenMicroScene] = useState<number | null>(null);
+  const [sceneImageFidelity, setSceneImageFidelity] = useState<number | null>(() => scene.imageFidelity ?? null);
   const [msModalPrompt, setMsModalPrompt] = useState("");
   const [msModalEditingPrompt, setMsModalEditingPrompt] = useState(false);
   const [msModalProvider, setMsModalProvider] = useState("auto");
   const [msModalMode, setMsModalMode] = useState("auto");
+  const [msModalImageFidelity, setMsModalImageFidelity] = useState<number | null>(null);
   const [msModalRefImages, setMsModalRefImages] = useState<string[]>([]);
   const [msModalShowLibrary, setMsModalShowLibrary] = useState(false);
   const [msModalShowMultiRefExpander, setMsModalShowMultiRefExpander] = useState(false);
@@ -4151,6 +4153,9 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                       setSceneArtPreset(artStyleId);
                       updateSceneMutation.mutate({ artPresetId: artStyleId });
                     }}
+                    onApplyCfgScale={(val) => {
+                      setMsModalImageFidelity(val);
+                    }}
                     zIndex={10001}
                   />
                 </div>
@@ -4291,6 +4296,10 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
         onApplyArtStyle={(artStyleId) => {
           setSceneArtPreset(artStyleId);
           silentSaveMutation.mutate({ artPresetId: artStyleId });
+        }}
+        onApplyCfgScale={(val) => {
+          setSceneImageFidelity(val);
+          silentSaveMutation.mutate({ imageFidelity: val });
         }}
       />
       <Dialog open={!!refLightboxUrl} onOpenChange={(open) => { if (!open) setRefLightboxUrl(null); }}>

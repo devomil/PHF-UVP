@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Sparkles, X, Send, Loader2, Wand2, Zap, HelpCircle, ChevronRight, Paperclip, ImageIcon, Palette } from "lucide-react";
+import { Sparkles, X, Send, Loader2, Wand2, Zap, HelpCircle, ChevronRight, Paperclip, ImageIcon, Palette, SlidersHorizontal } from "lucide-react";
 
 interface SuzzieSceneContext {
   narration?: string;
@@ -25,6 +25,7 @@ interface ChatMessage {
   suggestedPrompt?: string;
   suggestedProvider?: string;
   suggestedArtStyle?: { id: string; name: string };
+  suggestedCfgScale?: number;
   imagePreviewUrl?: string;
 }
 
@@ -33,6 +34,7 @@ interface AskSuzziePanelProps {
   onApplyVisualDirection?: (prompt: string) => void;
   onApplyProvider?: (providerId: string) => void;
   onApplyArtStyle?: (artStyleId: string) => void;
+  onApplyCfgScale?: (cfgScale: number) => void;
   zIndex?: number;
 }
 
@@ -42,7 +44,7 @@ const QUICK_ACTIONS = [
   { label: "How to add a logo?", icon: HelpCircle, prompt: "How do I add a logo or watermark to this scene?" },
 ];
 
-export function AskSuzziePanel({ sceneContext, onApplyVisualDirection, onApplyProvider, onApplyArtStyle, zIndex }: AskSuzziePanelProps) {
+export function AskSuzziePanel({ sceneContext, onApplyVisualDirection, onApplyProvider, onApplyArtStyle, onApplyCfgScale, zIndex }: AskSuzziePanelProps) {
   const zStyle = zIndex ? { zIndex } : {};
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -165,6 +167,7 @@ export function AskSuzziePanel({ sceneContext, onApplyVisualDirection, onApplyPr
           suggestedPrompt: data.suggestedPrompt,
           suggestedProvider: data.suggestedProvider,
           suggestedArtStyle: data.suggestedArtStyle,
+          suggestedCfgScale: typeof data.suggestedCfgScale === "number" ? data.suggestedCfgScale : undefined,
         };
         setMessages(prev => [...prev, assistantMessage]);
       } else {
@@ -382,6 +385,47 @@ export function AskSuzziePanel({ sceneContext, onApplyVisualDirection, onApplyPr
                   <Zap className="w-3 h-3" />
                   Apply Provider
                 </button>
+              )}
+
+              {msg.suggestedCfgScale !== undefined && onApplyCfgScale && (
+                <div
+                  className="mt-2 rounded-lg overflow-hidden"
+                  style={{
+                    background: "rgba(6,182,212,0.08)",
+                    border: "1px solid rgba(6,182,212,0.2)",
+                  }}
+                >
+                  <div className="px-2.5 py-1.5 flex items-center gap-1.5" style={{ borderBottom: "1px solid rgba(6,182,212,0.15)" }}>
+                    <SlidersHorizontal className="w-3 h-3" style={{ color: "rgba(103,232,249,0.8)" }} />
+                    <span className="text-[10px] font-semibold" style={{ color: "rgba(103,232,249,0.9)" }}>Suggested Image Fidelity</span>
+                  </div>
+                  <div className="px-2.5 py-2 flex items-center justify-between gap-2">
+                    <div>
+                      <span className="text-[13px] font-bold" style={{ color: "rgba(255,255,255,0.9)" }}>
+                        {Math.round(msg.suggestedCfgScale * 100)}%
+                      </span>
+                      <span className="ml-1.5 text-[10px]" style={{ color: "rgba(103,232,249,0.7)" }}>
+                        {msg.suggestedCfgScale >= 0.8
+                          ? "Lock source geometry"
+                          : msg.suggestedCfgScale >= 0.5
+                          ? "Balanced"
+                          : "Creative freedom"}
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => onApplyCfgScale(msg.suggestedCfgScale!)}
+                      className="flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-semibold transition-all hover:scale-[1.02] shrink-0"
+                      style={{
+                        background: "linear-gradient(135deg, rgba(6,182,212,0.35), rgba(14,165,233,0.25))",
+                        color: "rgba(103,232,249,0.95)",
+                        border: "1px solid rgba(6,182,212,0.3)",
+                      }}
+                    >
+                      <SlidersHorizontal className="w-3 h-3" />
+                      Apply
+                    </button>
+                  </div>
+                </div>
               )}
             </div>
           </div>

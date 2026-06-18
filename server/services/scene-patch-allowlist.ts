@@ -45,6 +45,7 @@ export const SCENE_PATCH_ALLOWED_FIELDS = [
   'imageGenerationPrompt',
   'imageCandidates',
   'generateNativeAudio',
+  'imageFidelity',
 ] as const;
 
 export const SCENE_PATCH_CLEARABLE_FIELDS: ReadonlySet<string> = new Set([
@@ -65,6 +66,7 @@ export const SCENE_PATCH_CLEARABLE_FIELDS: ReadonlySet<string> = new Set([
   'imageGenerationModel',
   'imageGenerationPrompt',
   'imageCandidates',
+  'imageFidelity',
 ]);
 
 export interface ApplyScenePatchResult {
