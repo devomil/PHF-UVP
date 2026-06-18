@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
   buildSuzzieSystemPrompt,
   buildAssetLibrarySuzziePrompt,
@@ -549,5 +549,262 @@ describe("buildAssetLibrarySuzziePrompt — IP-Adapter guidance injection for im
     const prompt = buildAssetLibrarySuzziePrompt({ mode: "t2i" });
     expect(prompt).not.toContain("IP-Adapter Syntax");
     expect(prompt).not.toContain("Style and Content Conditioning");
+  });
+});
+
+const MOCK_VIDEO_PROVIDER_ID = "__test_mock_video_provider__";
+const MOCK_IMAGE_PROVIDER_ID = "__test_mock_image_provider__";
+
+describe("buildSuzzieSystemPrompt — registry-injection: mock provider capabilities appear in output", () => {
+  beforeEach(() => {
+    (VIDEO_PROVIDERS as Record<string, unknown>)[MOCK_VIDEO_PROVIDER_ID] = {
+      id: MOCK_VIDEO_PROVIDER_ID,
+      name: MOCK_VIDEO_PROVIDER_ID,
+      displayName: "Mock Video Provider",
+      description: "A mock provider for testing",
+      costPerSecond: 0.01,
+      maxDuration: 8,
+      strengths: ["testing"],
+      weaknesses: [],
+      bestFor: ["test"],
+      tier: "standard" as const,
+      multiImageSupport: {
+        maxImages: 4,
+        promptSyntax: "@mockImageN",
+        hint: "Use @mockImageN syntax",
+      },
+      cfgControlSupport: {
+        minCfg: 0.1,
+        maxCfg: 1.0,
+        defaultCfg: 0.7,
+        hint: "Adjust cfg_scale for fidelity",
+      },
+      ipAdapterSupport: {
+        maxAdapters: 2,
+        promptSyntax: "@mockIpRef",
+        hint: "Use @mockIpRef for style conditioning",
+      },
+    };
+  });
+
+  afterEach(() => {
+    delete (VIDEO_PROVIDERS as Record<string, unknown>)[MOCK_VIDEO_PROVIDER_ID];
+  });
+
+  it("includes mock provider display name and id in provider knowledge section", () => {
+    const prompt = buildSuzzieSystemPrompt({ provider: MOCK_VIDEO_PROVIDER_ID });
+    expect(prompt).toContain(MOCK_VIDEO_PROVIDER_ID);
+    expect(prompt).toContain("Mock Video Provider");
+  });
+
+  it("picks up multiImageSupport from mock provider: @imageN syntax block is injected", () => {
+    const prompt = buildSuzzieSystemPrompt({ provider: MOCK_VIDEO_PROVIDER_ID });
+    expect(prompt).toContain("@imageN Syntax");
+    expect(prompt).toContain(MOCK_VIDEO_PROVIDER_ID);
+    expect(prompt).toMatch(/supports up to 4 reference images/);
+  });
+
+  it("picks up multiImageSupport from mock provider: syntax token appears in capability matrix", () => {
+    const prompt = buildSuzzieSystemPrompt({ provider: MOCK_VIDEO_PROVIDER_ID });
+    const matrixStart = prompt.indexOf("## Provider Capability Matrix");
+    expect(matrixStart).toBeGreaterThanOrEqual(0);
+    const matrixSection = prompt.slice(matrixStart);
+    expect(matrixSection).toContain("Mock Video Provider");
+    expect(matrixSection).toContain("@mockImageN");
+  });
+
+  it("picks up cfgControlSupport from mock provider: CFG block is injected", () => {
+    const prompt = buildSuzzieSystemPrompt({ provider: MOCK_VIDEO_PROVIDER_ID });
+    expect(prompt).toContain("CFG Scale Control");
+    expect(prompt).toContain("Source Frame Fidelity");
+    expect(prompt).toContain("cfg_scale");
+    expect(prompt).toMatch(/cfg_scale tuning in the range 0\.1/);
+  });
+
+  it("picks up cfgControlSupport from mock provider: capability matrix CFG row lists mock provider", () => {
+    const prompt = buildSuzzieSystemPrompt({ provider: MOCK_VIDEO_PROVIDER_ID });
+    const matrixStart = prompt.indexOf("## Provider Capability Matrix");
+    expect(matrixStart).toBeGreaterThanOrEqual(0);
+    const matrixSection = prompt.slice(matrixStart);
+    expect(matrixSection).toContain("Mock Video Provider");
+    expect(matrixSection).toMatch(/CFG scale.*source-frame fidelity.*video/i);
+  });
+
+  it("picks up ipAdapterSupport from mock provider: IP-Adapter block is injected", () => {
+    const prompt = buildSuzzieSystemPrompt({ provider: MOCK_VIDEO_PROVIDER_ID });
+    expect(prompt).toContain("IP-Adapter Syntax");
+    expect(prompt).toContain("Style and Content Conditioning");
+    expect(prompt).toContain("@mockIpRef");
+  });
+
+  it("picks up ipAdapterSupport from mock provider: capability matrix IP-Adapter row lists mock provider", () => {
+    const prompt = buildSuzzieSystemPrompt({ provider: MOCK_VIDEO_PROVIDER_ID });
+    const matrixStart = prompt.indexOf("## Provider Capability Matrix");
+    expect(matrixStart).toBeGreaterThanOrEqual(0);
+    const matrixSection = prompt.slice(matrixStart);
+    expect(matrixSection).toContain("Mock Video Provider");
+    expect(matrixSection).toContain("@mockIpRef");
+  });
+});
+
+describe("buildSuzzieSystemPrompt — registry-injection: mock image provider capabilities appear in output", () => {
+  beforeEach(() => {
+    (IMAGE_PROVIDERS as Record<string, unknown>)[MOCK_IMAGE_PROVIDER_ID] = {
+      id: MOCK_IMAGE_PROVIDER_ID,
+      name: MOCK_IMAGE_PROVIDER_ID,
+      displayName: "Mock Image Provider",
+      description: "A mock image provider for testing",
+      strengths: ["testing"],
+      bestFor: ["test"],
+      multiImageSupport: {
+        maxImages: 3,
+        promptSyntax: "@mockImgRef",
+        hint: "Use @mockImgRef syntax",
+      },
+      cfgControlSupport: {
+        minCfg: 0.2,
+        maxCfg: 0.9,
+        defaultCfg: 0.5,
+        hint: "Adjust cfg_scale",
+      },
+      ipAdapterSupport: {
+        maxAdapters: 1,
+        promptSyntax: "@mockImgIpRef",
+        hint: "Use @mockImgIpRef for conditioning",
+      },
+    };
+  });
+
+  afterEach(() => {
+    delete (IMAGE_PROVIDERS as Record<string, unknown>)[MOCK_IMAGE_PROVIDER_ID];
+  });
+
+  it("includes mock image provider in provider knowledge section", () => {
+    const prompt = buildSuzzieSystemPrompt({ provider: MOCK_IMAGE_PROVIDER_ID });
+    expect(prompt).toContain(MOCK_IMAGE_PROVIDER_ID);
+    expect(prompt).toContain("Mock Image Provider");
+  });
+
+  it("picks up multiImageSupport from mock image provider: @imageN block is injected", () => {
+    const prompt = buildSuzzieSystemPrompt({ provider: MOCK_IMAGE_PROVIDER_ID });
+    expect(prompt).toContain("@imageN Syntax");
+    expect(prompt).toMatch(/supports up to 3 reference images/);
+  });
+
+  it("picks up cfgControlSupport from mock image provider: CFG block is injected", () => {
+    const prompt = buildSuzzieSystemPrompt({ provider: MOCK_IMAGE_PROVIDER_ID });
+    expect(prompt).toContain("CFG Scale Control");
+    expect(prompt).toContain("cfg_scale");
+  });
+
+  it("picks up ipAdapterSupport from mock image provider: IP-Adapter block is injected", () => {
+    const prompt = buildSuzzieSystemPrompt({ provider: MOCK_IMAGE_PROVIDER_ID });
+    expect(prompt).toContain("IP-Adapter Syntax");
+    expect(prompt).toContain("@mockImgIpRef");
+  });
+});
+
+describe("buildCapabilityMatrix (via buildSuzzieSystemPrompt) — only providers with a capability appear in that row", () => {
+  const MOCK_CFG_ONLY_ID = "__test_cfg_only__";
+  const MOCK_MULTI_ONLY_ID = "__test_multi_only__";
+
+  beforeEach(() => {
+    (VIDEO_PROVIDERS as Record<string, unknown>)[MOCK_CFG_ONLY_ID] = {
+      id: MOCK_CFG_ONLY_ID,
+      name: MOCK_CFG_ONLY_ID,
+      displayName: "Mock CFG-Only Provider",
+      description: "Only has cfgControlSupport",
+      costPerSecond: 0.01,
+      maxDuration: 8,
+      strengths: ["cfg"],
+      weaknesses: [],
+      bestFor: ["test"],
+      tier: "standard" as const,
+      cfgControlSupport: {
+        minCfg: 0.0,
+        maxCfg: 1.0,
+        defaultCfg: 0.5,
+        hint: "cfg only",
+      },
+    };
+
+    (VIDEO_PROVIDERS as Record<string, unknown>)[MOCK_MULTI_ONLY_ID] = {
+      id: MOCK_MULTI_ONLY_ID,
+      name: MOCK_MULTI_ONLY_ID,
+      displayName: "Mock MultiImage-Only Provider",
+      description: "Only has multiImageSupport",
+      costPerSecond: 0.01,
+      maxDuration: 8,
+      strengths: ["multi"],
+      weaknesses: [],
+      bestFor: ["test"],
+      tier: "standard" as const,
+      multiImageSupport: {
+        maxImages: 2,
+        promptSyntax: "@multiOnlySyntax",
+        hint: "multi only",
+      },
+    };
+  });
+
+  afterEach(() => {
+    delete (VIDEO_PROVIDERS as Record<string, unknown>)[MOCK_CFG_ONLY_ID];
+    delete (VIDEO_PROVIDERS as Record<string, unknown>)[MOCK_MULTI_ONLY_ID];
+  });
+
+  it("capability matrix CFG row contains the CFG-only provider but not the multi-only provider", () => {
+    const prompt = buildSuzzieSystemPrompt({});
+    const matrixStart = prompt.indexOf("## Provider Capability Matrix");
+    expect(matrixStart).toBeGreaterThanOrEqual(0);
+    const matrixSection = prompt.slice(matrixStart);
+
+    const CFG_ROW_MARKER = "**CFG scale / source-frame fidelity (video):**";
+    const cfgRowStart = matrixSection.indexOf(CFG_ROW_MARKER);
+    expect(cfgRowStart).toBeGreaterThanOrEqual(0);
+    const cfgRowEnd = matrixSection.indexOf('\n', cfgRowStart);
+    const cfgRow = matrixSection.slice(cfgRowStart, cfgRowEnd === -1 ? undefined : cfgRowEnd);
+    expect(cfgRow).toContain("Mock CFG-Only Provider");
+    expect(cfgRow).not.toContain("Mock MultiImage-Only Provider");
+  });
+
+  it("capability matrix multi-image video row contains the multi-only provider but not the CFG-only provider", () => {
+    const prompt = buildSuzzieSystemPrompt({});
+    const matrixStart = prompt.indexOf("## Provider Capability Matrix");
+    expect(matrixStart).toBeGreaterThanOrEqual(0);
+    const matrixSection = prompt.slice(matrixStart);
+
+    const MULTI_ROW_MARKER = "**Multi-image @imageN (video):**";
+    const multiRowStart = matrixSection.indexOf(MULTI_ROW_MARKER);
+    expect(multiRowStart).toBeGreaterThanOrEqual(0);
+    const multiRowEnd = matrixSection.indexOf('\n', multiRowStart);
+    const multiRow = matrixSection.slice(multiRowStart, multiRowEnd === -1 ? undefined : multiRowEnd);
+    expect(multiRow).toContain("Mock MultiImage-Only Provider");
+    expect(multiRow).not.toContain("Mock CFG-Only Provider");
+  });
+
+  it("capability matrix omits a row entirely when no provider has that capability", () => {
+    const prompt = buildSuzzieSystemPrompt({});
+    const matrixStart = prompt.indexOf("## Provider Capability Matrix");
+    expect(matrixStart).toBeGreaterThanOrEqual(0);
+    const matrixSection = prompt.slice(matrixStart);
+    expect(matrixSection).toContain("## Provider Capability Matrix");
+    expect(matrixSection.length).toBeGreaterThan(50);
+  });
+
+  it("a provider stripped of cfgControlSupport no longer appears in the CFG capability matrix row", () => {
+    const entry = (VIDEO_PROVIDERS as Record<string, Record<string, unknown>>)[MOCK_CFG_ONLY_ID];
+    const saved = entry.cfgControlSupport;
+    delete entry.cfgControlSupport;
+    try {
+      const prompt = buildSuzzieSystemPrompt({});
+      const matrixStart = prompt.indexOf("## Provider Capability Matrix");
+      const matrixSection = prompt.slice(matrixStart);
+      const cfgLineMatch = matrixSection.match(/\*\*CFG scale[^*]*\*\*:([^\n]*)/i);
+      if (cfgLineMatch) {
+        expect(cfgLineMatch[1]).not.toContain("Mock CFG-Only Provider");
+      }
+    } finally {
+      entry.cfgControlSupport = saved;
+    }
   });
 });
