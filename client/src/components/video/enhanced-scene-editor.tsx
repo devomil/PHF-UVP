@@ -20,6 +20,7 @@ import { SceneDurationControl } from "./scene-duration-control";
 import { NativeAudioToggle } from "./native-audio-toggle";
 import { resolveSceneVideoProvider } from "./scene-provider-resolver";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -1030,6 +1031,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
           sourceImageUrls: useSourceImage && referenceImageUrls.length > 1 ? referenceImageUrls : undefined,
           referenceImages: referenceImageUrls.length > 0 ? referenceImageUrls : undefined,
           generationMode: activeMode,
+          imageFidelity: sceneImageFidelity !== null ? sceneImageFidelity : undefined,
         }),
       });
       if (!res.ok) throw new Error("Failed to regenerate video");
@@ -2162,6 +2164,52 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
               </div>
             );
           })()}
+
+          {(referenceImageUrls.length > 0 || !!imageUrl) && projectMode !== 'studio-polish' && (
+            <div className="col-span-3 mt-1">
+              <div className="flex items-center justify-between mb-1">
+                <div className="flex items-center gap-1">
+                  <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>Image Fidelity</span>
+                  <TooltipProvider delayDuration={200}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Info className="w-3 h-3 cursor-help" style={{ color: "var(--text-muted)" }} />
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="max-w-[240px] text-left space-y-1.5 p-3">
+                        <p className="font-medium text-xs">CFG Scale (Image Fidelity)</p>
+                        <p className="text-xs opacity-90">Controls how closely the video follows the reference image. Higher = product label stays sharper. Lower = more creative movement.</p>
+                        <div className="text-[10px] opacity-75 space-y-0.5 pt-0.5 border-t border-white/20">
+                          <p>🏷️ Product / label scenes: 85–95%</p>
+                          <p>👤 Character identity: 60–75%</p>
+                          <p>🎨 Creative / abstract: 40–60%</p>
+                        </div>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
+                <span className="text-xs font-bold" style={{ color: "var(--text-secondary)" }}>
+                  {sceneImageFidelity !== null ? `${Math.round(sceneImageFidelity * 100)}%` : 'Auto'}
+                </span>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                value={sceneImageFidelity !== null ? Math.round(sceneImageFidelity * 100) : 50}
+                onChange={(e) => {
+                  const val = parseInt(e.target.value) / 100;
+                  setSceneImageFidelity(val);
+                  silentSaveMutation.mutate({ imageFidelity: val });
+                }}
+                className="w-full h-1.5 rounded-full appearance-none cursor-pointer"
+                style={{ background: `linear-gradient(to right, rgb(168 85 247) ${sceneImageFidelity !== null ? Math.round(sceneImageFidelity * 100) : 50}%, var(--border-subtle) ${sceneImageFidelity !== null ? Math.round(sceneImageFidelity * 100) : 50}%)` }}
+              />
+              <div className="flex justify-between mt-0.5">
+                <span className="text-[9px]" style={{ color: "var(--text-muted)" }}>Creative</span>
+                <span className="text-[9px]" style={{ color: "var(--text-muted)" }}>Faithful</span>
+              </div>
+            </div>
+          )}
 
           {projectMode !== 'studio-polish' && (
           <div className="col-span-3 flex flex-col items-end gap-2">

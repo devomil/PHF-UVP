@@ -9,7 +9,9 @@ import {
   X,
   Check,
   ArrowRight,
+  Info,
 } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface ChatMessage {
   role: 'user' | 'assistant';
@@ -341,7 +343,25 @@ export function AssetSuzzieChat({
               {msg.suggestedCfgScale !== undefined && (
                 <div className="bg-cyan-500/10 border border-cyan-500/30 rounded-lg p-2 flex items-center justify-between">
                   <div>
-                    <p className="text-[10px] text-cyan-400 font-medium uppercase tracking-wider">Image Fidelity</p>
+                    <div className="flex items-center gap-1 mb-0.5">
+                      <p className="text-[10px] text-cyan-400 font-medium uppercase tracking-wider">Image Fidelity</p>
+                      <TooltipProvider delayDuration={200}>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Info className="w-3 h-3 cursor-help text-cyan-400/70" />
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="max-w-[240px] text-left space-y-1.5 p-3">
+                            <p className="font-medium text-xs">CFG Scale (Image Fidelity)</p>
+                            <p className="text-xs opacity-90">Controls how closely the video follows the reference image. Higher = product label stays sharper. Lower = more creative movement.</p>
+                            <div className="text-[10px] opacity-75 space-y-0.5 pt-0.5 border-t border-white/20">
+                              <p>🏷️ Product / label scenes: 85–95%</p>
+                              <p>👤 Character identity: 60–75%</p>
+                              <p>🎨 Creative / abstract: 40–60%</p>
+                            </div>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </div>
                     <p className="text-xs text-cyan-200">{Math.round(msg.suggestedCfgScale * 100)}% — {msg.suggestedCfgScale >= 0.8 ? 'Lock source geometry' : msg.suggestedCfgScale >= 0.5 ? 'Balanced' : 'Creative freedom'}</p>
                   </div>
                   {onApplyCfgScale && (
