@@ -1,6 +1,7 @@
 import { memo, useState } from 'react';
 import { ChevronDown, ChevronUp, Sparkles, Info } from 'lucide-react';
 import { VIDEO_PROVIDERS, type VideoProvider } from '@shared/provider-config';
+import { getDropdownVideoProviders } from '@shared/provider-catalog';
 
 const TIER_STYLES: Record<string, { label: string; bg: string; text: string; border: string }> = {
   premium: { label: 'Premium', bg: 'rgba(251,191,36,0.15)', text: 'rgb(252,211,77)', border: 'rgba(251,191,36,0.3)' },
@@ -158,14 +159,7 @@ export const ProviderCapabilitySelector = memo(function ProviderCapabilitySelect
     providerGroups[family].push(id);
   }
 
-  const mainProviderIds = [
-    'auto',
-    'kling-2.6', 'kling-2.6-pro', 'kling-2.6-motion-control-pro',
-    'runway', 'runway-4.5', 'runway-gen4', 'runway-gen4-aleph', 'runway-act-two',
-    'veo-3.1', 'sora-2',
-    'luma', 'hailuo', 'wan-2.6', 'wan-2.1', 'hunyuan',
-    'pika', 'seedance-1.0',
-  ];
+  const mainProviderIds = getDropdownVideoProviders().map(p => p.id);
 
   const filteredProviders = mainProviderIds.filter(id => id === 'auto' || VIDEO_PROVIDERS[id]);
   const displayProviders = styleRecommendedProviders && styleRecommendedProviders.length > 0

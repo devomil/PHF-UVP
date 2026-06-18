@@ -12,6 +12,7 @@ import type { MicroSceneOverlayItem, ImageOverlayItem } from "@shared/video-type
 import { ProviderCapabilitySelector, getProviderRecommendationText } from "./ProviderCapabilityCard";
 import { AskSuzziePanel } from "./ask-suzzie-panel";
 import { VIDEO_PROVIDERS as PROVIDER_CONFIG, getMultiImageSupport, type MultiImageSupport } from "@shared/provider-config";
+import { getDropdownVideoProviders } from "@shared/provider-catalog";
 import { SCENE_CONTENT_TAGS, getSceneContentTag } from "@shared/config/scene-content-tags";
 import { getVisualArtPreset, getAllVisualArtPresets } from "@shared/config/visual-art-presets";
 import { CharacterProfilesPanel } from "./character-profiles-panel";
@@ -97,19 +98,7 @@ function formatEditorProviderName(raw: string): string {
   return raw.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 }
 
-const VIDEO_PROVIDERS = [
-  { id: "auto", label: "Auto-select (recommended)" },
-  { id: "kling-2.6", label: "Kling 2.6" },
-  { id: "kling-2.6-pro", label: "Kling 2.6 Pro" },
-  { id: "hailuo", label: "Hailuo" },
-  { id: "wan-2.6", label: "Wan 2.6" },
-  { id: "wan-2.1", label: "Wan 2.1" },
-  { id: "veo-3.1", label: "Veo 3.1" },
-  { id: "veo-3", label: "Veo 3" },
-  { id: "sora-2", label: "Sora 2" },
-  { id: "sora-2-pro", label: "Sora 2 Pro" },
-  { id: "hunyuan", label: "Hunyuan" },
-];
+const VIDEO_PROVIDERS = getDropdownVideoProviders().map(p => ({ id: p.id, label: p.name }));
 
 const ART_PRESET_IMAGES: Record<string, string> = {
   '3d-illustration': '/art-presets/3d-illustration.png',
