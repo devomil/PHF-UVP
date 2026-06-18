@@ -2367,6 +2367,21 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
           </div>
         )}
 
+        {referenceImageUrls.length >= 2 && !isEditing && provider !== "auto" && !getMultiImageSupport(provider) && (
+          <div
+            className="mt-2 flex items-start gap-2 rounded-lg border px-3 py-2 animate-in slide-in-from-top-2 duration-300"
+            style={{
+              borderColor: "rgba(217,119,6,0.35)",
+              backgroundColor: "rgba(217,119,6,0.08)",
+            }}
+          >
+            <Info className="w-3.5 h-3.5 mt-0.5 shrink-0" style={{ color: "rgb(251,191,36)" }} />
+            <p className="text-[11px] leading-relaxed" style={{ color: "rgb(251,191,36)" }}>
+              This provider only uses the first image — additional images are ignored.
+            </p>
+          </div>
+        )}
+
         {showMultiImageTip && referenceImageUrls.length >= 2 && !isEditing && !!getMultiImageSupport(provider === "auto" ? "" : provider) && (
           <div
             className="mt-3 rounded-xl border p-3.5 relative animate-in slide-in-from-top-2 duration-300"
@@ -3036,6 +3051,21 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
               </p>
             )}
           </div>
+
+          {referenceImageUrls.length >= 2 && provider !== "auto" && !getMultiImageSupport(provider) && (
+            <div
+              className="mt-2 flex items-start gap-2 rounded-lg border px-3 py-2 animate-in slide-in-from-top-2 duration-300"
+              style={{
+                borderColor: "rgba(217,119,6,0.35)",
+                backgroundColor: "rgba(217,119,6,0.08)",
+              }}
+            >
+              <Info className="w-3.5 h-3.5 mt-0.5 shrink-0" style={{ color: "rgb(251,191,36)" }} />
+              <p className="text-[11px] leading-relaxed" style={{ color: "rgb(251,191,36)" }}>
+                This provider only uses the first image — additional images are ignored.
+              </p>
+            </div>
+          )}
 
           {showMultiImageTip && referenceImageUrls.length >= 2 && !!getMultiImageSupport(provider === "auto" ? "" : provider) && (
             <div
