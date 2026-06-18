@@ -25,6 +25,22 @@ const soundReferenceAudioProviders = Object.values(SOUND_PROVIDERS).filter(
   (p) => p.referenceAudioSupport != null,
 );
 
+const videoCfgControlProviders = Object.values(VIDEO_PROVIDERS).filter(
+  (p) => p.cfgControlSupport != null,
+);
+
+const imageCfgControlProviders = Object.values(IMAGE_PROVIDERS).filter(
+  (p) => p.cfgControlSupport != null,
+);
+
+const videoIpAdapterProviders = Object.values(VIDEO_PROVIDERS).filter(
+  (p) => p.ipAdapterSupport != null,
+);
+
+const imageIpAdapterProviders = Object.values(IMAGE_PROVIDERS).filter(
+  (p) => p.ipAdapterSupport != null,
+);
+
 describe("buildSuzzieSystemPrompt — @imageN guidance injection", () => {
   it.each(videoMultiImageProviders)(
     "includes the @imageN block for video provider $id (multiImageSupport)",
@@ -275,5 +291,159 @@ describe("buildAssetLibrarySuzziePrompt — reference audio guidance injection f
     });
     expect(prompt.length).toBeGreaterThan(100);
     expect(prompt).toContain("Suzzie");
+  });
+});
+
+describe("buildSuzzieSystemPrompt — CFG scale guidance injection for video providers", () => {
+  it.each(videoCfgControlProviders)(
+    "includes the CFG Scale Control block for video provider $id (cfgControlSupport)",
+    ({ id, cfgControlSupport }) => {
+      const prompt = buildSuzzieSystemPrompt({ provider: id });
+      expect(prompt).toContain("CFG Scale Control");
+      expect(prompt).toContain("Source Frame Fidelity");
+      expect(prompt).toContain(id);
+      expect(prompt).toContain("cfg_scale");
+      expect(prompt).toMatch(/cfg_scale tuning in the range \d+(\.\d+)?/);
+      const idx = prompt.indexOf("CFG Scale Control");
+      expect(idx).toBeGreaterThanOrEqual(0);
+      expect(prompt.slice(idx)).toContain(id);
+    },
+  );
+
+  it.each(imageCfgControlProviders)(
+    "includes the CFG Scale Control block for image provider $id (cfgControlSupport)",
+    ({ id }) => {
+      const prompt = buildSuzzieSystemPrompt({ provider: id });
+      expect(prompt).toContain("CFG Scale Control");
+      expect(prompt).toContain("Source Frame Fidelity");
+      expect(prompt).toContain(id);
+      expect(prompt).toContain("cfg_scale");
+      const idx = prompt.indexOf("CFG Scale Control");
+      expect(idx).toBeGreaterThanOrEqual(0);
+      expect(prompt.slice(idx)).toContain(id);
+    },
+  );
+
+  it("omits the CFG Scale Control block when provider is runway (no cfgControlSupport)", () => {
+    const prompt = buildSuzzieSystemPrompt({ provider: "runway" });
+    expect(prompt).not.toContain("CFG Scale Control");
+  });
+
+  it("omits the CFG Scale Control block when no provider is supplied", () => {
+    const prompt = buildSuzzieSystemPrompt({});
+    expect(prompt).not.toContain("CFG Scale Control");
+  });
+});
+
+describe("buildAssetLibrarySuzziePrompt — CFG scale guidance injection for video providers", () => {
+  it.each(videoCfgControlProviders)(
+    "includes the CFG Scale Control block for video provider $id (cfgControlSupport)",
+    ({ id }) => {
+      const prompt = buildAssetLibrarySuzziePrompt({ mode: "i2v", provider: id });
+      expect(prompt).toContain("CFG Scale Control");
+      expect(prompt).toContain("Source Frame Fidelity");
+      expect(prompt).toContain(id);
+      expect(prompt).toContain("cfg_scale");
+      expect(prompt).toMatch(/cfg_scale tuning in the range \d+(\.\d+)?/);
+    },
+  );
+
+  it.each(imageCfgControlProviders)(
+    "includes the CFG Scale Control block for image provider $id (cfgControlSupport)",
+    ({ id }) => {
+      const prompt = buildAssetLibrarySuzziePrompt({ mode: "t2i", provider: id });
+      expect(prompt).toContain("CFG Scale Control");
+      expect(prompt).toContain("Source Frame Fidelity");
+      expect(prompt).toContain(id);
+      expect(prompt).toContain("cfg_scale");
+    },
+  );
+
+  it("omits the CFG Scale Control block when provider is runway (no cfgControlSupport)", () => {
+    const prompt = buildAssetLibrarySuzziePrompt({ mode: "t2v", provider: "runway" });
+    expect(prompt).not.toContain("CFG Scale Control");
+  });
+
+  it("omits the CFG Scale Control block when no provider is supplied", () => {
+    const prompt = buildAssetLibrarySuzziePrompt({ mode: "t2i" });
+    expect(prompt).not.toContain("CFG Scale Control");
+  });
+});
+
+describe("buildSuzzieSystemPrompt — IP-Adapter guidance injection for image providers", () => {
+  it.each(imageIpAdapterProviders)(
+    "includes the IP-Adapter block for image provider $id (ipAdapterSupport)",
+    ({ id, ipAdapterSupport }) => {
+      const prompt = buildSuzzieSystemPrompt({ provider: id });
+      expect(prompt).toContain("IP-Adapter Syntax");
+      expect(prompt).toContain("Style and Content Conditioning");
+      expect(prompt).toContain(id);
+      expect(prompt).toContain(ipAdapterSupport!.promptSyntax ?? "@ipRef");
+      const idx = prompt.indexOf("IP-Adapter Syntax");
+      expect(idx).toBeGreaterThanOrEqual(0);
+      expect(prompt.slice(idx)).toContain(id);
+    },
+  );
+
+  it.each(videoIpAdapterProviders)(
+    "includes the IP-Adapter block for video provider $id (ipAdapterSupport)",
+    ({ id, ipAdapterSupport }) => {
+      const prompt = buildSuzzieSystemPrompt({ provider: id });
+      expect(prompt).toContain("IP-Adapter Syntax");
+      expect(prompt).toContain("Style and Content Conditioning");
+      expect(prompt).toContain(id);
+      expect(prompt).toContain(ipAdapterSupport!.promptSyntax ?? "@ipRef");
+      const idx = prompt.indexOf("IP-Adapter Syntax");
+      expect(idx).toBeGreaterThanOrEqual(0);
+      expect(prompt.slice(idx)).toContain(id);
+    },
+  );
+
+  it("omits the IP-Adapter block when provider is runway (no ipAdapterSupport)", () => {
+    const prompt = buildSuzzieSystemPrompt({ provider: "runway" });
+    expect(prompt).not.toContain("IP-Adapter Syntax");
+    expect(prompt).not.toContain("Style and Content Conditioning");
+  });
+
+  it("omits the IP-Adapter block when no provider is supplied", () => {
+    const prompt = buildSuzzieSystemPrompt({});
+    expect(prompt).not.toContain("IP-Adapter Syntax");
+    expect(prompt).not.toContain("Style and Content Conditioning");
+  });
+});
+
+describe("buildAssetLibrarySuzziePrompt — IP-Adapter guidance injection for image providers", () => {
+  it.each(imageIpAdapterProviders)(
+    "includes the IP-Adapter block for image provider $id (ipAdapterSupport)",
+    ({ id, ipAdapterSupport }) => {
+      const prompt = buildAssetLibrarySuzziePrompt({ mode: "t2i", provider: id });
+      expect(prompt).toContain("IP-Adapter Syntax");
+      expect(prompt).toContain("Style and Content Conditioning");
+      expect(prompt).toContain(id);
+      expect(prompt).toContain(ipAdapterSupport!.promptSyntax ?? "@ipRef");
+    },
+  );
+
+  it.each(videoIpAdapterProviders)(
+    "includes the IP-Adapter block for video provider $id (ipAdapterSupport)",
+    ({ id, ipAdapterSupport }) => {
+      const prompt = buildAssetLibrarySuzziePrompt({ mode: "i2v", provider: id });
+      expect(prompt).toContain("IP-Adapter Syntax");
+      expect(prompt).toContain("Style and Content Conditioning");
+      expect(prompt).toContain(id);
+      expect(prompt).toContain(ipAdapterSupport!.promptSyntax ?? "@ipRef");
+    },
+  );
+
+  it("omits the IP-Adapter block when provider is runway (no ipAdapterSupport)", () => {
+    const prompt = buildAssetLibrarySuzziePrompt({ mode: "t2v", provider: "runway" });
+    expect(prompt).not.toContain("IP-Adapter Syntax");
+    expect(prompt).not.toContain("Style and Content Conditioning");
+  });
+
+  it("omits the IP-Adapter block when no provider is supplied", () => {
+    const prompt = buildAssetLibrarySuzziePrompt({ mode: "t2i" });
+    expect(prompt).not.toContain("IP-Adapter Syntax");
+    expect(prompt).not.toContain("Style and Content Conditioning");
   });
 });

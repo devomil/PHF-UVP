@@ -1,6 +1,6 @@
 import { VIDEO_PROVIDER_CATALOG, IMAGE_PROVIDER_CATALOG } from '../../shared/provider-catalog';
 import { getAllVisualArtPresets } from '../../shared/config/visual-art-presets';
-import { getMultiImageSupport, getVoiceCloneSupport, getReferenceAudioSupport } from '../../shared/provider-config';
+import { getMultiImageSupport, getVoiceCloneSupport, getReferenceAudioSupport, getCfgControlSupport, getIpAdapterSupport } from '../../shared/provider-config';
 
 interface SuzzieSceneContext {
   narration?: string;
@@ -120,6 +120,8 @@ export function buildSuzzieSystemPrompt(context: SuzzieSceneContext): string {
   const multiImageSupport = context.provider ? getMultiImageSupport(context.provider) : null;
   const voiceCloneSupport = context.provider ? getVoiceCloneSupport(context.provider) : null;
   const referenceAudioSupport = context.provider ? getReferenceAudioSupport(context.provider) : null;
+  const cfgControlSupport = context.provider ? getCfgControlSupport(context.provider) : null;
+  const ipAdapterSupport = context.provider ? getIpAdapterSupport(context.provider) : null;
 
   let sceneContext = '';
   if (context.narration || context.sceneType || context.artPresetName) {
@@ -182,6 +184,44 @@ The selected provider (${context.provider}) accepts a reference audio file to gu
 
 When the user asks about matching a sonic mood, recreating a vibe, or steering audio style with an example clip, proactively suggest the reference audio syntax.` : '';
 
+  const cfgControlGuidance = cfgControlSupport ? `
+
+## CFG Scale Control — Source Frame Fidelity
+The selected provider (${context.provider}) supports cfg_scale tuning in the range ${cfgControlSupport.minCfg}–${cfgControlSupport.maxCfg} (default ${cfgControlSupport.defaultCfg}).
+
+**How it works:**
+- cfg_scale controls how tightly the AI adheres to the reference image when in I2V mode
+- Higher values preserve the source frame (colors, composition, geometry) more strictly
+- Lower values allow more creative interpretation and stylistic departure
+
+**Suggested settings:**
+- Products with labels or text: 0.85–0.95 (locks the reference frame tightly)
+- Character scenes with natural movement: 0.5–0.7 (allows fluid motion)
+- Abstract / artistic shots: 0.3–0.5 (maximum creative freedom)
+
+**Tip:** ${cfgControlSupport.hint}
+
+When the user wants tight source-image preservation (e.g. product label stays sharp, character identity locked), recommend a high cfg_scale and include a \`suggestedCfgScale\` value in your JSON response.` : '';
+
+  const ipAdapterGuidance = ipAdapterSupport ? `
+
+## IP-Adapter Syntax — Style and Content Conditioning
+The selected provider (${context.provider}) supports up to ${ipAdapterSupport.maxAdapters} IP-Adapter reference image(s) using **${ipAdapterSupport.promptSyntax ?? '@ipRef'}** syntax in the prompt.
+
+**How it works:**
+- The user uploads a style or content reference image (not necessarily the subject itself)
+- Tag it in the prompt using ${ipAdapterSupport.promptSyntax ?? '@ipRef'} — the model extracts the visual style, color palette, and compositional feel from that reference
+- The reference is a creative steering signal, not a strict copy source
+
+**Example prompts to suggest:**
+- "${ipAdapterSupport.promptSyntax ?? '@ipRef'} — a woman in a crisp lab coat examines a glowing molecular display, cinematic color grade"
+- "Product shot in the style of ${ipAdapterSupport.promptSyntax ?? '@ipRef'}: supplement bottle surrounded by botanical ingredients, golden hour light"
+- "Character portrait inspired by ${ipAdapterSupport.promptSyntax ?? '@ipRef'} — warm Rembrandt lighting, shallow depth of field, 85mm lens"
+
+**Tip:** ${ipAdapterSupport.hint}
+
+When the user wants to match a specific visual mood, replicate a brand aesthetic, or use an existing image as a style guide, proactively suggest the IP-Adapter syntax.` : '';
+
   const i2vGuidance = context.hasReferenceImage ? `
 
 ## CRITICAL: I2V Reference Image Rules
@@ -220,6 +260,8 @@ ${sceneContext}
 ${multiImageGuidance}
 ${voiceCloneGuidance}
 ${referenceAudioGuidance}
+${cfgControlGuidance}
+${ipAdapterGuidance}
 ${i2vGuidance}
 
 ## Image Analysis
@@ -366,6 +408,8 @@ export function buildAssetLibrarySuzziePrompt(context: SuzzieAssetLibraryContext
   const multiImageSupportAsset = resolvedProvider ? getMultiImageSupport(resolvedProvider) : null;
   const voiceCloneSupportAsset = resolvedProvider ? getVoiceCloneSupport(resolvedProvider) : null;
   const referenceAudioSupportAsset = resolvedProvider ? getReferenceAudioSupport(resolvedProvider) : null;
+  const cfgControlSupportAsset = resolvedProvider ? getCfgControlSupport(resolvedProvider) : null;
+  const ipAdapterSupportAsset = resolvedProvider ? getIpAdapterSupport(resolvedProvider) : null;
 
   const modeLabels: Record<string, string> = {
     't2i': 'Text-to-Image',
@@ -432,6 +476,44 @@ The selected provider (${resolvedProvider}) accepts a reference audio file to gu
 
 When the user asks about matching a sonic mood, recreating a vibe, or steering audio style with an example clip, proactively suggest the reference audio syntax.` : '';
 
+  const cfgControlGuidanceAsset = cfgControlSupportAsset ? `
+
+## CFG Scale Control — Source Frame Fidelity
+The selected provider (${resolvedProvider}) supports cfg_scale tuning in the range ${cfgControlSupportAsset.minCfg}–${cfgControlSupportAsset.maxCfg} (default ${cfgControlSupportAsset.defaultCfg}).
+
+**How it works:**
+- cfg_scale controls how tightly the AI adheres to the reference image when in I2V mode
+- Higher values preserve the source frame (colors, composition, geometry) more strictly
+- Lower values allow more creative interpretation and stylistic departure
+
+**Suggested settings:**
+- Products with labels or text: 0.85–0.95 (locks the reference frame tightly)
+- Character scenes with natural movement: 0.5–0.7 (allows fluid motion)
+- Abstract / artistic shots: 0.3–0.5 (maximum creative freedom)
+
+**Tip:** ${cfgControlSupportAsset.hint}
+
+When the user wants tight source-image preservation (e.g. product label stays sharp, character identity locked), recommend a high cfg_scale and include a \`suggestedCfgScale\` value in your JSON response.` : '';
+
+  const ipAdapterGuidanceAsset = ipAdapterSupportAsset ? `
+
+## IP-Adapter Syntax — Style and Content Conditioning
+The selected provider (${resolvedProvider}) supports up to ${ipAdapterSupportAsset.maxAdapters} IP-Adapter reference image(s) using **${ipAdapterSupportAsset.promptSyntax ?? '@ipRef'}** syntax in the prompt.
+
+**How it works:**
+- The user uploads a style or content reference image (not necessarily the subject itself)
+- Tag it in the prompt using ${ipAdapterSupportAsset.promptSyntax ?? '@ipRef'} — the model extracts the visual style, color palette, and compositional feel from that reference
+- The reference is a creative steering signal, not a strict copy source
+
+**Example prompts to suggest:**
+- "${ipAdapterSupportAsset.promptSyntax ?? '@ipRef'} — a woman in a crisp lab coat examines a glowing molecular display, cinematic color grade"
+- "Product shot in the style of ${ipAdapterSupportAsset.promptSyntax ?? '@ipRef'}: supplement bottle surrounded by botanical ingredients, golden hour light"
+- "Character portrait inspired by ${ipAdapterSupportAsset.promptSyntax ?? '@ipRef'} — warm Rembrandt lighting, shallow depth of field, 85mm lens"
+
+**Tip:** ${ipAdapterSupportAsset.hint}
+
+When the user wants to match a specific visual mood, replicate a brand aesthetic, or use an existing image as a style guide, proactively suggest the IP-Adapter syntax.` : '';
+
   const creativeSeed = Math.floor(Math.random() * 10000);
   const creativeAngles = [
     'Focus on unexpected camera movements and atmospheric lighting this time.',
@@ -468,6 +550,8 @@ ${currentContext}
 ${multiImageGuidanceAsset}
 ${voiceCloneGuidanceAsset}
 ${referenceAudioGuidanceAsset}
+${cfgControlGuidanceAsset}
+${ipAdapterGuidanceAsset}
 
 ## Response Format (CRITICAL — follow exactly)
 When you have a prompt suggestion, include ALL relevant suggestions in a SINGLE JSON block. Always include a negative prompt for I2V and T2V modes — but NEVER duplicate terms already stated in the main prompt. The negative prompt should only contain ADDITIONAL safety rails. Include suggestedCfgScale for I2V when the user has a product/object that needs source frame preservation.

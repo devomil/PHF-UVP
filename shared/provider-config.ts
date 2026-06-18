@@ -27,6 +27,19 @@ export interface ReferenceAudioSupport {
   hint: string;
 }
 
+export interface CfgControlSupport {
+  minCfg: number;
+  maxCfg: number;
+  defaultCfg: number;
+  hint: string;
+}
+
+export interface IpAdapterSupport {
+  maxAdapters: number;
+  promptSyntax: string | null;
+  hint: string;
+}
+
 export interface VideoProvider {
   id: string;
   name: string;
@@ -45,6 +58,8 @@ export interface VideoProvider {
   visualCategory?: string[];
   qualityNotes?: string;
   multiImageSupport?: MultiImageSupport;
+  cfgControlSupport?: CfgControlSupport;
+  ipAdapterSupport?: IpAdapterSupport;
 }
 
 export const VIDEO_PROVIDERS: Record<string, VideoProvider> = {
@@ -325,6 +340,12 @@ export const VIDEO_PROVIDERS: Record<string, VideoProvider> = {
         promptSyntax: '@image_N',
         hint: 'Use @image_1, @image_2, etc. in your prompt to reference each image. Example: "use @image_1 as start frame, a woman @image_2 is introducing herself"',
       },
+    cfgControlSupport: {
+      minCfg: 0,
+      maxCfg: 1,
+      defaultCfg: 0.5,
+      hint: 'Use 0.85–0.95 to tighten source-frame fidelity for products/labels; 0.4–0.6 for more creative departure from the reference image.',
+    },
   },
 
   'kling-2.5': {
@@ -395,6 +416,12 @@ export const VIDEO_PROVIDERS: Record<string, VideoProvider> = {
         promptSyntax: '@image_N',
         hint: 'Use @image_1, @image_2, etc. in your prompt to reference each image. Example: "use @image_1 as start frame, a woman @image_2 is introducing herself"',
       },
+    cfgControlSupport: {
+      minCfg: 0,
+      maxCfg: 1,
+      defaultCfg: 0.5,
+      hint: 'Use 0.85–0.95 to tighten source-frame fidelity for products/labels; 0.4–0.6 for more creative departure from the reference image.',
+    },
   },
 
   'kling-2.6-motion-control': {
@@ -757,6 +784,8 @@ export interface ImageProvider {
   strengths: string[];
   bestFor: string[];
   multiImageSupport?: MultiImageSupport;
+  cfgControlSupport?: CfgControlSupport;
+  ipAdapterSupport?: IpAdapterSupport;
 }
 
 export const IMAGE_PROVIDERS: Record<string, ImageProvider> = {
@@ -767,6 +796,11 @@ export const IMAGE_PROVIDERS: Record<string, ImageProvider> = {
     costPerImage: 0.03,
     strengths: ['Product shots', 'Clean compositions', 'Commercial quality'],
     bestFor: ['product', 'food', 'object', 'still-life'],
+    ipAdapterSupport: {
+      maxAdapters: 1,
+      promptSyntax: '@ipRef',
+      hint: 'Upload a style or content reference image and tag it as @ipRef in your prompt to guide the visual style, color palette, and composition of the generated image.',
+    },
   },
 
   'flux-1-dev': {
@@ -776,6 +810,11 @@ export const IMAGE_PROVIDERS: Record<string, ImageProvider> = {
     costPerImage: 0.025,
     strengths: ['Development version', 'Experimental features'],
     bestFor: ['testing', 'experimental'],
+    ipAdapterSupport: {
+      maxAdapters: 1,
+      promptSyntax: '@ipRef',
+      hint: 'Upload a style or content reference image and tag it as @ipRef in your prompt to guide the visual style, color palette, and composition of the generated image.',
+    },
   },
 
   falai: {
@@ -915,6 +954,20 @@ export function getReferenceAudioSupport(providerId: string): ReferenceAudioSupp
 export function getMultiImageSupport(providerId: string): MultiImageSupport | null {
   const provider = VIDEO_PROVIDERS[providerId];
   return provider?.multiImageSupport || null;
+}
+
+export function getCfgControlSupport(providerId: string): CfgControlSupport | null {
+  const vprovider = VIDEO_PROVIDERS[providerId];
+  if (vprovider?.cfgControlSupport) return vprovider.cfgControlSupport;
+  const iprovider = IMAGE_PROVIDERS[providerId];
+  return iprovider?.cfgControlSupport ?? null;
+}
+
+export function getIpAdapterSupport(providerId: string): IpAdapterSupport | null {
+  const iprovider = IMAGE_PROVIDERS[providerId];
+  if (iprovider?.ipAdapterSupport) return iprovider.ipAdapterSupport;
+  const vprovider = VIDEO_PROVIDERS[providerId];
+  return vprovider?.ipAdapterSupport ?? null;
 }
 
 export function getMultiImageHint(providerId: string, imageCount: number): string {
