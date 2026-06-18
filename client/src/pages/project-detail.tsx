@@ -6172,6 +6172,7 @@ export function QuickCreateAssetPanel({ projectId, project }: { projectId: strin
   const [visualGenerating, setVisualGenerating] = useState(false);
   const [editNegativePrompt, setEditNegativePrompt] = useState(false);
   const [imageFidelity, setImageFidelity] = useState<number | null>(null);
+  const [suzzieSuggestedFidelity, setSuzzieSuggestedFidelity] = useState<number | null>(null);
   const [artPresetId, setArtPresetId] = useState("");
   const [overrideSourceImage, setOverrideSourceImage] = useState<string | null | undefined>(undefined);
   const [overrideCharacter, setOverrideCharacter] = useState<string | null | undefined>(undefined);
@@ -7005,16 +7006,29 @@ export function QuickCreateAssetPanel({ projectId, project }: { projectId: strin
                         </div>
                         <span className="text-xs font-bold" style={{ color: "var(--text-secondary)" }}>{Math.round(imageFidelity * 100)}%</span>
                       </div>
-                      <input
-                        type="range"
-                        min={0}
-                        max={100}
-                        value={Math.round(imageFidelity * 100)}
-                        onChange={(e) => setImageFidelity(parseInt(e.target.value) / 100)}
-                        className="w-full h-1.5 rounded-full appearance-none cursor-pointer"
-                        style={{ background: `linear-gradient(to right, rgb(168 85 247) ${Math.round(imageFidelity * 100)}%, var(--border-subtle) ${Math.round(imageFidelity * 100)}%)` }}
-                      />
-                      <div className="flex justify-between mt-0.5">
+                      <div className="relative">
+                        <input
+                          type="range"
+                          min={0}
+                          max={100}
+                          value={Math.round(imageFidelity * 100)}
+                          onChange={(e) => setImageFidelity(parseInt(e.target.value) / 100)}
+                          className="w-full h-1.5 rounded-full appearance-none cursor-pointer"
+                          style={{ background: `linear-gradient(to right, rgb(168 85 247) ${Math.round(imageFidelity * 100)}%, var(--border-subtle) ${Math.round(imageFidelity * 100)}%)` }}
+                        />
+                        {suzzieSuggestedFidelity !== null && (
+                          <div
+                            className="absolute top-full pointer-events-none flex flex-col items-center"
+                            style={{ left: `${suzzieSuggestedFidelity * 100}%`, transform: 'translateX(-50%)' }}
+                          >
+                            <div className="w-px h-2 bg-cyan-400/60" />
+                            <span className={`text-[9px] font-semibold whitespace-nowrap transition-colors ${Math.abs((imageFidelity ?? 0) - suzzieSuggestedFidelity) < 0.026 ? 'text-cyan-400' : 'text-cyan-600/60'}`}>
+                              Suzzie ✦
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                      <div className={`flex justify-between ${suzzieSuggestedFidelity !== null ? 'mt-5' : 'mt-0.5'}`}>
                         <span className="text-[9px]" style={{ color: "var(--text-muted)" }}>Creative</span>
                         <span className="text-[9px]" style={{ color: "var(--text-muted)" }}>Faithful</span>
                       </div>
@@ -7199,7 +7213,7 @@ export function QuickCreateAssetPanel({ projectId, project }: { projectId: strin
                   onApplyVisualDirection={(newPrompt) => setPromptText(newPrompt)}
                   onApplyProvider={(providerId) => setSelectedProvider(providerId)}
                   onApplyArtStyle={(artStyleId) => setArtPresetId(artStyleId)}
-                  onApplyCfgScale={(val) => setImageFidelity(val)}
+                  onApplyCfgScale={(val) => { setImageFidelity(val); setSuzzieSuggestedFidelity(val); }}
                 />
               </div>
 

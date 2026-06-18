@@ -2125,6 +2125,7 @@ export function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () =>
   const [duration, setDuration] = useState("6");
   const [imageStyle, setImageStyle] = useState("Photorealistic");
   const [imageFidelity, setImageFidelity] = useState(0.85);
+  const [suzzieSuggestedFidelity, setSuzzieSuggestedFidelity] = useState<number | null>(null);
   const [artPresetId, setArtPresetId] = useState<string>("");
   const [aspectRatio, setAspectRatio] = useState("16:9");
   const [provider, setProvider] = useState("auto");
@@ -2555,7 +2556,7 @@ export function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () =>
               onApplyPrompt={setPrompt}
               onApplyProvider={setProvider}
               onApplyNegativePrompt={setNegativePrompt}
-              onApplyCfgScale={setImageFidelity}
+              onApplyCfgScale={(val) => { setImageFidelity(val); setSuzzieSuggestedFidelity(val); }}
             />
           </div>
           <Textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder={genMode === 'i2i' ? "Describe the transformation you want (e.g. 'Place this person in a modern office holding a laptop' or 'Show this product on a marble countertop with warm lighting')..." : "Describe the video clip or image you want to create..."} rows={4} required className="mt-1.5" style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }} />
@@ -2646,15 +2647,27 @@ export function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () =>
               </div>
               <span className="text-xs font-medium" style={{ color: "var(--text-tertiary)" }}>{Math.round(imageFidelity * 100)}%</span>
             </div>
-            <Slider
-              value={[imageFidelity]}
-              onValueChange={([v]) => setImageFidelity(v)}
-              min={0.1}
-              max={1.0}
-              step={0.05}
-              className="mt-2"
-            />
-            <div className="flex justify-between mt-1">
+            <div className="relative mt-2">
+              <Slider
+                value={[imageFidelity]}
+                onValueChange={([v]) => setImageFidelity(v)}
+                min={0.1}
+                max={1.0}
+                step={0.05}
+              />
+              {suzzieSuggestedFidelity !== null && (
+                <div
+                  className="absolute top-full pointer-events-none flex flex-col items-center"
+                  style={{ left: `${((suzzieSuggestedFidelity - 0.1) / 0.9) * 100}%`, transform: 'translateX(-50%)' }}
+                >
+                  <div className="w-px h-2 bg-cyan-400/60" />
+                  <span className={`text-[9px] font-semibold whitespace-nowrap transition-colors ${Math.abs(imageFidelity - suzzieSuggestedFidelity) < 0.026 ? 'text-cyan-400' : 'text-cyan-600/60'}`}>
+                    Suzzie ✦
+                  </span>
+                </div>
+              )}
+            </div>
+            <div className={`flex justify-between ${suzzieSuggestedFidelity !== null ? 'mt-5' : 'mt-1'}`}>
               <span className="text-[10px]" style={{ color: "var(--text-tertiary)" }}>Creative freedom</span>
               <span className="text-[10px]" style={{ color: "var(--text-tertiary)" }}>Lock source</span>
             </div>

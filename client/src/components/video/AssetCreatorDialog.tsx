@@ -169,6 +169,7 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
   const [style, setStyle] = useState('Photorealistic');
   const [negativePrompt, setNegativePrompt] = useState('');
   const [imageFidelity, setImageFidelity] = useState(0.85);
+  const [suzzieSuggestedFidelity, setSuzzieSuggestedFidelity] = useState<number | null>(null);
   const [strength, setStrength] = useState(0.35);
   const [useCase, setUseCase] = useState('style-transfer');
   const [outputFormat, setOutputFormat] = useState<'jpg' | 'png'>('png');
@@ -616,7 +617,7 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
                     onApplyPrompt={setPrompt}
                     onApplyProvider={setProvider}
                     onApplyNegativePrompt={setNegativePrompt}
-                    onApplyCfgScale={(val) => setImageFidelity(val)}
+                    onApplyCfgScale={(val) => { setImageFidelity(val); setSuzzieSuggestedFidelity(val); }}
                   />
                 )}
               </div>
@@ -1388,15 +1389,28 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
                   </Tooltip>
                 </TooltipProvider>
               </div>
-              <Slider
-                value={[imageFidelity]}
-                onValueChange={([v]) => setImageFidelity(v)}
-                min={0.1}
-                max={1.0}
-                step={0.05}
-                className="py-2"
-              />
-              <div className="flex justify-between text-[10px] text-gray-500">
+              <div className="relative">
+                <Slider
+                  value={[imageFidelity]}
+                  onValueChange={([v]) => setImageFidelity(v)}
+                  min={0.1}
+                  max={1.0}
+                  step={0.05}
+                  className="py-2"
+                />
+                {suzzieSuggestedFidelity !== null && (
+                  <div
+                    className="absolute top-full pointer-events-none flex flex-col items-center"
+                    style={{ left: `${((suzzieSuggestedFidelity - 0.1) / 0.9) * 100}%`, transform: 'translateX(-50%)' }}
+                  >
+                    <div className="w-px h-2 bg-cyan-400/60" />
+                    <span className={`text-[9px] font-semibold whitespace-nowrap transition-colors ${Math.abs(imageFidelity - suzzieSuggestedFidelity) < 0.026 ? 'text-cyan-400' : 'text-cyan-600/60'}`}>
+                      Suzzie ✦
+                    </span>
+                  </div>
+                )}
+              </div>
+              <div className={`flex justify-between text-[10px] text-gray-500 ${suzzieSuggestedFidelity !== null ? 'mt-5' : ''}`}>
                 <span>Creative freedom</span>
                 <span>Lock source geometry</span>
               </div>
