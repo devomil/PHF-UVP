@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Upload, Mic, Trash2, CheckCircle, XCircle, Clock, Copy } from "lucide-react";
+import { Loader2, Upload, Mic, Trash2, CheckCircle, XCircle, Clock, Copy, Play, Square } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 
@@ -27,9 +27,58 @@ interface VoiceCloneManagerProps {
 export function VoiceCloneManager({ onSelectVoice, selectedVoiceId }: VoiceCloneManagerProps) {
   const [voiceName, setVoiceName] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [previewingId, setPreviewingId] = useState<number | null>(null);
+  const [playingId, setPlayingId] = useState<number | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  const stopCurrentAudio = () => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.src = "";
+      audioRef.current = null;
+    }
+    setPlayingId(null);
+  };
+
+  const handlePreview = async (voice: ClonedVoice) => {
+    if (playingId === voice.id) {
+      stopCurrentAudio();
+      return;
+    }
+    stopCurrentAudio();
+    setPreviewingId(voice.id);
+    try {
+      const res = await fetch(`/api/voice-cloning/${voice.id}/preview`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Preview failed" }));
+        throw new Error(err.error || "Preview failed");
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      audioRef.current = audio;
+      setPlayingId(voice.id);
+      audio.onended = () => {
+        setPlayingId(null);
+        URL.revokeObjectURL(url);
+      };
+      audio.onerror = () => {
+        setPlayingId(null);
+        URL.revokeObjectURL(url);
+      };
+      audio.play();
+    } catch (err: any) {
+      toast({ title: "Preview failed", description: err.message, variant: "destructive" });
+    } finally {
+      setPreviewingId(null);
+    }
+  };
 
   const { data, isLoading } = useQuery<{ success: boolean; voices: ClonedVoice[] }>({
     queryKey: ["/api/voice-cloning"],
@@ -215,19 +264,41 @@ export function VoiceCloneManager({ onSelectVoice, selectedVoiceId }: VoiceClone
 
                   <div className="flex items-center gap-1 ml-2 shrink-0">
                     {voice.status === "ready" && (
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-7 w-7"
-                        title="Copy @voice syntax"
-                        data-testid={`copy-voice-syntax-${voice.id}`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          copyVoiceSyntax(voice);
-                        }}
-                      >
-                        <Copy className="w-3 h-3" />
-                      </Button>
+                      <>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7"
+                          title={playingId === voice.id ? "Stop preview" : "Preview voice"}
+                          data-testid={`preview-voice-${voice.id}`}
+                          disabled={previewingId !== null && previewingId !== voice.id}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handlePreview(voice);
+                          }}
+                        >
+                          {previewingId === voice.id ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : playingId === voice.id ? (
+                            <Square className="w-3 h-3" />
+                          ) : (
+                            <Play className="w-3 h-3" />
+                          )}
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7"
+                          title="Copy @voice syntax"
+                          data-testid={`copy-voice-syntax-${voice.id}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            copyVoiceSyntax(voice);
+                          }}
+                        >
+                          <Copy className="w-3 h-3" />
+                        </Button>
+                      </>
                     )}
                     <Button
                       size="icon"

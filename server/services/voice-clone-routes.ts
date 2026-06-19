@@ -133,6 +133,47 @@ router.post('/', voiceSampleUpload.single('sample'), async (req: Request, res: R
   }
 });
 
+const PREVIEW_TEXT = "Hello! This is a preview of your cloned voice. It sounds just like you.";
+
+router.post('/:id/preview', async (req: Request, res: Response) => {
+  const userId = (req.user as any).id;
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) {
+    return res.status(400).json({ success: false, error: 'Invalid voice ID.' });
+  }
+
+  try {
+    const [voice] = await db
+      .select()
+      .from(clonedVoices)
+      .where(and(eq(clonedVoices.id, id), eq(clonedVoices.userId, userId)))
+      .limit(1);
+
+    if (!voice) {
+      return res.status(404).json({ success: false, error: 'Voice not found or not owned by you.' });
+    }
+
+    if (voice.status !== 'ready' || !voice.providerVoiceId) {
+      return res.status(400).json({ success: false, error: 'Voice is not ready for preview yet.' });
+    }
+
+    const audioBuffer = await generatePlayhtSpeech(PREVIEW_TEXT, voice.providerVoiceId);
+    if (!audioBuffer) {
+      return res.status(503).json({ success: false, error: 'Voice preview is not available — Play.ht credentials are not configured.' });
+    }
+
+    res.set({
+      'Content-Type': 'audio/mpeg',
+      'Content-Length': audioBuffer.length.toString(),
+      'Cache-Control': 'no-store',
+    });
+    res.send(audioBuffer);
+  } catch (err: any) {
+    console.error(`[VoiceClone] Preview error for id=${id}:`, err.message);
+    res.status(500).json({ success: false, error: 'Failed to generate voice preview.' });
+  }
+});
+
 router.delete('/:id', async (req: Request, res: Response) => {
   const userId = (req.user as any).id;
   const id = parseInt(req.params.id, 10);
