@@ -18,6 +18,11 @@ export interface CostDriftError {
   tolerancePct: number;
 }
 
+export interface UnbaselinedProviderError {
+  registry: string;
+  id: string;
+}
+
 export interface ProviderCostEntry {
   costPerSecond?: number;
   costPerImage?: number;
@@ -85,6 +90,46 @@ function checkSection(
   }
 
   return errors;
+}
+
+export interface UnbaselinedParams {
+  videoProviders: Record<string, ProviderCostEntry>;
+  imageProviders: Record<string, ProviderCostEntry>;
+  soundProviders: Record<string, ProviderCostEntry>;
+  videoBaseline: BaselineSection;
+  imageBaseline: BaselineSection;
+  soundBaseline: BaselineSection;
+}
+
+function unbaselinedInSection(
+  providers: Record<string, ProviderCostEntry>,
+  baseline: BaselineSection,
+  registryLabel: string,
+): UnbaselinedProviderError[] {
+  const errors: UnbaselinedProviderError[] = [];
+  for (const id of Object.keys(providers)) {
+    if (!(id in baseline)) {
+      errors.push({ registry: registryLabel, id });
+    }
+  }
+  return errors;
+}
+
+export function checkUnbaselinedProviders(params: UnbaselinedParams): UnbaselinedProviderError[] {
+  const {
+    videoProviders,
+    imageProviders,
+    soundProviders,
+    videoBaseline,
+    imageBaseline,
+    soundBaseline,
+  } = params;
+
+  return [
+    ...unbaselinedInSection(videoProviders, videoBaseline, 'shared/VIDEO_PROVIDERS'),
+    ...unbaselinedInSection(imageProviders, imageBaseline, 'shared/IMAGE_PROVIDERS'),
+    ...unbaselinedInSection(soundProviders, soundBaseline, 'shared/SOUND_PROVIDERS'),
+  ];
 }
 
 export function checkCostDrift(params: CostDriftParams): CostDriftError[] {

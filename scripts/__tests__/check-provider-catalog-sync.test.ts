@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'child_process';
 import path from 'path';
 import { findCatalogSyncGaps, type CatalogEntry, type SyncCheckParams } from '../provider-catalog-sync-core';
-import { checkCostDrift, type CostDriftParams } from '../check-cost-drift-core';
+import { checkCostDrift, checkUnbaselinedProviders, type CostDriftParams, type UnbaselinedParams } from '../check-cost-drift-core';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -467,6 +467,128 @@ describe('checkCostDrift — drift detected', () => {
       videoBaseline:  { runway: { costPerSecond: 0.05 } },
     });
     expect(checkCostDrift(params)).toHaveLength(0);
+  });
+});
+
+// ── checkUnbaselinedProviders unit tests ──────────────────────────────────────
+
+function baseUnbaselinedParams(overrides: Partial<UnbaselinedParams> = {}): UnbaselinedParams {
+  return {
+    videoProviders: {},
+    imageProviders: {},
+    soundProviders: {},
+    videoBaseline: {},
+    imageBaseline: {},
+    soundBaseline: {},
+    ...overrides,
+  };
+}
+
+describe('checkUnbaselinedProviders — no unbaselined providers', () => {
+  it('returns empty array when all video providers are in the baseline', () => {
+    const params = baseUnbaselinedParams({
+      videoProviders: { runway: { costPerSecond: 0.05 } },
+      videoBaseline:  { runway: { costPerSecond: 0.05 } },
+    });
+    expect(checkUnbaselinedProviders(params)).toHaveLength(0);
+  });
+
+  it('returns empty array when all image providers are in the baseline', () => {
+    const params = baseUnbaselinedParams({
+      imageProviders: { flux: { costPerImage: 0.03 } },
+      imageBaseline:  { flux: { costPerImage: 0.03 } },
+    });
+    expect(checkUnbaselinedProviders(params)).toHaveLength(0);
+  });
+
+  it('returns empty array when all sound providers are in the baseline', () => {
+    const params = baseUnbaselinedParams({
+      soundProviders: { elevenlabs: { costPerSecond: 0.015 } },
+      soundBaseline:  { elevenlabs: { costPerSecond: 0.015 } },
+    });
+    expect(checkUnbaselinedProviders(params)).toHaveLength(0);
+  });
+
+  it('returns empty array when registries and baselines are all empty', () => {
+    expect(checkUnbaselinedProviders(baseUnbaselinedParams())).toHaveLength(0);
+  });
+
+  it('does not flag a baseline provider that was removed from the registry', () => {
+    const params = baseUnbaselinedParams({
+      videoProviders: {},
+      videoBaseline:  { runway: { costPerSecond: 0.05 } },
+    });
+    expect(checkUnbaselinedProviders(params)).toHaveLength(0);
+  });
+});
+
+describe('checkUnbaselinedProviders — new provider flagged', () => {
+  it('flags a video provider that has no baseline entry', () => {
+    const params = baseUnbaselinedParams({
+      videoProviders: { 'brand-new-vid': { costPerSecond: 0.99 } },
+      videoBaseline:  {},
+    });
+    const errors = checkUnbaselinedProviders(params);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toMatchObject({
+      registry: 'shared/VIDEO_PROVIDERS',
+      id: 'brand-new-vid',
+    });
+  });
+
+  it('flags a new image provider missing from the baseline', () => {
+    const params = baseUnbaselinedParams({
+      imageProviders: { 'new-image-prov': { costPerImage: 0.05 } },
+      imageBaseline:  {},
+    });
+    const errors = checkUnbaselinedProviders(params);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toMatchObject({
+      registry: 'shared/IMAGE_PROVIDERS',
+      id: 'new-image-prov',
+    });
+  });
+
+  it('flags a new sound provider missing from the baseline', () => {
+    const params = baseUnbaselinedParams({
+      soundProviders: { 'new-sfx': { costPerEffect: 0.03 } },
+      soundBaseline:  {},
+    });
+    const errors = checkUnbaselinedProviders(params);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toMatchObject({
+      registry: 'shared/SOUND_PROVIDERS',
+      id: 'new-sfx',
+    });
+  });
+
+  it('flags multiple new providers across different registries', () => {
+    const params = baseUnbaselinedParams({
+      videoProviders: { 'new-vid-a': { costPerSecond: 0.04 }, 'new-vid-b': { costPerSecond: 0.06 } },
+      videoBaseline:  {},
+      imageProviders: { 'new-img': { costPerImage: 0.02 } },
+      imageBaseline:  {},
+    });
+    const errors = checkUnbaselinedProviders(params);
+    expect(errors).toHaveLength(3);
+    const ids = errors.map(e => e.id);
+    expect(ids).toContain('new-vid-a');
+    expect(ids).toContain('new-vid-b');
+    expect(ids).toContain('new-img');
+  });
+
+  it('does not flag existing providers when a new one is added alongside them', () => {
+    const params = baseUnbaselinedParams({
+      videoProviders: {
+        runway: { costPerSecond: 0.05 },
+        'new-provider': { costPerSecond: 0.07 },
+      },
+      videoBaseline: { runway: { costPerSecond: 0.05 } },
+    });
+    const errors = checkUnbaselinedProviders(params);
+    expect(errors).toHaveLength(1);
+    expect(errors[0].id).toBe('new-provider');
+    expect(errors[0].registry).toBe('shared/VIDEO_PROVIDERS');
   });
 });
 

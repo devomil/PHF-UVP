@@ -37,7 +37,7 @@ import { VIDEO_PROVIDERS, IMAGE_PROVIDERS, SOUND_PROVIDERS } from '../shared/pro
 import { AI_VIDEO_PROVIDERS, PROVIDER_TEST_ID_MAP } from '../server/config/ai-video-providers-static.js';
 import { IMAGE_PROVIDERS as SERVER_IMAGE_PROVIDERS } from '../server/config/image-providers.js';
 import { findCatalogSyncGaps } from './provider-catalog-sync-core.js';
-import { checkCostDrift } from './check-cost-drift-core.js';
+import { checkCostDrift, checkUnbaselinedProviders } from './check-cost-drift-core.js';
 
 const _require = createRequire(import.meta.url);
 const costBaseline = _require('./provider-cost-baseline.json') as {
@@ -150,9 +150,23 @@ const driftErrors = checkCostDrift({
   tolerancePct: costBaseline._tolerancePct,
 });
 
+// ── 7. UNBASELINED PROVIDER DETECTION ────────────────────────────────────────
+// Flag providers that exist in the live registry but have no entry in the
+// committed baseline snapshot. A new provider without a baseline entry will
+// silently pass the drift check, leaving billing estimates unreviewed.
+
+const unbaselinedErrors = checkUnbaselinedProviders({
+  videoProviders: VIDEO_PROVIDERS,
+  imageProviders: IMAGE_PROVIDERS,
+  soundProviders: SOUND_PROVIDERS,
+  videoBaseline: costBaseline.video,
+  imageBaseline: costBaseline.image,
+  soundBaseline: costBaseline.sound,
+});
+
 // ── Report ───────────────────────────────────────────────────────────────────
 
-if (gaps.length === 0 && costErrors.length === 0 && driftErrors.length === 0) {
+if (gaps.length === 0 && costErrors.length === 0 && driftErrors.length === 0 && unbaselinedErrors.length === 0) {
   console.log('check-provider-catalog-sync: OK — catalog and registry are fully in sync.');
   process.exit(0);
 }
@@ -204,9 +218,18 @@ if (driftErrors.length > 0) {
   console.error('');
 }
 
-const totalIssues = gaps.length + costErrors.length + driftErrors.length;
+if (unbaselinedErrors.length > 0) {
+  console.error('  [cost-baseline] These providers are in the registry but have no entry in the cost baseline.');
+  console.error('  Add them to scripts/provider-cost-baseline.json so future cost changes are caught by drift detection.\n');
+  for (const { registry, id } of unbaselinedErrors) {
+    console.error(`    ${registry}["${id}"]  →  missing from  scripts/provider-cost-baseline.json`);
+  }
+  console.error('');
+}
+
+const totalIssues = gaps.length + costErrors.length + driftErrors.length + unbaselinedErrors.length;
 console.error(
   `${totalIssues} issue(s) found` +
-  ` (${gaps.length} sync gap(s), ${costErrors.length} cost error(s), ${driftErrors.length} cost drift(s)).`,
+  ` (${gaps.length} sync gap(s), ${costErrors.length} cost error(s), ${driftErrors.length} cost drift(s), ${unbaselinedErrors.length} unbaselined provider(s)).`,
 );
 process.exit(1);
