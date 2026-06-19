@@ -15,6 +15,83 @@ if (!fs.existsSync(VOICE_SAMPLES_DIR)) {
   fs.mkdirSync(VOICE_SAMPLES_DIR, { recursive: true });
 }
 
+const VOICE_PREVIEWS_DIR = path.resolve('uploads/voice-previews');
+if (!fs.existsSync(VOICE_PREVIEWS_DIR)) {
+  fs.mkdirSync(VOICE_PREVIEWS_DIR, { recursive: true });
+}
+
+const PREVIEW_CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+interface PreviewCacheEntry {
+  buffer: Buffer;
+  expiresAt: number;
+}
+
+const previewMemoryCache = new Map<string, PreviewCacheEntry>();
+
+function previewCacheKey(providerVoiceId: string): string {
+  return crypto.createHash('sha256').update(providerVoiceId).digest('hex');
+}
+
+function getPreviewFromCache(providerVoiceId: string): Buffer | null {
+  const key = previewCacheKey(providerVoiceId);
+
+  const memEntry = previewMemoryCache.get(key);
+  if (memEntry) {
+    if (Date.now() < memEntry.expiresAt) {
+      return memEntry.buffer;
+    }
+    previewMemoryCache.delete(key);
+  }
+
+  const diskPath = path.join(VOICE_PREVIEWS_DIR, `${key}.mp3`);
+  const metaPath = path.join(VOICE_PREVIEWS_DIR, `${key}.json`);
+  if (fs.existsSync(diskPath) && fs.existsSync(metaPath)) {
+    try {
+      const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
+      if (Date.now() < meta.expiresAt) {
+        const buf = fs.readFileSync(diskPath);
+        previewMemoryCache.set(key, { buffer: buf, expiresAt: meta.expiresAt });
+        return buf;
+      }
+      fs.unlinkSync(diskPath);
+      fs.unlinkSync(metaPath);
+    } catch {
+    }
+  }
+
+  return null;
+}
+
+function setPreviewCache(providerVoiceId: string, buffer: Buffer): void {
+  const key = previewCacheKey(providerVoiceId);
+  const expiresAt = Date.now() + PREVIEW_CACHE_TTL_MS;
+
+  previewMemoryCache.set(key, { buffer, expiresAt });
+
+  const diskPath = path.join(VOICE_PREVIEWS_DIR, `${key}.mp3`);
+  const metaPath = path.join(VOICE_PREVIEWS_DIR, `${key}.json`);
+  try {
+    fs.writeFileSync(diskPath, buffer);
+    fs.writeFileSync(metaPath, JSON.stringify({ expiresAt }));
+  } catch (err: any) {
+    console.warn('[VoiceClone] Could not write preview cache to disk:', err.message);
+  }
+}
+
+function invalidatePreviewCache(providerVoiceId: string): void {
+  const key = previewCacheKey(providerVoiceId);
+  previewMemoryCache.delete(key);
+  const diskPath = path.join(VOICE_PREVIEWS_DIR, `${key}.mp3`);
+  const metaPath = path.join(VOICE_PREVIEWS_DIR, `${key}.json`);
+  if (fs.existsSync(diskPath)) {
+    try { fs.unlinkSync(diskPath); } catch { }
+  }
+  if (fs.existsSync(metaPath)) {
+    try { fs.unlinkSync(metaPath); } catch { }
+  }
+}
+
 const MIN_DURATION_SECONDS = 10;
 
 // Only WAV and MP3 are accepted for voice cloning.
@@ -157,15 +234,30 @@ router.post('/:id/preview', async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, error: 'Voice is not ready for preview yet.' });
     }
 
+    const cached = getPreviewFromCache(voice.providerVoiceId);
+    if (cached) {
+      console.log(`[VoiceClone] Serving preview from cache for id=${id}`);
+      res.set({
+        'Content-Type': 'audio/mpeg',
+        'Content-Length': cached.length.toString(),
+        'Cache-Control': 'private, max-age=3600',
+        'X-Cache': 'HIT',
+      });
+      return res.send(cached);
+    }
+
     const audioBuffer = await generatePlayhtSpeech(PREVIEW_TEXT, voice.providerVoiceId);
     if (!audioBuffer) {
       return res.status(503).json({ success: false, error: 'Voice preview is not available — Play.ht credentials are not configured.' });
     }
 
+    setPreviewCache(voice.providerVoiceId, audioBuffer);
+
     res.set({
       'Content-Type': 'audio/mpeg',
       'Content-Length': audioBuffer.length.toString(),
-      'Cache-Control': 'no-store',
+      'Cache-Control': 'private, max-age=3600',
+      'X-Cache': 'MISS',
     });
     res.send(audioBuffer);
   } catch (err: any) {
@@ -196,6 +288,10 @@ router.delete('/:id', async (req: Request, res: Response) => {
       if (fs.existsSync(filePath)) {
         fs.unlinkSync(filePath);
       }
+    }
+
+    if (deleted.providerVoiceId) {
+      invalidatePreviewCache(deleted.providerVoiceId);
     }
 
     res.json({ success: true, id });
