@@ -2,6 +2,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import {
   getDropdownImageProviders,
   getDropdownVideoProviders,
+  getDropdownV2VProviders,
   VIDEO_PROVIDER_CATALOG,
   IMAGE_PROVIDER_CATALOG,
 } from '../provider-catalog';
@@ -475,5 +476,177 @@ describe('getDropdownImageProviders', () => {
     // Clean up the remaining test entry so afterEach (which only removes one) is sufficient
     const idxA = IMAGE_PROVIDER_CATALOG.findIndex(p => p.id === '__test__img-removal-isolation-a');
     IMAGE_PROVIDER_CATALOG.splice(idxA, 1);
+  });
+});
+
+const AUTO_V2V = {
+  id: 'auto',
+  name: 'Auto (Kling Object Replace)',
+  description: 'Automatically uses Kling for seamless object replacement',
+};
+
+describe('getDropdownV2VProviders', () => {
+  afterEach(() => {
+    const idx = VIDEO_PROVIDER_CATALOG.findIndex(p => p.id.startsWith('__test__'));
+    if (idx !== -1) VIDEO_PROVIDER_CATALOG.splice(idx, 1);
+  });
+
+  it('always puts the auto-select entry first', () => {
+    const list = getDropdownV2VProviders();
+    expect(list[0]).toEqual(AUTO_V2V);
+  });
+
+  it('auto-select entry is first even when no other providers have showInV2VDropdown', () => {
+    VIDEO_PROVIDER_CATALOG.push({
+      id: '__test__v2v-no-flag',
+      name: 'Test No V2V Flag',
+      family: 'Test',
+      description: 'Should not appear',
+      capabilities: ['V2V'],
+      maxDuration: 5,
+      costTier: 'budget',
+      type: 'video',
+      supportedModes: ['v2v'],
+      aspectRatios: ['16:9'],
+    });
+    const list = getDropdownV2VProviders();
+    expect(list[0]).toEqual(AUTO_V2V);
+  });
+
+  it('a new catalog entry with showInV2VDropdown: true automatically appears in the list', () => {
+    VIDEO_PROVIDER_CATALOG.push({
+      id: '__test__v2v-new',
+      name: 'Test New V2V Provider',
+      family: 'Test',
+      description: 'A test V2V provider',
+      capabilities: ['V2V'],
+      maxDuration: 10,
+      costTier: 'standard',
+      type: 'video',
+      supportedModes: ['v2v'],
+      aspectRatios: ['16:9'],
+      showInV2VDropdown: true,
+    });
+
+    const ids = getDropdownV2VProviders().map(p => p.id);
+    expect(ids).toContain('__test__v2v-new');
+  });
+
+  it('the new entry shape only exposes id, name, and description', () => {
+    VIDEO_PROVIDER_CATALOG.push({
+      id: '__test__v2v-shape',
+      name: 'Test V2V Shape Provider',
+      family: 'Test',
+      description: 'V2V shape check provider',
+      capabilities: ['V2V'],
+      maxDuration: 5,
+      costTier: 'budget',
+      type: 'video',
+      supportedModes: ['v2v'],
+      aspectRatios: ['16:9'],
+      showInV2VDropdown: true,
+    });
+
+    const list = getDropdownV2VProviders();
+    const entry = list.find(p => p.id === '__test__v2v-shape');
+    expect(entry).toBeDefined();
+    expect(entry).toEqual({
+      id: '__test__v2v-shape',
+      name: 'Test V2V Shape Provider',
+      description: 'V2V shape check provider',
+    });
+    expect(Object.keys(entry!)).toStrictEqual(['id', 'name', 'description']);
+  });
+
+  it('catalog entries without showInV2VDropdown are excluded', () => {
+    VIDEO_PROVIDER_CATALOG.push({
+      id: '__test__v2v-hidden',
+      name: 'Test Hidden V2V',
+      family: 'Test',
+      description: 'Should not appear in V2V dropdown',
+      capabilities: ['V2V'],
+      maxDuration: 5,
+      costTier: 'budget',
+      type: 'video',
+      supportedModes: ['v2v'],
+      aspectRatios: ['16:9'],
+    });
+
+    const ids = getDropdownV2VProviders().map(p => p.id);
+    expect(ids).not.toContain('__test__v2v-hidden');
+  });
+
+  it('catalog entries with showInV2VDropdown: false are excluded', () => {
+    VIDEO_PROVIDER_CATALOG.push({
+      id: '__test__v2v-disabled',
+      name: 'Test Disabled V2V',
+      family: 'Test',
+      description: 'Should not appear in V2V dropdown',
+      capabilities: ['V2V'],
+      maxDuration: 5,
+      costTier: 'budget',
+      type: 'video',
+      supportedModes: ['v2v'],
+      aspectRatios: ['16:9'],
+      showInV2VDropdown: false,
+    });
+
+    const ids = getDropdownV2VProviders().map(p => p.id);
+    expect(ids).not.toContain('__test__v2v-disabled');
+  });
+
+  it('existing catalog entries with showInV2VDropdown: true are all present', () => {
+    const catalogIds = VIDEO_PROVIDER_CATALOG
+      .filter(p => p.showInV2VDropdown === true)
+      .map(p => p.id);
+
+    expect(catalogIds.length).toBeGreaterThan(0);
+
+    const dropdownIds = getDropdownV2VProviders().map(p => p.id);
+    for (const id of catalogIds) {
+      expect(dropdownIds).toContain(id);
+    }
+  });
+
+  it('providers without showInV2VDropdown do not bleed into the V2V dropdown even if they have showInDropdown', () => {
+    VIDEO_PROVIDER_CATALOG.push({
+      id: '__test__v2v-bleed',
+      name: 'Test Bleed Provider',
+      family: 'Test',
+      description: 'Has showInDropdown but not showInV2VDropdown',
+      capabilities: ['T2V'],
+      maxDuration: 5,
+      costTier: 'budget',
+      type: 'video',
+      supportedModes: ['t2v'],
+      aspectRatios: ['16:9'],
+      showInDropdown: true,
+    });
+
+    const ids = getDropdownV2VProviders().map(p => p.id);
+    expect(ids).not.toContain('__test__v2v-bleed');
+  });
+
+  it('removing a showInV2VDropdown: true entry removes it from the dropdown', () => {
+    VIDEO_PROVIDER_CATALOG.push({
+      id: '__test__v2v-removal',
+      name: 'Test V2V Removal Provider',
+      family: 'Test',
+      description: 'Should disappear after removal',
+      capabilities: ['V2V'],
+      maxDuration: 5,
+      costTier: 'budget',
+      type: 'video',
+      supportedModes: ['v2v'],
+      aspectRatios: ['16:9'],
+      showInV2VDropdown: true,
+    });
+
+    expect(getDropdownV2VProviders().map(p => p.id)).toContain('__test__v2v-removal');
+
+    const idx = VIDEO_PROVIDER_CATALOG.findIndex(p => p.id === '__test__v2v-removal');
+    VIDEO_PROVIDER_CATALOG.splice(idx, 1);
+
+    expect(getDropdownV2VProviders().map(p => p.id)).not.toContain('__test__v2v-removal');
   });
 });
