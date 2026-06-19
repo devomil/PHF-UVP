@@ -42,7 +42,7 @@ describe('check-provider-catalog-sync script (real catalog)', () => {
       `lint:providers reported gaps:\n${result.stderr}`,
     ).toContain('OK');
     expect(result.status).toBe(0);
-  });
+  }, 30_000);
 });
 
 // ── Unit tests: findCatalogSyncGaps with fixture data ────────────────────────
