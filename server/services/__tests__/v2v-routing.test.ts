@@ -161,7 +161,87 @@ describe('buildV2VRouteDecision — V2V detection and routing', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 3. Guard: missing referenceVideoUrl throws before any provider is called
+// 3. replacementImageUrl URL-forwarding contract
+// ---------------------------------------------------------------------------
+//
+// The regenerate-video route reads `req.body.replacementImageUrl`, resolves
+// any brand-asset path to a public CDN URL, then stores the result as
+// `sourceImageUrl` on the created job.  The worker later calls
+// `buildV2VRouteDecision(i2vSettings, provider, job.sourceImageUrl)`, which
+// surfaces it as `decision.replacementImage`.  These tests verify the pure
+// helper's half of that contract: whatever URL arrives is returned unchanged.
+//
+// The URL resolution step (brand-asset path → CDN URL) is exercised at the
+// HTTP layer (universal-video-routes.ts) and is not the responsibility of this
+// pure helper.
+
+describe('buildV2VRouteDecision — replacementImageUrl URL-forwarding contract', () => {
+  const baseSettings = {
+    assetLibraryMode: 'v2v',
+    referenceVideoUrl: 'https://cdn.example.com/ref.mp4',
+  };
+
+  it('returns the plain HTTPS replacementImageUrl in decision.replacementImage unchanged', () => {
+    const url = 'https://cdn.example.com/product.png';
+    const decision = buildV2VRouteDecision(baseSettings, 'kling-2.6', url);
+    expect(decision.isV2V).toBe(true);
+    if (!decision.isV2V) return;
+    expect(decision.replacementImage).toBe(url);
+  });
+
+  it('returns a pre-resolved brand-asset CDN URL in decision.replacementImage unchanged', () => {
+    // The route resolves /api/brand-assets/file/<id> → a CDN URL *before*
+    // creating the job, so by the time buildV2VRouteDecision is called the URL
+    // is already a public HTTPS URL.  This test documents that the helper is
+    // transparent: any non-empty URL passes through without modification.
+    const resolvedUrl = 'https://cdn.example.com/brand-asset-42.png';
+    const decision = buildV2VRouteDecision(baseSettings, 'kling-2.6', resolvedUrl);
+    expect(decision.isV2V).toBe(true);
+    if (!decision.isV2V) return;
+    expect(decision.replacementImage).toBe(resolvedUrl);
+  });
+
+  it('treats an empty-string sourceImageUrl (absent req.body field) as undefined', () => {
+    // An empty string can arrive when the UI sends `replacementImageUrl: ""`
+    // or the field is absent.  Both should be treated as "no replacement image".
+    const decision = buildV2VRouteDecision(baseSettings, 'kling-2.6', '');
+    expect(decision.isV2V).toBe(true);
+    if (!decision.isV2V) return;
+    expect(decision.replacementImage).toBeUndefined();
+  });
+
+  it('treats a null sourceImageUrl as undefined (optional field)', () => {
+    const decision = buildV2VRouteDecision(baseSettings, 'kling-2.6', null);
+    expect(decision.isV2V).toBe(true);
+    if (!decision.isV2V) return;
+    expect(decision.replacementImage).toBeUndefined();
+  });
+
+  it('Runway path: decision.replacementImage is undefined when no sourceImageUrl — replacementImageUrl is optional for Runway', () => {
+    // The Runway provider (generateVideoToVideo) does not use a replacement image,
+    // so an absent replacementImageUrl body field must not block the job.
+    const decision = buildV2VRouteDecision(baseSettings, 'runway-gen4-aleph', null);
+    expect(decision.isV2V).toBe(true);
+    if (!decision.isV2V) return;
+    expect(decision.isRunwayV2V).toBe(true);
+    expect(decision.replacementImage).toBeUndefined();
+  });
+
+  it('Runway path: decision.replacementImage is set when sourceImageUrl is present (optional, not required)', () => {
+    // Runway ignores replacementImage in its generateVideoToVideo call, but the
+    // decision object still carries it for completeness — the caller decides whether
+    // to forward it.
+    const url = 'https://cdn.example.com/optional-ref.png';
+    const decision = buildV2VRouteDecision(baseSettings, 'runway-gen4-aleph', url);
+    expect(decision.isV2V).toBe(true);
+    if (!decision.isV2V) return;
+    expect(decision.isRunwayV2V).toBe(true);
+    expect(decision.replacementImage).toBe(url);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 4. Guard: missing referenceVideoUrl throws before any provider is called
 // ---------------------------------------------------------------------------
 
 describe('buildV2VRouteDecision — referenceVideoUrl guard', () => {

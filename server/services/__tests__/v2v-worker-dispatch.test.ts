@@ -323,7 +323,102 @@ describe('worker processJob — referenceVideoUrl guard', () => {
 });
 
 // ---------------------------------------------------------------------------
-// (e) Non-V2V jobs still go through dispatchRender
+// (e) replacementImageUrl body field forwarding — job.sourceImageUrl → provider
+// ---------------------------------------------------------------------------
+//
+// The regenerate-video HTTP handler places the (resolved) replacementImageUrl
+// from req.body into job.sourceImageUrl when it calls createJob.  The worker
+// then reads job.sourceImageUrl inside buildV2VRouteDecision to populate
+// decision.replacementImage, which is forwarded to the provider.
+//
+// These tests cover the worker half of the chain.  The HTTP half
+// (req.body → createJob) is covered by v2v-regenerate-body.test.ts.
+//
+//   req.body.replacementImageUrl          → see v2v-regenerate-body.test.ts
+//       ↓ resolved to CDN URL
+//   createJob({ sourceImageUrl })         → see v2v-regenerate-body.test.ts
+//       ↓
+//   job.sourceImageUrl                    ← asserted here ↓
+//   buildV2VRouteDecision → replacementImage
+//       ↓
+//   replaceObjectInVideo({ replacementImageUrl })   ← asserted here
+
+describe('worker processJob — replacementImageUrl body field forwarding', () => {
+  it('forwards job.sourceImageUrl as replacementImageUrl to the Kling provider (exact URL, no transformation)', async () => {
+    const replacementUrl = 'https://cdn.example.com/product-exact.jpg';
+    const job = makeV2VJob({
+      provider: 'kling-2.6',
+      sourceImageUrl: replacementUrl,
+    });
+
+    await (videoGenerationWorker as any).processJob(job);
+
+    expect(replaceObjectInVideoMock).toHaveBeenCalledTimes(1);
+    const klingArgs = replaceObjectInVideoMock.mock.calls[0][0];
+    // The URL must arrive at the provider unchanged — no re-encoding or path alteration.
+    expect(klingArgs.replacementImageUrl).toBe(replacementUrl);
+  });
+
+  it('does not call replaceObjectInVideo when job.sourceImageUrl is absent — marks job failed (missing replacementImageUrl is a Kling error, not a 400)', async () => {
+    // The HTTP route makes replacementImageUrl optional: a missing body field does
+    // not produce a 400.  The failure surfaces later, at the worker level, when Kling
+    // discovers it has no replacement image.  This test confirms the worker path
+    // (not the route) is responsible for the error and that the job is marked failed.
+    const job = makeV2VJob({
+      provider: 'kling-2.6',
+      sourceImageUrl: null,
+    });
+
+    await (videoGenerationWorker as any).processJob(job);
+
+    expect(replaceObjectInVideoMock).not.toHaveBeenCalled();
+    const failedCall = updateJobMock.mock.calls.find(
+      ([, patch]: [string, any]) => patch.status === 'failed',
+    );
+    expect(failedCall).toBeDefined();
+    // The error message must mention the missing image so operators can diagnose.
+    expect(failedCall[1].errorMessage).toMatch(/replacement image|sourceImageUrl/i);
+  });
+
+  it('Runway V2V succeeds when job.sourceImageUrl is absent — replacementImageUrl is optional for Runway', async () => {
+    // req.body.replacementImageUrl is not required for the Runway V2V path.  An
+    // absent or empty field must not cause a 400 (HTTP) or a failed job (worker).
+    const job = makeV2VJob({
+      provider: 'runway-gen4-aleph',
+      sourceImageUrl: null,   // no replacement image body field
+    });
+
+    await (videoGenerationWorker as any).processJob(job);
+
+    expect(generateVideoToVideoMock).toHaveBeenCalledTimes(1);
+    expect(replaceObjectInVideoMock).not.toHaveBeenCalled();
+    const succeededCall = updateJobMock.mock.calls.find(
+      ([, patch]: [string, any]) => patch.status === 'succeeded',
+    );
+    expect(succeededCall).toBeDefined();
+  });
+
+  it('Runway V2V also succeeds when job.sourceImageUrl IS present — it is forwarded in the decision but not used by generateVideoToVideo', async () => {
+    // The route may still populate sourceImageUrl for Runway (e.g. from scene.brandAssetUrl)
+    // even when replacementImageUrl is not the primary intent.  The worker must not fail.
+    const job = makeV2VJob({
+      provider: 'runway-gen4-aleph',
+      sourceImageUrl: 'https://cdn.example.com/brand-ref.jpg',
+    });
+
+    await (videoGenerationWorker as any).processJob(job);
+
+    expect(generateVideoToVideoMock).toHaveBeenCalledTimes(1);
+    expect(replaceObjectInVideoMock).not.toHaveBeenCalled();
+    const succeededCall = updateJobMock.mock.calls.find(
+      ([, patch]: [string, any]) => patch.status === 'succeeded',
+    );
+    expect(succeededCall).toBeDefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// (f) Non-V2V jobs still go through dispatchRender
 // ---------------------------------------------------------------------------
 
 describe('worker processJob — non-V2V jobs use dispatchRender', () => {
