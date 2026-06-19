@@ -10,6 +10,7 @@ import { describe, it, expect } from 'vitest';
 import {
   ASSET_CREATOR_MODE_GATING,
   isRunwayV2V,
+  isReplacementImageSectionVisible,
   isAssetCreatorProviderSelectorVisible,
   isAssetCreatorAmberWarningVisible,
   computeAssetCreatorCanSubmit,
@@ -287,5 +288,42 @@ describe('computeAssetCreatorCanSubmit – V2V gating', () => {
         isUploadingImage: true,
       }),
     ).toBe(false);
+  });
+});
+
+// ── isReplacementImageSectionVisible ──────────────────────────────────────────
+
+describe('isReplacementImageSectionVisible – Kling / non-Runway V2V gating', () => {
+  it('shows the section for v2v mode with a non-Runway provider (kling-2.6)', () => {
+    expect(isReplacementImageSectionVisible('v2v', 'kling-2.6')).toBe(true);
+  });
+
+  it('shows the section for v2v mode with another non-Runway provider', () => {
+    expect(isReplacementImageSectionVisible('v2v', 'auto')).toBe(true);
+  });
+
+  it('hides the section for v2v mode when provider is Runway (runway-gen4-aleph)', () => {
+    expect(isReplacementImageSectionVisible('v2v', 'runway-gen4-aleph')).toBe(false);
+  });
+
+  it('hides the section for v2v mode when provider is any runway-prefixed variant', () => {
+    expect(isReplacementImageSectionVisible('v2v', 'runway-act-two')).toBe(false);
+  });
+
+  it('hides the section for non-v2v modes even with a non-Runway provider', () => {
+    for (const m of ['t2v', 'i2v', 't2i', 'i2i'] as AssetCreatorMode[]) {
+      expect(isReplacementImageSectionVisible(m, 'kling-2.6')).toBe(false);
+    }
+  });
+
+  it('hides the section for toolkit modes', () => {
+    for (const m of ['upscale-image', 'upscale-video', 'bg-remove-image', 'bg-remove-video'] as AssetCreatorMode[]) {
+      expect(isReplacementImageSectionVisible(m, 'kling-2.6')).toBe(false);
+    }
+  });
+
+  it('hides the section for character modes', () => {
+    expect(isReplacementImageSectionVisible('character', 'kling-2.6')).toBe(false);
+    expect(isReplacementImageSectionVisible('character-performance', 'kling-2.6')).toBe(false);
   });
 });

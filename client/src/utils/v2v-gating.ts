@@ -45,6 +45,21 @@ export function isRunwayV2V(provider: string): boolean {
 }
 
 /**
+ * Whether the replacement-image upload section should be rendered.
+ * Non-Runway V2V providers (e.g. Kling) require a replacement image to
+ * specify which object should be swapped; Runway handles this via its own
+ * prompt-only flow, so it does not expose this section.
+ *
+ * Mirrors: mode === 'v2v' && !isRunwayV2V(provider)
+ */
+export function isReplacementImageSectionVisible(
+  mode: AssetCreatorMode,
+  provider: string,
+): boolean {
+  return mode === 'v2v' && !isRunwayV2V(provider);
+}
+
+/**
  * Whether the provider selector should be rendered.
  * Mirrors: cfg.category !== 'toolkit' && mode !== 'character-performance' &&
  *          mode !== 'character' && (mode !== 'v2v' || referenceVideoUrl)

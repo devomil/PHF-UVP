@@ -36,6 +36,7 @@ import { providerSupportsMultiImage, getDropdownVideoProviders, getDropdownImage
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   isRunwayV2V,
+  isReplacementImageSectionVisible,
   isAssetCreatorProviderSelectorVisible,
   isAssetCreatorAmberWarningVisible,
   computeAssetCreatorCanSubmit,
@@ -215,7 +216,7 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
     ? (SHARED_VIDEO_PROVIDERS[provider]?.multiImageSupport ?? null)
     : null;
 
-  const needsReplacementForV2V = mode === 'v2v' && !isRunwayV2V(provider);
+  const needsReplacementForV2V = isReplacementImageSectionVisible(mode, provider);
 
   const getProviders = () => {
     if (mode === 'v2v') return V2V_PROVIDERS;
