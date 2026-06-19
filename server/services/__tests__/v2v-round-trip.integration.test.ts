@@ -433,17 +433,74 @@ describe('V2V round-trip: HTTP route → processJob → provider (Kling path)', 
     // No sourceImageUrl forwarded when replacementImageUrl was absent.
     expect(createJobArgs.sourceImageUrl).toBeFalsy();
 
-    const job = buildJobFromCreateJobArgs(createJobArgs, 'integ-job-kling-noimg');
+    // Use maxRetries=3 to confirm the deterministic [V2V] error bypasses retries.
+    const job = { ...buildJobFromCreateJobArgs(createJobArgs, 'integ-job-kling-noimg'), maxRetries: 3 };
 
     await (videoGenerationWorker as any).processJob(job);
 
     // Worker must fail the job — Kling cannot proceed without a replacement image.
     expect(replaceObjectInVideoMock).not.toHaveBeenCalled();
+
+    // Must NOT have re-queued the job as 'pending' — deterministic error skips retries.
+    const pendingCall = updateJobMock.mock.calls.find(
+      ([, patch]: [string, any]) => patch.status === 'pending',
+    );
+    expect(pendingCall).toBeUndefined();
+
     const failedCall = updateJobMock.mock.calls.find(
       ([, patch]: [string, any]) => patch.status === 'failed',
     );
     expect(failedCall).toBeDefined();
     expect(failedCall[1].errorMessage).toMatch(/replacement image|sourceImageUrl/i);
+  });
+
+  it('worker fails the job immediately (no retry) when referenceVideoUrl is absent — deterministic [V2V] error', async () => {
+    // Build a job directly (no HTTP route call needed — this exercises the
+    // worker guard in buildV2VRouteDecision which throws [V2V] prefixed errors).
+    const job = {
+      jobId: 'integ-job-noref',
+      projectId: PROJECT_ID,
+      sceneId: SCENE_ID,
+      provider: 'kling-2.6',
+      prompt: 'A cinematic V2V shot',
+      duration: 6,
+      aspectRatio: '16:9',
+      negativePrompt: null,
+      style: null,
+      triggeredBy: null,
+      sourceImageUrl: 'https://cdn.example.com/product.jpg',
+      // assetLibraryMode:'v2v' but NO referenceVideoUrl — triggers the [V2V] guard
+      i2vSettings: { assetLibraryMode: 'v2v' },
+      motionControl: null,
+      sceneType: 'content',
+      retryCount: 0,
+      maxRetries: 3,   // would normally allow 3 retries
+      status: 'pending',
+      startedAt: null,
+      completedAt: null,
+      errorMessage: null,
+      videoUrl: null,
+      progress: 0,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as any;
+
+    await (videoGenerationWorker as any).processJob(job);
+
+    // Must go directly to 'failed' — no retry (no 'pending' update).
+    const pendingCall = updateJobMock.mock.calls.find(
+      ([, patch]: [string, any]) => patch.status === 'pending',
+    );
+    expect(pendingCall).toBeUndefined();
+
+    const failedCall = updateJobMock.mock.calls.find(
+      ([, patch]: [string, any]) => patch.status === 'failed',
+    );
+    expect(failedCall).toBeDefined();
+    expect(failedCall[1].errorMessage).toMatch(/referenceVideoUrl/i);
+
+    expect(replaceObjectInVideoMock).not.toHaveBeenCalled();
+    expect(generateVideoToVideoMock).not.toHaveBeenCalled();
   });
 });
 

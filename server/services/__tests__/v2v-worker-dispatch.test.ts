@@ -418,6 +418,100 @@ describe('worker processJob — replacementImageUrl body field forwarding', () =
 });
 
 // ---------------------------------------------------------------------------
+// (e2) Deterministic V2V errors skip retries even when maxRetries > 0
+// ---------------------------------------------------------------------------
+//
+// Errors prefixed with "[V2V]" indicate that the same input will always fail
+// (e.g. missing referenceVideoUrl, missing replacement image). The worker must
+// mark the job failed immediately instead of re-queuing it as 'pending'.
+
+describe('worker processJob — deterministic V2V errors bypass retry loop', () => {
+  function makeV2VJobWithRetries(
+    overrides: {
+      provider?: string;
+      referenceVideoUrl?: string | null;
+      sourceImageUrl?: string | null;
+      retryCount?: number;
+      maxRetries?: number;
+    } = {},
+  ) {
+    const base = makeV2VJob({
+      provider: overrides.provider,
+      referenceVideoUrl: overrides.referenceVideoUrl,
+      sourceImageUrl: overrides.sourceImageUrl,
+    });
+    return {
+      ...base,
+      retryCount: overrides.retryCount ?? 0,
+      maxRetries: overrides.maxRetries ?? 3,
+    } as any;
+  }
+
+  it('marks job failed immediately (no pending retry) when referenceVideoUrl is absent — even with retries remaining', async () => {
+    // With maxRetries=3 and retryCount=0, a transient error would normally
+    // cause a status:'pending' retry. But missing referenceVideoUrl is
+    // deterministic — the [V2V] prefix causes the worker to skip retries.
+    const job = makeV2VJobWithRetries({ referenceVideoUrl: null, maxRetries: 3 });
+
+    await (videoGenerationWorker as any).processJob(job);
+
+    const pendingCall = updateJobMock.mock.calls.find(
+      ([, patch]: [string, any]) => patch.status === 'pending',
+    );
+    expect(pendingCall).toBeUndefined();
+
+    const failedCall = updateJobMock.mock.calls.find(
+      ([, patch]: [string, any]) => patch.status === 'failed',
+    );
+    expect(failedCall).toBeDefined();
+    expect(failedCall[1].errorMessage).toMatch(/referenceVideoUrl/i);
+  });
+
+  it('marks job failed immediately (no pending retry) when Kling replacement image is absent — even with retries remaining', async () => {
+    const job = makeV2VJobWithRetries({
+      provider: 'kling-2.6',
+      sourceImageUrl: null,
+      maxRetries: 3,
+    });
+
+    await (videoGenerationWorker as any).processJob(job);
+
+    const pendingCall = updateJobMock.mock.calls.find(
+      ([, patch]: [string, any]) => patch.status === 'pending',
+    );
+    expect(pendingCall).toBeUndefined();
+
+    const failedCall = updateJobMock.mock.calls.find(
+      ([, patch]: [string, any]) => patch.status === 'failed',
+    );
+    expect(failedCall).toBeDefined();
+    expect(failedCall[1].errorMessage).toMatch(/replacement image|sourceImageUrl/i);
+  });
+
+  it('still retries transient errors (non-[V2V] prefix) when retries remain', async () => {
+    // A Runway provider failure with no [V2V] prefix is transient and must retry.
+    generateVideoToVideoMock.mockResolvedValueOnce({
+      success: false,
+      error: 'Upstream timeout',
+    });
+
+    const job = makeV2VJobWithRetries({ provider: 'runway-gen4-aleph', maxRetries: 3 });
+
+    await (videoGenerationWorker as any).processJob(job);
+
+    const pendingCall = updateJobMock.mock.calls.find(
+      ([, patch]: [string, any]) => patch.status === 'pending',
+    );
+    expect(pendingCall).toBeDefined();
+
+    const failedCall = updateJobMock.mock.calls.find(
+      ([, patch]: [string, any]) => patch.status === 'failed',
+    );
+    expect(failedCall).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // (f) Non-V2V jobs still go through dispatchRender
 // ---------------------------------------------------------------------------
 

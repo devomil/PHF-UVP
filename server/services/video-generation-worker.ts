@@ -931,7 +931,13 @@ class VideoGenerationWorker {
         const errMsg = genError?.message || genError?.toString?.() || JSON.stringify(genError);
         log.error(`Video generation error for job ${job.jobId}: ${errMsg}`);
 
+        // Deterministic V2V errors (prefixed with "[V2V]") will always fail on
+        // the same input — retrying wastes credits and delays the user. Skip the
+        // retry loop and go straight to permanent failure.
+        const isDeterministicV2VError = /^\[V2V\]/i.test(errMsg);
+
         if (
+          !isDeterministicV2VError &&
           job.retryCount !== null &&
           job.maxRetries !== null &&
           job.retryCount < job.maxRetries
