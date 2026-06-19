@@ -1,2 +1,5 @@
+# Reject commits that use native browser dialogs (alert/confirm/prompt) in client/src
 npm run lint:dialogs
+
+# Reject commits where a showInDropdown catalog entry has no matching registry entry
 npm run lint:providers
