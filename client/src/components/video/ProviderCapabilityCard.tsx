@@ -160,6 +160,7 @@ interface ProviderCapabilitySelectorProps {
   styleRecommendedProviders?: string[];
   styleLabel?: string;
   suzzieRationale?: string;
+  mode?: 't2v' | 'i2v' | 'v2v';
 }
 
 export const ProviderCapabilitySelector = memo(function ProviderCapabilitySelector({
@@ -172,6 +173,7 @@ export const ProviderCapabilitySelector = memo(function ProviderCapabilitySelect
   styleRecommendedProviders,
   styleLabel,
   suzzieRationale,
+  mode,
 }: ProviderCapabilitySelectorProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -197,7 +199,7 @@ export const ProviderCapabilitySelector = memo(function ProviderCapabilitySelect
     providerGroups[family].push(id);
   }
 
-  const mainProviderIds = getDropdownVideoProviders().map(p => p.id);
+  const mainProviderIds = getDropdownVideoProviders(mode).map(p => p.id);
 
   const filteredProviders = mainProviderIds;
   const displayProviders = styleRecommendedProviders && styleRecommendedProviders.length > 0

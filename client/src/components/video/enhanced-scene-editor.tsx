@@ -2246,6 +2246,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                     styleRecommendedProviders={styleRecProviders}
                     styleLabel={styleRecLabel}
                     suzzieRationale={suzzieProviderRationale}
+                    mode={generationMode !== "auto" ? (generationMode as 't2v' | 'i2v' | 'v2v') : undefined}
                   />
                 </div>
               </div>
@@ -3776,6 +3777,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                                   styleRecommendedProviders={styleRecProviders}
                                   styleLabel={styleRecLabel}
                                   suzzieRationale={msModalSuzzieProviderRationale}
+                                  mode={msModalMode !== "auto" ? (msModalMode as 't2v' | 'i2v' | 'v2v') : undefined}
                                 />
                               </div>
                             </div>
