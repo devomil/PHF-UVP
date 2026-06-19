@@ -2831,7 +2831,7 @@ export function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () =>
           </Select>
         </div>
 
-        <div>
+        {(genMode !== 'v2v' || referenceVideoUrl) && <div>
           <Label style={{ color: "var(--text-secondary)" }}>Provider</Label>
           <Select value={provider} onValueChange={(val) => { setProvider(val); setSuzzieProviderRationale(undefined); setAdditionalRefImages([]); }}>
             <SelectTrigger className="mt-1.5" style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }}>
@@ -2911,7 +2911,7 @@ export function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () =>
               ))}
             </SelectContent>
           </Select>
-        </div>
+        </div>}
 
         <div className="flex items-center gap-2">
           <input type="checkbox" id="saveToLibrary" checked={saveToLibrary} onChange={(e) => setSaveToLibrary(e.target.checked)} className="rounded" style={{ borderColor: "var(--border-medium)", backgroundColor: "var(--input-bg)" }} />
@@ -2925,11 +2925,18 @@ export function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () =>
           </div>
         )}
 
+        {cfg.needsRefVideo && !referenceVideoUrl && (
+          <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-amber-500/30 bg-amber-500/10">
+            <Film className="w-4 h-4 text-amber-400 flex-shrink-0" />
+            <span className="text-sm text-amber-300">Upload a reference video above to enable generation.</span>
+          </div>
+        )}
+
         <div className="flex gap-3 pt-4">
           <Button type="button" variant="outline" onClick={onBack} style={{ borderColor: "var(--border-medium)", color: "var(--text-secondary)" }}>
             <ArrowLeft className="w-4 h-4 mr-2" /> Back
           </Button>
-          <Button type="submit" className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500" disabled={isLoading || !prompt}>
+          <Button type="submit" className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500" disabled={isLoading || !prompt || (cfg.needsRefVideo && !referenceVideoUrl)}>
             {isLoading ? "Generating..." : "Generate"}
           </Button>
         </div>
