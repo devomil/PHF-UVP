@@ -241,6 +241,41 @@ describe('findCatalogSyncGaps', () => {
     });
   });
 
+  describe('gap 4b: AI_VIDEO_PROVIDERS entry with no catalog entry (registry→catalog)', () => {
+    it('catches a provider in aiVideoProviders and providerTestIdMap but absent from videoCatalog', () => {
+      const params = makeParams({
+        videoCatalog: [],
+        aiVideoProviders: { 'orphan-server-provider': {} },
+        providerTestIdMap: { 'orphan-server-provider': 'test-orphan' },
+      });
+
+      const gaps = findCatalogSyncGaps(params);
+      const match = gaps.find(
+        g =>
+          g.id === 'orphan-server-provider' &&
+          g.direction === 'registry→catalog' &&
+          g.registry === 'server/AI_VIDEO_PROVIDERS',
+      );
+      expect(match).toBeDefined();
+    });
+
+    it('does NOT flag an aiVideoProviders entry that has a corresponding catalog entry', () => {
+      const params = makeParams({
+        videoCatalog: [{ id: 'synced-server-provider', showInDropdown: true }],
+        sharedVideoProviders: { 'synced-server-provider': {} },
+        aiVideoProviders: { 'synced-server-provider': {} },
+        providerTestIdMap: { 'synced-server-provider': 'test-synced' },
+      });
+
+      const gaps = findCatalogSyncGaps(params);
+      expect(
+        gaps.filter(
+          g => g.id === 'synced-server-provider' && g.registry === 'server/AI_VIDEO_PROVIDERS',
+        ),
+      ).toHaveLength(0);
+    });
+  });
+
   describe('gap direction 4: dropdown-visible image provider missing from server IMAGE_PROVIDERS', () => {
     it('catches an image catalog entry with showInDropdown:true missing from serverImageProviders', () => {
       const params = makeParams({

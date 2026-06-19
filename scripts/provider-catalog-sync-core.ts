@@ -146,7 +146,20 @@ export function findCatalogSyncGaps(params: SyncCheckParams): Gap[] {
     }
   }
 
-  // ── 4b. CATALOG → SERVER_IMAGE_PROVIDERS ───────────────────────────────────
+  // ── 4b. REGISTRY → CATALOG (AI_VIDEO_PROVIDERS) ────────────────────────────
+  for (const id of Object.keys(aiVideoProviders)) {
+    if (!videoCatalogIds.has(id)) {
+      gaps.push({
+        catalog: 'VIDEO_PROVIDER_CATALOG',
+        registry: 'server/AI_VIDEO_PROVIDERS',
+        id,
+        direction: 'registry→catalog',
+        reason: 'present in server AI_VIDEO_PROVIDERS but has no catalog entry — orphaned provider',
+      });
+    }
+  }
+
+  // ── 4c. CATALOG → SERVER_IMAGE_PROVIDERS ───────────────────────────────────
   for (const entry of imageCatalog) {
     const isDropdownVisible =
       entry.showInDropdown === true ||
