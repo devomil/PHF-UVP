@@ -1054,10 +1054,25 @@ Create an OPTIMIZED visual direction that requires NO IMPROVEMENT. ${isProductWo
 
 router.post('/ask-suzzie/asset-library', isAuthenticated, async (req: Request, res: Response) => {
   try {
-    const { message, conversationHistory, context } = req.body;
+    const { message, conversationHistory, context, imageAttachment } = req.body;
 
     if (!message || typeof message !== 'string') {
       return res.status(400).json({ success: false, error: 'Message is required' });
+    }
+
+    if (imageAttachment && imageAttachment.base64 && imageAttachment.mediaType) {
+      const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+      if (!allowedTypes.includes(imageAttachment.mediaType)) {
+        return res.status(400).json({ success: false, error: 'Unsupported image format. Use JPEG, PNG, or WebP.' });
+      }
+      const base64Len = typeof imageAttachment.base64 === 'string' ? imageAttachment.base64.length : 0;
+      const estimatedBytes = Math.ceil(base64Len * 0.75);
+      if (estimatedBytes > 10 * 1024 * 1024) {
+        return res.status(413).json({ success: false, error: 'Image too large. Maximum size is 10MB.' });
+      }
+      if (base64Len < 100 || !/^[A-Za-z0-9+/=]+$/.test(imageAttachment.base64.substring(0, 200))) {
+        return res.status(400).json({ success: false, error: 'Invalid image data.' });
+      }
     }
 
     const { llmClient } = await import('../services/piapi-llm-client');

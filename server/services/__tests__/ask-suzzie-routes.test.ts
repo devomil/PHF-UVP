@@ -555,4 +555,42 @@ describe('POST /api/universal-video/ask-suzzie/asset-library', () => {
     expect(res.body.success).toBe(true);
     expect(res.body.suggestedProvider).toBe('runway');
   });
+
+  it('returns 400 when imageAttachment has an unsupported media type', async () => {
+    const res = await request(makeApp())
+      .post('/api/universal-video/ask-suzzie/asset-library')
+      .set('x-test-user', 'user-1')
+      .send({
+        message: 'What do you think of this image?',
+        imageAttachment: {
+          mediaType: 'image/gif',
+          base64: 'R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==',
+        },
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.success).toBe(false);
+    expect(res.body.error).toMatch(/unsupported image format/i);
+    expect(createChatCompletionMock).not.toHaveBeenCalled();
+  });
+
+  it('returns 413 when imageAttachment base64 decodes to more than 10 MB', async () => {
+    const oversizedBase64 = 'A'.repeat(14_000_000);
+
+    const res = await request(makeApp())
+      .post('/api/universal-video/ask-suzzie/asset-library')
+      .set('x-test-user', 'user-1')
+      .send({
+        message: 'Can you analyse this large image?',
+        imageAttachment: {
+          mediaType: 'image/jpeg',
+          base64: oversizedBase64,
+        },
+      });
+
+    expect(res.status).toBe(413);
+    expect(res.body.success).toBe(false);
+    expect(res.body.error).toMatch(/image too large/i);
+    expect(createChatCompletionMock).not.toHaveBeenCalled();
+  });
 });
