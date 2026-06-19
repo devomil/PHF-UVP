@@ -23,6 +23,7 @@ import { runScriptPipeline } from '../services/script-pipeline-service';
 import type { ProductContext } from '../services/product-analysis-service';
 import { videoProviderSelector, SceneForSelection } from '../services/video-provider-selector';
 import { imageProviderSelector } from '../services/image-provider-selector';
+import { normalizeImageProviderId } from '../config/image-providers';
 import { motionGraphicsRouter } from '../services/motion-graphics-router';
 import { motionGraphicsGenerator } from '../services/motion-graphics-generator';
 import { soundDesignService } from '../services/sound-design-service';
@@ -6840,7 +6841,7 @@ const ALLOWED_IMAGE_LOCK_PROVIDERS = new Set([
   'flux-1-dev',
   'flux-1.1-pro',
   'falai',
-  'stable-diffusion-3',
+  'stability',
   'midjourney',
   'gpt-image-1',
 ]);
@@ -6848,7 +6849,10 @@ router.patch('/:projectId/scenes/:sceneId/provider-lock', isAuthenticated, async
   try {
     const userId = (req.user as any)?.id;
     const { projectId, sceneId } = req.params;
-    const { imageProviderLock, videoProviderLock } = req.body || {};
+    const { imageProviderLock: rawImageProviderLock, videoProviderLock } = req.body || {};
+    const imageProviderLock = typeof rawImageProviderLock === 'string' && rawImageProviderLock !== ''
+      ? normalizeImageProviderId(rawImageProviderLock)
+      : rawImageProviderLock;
 
     if (imageProviderLock !== undefined && imageProviderLock !== null && imageProviderLock !== '') {
       if (typeof imageProviderLock !== 'string' || !ALLOWED_IMAGE_LOCK_PROVIDERS.has(imageProviderLock)) {
@@ -7238,8 +7242,8 @@ router.post('/:projectId/scenes/:sceneId/regenerate-image', isAuthenticated, asy
       const lockedScene: any = projectData.scenes?.find((s: any) => s.id === sceneId);
       const lock = lockedScene?.assets?.imageProviderLock;
       if (lock) {
-        effectiveProvider = lock;
-        console.log(`[Phase9B] Honoring imageProviderLock for scene ${sceneId}: ${lock}`);
+        effectiveProvider = normalizeImageProviderId(lock);
+        console.log(`[Phase9B] Honoring imageProviderLock for scene ${sceneId}: ${lock}${lock !== effectiveProvider ? ` (normalized to ${effectiveProvider})` : ''}`);
       }
     }
     console.log(`[Phase9B] Regenerating image for scene ${sceneId} with provider: ${effectiveProvider || 'default'}, mode: ${generationMode || 'auto'}`);

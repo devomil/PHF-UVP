@@ -2,7 +2,7 @@
 
 export type ImageStyle = 'default' | 'lifestyle' | 'hero-shot' | 'product-photo' | 'artistic' | 'nature' | 'person';
 
-export type ImageApiProvider = 'piapi' | 'fal' | 'stability' | 'legnext' | 'openai' | 'recraft' | 'nano-banana-2';
+export type ImageApiProvider = 'piapi' | 'fal' | 'legnext' | 'openai' | 'recraft' | 'nano-banana-2';
 
 export interface ImageProvider {
   id: string;
@@ -51,19 +51,12 @@ export const IMAGE_PROVIDERS: Record<string, ImageProvider> = {
     costPerImage: 0.003,
     apiProvider: 'fal',
   },
-  'stable-diffusion-3': {
-    id: 'stable-diffusion-3',
-    name: 'Stable Diffusion 3',
-    modelId: 'sd3',
-    costPerImage: 0.04,
-    apiProvider: 'piapi',
-  },
   'stability': {
     id: 'stability',
     name: 'Stability AI',
     modelId: 'sd3',
     costPerImage: 0.04,
-    apiProvider: 'stability',
+    apiProvider: 'piapi',
   },
   'ideogram': {
     id: 'ideogram',
@@ -146,4 +139,12 @@ export function getImageProviderForStyle(style: ImageStyle, qualityTier: string)
 export function isLegNextProvider(providerId: string): boolean {
   const provider = IMAGE_PROVIDERS[providerId];
   return provider?.apiProvider === 'legnext';
+}
+
+const LEGACY_PROVIDER_ID_MAP: Record<string, string> = {
+  'stable-diffusion-3': 'stability',
+};
+
+export function normalizeImageProviderId(id: string): string {
+  return LEGACY_PROVIDER_ID_MAP[id] ?? id;
 }

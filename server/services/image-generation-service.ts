@@ -258,7 +258,7 @@ class ImageGenerationService {
     const piapiModelMap: Record<string, string> = {
       'flux-1.1-pro': 'Qubico/flux1-dev',
       'flux': 'Qubico/flux1-schnell',
-      'stable-diffusion-3': 'sd3',
+      'stability': 'sd3',
       'ideogram': 'ideogram-v2',
     };
     

@@ -875,9 +875,9 @@ export const IMAGE_PROVIDERS: Record<string, ImageProvider> = {
     },
   },
 
-  'stable-diffusion-3': {
-    id: 'stable-diffusion-3',
-    name: 'stable-diffusion-3',
+  stability: {
+    id: 'stability',
+    name: 'stability',
     displayName: 'Stable Diffusion 3',
     costPerImage: 0.02,
     strengths: ['Versatile', 'Good text rendering', 'Fast'],
