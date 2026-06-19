@@ -853,7 +853,14 @@ function VideoCreatorForm({
             <Mic className="h-4 w-4" />
             Voiceover
           </Label>
-          <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+          <div className="flex items-center gap-2">
+            {formData.voiceName && (
+              <span className="text-xs text-muted-foreground group-data-[state=open]:hidden">
+                {formData.voiceId?.startsWith('cloned:') ? `${formData.voiceName} (Cloned)` : formData.voiceName}
+              </span>
+            )}
+            <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+          </div>
         </CollapsibleTrigger>
         <CollapsibleContent className="pt-2">
           <VoiceSelector
@@ -1336,7 +1343,28 @@ function VoiceoverControlsPanel({
   const [selectedVoiceId, setSelectedVoiceId] = useState(currentVoiceId || '21m00Tcm4TlvDq8ikWAM');
   const [isRegenerating, setIsRegenerating] = useState(false);
 
-  const selectedVoice = VOICE_OPTIONS.find(v => v.id === selectedVoiceId) || VOICE_OPTIONS[0];
+  const { data: clonedVoicesData } = useQuery<{ success: boolean; voices: { id: number; name: string; status: string }[] }>({
+    queryKey: ['/api/voice-cloning'],
+  });
+  const clonedVoices = clonedVoicesData?.voices?.filter(v => v.status === 'ready') ?? [];
+
+  const isClonedSelected = selectedVoiceId.startsWith('cloned:');
+  const selectedClonedVoice = isClonedSelected
+    ? clonedVoices.find(v => `cloned:${v.id}` === selectedVoiceId)
+    : null;
+  const selectedStandardVoice = !isClonedSelected
+    ? (VOICE_OPTIONS.find(v => v.id === selectedVoiceId) || VOICE_OPTIONS[0])
+    : null;
+
+  const selectedVoiceLabel = isClonedSelected
+    ? selectedClonedVoice
+      ? `${selectedClonedVoice.name} (Cloned)`
+      : currentVoiceName
+        ? `${currentVoiceName} (Cloned)`
+        : selectedVoiceId
+    : selectedStandardVoice
+      ? `${selectedStandardVoice.name} - ${selectedStandardVoice.description}`
+      : selectedVoiceId;
 
   const handleRegenerateVoiceover = async () => {
     setIsRegenerating(true);
@@ -1372,10 +1400,22 @@ function VoiceoverControlsPanel({
         <Select value={selectedVoiceId} onValueChange={setSelectedVoiceId}>
           <SelectTrigger className="flex-1 h-8 text-xs" data-testid="select-voice">
             <SelectValue>
-              {selectedVoice.name} - {selectedVoice.description}
+              {selectedVoiceLabel}
             </SelectValue>
           </SelectTrigger>
           <SelectContent className="max-h-64">
+            {clonedVoices.length > 0 && (
+              <>
+                <div className="px-2 py-1 text-xs font-medium text-muted-foreground">Cloned Voices</div>
+                {clonedVoices.map(cv => (
+                  <SelectItem key={`cloned:${cv.id}`} value={`cloned:${cv.id}`}>
+                    <span className="font-medium">{cv.name}</span>
+                    <span className="text-muted-foreground ml-2">- Cloned</span>
+                  </SelectItem>
+                ))}
+                <div className="px-2 py-1 text-xs font-medium text-muted-foreground mt-1">Standard Voices</div>
+              </>
+            )}
             {VOICE_OPTIONS.map(voice => (
               <SelectItem key={voice.id} value={voice.id}>
                 <span className="font-medium">{voice.name}</span>
