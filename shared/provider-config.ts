@@ -301,6 +301,23 @@ export const VIDEO_PROVIDERS: Record<string, VideoProvider> = {
     visualCategory: ['human_subjects', 'talking-head'],
     qualityNotes: 'Best for long-form presenter and spokesperson content with native lip-sync',
   },
+  omniavatar: {
+    id: 'omniavatar',
+    name: 'omniavatar',
+    displayName: 'OmniAvatar',
+    costPerSecond: 0.05,
+    maxDuration: 30,
+    family: 'omniavatar',
+    tier: 'standard',
+    specialization: 'avatar',
+    strengths: ['Consistent identity', 'Branded spokesperson', 'Expression variety'],
+    weaknesses: ['Avatar-focused', 'Less versatile for general scenes'],
+    bestFor: ['avatar', 'spokesperson', 'branded-presenter', 'consistent-character'],
+    specialties: ['AI avatar generation with consistent identity', 'Branded spokesperson content', 'Presenter animation'],
+    limitations: ['Optimized for avatar/spokesperson use cases'],
+    visualCategory: ['human_subjects', 'talking-head', 'avatar'],
+    qualityNotes: 'Best for branded spokesperson and consistent presenter avatar content',
+  },
 
   'kling-effects': {
     id: 'kling-effects',
@@ -674,6 +691,23 @@ export const VIDEO_PROVIDERS: Record<string, VideoProvider> = {
     visualCategory: ['cinematic', 'general', 'storytelling'],
     qualityNotes: 'High-quality general T2V with consistent style and strong prompt understanding',
   },
+  'sora-2-pro': {
+    id: 'sora-2-pro',
+    name: 'sora-2-pro',
+    displayName: 'Sora 2 Pro',
+    description: 'Premium OpenAI Sora 2 with enhanced fidelity and top-tier cinematic output',
+    costPerSecond: 0.10,
+    maxDuration: 10,
+    family: 'sora',
+    tier: 'ultra',
+    strengths: ['Ultra-high fidelity', 'Hero content quality', 'Premium cinematic output', 'Strong prompt adherence'],
+    weaknesses: ['Highest cost tier', 'Limited availability'],
+    bestFor: ['hero-content', 'cinematic', 'premium', 'broadcast'],
+    specialties: ['Premium cinematic output', 'Ultra-high fidelity rendering', 'Hero and flagship content'],
+    limitations: ['Highest cost tier', 'May have limited API availability'],
+    visualCategory: ['cinematic', 'premium', 'hero'],
+    qualityNotes: 'Premium Sora 2 tier — maximum fidelity for hero content and flagship productions',
+  },
 
   // Pika
   pika: {
@@ -862,6 +896,24 @@ export const IMAGE_PROVIDERS: Record<string, ImageProvider> = {
       promptSyntax: '@imageN',
       hint: 'Upload up to 5 reference images and tag them as @image1, @image2, … in your prompt. Midjourney blends their style, composition, and content to guide the generated image.',
     },
+  },
+
+  ideogram: {
+    id: 'ideogram',
+    name: 'ideogram',
+    displayName: 'Ideogram',
+    costPerImage: 0.04,
+    strengths: ['Best-in-class text rendering', 'Marketing materials', 'Social graphics', 'Readable text overlays'],
+    bestFor: ['text-in-image', 'marketing', 'social-graphics', 'product-labels', 'infographic'],
+  },
+
+  'nano-banana-pro': {
+    id: 'nano-banana-pro',
+    name: 'nano-banana-pro',
+    displayName: 'Nano Banana Pro',
+    costPerImage: 0.04,
+    strengths: ['Photorealistic output', 'Natural scenes', 'People and lifestyle', 'Organic quality'],
+    bestFor: ['lifestyle', 'person', 'photorealistic', 'product', 'natural-scene'],
   },
 };
 

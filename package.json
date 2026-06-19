@@ -9,6 +9,7 @@
     "db:push": "drizzle-kit push",
     "test": "vitest run",
     "lint:dialogs": "bash scripts/check-no-native-dialogs.sh",
+    "lint:providers": "tsx scripts/check-provider-catalog-sync.ts",
     "prepare": "husky"
   },
   "dependencies": {
