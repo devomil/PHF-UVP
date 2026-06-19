@@ -1,5 +1,9 @@
 // Static provider config — no DB imports. Safe to import from scripts.
 // ai-video-providers.ts re-exports everything from here.
+//
+// PROVIDER_TEST_ID_MAP lives here (not in ai-video-providers.ts) so that
+// scripts/check-provider-catalog-sync.ts can import it without pulling in
+// any DB dependencies.
 
 export interface AIVideoProviderConfig {
   modelId: string;
@@ -15,6 +19,39 @@ export interface AIVideoProviderConfig {
   };
   supportedAspectRatios: string[];
 }
+
+// Maps each provider key to the PiAPI test IDs whose pass/fail status
+// controls whether the provider is included in the live dropdown.
+// Every showInDropdown:true entry in VIDEO_PROVIDER_CATALOG must appear here.
+// The lint check in scripts/check-provider-catalog-sync.ts enforces this.
+export const PROVIDER_TEST_ID_MAP: Record<string, string[]> = {
+  'omni-human-1.5': ['omnihuman-1.5'],
+  'kling-avatar': ['i2v-kling-avatar'],
+  'omniavatar': ['i2v-omniavatar'],
+  'kling-2.6': ['kling-2.6'],
+  'kling-2.6-pro': ['kling-2.6'],
+  'kling-2.1-master': ['kling-2.6'],
+  'kling-2.6-motion-control-pro': ['kling-2.6'],
+  'kling-2.5': ['kling-2.5'],
+  'kling-effects': ['kling-effects'],
+  'veo-3.1': ['veo-3.1'],
+  'veo-3': ['veo-3'],
+  'luma': ['luma'],
+  'runway': ['runway'],
+  'runway-4.5': ['runway-4.5'],
+  'runway-gen4': ['runway-gen4'],
+  'runway-gen4-aleph': ['runway-gen4-aleph'],
+  'runway-act-two': ['runway-act-two'],
+  'hailuo': ['hailuo'],
+  'wan-2.6': ['wan-2.6'],
+  'pika': ['pika'],
+  'seedance-1.0': ['seedance-1.0', 'seedance-pro'],
+  'seedance-2.0': ['seedance-2'],
+  'seedance-2.0-fast': ['seedance-2-fast'],
+  'sora-2': ['sora-2'],
+  'sora-2-pro': ['sora-2-pro'],
+  'hunyuan': ['hunyuan'],
+};
 
 export const AI_VIDEO_PROVIDERS: Record<string, AIVideoProviderConfig> = {
   'kling': {

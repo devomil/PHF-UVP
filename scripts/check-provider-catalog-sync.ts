@@ -6,6 +6,7 @@
 // IMAGE_PROVIDER_CATALOG  → IMAGE_PROVIDERS        (shared/provider-config.ts)
 // VIDEO_PROVIDER_CATALOG  → AI_VIDEO_PROVIDERS     (server/config/ai-video-providers-static.ts)
 // VIDEO_PROVIDER_CATALOG  → server VIDEO_PROVIDERS (server/config/video-providers.ts, derived from AI_VIDEO_PROVIDERS)
+// VIDEO_PROVIDER_CATALOG  → PROVIDER_TEST_ID_MAP   (server/config/ai-video-providers-static.ts)
 // IMAGE_PROVIDER_CATALOG  → server IMAGE_PROVIDERS (server/config/image-providers.ts)
 //   Flags checked: showInDropdown, showInImageDropdown, showInI2IDropdown
 //
@@ -14,7 +15,7 @@
 
 import { VIDEO_PROVIDER_CATALOG, IMAGE_PROVIDER_CATALOG } from '../shared/provider-catalog.js';
 import { VIDEO_PROVIDERS, IMAGE_PROVIDERS } from '../shared/provider-config.js';
-import { AI_VIDEO_PROVIDERS } from '../server/config/ai-video-providers-static.js';
+import { AI_VIDEO_PROVIDERS, PROVIDER_TEST_ID_MAP } from '../server/config/ai-video-providers-static.js';
 import { IMAGE_PROVIDERS as SERVER_IMAGE_PROVIDERS } from '../server/config/image-providers.js';
 
 interface Gap {
@@ -48,6 +49,18 @@ for (const entry of IMAGE_PROVIDER_CATALOG) {
 for (const entry of VIDEO_PROVIDER_CATALOG) {
   if (entry.showInDropdown === true && !(entry.id in AI_VIDEO_PROVIDERS)) {
     gaps.push({ catalog: 'VIDEO_PROVIDER_CATALOG', registry: 'server/AI_VIDEO_PROVIDERS', id: entry.id });
+  }
+}
+
+// PROVIDER_TEST_ID_MAP gates which providers the live tested-providers filter
+// activates. A showInDropdown provider absent from this map will never be
+// surfaced through the test-results path (it silently falls through or gets
+// excluded). Every showInDropdown:true video catalog entry that also exists in
+// AI_VIDEO_PROVIDERS must have a PROVIDER_TEST_ID_MAP entry.
+
+for (const entry of VIDEO_PROVIDER_CATALOG) {
+  if (entry.showInDropdown === true && entry.id in AI_VIDEO_PROVIDERS && !(entry.id in PROVIDER_TEST_ID_MAP)) {
+    gaps.push({ catalog: 'VIDEO_PROVIDER_CATALOG', registry: 'server/PROVIDER_TEST_ID_MAP', id: entry.id });
   }
 }
 

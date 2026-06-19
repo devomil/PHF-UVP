@@ -2,40 +2,12 @@ import { db } from '../db';
 import { sql } from 'drizzle-orm';
 
 export type { AIVideoProviderConfig } from './ai-video-providers-static';
-export { AI_VIDEO_PROVIDERS } from './ai-video-providers-static';
-import { AI_VIDEO_PROVIDERS } from './ai-video-providers-static';
+export { AI_VIDEO_PROVIDERS, PROVIDER_TEST_ID_MAP } from './ai-video-providers-static';
+import { AI_VIDEO_PROVIDERS, PROVIDER_TEST_ID_MAP } from './ai-video-providers-static';
 
 let cachedPassedProviders: Set<string> | null = null;
 let cacheTimestamp = 0;
 const CACHE_TTL_MS = 5 * 60 * 1000;
-
-const PROVIDER_TEST_ID_MAP: Record<string, string[]> = {
-  'omni-human-1.5': ['omnihuman-1.5'],
-  'kling-avatar': ['i2v-kling-avatar'],
-  'omniavatar': ['i2v-omniavatar'],
-  'kling-2.6': ['kling-2.6'],
-  'kling-2.6-pro': ['kling-2.6'],
-  'kling-2.1-master': ['kling-2.6'],
-  'kling-2.6-motion-control-pro': ['kling-2.6'],
-  'kling-2.5': ['kling-2.5'],
-  'veo-3.1': ['veo-3.1'],
-  'veo-3': ['veo-3'],
-  'luma': ['luma'],
-  'runway': ['runway'],
-  'runway-4.5': ['runway-4.5'],
-  'runway-gen4': ['runway-gen4'],
-  'runway-gen4-aleph': ['runway-gen4-aleph'],
-  'runway-act-two': ['runway-act-two'],
-  'hailuo': ['hailuo'],
-  'wan-2.6': ['wan-2.6'],
-  'pika': ['pika'],
-  'seedance-1.0': ['seedance-1.0', 'seedance-pro'],
-  'seedance-2.0': ['seedance-2'],
-  'seedance-2.0-fast': ['seedance-2-fast'],
-  'sora-2': ['sora-2'],
-  'sora-2-pro': ['sora-2-pro'],
-  'hunyuan': ['hunyuan'],
-};
 
 async function loadPassedProviders(): Promise<Set<string>> {
   try {
