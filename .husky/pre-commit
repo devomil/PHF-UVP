@@ -1,1 +1,2 @@
 npm run lint:dialogs
+npm run lint:providers
