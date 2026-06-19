@@ -6,6 +6,7 @@ import {
   getDropdownI2IProviders,
   getImageDropdownProviders,
   getDropdownVideoProviders,
+  getDropdownV2VProviders,
 } from '../provider-catalog';
 import { getMultiImageSupport } from '../provider-config';
 
@@ -349,6 +350,63 @@ describe('getDropdownVideoProviders', () => {
     'entry %s has name and description matching the catalog',
     (id, name, description) => {
       const result = getDropdownVideoProviders();
+      const entry = result.find(p => p.id === id);
+      expect(entry).toBeDefined();
+      expect(entry!.name).toBe(name);
+      expect(entry!.description).toBe(description);
+    },
+  );
+});
+
+// ---------------------------------------------------------------------------
+// getDropdownV2VProviders — catalog flag sync
+// ---------------------------------------------------------------------------
+describe('getDropdownV2VProviders', () => {
+  const v2vCatalogEntries = VIDEO_PROVIDER_CATALOG.filter(p => p.showInV2VDropdown === true);
+
+  it('always puts the auto entry first', () => {
+    const result = getDropdownV2VProviders();
+    expect(result.length).toBeGreaterThan(0);
+    expect(result[0].id).toBe('auto');
+  });
+
+  it('contains exactly one auto entry', () => {
+    const result = getDropdownV2VProviders();
+    const autoEntries = result.filter(p => p.id === 'auto');
+    expect(autoEntries).toHaveLength(1);
+  });
+
+  it('includes every catalog entry marked showInV2VDropdown', () => {
+    const result = getDropdownV2VProviders();
+    const resultIds = result.map(p => p.id);
+    for (const entry of v2vCatalogEntries) {
+      expect(resultIds).toContain(entry.id);
+    }
+  });
+
+  it('does not include providers not marked showInV2VDropdown (except auto)', () => {
+    const flaggedIds = new Set(v2vCatalogEntries.map(p => p.id));
+    const result = getDropdownV2VProviders();
+    for (const item of result) {
+      if (item.id === 'auto') continue;
+      expect(flaggedIds.has(item.id)).toBe(true);
+    }
+  });
+
+  it('every returned entry has a non-empty id, name, and description', () => {
+    const result = getDropdownV2VProviders();
+    expect(result.length).toBeGreaterThan(0);
+    for (const entry of result) {
+      expect(entry.id.length).toBeGreaterThan(0);
+      expect(entry.name.length).toBeGreaterThan(0);
+      expect(entry.description.length).toBeGreaterThan(0);
+    }
+  });
+
+  it.each(v2vCatalogEntries.map(p => [p.id, p.name, p.description] as const))(
+    'entry %s has name and description matching the catalog',
+    (id, name, description) => {
+      const result = getDropdownV2VProviders();
       const entry = result.find(p => p.id === id);
       expect(entry).toBeDefined();
       expect(entry!.name).toBe(name);
