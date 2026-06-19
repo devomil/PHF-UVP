@@ -518,3 +518,152 @@ describe("ProviderCapabilitySelector — suzzieRationale badge", () => {
     expect(tooltipContent.textContent).toContain(NEW_RATIONALE);
   });
 });
+
+// ---------------------------------------------------------------------------
+// 5. Micro-scene modal integration — Suzzie provider recommendation flow
+//    Mirrors EnhancedSceneEditor's msModalProvider / msModalSuzzieProviderRationale
+//    wiring that lives inside the micro-scene fullscreen modal.
+// ---------------------------------------------------------------------------
+describe("Micro-scene modal integration — Suzzie provider recommendation flow", () => {
+  const PROVIDER_ID = "kling-2.6";
+  const RATIONALE = "Kling 2.6 Pro excels at stable product I2V with strong compositional control.";
+
+  /**
+   * Thin wrapper that mirrors the wiring inside EnhancedSceneEditor's
+   * micro-scene fullscreen modal:
+   *   AskSuzziePanel.onApplyProvider → setMsModalProvider + setMsModalSuzzieProviderRationale
+   *   ProviderCapabilitySelector receives selectedProvider={msModalProvider}
+   *                               and suzzieRationale={msModalSuzzieProviderRationale}
+   * Manual provider selection (onSelectProvider) clears msModalSuzzieProviderRationale.
+   */
+  function MsModalIntegration() {
+    const [msModalProvider, setMsModalProvider] = React.useState("auto");
+    const [msModalSuzzieProviderRationale, setMsModalSuzzieProviderRationale] = React.useState<
+      string | undefined
+    >(undefined);
+
+    return React.createElement(
+      React.Fragment,
+      null,
+      React.createElement(ProviderCapabilitySelector, {
+        selectedProvider: msModalProvider,
+        onSelectProvider: (id: string) => {
+          setMsModalProvider(id);
+          setMsModalSuzzieProviderRationale(undefined);
+        },
+        suzzieRationale: msModalSuzzieProviderRationale,
+      }),
+      React.createElement(AskSuzziePanel, {
+        sceneContext: { narration: "Micro-scene product close-up" },
+        onApplyProvider: (providerId: string, rationale?: string) => {
+          setMsModalProvider(providerId);
+          setMsModalSuzzieProviderRationale(rationale);
+        },
+      })
+    );
+  }
+
+  beforeEach(() => {
+    (global as any).fetch = makeFetchMock(PROVIDER_ID, RATIONALE);
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
+
+  it("shows the 'Why?' badge with the correct rationale after clicking Apply Provider", async () => {
+    render(React.createElement(MsModalIntegration));
+
+    // Initially no recommendation badge
+    expect(screen.getByText("Auto-select")).toBeTruthy();
+    expect(screen.queryByText("Why?")).toBeNull();
+
+    // Open Suzzie and trigger provider recommendation
+    fireEvent.click(screen.getByText("Ask Suzzie"));
+    const quickAction = await screen.findByText("Best style & provider?");
+    fireEvent.click(quickAction);
+
+    // Apply the recommendation
+    const applyBtn = await screen.findByText("Apply Provider");
+    fireEvent.click(applyBtn);
+
+    // Provider display name now appears in the selector
+    await waitFor(() => {
+      expect(screen.getByText("Kling 2.6 Pro")).toBeTruthy();
+    });
+
+    // "Why?" badge is visible — msModalSuzzieProviderRationale was set
+    expect(screen.getByText("Why?")).toBeTruthy();
+  });
+
+  it("shows the correct rationale text in the tooltip for the micro-scene modal badge", async () => {
+    render(React.createElement(MsModalIntegration));
+
+    fireEvent.click(screen.getByText("Ask Suzzie"));
+    const quickAction = await screen.findByText("Best style & provider?");
+    fireEvent.click(quickAction);
+
+    const applyBtn = await screen.findByText("Apply Provider");
+    fireEvent.click(applyBtn);
+
+    await waitFor(() => {
+      const tooltipContent = screen.getByTestId("tooltip-content");
+      expect(tooltipContent.textContent).toContain(RATIONALE);
+    });
+  });
+
+  it("clears the 'Why?' badge when the user manually picks a provider in the micro-scene modal", async () => {
+    render(React.createElement(MsModalIntegration));
+
+    // Apply Suzzie's recommendation
+    fireEvent.click(screen.getByText("Ask Suzzie"));
+    const quickAction = await screen.findByText("Best style & provider?");
+    fireEvent.click(quickAction);
+    const applyBtn = await screen.findByText("Apply Provider");
+    fireEvent.click(applyBtn);
+    await waitFor(() => expect(screen.getByText("Why?")).toBeTruthy());
+
+    // Manually pick "Auto-select" in the provider dropdown —
+    // onSelectProvider fires → setMsModalSuzzieProviderRationale(undefined)
+    const selectorTrigger = screen.getByText("Kling 2.6 Pro").closest("button")!;
+    fireEvent.click(selectorTrigger);
+
+    const autoOption = await screen.findByText("Auto-select");
+    fireEvent.click(autoOption);
+
+    // Badge must be gone because msModalSuzzieProviderRationale was cleared
+    await waitFor(() => {
+      expect(screen.queryByText("Why?")).toBeNull();
+    });
+  });
+
+  it("does not show the 'Why?' badge when the API returns no rationale in the micro-scene modal", async () => {
+    (global as any).fetch = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        success: true,
+        message: "I recommend Kling 2.6 Pro.",
+        suggestedProvider: PROVIDER_ID,
+        // no suggestedProviderRationale
+      }),
+      text: async () => "{}",
+    }));
+
+    render(React.createElement(MsModalIntegration));
+
+    fireEvent.click(screen.getByText("Ask Suzzie"));
+    const quickAction = await screen.findByText("Best style & provider?");
+    fireEvent.click(quickAction);
+
+    const applyBtn = await screen.findByText("Apply Provider");
+    fireEvent.click(applyBtn);
+
+    // Provider switches but no rationale → badge must not appear
+    await waitFor(() => {
+      expect(screen.getByText("Kling 2.6 Pro")).toBeTruthy();
+    });
+    expect(screen.queryByText("Why?")).toBeNull();
+  });
+});
