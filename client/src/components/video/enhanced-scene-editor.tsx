@@ -189,7 +189,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
     }
   );
   const [referenceVideoUrl, setReferenceVideoUrl] = useState<string>(
-    () => scene.assets?.referenceVideoUrl || ''
+    () => scene.assets?.referenceVideoUrl || scene.assets?.videoUrl || ''
   );
   const [showLibrary, setShowLibrary] = useState(false);
   const [showEditLibrary, setShowEditLibrary] = useState(false);
@@ -1049,6 +1049,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
         : generationMode;
       const sourceImage = referenceImageUrls.length > 0 ? referenceImageUrls[0] : imageUrl;
       const useSourceImage = activeMode === "i2v" || activeMode === "i2i";
+      const isV2V = !!referenceVideoUrl;
       const res = await fetch(`/api/universal-video/${projectId}/scenes/${sceneId}/regenerate-video`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1056,10 +1057,11 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
         body: JSON.stringify({
           query: editValues.visualDirection,
           provider: provider === "auto" ? undefined : provider,
-          sourceImageUrl: useSourceImage ? sourceImage : undefined,
-          sourceImageUrls: useSourceImage && referenceImageUrls.length > 1 ? referenceImageUrls : undefined,
-          referenceImages: referenceImageUrls.length > 0 ? referenceImageUrls : undefined,
-          generationMode: activeMode,
+          sourceImageUrl: !isV2V && useSourceImage ? sourceImage : undefined,
+          sourceImageUrls: !isV2V && useSourceImage && referenceImageUrls.length > 1 ? referenceImageUrls : undefined,
+          referenceImages: !isV2V && referenceImageUrls.length > 0 ? referenceImageUrls : undefined,
+          generationMode: isV2V ? 'v2v' : activeMode,
+          referenceVideoUrl: isV2V ? referenceVideoUrl : undefined,
           imageFidelity: sceneImageFidelity !== null ? sceneImageFidelity : undefined,
         }),
       });
@@ -3055,6 +3057,22 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                   <Video className="w-3 h-3" />
                   Add Video
                 </button>
+                {videoUrl && !referenceVideoUrl && isEditing && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setReferenceVideoUrl(videoUrl);
+                      persistReferenceVideo(videoUrl);
+                      toast({ title: "Current clip set as V2V reference", description: "Regenerating will transform this clip." });
+                    }}
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-dashed text-[11px] transition-colors hover:border-violet-500/40"
+                    style={{ borderColor: "rgba(124,58,237,0.3)", color: "rgb(124,58,237)" }}
+                    title="Use the scene's current video clip as the V2V source for regeneration"
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                    Use current clip
+                  </button>
+                )}
               </div>
 
               <button
@@ -3143,6 +3161,12 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
               </div>
             )}
 
+            {referenceVideoUrl && (
+              <div className="mt-2 flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[11px]" style={{ backgroundColor: "rgba(124,58,237,0.08)", color: "rgb(124,58,237)" }}>
+                <RefreshCw className="w-3 h-3 flex-shrink-0" />
+                <span>V2V active — regenerating will transform this clip</span>
+              </div>
+            )}
             {referenceImageUrls.length === 0 && !referenceVideoUrl && (
               <p className="text-[10px] mt-2" style={{ color: "var(--text-muted)" }}>
                 Add product photos, brand images, or style reference videos to guide AI generation. Images trigger I2V mode for better brand consistency.

@@ -161,6 +161,7 @@ export async function processVideoJob(jobId: string) {
         preferredProvider: job.provider || "auto",
         negativePrompt: job.negativePrompt || undefined,
         imageUrl: resolvedImageUrl,
+        sourceVideoUrl: jobI2vSettings.sourceVideoUrl || undefined,
         ...(jobI2vSettings.isCharacterReference ? { isCharacterReference: true } : {}),
         ...(jobI2vSettings.artPresetId ? { artPresetId: jobI2vSettings.artPresetId } : {}),
         ...(Object.keys(i2vSettingsForProvider).length > 0 ? { i2vSettings: i2vSettingsForProvider } : {}),

@@ -1912,6 +1912,61 @@ class PiAPIVideoService {
     };
   }
   /**
+   * Video-to-Video transformation: animates/transforms an existing clip guided by a prompt.
+   * Uses Kling I2V pipeline with the source video URL as the reference image input.
+   * Providers that natively support V2V (video_url field) will receive it directly;
+   * others fall back to T2V with the prompt describing the desired transformation.
+   */
+  async generateVideoToVideo(options: {
+    sourceVideoUrl: string;
+    prompt: string;
+    duration: number;
+    aspectRatio: '16:9' | '9:16' | '1:1';
+    model: string;
+    negativePrompt?: string;
+  }): Promise<PiAPIGenerationResult> {
+    if (!this.isAvailable()) {
+      return { success: false, error: 'PiAPI key not configured' };
+    }
+
+    const startTime = Date.now();
+    console.log(`[PiAPI:${options.model}] ========== V2V GENERATION ==========`);
+    console.log(`[PiAPI:${options.model}] Source video: ${options.sourceVideoUrl.substring(0, 80)}...`);
+    console.log(`[PiAPI:${options.model}] Prompt: ${options.prompt}`);
+
+    const modelConfig = this.getModelConfig(options.model);
+    // Derive Kling version string from model key (e.g. "kling-2.6" → "2.6")
+    const klingVersion = options.model.match(/kling-(\d+\.\d+)/)?.[1] || '2.6';
+
+    const requestBody: any = {
+      model: modelConfig.modelId,
+      task_type: 'video_generation',
+      input: {
+        prompt: options.prompt,
+        negative_prompt: options.negativePrompt || '',
+        duration: Math.min(options.duration, modelConfig.maxDuration),
+        aspect_ratio: options.aspectRatio,
+        mode: 'std',
+        version: klingVersion,
+        video_url: options.sourceVideoUrl,
+      },
+    };
+
+    try {
+      const result = await this.createAndPollTask(requestBody, options.model);
+      const genMs = Date.now() - startTime;
+      if (result.videoUrl && !result.videoUrl.startsWith('http')) {
+        const s3Url = await this.uploadToS3(result.videoUrl, options.model);
+        return { ...result, videoUrl: s3Url, s3Url, generationTimeMs: genMs };
+      }
+      return { ...result, generationTimeMs: genMs };
+    } catch (err: any) {
+      console.error(`[PiAPI V2V] Error:`, err?.message || err);
+      return { success: false, error: err?.message || 'V2V generation failed' };
+    }
+  }
+
+  /**
    * Video Object Replacement using Kling Multi-Elements
    * Takes an existing video and replaces a specific object with a product image
    */

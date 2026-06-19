@@ -49,6 +49,7 @@ export interface AIVideoOptions {
   visualStyle?: string;
   imageUrl?: string;
   imageUrls?: string[];
+  sourceVideoUrl?: string; // V2V: existing video clip to transform
   qualityTier?: 'ultra' | 'premium' | 'standard' | 'draft';
   i2vSettings?: I2VSettingsInput;
   motionOverride?: MotionControlConfig;
@@ -581,6 +582,27 @@ class AIVideoService {
 
     console.log(`[AIVideo] Using direct Runway API for ${providerKey}`);
 
+    // Route V2V through Runway's dedicated video-to-video endpoint
+    if (options.sourceVideoUrl && !options.imageUrl) {
+      console.log(`[AIVideo] Routing V2V to Runway for ${providerKey}`);
+      const result = await runwayVideoService.generateVideoToVideo({
+        videoUrl: options.sourceVideoUrl,
+        prompt: options.prompt,
+        model: providerKey,
+        duration: options.duration,
+        aspectRatio: options.aspectRatio,
+      });
+      return {
+        success: result.success,
+        videoUrl: result.videoUrl,
+        s3Url: result.s3Url || result.videoUrl,
+        duration: result.duration,
+        cost: result.cost,
+        error: result.error,
+        generationTimeMs: result.generationTimeMs,
+      };
+    }
+
     const result = await runwayVideoService.generateVideo({
       prompt: options.prompt,
       duration: options.duration,
@@ -620,6 +642,28 @@ class AIVideoService {
     console.log(`[AIVideo] Motion control: ${motionControl.camera_movement} @ ${motionControl.intensity}`);
     console.log(`[AIVideo] Motion rationale: ${motionControl.rationale}`);
     
+    // If sourceVideoUrl provided (and no imageUrl), use V2V (video-to-video)
+    if (options.sourceVideoUrl && !options.imageUrl) {
+      console.log(`[AIVideo] Using V2V for ${providerKey} with source clip: ${options.sourceVideoUrl.substring(0, 60)}...`);
+      const result = await piapiVideoService.generateVideoToVideo({
+        sourceVideoUrl: options.sourceVideoUrl,
+        prompt: options.prompt,
+        duration: options.duration,
+        aspectRatio: options.aspectRatio,
+        model: providerKey,
+        negativePrompt: options.negativePrompt,
+      });
+      return {
+        success: result.success,
+        videoUrl: result.videoUrl,
+        s3Url: result.s3Url,
+        duration: result.duration,
+        cost: result.cost,
+        error: result.error,
+        generationTimeMs: result.generationTimeMs,
+      };
+    }
+
     // If imageUrl provided, use I2V (image-to-video) instead of T2V (text-to-video)
     if (options.imageUrl) {
       console.log(`[AIVideo] Using I2V for ${providerKey} with source image: ${options.imageUrl.substring(0, 50)}...`);

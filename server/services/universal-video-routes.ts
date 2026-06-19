@@ -7359,10 +7359,10 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, req
   try {
     const userId = (req.user as any)?.id;
     const { projectId, sceneId } = req.params;
-    const { query, provider, sourceImageUrl, sourceImageUrls: reqImageUrls, referenceImages: reqReferenceImages, i2vSettings, motionControl, forceRegenerate, generationMode, strongAnchor, mode: regenerateMode, referenceUrl: v2vReferenceUrl } = req.body;
+    const { query, provider, sourceImageUrl, sourceImageUrls: reqImageUrls, referenceImages: reqReferenceImages, i2vSettings, motionControl, forceRegenerate, generationMode, strongAnchor, mode: regenerateMode, referenceUrl: v2vReferenceUrl, referenceVideoUrl: reqReferenceVideoUrl } = req.body;
     
-    console.log(`[Phase9B-Async] Creating async video generation job for scene ${sceneId} with provider: ${provider || 'default'}${sourceImageUrl ? ', using I2V with source image' : ''}${i2vSettings ? ', with I2V settings' : ''}${forceRegenerate ? ', FORCE REGENERATE' : ''}`);
-    console.log(`[Phase9B-Async] Generation mode: ${generationMode || 'auto'}`);
+    console.log(`[Phase9B-Async] Creating async video generation job for scene ${sceneId} with provider: ${provider || 'default'}${sourceImageUrl ? ', using I2V with source image' : ''}${i2vSettings ? ', with I2V settings' : ''}${forceRegenerate ? ', FORCE REGENERATE' : ''}${reqReferenceVideoUrl ? ', V2V mode' : ''}`);
+    console.log(`[Phase9B-Async] Generation mode: ${generationMode || 'auto'}${reqReferenceVideoUrl ? ' (V2V override)' : ''}`);
     console.log(`[Phase9B-Async] Source image URL from request: ${sourceImageUrl?.substring(0, 80) || 'none'}`);
     console.log(`[Phase9B-Async] I2V settings: ${JSON.stringify(i2vSettings || 'none')}`);
     console.log(`[Phase9B-Async] Motion control: ${JSON.stringify(motionControl || 'auto (intelligent)')}`);
@@ -7469,17 +7469,21 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, req
     const explicitMode = generationMode || 'auto';
     const forceT2V = !isV2VMode && explicitMode === 't2v';
     const forceI2V = !isV2VMode && explicitMode === 'i2v';
-    // For V2V mode, the scene's brandAssetUrl (or an explicit sourceImageUrl) is used
-    // as the replacement/anchor image for Kling object-replace. Runway V2V ignores it.
-    // For T2V/I2V modes, the existing brand-asset-as-reference logic is unchanged.
-    const shouldUseBrandAsset = !forceT2V && !!scene.brandAssetUrl;
-    const useBrandAssetAsReference = !isV2VMode && shouldUseBrandAsset && requiresPeopleContent && !sourceImageUrl;
+    // forceV2V covers both the legacy mode='video-to-video' path (isV2VMode) and the
+    // newer generationMode='v2v' + referenceVideoUrl path from the scene editor.
+    const forceV2V = isV2VMode || (explicitMode === 'v2v' && !!reqReferenceVideoUrl);
+    console.log(`[Phase9B-Async] V2V mode: ${forceV2V}, referenceVideoUrl: ${(v2vReferenceUrl || reqReferenceVideoUrl)?.substring(0, 80) || 'none'}`);
+    const shouldUseBrandAsset = !forceT2V && !forceV2V && !!scene.brandAssetUrl;
+    const useBrandAssetAsReference = !forceV2V && shouldUseBrandAsset && requiresPeopleContent && !sourceImageUrl;
     const relativeSourceUrl = forceT2V
       ? undefined
       : isV2VMode
         ? (sourceImageUrl || scene.brandAssetUrl || undefined)
-        : (sourceImageUrl || (shouldUseBrandAsset ? scene.brandAssetUrl : undefined));
+        : forceV2V
+          ? undefined
+          : (sourceImageUrl || (shouldUseBrandAsset ? scene.brandAssetUrl : undefined));
     console.log(`[Phase9B-Async] Explicit generation mode: ${isV2VMode ? 'video-to-video' : explicitMode} (forceI2V=${forceI2V})`);
+
     console.log(`[Phase9B-Async] Scene brandAssetUrl: ${scene.brandAssetUrl?.substring(0, 80) || 'none'}`);
     console.log(`[Phase9B-Async] Requires people content: ${requiresPeopleContent}, will use brandAsset: ${shouldUseBrandAsset}, asReference: ${useBrandAssetAsReference}`);
     console.log(`[Phase9B-Async] Relative source image URL: ${relativeSourceUrl?.substring(0, 80) || 'none (T2V mode)'}`);
@@ -7500,7 +7504,7 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, req
       }
     }
     
-    if (!finalSourceImageUrl && !forceT2V) {
+    if (!finalSourceImageUrl && !forceT2V && !forceV2V) {
       const { isStylizedPreset: isStylizedCheck, getVisualArtPreset: getPreset } = await import('../../shared/config/visual-art-presets');
       const sceneArtPresetId = (scene as any).artPresetId || (projectData as any).progress?.artPresetId || (projectData as any).artPresetId;
       const sceneArtPreset = sceneArtPresetId ? getPreset(sceneArtPresetId) : null;
@@ -7625,7 +7629,7 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, req
       : (reqImageUrls && Array.isArray(reqImageUrls) && reqImageUrls.length > 0)
         ? reqImageUrls
         : (sceneRefImages && sceneRefImages.length > 0 ? sceneRefImages : undefined);
-    if (allRefImages && allRefImages.length > 0 && !forceT2V) {
+    if (allRefImages && allRefImages.length > 0 && !forceT2V && !forceV2V) {
       const projectAR = (projectData as any).outputFormat?.aspectRatio || (projectData as any).settings?.aspectRatio || '16:9';
       const resolvedUrls = await Promise.all(
         allRefImages.map((url: string) => getPublicUrlForBrandAsset(url, projectAR))
@@ -7686,7 +7690,7 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, req
     // has refs, only a seed, or both.
     const sceneSeedImageUrl = (scene as any).seedImageUrl as string | undefined;
     let finalPromptForJob = effectivePrompt;
-    if (!forceT2V && (sceneSeedImageUrl || (sceneBrandRefs && sceneBrandRefs.length > 0))) {
+    if (!forceT2V && !forceV2V && (sceneSeedImageUrl || (sceneBrandRefs && sceneBrandRefs.length > 0))) {
       try {
         const { assembleOmniReferenceImages } = await import('../../shared/omni-reference-assembler');
         // Phase 20C aspect-ratio contract — DOCUMENTED DEVIATION from spec.
@@ -7828,9 +7832,12 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, req
       console.log(`[Phase9B-Async] ✓ Forcing REFERENCE MODE — product image will steer composition, not animate the first frame`);
     }
 
-    // Merge V2V settings into i2vSettings so the worker can detect and route the job.
-    const v2vI2vMerge = resolvedV2VReferenceUrl
-      ? { assetLibraryMode: 'v2v' as const, referenceVideoUrl: resolvedV2VReferenceUrl }
+    // Merge V2V settings — support both the legacy mode='video-to-video' path
+    // (resolvedV2VReferenceUrl, already public-URL-resolved) and the newer
+    // generationMode='v2v' path (reqReferenceVideoUrl, passed as-is).
+    const effectiveV2VUrl = resolvedV2VReferenceUrl || (forceV2V && !isV2VMode ? reqReferenceVideoUrl : undefined);
+    const v2vI2vMerge = effectiveV2VUrl
+      ? { assetLibraryMode: 'v2v' as const, referenceVideoUrl: effectiveV2VUrl, sourceVideoUrl: effectiveV2VUrl }
       : {};
     const finalI2vSettings = {
       ...jobI2vWithHint,
@@ -7849,6 +7856,7 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, req
       triggeredBy: userId,
       sourceImageUrl: finalSourceImageUrl,
       sourceImageUrls: finalSourceImageUrls,
+      sourceVideoUrl: effectiveV2VUrl,
       i2vSettings: Object.keys(finalI2vSettings).length > 0 ? finalI2vSettings : undefined,
       motionControl: normalizedMotionControl,
       sceneType: scene.type || 'content',
