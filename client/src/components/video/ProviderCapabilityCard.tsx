@@ -2,6 +2,12 @@ import { memo, useState } from 'react';
 import { ChevronDown, ChevronUp, Sparkles, Info } from 'lucide-react';
 import { VIDEO_PROVIDERS } from '@shared/provider-config';
 import { getDropdownVideoProviders, VIDEO_PROVIDER_CATALOG } from '@shared/provider-catalog';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 const TIER_STYLES: Record<string, { label: string; bg: string; text: string; border: string }> = {
   premium: { label: 'Premium', bg: 'rgba(251,191,36,0.15)', text: 'rgb(252,211,77)', border: 'rgba(251,191,36,0.3)' },
@@ -153,6 +159,7 @@ interface ProviderCapabilitySelectorProps {
   compact?: boolean;
   styleRecommendedProviders?: string[];
   styleLabel?: string;
+  suzzieRationale?: string;
 }
 
 export const ProviderCapabilitySelector = memo(function ProviderCapabilitySelector({
@@ -164,6 +171,7 @@ export const ProviderCapabilitySelector = memo(function ProviderCapabilitySelect
   compact = false,
   styleRecommendedProviders,
   styleLabel,
+  suzzieRationale,
 }: ProviderCapabilitySelectorProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -233,6 +241,30 @@ export const ProviderCapabilitySelector = memo(function ProviderCapabilitySelect
                 </span>
               )}
             </span>
+          )}
+          {suzzieRationale && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span
+                    className="inline-flex items-center gap-0.5 text-[9px] px-1.5 py-0.5 rounded-full cursor-default flex-shrink-0"
+                    style={{
+                      backgroundColor: 'rgba(34,197,94,0.15)',
+                      color: 'rgb(134,239,172)',
+                      border: '1px solid rgba(34,197,94,0.3)',
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <Info className="w-2.5 h-2.5" />
+                    Why?
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent className="max-w-xs text-left" side="bottom">
+                  <p className="text-xs font-semibold mb-0.5" style={{ color: 'rgb(134,239,172)' }}>Suzzie's reasoning</p>
+                  <p className="text-xs">{suzzieRationale}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           )}
         </div>
         {isExpanded ? (

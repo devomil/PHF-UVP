@@ -33,7 +33,7 @@ interface ChatMessage {
 interface AskSuzziePanelProps {
   sceneContext: SuzzieSceneContext;
   onApplyVisualDirection?: (prompt: string) => void;
-  onApplyProvider?: (providerId: string) => void;
+  onApplyProvider?: (providerId: string, rationale?: string) => void;
   onApplyArtStyle?: (artStyleId: string) => void;
   onApplyCfgScale?: (cfgScale: number) => void;
   zIndex?: number;
@@ -389,7 +389,7 @@ export function AskSuzziePanel({ sceneContext, onApplyVisualDirection, onApplyPr
                   )}
                   {onApplyProvider && (
                     <button
-                      onClick={() => onApplyProvider(msg.suggestedProvider!)}
+                      onClick={() => onApplyProvider(msg.suggestedProvider!, msg.suggestedProviderRationale)}
                       className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-semibold transition-all hover:scale-[1.02]"
                       style={{
                         background: "linear-gradient(135deg, rgba(34,197,94,0.3), rgba(16,185,129,0.2))",

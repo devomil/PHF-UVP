@@ -163,6 +163,7 @@ function ScriptGenerationPanel({ projectId, project, scenes }: { projectId: stri
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [selectedProvider, setSelectedProvider] = useState("auto");
+  const [suzzieProviderRationale, setSuzzieProviderRationale] = useState<string | undefined>(undefined);
   const [uploadingSceneId, setUploadingSceneId] = useState<string | null>(null);
   const [librarySceneId, setLibrarySceneId] = useState<string | null>(null);
   const [selectedVoice, setSelectedVoice] = useState(project.voiceoverSettings?.voiceId || project.voiceId || "");
@@ -7228,7 +7229,7 @@ export function QuickCreateAssetPanel({ projectId, project }: { projectId: strin
                     hasReferenceImage: !!(overrideSourceImage || assetsQuery.data?.generationInfo?.sourceImageUrl),
                   }}
                   onApplyVisualDirection={(newPrompt) => setPromptText(newPrompt)}
-                  onApplyProvider={(providerId) => setSelectedProvider(providerId)}
+                  onApplyProvider={(providerId, rationale) => { setSelectedProvider(providerId); setSuzzieProviderRationale(rationale); }}
                   onApplyArtStyle={(artStyleId) => setArtPresetId(artStyleId)}
                   onApplyCfgScale={(val) => { setImageFidelity(val); setSuzzieSuggestedFidelity(val); }}
                 />
@@ -7239,9 +7240,10 @@ export function QuickCreateAssetPanel({ projectId, project }: { projectId: strin
                   <ProviderCatalogSelector
                     outputType={outputType}
                     provider={selectedProvider}
-                    onProviderChange={setSelectedProvider}
+                    onProviderChange={(v) => { setSelectedProvider(v); setSuzzieProviderRationale(undefined); }}
                     label="Provider"
                     compact
+                    suzzieRationale={suzzieProviderRationale}
                   />
                 </div>
                 <Button

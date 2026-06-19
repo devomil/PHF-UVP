@@ -33,7 +33,7 @@ interface AssetSuzzieChatProps {
   style: string;
   validProviderIds: string[];
   onApplyPrompt: (prompt: string) => void;
-  onApplyProvider?: (provider: string) => void;
+  onApplyProvider?: (provider: string, rationale?: string) => void;
   onApplyNegativePrompt?: (negativePrompt: string) => void;
   onApplyCfgScale?: (cfgScale: number) => void;
 }
@@ -177,9 +177,9 @@ export function AssetSuzzieChat({
     setTimeout(() => setAppliedPromptIndex(null), 2000);
   };
 
-  const handleApplyProvider = (suggestedProvider: string) => {
+  const handleApplyProvider = (suggestedProvider: string, rationale?: string) => {
     if (validProviderIds.includes(suggestedProvider)) {
-      onApplyProvider?.(suggestedProvider);
+      onApplyProvider?.(suggestedProvider, rationale);
     }
   };
 
@@ -318,7 +318,7 @@ export function AssetSuzzieChat({
                       <Button
                         type="button"
                         size="sm"
-                        onClick={() => handleApplyProvider(msg.suggestedProvider!)}
+                        onClick={() => handleApplyProvider(msg.suggestedProvider!, msg.suggestedProviderRationale)}
                         className="h-6 px-2.5 text-[11px] bg-blue-600 hover:bg-blue-700 text-white gap-1 shrink-0 mt-0.5"
                       >
                         <ArrowRight className="h-3 w-3" />

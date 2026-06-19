@@ -228,6 +228,8 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
   const [msModalPrompt, setMsModalPrompt] = useState("");
   const [msModalEditingPrompt, setMsModalEditingPrompt] = useState(false);
   const [msModalProvider, setMsModalProvider] = useState("auto");
+  const [suzzieProviderRationale, setSuzzieProviderRationale] = useState<string | undefined>(undefined);
+  const [msModalSuzzieProviderRationale, setMsModalSuzzieProviderRationale] = useState<string | undefined>(undefined);
   const [msModalMode, setMsModalMode] = useState("auto");
   const [msModalImageFidelity, setMsModalImageFidelity] = useState<number | null>(null);
   const [msModalRefImages, setMsModalRefImages] = useState<string[]>([]);
@@ -2237,12 +2239,13 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                 <div className="w-44">
                   <ProviderCapabilitySelector
                     selectedProvider={provider}
-                    onSelectProvider={setProvider}
+                    onSelectProvider={(id) => { setProvider(id); setSuzzieProviderRationale(undefined); }}
                     recommendedProvider={providerUsed || undefined}
                     recommendationReason={providerUsed ? getProviderRecommendationText(providerUsed, scene.type) : undefined}
                     compact
                     styleRecommendedProviders={styleRecProviders}
                     styleLabel={styleRecLabel}
+                    suzzieRationale={suzzieProviderRationale}
                   />
                 </div>
               </div>
@@ -3765,13 +3768,14 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                               <div className="w-48">
                                 <ProviderCapabilitySelector
                                   selectedProvider={msModalProvider}
-                                  onSelectProvider={setMsModalProvider}
+                                  onSelectProvider={(id) => { setMsModalProvider(id); setMsModalSuzzieProviderRationale(undefined); }}
                                   recommendedProvider={providerUsed || undefined}
                                   recommendationReason={providerUsed ? getProviderRecommendationText(providerUsed, scene.type) : undefined}
                                   darkMode
                                   compact
                                   styleRecommendedProviders={styleRecProviders}
                                   styleLabel={styleRecLabel}
+                                  suzzieRationale={msModalSuzzieProviderRationale}
                                 />
                               </div>
                             </div>
@@ -4183,8 +4187,9 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                       setMsModalPrompt(prompt);
                       setMsModalEditingPrompt(true);
                     }}
-                    onApplyProvider={(providerId) => {
+                    onApplyProvider={(providerId, rationale) => {
                       setMsModalProvider(providerId);
+                      setMsModalSuzzieProviderRationale(rationale);
                     }}
                     onApplyArtStyle={(artStyleId) => {
                       setSceneArtPreset(artStyleId);
@@ -4327,8 +4332,9 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
           setEditValues(prev => ({ ...prev, visualDirection: prompt }));
           silentSaveMutation.mutate({ visualDirection: prompt });
         }}
-        onApplyProvider={(providerId) => {
+        onApplyProvider={(providerId, rationale) => {
           setProvider(providerId);
+          setSuzzieProviderRationale(rationale);
         }}
         onApplyArtStyle={(artStyleId) => {
           setSceneArtPreset(artStyleId);

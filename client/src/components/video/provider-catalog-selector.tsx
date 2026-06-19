@@ -21,9 +21,10 @@ interface ProviderCatalogSelectorProps {
   onProviderChange: (v: string) => void;
   label?: string;
   compact?: boolean;
+  suzzieRationale?: string;
 }
 
-export function ProviderCatalogSelector({ outputType, provider, onProviderChange, label = "Provider", compact = false }: ProviderCatalogSelectorProps) {
+export function ProviderCatalogSelector({ outputType, provider, onProviderChange, label = "Provider", compact = false, suzzieRationale }: ProviderCatalogSelectorProps) {
   const [expanded, setExpanded] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -57,6 +58,24 @@ export function ProviderCatalogSelector({ outputType, provider, onProviderChange
                 <span className="font-medium text-sm" style={{ color: "var(--text-primary)" }}>{selectedProvider.name}</span>
                 {selectedProvider.highlight && (
                   <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-500/20 text-purple-400 whitespace-nowrap">{selectedProvider.highlight}</span>
+                )}
+                {suzzieRationale && (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span
+                          className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full cursor-default flex-shrink-0 bg-green-500/15 text-green-300 border border-green-500/30"
+                        >
+                          <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+                          Why?
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-xs text-left" side="bottom">
+                        <p className="text-xs font-semibold mb-0.5 text-green-300">Suzzie's reasoning</p>
+                        <p className="text-xs">{suzzieRationale}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 )}
                 {providerSupportsNativeAudio(selectedProvider.id) && (
                   <TooltipProvider>

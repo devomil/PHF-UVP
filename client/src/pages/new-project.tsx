@@ -2129,6 +2129,7 @@ export function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () =>
   const [artPresetId, setArtPresetId] = useState<string>("");
   const [aspectRatio, setAspectRatio] = useState("16:9");
   const [provider, setProvider] = useState("auto");
+  const [suzzieProviderRationale, setSuzzieProviderRationale] = useState<string | undefined>(undefined);
   const [saveToLibrary, setSaveToLibrary] = useState(true);
   const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(null);
 
@@ -2554,7 +2555,7 @@ export function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () =>
               style={imageStyle}
               validProviderIds={validProviderIds}
               onApplyPrompt={setPrompt}
-              onApplyProvider={setProvider}
+              onApplyProvider={(prov, rationale) => { setProvider(prov); setSuzzieProviderRationale(rationale); }}
               onApplyNegativePrompt={setNegativePrompt}
               onApplyCfgScale={(val) => { setImageFidelity(val); setSuzzieSuggestedFidelity(val); }}
             />
@@ -2838,10 +2839,29 @@ export function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () =>
 
         <div>
           <Label style={{ color: "var(--text-secondary)" }}>Provider</Label>
-          <Select value={provider} onValueChange={(val) => { setProvider(val); setAdditionalRefImages([]); }}>
+          <Select value={provider} onValueChange={(val) => { setProvider(val); setSuzzieProviderRationale(undefined); setAdditionalRefImages([]); }}>
             <SelectTrigger className="mt-1.5" style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }}>
               <span className="flex items-center gap-1.5 flex-wrap">
                 <span>{getProviders().find(p => p.id === provider)?.name ?? 'Select provider'}</span>
+                {suzzieProviderRationale && (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span
+                          className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full cursor-default bg-green-500/15 text-green-300 border border-green-500/30 whitespace-nowrap"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+                          Why?
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-xs text-left" side="bottom">
+                        <p className="text-xs font-semibold mb-0.5 text-green-300">Suzzie's reasoning</p>
+                        <p className="text-xs">{suzzieProviderRationale}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
                 {providerSupportsMultiImage(provider) && (() => {
                   const support = getMultiImageSupport(provider);
                   const hint = support?.hint ?? "Supports multiple image references via @image_N syntax in your prompt.";

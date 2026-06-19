@@ -164,6 +164,7 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
   const [category, setCategory] = useState<ModeCategory>('generate');
   const [prompt, setPrompt] = useState('');
   const [provider, setProvider] = useState('auto');
+  const [suzzieProviderRationale, setSuzzieProviderRationale] = useState<string | undefined>(undefined);
   const [aspectRatio, setAspectRatio] = useState('16:9');
   const [duration, setDuration] = useState(6);
   const [style, setStyle] = useState('Photorealistic');
@@ -615,7 +616,7 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
                     style={style}
                     validProviderIds={getProviders().map(p => p.id)}
                     onApplyPrompt={setPrompt}
-                    onApplyProvider={setProvider}
+                    onApplyProvider={(prov, rationale) => { setProvider(prov); setSuzzieProviderRationale(rationale); }}
                     onApplyNegativePrompt={setNegativePrompt}
                     onApplyCfgScale={(val) => { setImageFidelity(val); setSuzzieSuggestedFidelity(val); }}
                   />
@@ -1244,9 +1245,28 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
               <div>
                 <Label className="text-sm text-gray-400 mb-1.5 block">Provider</Label>
                 <Select value={provider} onValueChange={(val) => { setProvider(val); setI2vAdditionalImages([]); }}>
-                  <SelectTrigger className="bg-gray-900 border-gray-700 text-white">
+                  <SelectTrigger className="bg-gray-900 border-gray-700 text-white" onClick={() => setSuzzieProviderRationale(undefined)}>
                     <span className="flex items-center gap-1.5 flex-wrap">
                       <span>{getProviders().find(p => p.id === provider)?.name ?? 'Select provider'}</span>
+                      {suzzieProviderRationale && (
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span
+                                className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full cursor-default bg-green-500/15 text-green-300 border border-green-500/30 whitespace-nowrap"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+                                Why?
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent className="max-w-xs text-left" side="bottom">
+                              <p className="text-xs font-semibold mb-0.5 text-green-300">Suzzie's reasoning</p>
+                              <p className="text-xs">{suzzieProviderRationale}</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      )}
                       {providerSupportsMultiImage(provider) && (() => {
                         const support = getMultiImageSupport(provider);
                         const hint = support?.hint ?? "Supports multiple image references via @image_N syntax in your prompt.";
