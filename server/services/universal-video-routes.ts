@@ -7907,7 +7907,7 @@ router.post('/:projectId/scenes/:sceneId/micro-scene/:microSceneIndex/regenerate
   try {
     const userId = (req.user as any)?.id;
     const { projectId, sceneId, microSceneIndex } = req.params;
-    const { provider, generationMode, query, sourceImageUrl, sourceImageUrls: reqSourceImageUrls } = req.body;
+    const { provider, generationMode, query, sourceImageUrl, sourceImageUrls: reqSourceImageUrls, referenceVideoUrl: reqRefVideoUrl } = req.body;
     const msIdx = parseInt(microSceneIndex, 10);
 
     const projectData = await getProjectFromDb(projectId);
@@ -8056,7 +8056,18 @@ router.post('/:projectId/scenes/:sceneId/micro-scene/:microSceneIndex/regenerate
       console.log(`[MicroScene-Regen] Pipeline providerHint: ${msProviderHint} (preference, not strict lock)`);
     }
 
+    const isV2VMode = !!reqRefVideoUrl || generationMode === 'v2v';
+    if (isV2VMode && reqRefVideoUrl) {
+      console.log(`[MicroScene-Regen] V2V mode — referenceVideoUrl: ${reqRefVideoUrl.substring(0, 80)}, provider: ${provider || 'default'}`);
+    }
+
     const msI2vWithHint = !provider && msProviderHint ? { providerHint: msProviderHint } : undefined;
+    const v2vI2vMerge = isV2VMode && reqRefVideoUrl
+      ? { assetLibraryMode: 'v2v' as const, referenceVideoUrl: reqRefVideoUrl, sourceVideoUrl: reqRefVideoUrl }
+      : {};
+    const finalMsI2vSettings = Object.keys({ ...msI2vWithHint, ...v2vI2vMerge }).length > 0
+      ? { ...msI2vWithHint, ...v2vI2vMerge }
+      : undefined;
 
     const job = await videoGenerationWorker.createJob({
       projectId,
@@ -8068,13 +8079,14 @@ router.post('/:projectId/scenes/:sceneId/micro-scene/:microSceneIndex/regenerate
       aspectRatio: (projectData as any).outputFormat?.aspectRatio || (projectData as any).settings?.aspectRatio || '16:9',
       style: (projectData as any).settings?.visualStyle || 'professional',
       triggeredBy: userId,
-      sourceImageUrl: finalSourceImageUrl,
-      sourceImageUrls: finalSourceImageUrls,
-      i2vSettings: msI2vWithHint,
+      sourceImageUrl: isV2VMode ? undefined : finalSourceImageUrl,
+      sourceImageUrls: isV2VMode ? undefined : finalSourceImageUrls,
+      sourceVideoUrl: isV2VMode ? reqRefVideoUrl : undefined,
+      i2vSettings: finalMsI2vSettings,
       sceneType: scene.type || 'content',
     });
 
-    console.log(`[MicroScene-Regen] Created job ${job.jobId} for micro-scene ${msIdx}${finalSourceImageUrl ? ' (I2V with image)' : ' (T2V)'}`);
+    console.log(`[MicroScene-Regen] Created job ${job.jobId} for micro-scene ${msIdx}${isV2VMode ? ' (V2V)' : finalSourceImageUrl ? ' (I2V with image)' : ' (T2V)'}`);
 
     return res.json({
       success: true,

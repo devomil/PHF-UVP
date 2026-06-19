@@ -236,6 +236,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
   const [suzzieProviderRationale, setSuzzieProviderRationale] = useState<string | undefined>(undefined);
   const [msModalSuzzieProviderRationale, setMsModalSuzzieProviderRationale] = useState<string | undefined>(undefined);
   const [msModalMode, setMsModalMode] = useState("auto");
+  const [msModalV2vProvider, setMsModalV2vProvider] = useState<string>('auto');
   const [msModalImageFidelity, setMsModalImageFidelity] = useState<number | null>(null);
   const [msModalRefImages, setMsModalRefImages] = useState<string[]>([]);
   const [msModalShowLibrary, setMsModalShowLibrary] = useState(false);
@@ -1107,7 +1108,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
     }
   };
 
-  const regenMicroSceneVideo = async (msIdx: number, opts?: { query?: string; provider?: string; generationMode?: string; sourceImageUrl?: string; sourceImageUrls?: string[]; skipProviderFallback?: boolean }) => {
+  const regenMicroSceneVideo = async (msIdx: number, opts?: { query?: string; provider?: string; generationMode?: string; sourceImageUrl?: string; sourceImageUrls?: string[]; skipProviderFallback?: boolean; referenceVideoUrl?: string }) => {
     if (!(msIdx in prevMicroSceneVideos.current)) {
       prevMicroSceneVideos.current[msIdx] = scene.microScenes?.[msIdx]?.videoUrl;
     }
@@ -1133,6 +1134,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
           generationMode: opts?.generationMode,
           sourceImageUrl: opts?.sourceImageUrl,
           sourceImageUrls: opts?.sourceImageUrls,
+          referenceVideoUrl: opts?.referenceVideoUrl,
         }),
       });
       if (!res.ok) {
@@ -3919,6 +3921,30 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                           <span className="text-[10px] text-right max-w-[260px]" style={{ color: msActiveMode === "i2v" || msActiveMode === "i2i" ? "rgb(192,132,252)" : "rgba(255,255,255,0.4)" }}>
                             {msModeInfo?.description || "Select a generation mode"}
                           </span>
+                          {referenceVideoUrl && (
+                            <div className="mt-1 w-full">
+                              <span className="text-[11px] font-medium text-white/50 block mb-1 text-right">V2V Provider</span>
+                              <div className="flex flex-wrap gap-1 justify-end" data-testid="ms-v2v-provider-picker">
+                                {getDropdownV2VProviders().map((p) => (
+                                  <button
+                                    key={p.id}
+                                    type="button"
+                                    onClick={() => setMsModalV2vProvider(p.id)}
+                                    data-testid={`ms-v2v-provider-pill-${p.id}`}
+                                    className="px-1.5 py-0.5 rounded text-[9px] font-medium border transition-colors"
+                                    style={
+                                      msModalV2vProvider === p.id
+                                        ? { backgroundColor: "rgba(124,58,237,0.18)", borderColor: "rgba(124,58,237,0.6)", color: "rgb(167,139,250)" }
+                                        : { backgroundColor: "transparent", borderColor: "rgba(255,255,255,0.15)", color: "rgba(255,255,255,0.4)" }
+                                    }
+                                    title={p.description}
+                                  >
+                                    {p.name}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                           <div className="mt-1">
                             <span className="text-[11px] font-medium text-white/50 block mb-1 text-right">Content Tag</span>
                             <div className="flex flex-wrap gap-1 justify-end">
@@ -4286,12 +4312,16 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                         <div className="flex items-center justify-end gap-2">
                           <button
                             onClick={() => {
+                              const isV2V = !!referenceVideoUrl;
                               regenMicroSceneVideo(fullscreenMicroScene, {
                                 query: msModalPrompt || undefined,
-                                provider: msModalProvider === "auto" ? undefined : msModalProvider,
-                                generationMode: msModalMode === "auto" ? undefined : msModalMode,
-                                sourceImageUrl: msModalRefImages.length > 0 ? msModalRefImages[0] : undefined,
-                                sourceImageUrls: msModalRefImages.length > 1 ? msModalRefImages : undefined,
+                                provider: isV2V
+                                  ? (msModalV2vProvider === 'auto' ? undefined : msModalV2vProvider)
+                                  : (msModalProvider === "auto" ? undefined : msModalProvider),
+                                generationMode: isV2V ? 'v2v' : (msModalMode === "auto" ? undefined : msModalMode),
+                                referenceVideoUrl: isV2V ? referenceVideoUrl : undefined,
+                                sourceImageUrl: !isV2V && msModalRefImages.length > 0 ? msModalRefImages[0] : undefined,
+                                sourceImageUrls: !isV2V && msModalRefImages.length > 1 ? msModalRefImages : undefined,
                               });
                             }}
                             disabled={regeneratingMicroScenes.has(fullscreenMicroScene)}
