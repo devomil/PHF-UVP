@@ -155,6 +155,7 @@ export interface RegenerateOptions {
   referenceUrl?: string;
   newPrompt?: string;
   newProvider?: string;
+  replacementImageUrl?: string;
 }
 
 // Phase 20C: structured brand reference entry used by Seedance 2 omni_reference.

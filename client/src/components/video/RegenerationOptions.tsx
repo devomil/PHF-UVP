@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { RefreshCw, Image, Video, Wand2, FileQuestion, AlertTriangle, Zap, Settings2, Sparkles, Camera, Film, Palette, Repeat2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { RefreshCw, Image, Video, Wand2, FileQuestion, AlertTriangle, Zap, Settings2, Sparkles, Camera, Film, Palette, Repeat2, ImagePlus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { getImageDropdownProviders, getDropdownV2VProviders } from '@shared/provider-catalog';
 import { Button } from '@/components/ui/button';
@@ -15,6 +15,7 @@ import {
   DropdownMenuSubContent,
 } from '@/components/ui/dropdown-menu';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { RegenerateOptions, PromptComplexityAnalysis, ReferenceMode } from '@shared/video-types';
 import { RegenerationHistoryPanel } from './RegenerationHistoryPanel';
@@ -100,6 +101,7 @@ interface RegenerationOptionsProps {
   complexity?: PromptComplexityAnalysis;
   referenceMode?: ReferenceMode;
   referenceVideoUrl?: string;
+  brandAssetUrl?: string;
   showHistory?: boolean;
   showStrategyPreview?: boolean;
   onRegenerate: (options: RegenerateOptions) => Promise<void>;
@@ -117,6 +119,7 @@ export const RegenerationOptions = ({
   complexity,
   referenceMode = 'none',
   referenceVideoUrl,
+  brandAssetUrl,
   showHistory = true,
   showStrategyPreview = true,
   onRegenerate,
@@ -124,6 +127,8 @@ export const RegenerationOptions = ({
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [activeTab, setActiveTab] = useState<string>('options');
   const { toast } = useToast();
+  const [replacementImageUrl, setReplacementImageUrl] = useState<string>(brandAssetUrl ?? '');
+  useEffect(() => { setReplacementImageUrl(brandAssetUrl ?? ''); }, [brandAssetUrl]);
 
   const hasReferenceVideo = mediaType === 'video' && !!referenceVideoUrl;
   const isVideoType = mediaType === 'video';
@@ -235,9 +240,24 @@ export const RegenerationOptions = ({
       )}
 
       {hasReferenceVideo && (
-        <div className="flex items-center gap-2 text-sm text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/20 p-2 rounded">
-          <Repeat2 className="w-4 h-4" />
-          <span>Reference video available — V2V mode enabled ({V2V_PROVIDERS.length} providers)</span>
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 text-sm text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/20 p-2 rounded">
+            <Repeat2 className="w-4 h-4" />
+            <span>Reference video available — V2V mode enabled ({V2V_PROVIDERS.length} providers)</span>
+          </div>
+          <div className="flex items-center gap-2 bg-violet-50 dark:bg-violet-900/20 p-2 rounded">
+            <ImagePlus className="w-4 h-4 shrink-0 text-violet-500" />
+            <div className="flex-1 min-w-0">
+              <div className="text-xs font-medium text-violet-700 dark:text-violet-300 mb-1">Replacement image (Kling V2V)</div>
+              <Input
+                data-testid="input-v2v-replacement-image"
+                placeholder="Paste image URL or leave blank to use brand asset"
+                value={replacementImageUrl}
+                onChange={(e) => setReplacementImageUrl(e.target.value)}
+                className="h-7 text-xs"
+              />
+            </div>
+          </div>
         </div>
       )}
       
@@ -346,6 +366,7 @@ export const RegenerationOptions = ({
               onClick={() => handleRegenerate({
                 mode: 'video-to-video',
                 referenceUrl: referenceVideoUrl,
+                replacementImageUrl: replacementImageUrl || undefined,
               })}
               title={!hasReferenceVideo ? 'Add a reference video clip to this scene to enable V2V mode' : undefined}
               data-testid="menu-item-video-to-video"
@@ -479,6 +500,7 @@ export const RegenerationOptions = ({
                       mode: 'video-to-video',
                       referenceUrl: referenceVideoUrl,
                       newProvider: provider.id === 'auto' ? undefined : provider.id,
+                      replacementImageUrl: replacementImageUrl || undefined,
                     })}
                     data-testid={`menu-item-v2v-provider-${provider.id}`}
                   >

@@ -20,6 +20,7 @@ import { SceneDurationControl } from "./scene-duration-control";
 import { NativeAudioToggle } from "./native-audio-toggle";
 import { resolveSceneVideoProvider } from "./scene-provider-resolver";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   AlertDialog,
@@ -190,6 +191,9 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
   );
   const [referenceVideoUrl, setReferenceVideoUrl] = useState<string>(
     () => scene.assets?.referenceVideoUrl || scene.assets?.videoUrl || ''
+  );
+  const [v2vReplacementImageUrl, setV2vReplacementImageUrl] = useState<string>(
+    () => scene.brandAssetUrl || ''
   );
   const [showLibrary, setShowLibrary] = useState(false);
   const [showEditLibrary, setShowEditLibrary] = useState(false);
@@ -1062,6 +1066,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
           referenceImages: !isV2V && referenceImageUrls.length > 0 ? referenceImageUrls : undefined,
           generationMode: isV2V ? 'v2v' : activeMode,
           referenceVideoUrl: isV2V ? referenceVideoUrl : undefined,
+          replacementImageUrl: isV2V && v2vReplacementImageUrl ? v2vReplacementImageUrl : undefined,
           imageFidelity: sceneImageFidelity !== null ? sceneImageFidelity : undefined,
         }),
       });
@@ -3025,6 +3030,23 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                     <X className="w-2.5 h-2.5" />
                   </button>
                   <div className="absolute bottom-0 left-0 right-0 text-[8px] text-center py-0.5 bg-blue-600/80 text-white">VID</div>
+                </div>
+              )}
+
+              {referenceVideoUrl && (
+                <div className="flex flex-col gap-0.5 min-w-0 flex-1 max-w-[160px]">
+                  <div className="text-[10px] font-medium flex items-center gap-1" style={{ color: "var(--text-muted)" }}>
+                    <ImagePlus className="w-3 h-3 text-violet-400" />
+                    Replacement image (V2V)
+                  </div>
+                  <Input
+                    data-testid="input-v2v-replacement-image"
+                    placeholder="Image URL (uses brand asset if blank)"
+                    value={v2vReplacementImageUrl}
+                    onChange={(e) => setV2vReplacementImageUrl(e.target.value)}
+                    className="h-6 text-[10px] px-1.5"
+                    disabled={!isEditing}
+                  />
                 </div>
               )}
 

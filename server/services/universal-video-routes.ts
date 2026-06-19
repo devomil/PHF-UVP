@@ -7359,7 +7359,7 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, req
   try {
     const userId = (req.user as any)?.id;
     const { projectId, sceneId } = req.params;
-    const { query, provider, sourceImageUrl, sourceImageUrls: reqImageUrls, referenceImages: reqReferenceImages, i2vSettings, motionControl, forceRegenerate, generationMode, strongAnchor, mode: regenerateMode, referenceUrl: v2vReferenceUrl, referenceVideoUrl: reqReferenceVideoUrl } = req.body;
+    const { query, provider, sourceImageUrl, sourceImageUrls: reqImageUrls, referenceImages: reqReferenceImages, i2vSettings, motionControl, forceRegenerate, generationMode, strongAnchor, mode: regenerateMode, referenceUrl: v2vReferenceUrl, referenceVideoUrl: reqReferenceVideoUrl, replacementImageUrl: reqReplacementImageUrl } = req.body;
     
     console.log(`[Phase9B-Async] Creating async video generation job for scene ${sceneId} with provider: ${provider || 'default'}${sourceImageUrl ? ', using I2V with source image' : ''}${i2vSettings ? ', with I2V settings' : ''}${forceRegenerate ? ', FORCE REGENERATE' : ''}${reqReferenceVideoUrl ? ', V2V mode' : ''}`);
     console.log(`[Phase9B-Async] Generation mode: ${generationMode || 'auto'}${reqReferenceVideoUrl ? ' (V2V override)' : ''}`);
@@ -7478,9 +7478,9 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, req
     const relativeSourceUrl = forceT2V
       ? undefined
       : isV2VMode
-        ? (sourceImageUrl || scene.brandAssetUrl || undefined)
+        ? (reqReplacementImageUrl || sourceImageUrl || scene.brandAssetUrl || undefined)
         : forceV2V
-          ? undefined
+          ? (reqReplacementImageUrl || scene.brandAssetUrl || undefined)
           : (sourceImageUrl || (shouldUseBrandAsset ? scene.brandAssetUrl : undefined));
     console.log(`[Phase9B-Async] Explicit generation mode: ${isV2VMode ? 'video-to-video' : explicitMode} (forceI2V=${forceI2V})`);
 
