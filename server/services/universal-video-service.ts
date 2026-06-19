@@ -2283,7 +2283,8 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
 
   /**
    * Generate TTS audio for a cloned voice via Play.ht, then upload to S3 and
-   * return a VoiceoverResult. Falls back to ElevenLabs on error.
+   * return a VoiceoverResult. Returns success:false with a descriptive error
+   * message if the voice cannot be resolved or generation fails.
    * `userId` must be the owner of the cloned voice record (enforces ownership).
    */
   private async generateVoiceoverForClonedVoice(
@@ -2292,10 +2293,12 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
     fallbackVoiceId?: string,
     options?: { stability?: number; similarityBoost?: number; style?: number },
     userId?: string,
-  ): Promise<VoiceoverResult | null> {
+  ): Promise<VoiceoverResult> {
     try {
       const voiceIdNum = parseInt(clonedVoiceRef.replace('cloned:', ''), 10);
-      if (isNaN(voiceIdNum)) return null;
+      if (isNaN(voiceIdNum)) {
+        return { url: '', duration: 0, success: false, error: `Invalid cloned voice reference: ${clonedVoiceRef}` };
+      }
 
       const { db: dbInstance } = await import('../db');
       const { clonedVoices: cvTable } = await import('../../shared/schema');
@@ -2304,7 +2307,7 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
       // Enforce ownership unconditionally — a missing userId is an authorization failure.
       if (!userId) {
         console.error(`[ClonedVoice] Cannot resolve cloned voice ${clonedVoiceRef}: no userId in context (access denied).`);
-        return null;
+        return { url: '', duration: 0, success: false, error: 'Cannot use cloned voice: user identity could not be verified' };
       }
 
       const [row] = await dbInstance
@@ -2315,22 +2318,24 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
 
       if (!row) {
         console.error(`[ClonedVoice] Voice ${clonedVoiceRef} not found or not owned by user ${userId} (access denied).`);
-        return null;
+        return { url: '', duration: 0, success: false, error: 'Cloned voice not found or you do not have access to it' };
       }
 
       if (row.status !== 'ready') {
-        console.warn(`[ClonedVoice] Voice ${clonedVoiceRef} not ready (status=${row.status}), falling back to default`);
-        return null;
+        console.warn(`[ClonedVoice] Voice ${clonedVoiceRef} not ready (status=${row.status})`);
+        return { url: '', duration: 0, success: false, error: `Cloned voice "${row.name}" is not ready yet (status: ${row.status})` };
       }
 
       if (!row.providerVoiceId) {
-        console.warn(`[ClonedVoice] Voice ${clonedVoiceRef} has no providerVoiceId (Play.ht not configured?), falling back`);
-        return null;
+        console.warn(`[ClonedVoice] Voice ${clonedVoiceRef} has no providerVoiceId (Play.ht not configured?)`);
+        return { url: '', duration: 0, success: false, error: `Cloned voice "${row.name}" has no provider voice ID — try re-cloning the voice` };
       }
 
       console.log(`[ClonedVoice] Generating speech via Play.ht for voice ${row.name} (${row.providerVoiceId})`);
       const audioBuffer = await generatePlayhtSpeech(text, row.providerVoiceId);
-      if (!audioBuffer) return null;
+      if (!audioBuffer) {
+        return { url: '', duration: 0, success: false, error: `Failed to generate speech for cloned voice "${row.name}" via Play.ht` };
+      }
 
       let actualDuration = 0;
       try {
@@ -2350,7 +2355,7 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
       return { url, duration: actualDuration, success: true };
     } catch (err: any) {
       console.error('[ClonedVoice] Play.ht TTS failed:', err.message);
-      return null;
+      return { url: '', duration: 0, success: false, error: `Cloned voice generation failed: ${err.message}` };
     }
   }
 
@@ -2375,10 +2380,10 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
     const resolvedVoiceId = inlineVoiceId || voiceId;
 
     // Route cloned voices through Play.ht (before the ElevenLabs key check).
+    // Return the result directly — success or a descriptive error — never fall through to
+    // ElevenLabs with a different voice when the user explicitly selected a cloned voice.
     if (resolvedVoiceId?.startsWith('cloned:')) {
-      const result = await this.generateVoiceoverForClonedVoice(cleanedText, resolvedVoiceId, undefined, options, context?.userId);
-      if (result) return result;
-      // Fall through to ElevenLabs default on failure.
+      return this.generateVoiceoverForClonedVoice(cleanedText, resolvedVoiceId, undefined, options, context?.userId);
     }
 
     const elevenLabsKey = process.env.ELEVENLABS_API_KEY;
@@ -2595,10 +2600,10 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
     const resolvedVoiceId = inlineVoiceId || voiceId;
 
     // Route cloned voices through Play.ht (no ElevenLabs key needed).
+    // Return the result directly — success or a descriptive error — never fall through to
+    // ElevenLabs with a different voice when the user explicitly selected a cloned voice.
     if (resolvedVoiceId?.startsWith('cloned:')) {
-      const result = await this.generateVoiceoverForClonedVoice(cleanNarration, resolvedVoiceId, undefined, options, context?.userId);
-      if (result) return result;
-      // Fall through to ElevenLabs on failure.
+      return this.generateVoiceoverForClonedVoice(cleanNarration, resolvedVoiceId, undefined, options, context?.userId);
     }
 
     const elevenLabsKey = process.env.ELEVENLABS_API_KEY;
