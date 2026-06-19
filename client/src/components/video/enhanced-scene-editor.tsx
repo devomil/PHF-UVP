@@ -759,6 +759,14 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
   const [sceneArtPreset, setSceneArtPreset] = useState<string>(scene.artPresetId || 'project');
   const [pipelineAssignedStyle] = useState<string | null>(scene.assignedStyleId || null);
   const [suzzieArtSuggestion, setSuzzieArtSuggestion] = useState<{ id: string; name: string } | null>(null);
+  const suzzieArtSuggestionTileRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!suzzieArtSuggestion) return;
+    const tile = suzzieArtSuggestionTileRef.current;
+    if (!tile) return;
+    tile.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+  }, [suzzieArtSuggestion]);
 
   const { data: projectData } = useQuery<{ qualityTier?: string }>({
     queryKey: ["project", projectId],
@@ -2911,6 +2919,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
               return (
                 <button
                   key={preset.id}
+                  ref={isSuggested ? suzzieArtSuggestionTileRef : undefined}
                   type="button"
                   onClick={() => {
                     if (!isEditing) return;
