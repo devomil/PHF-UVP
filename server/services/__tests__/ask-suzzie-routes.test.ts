@@ -36,14 +36,19 @@ vi.mock('../../auth', () => ({
 
 // ---------------------------------------------------------------------------
 // LLM client mock — controlled per-test via the `mockLlmText` variable.
+// `createChatCompletionMock` is a vi.fn() spy so tests can assert call counts.
 // ---------------------------------------------------------------------------
 let mockLlmText = '';
 let mockLlmAvailable = true;
 
+// vi.hoisted ensures the spy reference is available inside vi.mock factories,
+// which are hoisted to the top of the file before other module-level code runs.
+const createChatCompletionMock = vi.hoisted(() => vi.fn());
+
 vi.mock('../../services/piapi-llm-client', () => ({
   llmClient: {
     isAvailable: () => mockLlmAvailable,
-    createChatCompletion: async () => ({ text: mockLlmText, provider: 'anthropic', model: 'claude-test' }),
+    createChatCompletion: createChatCompletionMock,
   },
 }));
 
@@ -152,7 +157,10 @@ const { default: universalVideoRouter } = await import('../universal-video-route
 
 function makeApp() {
   const app = express();
-  app.use(express.json());
+  // Use a generous body limit so oversized-image validation tests can send large
+  // payloads and have them reach the route handler (rather than being rejected
+  // by Express's body-parser before our code runs).
+  app.use(express.json({ limit: '25mb' }));
   app.use('/api/universal-video', universalVideoRouter);
   return app;
 }
@@ -182,6 +190,14 @@ describe('POST /api/universal-video/ask-suzzie (assistant mode)', () => {
       'Kling excels at cinematic motion with smooth camera moves.',
       'A product floating in soft golden light with gentle bokeh.',
     );
+    // Wire the spy implementation so it captures the current mockLlmText at
+    // call time, and reset call history so each test starts clean.
+    createChatCompletionMock.mockClear();
+    createChatCompletionMock.mockImplementation(async () => ({
+      text: mockLlmText,
+      provider: 'anthropic',
+      model: 'claude-test',
+    }));
   });
 
   it('returns 401 when no session user is provided', async () => {
@@ -273,6 +289,49 @@ describe('POST /api/universal-video/ask-suzzie (assistant mode)', () => {
     expect(res.body.suggestedProvider).toBe('runway');
     expect(res.body.suggestedProviderRationale).toBe('Runway handles complex motion well.');
   });
+
+  it('returns 400 when imageAttachment has an unsupported media type', async () => {
+    const res = await request(makeApp())
+      .post('/api/universal-video/ask-suzzie')
+      .set('x-test-user', 'user-1')
+      .send({
+        mode: 'assistant',
+        question: 'What do you think of this image?',
+        imageAttachment: {
+          mediaType: 'image/gif',
+          base64: 'R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==',
+        },
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.success).toBe(false);
+    expect(res.body.error).toMatch(/unsupported image format/i);
+    expect(createChatCompletionMock).not.toHaveBeenCalled();
+  });
+
+  it('returns 413 when imageAttachment base64 decodes to more than 10 MB', async () => {
+    // Need decoded byte length > 10 MB (10 * 1024 * 1024 = 10_485_760 bytes).
+    // estimatedBytes = Math.ceil(base64Len * 0.75), so base64Len must exceed ~13_981_014.
+    // 'A' is a valid base64 character and passes the first-200-chars sanity regex.
+    const oversizedBase64 = 'A'.repeat(14_000_000);
+
+    const res = await request(makeApp())
+      .post('/api/universal-video/ask-suzzie')
+      .set('x-test-user', 'user-1')
+      .send({
+        mode: 'assistant',
+        question: 'Can you analyse this large image?',
+        imageAttachment: {
+          mediaType: 'image/jpeg',
+          base64: oversizedBase64,
+        },
+      });
+
+    expect(res.status).toBe(413);
+    expect(res.body.success).toBe(false);
+    expect(res.body.error).toMatch(/image too large/i);
+    expect(createChatCompletionMock).not.toHaveBeenCalled();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -286,6 +345,12 @@ describe('POST /api/universal-video/ask-suzzie/asset-library', () => {
       'Luma Dream Machine is great for high-quality photorealistic imagery.',
       'Vibrant close-up product shot on a marble surface with natural light.',
     );
+    createChatCompletionMock.mockClear();
+    createChatCompletionMock.mockImplementation(async () => ({
+      text: mockLlmText,
+      provider: 'anthropic',
+      model: 'claude-test',
+    }));
   });
 
   it('returns 401 when no session user is provided', async () => {
