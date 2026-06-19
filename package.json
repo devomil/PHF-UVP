@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "tsx server/index.ts",
+    "dev": "concurrently --names \"server,providers\" --prefix-colors \"cyan,yellow\" \"tsx server/index.ts\" \"npm run watch:providers\"",
     "build": "vite build && esbuild server/index.ts --bundle --platform=node --format=esm --packages=external --outdir=dist/server",
     "start": "NODE_ENV=production node dist/server/index.js",
     "db:push": "drizzle-kit push",
@@ -90,6 +90,7 @@
     "@types/supertest": "^7.2.0",
     "@types/ws": "^8.18.1",
     "@vitejs/plugin-react": "^4.7.0",
+    "concurrently": "^9.2.3",
     "drizzle-kit": "^0.30.6",
     "esbuild": "^0.24.2",
     "husky": "^9.1.7",
