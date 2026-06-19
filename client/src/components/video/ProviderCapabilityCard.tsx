@@ -1,7 +1,7 @@
 import { memo, useState } from 'react';
 import { ChevronDown, ChevronUp, Sparkles, Info } from 'lucide-react';
-import { VIDEO_PROVIDERS, type VideoProvider } from '@shared/provider-config';
-import { getDropdownVideoProviders } from '@shared/provider-catalog';
+import { VIDEO_PROVIDERS } from '@shared/provider-config';
+import { getDropdownVideoProviders, VIDEO_PROVIDER_CATALOG } from '@shared/provider-catalog';
 
 const TIER_STYLES: Record<string, { label: string; bg: string; text: string; border: string }> = {
   premium: { label: 'Premium', bg: 'rgba(251,191,36,0.15)', text: 'rgb(252,211,77)', border: 'rgba(251,191,36,0.3)' },
@@ -29,11 +29,26 @@ export const ProviderCapabilityCard = memo(function ProviderCapabilityCard({
   onClick,
 }: ProviderCapabilityCardProps) {
   const provider = VIDEO_PROVIDERS[providerId];
-  if (!provider) return null;
 
-  const tier = TIER_STYLES[provider.tier || 'standard'];
-  const specialties = provider.specialties || [];
-  const bestFor = provider.bestFor || [];
+  const catalogEntry = !provider
+    ? VIDEO_PROVIDER_CATALOG.find(p => p.id === providerId)
+    : null;
+
+  if (!provider && !catalogEntry) return null;
+
+  const catalogTier = catalogEntry
+    ? (catalogEntry.costTier === 'ultra' ? 'premium' : catalogEntry.costTier)
+    : null;
+
+  const tier = provider
+    ? TIER_STYLES[provider.tier || 'standard']
+    : (catalogTier ? TIER_STYLES[catalogTier] : null);
+
+  const displayName = provider ? provider.displayName : (catalogEntry?.name ?? providerId);
+  const description = provider ? provider.description : catalogEntry?.description;
+  const specialties = provider ? (provider.specialties || []) : [];
+  const bestFor = provider ? (provider.bestFor || []) : [];
+  const costPerSecond = provider ? provider.costPerSecond : null;
 
   return (
     <div
@@ -54,18 +69,20 @@ export const ProviderCapabilityCard = memo(function ProviderCapabilityCard({
               className="font-medium text-sm"
               style={{ color: darkMode ? 'white' : 'var(--text-primary)' }}
             >
-              {provider.displayName}
+              {displayName}
             </span>
-            <span
-              className="text-[10px] px-1.5 py-0.5 rounded-full font-medium"
-              style={{
-                backgroundColor: tier.bg,
-                color: tier.text,
-                border: `1px solid ${tier.border}`,
-              }}
-            >
-              {tier.label}
-            </span>
+            {tier && (
+              <span
+                className="text-[10px] px-1.5 py-0.5 rounded-full font-medium"
+                style={{
+                  backgroundColor: tier.bg,
+                  color: tier.text,
+                  border: `1px solid ${tier.border}`,
+                }}
+              >
+                {tier.label}
+              </span>
+            )}
             {isRecommended && (
               <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium flex items-center gap-1 bg-purple-500/20 text-purple-300 border border-purple-500/30">
                 <Sparkles className="w-2.5 h-2.5" /> Recommended
@@ -73,12 +90,12 @@ export const ProviderCapabilityCard = memo(function ProviderCapabilityCard({
             )}
           </div>
 
-          {provider.description && (
+          {description && (
             <p
               className="text-[11px] mt-0.5 leading-relaxed"
               style={{ color: darkMode ? 'rgba(255,255,255,0.45)' : 'var(--text-muted)' }}
             >
-              {provider.description}
+              {description}
             </p>
           )}
 
@@ -114,12 +131,14 @@ export const ProviderCapabilityCard = memo(function ProviderCapabilityCard({
           )}
         </div>
 
-        <span
-          className="text-[10px] font-mono flex-shrink-0"
-          style={{ color: darkMode ? 'rgba(255,255,255,0.3)' : 'var(--text-muted)' }}
-        >
-          ${provider.costPerSecond}/s
-        </span>
+        {costPerSecond !== null && (
+          <span
+            className="text-[10px] font-mono flex-shrink-0"
+            style={{ color: darkMode ? 'rgba(255,255,255,0.3)' : 'var(--text-muted)' }}
+          >
+            ${costPerSecond}/s
+          </span>
+        )}
       </div>
     </div>
   );
@@ -149,7 +168,18 @@ export const ProviderCapabilitySelector = memo(function ProviderCapabilitySelect
   const [isExpanded, setIsExpanded] = useState(false);
 
   const selectedConfig = VIDEO_PROVIDERS[selectedProvider];
-  const selectedTier = selectedConfig ? TIER_STYLES[selectedConfig.tier || 'standard'] : null;
+  const selectedCatalogEntry = !selectedConfig
+    ? VIDEO_PROVIDER_CATALOG.find(p => p.id === selectedProvider)
+    : null;
+  const selectedDisplayName = selectedConfig
+    ? selectedConfig.displayName
+    : (selectedCatalogEntry?.name ?? selectedProvider);
+  const selectedCatalogTier = selectedCatalogEntry
+    ? (selectedCatalogEntry.costTier === 'ultra' ? 'premium' : selectedCatalogEntry.costTier)
+    : null;
+  const selectedTier = selectedConfig
+    ? TIER_STYLES[selectedConfig.tier || 'standard']
+    : (selectedCatalogTier ? TIER_STYLES[selectedCatalogTier] : null);
 
   const providerGroups: Record<string, string[]> = {};
   const providerEntries = Object.entries(VIDEO_PROVIDERS);
@@ -161,7 +191,7 @@ export const ProviderCapabilitySelector = memo(function ProviderCapabilitySelect
 
   const mainProviderIds = getDropdownVideoProviders().map(p => p.id);
 
-  const filteredProviders = mainProviderIds.filter(id => id === 'auto' || VIDEO_PROVIDERS[id]);
+  const filteredProviders = mainProviderIds;
   const displayProviders = styleRecommendedProviders && styleRecommendedProviders.length > 0
     ? [
         ...filteredProviders.filter(id => id === 'auto'),
@@ -187,9 +217,9 @@ export const ProviderCapabilitySelector = memo(function ProviderCapabilitySelect
               <Sparkles className="w-3 h-3 text-purple-400" />
               Auto-select
             </span>
-          ) : selectedConfig ? (
+          ) : (
             <span className="flex items-center gap-1.5">
-              {selectedConfig.displayName}
+              {selectedDisplayName}
               {selectedTier && (
                 <span
                   className="text-[9px] px-1 py-0.5 rounded-full"
@@ -203,8 +233,6 @@ export const ProviderCapabilitySelector = memo(function ProviderCapabilitySelect
                 </span>
               )}
             </span>
-          ) : (
-            <span>{selectedProvider}</span>
           )}
         </div>
         {isExpanded ? (
