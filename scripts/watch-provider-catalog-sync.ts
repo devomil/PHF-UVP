@@ -16,6 +16,11 @@ import { watch } from 'node:fs';
 import { resolve, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+if (process.env.NODE_ENV === 'production' || process.env.CI === 'true' || process.env.CI === '1') {
+  console.log('watch:providers — skipped in CI/production environment');
+  process.exit(0);
+}
+
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const root = resolve(__dirname, '..');
 
