@@ -231,6 +231,73 @@ describe('getDropdownVideoProviders', () => {
       expect(dropdownIds).toContain(id);
     }
   });
+
+  it('removing a showInDropdown: true entry removes it from the dropdown', () => {
+    VIDEO_PROVIDER_CATALOG.push({
+      id: '__test__removal-check',
+      name: 'Test Removal Video Provider',
+      family: 'Test',
+      description: 'Should disappear after removal',
+      capabilities: ['T2V'],
+      maxDuration: 5,
+      costTier: 'budget',
+      type: 'video',
+      supportedModes: ['t2v'],
+      aspectRatios: ['16:9'],
+      showInDropdown: true,
+    });
+
+    expect(getDropdownVideoProviders().map(p => p.id)).toContain('__test__removal-check');
+
+    const idx = VIDEO_PROVIDER_CATALOG.findIndex(p => p.id === '__test__removal-check');
+    VIDEO_PROVIDER_CATALOG.splice(idx, 1);
+
+    expect(getDropdownVideoProviders().map(p => p.id)).not.toContain('__test__removal-check');
+  });
+
+  it('removing a showInDropdown: true entry does not affect other dropdown entries', () => {
+    VIDEO_PROVIDER_CATALOG.push({
+      id: '__test__removal-isolation-a',
+      name: 'Test Isolation A',
+      family: 'Test',
+      description: 'Stays in dropdown',
+      capabilities: ['T2V'],
+      maxDuration: 5,
+      costTier: 'budget',
+      type: 'video',
+      supportedModes: ['t2v'],
+      aspectRatios: ['16:9'],
+      showInDropdown: true,
+    });
+    VIDEO_PROVIDER_CATALOG.push({
+      id: '__test__removal-isolation-b',
+      name: 'Test Isolation B',
+      family: 'Test',
+      description: 'Will be removed',
+      capabilities: ['T2V'],
+      maxDuration: 5,
+      costTier: 'budget',
+      type: 'video',
+      supportedModes: ['t2v'],
+      aspectRatios: ['16:9'],
+      showInDropdown: true,
+    });
+
+    const before = getDropdownVideoProviders().map(p => p.id);
+    expect(before).toContain('__test__removal-isolation-a');
+    expect(before).toContain('__test__removal-isolation-b');
+
+    const idxB = VIDEO_PROVIDER_CATALOG.findIndex(p => p.id === '__test__removal-isolation-b');
+    VIDEO_PROVIDER_CATALOG.splice(idxB, 1);
+
+    const after = getDropdownVideoProviders().map(p => p.id);
+    expect(after).toContain('__test__removal-isolation-a');
+    expect(after).not.toContain('__test__removal-isolation-b');
+
+    // Clean up the remaining test entry so afterEach (which only removes one) is sufficient
+    const idxA = VIDEO_PROVIDER_CATALOG.findIndex(p => p.id === '__test__removal-isolation-a');
+    VIDEO_PROVIDER_CATALOG.splice(idxA, 1);
+  });
 });
 
 describe('getDropdownImageProviders', () => {
@@ -341,5 +408,72 @@ describe('getDropdownImageProviders', () => {
     for (const id of catalogIds) {
       expect(dropdownIds).toContain(id);
     }
+  });
+
+  it('removing a showInDropdown: true entry removes it from the dropdown', () => {
+    IMAGE_PROVIDER_CATALOG.push({
+      id: '__test__img-removal-check',
+      name: 'Test Removal Image Provider',
+      family: 'Test',
+      description: 'Should disappear after removal',
+      capabilities: ['T2I'],
+      maxDuration: 0,
+      costTier: 'budget',
+      type: 'image',
+      supportedModes: ['t2i'],
+      aspectRatios: ['1:1'],
+      showInDropdown: true,
+    });
+
+    expect(getDropdownImageProviders().map(p => p.id)).toContain('__test__img-removal-check');
+
+    const idx = IMAGE_PROVIDER_CATALOG.findIndex(p => p.id === '__test__img-removal-check');
+    IMAGE_PROVIDER_CATALOG.splice(idx, 1);
+
+    expect(getDropdownImageProviders().map(p => p.id)).not.toContain('__test__img-removal-check');
+  });
+
+  it('removing a showInDropdown: true entry does not affect other dropdown entries', () => {
+    IMAGE_PROVIDER_CATALOG.push({
+      id: '__test__img-removal-isolation-a',
+      name: 'Test Image Isolation A',
+      family: 'Test',
+      description: 'Stays in dropdown',
+      capabilities: ['T2I'],
+      maxDuration: 0,
+      costTier: 'budget',
+      type: 'image',
+      supportedModes: ['t2i'],
+      aspectRatios: ['1:1'],
+      showInDropdown: true,
+    });
+    IMAGE_PROVIDER_CATALOG.push({
+      id: '__test__img-removal-isolation-b',
+      name: 'Test Image Isolation B',
+      family: 'Test',
+      description: 'Will be removed',
+      capabilities: ['T2I'],
+      maxDuration: 0,
+      costTier: 'budget',
+      type: 'image',
+      supportedModes: ['t2i'],
+      aspectRatios: ['1:1'],
+      showInDropdown: true,
+    });
+
+    const before = getDropdownImageProviders().map(p => p.id);
+    expect(before).toContain('__test__img-removal-isolation-a');
+    expect(before).toContain('__test__img-removal-isolation-b');
+
+    const idxB = IMAGE_PROVIDER_CATALOG.findIndex(p => p.id === '__test__img-removal-isolation-b');
+    IMAGE_PROVIDER_CATALOG.splice(idxB, 1);
+
+    const after = getDropdownImageProviders().map(p => p.id);
+    expect(after).toContain('__test__img-removal-isolation-a');
+    expect(after).not.toContain('__test__img-removal-isolation-b');
+
+    // Clean up the remaining test entry so afterEach (which only removes one) is sufficient
+    const idxA = IMAGE_PROVIDER_CATALOG.findIndex(p => p.id === '__test__img-removal-isolation-a');
+    IMAGE_PROVIDER_CATALOG.splice(idxA, 1);
   });
 });
