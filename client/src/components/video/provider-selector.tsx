@@ -5,7 +5,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { providerSupportsNativeAudio } from '@shared/provider-catalog';
+import { providerSupportsNativeAudio, getImageDropdownProviders } from '@shared/provider-catalog';
 
 export interface ProviderInfo {
   id: string;
@@ -275,74 +275,36 @@ export const VIDEO_PROVIDERS: ProviderInfo[] = [
   },
 ];
 
-export const IMAGE_PROVIDERS: ProviderInfo[] = [
-  {
-    id: 'flux',
-    name: 'Flux.1',
-    description: 'Product shots, food, objects',
-    bestFor: ['product', 'food', 'object', 'still'],
-    icon: '📸',
-    color: 'orange',
-    supportsI2I: true,
+// Display metadata for image providers — icon, color, and bestFor keywords.
+// These are frontend-only display concerns not stored in the shared catalog.
+// Add an entry here whenever a new provider is added to IMAGE_PROVIDER_CATALOG
+// with showInImageDropdown: true.
+const IMAGE_PROVIDER_DISPLAY: Record<string, { icon: string; color: string; bestFor: string[] }> = {
+  flux:        { icon: '📸', color: 'orange', bestFor: ['product', 'food', 'object', 'still'] },
+  falai:       { icon: '🎨', color: 'indigo', bestFor: ['lifestyle', 'person', 'nature', 'scene', 'human', 'face'] },
+  stability:   { icon: '🖼️', color: 'purple', bestFor: ['versatile', 'general', 'artistic'] },
+  ideogram:    { icon: '✏️', color: 'teal',   bestFor: ['text', 'logo', 'typography', 'branding'] },
+  midjourney:  { icon: '🎭', color: 'pink',   bestFor: ['artistic', 'stylized', 'creative', 'aesthetic'] },
+  dalle3:      { icon: '🌈', color: 'green',  bestFor: ['diverse', 'text', 'complex'] },
+};
+
+// IMAGE_PROVIDERS is derived from IMAGE_PROVIDER_CATALOG (showInImageDropdown:
+// true entries) so new image providers only need a one-line catalog change plus
+// an entry in IMAGE_PROVIDER_DISPLAY above for icon/color/bestFor metadata.
+export const IMAGE_PROVIDERS: ProviderInfo[] = getImageDropdownProviders().map(p => {
+  const display = IMAGE_PROVIDER_DISPLAY[p.id] ?? { icon: '🖼️', color: 'purple', bestFor: [] };
+  return {
+    id: p.id,
+    name: p.name,
+    description: p.description,
+    bestFor: display.bestFor,
+    icon: display.icon,
+    color: display.color,
+    supportsI2I: p.supportsI2I,
     supportsI2V: false,
-    supportsStyle: true,
-  },
-  {
-    id: 'falai',
-    name: 'fal.ai',
-    description: 'Lifestyle, people, natural scenes',
-    bestFor: ['lifestyle', 'person', 'nature', 'scene', 'human', 'face'],
-    icon: '🎨',
-    color: 'indigo',
-    supportsI2I: true,
-    supportsI2V: false,
-    supportsStyle: true,
-  },
-  {
-    id: 'stability',
-    name: 'Stability AI',
-    description: 'SDXL, versatile generation',
-    bestFor: ['versatile', 'general', 'artistic'],
-    icon: '🖼️',
-    color: 'purple',
-    supportsI2I: true,
-    supportsI2V: false,
-    supportsStyle: true,
-  },
-  {
-    id: 'ideogram',
-    name: 'Ideogram',
-    description: 'Text rendering, logos',
-    bestFor: ['text', 'logo', 'typography', 'branding'],
-    icon: '✏️',
-    color: 'teal',
-    supportsI2I: true,
-    supportsI2V: false,
-    supportsStyle: false,
-  },
-  {
-    id: 'midjourney',
-    name: 'Midjourney',
-    description: 'Artistic, stylized imagery',
-    bestFor: ['artistic', 'stylized', 'creative', 'aesthetic'],
-    icon: '🎭',
-    color: 'pink',
-    supportsI2I: false,
-    supportsI2V: false,
-    supportsStyle: true,
-  },
-  {
-    id: 'dalle3',
-    name: 'DALL-E 3',
-    description: 'Diverse styles, text understanding',
-    bestFor: ['diverse', 'text', 'complex'],
-    icon: '🌈',
-    color: 'green',
-    supportsI2I: false,
-    supportsI2V: false,
-    supportsStyle: false,
-  },
-];
+    supportsStyle: p.supportsStyle,
+  };
+});
 
 const OTHER_SOURCES = [
   {

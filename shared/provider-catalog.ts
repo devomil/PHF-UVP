@@ -9,7 +9,7 @@ export interface ProviderCatalogEntry {
   maxDuration: number;
   costTier: 'budget' | 'standard' | 'premium' | 'ultra';
   type: 'video' | 'image';
-  supportedModes: ('t2v' | 'i2v' | 'v2v' | 't2i')[];
+  supportedModes: ('t2v' | 'i2v' | 'v2v' | 't2i' | 'i2i')[];
   aspectRatios: string[];
   highlight?: string;
   multiImageSupport?: boolean;
@@ -31,6 +31,21 @@ export interface ProviderCatalogEntry {
   // getDropdownVideoProviders() helper reads this flag — it is the single
   // place to control which providers appear in both dropdowns.
   showInDropdown?: boolean;
+  // When true, this image provider accepts an input image and transforms it
+  // (image-to-image). Used to populate the I2I provider dropdowns and to
+  // filter the ProviderSelector for I2I reference modes.
+  supportsI2I?: boolean;
+  // When true, this image provider supports style-transfer / style-reference
+  // mode (the reference image drives aesthetic, not content).
+  supportsStyle?: boolean;
+  // When true, this provider appears in the ProviderSelector and
+  // RegenerationOptions image provider lists. Add a new image provider to
+  // IMAGE_PROVIDER_CATALOG with this flag to surface it in those UIs without
+  // any other code change.
+  showInImageDropdown?: boolean;
+  // When true, this provider appears in the Quick Create I2I provider
+  // dropdown (QC_I2I_PROVIDERS). getDropdownI2IProviders() reads this flag.
+  showInI2IDropdown?: boolean;
 }
 
 export const VIDEO_PROVIDER_CATALOG: ProviderCatalogEntry[] = [
@@ -601,17 +616,20 @@ export const VIDEO_PROVIDER_CATALOG: ProviderCatalogEntry[] = [
 export const IMAGE_PROVIDER_CATALOG: ProviderCatalogEntry[] = [
   {
     id: 'flux',
-    name: 'Flux Schnell',
+    name: 'Flux.1',
     family: 'Flux',
     description: 'Black Forest Labs\' Flux model. Fast, high-quality image generation with excellent prompt adherence and photorealistic output.',
-    capabilities: ['T2I'],
+    capabilities: ['T2I', 'I2I'],
     maxDuration: 0,
     costTier: 'standard',
     type: 'image',
-    supportedModes: ['t2i'],
+    supportedModes: ['t2i', 'i2i'],
     aspectRatios: ['16:9', '9:16', '1:1'],
     highlight: 'Recommended',
     showInDropdown: true,
+    supportsI2I: true,
+    supportsStyle: true,
+    showInImageDropdown: true,
   },
   {
     id: 'flux-1-dev',
@@ -627,44 +645,81 @@ export const IMAGE_PROVIDER_CATALOG: ProviderCatalogEntry[] = [
     showInDropdown: true,
   },
   {
+    id: 'flux-kontext',
+    name: 'Flux Kontext',
+    family: 'Flux',
+    description: 'Edit images with contextual understanding of existing content. Ideal for targeted modifications that preserve the rest of the scene.',
+    capabilities: ['I2I'],
+    maxDuration: 0,
+    costTier: 'standard',
+    type: 'image',
+    supportedModes: ['i2i'],
+    aspectRatios: ['16:9', '9:16', '1:1'],
+    highlight: 'Context-Aware',
+    supportsI2I: true,
+    showInI2IDropdown: true,
+  },
+  {
+    id: 'flux-1.1-pro',
+    name: 'Flux 1.1 Pro',
+    family: 'Flux',
+    description: 'High-fidelity image editing with professional-grade output. Excellent detail preservation and prompt adherence for I2I tasks.',
+    capabilities: ['T2I', 'I2I'],
+    maxDuration: 0,
+    costTier: 'premium',
+    type: 'image',
+    supportedModes: ['t2i', 'i2i'],
+    aspectRatios: ['16:9', '9:16', '1:1'],
+    supportsI2I: true,
+    showInI2IDropdown: true,
+  },
+  {
     id: 'stability',
-    name: 'Stable Diffusion 3',
+    name: 'Stability AI',
     family: 'Stability',
     description: 'Stability AI\'s latest diffusion model. Exceptional text rendering in images, versatile style range, and consistent compositional quality.',
-    capabilities: ['T2I'],
+    capabilities: ['T2I', 'I2I'],
     maxDuration: 0,
     costTier: 'budget',
     type: 'image',
-    supportedModes: ['t2i'],
+    supportedModes: ['t2i', 'i2i'],
     aspectRatios: ['16:9', '9:16', '1:1'],
+    supportsI2I: true,
+    supportsStyle: true,
+    showInImageDropdown: true,
   },
   {
     id: 'ideogram',
     name: 'Ideogram',
     family: 'Ideogram',
     description: 'Best-in-class text rendering in images. Perfect for marketing materials, social graphics, and any content requiring readable text overlays.',
-    capabilities: ['T2I'],
+    capabilities: ['T2I', 'I2I'],
     maxDuration: 0,
     costTier: 'standard',
     type: 'image',
-    supportedModes: ['t2i'],
+    supportedModes: ['t2i', 'i2i'],
     aspectRatios: ['16:9', '9:16', '1:1'],
     highlight: 'Best Text',
     showInDropdown: true,
+    supportsI2I: true,
+    showInImageDropdown: true,
+    showInI2IDropdown: true,
   },
   {
     id: 'nano-banana-pro',
     name: 'Nano Banana Pro',
     family: 'Nano Banana',
-    description: 'Photorealistic and lifestyle image generation. Preferred for natural scenes, people, and product shots requiring organic, lifelike quality.',
-    capabilities: ['T2I'],
+    description: 'Advanced style transfer and photorealistic scene integration. Preferred for natural scenes, people, and product shots.',
+    capabilities: ['T2I', 'I2I'],
     maxDuration: 0,
     costTier: 'standard',
     type: 'image',
-    supportedModes: ['t2i'],
+    supportedModes: ['t2i', 'i2i'],
     aspectRatios: ['16:9', '9:16', '1:1'],
     highlight: 'Photorealistic',
     showInDropdown: true,
+    supportsI2I: true,
+    showInI2IDropdown: true,
   },
   {
     id: 'midjourney',
@@ -678,6 +733,8 @@ export const IMAGE_PROVIDER_CATALOG: ProviderCatalogEntry[] = [
     supportedModes: ['t2i'],
     aspectRatios: ['16:9', '9:16', '1:1'],
     highlight: 'Best Aesthetic',
+    supportsStyle: true,
+    showInImageDropdown: true,
   },
   {
     id: 'dalle3',
@@ -690,19 +747,23 @@ export const IMAGE_PROVIDER_CATALOG: ProviderCatalogEntry[] = [
     type: 'image',
     supportedModes: ['t2i'],
     aspectRatios: ['16:9', '9:16', '1:1'],
+    showInImageDropdown: true,
   },
   {
     id: 'falai',
-    name: 'Fal AI',
+    name: 'fal.ai',
     family: 'Fal',
-    description: 'Fast inference image generation. Optimized for speed with good quality output — ideal for real-time applications and rapid iteration.',
-    capabilities: ['T2I'],
+    description: 'Fast inference image generation. Lifestyle, people, and natural scenes. Optimized for speed with good quality output.',
+    capabilities: ['T2I', 'I2I'],
     maxDuration: 0,
     costTier: 'budget',
     type: 'image',
-    supportedModes: ['t2i'],
+    supportedModes: ['t2i', 'i2i'],
     aspectRatios: ['16:9', '9:16', '1:1'],
     highlight: 'Fastest',
+    supportsI2I: true,
+    supportsStyle: true,
+    showInImageDropdown: true,
   },
 ];
 
@@ -736,6 +797,45 @@ export function getDropdownImageProviders(): Array<{ id: string; name: string; d
     .filter(p => p.showInDropdown === true)
     .map(p => ({ id: p.id, name: p.name, description: p.description }));
   return [auto, ...providers];
+}
+
+// Returns the list of image-to-image providers for the Quick Create I2I
+// dropdown. The auto-select entry is always prepended. Any provider added to
+// IMAGE_PROVIDER_CATALOG with `showInI2IDropdown: true` will automatically
+// appear here — no other code change required.
+export function getDropdownI2IProviders(): Array<{ id: string; name: string; description: string }> {
+  const auto = {
+    id: 'auto',
+    name: 'Auto (Best Match)',
+    description: 'Automatically selects the best image-to-image transformation provider',
+  };
+  const providers = IMAGE_PROVIDER_CATALOG
+    .filter(p => p.showInI2IDropdown === true)
+    .map(p => ({ id: p.id, name: p.name, description: p.description }));
+  return [auto, ...providers];
+}
+
+// Returns image providers for the ProviderSelector and RegenerationOptions
+// image dropdown. Any provider added to IMAGE_PROVIDER_CATALOG with
+// `showInImageDropdown: true` will automatically appear — no other code
+// change required. Each entry exposes the capability flags (supportsI2I,
+// supportsStyle) used by the UI to filter providers by reference mode.
+export function getImageDropdownProviders(): Array<{
+  id: string;
+  name: string;
+  description: string;
+  supportsI2I: boolean;
+  supportsStyle: boolean;
+}> {
+  return IMAGE_PROVIDER_CATALOG
+    .filter(p => p.showInImageDropdown === true)
+    .map(p => ({
+      id: p.id,
+      name: p.name,
+      description: p.description,
+      supportsI2I: p.supportsI2I === true,
+      supportsStyle: p.supportsStyle === true,
+    }));
 }
 
 // Returns the list of video providers for the Quick Create and Asset Creator

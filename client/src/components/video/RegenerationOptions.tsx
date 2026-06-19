@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { RefreshCw, Image, Video, Wand2, FileQuestion, AlertTriangle, Zap, Settings2, Sparkles, Camera, Film, Palette, History } from 'lucide-react';
+import { getImageDropdownProviders } from '@shared/provider-catalog';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -28,14 +29,30 @@ interface ProviderInfo {
   supportsStyle?: boolean;
 }
 
-const IMAGE_PROVIDERS: ProviderInfo[] = [
-  { id: 'flux', name: 'Flux.1', description: 'Product shots, food, objects', icon: '📸', supportsI2I: true, supportsI2V: false, supportsStyle: true },
-  { id: 'falai', name: 'fal.ai', description: 'Lifestyle, people, natural scenes', icon: '🎨', supportsI2I: true, supportsI2V: false, supportsStyle: true },
-  { id: 'stability', name: 'Stability AI', description: 'SDXL, versatile generation', icon: '🖼️', supportsI2I: true, supportsI2V: false, supportsStyle: true },
-  { id: 'ideogram', name: 'Ideogram', description: 'Text rendering, logos', icon: '✏️', supportsI2I: true, supportsI2V: false, supportsStyle: false },
-  { id: 'midjourney', name: 'Midjourney', description: 'Artistic, stylized imagery', icon: '🎭', supportsI2I: false, supportsI2V: false, supportsStyle: true },
-  { id: 'dalle3', name: 'DALL-E 3', description: 'Diverse styles, text understanding', icon: '🌈', supportsI2I: false, supportsI2V: false, supportsStyle: false },
-];
+// Display icons for image providers — frontend-only display metadata.
+// Add an entry here whenever a new provider is added to IMAGE_PROVIDER_CATALOG
+// with showInImageDropdown: true.
+const IMAGE_PROVIDER_ICONS: Record<string, string> = {
+  flux:       '📸',
+  falai:      '🎨',
+  stability:  '🖼️',
+  ideogram:   '✏️',
+  midjourney: '🎭',
+  dalle3:     '🌈',
+};
+
+// IMAGE_PROVIDERS is derived from IMAGE_PROVIDER_CATALOG (showInImageDropdown:
+// true entries) so new image providers only need a one-line catalog change plus
+// an icon entry in IMAGE_PROVIDER_ICONS above.
+const IMAGE_PROVIDERS: ProviderInfo[] = getImageDropdownProviders().map(p => ({
+  id: p.id,
+  name: p.name,
+  description: p.description,
+  icon: IMAGE_PROVIDER_ICONS[p.id] ?? '🖼️',
+  supportsI2I: p.supportsI2I,
+  supportsI2V: false,
+  supportsStyle: p.supportsStyle,
+}));
 
 const VIDEO_PROVIDERS: ProviderInfo[] = [
   { id: 'kling-2.0', name: 'Kling 2.0', description: 'Native audio, motion control', icon: '🎬', supportsI2I: false, supportsI2V: true, supportsStyle: true },
