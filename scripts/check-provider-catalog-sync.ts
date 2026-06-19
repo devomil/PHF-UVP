@@ -32,7 +32,7 @@
 // Exit 0 = all clear, exit 1 = gaps detected, exit 2 = usage error.
 
 import { VIDEO_PROVIDER_CATALOG, IMAGE_PROVIDER_CATALOG } from '../shared/provider-catalog.js';
-import { VIDEO_PROVIDERS, IMAGE_PROVIDERS } from '../shared/provider-config.js';
+import { VIDEO_PROVIDERS, IMAGE_PROVIDERS, SOUND_PROVIDERS } from '../shared/provider-config.js';
 import { AI_VIDEO_PROVIDERS, PROVIDER_TEST_ID_MAP } from '../server/config/ai-video-providers-static.js';
 import { IMAGE_PROVIDERS as SERVER_IMAGE_PROVIDERS } from '../server/config/image-providers.js';
 import { findCatalogSyncGaps } from './provider-catalog-sync-core.js';
@@ -94,6 +94,36 @@ for (const [id, entry] of Object.entries(IMAGE_PROVIDERS)) {
   }
 }
 
+// SFX / voiceover / music providers — each type has its own cost field:
+//   voiceover → costPerSecond
+//   music     → costPerTrack
+//   sfx       → costPerEffect
+// A missing or zero value silently produces wrong credit estimates.
+
+const SFX_COST_FIELD: Record<string, string> = {
+  voiceover: 'costPerSecond',
+  music: 'costPerTrack',
+  sfx: 'costPerEffect',
+};
+
+for (const [id, entry] of Object.entries(SOUND_PROVIDERS)) {
+  const field = SFX_COST_FIELD[entry.type];
+  if (!field) continue; // unknown type — skip
+  const v = (entry as Record<string, unknown>)[field] as number | undefined;
+  if (typeof v !== 'number' || !isFinite(v) || v <= 0) {
+    costErrors.push({
+      registry: 'shared/SOUND_PROVIDERS',
+      id,
+      field,
+      value: v,
+      reason:
+        typeof v !== 'number' || !isFinite(v)
+          ? `${field} is missing or not a number (got ${JSON.stringify(v)})`
+          : `${field} must be > 0, got ${v}`,
+    });
+  }
+}
+
 // ── Report ───────────────────────────────────────────────────────────────────
 
 if (gaps.length === 0 && costErrors.length === 0) {
@@ -126,7 +156,8 @@ if (registryMissing.length > 0) {
 
 if (costErrors.length > 0) {
   console.error('  [cost-validation] These registry entries have a missing or zero cost field.');
-  console.error('  Update shared/provider-config.ts with the correct positive cost value.\n');
+  console.error('  Update shared/provider-config.ts with the correct positive cost value.');
+  console.error('  (Video/image providers: costPerSecond / costPerImage; sound providers: costPerEffect / costPerSecond / costPerTrack)\n');
   for (const { registry, id, field, reason } of costErrors) {
     console.error(`    ${registry}["${id}"].${field}  →  ${reason}`);
   }
