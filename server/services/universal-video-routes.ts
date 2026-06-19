@@ -892,26 +892,9 @@ router.post('/ask-suzzie', isAuthenticated, async (req: Request, res: Response) 
       
       const text = llmResult.text || '';
       
-      let suggestedPrompt: string | undefined;
-      let suggestedProvider: string | undefined;
-      let suggestedProviderRationale: string | undefined;
-      let suggestedArtStyle: { id: string; name: string } | undefined;
-      
-      const jsonBlocks = text.match(/```json\s*([\s\S]*?)```/g) || [];
-      for (const block of jsonBlocks) {
-        try {
-          const jsonStr = block.replace(/```json\s*/, '').replace(/```$/, '').trim();
-          const parsed = JSON.parse(jsonStr);
-          if (parsed.suggestedPrompt && !suggestedPrompt) suggestedPrompt = parsed.suggestedPrompt;
-          if (parsed.suggestedProvider && !suggestedProvider) suggestedProvider = parsed.suggestedProvider;
-          if (parsed.suggestedProviderRationale && !suggestedProviderRationale) suggestedProviderRationale = parsed.suggestedProviderRationale;
-          if (parsed.suggestedArtStyle && !suggestedArtStyle && parsed.suggestedArtStyle.id && parsed.suggestedArtStyle.name) {
-            suggestedArtStyle = { id: parsed.suggestedArtStyle.id, name: parsed.suggestedArtStyle.name };
-          }
-        } catch {}
-      }
-      
-      const cleanMessage = text.replace(/```json\s*[\s\S]*?```/g, '').trim();
+      const { parseSuzzieSceneEditorResponse } = await import('../utils/suzzie-json-parser');
+      const { suggestedPrompt, suggestedProvider, suggestedProviderRationale, suggestedArtStyle, cleanMessage } =
+        parseSuzzieSceneEditorResponse(text);
       
       return res.json({
         success: true,
@@ -1117,29 +1100,9 @@ router.post('/ask-suzzie/asset-library', isAuthenticated, async (req: Request, r
 
     const text = llmResult.text || '';
 
-    let suggestedPrompt: string | undefined;
-    let suggestedProvider: string | undefined;
-    let suggestedProviderRationale: string | undefined;
-    let suggestedNegativePrompt: string | undefined;
-    let suggestedCfgScale: number | undefined;
-
-    const jsonBlocks = text.match(/```json\s*([\s\S]*?)```/g) || [];
-    for (const block of jsonBlocks) {
-      try {
-        const jsonStr = block.replace(/```json\s*/, '').replace(/```$/, '').trim();
-        const parsed = JSON.parse(jsonStr);
-        if (parsed.suggestedPrompt && !suggestedPrompt) suggestedPrompt = parsed.suggestedPrompt;
-        if (parsed.suggestedProvider && !suggestedProvider) suggestedProvider = parsed.suggestedProvider;
-        if (parsed.suggestedProviderRationale && !suggestedProviderRationale) suggestedProviderRationale = parsed.suggestedProviderRationale;
-        if (parsed.suggestedNegativePrompt && !suggestedNegativePrompt) suggestedNegativePrompt = parsed.suggestedNegativePrompt;
-        if (parsed.suggestedCfgScale !== undefined && suggestedCfgScale === undefined) {
-          const val = parseFloat(parsed.suggestedCfgScale);
-          if (!isNaN(val) && val >= 0 && val <= 1) suggestedCfgScale = val;
-        }
-      } catch {}
-    }
-
-    const cleanMessage = text.replace(/```json\s*[\s\S]*?```/g, '').trim();
+    const { parseSuzzieAssetLibraryResponse } = await import('../utils/suzzie-json-parser');
+    const { suggestedPrompt, suggestedProvider, suggestedProviderRationale, suggestedNegativePrompt, suggestedCfgScale, cleanMessage } =
+      parseSuzzieAssetLibraryResponse(text);
 
     return res.json({
       success: true,
