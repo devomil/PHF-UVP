@@ -806,6 +806,59 @@ class VideoGenerationWorker {
           log.info(` Job ${job.jobId} using provider hint: ${provider} (soft preference with fallbacks)`);
         }
 
+        // V2V branch: when the regenerate-video handler stored assetLibraryMode='v2v'
+        // in i2vSettings, bypass dispatchRender and call the V2V provider directly.
+        const isV2VJob = (jobI2vSettings as any)?.assetLibraryMode === 'v2v';
+        if (isV2VJob) {
+          const refVideoUrl = (jobI2vSettings as any)?.referenceVideoUrl as string | undefined;
+          if (!refVideoUrl) {
+            throw new Error('[V2V] Job is marked as V2V but has no referenceVideoUrl in i2vSettings');
+          }
+          const jobProvider = (job.provider === 'auto' ? undefined : job.provider) || 'kling-2.6';
+          const isRunwayV2V = jobProvider.startsWith('runway');
+          log.info(`[V2V] Job ${job.jobId} routing to ${isRunwayV2V ? 'Runway Gen-4 Aleph' : 'Kling object-replace'} V2V (provider=${jobProvider})`);
+
+          let v2vVideoUrl: string | undefined;
+          if (isRunwayV2V) {
+            const { runwayVideoService } = await import('./runway-video-service');
+            const v2vResult = await runwayVideoService.generateVideoToVideo({
+              videoUrl: refVideoUrl,
+              prompt: job.prompt || '',
+              model: jobProvider,
+              duration: job.duration || 5,
+              aspectRatio: aspectRatio as '16:9' | '9:16' | '1:1',
+            });
+            if (!v2vResult.success || !v2vResult.videoUrl) {
+              throw new Error(v2vResult.error || 'Runway V2V generation failed');
+            }
+            v2vVideoUrl = v2vResult.videoUrl;
+            resolvedProvider = v2vResult.provider || jobProvider;
+          } else {
+            // Kling object-replace path. Needs a replacement image — prefer the
+            // job's sourceImageUrl (e.g. scene.brandAssetUrl) and fall back to
+            // regenerating one via the scene prompt if none was provided.
+            const replacementImage = job.sourceImageUrl || undefined;
+            if (!replacementImage) {
+              throw new Error('[V2V] Kling V2V requires a replacement image (sourceImageUrl) — none found on job');
+            }
+            const { piapiVideoService } = await import('./piapi-video-service');
+            const v2vResult = await piapiVideoService.replaceObjectInVideo({
+              videoUrl: refVideoUrl,
+              replacementImageUrl: replacementImage,
+              prompt: job.prompt || '',
+              duration: job.duration || 5,
+              aspectRatio: aspectRatio as '16:9' | '9:16' | '1:1',
+            });
+            if (!v2vResult.success || !v2vResult.videoUrl) {
+              throw new Error(v2vResult.error || 'Kling V2V generation failed');
+            }
+            v2vVideoUrl = v2vResult.s3Url || v2vResult.videoUrl;
+            resolvedProvider = v2vResult.provider || 'kling-v2v';
+          }
+          videoUrl = v2vVideoUrl ?? null;
+          log.info(`[V2V] Job ${job.jobId} completed via ${resolvedProvider}: ${videoUrl?.substring(0, 80)}`);
+        } else {
+
         // Phase 23B (Task #174): dispatch through the render-system
         // router. For `renderSystemType === 'ai_video'` (or unset) this
         // is a 1:1 wrapper around the previous
@@ -862,11 +915,12 @@ class VideoGenerationWorker {
         } else if (result.success && result.s3Url) {
           videoUrl = result.s3Url;
         }
+        } // end non-V2V branch
 
         // Update job with actual provider used (for tracking/debugging)
         const progressJob2 = await storage.updateVideoGenerationJob(job.jobId, {
           progress: 90,
-          provider: actualProvider,
+          provider: resolvedProvider !== 'auto' ? resolvedProvider : (job.provider || undefined),
         });
         this.notifyJobUpdate(progressJob2);
       } catch (genError: any) {

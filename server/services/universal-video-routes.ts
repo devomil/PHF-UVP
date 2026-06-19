@@ -7359,7 +7359,7 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, req
   try {
     const userId = (req.user as any)?.id;
     const { projectId, sceneId } = req.params;
-    const { query, provider, sourceImageUrl, sourceImageUrls: reqImageUrls, referenceImages: reqReferenceImages, i2vSettings, motionControl, forceRegenerate, generationMode, strongAnchor } = req.body;
+    const { query, provider, sourceImageUrl, sourceImageUrls: reqImageUrls, referenceImages: reqReferenceImages, i2vSettings, motionControl, forceRegenerate, generationMode, strongAnchor, mode: regenerateMode, referenceUrl: v2vReferenceUrl } = req.body;
     
     console.log(`[Phase9B-Async] Creating async video generation job for scene ${sceneId} with provider: ${provider || 'default'}${sourceImageUrl ? ', using I2V with source image' : ''}${i2vSettings ? ', with I2V settings' : ''}${forceRegenerate ? ', FORCE REGENERATE' : ''}`);
     console.log(`[Phase9B-Async] Generation mode: ${generationMode || 'auto'}`);
@@ -7437,6 +7437,13 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, req
     }
     const fallbackPrompt = (scene as any).summary || 'professional video';
     
+    // V2V mode: the UI passed mode='video-to-video' and a referenceUrl.
+    // We detect this early so downstream I2V/T2V logic can be skipped.
+    const isV2VMode = regenerateMode === 'video-to-video';
+    if (isV2VMode) {
+      console.log(`[V2V] Scene ${sceneId}: video-to-video mode requested, referenceUrl=${v2vReferenceUrl?.substring(0, 80) || 'none'}`);
+    }
+
     // Check if visual direction requires AI-generated people/activities (not compatible with location assets)
     const visualDir = (scene.visualDirection || '').toLowerCase();
     const requiresPeopleContent = visualDir.includes('montage') || 
@@ -7460,12 +7467,19 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, req
     // forces those providers into REFERENCE MODE regardless of prompt-keyword detection.
     // If explicit generationMode is "t2v", skip all source images (user chose text-to-video).
     const explicitMode = generationMode || 'auto';
-    const forceT2V = explicitMode === 't2v';
-    const forceI2V = explicitMode === 'i2v';
+    const forceT2V = !isV2VMode && explicitMode === 't2v';
+    const forceI2V = !isV2VMode && explicitMode === 'i2v';
+    // For V2V mode, the scene's brandAssetUrl (or an explicit sourceImageUrl) is used
+    // as the replacement/anchor image for Kling object-replace. Runway V2V ignores it.
+    // For T2V/I2V modes, the existing brand-asset-as-reference logic is unchanged.
     const shouldUseBrandAsset = !forceT2V && !!scene.brandAssetUrl;
-    const useBrandAssetAsReference = shouldUseBrandAsset && requiresPeopleContent && !sourceImageUrl;
-    const relativeSourceUrl = forceT2V ? undefined : (sourceImageUrl || (shouldUseBrandAsset ? scene.brandAssetUrl : undefined));
-    console.log(`[Phase9B-Async] Explicit generation mode: ${explicitMode} (forceI2V=${forceI2V})`);
+    const useBrandAssetAsReference = !isV2VMode && shouldUseBrandAsset && requiresPeopleContent && !sourceImageUrl;
+    const relativeSourceUrl = forceT2V
+      ? undefined
+      : isV2VMode
+        ? (sourceImageUrl || scene.brandAssetUrl || undefined)
+        : (sourceImageUrl || (shouldUseBrandAsset ? scene.brandAssetUrl : undefined));
+    console.log(`[Phase9B-Async] Explicit generation mode: ${isV2VMode ? 'video-to-video' : explicitMode} (forceI2V=${forceI2V})`);
     console.log(`[Phase9B-Async] Scene brandAssetUrl: ${scene.brandAssetUrl?.substring(0, 80) || 'none'}`);
     console.log(`[Phase9B-Async] Requires people content: ${requiresPeopleContent}, will use brandAsset: ${shouldUseBrandAsset}, asReference: ${useBrandAssetAsReference}`);
     console.log(`[Phase9B-Async] Relative source image URL: ${relativeSourceUrl?.substring(0, 80) || 'none (T2V mode)'}`);
@@ -7576,6 +7590,31 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, req
     }
     if (!provider && !videoLock && sceneProviderHint) {
       console.log(`[Phase9B-Async] Pipeline providerHint: ${sceneProviderHint} (soft preference via i2vSettings)`);
+    }
+
+    // V2V: resolve provider and reference video URL.
+    // When the caller sent mode='video-to-video' but no explicit provider (or 'auto'),
+    // fall back to the first real provider from getDropdownV2VProviders().
+    let resolvedV2VReferenceUrl: string | undefined;
+    if (isV2VMode) {
+      if (!v2vReferenceUrl) {
+        return res.status(400).json({ success: false, error: 'referenceUrl is required for video-to-video mode' });
+      }
+      if (!effectiveProvider || effectiveProvider === 'auto') {
+        const { getDropdownV2VProviders } = await import('../../shared/provider-catalog');
+        const v2vProviders = getDropdownV2VProviders();
+        // index 0 is the synthetic "auto" entry — skip it
+        const firstReal = v2vProviders.find(p => p.id !== 'auto');
+        effectiveProvider = firstReal?.id || 'kling-2.6';
+        console.log(`[V2V] Auto-resolved V2V provider to: ${effectiveProvider}`);
+      }
+      const projectAR = (projectData as any).outputFormat?.aspectRatio || (projectData as any).settings?.aspectRatio || '16:9';
+      const resolved = await getPublicUrlForBrandAsset(v2vReferenceUrl, projectAR);
+      if (!resolved) {
+        return res.status(400).json({ success: false, error: 'Could not resolve referenceUrl to a public URL for V2V' });
+      }
+      resolvedV2VReferenceUrl = resolved;
+      console.log(`[V2V] Scene ${sceneId}: referenceVideoUrl resolved, provider=${effectiveProvider}`);
     }
 
     let finalSourceImageUrls: string[] | undefined = undefined;
@@ -7789,6 +7828,15 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, req
       console.log(`[Phase9B-Async] ✓ Forcing REFERENCE MODE — product image will steer composition, not animate the first frame`);
     }
 
+    // Merge V2V settings into i2vSettings so the worker can detect and route the job.
+    const v2vI2vMerge = resolvedV2VReferenceUrl
+      ? { assetLibraryMode: 'v2v' as const, referenceVideoUrl: resolvedV2VReferenceUrl }
+      : {};
+    const finalI2vSettings = {
+      ...jobI2vWithHint,
+      ...v2vI2vMerge,
+    };
+
     const job = await videoGenerationWorker.createJob({
       projectId,
       sceneId,
@@ -7801,7 +7849,7 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, req
       triggeredBy: userId,
       sourceImageUrl: finalSourceImageUrl,
       sourceImageUrls: finalSourceImageUrls,
-      i2vSettings: Object.keys(jobI2vWithHint).length > 0 ? jobI2vWithHint : undefined,
+      i2vSettings: Object.keys(finalI2vSettings).length > 0 ? finalI2vSettings : undefined,
       motionControl: normalizedMotionControl,
       sceneType: scene.type || 'content',
     });
