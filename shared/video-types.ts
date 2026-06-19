@@ -116,7 +116,7 @@ export interface GenerationSettings {
 }
 
 // Phase 13D: Reference Image Configuration
-export type ReferenceMode = 'none' | 'image-to-image' | 'image-to-video' | 'style-reference';
+export type ReferenceMode = 'none' | 'image-to-image' | 'image-to-video' | 'style-reference' | 'video-to-video';
 export type ReferenceSourceType = 'upload' | 'current-media' | 'asset-library' | 'brand-media';
 
 export interface ImageToImageSettings {
@@ -148,7 +148,7 @@ export interface ReferenceConfig {
 }
 
 // Phase 13D: Regeneration Options
-export type RegenerateMode = 'standard' | 'with-reference' | 'simplified-prompt' | 'different-provider' | 'stock-search';
+export type RegenerateMode = 'standard' | 'with-reference' | 'simplified-prompt' | 'different-provider' | 'stock-search' | 'video-to-video';
 
 export interface RegenerateOptions {
   mode: RegenerateMode;

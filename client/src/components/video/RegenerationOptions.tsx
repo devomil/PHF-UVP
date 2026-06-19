@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { RefreshCw, Image, Video, Wand2, FileQuestion, AlertTriangle, Zap, Settings2, Sparkles, Camera, Film, Palette, History } from 'lucide-react';
-import { getImageDropdownProviders } from '@shared/provider-catalog';
+import { RefreshCw, Image, Video, Wand2, FileQuestion, AlertTriangle, Zap, Settings2, Sparkles, Camera, Film, Palette, Repeat2 } from 'lucide-react';
+import { getImageDropdownProviders, getDropdownV2VProviders } from '@shared/provider-catalog';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -54,6 +54,25 @@ const IMAGE_PROVIDERS: ProviderInfo[] = getImageDropdownProviders().map(p => ({
   supportsStyle: p.supportsStyle,
 }));
 
+// Display icons for V2V providers — add an entry here when a new provider is
+// added to VIDEO_PROVIDER_CATALOG with showInV2VDropdown: true.
+const V2V_PROVIDER_ICONS: Record<string, string> = {
+  auto:                 '🔄',
+  'kling-2.6':          '🚀',
+  'runway-gen4-aleph':  '🎬',
+};
+
+// V2V_PROVIDERS is derived from VIDEO_PROVIDER_CATALOG (showInV2VDropdown: true
+// entries) via getDropdownV2VProviders() so no provider names are hardcoded here.
+const V2V_PROVIDERS: ProviderInfo[] = getDropdownV2VProviders().map(p => ({
+  id: p.id,
+  name: p.name,
+  description: p.description,
+  icon: V2V_PROVIDER_ICONS[p.id] ?? '🎞️',
+  supportsI2V: false,
+  supportsStyle: false,
+}));
+
 const VIDEO_PROVIDERS: ProviderInfo[] = [
   { id: 'kling-2.0', name: 'Kling 2.0', description: 'Native audio, motion control', icon: '🎬', supportsI2I: false, supportsI2V: true, supportsStyle: true },
   { id: 'kling-2.6-motion-control-pro', name: 'Kling 2.6 Motion Pro', description: 'Top quality, cinematic', icon: '👑', supportsI2I: false, supportsI2V: true, supportsStyle: true },
@@ -79,6 +98,7 @@ interface RegenerationOptionsProps {
   suggestedImprovement?: string;
   complexity?: PromptComplexityAnalysis;
   referenceMode?: ReferenceMode;
+  referenceVideoUrl?: string;
   showHistory?: boolean;
   showStrategyPreview?: boolean;
   onRegenerate: (options: RegenerateOptions) => Promise<void>;
@@ -95,13 +115,15 @@ export const RegenerationOptions = ({
   suggestedImprovement,
   complexity,
   referenceMode = 'none',
+  referenceVideoUrl,
   showHistory = true,
   showStrategyPreview = true,
   onRegenerate,
 }: RegenerationOptionsProps) => {
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [activeTab, setActiveTab] = useState<string>('options');
-  
+
+  const hasReferenceVideo = mediaType === 'video' && !!referenceVideoUrl;
   const hasQualityIssues = qualityIssues.length > 0;
   const isComplexPrompt = complexity?.category === 'complex' || complexity?.category === 'impossible';
   
@@ -190,12 +212,21 @@ export const RegenerationOptions = ({
           {referenceMode === 'image-to-image' && <Image className="w-4 h-4" />}
           {referenceMode === 'image-to-video' && <Film className="w-4 h-4" />}
           {referenceMode === 'style-reference' && <Palette className="w-4 h-4" />}
+          {referenceMode === 'video-to-video' && <Repeat2 className="w-4 h-4" />}
           <span>
             Showing {currentProviders.length} providers supporting {
               referenceMode === 'image-to-image' ? 'I2I' :
-              referenceMode === 'image-to-video' ? 'I2V' : 'Style Transfer'
+              referenceMode === 'image-to-video' ? 'I2V' :
+              referenceMode === 'video-to-video' ? 'V2V' : 'Style Transfer'
             }
           </span>
+        </div>
+      )}
+
+      {hasReferenceVideo && (
+        <div className="flex items-center gap-2 text-sm text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/20 p-2 rounded">
+          <Repeat2 className="w-4 h-4" />
+          <span>Reference video available — V2V mode enabled ({V2V_PROVIDERS.length} providers)</span>
         </div>
       )}
       
@@ -297,6 +328,22 @@ export const RegenerationOptions = ({
               <div className="text-xs text-gray-500">Find real footage instead</div>
             </div>
           </DropdownMenuItem>
+
+          {hasReferenceVideo && (
+            <DropdownMenuItem
+              onClick={() => handleRegenerate({
+                mode: 'video-to-video',
+                referenceUrl: referenceVideoUrl,
+              })}
+              data-testid="menu-item-video-to-video"
+            >
+              <Repeat2 className="w-4 h-4 mr-2 text-violet-500" />
+              <div>
+                <div className="font-medium">Video-to-Video (Auto)</div>
+                <div className="text-xs text-gray-500">Transform reference clip using best V2V provider</div>
+              </div>
+            </DropdownMenuItem>
+          )}
           
           <DropdownMenuSeparator />
           
@@ -386,6 +433,42 @@ export const RegenerationOptions = ({
                       {provider.supportsI2V && <span className="text-[10px] px-1 bg-green-100 text-green-700 rounded">I2V</span>}
                       {provider.supportsStyle && <span className="text-[10px] px-1 bg-purple-100 text-purple-700 rounded">Style</span>}
                     </div>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+          )}
+
+          {hasReferenceVideo && (
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger data-testid="submenu-v2v-providers">
+                <Repeat2 className="w-4 h-4 mr-2 text-violet-500" />
+                <span>Video-to-Video ({V2V_PROVIDERS.length})</span>
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="w-72">
+                <DropdownMenuLabel className="flex items-center gap-2">
+                  <Repeat2 className="w-3 h-3" />
+                  V2V Providers
+                </DropdownMenuLabel>
+                <DropdownMenuLabel className="text-xs font-normal text-gray-500 whitespace-normal leading-snug">
+                  Transforms your reference clip — available providers are driven by the catalog.
+                </DropdownMenuLabel>
+                {V2V_PROVIDERS.map((provider) => (
+                  <DropdownMenuItem
+                    key={provider.id}
+                    onClick={() => handleRegenerate({
+                      mode: 'video-to-video',
+                      referenceUrl: referenceVideoUrl,
+                      newProvider: provider.id === 'auto' ? undefined : provider.id,
+                    })}
+                    data-testid={`menu-item-v2v-provider-${provider.id}`}
+                  >
+                    <span className="mr-2">{provider.icon}</span>
+                    <div className="flex-1">
+                      <div className="font-medium">{provider.name}</div>
+                      <div className="text-xs text-gray-500">{provider.description}</div>
+                    </div>
+                    <span className="text-[10px] px-1 bg-violet-100 text-violet-700 rounded ml-2">V2V</span>
                   </DropdownMenuItem>
                 ))}
               </DropdownMenuSubContent>
