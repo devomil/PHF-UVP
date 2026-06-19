@@ -2,6 +2,7 @@ import express from "express";
 import { createServer } from "http";
 import { setupAuth } from "./auth";
 import { registerRoutes } from "./routes";
+import { startPreviewCacheSweeper } from "./services/voice-clone-routes";
 
 // Absorb DB connection drops (Neon idle-suspend, ECONNRESET, socket
 // hang up) before they can crash the process via unhandled rejection or
@@ -67,6 +68,8 @@ setupAuth(app);
     const { setupVite } = await import("./vite");
     await setupVite(app, httpServer);
   }
+
+  startPreviewCacheSweeper();
 
   const port = 5000;
   httpServer.listen(port, "0.0.0.0", () => {

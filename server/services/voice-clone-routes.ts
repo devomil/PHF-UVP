@@ -79,6 +79,48 @@ function setPreviewCache(providerVoiceId: string, buffer: Buffer): void {
   }
 }
 
+export function sweepExpiredPreviewCache(): void {
+  let entries: string[];
+  try {
+    entries = fs.readdirSync(VOICE_PREVIEWS_DIR);
+  } catch {
+    return;
+  }
+
+  let removed = 0;
+  const now = Date.now();
+
+  for (const file of entries) {
+    if (!file.endsWith('.json')) continue;
+    const metaPath = path.join(VOICE_PREVIEWS_DIR, file);
+    try {
+      const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
+      if (now >= meta.expiresAt) {
+        const mp3Path = metaPath.replace(/\.json$/, '.mp3');
+        try { fs.unlinkSync(mp3Path); } catch { }
+        try { fs.unlinkSync(metaPath); } catch { }
+        const key = file.replace(/\.json$/, '');
+        previewMemoryCache.delete(key);
+        removed++;
+      }
+    } catch {
+    }
+  }
+
+  if (removed > 0) {
+    console.log(`[VoicePreviewCache] Swept ${removed} expired cache entry(s) from ${VOICE_PREVIEWS_DIR}`);
+  }
+}
+
+const SWEEP_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
+
+export function startPreviewCacheSweeper(intervalMs: number = SWEEP_INTERVAL_MS): void {
+  sweepExpiredPreviewCache();
+  const timer = setInterval(sweepExpiredPreviewCache, intervalMs);
+  if (timer.unref) timer.unref();
+  console.log(`[VoicePreviewCache] Cache sweeper started (interval: ${intervalMs / 1000}s)`);
+}
+
 function invalidatePreviewCache(providerVoiceId: string): void {
   const key = previewCacheKey(providerVoiceId);
   previewMemoryCache.delete(key);
