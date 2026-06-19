@@ -3,10 +3,12 @@ import {
   providerSupportsMultiImage,
   IMAGE_PROVIDER_CATALOG,
   VIDEO_PROVIDER_CATALOG,
+  SFX_PROVIDER_CATALOG,
   getDropdownI2IProviders,
   getImageDropdownProviders,
   getDropdownVideoProviders,
   getDropdownV2VProviders,
+  getDropdownSfxProviders,
 } from '../provider-catalog';
 import { getMultiImageSupport } from '../provider-config';
 
@@ -418,6 +420,61 @@ describe('getDropdownV2VProviders', () => {
     'entry %s has name and description matching the catalog',
     (id, name, description) => {
       const result = getDropdownV2VProviders();
+      const entry = result.find(p => p.id === id);
+      expect(entry).toBeDefined();
+      expect(entry!.name).toBe(name);
+      expect(entry!.description).toBe(description);
+    },
+  );
+});
+
+// ---------------------------------------------------------------------------
+// getDropdownSfxProviders — catalog flag sync
+// ---------------------------------------------------------------------------
+describe('getDropdownSfxProviders', () => {
+  const sfxDropdownEntries = SFX_PROVIDER_CATALOG.filter(p => p.showInDropdown === true);
+
+  it('returns at least one entry', () => {
+    const result = getDropdownSfxProviders();
+    expect(result.length).toBeGreaterThan(0);
+  });
+
+  it('includes every catalog entry marked showInDropdown', () => {
+    const result = getDropdownSfxProviders();
+    const resultIds = result.map(p => p.id);
+    for (const entry of sfxDropdownEntries) {
+      expect(resultIds).toContain(entry.id);
+    }
+  });
+
+  it('does not include providers not marked showInDropdown', () => {
+    const flaggedIds = new Set(sfxDropdownEntries.map(p => p.id));
+    const result = getDropdownSfxProviders();
+    for (const item of result) {
+      expect(flaggedIds.has(item.id)).toBe(true);
+    }
+  });
+
+  it('every returned entry has a non-empty id, name, and description', () => {
+    const result = getDropdownSfxProviders();
+    for (const entry of result) {
+      expect(entry.id.length).toBeGreaterThan(0);
+      expect(entry.name.length).toBeGreaterThan(0);
+      expect(entry.description.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('each entry shape exposes exactly id, name, and description', () => {
+    const result = getDropdownSfxProviders();
+    for (const entry of result) {
+      expect(Object.keys(entry).sort()).toStrictEqual(['description', 'id', 'name']);
+    }
+  });
+
+  it.each(sfxDropdownEntries.map(p => [p.id, p.name, p.description] as const))(
+    'entry %s has name and description matching the catalog',
+    (id, name, description) => {
+      const result = getDropdownSfxProviders();
       const entry = result.find(p => p.id === id);
       expect(entry).toBeDefined();
       expect(entry!.name).toBe(name);

@@ -930,6 +930,48 @@ export function getDropdownVideoProviders(
   return [auto, ...providers];
 }
 
+// ---------------------------------------------------------------------------
+// SFX (sound-effect) provider catalog
+// ---------------------------------------------------------------------------
+// Each entry here is the single source of truth for the provider's
+// `id`, `name`, and `description` as they appear in the sound-effect
+// provider dropdown.  When a new SFX provider is added or renamed,
+// update this catalog — the getter and the UI will reflect the change
+// automatically without any other code change required.
+
+export interface SfxCatalogEntry {
+  id: string;
+  name: string;
+  description: string;
+  // When true, this entry appears in the SFX provider dropdown returned
+  // by getDropdownSfxProviders().
+  showInDropdown?: boolean;
+}
+
+export const SFX_PROVIDER_CATALOG: SfxCatalogEntry[] = [
+  {
+    id: 'kling_sound',
+    name: 'Kling Sound',
+    description: 'Kling\'s native sound-effect generation. Synchronized to video scenes at a low cost tier.',
+    showInDropdown: true,
+  },
+  {
+    id: 'elevenlabs_sfx',
+    name: 'ElevenLabs SFX',
+    description: 'ElevenLabs text-to-sound-effect engine. High-quality, expressive audio for any scene description.',
+    showInDropdown: true,
+  },
+];
+
+// Returns the list of SFX providers for the sound-effect provider dropdown.
+// Any provider added to SFX_PROVIDER_CATALOG with `showInDropdown: true`
+// will automatically appear here — no other code change required.
+export function getDropdownSfxProviders(): Array<{ id: string; name: string; description: string }> {
+  return SFX_PROVIDER_CATALOG
+    .filter(p => p.showInDropdown === true)
+    .map(p => ({ id: p.id, name: p.name, description: p.description }));
+}
+
 // Phase 20D (Task #136): single source of truth for the per-scene
 // `generateNativeAudio` toggle. Every consumer (the UI toggle's
 // disabled-state, the ai-video-service forwarding gate, and any future
