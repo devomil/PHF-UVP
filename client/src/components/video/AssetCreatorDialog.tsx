@@ -34,6 +34,12 @@ import { AssetSuzzieChat } from './AssetSuzzieChat';
 import { VIDEO_PROVIDERS as SHARED_VIDEO_PROVIDERS, getMultiImageSupport } from '@shared/provider-config';
 import { providerSupportsMultiImage, getDropdownVideoProviders, getDropdownImageProviders, getDropdownV2VProviders } from '@shared/provider-catalog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import {
+  isRunwayV2V,
+  isAssetCreatorProviderSelectorVisible,
+  isAssetCreatorAmberWarningVisible,
+  computeAssetCreatorCanSubmit,
+} from '@/utils/v2v-gating';
 
 type GenerationMode =
   | 't2i' | 't2v' | 'i2v' | 'i2i' | 'v2v'
@@ -146,10 +152,6 @@ const CATEGORY_LABELS: Record<ModeCategory, string> = {
   transform: 'Transform',
   toolkit: 'Toolkit',
 };
-
-function isRunwayV2V(provider: string) {
-  return provider.startsWith('runway');
-}
 
 export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCreatorDialogProps) {
   const { toast } = useToast();
@@ -466,11 +468,14 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
     }
   };
 
-  const canSubmit =
-    (!cfg.needsPrompt || prompt.trim()) &&
-    (!cfg.needsRefImage || referenceImageUrl) &&
-    (!cfg.needsRefVideo || referenceVideoUrl) &&
-    (!needsReplacementForV2V || replacementImageUrl);
+  const canSubmit = computeAssetCreatorCanSubmit({
+    mode,
+    prompt,
+    referenceImageUrl,
+    referenceVideoUrl,
+    replacementImageUrl,
+    provider,
+  });
 
   const promptPlaceholders: Partial<Record<GenerationMode, string>> = {
     t2i: 'Describe the image you want to create...',
@@ -1237,7 +1242,7 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
             </div>
           )}
 
-          {cfg.category !== 'toolkit' && mode !== 'character-performance' && mode !== 'character' && (mode !== 'v2v' || referenceVideoUrl) && (
+          {isAssetCreatorProviderSelectorVisible(mode, referenceVideoUrl) && (
             <div className={mode === 'i2i' ? '' : 'grid grid-cols-2 gap-4'}>
               <div>
                 <Label className="text-sm text-gray-400 mb-1.5 block">Provider</Label>
@@ -1459,7 +1464,7 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
             </div>
           )}
 
-          {mode === 'v2v' && !referenceVideoUrl && (
+          {isAssetCreatorAmberWarningVisible(mode, referenceVideoUrl) && (
             <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-amber-500/30 bg-amber-500/10">
               <Film className="h-3.5 w-3.5 text-amber-400 flex-shrink-0" />
               <p className="text-xs text-amber-300">Upload a reference video above to enable generation.</p>

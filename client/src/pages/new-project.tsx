@@ -12,6 +12,12 @@ import { getAllVisualArtPresets, isStylizedPreset, type VisualArtPreset } from "
 import { VIDEO_PROVIDERS as SHARED_VIDEO_PROVIDERS, getMultiImageSupport } from "@shared/provider-config";
 import { providerSupportsMultiImage, getDropdownVideoProviders, getDropdownImageProviders, getDropdownI2IProviders, getDropdownV2VProviders } from "@shared/provider-catalog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  isQCProviderSectionVisible,
+  isQCAmberBannerVisible,
+  wouldQCHandleSubmitBlock,
+  isQCGenerateButtonDisabled,
+} from "@/utils/v2v-gating";
 import { getAllProjectTypes, getProjectType, CONTENT_STRUCTURES, LONG_STORY_DEFAULT_ART_PRESET_IDS, getAllProjectPurposes } from "@shared/config/project-types";
 import { DECK_AUDIENCES, DEFAULT_DECK_AUDIENCE_ID, getDeckAudience } from "@shared/config/deck-audiences";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -2231,7 +2237,7 @@ export function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () =>
       refImageSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
-    if (cfg.needsRefVideo && !referenceVideoUrl) {
+    if (wouldQCHandleSubmitBlock(genMode, referenceVideoUrl)) {
       const msg = "Please upload a reference video for V2V mode.";
       setValidationError(msg);
       toast({ title: "Reference video required", description: msg, variant: "destructive" });
@@ -2831,7 +2837,7 @@ export function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () =>
           </Select>
         </div>
 
-        {(genMode !== 'v2v' || referenceVideoUrl) && <div>
+        {isQCProviderSectionVisible(genMode, referenceVideoUrl) && <div>
           <Label style={{ color: "var(--text-secondary)" }}>Provider</Label>
           <Select value={provider} onValueChange={(val) => { setProvider(val); setSuzzieProviderRationale(undefined); setAdditionalRefImages([]); }}>
             <SelectTrigger className="mt-1.5" style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }}>
@@ -2925,7 +2931,7 @@ export function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () =>
           </div>
         )}
 
-        {cfg.needsRefVideo && !referenceVideoUrl && (
+        {isQCAmberBannerVisible(genMode, referenceVideoUrl) && (
           <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-amber-500/30 bg-amber-500/10">
             <Film className="w-4 h-4 text-amber-400 flex-shrink-0" />
             <span className="text-sm text-amber-300">Upload a reference video above to enable generation.</span>
@@ -2936,7 +2942,7 @@ export function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () =>
           <Button type="button" variant="outline" onClick={onBack} style={{ borderColor: "var(--border-medium)", color: "var(--text-secondary)" }}>
             <ArrowLeft className="w-4 h-4 mr-2" /> Back
           </Button>
-          <Button type="submit" className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500" disabled={isLoading || !prompt || (cfg.needsRefVideo && !referenceVideoUrl)}>
+          <Button type="submit" className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500" disabled={isLoading || isQCGenerateButtonDisabled(genMode, prompt, referenceVideoUrl)}>
             {isLoading ? "Generating..." : "Generate"}
           </Button>
         </div>
