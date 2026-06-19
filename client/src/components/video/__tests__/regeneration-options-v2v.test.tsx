@@ -78,6 +78,11 @@ vi.mock("@/components/ui/tabs", () => {
 vi.mock("../RegenerationHistoryPanel", () => ({ RegenerationHistoryPanel: () => null }));
 vi.mock("../StrategyPreviewCard", () => ({ StrategyPreviewCard: () => null }));
 
+vi.mock("@/components/ui/input", () => ({
+  Input: ({ value, onChange, "data-testid": tid, ...rest }: any) =>
+    React.createElement("input", { value, onChange, "data-testid": tid, ...rest }),
+}));
+
 const mockToast = vi.fn();
 vi.mock("@/hooks/use-toast", () => ({
   useToast: () => ({ toast: mockToast }),
@@ -271,5 +276,84 @@ describe("RegenerationOptions — V2V submenu catalog-driven", () => {
     const call = onRegenerate.mock.calls[0][0];
     expect(call.mode).toBe("video-to-video");
     expect(call.newProvider).toBe("mock-v2v-two");
+  });
+});
+
+describe("RegenerationOptions — V2V replacementImageUrl round-trip", () => {
+  const BRAND_URL = "https://cdn.example.com/brand-asset.png";
+  const CUSTOM_URL = "https://cdn.example.com/custom-replacement.png";
+
+  it("pre-fills the picker with brandAssetUrl and includes it as replacementImageUrl in every V2V onRegenerate call", () => {
+    const onRegenerate = vi.fn().mockResolvedValue(undefined);
+    render(
+      <RegenerationOptions
+        {...baseProps({
+          referenceVideoUrl: "https://example.com/ref.mp4",
+          brandAssetUrl: BRAND_URL,
+          onRegenerate,
+        })}
+      />,
+    );
+
+    const input = screen.getByTestId("input-v2v-replacement-image") as HTMLInputElement;
+    expect(input.value).toBe(BRAND_URL);
+
+    fireEvent.click(screen.getByTestId("menu-item-video-to-video"));
+    expect(onRegenerate).toHaveBeenCalledTimes(1);
+    expect(onRegenerate.mock.calls[0][0].replacementImageUrl).toBe(BRAND_URL);
+
+    onRegenerate.mockClear();
+
+    fireEvent.click(screen.getByTestId("menu-item-v2v-provider-mock-v2v-one"));
+    expect(onRegenerate).toHaveBeenCalledTimes(1);
+    expect(onRegenerate.mock.calls[0][0].replacementImageUrl).toBe(BRAND_URL);
+  });
+
+  it("uses the updated URL in onRegenerate after the user changes the picker value", () => {
+    const onRegenerate = vi.fn().mockResolvedValue(undefined);
+    render(
+      <RegenerationOptions
+        {...baseProps({
+          referenceVideoUrl: "https://example.com/ref.mp4",
+          brandAssetUrl: BRAND_URL,
+          onRegenerate,
+        })}
+      />,
+    );
+
+    const input = screen.getByTestId("input-v2v-replacement-image") as HTMLInputElement;
+    fireEvent.change(input, { target: { value: CUSTOM_URL } });
+    expect(input.value).toBe(CUSTOM_URL);
+
+    fireEvent.click(screen.getByTestId("menu-item-v2v-provider-mock-v2v-one"));
+    expect(onRegenerate).toHaveBeenCalledTimes(1);
+    expect(onRegenerate.mock.calls[0][0].replacementImageUrl).toBe(CUSTOM_URL);
+  });
+
+  it("passes replacementImageUrl as undefined (not empty string) when the picker is empty", () => {
+    const onRegenerate = vi.fn().mockResolvedValue(undefined);
+    render(
+      <RegenerationOptions
+        {...baseProps({
+          referenceVideoUrl: "https://example.com/ref.mp4",
+          onRegenerate,
+        })}
+      />,
+    );
+
+    const input = screen.getByTestId("input-v2v-replacement-image") as HTMLInputElement;
+    expect(input.value).toBe("");
+
+    fireEvent.click(screen.getByTestId("menu-item-video-to-video"));
+    expect(onRegenerate).toHaveBeenCalledTimes(1);
+    const quickActionCall = onRegenerate.mock.calls[0][0];
+    expect(quickActionCall.replacementImageUrl).toBeUndefined();
+
+    onRegenerate.mockClear();
+
+    fireEvent.click(screen.getByTestId("menu-item-v2v-provider-auto"));
+    expect(onRegenerate).toHaveBeenCalledTimes(1);
+    const providerCall = onRegenerate.mock.calls[0][0];
+    expect(providerCall.replacementImageUrl).toBeUndefined();
   });
 });
