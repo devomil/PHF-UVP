@@ -243,6 +243,17 @@ describe('getImageDropdownProviders', () => {
       expect(typeof entry.supportsStyle).toBe('boolean');
     }
   });
+
+  it.each(imageDropdownEntries.map(p => [p.id, p.name, p.description] as const))(
+    'entry %s has name and description matching the catalog',
+    (id, name, description) => {
+      const result = getImageDropdownProviders();
+      const entry = result.find(p => p.id === id);
+      expect(entry).toBeDefined();
+      expect(entry!.name).toBe(name);
+      expect(entry!.description).toBe(description);
+    },
+  );
 });
 
 // ---------------------------------------------------------------------------
