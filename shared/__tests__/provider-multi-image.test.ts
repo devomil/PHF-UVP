@@ -12,8 +12,8 @@ import {
 } from '../provider-catalog';
 import { getMultiImageSupport } from '../provider-config';
 
-// Providers that carry multiImageSupport in provider-config.ts
-const MULTI_IMAGE_PROVIDERS = [
+// Video providers that carry multiImageSupport in provider-config.ts
+const MULTI_IMAGE_VIDEO_PROVIDERS = [
   'kling',
   'kling-1.6',
   'kling-2.0',
@@ -27,8 +27,19 @@ const MULTI_IMAGE_PROVIDERS = [
   'seedance-2.0-fast',
 ];
 
-// Providers (or pseudo-ids) that must NOT show the badge
-const NON_MULTI_IMAGE_PROVIDERS = [
+// Image providers that carry multiImageSupport in IMAGE_PROVIDERS
+const MULTI_IMAGE_IMAGE_PROVIDERS = [
+  'flux',
+  'flux-1-dev',
+  'falai',
+  'midjourney',
+];
+
+// All multi-image providers combined (used in shared assertions)
+const MULTI_IMAGE_PROVIDERS = [...MULTI_IMAGE_VIDEO_PROVIDERS, ...MULTI_IMAGE_IMAGE_PROVIDERS];
+
+// Video providers (or pseudo-ids) that must NOT show the badge
+const NON_MULTI_IMAGE_VIDEO_PROVIDERS = [
   'auto',
   'runway',
   'runway-4.5',
@@ -51,6 +62,21 @@ const NON_MULTI_IMAGE_PROVIDERS = [
   'omni-human-1.5',
   'omniavatar',
   'remotion-motion-graphics',
+];
+
+// Image providers that do NOT have multiImageSupport
+const NON_MULTI_IMAGE_IMAGE_PROVIDERS = [
+  'stability',
+  'ideogram',
+  'dalle3',
+  'flux-kontext',
+  'flux-1.1-pro',
+];
+
+// Combined list of all non-multi-image providers
+const NON_MULTI_IMAGE_PROVIDERS = [
+  ...NON_MULTI_IMAGE_VIDEO_PROVIDERS,
+  ...NON_MULTI_IMAGE_IMAGE_PROVIDERS,
 ];
 
 describe('providerSupportsMultiImage', () => {
@@ -122,6 +148,186 @@ describe('getMultiImageSupport', () => {
     for (const id of NON_MULTI_IMAGE_PROVIDERS) {
       expect(getMultiImageSupport(id)).toBeNull();
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// providerSupportsMultiImage — image provider coverage
+// ---------------------------------------------------------------------------
+describe('providerSupportsMultiImage — image providers', () => {
+  it.each(MULTI_IMAGE_IMAGE_PROVIDERS)(
+    'returns true for image provider %s',
+    (id) => {
+      expect(providerSupportsMultiImage(id)).toBe(true);
+    },
+  );
+
+  it.each(NON_MULTI_IMAGE_IMAGE_PROVIDERS)(
+    'returns false for image provider %s',
+    (id) => {
+      expect(providerSupportsMultiImage(id)).toBe(false);
+    },
+  );
+
+  it('flux returns true (IMAGE_PROVIDERS path)', () => {
+    expect(providerSupportsMultiImage('flux')).toBe(true);
+  });
+
+  it('flux-1-dev returns true (IMAGE_PROVIDERS path)', () => {
+    expect(providerSupportsMultiImage('flux-1-dev')).toBe(true);
+  });
+
+  it('falai returns true (IMAGE_PROVIDERS path)', () => {
+    expect(providerSupportsMultiImage('falai')).toBe(true);
+  });
+
+  it('stability returns false — no multiImageSupport in IMAGE_PROVIDERS', () => {
+    expect(providerSupportsMultiImage('stability')).toBe(false);
+  });
+
+  it('ideogram returns false — no multiImageSupport in IMAGE_PROVIDERS', () => {
+    expect(providerSupportsMultiImage('ideogram')).toBe(false);
+  });
+
+  it('dalle3 returns false — no multiImageSupport in IMAGE_PROVIDERS', () => {
+    expect(providerSupportsMultiImage('dalle3')).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getMultiImageSupport — image provider hint strings and config
+// ---------------------------------------------------------------------------
+describe('getMultiImageSupport — image providers', () => {
+  it('returns a config object for flux', () => {
+    const support = getMultiImageSupport('flux');
+    expect(support).not.toBeNull();
+    expect(support!.maxImages).toBeGreaterThan(0);
+    expect(typeof support!.hint).toBe('string');
+    expect(support!.hint.length).toBeGreaterThan(0);
+    expect(support!.promptSyntax).toBe('@imageN');
+  });
+
+  it('flux supports up to 4 reference images', () => {
+    const support = getMultiImageSupport('flux');
+    expect(support!.maxImages).toBe(4);
+  });
+
+  it('flux hint mentions @image1 or @imageN syntax', () => {
+    const support = getMultiImageSupport('flux');
+    expect(support!.hint).toMatch(/@image/);
+  });
+
+  it('returns a config object for flux-1-dev', () => {
+    const support = getMultiImageSupport('flux-1-dev');
+    expect(support).not.toBeNull();
+    expect(support!.maxImages).toBeGreaterThan(0);
+    expect(typeof support!.hint).toBe('string');
+    expect(support!.hint.length).toBeGreaterThan(0);
+    expect(support!.promptSyntax).toBe('@imageN');
+  });
+
+  it('flux-1-dev supports up to 4 reference images', () => {
+    const support = getMultiImageSupport('flux-1-dev');
+    expect(support!.maxImages).toBe(4);
+  });
+
+  it('flux-1-dev hint mentions @image syntax', () => {
+    const support = getMultiImageSupport('flux-1-dev');
+    expect(support!.hint).toMatch(/@image/);
+  });
+
+  it('returns a config object for falai', () => {
+    const support = getMultiImageSupport('falai');
+    expect(support).not.toBeNull();
+    expect(support!.maxImages).toBeGreaterThan(0);
+    expect(typeof support!.hint).toBe('string');
+    expect(support!.hint.length).toBeGreaterThan(0);
+    expect(support!.promptSyntax).toBe('@imageN');
+  });
+
+  it('falai supports up to 4 reference images', () => {
+    const support = getMultiImageSupport('falai');
+    expect(support!.maxImages).toBe(4);
+  });
+
+  it('falai hint mentions @image syntax', () => {
+    const support = getMultiImageSupport('falai');
+    expect(support!.hint).toMatch(/@image/);
+  });
+
+  it('returns null for stability — no multiImageSupport', () => {
+    expect(getMultiImageSupport('stability')).toBeNull();
+  });
+
+  it('returns null for ideogram — no multiImageSupport', () => {
+    expect(getMultiImageSupport('ideogram')).toBeNull();
+  });
+
+  it('returns null for dalle3 — no multiImageSupport', () => {
+    expect(getMultiImageSupport('dalle3')).toBeNull();
+  });
+
+  it('flux and flux-1-dev share the same promptSyntax', () => {
+    const fluxSupport = getMultiImageSupport('flux');
+    const devSupport = getMultiImageSupport('flux-1-dev');
+    expect(fluxSupport!.promptSyntax).toBe(devSupport!.promptSyntax);
+  });
+
+  it('image providers use @imageN promptSyntax (video providers may differ)', () => {
+    const fluxSupport = getMultiImageSupport('flux');
+    const fluxDevSupport = getMultiImageSupport('flux-1-dev');
+    const falaiSupport = getMultiImageSupport('falai');
+    expect(fluxSupport!.promptSyntax).toBe('@imageN');
+    expect(fluxDevSupport!.promptSyntax).toBe('@imageN');
+    expect(falaiSupport!.promptSyntax).toBe('@imageN');
+  });
+
+  it.each(MULTI_IMAGE_IMAGE_PROVIDERS)(
+    'getMultiImageSupport returns non-null with valid shape for image provider %s',
+    (id) => {
+      const support = getMultiImageSupport(id);
+      expect(support).not.toBeNull();
+      expect(support!.maxImages).toBeGreaterThan(0);
+      expect(typeof support!.promptSyntax).toBe('string');
+      expect(support!.promptSyntax.length).toBeGreaterThan(0);
+      expect(typeof support!.hint).toBe('string');
+      expect(support!.hint.length).toBeGreaterThan(0);
+    },
+  );
+
+  it.each(NON_MULTI_IMAGE_IMAGE_PROVIDERS)(
+    'getMultiImageSupport returns null for non-supporting image provider %s',
+    (id) => {
+      expect(getMultiImageSupport(id)).toBeNull();
+    },
+  );
+});
+
+// ---------------------------------------------------------------------------
+// providerSupportsMultiImage — VIDEO_PROVIDERS still return true
+// ---------------------------------------------------------------------------
+describe('providerSupportsMultiImage — VIDEO_PROVIDERS still return true', () => {
+  it.each(MULTI_IMAGE_VIDEO_PROVIDERS)(
+    'video provider %s still returns true',
+    (id) => {
+      expect(providerSupportsMultiImage(id)).toBe(true);
+    },
+  );
+
+  it('kling returns true (VIDEO_PROVIDERS path)', () => {
+    expect(providerSupportsMultiImage('kling')).toBe(true);
+  });
+
+  it('kling-2.6 returns true (VIDEO_PROVIDERS path)', () => {
+    expect(providerSupportsMultiImage('kling-2.6')).toBe(true);
+  });
+
+  it('seedance-2.0 returns true (VIDEO_PROVIDERS path)', () => {
+    expect(providerSupportsMultiImage('seedance-2.0')).toBe(true);
+  });
+
+  it('seedance-2.0-fast returns true (VIDEO_PROVIDERS path)', () => {
+    expect(providerSupportsMultiImage('seedance-2.0-fast')).toBe(true);
   });
 });
 
