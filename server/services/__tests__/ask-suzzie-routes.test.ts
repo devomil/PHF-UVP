@@ -185,9 +185,14 @@ function makeLlmResponseWithArtStyle(
   artStyleName: string,
   provider?: string,
   rationale?: string,
+  artStyleRationale?: string,
 ): string {
   const block: Record<string, unknown> = {
-    suggestedArtStyle: { id: artStyleId, name: artStyleName },
+    suggestedArtStyle: {
+      id: artStyleId,
+      name: artStyleName,
+      ...(artStyleRationale ? { rationale: artStyleRationale } : {}),
+    },
     ...(provider ? { suggestedProvider: provider } : {}),
     ...(rationale ? { suggestedProviderRationale: rationale } : {}),
   };
@@ -411,6 +416,44 @@ describe('POST /api/universal-video/ask-suzzie (assistant mode)', () => {
     expect(res.body.suggestedArtStyle.id).toBe('cinematic-noir');
     expect(res.body.suggestedArtStyle.name).toBe('Cinematic Noir');
     expect(res.body.suggestedProvider).toBe('kling');
+  });
+
+  it('surfaces suggestedArtStyle rationale when the LLM emits it', async () => {
+    mockLlmText = makeLlmResponseWithArtStyle(
+      'cinematic-realism',
+      'Cinematic Realism',
+      undefined,
+      undefined,
+      'Chosen for its photorealistic depth that matches the product showcase.',
+    );
+
+    const res = await request(makeApp())
+      .post('/api/universal-video/ask-suzzie')
+      .set('x-test-user', 'user-1')
+      .send({
+        mode: 'assistant',
+        question: 'Which art style fits a product demo?',
+        sceneType: 'product',
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.suggestedArtStyle.rationale).toBe(
+      'Chosen for its photorealistic depth that matches the product showcase.',
+    );
+  });
+
+  it('omits rationale from suggestedArtStyle when the LLM does not emit it', async () => {
+    mockLlmText = makeLlmResponseWithArtStyle('watercolor-dreams', 'Watercolor Dreams');
+
+    const res = await request(makeApp())
+      .post('/api/universal-video/ask-suzzie')
+      .set('x-test-user', 'user-1')
+      .send({ mode: 'assistant', question: 'Suggest an art style.' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.suggestedArtStyle.id).toBe('watercolor-dreams');
+    expect(res.body.suggestedArtStyle.rationale).toBeUndefined();
   });
 
   it('omits suggestedArtStyle when the LLM JSON block does not include it', async () => {

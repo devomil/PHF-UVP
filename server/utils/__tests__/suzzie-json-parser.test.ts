@@ -51,6 +51,28 @@ describe("parseSuzzieSceneEditorResponse — suggestedProviderRationale extracti
     expect(result.suggestedArtStyle).toEqual({ id: "cinematic-realism", name: "Cinematic Realism" });
   });
 
+  it("extracts suggestedArtStyle rationale when present", () => {
+    const text = wrap({
+      suggestedArtStyle: {
+        id: "cinematic-noir",
+        name: "Cinematic Noir",
+        rationale: "Chosen for its dramatic shadows that match the scene's tense mood.",
+      },
+    });
+    const result = parseSuzzieSceneEditorResponse(text);
+    expect(result.suggestedArtStyle?.id).toBe("cinematic-noir");
+    expect(result.suggestedArtStyle?.name).toBe("Cinematic Noir");
+    expect(result.suggestedArtStyle?.rationale).toBe("Chosen for its dramatic shadows that match the scene's tense mood.");
+  });
+
+  it("omits rationale from suggestedArtStyle when absent", () => {
+    const text = wrap({
+      suggestedArtStyle: { id: "watercolor-dreams", name: "Watercolor Dreams" },
+    });
+    const result = parseSuzzieSceneEditorResponse(text);
+    expect(result.suggestedArtStyle?.rationale).toBeUndefined();
+  });
+
   it("omits suggestedProviderRationale (undefined, not null) when absent from the JSON block", () => {
     const text = wrap({ suggestedProvider: "runway", suggestedPrompt: "Some prompt" });
     const result = parseSuzzieSceneEditorResponse(text);

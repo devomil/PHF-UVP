@@ -758,7 +758,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
   const isContentTagAutoAssigned = autoAssignedContentTag !== null && contentTag === autoAssignedContentTag;
   const [sceneArtPreset, setSceneArtPreset] = useState<string>(scene.artPresetId || 'project');
   const [pipelineAssignedStyle] = useState<string | null>(scene.assignedStyleId || null);
-  const [suzzieArtSuggestion, setSuzzieArtSuggestion] = useState<{ id: string; name: string } | null>(null);
+  const [suzzieArtSuggestion, setSuzzieArtSuggestion] = useState<{ id: string; name: string; rationale?: string } | null>(null);
   const suzzieArtSuggestionTileRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -2942,7 +2942,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                       ? 'rgba(251,146,60,0.6)'
                       : 'var(--border-subtle)',
                   }}
-                  title={isSuggested ? `Suzzie suggests: ${preset.name}` : preset.description}
+                  title={isSuggested ? `✦ Suzzie suggests: ${preset.name}${suzzieArtSuggestion?.rationale ? ` — ${suzzieArtSuggestion.rationale}` : ""}` : preset.description}
                 >
                   {isSuggested && (
                     <div

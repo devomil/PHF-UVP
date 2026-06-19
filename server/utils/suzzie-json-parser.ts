@@ -2,7 +2,7 @@ export interface SuzzieSceneEditorParseResult {
   suggestedPrompt?: string;
   suggestedProvider?: string;
   suggestedProviderRationale?: string;
-  suggestedArtStyle?: { id: string; name: string };
+  suggestedArtStyle?: { id: string; name: string; rationale?: string };
   cleanMessage: string;
 }
 
@@ -32,7 +32,7 @@ export function parseSuzzieSceneEditorResponse(text: string): SuzzieSceneEditorP
   let suggestedPrompt: string | undefined;
   let suggestedProvider: string | undefined;
   let suggestedProviderRationale: string | undefined;
-  let suggestedArtStyle: { id: string; name: string } | undefined;
+  let suggestedArtStyle: { id: string; name: string; rationale?: string } | undefined;
 
   for (const parsed of extractJsonBlocks(text)) {
     if (parsed.suggestedPrompt && !suggestedPrompt) suggestedPrompt = String(parsed.suggestedPrompt);
@@ -41,7 +41,11 @@ export function parseSuzzieSceneEditorResponse(text: string): SuzzieSceneEditorP
     if (parsed.suggestedArtStyle && !suggestedArtStyle) {
       const style = parsed.suggestedArtStyle as Record<string, unknown>;
       if (style.id && style.name) {
-        suggestedArtStyle = { id: String(style.id), name: String(style.name) };
+        suggestedArtStyle = {
+          id: String(style.id),
+          name: String(style.name),
+          ...(style.rationale ? { rationale: String(style.rationale) } : {}),
+        };
       }
     }
   }
