@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,8 +31,17 @@ export function VoiceCloneManager({ onSelectVoice, selectedVoiceId }: VoiceClone
   const [playingId, setPlayingId] = useState<number | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const previewCacheRef = useRef<Map<number, string>>(new Map());
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  useEffect(() => {
+    const cache = previewCacheRef.current;
+    return () => {
+      cache.forEach((url) => URL.revokeObjectURL(url));
+      cache.clear();
+    };
+  }, []);
 
   const stopCurrentAudio = () => {
     if (audioRef.current) {
@@ -43,12 +52,28 @@ export function VoiceCloneManager({ onSelectVoice, selectedVoiceId }: VoiceClone
     setPlayingId(null);
   };
 
+  const playUrl = (voiceId: number, url: string) => {
+    const audio = new Audio(url);
+    audioRef.current = audio;
+    setPlayingId(voiceId);
+    audio.onended = () => setPlayingId(null);
+    audio.onerror = () => setPlayingId(null);
+    audio.play();
+  };
+
   const handlePreview = async (voice: ClonedVoice) => {
     if (playingId === voice.id) {
       stopCurrentAudio();
       return;
     }
     stopCurrentAudio();
+
+    const cached = previewCacheRef.current.get(voice.id);
+    if (cached) {
+      playUrl(voice.id, cached);
+      return;
+    }
+
     setPreviewingId(voice.id);
     try {
       const res = await fetch(`/api/voice-cloning/${voice.id}/preview`, {
@@ -61,18 +86,8 @@ export function VoiceCloneManager({ onSelectVoice, selectedVoiceId }: VoiceClone
       }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
-      const audio = new Audio(url);
-      audioRef.current = audio;
-      setPlayingId(voice.id);
-      audio.onended = () => {
-        setPlayingId(null);
-        URL.revokeObjectURL(url);
-      };
-      audio.onerror = () => {
-        setPlayingId(null);
-        URL.revokeObjectURL(url);
-      };
-      audio.play();
+      previewCacheRef.current.set(voice.id, url);
+      playUrl(voice.id, url);
     } catch (err: any) {
       toast({ title: "Preview failed", description: err.message, variant: "destructive" });
     } finally {
@@ -123,7 +138,12 @@ export function VoiceCloneManager({ onSelectVoice, selectedVoiceId }: VoiceClone
       if (!res.ok) throw new Error("Delete failed");
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (_data, id) => {
+      const cached = previewCacheRef.current.get(id);
+      if (cached) {
+        URL.revokeObjectURL(cached);
+        previewCacheRef.current.delete(id);
+      }
       queryClient.invalidateQueries({ queryKey: ["/api/voice-cloning"] });
       toast({ title: "Voice deleted" });
     },
