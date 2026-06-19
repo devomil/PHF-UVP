@@ -182,9 +182,56 @@ for (const entry of IMAGE_PROVIDER_CATALOG) {
   }
 }
 
+// ── 5. COST FIELD VALIDATION ─────────────────────────────────────────────────
+// Every entry in VIDEO_PROVIDERS must have a positive, non-zero costPerSecond.
+// Every entry in IMAGE_PROVIDERS must have a positive, non-zero costPerImage.
+// A missing or zero value silently produces wrong credit estimates in billing.
+
+interface CostError {
+  registry: string;
+  id: string;
+  field: string;
+  value: number | undefined;
+  reason: string;
+}
+
+const costErrors: CostError[] = [];
+
+for (const [id, entry] of Object.entries(VIDEO_PROVIDERS)) {
+  const v = entry.costPerSecond;
+  if (typeof v !== 'number' || !isFinite(v) || v <= 0) {
+    costErrors.push({
+      registry: 'shared/VIDEO_PROVIDERS',
+      id,
+      field: 'costPerSecond',
+      value: v as number | undefined,
+      reason:
+        typeof v !== 'number' || !isFinite(v)
+          ? `costPerSecond is missing or not a number (got ${JSON.stringify(v)})`
+          : `costPerSecond must be > 0, got ${v}`,
+    });
+  }
+}
+
+for (const [id, entry] of Object.entries(IMAGE_PROVIDERS)) {
+  const v = entry.costPerImage;
+  if (typeof v !== 'number' || !isFinite(v) || v <= 0) {
+    costErrors.push({
+      registry: 'shared/IMAGE_PROVIDERS',
+      id,
+      field: 'costPerImage',
+      value: v as number | undefined,
+      reason:
+        typeof v !== 'number' || !isFinite(v)
+          ? `costPerImage is missing or not a number (got ${JSON.stringify(v)})`
+          : `costPerImage must be > 0, got ${v}`,
+    });
+  }
+}
+
 // ── Report ───────────────────────────────────────────────────────────────────
 
-if (gaps.length === 0) {
+if (gaps.length === 0 && costErrors.length === 0) {
   console.log('check-provider-catalog-sync: OK — catalog and registry are fully in sync.');
   process.exit(0);
 }
@@ -212,5 +259,15 @@ if (registryMissing.length > 0) {
   console.error('');
 }
 
-console.error(`${gaps.length} gap(s) found.`);
+if (costErrors.length > 0) {
+  console.error('  [cost-validation] These registry entries have a missing or zero cost field.');
+  console.error('  Update shared/provider-config.ts with the correct positive cost value.\n');
+  for (const { registry, id, field, reason } of costErrors) {
+    console.error(`    ${registry}["${id}"].${field}  →  ${reason}`);
+  }
+  console.error('');
+}
+
+const totalIssues = gaps.length + costErrors.length;
+console.error(`${totalIssues} issue(s) found (${gaps.length} sync gap(s), ${costErrors.length} cost error(s)).`);
 process.exit(1);
