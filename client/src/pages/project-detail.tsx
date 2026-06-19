@@ -45,6 +45,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { EndCardPreview } from "@/components/video/EndCardPreview";
 import { AskSuzziePanel } from "@/components/video/ask-suzzie-panel";
+import { AssetSuzzieChat } from "@/components/video/AssetSuzzieChat";
 import { CanvaSyncCard } from "@/components/canva/CanvaSyncCard";
 // Task #119: project-header render-type histogram + per-scene badge.
 // `RenderTypeHistogram` shows the count of each render system across
@@ -7187,9 +7188,25 @@ export function QuickCreateAssetPanel({ projectId, project }: { projectId: strin
 
             <div className="space-y-2.5">
               <div>
-                <div className="flex items-center gap-2 mb-1.5">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-purple-400"><path d="M12 20h9"/><path d="M16.376 3.622a1 1 0 0 1 3.002 3.002L7.368 18.635a2 2 0 0 1-.855.506l-2.872.838a.5.5 0 0 1-.62-.62l.838-2.872a2 2 0 0 1 .506-.854z"/></svg>
-                  <label className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>Visual Prompt</label>
+                <div className="flex items-center justify-between gap-2 mb-1.5">
+                  <div className="flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-purple-400"><path d="M12 20h9"/><path d="M16.376 3.622a1 1 0 0 1 3.002 3.002L7.368 18.635a2 2 0 0 1-.855.506l-2.872.838a.5.5 0 0 1-.62-.62l.838-2.872a2 2 0 0 1 .506-.854z"/></svg>
+                    <label className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>Visual Prompt</label>
+                  </div>
+                  <AssetSuzzieChat
+                    mode={isI2V ? 'i2v' : (project?.mediaMode === 'image' ? 't2i' : 't2v')}
+                    provider={selectedProvider}
+                    prompt={promptText}
+                    hasReferenceImage={!!(overrideSourceImage || assetsQuery.data?.generationInfo?.sourceImageUrl)}
+                    aspectRatio={selectedAspectRatio}
+                    duration={selectedDuration}
+                    style={artPresetId || ''}
+                    validProviderIds={[]}
+                    onApplyPrompt={setPromptText}
+                    onApplyProvider={setSelectedProvider}
+                    onApplyNegativePrompt={setNegativePrompt}
+                    onApplyCfgScale={(val) => { setImageFidelity(val); setSuzzieSuggestedFidelity(val); }}
+                  />
                 </div>
                 <textarea
                   value={promptText}
