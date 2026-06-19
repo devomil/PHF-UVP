@@ -31,11 +31,22 @@
 // Run via:  npm run lint:providers
 // Exit 0 = all clear, exit 1 = gaps detected, exit 2 = usage error.
 
+import { createRequire } from 'module';
 import { VIDEO_PROVIDER_CATALOG, IMAGE_PROVIDER_CATALOG } from '../shared/provider-catalog.js';
 import { VIDEO_PROVIDERS, IMAGE_PROVIDERS, SOUND_PROVIDERS } from '../shared/provider-config.js';
 import { AI_VIDEO_PROVIDERS, PROVIDER_TEST_ID_MAP } from '../server/config/ai-video-providers-static.js';
 import { IMAGE_PROVIDERS as SERVER_IMAGE_PROVIDERS } from '../server/config/image-providers.js';
 import { findCatalogSyncGaps } from './provider-catalog-sync-core.js';
+import { checkCostDrift } from './check-cost-drift-core.js';
+
+const _require = createRequire(import.meta.url);
+const costBaseline = _require('./provider-cost-baseline.json') as {
+  _comment: string;
+  _tolerancePct: number;
+  video: Record<string, { costPerSecond?: number; costPerImage?: number; costPerTrack?: number; costPerEffect?: number }>;
+  image: Record<string, { costPerSecond?: number; costPerImage?: number; costPerTrack?: number; costPerEffect?: number }>;
+  sound: Record<string, { costPerSecond?: number; costPerImage?: number; costPerTrack?: number; costPerEffect?: number }>;
+};
 
 const gaps = findCatalogSyncGaps({
   videoCatalog: VIDEO_PROVIDER_CATALOG,
@@ -124,9 +135,24 @@ for (const [id, entry] of Object.entries(SOUND_PROVIDERS)) {
   }
 }
 
+// ── 6. COST DRIFT DETECTION ───────────────────────────────────────────────────
+// Compare current cost values against the committed baseline snapshot.
+// Changes larger than _tolerancePct% from the baseline are flagged so that
+// accidental typos (e.g. 0.05 → 0.5, a 10× drift) are caught before billing.
+
+const driftErrors = checkCostDrift({
+  videoProviders: VIDEO_PROVIDERS,
+  imageProviders: IMAGE_PROVIDERS,
+  soundProviders: SOUND_PROVIDERS,
+  videoBaseline: costBaseline.video,
+  imageBaseline: costBaseline.image,
+  soundBaseline: costBaseline.sound,
+  tolerancePct: costBaseline._tolerancePct,
+});
+
 // ── Report ───────────────────────────────────────────────────────────────────
 
-if (gaps.length === 0 && costErrors.length === 0) {
+if (gaps.length === 0 && costErrors.length === 0 && driftErrors.length === 0) {
   console.log('check-provider-catalog-sync: OK — catalog and registry are fully in sync.');
   process.exit(0);
 }
@@ -164,6 +190,23 @@ if (costErrors.length > 0) {
   console.error('');
 }
 
-const totalIssues = gaps.length + costErrors.length;
-console.error(`${totalIssues} issue(s) found (${gaps.length} sync gap(s), ${costErrors.length} cost error(s)).`);
+if (driftErrors.length > 0) {
+  console.error('  [cost-drift] These registry entries have a cost value that deviates from the committed baseline');
+  console.error(`  by more than ${costBaseline._tolerancePct}%. If this change is intentional, update`);
+  console.error('  scripts/provider-cost-baseline.json to match the new value.\n');
+  for (const { registry, id, field, baseline, current, driftPct } of driftErrors) {
+    console.error(
+      `    ${registry}["${id}"].${field}` +
+      `  →  baseline=${baseline}, current=${current}` +
+      `  (${driftPct.toFixed(1)}% drift, limit ${costBaseline._tolerancePct}%)`,
+    );
+  }
+  console.error('');
+}
+
+const totalIssues = gaps.length + costErrors.length + driftErrors.length;
+console.error(
+  `${totalIssues} issue(s) found` +
+  ` (${gaps.length} sync gap(s), ${costErrors.length} cost error(s), ${driftErrors.length} cost drift(s)).`,
+);
 process.exit(1);

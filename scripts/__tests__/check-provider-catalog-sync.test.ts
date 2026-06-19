@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'child_process';
 import path from 'path';
 import { findCatalogSyncGaps, type CatalogEntry, type SyncCheckParams } from '../provider-catalog-sync-core';
+import { checkCostDrift, type CostDriftParams } from '../check-cost-drift-core';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -302,6 +303,185 @@ describe('findCatalogSyncGaps — multiple gaps accumulate', () => {
     expect(gaps.length).toBeGreaterThanOrEqual(2);
     expect(gaps.some(g => g.id === 'vid-x')).toBe(true);
     expect(gaps.some(g => g.id === 'orphan-registry')).toBe(true);
+  });
+});
+
+// ── checkCostDrift unit tests ─────────────────────────────────────────────────
+
+function baseDriftParams(overrides: Partial<CostDriftParams> = {}): CostDriftParams {
+  return {
+    videoProviders: {},
+    imageProviders: {},
+    soundProviders: {},
+    videoBaseline: {},
+    imageBaseline: {},
+    soundBaseline: {},
+    tolerancePct: 50,
+    ...overrides,
+  };
+}
+
+describe('checkCostDrift — no drift (all within tolerance)', () => {
+  it('returns empty array when providers match the baseline exactly', () => {
+    const params = baseDriftParams({
+      videoProviders: { runway: { costPerSecond: 0.05 } },
+      videoBaseline:  { runway: { costPerSecond: 0.05 } },
+    });
+    expect(checkCostDrift(params)).toHaveLength(0);
+  });
+
+  it('returns empty array when drift is exactly at the tolerance boundary', () => {
+    // 50% tolerance, baseline 0.05 → current 0.075 is exactly +50% → still ok
+    const params = baseDriftParams({
+      videoProviders: { runway: { costPerSecond: 0.075 } },
+      videoBaseline:  { runway: { costPerSecond: 0.05 } },
+    });
+    expect(checkCostDrift(params)).toHaveLength(0);
+  });
+
+  it('returns empty array when a provider is new (not in baseline)', () => {
+    // New providers are not flagged — they simply have no baseline entry.
+    const params = baseDriftParams({
+      videoProviders: { 'brand-new': { costPerSecond: 0.99 } },
+      videoBaseline:  {},
+    });
+    expect(checkCostDrift(params)).toHaveLength(0);
+  });
+
+  it('returns empty array when a baseline provider is removed from the registry', () => {
+    // Removed providers are handled by the zero/missing cost check, not drift.
+    const params = baseDriftParams({
+      videoProviders: {},
+      videoBaseline:  { runway: { costPerSecond: 0.05 } },
+    });
+    expect(checkCostDrift(params)).toHaveLength(0);
+  });
+});
+
+describe('checkCostDrift — drift detected', () => {
+  it('flags a costPerSecond that increased by more than the tolerance', () => {
+    // 0.05 → 0.5 is 900% drift, well over 50%
+    const params = baseDriftParams({
+      videoProviders: { runway: { costPerSecond: 0.5 } },
+      videoBaseline:  { runway: { costPerSecond: 0.05 } },
+    });
+    const errors = checkCostDrift(params);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toMatchObject({
+      registry: 'shared/VIDEO_PROVIDERS',
+      id: 'runway',
+      field: 'costPerSecond',
+      baseline: 0.05,
+      current: 0.5,
+    });
+    expect(errors[0].driftPct).toBeCloseTo(900, 0);
+  });
+
+  it('flags a costPerSecond that decreased by more than the tolerance', () => {
+    // 0.05 → 0.01 is 80% decrease, over 50%
+    const params = baseDriftParams({
+      videoProviders: { runway: { costPerSecond: 0.01 } },
+      videoBaseline:  { runway: { costPerSecond: 0.05 } },
+    });
+    const errors = checkCostDrift(params);
+    expect(errors).toHaveLength(1);
+    expect(errors[0].driftPct).toBeCloseTo(80, 0);
+  });
+
+  it('flags a costPerImage drift in the image registry', () => {
+    const params = baseDriftParams({
+      imageProviders: { flux: { costPerImage: 0.30 } },
+      imageBaseline:  { flux: { costPerImage: 0.03 } },
+    });
+    const errors = checkCostDrift(params);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toMatchObject({
+      registry: 'shared/IMAGE_PROVIDERS',
+      id: 'flux',
+      field: 'costPerImage',
+    });
+  });
+
+  it('flags a costPerTrack drift in the sound registry', () => {
+    const params = baseDriftParams({
+      soundProviders: { udio: { costPerTrack: 1.00 } },
+      soundBaseline:  { udio: { costPerTrack: 0.10 } },
+    });
+    const errors = checkCostDrift(params);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toMatchObject({
+      registry: 'shared/SOUND_PROVIDERS',
+      id: 'udio',
+      field: 'costPerTrack',
+    });
+  });
+
+  it('flags a costPerEffect drift in the sound registry', () => {
+    const params = baseDriftParams({
+      soundProviders: { elevenlabs_sfx: { costPerEffect: 0.20 } },
+      soundBaseline:  { elevenlabs_sfx: { costPerEffect: 0.02 } },
+    });
+    const errors = checkCostDrift(params);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toMatchObject({
+      registry: 'shared/SOUND_PROVIDERS',
+      id: 'elevenlabs_sfx',
+      field: 'costPerEffect',
+    });
+  });
+
+  it('accumulates errors across multiple drifted providers', () => {
+    const params = baseDriftParams({
+      videoProviders: {
+        runway: { costPerSecond: 0.5 },
+        kling:  { costPerSecond: 0.3 },
+      },
+      videoBaseline: {
+        runway: { costPerSecond: 0.05 },
+        kling:  { costPerSecond: 0.03 },
+      },
+    });
+    const errors = checkCostDrift(params);
+    expect(errors).toHaveLength(2);
+    const ids = errors.map(e => e.id);
+    expect(ids).toContain('runway');
+    expect(ids).toContain('kling');
+  });
+
+  it('respects a custom tolerancePct', () => {
+    // With a strict 10% tolerance, even a 20% increase should be flagged
+    const params = baseDriftParams({
+      videoProviders: { runway: { costPerSecond: 0.06 } },
+      videoBaseline:  { runway: { costPerSecond: 0.05 } },
+      tolerancePct: 10,
+    });
+    const errors = checkCostDrift(params);
+    expect(errors).toHaveLength(1);
+    expect(errors[0].driftPct).toBeCloseTo(20, 0);
+  });
+
+  it('does not flag a value that has drifted but the live cost field is missing (zero/missing check handles that)', () => {
+    // If the live entry exists but has no cost field at all, drift check skips it
+    const params = baseDriftParams({
+      videoProviders: { runway: {} },
+      videoBaseline:  { runway: { costPerSecond: 0.05 } },
+    });
+    expect(checkCostDrift(params)).toHaveLength(0);
+  });
+});
+
+describe('checkCostDrift — real production registry against baseline (integration)', () => {
+  it('exits 0 with current production costs — no drift vs committed baseline', () => {
+    const scriptPath = path.resolve('scripts/check-provider-catalog-sync.ts');
+    const result = spawnSync('npx', ['tsx', scriptPath], {
+      encoding: 'utf8',
+      env: { ...process.env, NODE_ENV: 'test' },
+    });
+    expect(
+      result.stdout,
+      `lint:providers reported issues:\n${result.stderr}`,
+    ).toContain('OK');
+    expect(result.status).toBe(0);
   });
 });
 
