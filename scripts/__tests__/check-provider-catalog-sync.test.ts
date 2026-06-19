@@ -3,6 +3,7 @@ import { spawnSync } from 'child_process';
 import path from 'path';
 import { findCatalogSyncGaps, type CatalogEntry, type SyncCheckParams } from '../provider-catalog-sync-core';
 import { checkCostDrift, checkUnbaselinedProviders, type CostDriftParams, type UnbaselinedParams } from '../check-cost-drift-core';
+import { checkSoundProviderCosts, type SoundProviderEntry } from '../check-sfx-cost-core';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -589,6 +590,157 @@ describe('checkUnbaselinedProviders — new provider flagged', () => {
     expect(errors).toHaveLength(1);
     expect(errors[0].id).toBe('new-provider');
     expect(errors[0].registry).toBe('shared/VIDEO_PROVIDERS');
+// ── checkSoundProviderCosts unit tests ────────────────────────────────────────
+
+function makeSound(id: string, type: string, costFields: Record<string, unknown> = {}): Record<string, SoundProviderEntry> {
+  return { [id]: { type, ...costFields } as SoundProviderEntry };
+}
+
+describe('checkSoundProviderCosts — valid positive values (no errors)', () => {
+  it('accepts a voiceover provider with a positive costPerSecond', () => {
+    const errors = checkSoundProviderCosts(makeSound('el-voice', 'voiceover', { costPerSecond: 0.05 }));
+    expect(errors).toHaveLength(0);
+  });
+
+  it('accepts a music provider with a positive costPerTrack', () => {
+    const errors = checkSoundProviderCosts(makeSound('udio', 'music', { costPerTrack: 0.10 }));
+    expect(errors).toHaveLength(0);
+  });
+
+  it('accepts an sfx provider with a positive costPerEffect', () => {
+    const errors = checkSoundProviderCosts(makeSound('el-sfx', 'sfx', { costPerEffect: 0.02 }));
+    expect(errors).toHaveLength(0);
+  });
+
+  it('skips entries with an unknown type without emitting an error', () => {
+    const errors = checkSoundProviderCosts(makeSound('mystery', 'ambient'));
+    expect(errors).toHaveLength(0);
+  });
+
+  it('returns an empty array for an empty registry', () => {
+    expect(checkSoundProviderCosts({})).toHaveLength(0);
+  });
+});
+
+describe('checkSoundProviderCosts — missing cost field', () => {
+  it('flags a voiceover provider with no costPerSecond field', () => {
+    const errors = checkSoundProviderCosts(makeSound('el-voice', 'voiceover'));
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toMatchObject({
+      registry: 'shared/SOUND_PROVIDERS',
+      id: 'el-voice',
+      field: 'costPerSecond',
+    });
+    expect(errors[0].reason).toContain('missing or not a number');
+  });
+
+  it('flags a music provider with no costPerTrack field', () => {
+    const errors = checkSoundProviderCosts(makeSound('udio', 'music'));
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toMatchObject({
+      id: 'udio',
+      field: 'costPerTrack',
+    });
+    expect(errors[0].reason).toContain('missing or not a number');
+  });
+
+  it('flags an sfx provider with no costPerEffect field', () => {
+    const errors = checkSoundProviderCosts(makeSound('el-sfx', 'sfx'));
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toMatchObject({
+      id: 'el-sfx',
+      field: 'costPerEffect',
+    });
+    expect(errors[0].reason).toContain('missing or not a number');
+  });
+});
+
+describe('checkSoundProviderCosts — zero cost field', () => {
+  it('flags a voiceover provider with costPerSecond === 0', () => {
+    const errors = checkSoundProviderCosts(makeSound('el-voice', 'voiceover', { costPerSecond: 0 }));
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toMatchObject({ id: 'el-voice', field: 'costPerSecond' });
+    expect(errors[0].reason).toContain('must be > 0');
+  });
+
+  it('flags a music provider with costPerTrack === 0', () => {
+    const errors = checkSoundProviderCosts(makeSound('udio', 'music', { costPerTrack: 0 }));
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toMatchObject({ id: 'udio', field: 'costPerTrack' });
+    expect(errors[0].reason).toContain('must be > 0');
+  });
+
+  it('flags an sfx provider with costPerEffect === 0', () => {
+    const errors = checkSoundProviderCosts(makeSound('el-sfx', 'sfx', { costPerEffect: 0 }));
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toMatchObject({ id: 'el-sfx', field: 'costPerEffect' });
+    expect(errors[0].reason).toContain('must be > 0');
+  });
+});
+
+describe('checkSoundProviderCosts — negative cost field', () => {
+  it('flags a voiceover provider with a negative costPerSecond', () => {
+    const errors = checkSoundProviderCosts(makeSound('el-voice', 'voiceover', { costPerSecond: -0.05 }));
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toMatchObject({ id: 'el-voice', field: 'costPerSecond' });
+    expect(errors[0].reason).toContain('must be > 0');
+  });
+
+  it('flags a music provider with a negative costPerTrack', () => {
+    const errors = checkSoundProviderCosts(makeSound('udio', 'music', { costPerTrack: -1 }));
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toMatchObject({ id: 'udio', field: 'costPerTrack' });
+    expect(errors[0].reason).toContain('must be > 0');
+  });
+
+  it('flags an sfx provider with a negative costPerEffect', () => {
+    const errors = checkSoundProviderCosts(makeSound('el-sfx', 'sfx', { costPerEffect: -0.01 }));
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toMatchObject({ id: 'el-sfx', field: 'costPerEffect' });
+    expect(errors[0].reason).toContain('must be > 0');
+  });
+});
+
+describe('checkSoundProviderCosts — non-numeric cost field', () => {
+  it('flags a voiceover provider with a string costPerSecond', () => {
+    const errors = checkSoundProviderCosts(makeSound('el-voice', 'voiceover', { costPerSecond: '0.05' }));
+    expect(errors).toHaveLength(1);
+    expect(errors[0].reason).toContain('missing or not a number');
+  });
+
+  it('flags an sfx provider with NaN costPerEffect', () => {
+    const errors = checkSoundProviderCosts(makeSound('el-sfx', 'sfx', { costPerEffect: NaN }));
+    expect(errors).toHaveLength(1);
+    expect(errors[0].reason).toContain('missing or not a number');
+  });
+});
+
+describe('checkSoundProviderCosts — accumulates errors across multiple providers', () => {
+  it('collects all errors in a single pass across different types', () => {
+    const providers: Record<string, SoundProviderEntry> = {
+      'voice-bad':  { type: 'voiceover' },
+      'music-bad':  { type: 'music', costPerTrack: 0 },
+      'sfx-bad':    { type: 'sfx', costPerEffect: -0.5 },
+      'voice-good': { type: 'voiceover', costPerSecond: 0.05 },
+    };
+    const errors = checkSoundProviderCosts(providers);
+    expect(errors).toHaveLength(3);
+    const ids = errors.map(e => e.id);
+    expect(ids).toContain('voice-bad');
+    expect(ids).toContain('music-bad');
+    expect(ids).toContain('sfx-bad');
+    expect(ids).not.toContain('voice-good');
+  });
+});
+
+describe('checkSoundProviderCosts — real SOUND_PROVIDERS registry (integration)', () => {
+  it('finds no cost errors in the current production SOUND_PROVIDERS', async () => {
+    const { SOUND_PROVIDERS } = await import('../../shared/provider-config');
+    const errors = checkSoundProviderCosts(SOUND_PROVIDERS as Record<string, SoundProviderEntry>);
+    expect(
+      errors,
+      `SOUND_PROVIDERS has missing/zero cost fields:\n${errors.map(e => `  ${e.registry}["${e.id}"].${e.field}: ${e.reason}`).join('\n')}`,
+    ).toHaveLength(0);
   });
 });
 
