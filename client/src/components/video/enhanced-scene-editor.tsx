@@ -2929,7 +2929,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                     if (suzzieArtSuggestion?.id === preset.id) setSuzzieArtSuggestion(null);
                   }}
                   disabled={!isEditing}
-                  className="flex-shrink-0 w-[80px] rounded-lg border-2 p-1.5 transition-all disabled:opacity-70 relative"
+                  className={`flex-shrink-0 w-[80px] rounded-lg border-2 p-1.5 transition-all disabled:opacity-70 relative${isSuggested ? " suzzie-suggest-pulse" : ""}`}
                   style={{
                     backgroundColor: sceneArtPreset === preset.id
                       ? 'rgba(139,92,246,0.15)'
