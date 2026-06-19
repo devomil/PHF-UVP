@@ -19,7 +19,7 @@
 // This catches regressions where a field is renamed in createJob but not in
 // processJob — the unit tests on each layer individually would not notice.
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import express from 'express';
 import request from 'supertest';
 
@@ -531,6 +531,133 @@ describe('V2V round-trip: HTTP route → processJob → provider (Runway path)',
       ([, patch]: [string, any]) => patch.status === 'succeeded',
     );
     expect(succeededCall).toBeDefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Brand-asset URL resolution → provider round-trip
+// ---------------------------------------------------------------------------
+//
+// Closes the gap identified in the task: the HTTP layer (v2v-regenerate-body.test.ts)
+// already verifies that a brand-asset path is resolved before createJob is called.
+// But there was no end-to-end test confirming the resolved CDN URL then flows
+// all the way into replaceObjectInVideo.  This describe block adds that coverage.
+//
+// Mock setup mirrors v2v-regenerate-body.test.ts "brand-asset path resolution":
+//   dbSelectWhereMock → brand asset row with storagePath
+//   bucketFileMock    → object-storage download returns a buffer
+//   global.fetch      → PiAPI ephemeral upload returns PIAPI_CDN_URL
+// The route resolves the path → stores the CDN URL in createJob args →
+// processJob reads it → replaceObjectInVideo receives it.
+
+describe('V2V round-trip: brand-asset URL resolution → replaceObjectInVideo (Kling)', () => {
+  const PIAPI_CDN_URL = 'https://storage.theapi.app/assets/resolved-brand-round-trip-123.jpg';
+  const BRAND_ASSET_PATH = '/api/brand-assets/file/123';
+
+  let originalFetch: typeof global.fetch;
+  let originalPiapiKey: string | undefined;
+
+  beforeEach(() => {
+    originalFetch = global.fetch;
+    originalPiapiKey = process.env.PIAPI_API_KEY;
+
+    // Provide a dummy key so uploadImageToPiAPIStorage doesn't short-circuit.
+    process.env.PIAPI_API_KEY = 'test-piapi-key-roundtrip';
+
+    // Simulate a successful PiAPI ephemeral-storage upload returning a CDN URL.
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ url: PIAPI_CDN_URL }),
+    } as any);
+
+    // DB returns a brand asset row with a valid storagePath.
+    dbSelectWhereMock.mockResolvedValue([
+      {
+        id: 123,
+        settings: {
+          storagePath: 'repl-bucket-test|public/brand-media/123_product.jpg',
+        },
+      },
+    ]);
+
+    // Object-storage download returns a stub image buffer.
+    bucketFileMock.mockResolvedValue([Buffer.from('fake-brand-asset-bytes')]);
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+    if (originalPiapiKey === undefined) {
+      delete process.env.PIAPI_API_KEY;
+    } else {
+      process.env.PIAPI_API_KEY = originalPiapiKey;
+    }
+  });
+
+  it('resolved CDN URL (not the raw brand-asset path) arrives at replaceObjectInVideo', async () => {
+    // Phase 1: HTTP layer — route receives a brand-asset path and resolves it.
+    const res = await request(makeApp())
+      .post(`/${PROJECT_ID}/scenes/${SCENE_ID}/regenerate-video`)
+      .send({
+        mode: 'video-to-video',
+        referenceUrl: REF_VIDEO_URL,
+        replacementImageUrl: BRAND_ASSET_PATH,
+        provider: 'kling-2.6',
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(createJobCaptureMock).toHaveBeenCalledTimes(1);
+
+    const createJobArgs = createJobCaptureMock.mock.calls[0][0];
+
+    // Route must have replaced the raw path with the resolved CDN URL.
+    expect(createJobArgs.sourceImageUrl).toBe(PIAPI_CDN_URL);
+    expect(createJobArgs.sourceImageUrl).not.toBe(BRAND_ASSET_PATH);
+    expect(createJobArgs.i2vSettings).toMatchObject({
+      assetLibraryMode: 'v2v',
+      referenceVideoUrl: REF_VIDEO_URL,
+    });
+
+    // Phase 2: Worker layer — processJob must forward the CDN URL to Kling.
+    const job = buildJobFromCreateJobArgs(createJobArgs, 'integ-job-brand-asset-1');
+    expect(job.sourceImageUrl).toBe(PIAPI_CDN_URL);
+
+    await (videoGenerationWorker as any).processJob(job);
+
+    expect(replaceObjectInVideoMock).toHaveBeenCalledTimes(1);
+    const klingArgs = replaceObjectInVideoMock.mock.calls[0][0];
+
+    // The resolved CDN URL — not the raw brand-asset path — must reach Kling.
+    expect(klingArgs.replacementImageUrl).toBe(PIAPI_CDN_URL);
+    expect(klingArgs.replacementImageUrl).not.toMatch(/\/api\/brand-assets\/file\//);
+    expect(klingArgs.videoUrl).toBe(REF_VIDEO_URL);
+
+    // Runway and dispatchRender must not have been touched.
+    expect(generateVideoToVideoMock).not.toHaveBeenCalled();
+    expect(dispatchRenderMock).not.toHaveBeenCalled();
+  });
+
+  it('job is marked succeeded when the brand-asset CDN URL flows through the full chain', async () => {
+    await request(makeApp())
+      .post(`/${PROJECT_ID}/scenes/${SCENE_ID}/regenerate-video`)
+      .send({
+        mode: 'video-to-video',
+        referenceUrl: REF_VIDEO_URL,
+        replacementImageUrl: BRAND_ASSET_PATH,
+        provider: 'kling-2.6',
+      });
+
+    const createJobArgs = createJobCaptureMock.mock.calls[0][0];
+    const job = buildJobFromCreateJobArgs(createJobArgs, 'integ-job-brand-asset-2');
+
+    await (videoGenerationWorker as any).processJob(job);
+
+    const succeededCall = updateJobMock.mock.calls.find(
+      ([, patch]: [string, any]) => patch.status === 'succeeded',
+    );
+    expect(succeededCall).toBeDefined();
+    expect(succeededCall[0]).toBe('integ-job-brand-asset-2');
   });
 });
 
