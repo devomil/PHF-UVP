@@ -43,8 +43,59 @@ const RECOMMENDED_VOICES = [
 
 export function VoiceSelector({ selectedVoiceId, onSelect }: VoiceSelectorProps) {
   const [playingVoiceId, setPlayingVoiceId] = useState<string | null>(null);
+  const [loadingPreviewId, setLoadingPreviewId] = useState<string | null>(null);
   const [showCloneManager, setShowCloneManager] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const blobUrlRef = useRef<string | null>(null);
+
+  const stopCurrent = () => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+    if (blobUrlRef.current) {
+      URL.revokeObjectURL(blobUrlRef.current);
+      blobUrlRef.current = null;
+    }
+    setPlayingVoiceId(null);
+  };
+
+  const playClonedPreview = async (cv: ClonedVoice) => {
+    const key = `cloned:${cv.id}`;
+
+    if (playingVoiceId === key) {
+      stopCurrent();
+      return;
+    }
+
+    stopCurrent();
+    setLoadingPreviewId(key);
+
+    try {
+      const res = await fetch(`/api/voice-cloning/${cv.id}/preview`, { method: 'POST' });
+      if (!res.ok) {
+        console.error('[VoicePreview] Failed to fetch cloned voice preview:', res.status);
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      blobUrlRef.current = url;
+
+      const audio = new Audio(url);
+      audioRef.current = audio;
+      setPlayingVoiceId(key);
+
+      audio.onended = () => { stopCurrent(); };
+      audio.onerror = () => { stopCurrent(); };
+
+      await audio.play();
+    } catch (err) {
+      console.error('[VoicePreview] Playback error:', err);
+      stopCurrent();
+    } finally {
+      setLoadingPreviewId(null);
+    }
+  };
 
   const { data: voicesData, isLoading } = useQuery<{ success: boolean; voices: Voice[] }>({
     queryKey: ['/api/universal-video/voices'],
@@ -64,33 +115,20 @@ export function VoiceSelector({ selectedVoiceId, onSelect }: VoiceSelectorProps)
   const playPreview = (voice: Voice) => {
     if (!voice.preview_url) return;
 
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current = null;
-    }
-
     if (playingVoiceId === voice.voice_id) {
-      setPlayingVoiceId(null);
+      stopCurrent();
       return;
     }
+
+    stopCurrent();
 
     const audio = new Audio(voice.preview_url);
     audioRef.current = audio;
     setPlayingVoiceId(voice.voice_id);
 
-    audio.onended = () => {
-      setPlayingVoiceId(null);
-      audioRef.current = null;
-    };
-
-    audio.onerror = () => {
-      setPlayingVoiceId(null);
-      audioRef.current = null;
-    };
-
-    audio.play().catch(() => {
-      setPlayingVoiceId(null);
-    });
+    audio.onended = () => { stopCurrent(); };
+    audio.onerror = () => { stopCurrent(); };
+    audio.play().catch(() => { stopCurrent(); });
   };
 
   if (isLoading) {
@@ -123,6 +161,8 @@ export function VoiceSelector({ selectedVoiceId, onSelect }: VoiceSelectorProps)
                 cv.status === "pending" ? "Processing…" :
                 cv.status === "failed" ? "Failed" :
                 null;
+              const isPlayingThis = playingVoiceId === voiceId;
+              const isLoadingThis = loadingPreviewId === voiceId;
               return (
                 <div
                   key={cv.id}
@@ -147,12 +187,35 @@ export function VoiceSelector({ selectedVoiceId, onSelect }: VoiceSelectorProps)
                       <p className="text-xs text-muted-foreground">Your cloned voice</p>
                     )}
                   </div>
-                  <Badge
-                    variant={cv.status === "failed" ? "destructive" : "secondary"}
-                    className="text-[10px] ml-2 shrink-0"
-                  >
-                    {cv.status === "ready" ? "cloned" : cv.status}
-                  </Badge>
+                  {isReady && (
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8 ml-2 shrink-0"
+                      data-testid={`play-cloned-voice-${cv.id}`}
+                      disabled={isLoadingThis}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        playClonedPreview(cv);
+                      }}
+                    >
+                      {isLoadingThis ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : isPlayingThis ? (
+                        <Pause className="w-4 h-4" />
+                      ) : (
+                        <Play className="w-4 h-4" />
+                      )}
+                    </Button>
+                  )}
+                  {!isReady && (
+                    <Badge
+                      variant={cv.status === "failed" ? "destructive" : "secondary"}
+                      className="text-[10px] ml-2 shrink-0"
+                    >
+                      {cv.status}
+                    </Badge>
+                  )}
                 </div>
               );
             })}
