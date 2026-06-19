@@ -116,6 +116,18 @@ describe('isQCGenerateButtonDisabled – V2V gating', () => {
     expect(isQCGenerateButtonDisabled('t2v', '', '')).toBe(true);
     expect(isQCGenerateButtonDisabled('t2v', 'a prompt', '')).toBe(false);
   });
+
+  it('disables button while video upload is in progress in v2v mode (even with valid prompt and URL)', () => {
+    expect(isQCGenerateButtonDisabled('v2v', 'make it cinematic', 'https://cdn.example.com/clip.mp4', true)).toBe(true);
+  });
+
+  it('enables button once upload completes in v2v mode (isUploadingVideo false)', () => {
+    expect(isQCGenerateButtonDisabled('v2v', 'make it cinematic', 'https://cdn.example.com/clip.mp4', false)).toBe(false);
+  });
+
+  it('disables button while video upload is in progress for non-v2v modes too', () => {
+    expect(isQCGenerateButtonDisabled('t2v', 'a sunset over the ocean', '', true)).toBe(true);
+  });
 });
 
 // ── handleSubmit early-return guard ───────────────────────────────────────────

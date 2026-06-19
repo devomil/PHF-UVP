@@ -81,6 +81,7 @@ export function computeAssetCreatorCanSubmit({
   referenceVideoUrl,
   replacementImageUrl,
   provider,
+  isUploadingVideo = false,
 }: {
   mode: AssetCreatorMode;
   prompt: string;
@@ -88,10 +89,12 @@ export function computeAssetCreatorCanSubmit({
   referenceVideoUrl: string;
   replacementImageUrl: string;
   provider: string;
+  isUploadingVideo?: boolean;
 }): boolean {
   const cfg = ASSET_CREATOR_MODE_GATING[mode];
   const needsReplacementForV2V = mode === 'v2v' && !isRunwayV2V(provider);
   return (
+    !isUploadingVideo &&
     (!cfg.needsPrompt || Boolean(prompt.trim())) &&
     (!cfg.needsRefImage || Boolean(referenceImageUrl)) &&
     (!cfg.needsRefVideo || Boolean(referenceVideoUrl)) &&
@@ -141,14 +144,15 @@ export function isQCAmberBannerVisible(
 
 /**
  * Whether the generate button should be disabled (ignoring isLoading).
- * Mirrors: !prompt || (cfg.needsRefVideo && !referenceVideoUrl)
+ * Mirrors: !prompt || (cfg.needsRefVideo && !referenceVideoUrl) || isUploadingVideo
  */
 export function isQCGenerateButtonDisabled(
   genMode: QuickCreateMode,
   prompt: string,
   referenceVideoUrl: string,
+  isUploadingVideo = false,
 ): boolean {
-  return !prompt || (QC_MODE_GATING[genMode].needsRefVideo && !referenceVideoUrl);
+  return isUploadingVideo || !prompt || (QC_MODE_GATING[genMode].needsRefVideo && !referenceVideoUrl);
 }
 
 /**

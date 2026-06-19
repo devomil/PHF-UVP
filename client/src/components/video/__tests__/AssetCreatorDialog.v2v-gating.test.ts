@@ -198,4 +198,38 @@ describe('computeAssetCreatorCanSubmit – V2V gating', () => {
       }),
     ).toBe(true);
   });
+
+  it('disables submit while video upload is in progress (even when all other fields are valid)', () => {
+    expect(
+      computeAssetCreatorCanSubmit({
+        ...baseV2V,
+        referenceVideoUrl: 'https://cdn.example.com/clip.mp4',
+        isUploadingVideo: true,
+      }),
+    ).toBe(false);
+  });
+
+  it('enables submit once upload completes (isUploadingVideo false, video URL present)', () => {
+    expect(
+      computeAssetCreatorCanSubmit({
+        ...baseV2V,
+        referenceVideoUrl: 'https://cdn.example.com/clip.mp4',
+        isUploadingVideo: false,
+      }),
+    ).toBe(true);
+  });
+
+  it('disables submit while video upload is in progress for non-v2v modes too', () => {
+    expect(
+      computeAssetCreatorCanSubmit({
+        mode: 't2v',
+        prompt: 'a beautiful sunset',
+        referenceImageUrl: '',
+        referenceVideoUrl: '',
+        replacementImageUrl: '',
+        provider: 'auto',
+        isUploadingVideo: true,
+      }),
+    ).toBe(false);
+  });
 });

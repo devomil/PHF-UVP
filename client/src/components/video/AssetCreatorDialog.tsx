@@ -475,6 +475,7 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
     referenceVideoUrl,
     replacementImageUrl,
     provider,
+    isUploadingVideo,
   });
 
   const promptPlaceholders: Partial<Record<GenerationMode, string>> = {
