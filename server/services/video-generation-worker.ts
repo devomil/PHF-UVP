@@ -14,6 +14,7 @@ import { preparePromptForProvider, type SanitizedPrompt } from "./prompt-sanitiz
 import { dispatchRender } from "./render-system-router";
 import type { RenderSystemType } from "../../shared/video-types";
 import type { SceneSnapshot } from "./render-handlers/types";
+import { buildV2VRouteDecision } from "./v2v-job-router";
 
 const log = createLogger("VideoWorker");
 
@@ -816,14 +817,9 @@ class VideoGenerationWorker {
 
         // V2V branch: when the regenerate-video handler stored assetLibraryMode='v2v'
         // in i2vSettings, bypass dispatchRender and call the V2V provider directly.
-        const isV2VJob = (jobI2vSettings as any)?.assetLibraryMode === 'v2v';
-        if (isV2VJob) {
-          const refVideoUrl = (jobI2vSettings as any)?.referenceVideoUrl as string | undefined;
-          if (!refVideoUrl) {
-            throw new Error('[V2V] Job is marked as V2V but has no referenceVideoUrl in i2vSettings');
-          }
-          const jobProvider = (job.provider === 'auto' ? undefined : job.provider) || 'kling-2.6';
-          const isRunwayV2V = jobProvider.startsWith('runway');
+        const v2vDecision = buildV2VRouteDecision(jobI2vSettings, job.provider, job.sourceImageUrl);
+        if (v2vDecision.isV2V) {
+          const { refVideoUrl, jobProvider, isRunwayV2V } = v2vDecision;
           log.info(`[V2V] Job ${job.jobId} routing to ${isRunwayV2V ? 'Runway Gen-4 Aleph' : 'Kling object-replace'} V2V (provider=${jobProvider})`);
 
           let v2vVideoUrl: string | undefined;
@@ -845,7 +841,7 @@ class VideoGenerationWorker {
             // Kling object-replace path. Needs a replacement image — prefer the
             // job's sourceImageUrl (e.g. scene.brandAssetUrl) and fall back to
             // regenerating one via the scene prompt if none was provided.
-            const replacementImage = job.sourceImageUrl || undefined;
+            const replacementImage = v2vDecision.replacementImage;
             if (!replacementImage) {
               throw new Error('[V2V] Kling V2V requires a replacement image (sourceImageUrl) — none found on job');
             }

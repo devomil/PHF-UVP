@@ -7604,12 +7604,12 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, req
       if (!v2vReferenceUrl) {
         return res.status(400).json({ success: false, error: 'referenceUrl is required for video-to-video mode' });
       }
-      if (!effectiveProvider || effectiveProvider === 'auto') {
+      {
+        // Delegate auto-resolution to the shared helper so the same fallback
+        // logic is exercised by the helper's unit tests (v2v-routing.test.ts).
         const { getDropdownV2VProviders } = await import('../../shared/provider-catalog');
-        const v2vProviders = getDropdownV2VProviders();
-        // index 0 is the synthetic "auto" entry — skip it
-        const firstReal = v2vProviders.find(p => p.id !== 'auto');
-        effectiveProvider = firstReal?.id || 'kling-2.6';
+        const { resolveV2VProvider } = await import('./v2v-job-router');
+        effectiveProvider = resolveV2VProvider(effectiveProvider, getDropdownV2VProviders());
         console.log(`[V2V] Auto-resolved V2V provider to: ${effectiveProvider}`);
       }
       const projectAR = (projectData as any).outputFormat?.aspectRatio || (projectData as any).settings?.aspectRatio || '16:9';
