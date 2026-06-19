@@ -915,6 +915,51 @@ export const IMAGE_PROVIDERS: Record<string, ImageProvider> = {
     strengths: ['Photorealistic output', 'Natural scenes', 'People and lifestyle', 'Organic quality'],
     bestFor: ['lifestyle', 'person', 'photorealistic', 'product', 'natural-scene'],
   },
+
+  stability: {
+    id: 'stability',
+    name: 'stability',
+    displayName: 'Stability AI',
+    costPerImage: 0.02,
+    strengths: ['Versatile style range', 'Text rendering', 'Budget-friendly', 'Consistent composition'],
+    bestFor: ['general', 'text-in-image', 'artistic', 'budget'],
+  },
+
+  dalle3: {
+    id: 'dalle3',
+    name: 'dalle3',
+    displayName: 'DALL-E 3',
+    costPerImage: 0.04,
+    strengths: ['Strong prompt understanding', 'Creative interpretation', 'Reliable quality', 'Diverse subjects'],
+    bestFor: ['general', 'creative', 'concept', 'illustration'],
+  },
+
+  'flux-kontext': {
+    id: 'flux-kontext',
+    name: 'flux-kontext',
+    displayName: 'Flux Kontext',
+    costPerImage: 0.03,
+    strengths: ['Contextual image editing', 'Targeted modifications', 'Scene preservation', 'High fidelity I2I'],
+    bestFor: ['i2i-editing', 'targeted-edit', 'scene-modification', 'context-aware'],
+  },
+
+  'flux-1.1-pro': {
+    id: 'flux-1.1-pro',
+    name: 'flux-1.1-pro',
+    displayName: 'Flux 1.1 Pro',
+    costPerImage: 0.05,
+    strengths: ['Professional-grade output', 'High detail preservation', 'Premium prompt adherence', 'I2I fidelity'],
+    bestFor: ['premium', 'professional', 'high-quality', 'i2i-precision'],
+  },
+
+  'stable-diffusion-3': {
+    id: 'stable-diffusion-3',
+    name: 'stable-diffusion-3',
+    displayName: 'Stable Diffusion 3',
+    costPerImage: 0.02,
+    strengths: ['Versatile', 'Good text rendering', 'Fast'],
+    bestFor: ['general', 'text-in-image', 'artistic'],
+  },
 };
 
 export interface SoundProvider {

@@ -616,6 +616,31 @@ export const VIDEO_PROVIDER_CATALOG: ProviderCatalogEntry[] = [
     aspectRatios: ['16:9', '9:16', '1:1'],
     supportsNativeAudio: true,
   },
+  {
+    id: 'runway-gen3',
+    name: 'Runway Gen-3 Alpha',
+    family: 'Runway',
+    description: 'Runway Gen-3 Alpha via direct API. Industry-standard cinematic quality with reliable camera movement and multi-subject scenes.',
+    capabilities: ['T2V', 'I2V'],
+    maxDuration: 10,
+    costTier: 'premium',
+    type: 'video',
+    supportedModes: ['t2v', 'i2v'],
+    aspectRatios: ['16:9', '9:16', '1:1'],
+  },
+  {
+    id: 'remotion-motion-graphics',
+    name: 'Remotion (Motion Graphics)',
+    family: 'Remotion',
+    description: 'Programmatic motion graphics via Remotion. Ideal for infographic animations, charts, data visualization, and text overlays with zero AI artifacts.',
+    capabilities: ['T2V'],
+    maxDuration: 60,
+    costTier: 'budget',
+    type: 'video',
+    supportedModes: ['t2v'],
+    aspectRatios: ['16:9', '9:16', '1:1'],
+    highlight: 'Motion Graphics',
+  },
 ];
 
 export const IMAGE_PROVIDER_CATALOG: ProviderCatalogEntry[] = [
@@ -769,6 +794,19 @@ export const IMAGE_PROVIDER_CATALOG: ProviderCatalogEntry[] = [
     supportsI2I: true,
     supportsStyle: true,
     showInImageDropdown: true,
+  },
+  {
+    id: 'stable-diffusion-3',
+    name: 'Stable Diffusion 3',
+    family: 'Stability',
+    description: 'Open-weights diffusion model with versatile style range, good text rendering, and fast generation. Budget-friendly for general image tasks.',
+    capabilities: ['T2I', 'I2I'],
+    maxDuration: 0,
+    costTier: 'budget',
+    type: 'image',
+    supportedModes: ['t2i', 'i2i'],
+    aspectRatios: ['16:9', '9:16', '1:1'],
+    supportsI2I: true,
   },
 ];
 
