@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Sparkles, Video, Image, Volume2, Images } from "lucide-react";
 import {
   getVideoProviders,
@@ -22,11 +22,23 @@ interface ProviderCatalogSelectorProps {
   label?: string;
   compact?: boolean;
   suzzieRationale?: string;
+  onClearRationale?: () => void;
 }
 
-export function ProviderCatalogSelector({ outputType, provider, onProviderChange, label = "Provider", compact = false, suzzieRationale }: ProviderCatalogSelectorProps) {
+export function ProviderCatalogSelector({ outputType, provider, onProviderChange, label = "Provider", compact = false, suzzieRationale, onClearRationale }: ProviderCatalogSelectorProps) {
   const [expanded, setExpanded] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [visibleRationale, setVisibleRationale] = useState<string | undefined>(suzzieRationale);
+
+  useEffect(() => {
+    setVisibleRationale(suzzieRationale);
+  }, [suzzieRationale]);
+
+  function handleProviderChange(v: string) {
+    setVisibleRationale(undefined);
+    onClearRationale?.();
+    onProviderChange(v);
+  }
 
   const providers = outputType === "video" ? getVideoProviders() : getImageProviders();
   const families = Array.from(new Set(providers.map(p => p.family)));
@@ -59,11 +71,12 @@ export function ProviderCatalogSelector({ outputType, provider, onProviderChange
                 {selectedProvider.highlight && (
                   <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-500/20 text-purple-400 whitespace-nowrap">{selectedProvider.highlight}</span>
                 )}
-                {suzzieRationale && (
+                {visibleRationale && (
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <span
+                          data-testid="provider-catalog-suzzie-badge"
                           className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full cursor-default flex-shrink-0 bg-green-500/15 text-green-300 border border-green-500/30"
                         >
                           <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
@@ -72,7 +85,7 @@ export function ProviderCatalogSelector({ outputType, provider, onProviderChange
                       </TooltipTrigger>
                       <TooltipContent className="max-w-xs text-left" side="bottom">
                         <p className="text-xs font-semibold mb-0.5 text-green-300">Suzzie's reasoning</p>
-                        <p className="text-xs">{suzzieRationale}</p>
+                        <p className="text-xs">{visibleRationale}</p>
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
@@ -149,7 +162,7 @@ export function ProviderCatalogSelector({ outputType, provider, onProviderChange
                   backgroundColor: provider === "auto" ? "var(--surface-active)" : "transparent",
                   color: "var(--text-primary)",
                 }}
-                onClick={() => { onProviderChange("auto"); setExpanded(false); setSearchQuery(""); }}
+                onClick={() => { handleProviderChange("auto"); setExpanded(false); setSearchQuery(""); }}
                 onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--surface-active)")}
                 onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = provider === "auto" ? "var(--surface-active)" : "transparent")}
               >
@@ -186,7 +199,7 @@ export function ProviderCatalogSelector({ outputType, provider, onProviderChange
                             backgroundColor: provider === p.id ? "var(--surface-active)" : "transparent",
                             color: "var(--text-primary)",
                           }}
-                          onClick={() => { onProviderChange(p.id); setExpanded(false); setSearchQuery(""); }}
+                          onClick={() => { handleProviderChange(p.id); setExpanded(false); setSearchQuery(""); }}
                           onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--surface-active)")}
                           onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = provider === p.id ? "var(--surface-active)" : "transparent")}
                         >
