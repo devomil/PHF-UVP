@@ -179,6 +179,21 @@ function makeLlmResponseWithProvider(provider: string, rationale: string, prompt
   return `Here is my recommendation for your scene.\n\n\`\`\`json\n${JSON.stringify(block, null, 2)}\n\`\`\`\n\nFeel free to adjust the prompt as needed.`;
 }
 
+/** Build an LLM response that includes a suggestedArtStyle block. */
+function makeLlmResponseWithArtStyle(
+  artStyleId: string,
+  artStyleName: string,
+  provider?: string,
+  rationale?: string,
+): string {
+  const block: Record<string, unknown> = {
+    suggestedArtStyle: { id: artStyleId, name: artStyleName },
+    ...(provider ? { suggestedProvider: provider } : {}),
+    ...(rationale ? { suggestedProviderRationale: rationale } : {}),
+  };
+  return `Here is my art style recommendation.\n\n\`\`\`json\n${JSON.stringify(block, null, 2)}\n\`\`\`\n\nLet me know if you need further adjustments.`;
+}
+
 // ---------------------------------------------------------------------------
 // Tests — POST /api/universal-video/ask-suzzie  (assistant mode)
 // ---------------------------------------------------------------------------
@@ -331,6 +346,44 @@ describe('POST /api/universal-video/ask-suzzie (assistant mode)', () => {
     expect(res.body.success).toBe(false);
     expect(res.body.error).toMatch(/image too large/i);
     expect(createChatCompletionMock).not.toHaveBeenCalled();
+  });
+
+  it('surfaces suggestedArtStyle with id and name when the LLM emits it', async () => {
+    mockLlmText = makeLlmResponseWithArtStyle(
+      'cinematic-noir',
+      'Cinematic Noir',
+      'kling',
+      'Kling pairs well with high-contrast noir visuals.',
+    );
+
+    const res = await request(makeApp())
+      .post('/api/universal-video/ask-suzzie')
+      .set('x-test-user', 'user-1')
+      .send({
+        mode: 'assistant',
+        question: 'What art style should I use for a dark thriller scene?',
+        sceneType: 'dramatic',
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.suggestedArtStyle).toBeDefined();
+    expect(res.body.suggestedArtStyle.id).toBe('cinematic-noir');
+    expect(res.body.suggestedArtStyle.name).toBe('Cinematic Noir');
+    expect(res.body.suggestedProvider).toBe('kling');
+  });
+
+  it('omits suggestedArtStyle when the LLM JSON block does not include it', async () => {
+    mockLlmText = makeLlmResponseWithProvider('luma', 'Luma is great for dreamy visuals.');
+
+    const res = await request(makeApp())
+      .post('/api/universal-video/ask-suzzie')
+      .set('x-test-user', 'user-1')
+      .send({ mode: 'assistant', question: 'Any provider suggestions?' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.suggestedArtStyle).toBeUndefined();
   });
 });
 
