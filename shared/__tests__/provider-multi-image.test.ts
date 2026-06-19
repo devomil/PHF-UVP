@@ -2,8 +2,10 @@ import { describe, it, expect } from 'vitest';
 import {
   providerSupportsMultiImage,
   IMAGE_PROVIDER_CATALOG,
+  VIDEO_PROVIDER_CATALOG,
   getDropdownI2IProviders,
   getImageDropdownProviders,
+  getDropdownVideoProviders,
 } from '../provider-catalog';
 import { getMultiImageSupport } from '../provider-config';
 
@@ -240,4 +242,117 @@ describe('getImageDropdownProviders', () => {
       expect(typeof entry.supportsStyle).toBe('boolean');
     }
   });
+});
+
+// ---------------------------------------------------------------------------
+// getDropdownVideoProviders — catalog flag sync
+// ---------------------------------------------------------------------------
+describe('getDropdownVideoProviders', () => {
+  const videoDropdownEntries = VIDEO_PROVIDER_CATALOG.filter(p => p.showInDropdown === true);
+
+  it('always puts the auto entry first', () => {
+    const result = getDropdownVideoProviders();
+    expect(result.length).toBeGreaterThan(0);
+    expect(result[0].id).toBe('auto');
+  });
+
+  it('contains exactly one auto entry', () => {
+    const result = getDropdownVideoProviders();
+    const autoEntries = result.filter(p => p.id === 'auto');
+    expect(autoEntries).toHaveLength(1);
+  });
+
+  it('includes every catalog entry marked showInDropdown', () => {
+    const result = getDropdownVideoProviders();
+    const resultIds = result.map(p => p.id);
+    for (const entry of videoDropdownEntries) {
+      expect(resultIds).toContain(entry.id);
+    }
+  });
+
+  it('does not include providers not marked showInDropdown (except auto)', () => {
+    const flaggedIds = new Set(videoDropdownEntries.map(p => p.id));
+    const result = getDropdownVideoProviders();
+    for (const item of result) {
+      if (item.id === 'auto') continue;
+      expect(flaggedIds.has(item.id)).toBe(true);
+    }
+  });
+
+  it('every returned entry has a non-empty id, name, and description', () => {
+    const result = getDropdownVideoProviders();
+    expect(result.length).toBeGreaterThan(0);
+    for (const entry of result) {
+      expect(entry.id.length).toBeGreaterThan(0);
+      expect(entry.name.length).toBeGreaterThan(0);
+      expect(entry.description.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('mode=t2v excludes providers that only support i2v', () => {
+    const t2vOnly = VIDEO_PROVIDER_CATALOG.filter(
+      p => p.showInDropdown === true && !p.supportedModes.includes('t2v'),
+    );
+    const result = getDropdownVideoProviders('t2v');
+    const resultIds = result.map(p => p.id);
+    for (const entry of t2vOnly) {
+      expect(resultIds).not.toContain(entry.id);
+    }
+  });
+
+  it('mode=t2v includes all showInDropdown providers that support t2v', () => {
+    const t2vEntries = VIDEO_PROVIDER_CATALOG.filter(
+      p => p.showInDropdown === true && p.supportedModes.includes('t2v'),
+    );
+    const result = getDropdownVideoProviders('t2v');
+    const resultIds = result.map(p => p.id);
+    for (const entry of t2vEntries) {
+      expect(resultIds).toContain(entry.id);
+    }
+  });
+
+  it('mode=i2v excludes providers that only support t2v', () => {
+    const i2vOnly = VIDEO_PROVIDER_CATALOG.filter(
+      p => p.showInDropdown === true && !p.supportedModes.includes('i2v'),
+    );
+    const result = getDropdownVideoProviders('i2v');
+    const resultIds = result.map(p => p.id);
+    for (const entry of i2vOnly) {
+      expect(resultIds).not.toContain(entry.id);
+    }
+  });
+
+  it('mode=i2v includes all showInDropdown providers that support i2v', () => {
+    const i2vEntries = VIDEO_PROVIDER_CATALOG.filter(
+      p => p.showInDropdown === true && p.supportedModes.includes('i2v'),
+    );
+    const result = getDropdownVideoProviders('i2v');
+    const resultIds = result.map(p => p.id);
+    for (const entry of i2vEntries) {
+      expect(resultIds).toContain(entry.id);
+    }
+  });
+
+  it('mode=t2v still has auto as the first entry', () => {
+    const result = getDropdownVideoProviders('t2v');
+    expect(result.length).toBeGreaterThan(0);
+    expect(result[0].id).toBe('auto');
+  });
+
+  it('mode=i2v still has auto as the first entry', () => {
+    const result = getDropdownVideoProviders('i2v');
+    expect(result.length).toBeGreaterThan(0);
+    expect(result[0].id).toBe('auto');
+  });
+
+  it.each(videoDropdownEntries.map(p => [p.id, p.name, p.description] as const))(
+    'entry %s has name and description matching the catalog',
+    (id, name, description) => {
+      const result = getDropdownVideoProviders();
+      const entry = result.find(p => p.id === id);
+      expect(entry).toBeDefined();
+      expect(entry!.name).toBe(name);
+      expect(entry!.description).toBe(description);
+    },
+  );
 });
