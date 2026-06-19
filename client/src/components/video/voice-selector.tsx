@@ -59,7 +59,7 @@ export function VoiceSelector({ selectedVoiceId, onSelect }: VoiceSelectorProps)
   });
 
   const voices = voicesData?.voices || [];
-  const clonedVoices = (clonedData?.voices || []).filter((v) => v.status === "ready");
+  const clonedVoices = clonedData?.voices || [];
 
   const playPreview = (voice: Voice) => {
     if (!voice.preview_url) return;
@@ -112,29 +112,47 @@ export function VoiceSelector({ selectedVoiceId, onSelect }: VoiceSelectorProps)
       {clonedVoices.length > 0 && (
         <div className="space-y-2">
           <p className="text-xs text-muted-foreground font-medium flex items-center gap-1">
-            <Mic className="w-3 h-3" /> Your Cloned Voices:
+            <Mic className="w-3 h-3" /> My Cloned Voices:
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             {clonedVoices.map((cv) => {
+              const isReady = cv.status === "ready";
               const voiceId = `cloned:${cv.id}`;
               const isSelected = selectedVoiceId === voiceId;
+              const statusLabel =
+                cv.status === "pending" ? "Processing…" :
+                cv.status === "failed" ? "Failed" :
+                null;
               return (
                 <div
                   key={cv.id}
                   data-testid={`cloned-voice-option-${cv.id}`}
-                  className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-colors ${
-                    isSelected ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"
+                  className={`flex items-center justify-between p-3 rounded-lg border transition-colors ${
+                    !isReady
+                      ? "border-border opacity-50 cursor-not-allowed"
+                      : isSelected
+                      ? "border-primary bg-primary/5 cursor-pointer"
+                      : "border-border hover:border-primary/50 cursor-pointer"
                   }`}
-                  onClick={() => onSelect(voiceId, cv.name)}
+                  onClick={() => isReady && onSelect(voiceId, cv.name)}
                 >
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="font-medium truncate">{cv.name}</span>
-                      {isSelected && <Check className="w-4 h-4 text-primary shrink-0" />}
+                      {isSelected && isReady && <Check className="w-4 h-4 text-primary shrink-0" />}
                     </div>
-                    <p className="text-xs text-muted-foreground">Your cloned voice</p>
+                    {statusLabel ? (
+                      <p className="text-xs text-muted-foreground">{statusLabel}</p>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">Your cloned voice</p>
+                    )}
                   </div>
-                  <Badge variant="secondary" className="text-[10px] ml-2 shrink-0">Cloned</Badge>
+                  <Badge
+                    variant={cv.status === "failed" ? "destructive" : "secondary"}
+                    className="text-[10px] ml-2 shrink-0"
+                  >
+                    {cv.status === "ready" ? "cloned" : cv.status}
+                  </Badge>
                 </div>
               );
             })}
