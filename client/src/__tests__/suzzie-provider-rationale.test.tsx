@@ -273,7 +273,125 @@ describe("AssetSuzzieChat — onApplyProvider rationale passthrough", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 3. ProviderCapabilitySelector — "Why?" badge visibility
+// 3. End-to-end integration: AskSuzziePanel → state → ProviderCapabilitySelector
+// ---------------------------------------------------------------------------
+describe("Scene-editor integration — Suzzie provider recommendation flow", () => {
+  const PROVIDER_ID = "kling-2.6";
+  const RATIONALE = "Kling 2.6 Pro excels at stable product I2V with strong compositional control.";
+
+  /**
+   * Thin wrapper that mirrors the wiring inside EnhancedSceneEditor:
+   *   AskSuzziePanel.onApplyProvider → setProvider + setSuzzieRationale
+   *   ProviderCapabilitySelector receives selectedProvider + suzzieRationale
+   */
+  function SceneEditorIntegration() {
+    const [provider, setProvider] = React.useState("auto");
+    const [suzzieRationale, setSuzzieRationale] = React.useState<string | undefined>(undefined);
+
+    return React.createElement(
+      React.Fragment,
+      null,
+      React.createElement(ProviderCapabilitySelector, {
+        selectedProvider: provider,
+        onSelectProvider: (id: string) => {
+          setProvider(id);
+          setSuzzieRationale(undefined);
+        },
+        suzzieRationale,
+      }),
+      React.createElement(AskSuzziePanel, {
+        sceneContext: { narration: "Our product launch moment" },
+        onApplyProvider: (providerId: string, rationale?: string) => {
+          setProvider(providerId);
+          setSuzzieRationale(rationale);
+        },
+      })
+    );
+  }
+
+  beforeEach(() => {
+    (global as any).fetch = makeFetchMock(PROVIDER_ID, RATIONALE);
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
+
+  it("updates the selected provider AND shows the 'Why?' badge after clicking Apply Provider", async () => {
+    render(React.createElement(SceneEditorIntegration));
+
+    // Selector starts showing "Auto-select"; badge must not be visible
+    expect(screen.getByText("Auto-select")).toBeTruthy();
+    expect(screen.queryByText("Why?")).toBeNull();
+
+    // Open the Suzzie panel and trigger the provider-recommendation quick action
+    fireEvent.click(screen.getByText("Ask Suzzie"));
+    const quickAction = await screen.findByText("Best style & provider?");
+    fireEvent.click(quickAction);
+
+    // Click Apply Provider once the mocked API response arrives
+    const applyBtn = await screen.findByText("Apply Provider");
+    fireEvent.click(applyBtn);
+
+    // 1) Provider selection changed — button now shows the provider display name
+    await waitFor(() => {
+      expect(screen.getByText("Kling 2.6 Pro")).toBeTruthy();
+    });
+
+    // "Auto-select" label must be gone from the trigger button
+    expect(screen.queryByText("Auto-select")).toBeNull();
+
+    // 2) "Why?" badge is visible in ProviderCapabilitySelector
+    expect(screen.getByText("Why?")).toBeTruthy();
+  });
+
+  it("displays the correct rationale text in the tooltip when the badge is visible", async () => {
+    render(React.createElement(SceneEditorIntegration));
+
+    fireEvent.click(screen.getByText("Ask Suzzie"));
+    const quickAction = await screen.findByText("Best style & provider?");
+    fireEvent.click(quickAction);
+
+    const applyBtn = await screen.findByText("Apply Provider");
+    fireEvent.click(applyBtn);
+
+    await waitFor(() => {
+      const tooltipContent = screen.getByTestId("tooltip-content");
+      expect(tooltipContent.textContent).toContain(RATIONALE);
+    });
+  });
+
+  it("clears the 'Why?' badge when the user manually picks a provider via the selector dropdown", async () => {
+    render(React.createElement(SceneEditorIntegration));
+
+    // Apply Suzzie's recommendation (provider → kling-2.6, badge appears)
+    fireEvent.click(screen.getByText("Ask Suzzie"));
+    const quickAction = await screen.findByText("Best style & provider?");
+    fireEvent.click(quickAction);
+    const applyBtn = await screen.findByText("Apply Provider");
+    fireEvent.click(applyBtn);
+    await waitFor(() => expect(screen.getByText("Why?")).toBeTruthy());
+
+    // Now open the selector dropdown by clicking the trigger button and pick
+    // "Auto-select" — this fires onSelectProvider('auto') inside the integration
+    // wrapper, which sets suzzieRationale to undefined.
+    const selectorTrigger = screen.getByText("Kling 2.6 Pro").closest("button")!;
+    fireEvent.click(selectorTrigger);
+
+    // "Auto-select" option appears inside the expanded dropdown
+    const autoOption = await screen.findByText("Auto-select");
+    fireEvent.click(autoOption);
+
+    // The badge must now be gone because suzzieRationale was cleared
+    await waitFor(() => {
+      expect(screen.queryByText("Why?")).toBeNull();
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 4. ProviderCapabilitySelector — "Why?" badge visibility
 // ---------------------------------------------------------------------------
 describe("ProviderCapabilitySelector — suzzieRationale badge", () => {
   const RATIONALE = "Kling 2.6 Pro offers stable product I2V with strong compositional control.";
