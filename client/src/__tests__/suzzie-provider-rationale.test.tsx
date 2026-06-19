@@ -343,4 +343,60 @@ describe("ProviderCapabilitySelector — suzzieRationale badge", () => {
     const tooltipContent = screen.getByTestId("tooltip-content");
     expect(tooltipContent.textContent).toContain(RATIONALE);
   });
+
+  it("auto-clears the badge when the user picks a different provider WITHOUT the parent resetting suzzieRationale", () => {
+    render(
+      React.createElement(ProviderCapabilitySelector, {
+        selectedProvider: "kling-2.6",
+        onSelectProvider,
+        suzzieRationale: RATIONALE,
+      })
+    );
+
+    // Badge is visible after Suzzie's recommendation
+    expect(screen.getByText("Why?")).toBeTruthy();
+
+    // Open the provider dropdown by clicking the trigger button
+    const trigger = screen.getByRole("button");
+    fireEvent.click(trigger);
+
+    // Pick a provider from the dropdown (auto-select item)
+    const autoOption = screen.getByText("Auto-select");
+    fireEvent.click(autoOption);
+
+    // The badge must be gone — the component cleared it internally, the
+    // parent prop was never changed (still holds RATIONALE).
+    expect(screen.queryByText("Why?")).toBeNull();
+  });
+
+  it("re-shows the badge when suzzieRationale is set again after a manual selection", () => {
+    const { rerender } = render(
+      React.createElement(ProviderCapabilitySelector, {
+        selectedProvider: "kling-2.6",
+        onSelectProvider,
+        suzzieRationale: RATIONALE,
+      })
+    );
+
+    // Open dropdown and pick a provider (auto-clears badge internally)
+    const trigger = screen.getByRole("button");
+    fireEvent.click(trigger);
+    fireEvent.click(screen.getByText("Auto-select"));
+    expect(screen.queryByText("Why?")).toBeNull();
+
+    // Parent provides a new rationale (another Suzzie suggestion)
+    const NEW_RATIONALE = "Auto-select is best when scene context changes.";
+    rerender(
+      React.createElement(ProviderCapabilitySelector, {
+        selectedProvider: "auto",
+        onSelectProvider,
+        suzzieRationale: NEW_RATIONALE,
+      })
+    );
+
+    // Badge re-appears with the fresh rationale
+    expect(screen.getByText("Why?")).toBeTruthy();
+    const tooltipContent = screen.getByTestId("tooltip-content");
+    expect(tooltipContent.textContent).toContain(NEW_RATIONALE);
+  });
 });

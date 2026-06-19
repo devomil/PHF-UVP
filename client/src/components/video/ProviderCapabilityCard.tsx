@@ -1,4 +1,4 @@
-import { memo, useState } from 'react';
+import { memo, useState, useEffect } from 'react';
 import { ChevronDown, ChevronUp, Sparkles, Info } from 'lucide-react';
 import { VIDEO_PROVIDERS } from '@shared/provider-config';
 import { getDropdownVideoProviders, VIDEO_PROVIDER_CATALOG } from '@shared/provider-catalog';
@@ -160,6 +160,7 @@ interface ProviderCapabilitySelectorProps {
   styleRecommendedProviders?: string[];
   styleLabel?: string;
   suzzieRationale?: string;
+  onClearRationale?: () => void;
   mode?: 't2v' | 'i2v' | 'v2v';
 }
 
@@ -173,9 +174,15 @@ export const ProviderCapabilitySelector = memo(function ProviderCapabilitySelect
   styleRecommendedProviders,
   styleLabel,
   suzzieRationale,
+  onClearRationale,
   mode,
 }: ProviderCapabilitySelectorProps) {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [visibleRationale, setVisibleRationale] = useState<string | undefined>(suzzieRationale);
+
+  useEffect(() => {
+    setVisibleRationale(suzzieRationale);
+  }, [suzzieRationale]);
 
   const selectedConfig = VIDEO_PROVIDERS[selectedProvider];
   const selectedCatalogEntry = !selectedConfig
@@ -244,7 +251,7 @@ export const ProviderCapabilitySelector = memo(function ProviderCapabilitySelect
               )}
             </span>
           )}
-          {suzzieRationale && (
+          {visibleRationale && (
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -263,7 +270,7 @@ export const ProviderCapabilitySelector = memo(function ProviderCapabilitySelect
                 </TooltipTrigger>
                 <TooltipContent className="max-w-xs text-left" side="bottom">
                   <p className="text-xs font-semibold mb-0.5" style={{ color: 'rgb(134,239,172)' }}>Suzzie's reasoning</p>
-                  <p className="text-xs">{suzzieRationale}</p>
+                  <p className="text-xs">{visibleRationale}</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -289,7 +296,7 @@ export const ProviderCapabilitySelector = memo(function ProviderCapabilitySelect
             style={{
               backgroundColor: selectedProvider === 'auto' ? 'rgba(124,58,237,0.15)' : 'transparent',
             }}
-            onClick={() => { onSelectProvider('auto'); setIsExpanded(false); }}
+            onClick={() => { setVisibleRationale(undefined); onClearRationale?.(); onSelectProvider('auto'); setIsExpanded(false); }}
             onMouseEnter={(e) => { if (selectedProvider !== 'auto') e.currentTarget.style.backgroundColor = darkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)'; }}
             onMouseLeave={(e) => { if (selectedProvider !== 'auto') e.currentTarget.style.backgroundColor = 'transparent'; }}
           >
@@ -315,7 +322,7 @@ export const ProviderCapabilitySelector = memo(function ProviderCapabilitySelect
               <div
                 key={id}
                 className="mx-1"
-                onClick={() => { onSelectProvider(id); setIsExpanded(false); }}
+                onClick={() => { setVisibleRationale(undefined); onClearRationale?.(); onSelectProvider(id); setIsExpanded(false); }}
               >
                 {isStyleRec && styleLabel && (
                   <div className="flex items-center gap-1 px-2.5 pt-1.5 pb-0">
