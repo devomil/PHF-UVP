@@ -348,6 +348,46 @@ describe('POST /api/universal-video/ask-suzzie (assistant mode)', () => {
     expect(createChatCompletionMock).not.toHaveBeenCalled();
   });
 
+  it('returns 400 when imageAttachment base64 string is shorter than 100 characters', async () => {
+    const res = await request(makeApp())
+      .post('/api/universal-video/ask-suzzie')
+      .set('x-test-user', 'user-1')
+      .send({
+        mode: 'assistant',
+        question: 'What do you see in this image?',
+        imageAttachment: {
+          mediaType: 'image/jpeg',
+          base64: 'abc123',
+        },
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.success).toBe(false);
+    expect(res.body.error).toMatch(/invalid image data/i);
+    expect(createChatCompletionMock).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 when imageAttachment base64 contains non-base64 characters', async () => {
+    const invalidBase64 = 'A'.repeat(99) + '!@#$%^&*()';
+
+    const res = await request(makeApp())
+      .post('/api/universal-video/ask-suzzie')
+      .set('x-test-user', 'user-1')
+      .send({
+        mode: 'assistant',
+        question: 'What do you see in this image?',
+        imageAttachment: {
+          mediaType: 'image/png',
+          base64: invalidBase64,
+        },
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.success).toBe(false);
+    expect(res.body.error).toMatch(/invalid image data/i);
+    expect(createChatCompletionMock).not.toHaveBeenCalled();
+  });
+
   it('surfaces suggestedArtStyle with id and name when the LLM emits it', async () => {
     mockLlmText = makeLlmResponseWithArtStyle(
       'cinematic-noir',
