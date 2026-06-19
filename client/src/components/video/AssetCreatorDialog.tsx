@@ -32,7 +32,7 @@ import {
 } from 'lucide-react';
 import { AssetSuzzieChat } from './AssetSuzzieChat';
 import { VIDEO_PROVIDERS as SHARED_VIDEO_PROVIDERS, getMultiImageSupport } from '@shared/provider-config';
-import { providerSupportsMultiImage, getDropdownVideoProviders, getDropdownImageProviders } from '@shared/provider-catalog';
+import { providerSupportsMultiImage, getDropdownVideoProviders, getDropdownImageProviders, getDropdownV2VProviders } from '@shared/provider-catalog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 type GenerationMode =
@@ -58,12 +58,9 @@ interface AssetCreatorDialogProps {
 // entries) so new image providers only need a one-line catalog change.
 const IMAGE_PROVIDERS = getDropdownImageProviders();
 
-const V2V_PROVIDERS = [
-  { id: 'auto', name: 'Auto (Kling Object Replace)' },
-  { id: 'kling-2.6', name: 'Kling 2.6 (Object Replace)' },
-  { id: 'runway-gen4-aleph', name: 'Runway Gen-4 Aleph (V2V)' },
-  { id: 'runway-4.5', name: 'Runway 4.5 (V2V)' },
-];
+// V2V_PROVIDERS is derived from VIDEO_PROVIDER_CATALOG (showInV2VDropdown: true
+// entries) so new V2V providers only need a one-line catalog change.
+const V2V_PROVIDERS = getDropdownV2VProviders();
 
 const TOOLKIT_PROVIDER = [
   { id: 'auto', name: 'Qubic Image Toolkit' },
