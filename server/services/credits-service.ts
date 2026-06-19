@@ -261,6 +261,19 @@ export async function canAccessProvider(userId: string, providerId: string): Pro
   return planAllowsProvider(sub.plan as PlanTier, providerId);
 }
 
+// Returns all video-provider IDs the user's plan allows. Admin users get the
+// full registry. Used by Suzzie to filter provider selection tips so she never
+// recommends a provider the user cannot actually use.
+export async function getAvailableProviderIdsForUser(userId: string): Promise<string[]> {
+  const { VIDEO_PROVIDERS } = await import('../../shared/provider-config');
+  const allVideoIds = Object.keys(VIDEO_PROVIDERS);
+  if (await isAdminUnlimitedById(userId)) return allVideoIds;
+  const sub = await ensureSubscription(userId);
+  const { PROVIDER_PERMISSIONS } = await import('../config/providerPermissions');
+  const allowed = new Set<string>(PROVIDER_PERMISSIONS[sub.plan as PlanTier] ?? []);
+  return allVideoIds.filter((id) => allowed.has(id));
+}
+
 // Looks up the GC cost from `generation_rates`. Falls back to a sensible
 // default if the row is missing — this should only happen pre-seed.
 export async function getCreditCost(provider: string, quality?: string | null, durationS?: number | null): Promise<number> {

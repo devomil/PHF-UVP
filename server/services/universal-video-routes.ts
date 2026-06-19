@@ -819,6 +819,10 @@ router.delete('/projects/:projectId', isAuthenticated, async (req: Request, res:
 // Ask Suzzie (Claude AI) - dual mode: visual direction generation + general assistant
 router.post('/ask-suzzie', isAuthenticated, async (req: Request, res: Response) => {
   try {
+    const userId = (req.user as any)?.id;
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'Not authenticated' });
+    }
     const { mode, question, conversationHistory, narration, sceneType, projectTitle, workflowPath, matchedAssets, selectedProduct, artPresetId, artPresetName, visualDirection, provider, imageAttachment, hasReferenceImage } = req.body;
     
     if (mode === 'assistant') {
@@ -846,6 +850,7 @@ router.post('/ask-suzzie', isAuthenticated, async (req: Request, res: Response) 
       
       const { llmClient } = await import('../services/piapi-llm-client');
       const { buildSuzzieSystemPrompt } = await import('../services/suzzie-knowledge-base');
+      const { getAvailableProviderIdsForUser } = await import('../services/credits-service');
       
       if (!llmClient.isAvailable()) {
         return res.status(500).json({ success: false, error: 'AI service not configured' });
@@ -853,8 +858,9 @@ router.post('/ask-suzzie', isAuthenticated, async (req: Request, res: Response) 
       
       console.log(`[AskSuzzie:Assistant] Question: "${truncatedQuestion.substring(0, 80)}..." | Scene: ${sceneType || 'none'} | Art: ${artPresetName || 'none'} | History: ${Array.isArray(conversationHistory) ? conversationHistory.length : 0} msgs | Image: ${hasImage ? 'yes' : 'no'}`);
       
+      const availableProviderIds = await getAvailableProviderIdsForUser(userId);
       const systemPrompt = buildSuzzieSystemPrompt({
-        narration, sceneType, artPresetId, artPresetName, visualDirection, projectTitle, provider, hasReferenceImage: !!hasReferenceImage,
+        narration, sceneType, artPresetId, artPresetName, visualDirection, projectTitle, provider, hasReferenceImage: !!hasReferenceImage, availableProviderIds,
       });
       
       let llmMessages: any[];

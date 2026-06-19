@@ -19,6 +19,7 @@ interface SuzzieSceneContext {
   projectTitle?: string;
   provider?: string;
   hasReferenceImage?: boolean;
+  availableProviderIds?: string[];
 }
 
 export interface SuzzieAssetLibraryContext {
@@ -190,8 +191,11 @@ Enable character consistency to extract a reference frame from Scene 1's video a
 ### Sound Design & Music
 Background music can be AI-generated or uploaded. Volume auto-ducks during voiceover. Per-scene sound effects can be added in the render settings.`;
 
-function buildProviderSelectionTips(): string {
-  const providers = Object.values(VIDEO_PROVIDERS);
+function buildProviderSelectionTips(availableProviderIds?: string[]): string {
+  const availableSet = availableProviderIds ? new Set(availableProviderIds) : null;
+  const providers = Object.values(VIDEO_PROVIDERS).filter(
+    (p) => !availableSet || availableSet.has(p.id),
+  );
 
   const isGeneralSpec = (p: { specialization?: string }) =>
     !p.specialization || p.specialization === 'general';
@@ -285,7 +289,7 @@ function buildProviderSelectionTips(): string {
   return lines.join('\n');
 }
 
-function buildWorkflowGuidance(): string {
+function buildWorkflowGuidance(availableProviderIds?: string[]): string {
   return `## Workflow Guidance
 
 ### When to use Text-to-Video (T2V) vs Image-to-Video (I2V)
@@ -301,7 +305,7 @@ function buildWorkflowGuidance(): string {
 - Keep it 2-4 sentences (40-80 words) for best results
 
 ### Provider Selection Tips
-${buildProviderSelectionTips()}`;
+${buildProviderSelectionTips(availableProviderIds)}`;
 }
 
 export function buildSuzzieSystemPrompt(context: SuzzieSceneContext): string {
@@ -448,7 +452,7 @@ CRITICAL: NEVER include text overlays, titles, captions, or on-screen text in an
 
 ${PLATFORM_FEATURES}
 
-${buildWorkflowGuidance()}
+${buildWorkflowGuidance(context.availableProviderIds)}
 
 ${providerKnowledge}
 
