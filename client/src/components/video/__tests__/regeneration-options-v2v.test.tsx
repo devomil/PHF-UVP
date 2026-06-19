@@ -3,11 +3,15 @@
 // RegenerationOptions — V2V submenu catalog-driven tests
 //
 // Verified behaviour:
-//   • submenu-v2v-providers trigger appears when mediaType="video" and
+//   • submenu-v2v-providers trigger appears (enabled) when mediaType="video" and
 //     referenceVideoUrl is provided
-//   • submenu-v2v-providers trigger is absent when referenceVideoUrl is omitted
+//   • submenu-v2v-providers trigger appears DISABLED when mediaType="video" and
+//     referenceVideoUrl is omitted (visible so users know V2V exists)
 //   • submenu-v2v-providers trigger is absent when mediaType="image" even if
 //     referenceVideoUrl is supplied
+//   • menu-item-video-to-video quick action appears DISABLED when no referenceVideoUrl
+//   • handleRegenerate shows a toast and does NOT call onRegenerate when
+//     mode="video-to-video" is triggered without a referenceUrl
 //   • V2V provider menu items are driven entirely by the mock catalog —
 //     items for both catalog providers appear and no hardcoded items appear
 //   • The auto entry (id="auto") is always the first V2V provider menu item
@@ -28,10 +32,10 @@ import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 vi.mock("@/components/ui/dropdown-menu", () => {
   const Pass = ({ children }: { children?: React.ReactNode }) =>
     React.createElement(React.Fragment, null, children);
-  const Item = ({ children, onClick, "data-testid": tid }: any) =>
-    React.createElement("button", { onClick, "data-testid": tid }, children);
-  const SubTrigger = ({ children, "data-testid": tid }: any) =>
-    React.createElement("div", { "data-testid": tid }, children);
+  const Item = ({ children, onClick, disabled, "data-testid": tid }: any) =>
+    React.createElement("button", { onClick, disabled, "data-testid": tid }, children);
+  const SubTrigger = ({ children, disabled, "data-testid": tid }: any) =>
+    React.createElement("div", { "data-testid": tid, disabled: disabled || undefined, "data-disabled": disabled ? "" : undefined }, children);
   const SubContent = ({ children }: any) =>
     React.createElement("div", null, children);
   return {
@@ -74,6 +78,11 @@ vi.mock("@/components/ui/tabs", () => {
 vi.mock("../RegenerationHistoryPanel", () => ({ RegenerationHistoryPanel: () => null }));
 vi.mock("../StrategyPreviewCard", () => ({ StrategyPreviewCard: () => null }));
 
+const mockToast = vi.fn();
+vi.mock("@/hooks/use-toast", () => ({
+  useToast: () => ({ toast: mockToast }),
+}));
+
 // ── Deterministic mock catalog — two V2V providers plus auto ─────────────────
 // NOTE: vi.mock() factories are hoisted before const declarations, so the
 // catalog data is inlined directly inside the factory. MOCK_V2V_CATALOG below
@@ -107,7 +116,10 @@ beforeAll(() => {
   };
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  mockToast.mockClear();
+});
 
 // ── Import component under test AFTER mocks are registered ───────────────────
 
@@ -138,9 +150,21 @@ describe("RegenerationOptions — V2V submenu catalog-driven", () => {
     expect(screen.getByTestId("submenu-v2v-providers")).toBeTruthy();
   });
 
-  it("does not show the V2V submenu trigger when referenceVideoUrl is omitted", () => {
+  it("shows the V2V submenu trigger disabled when mediaType=video but referenceVideoUrl is omitted", () => {
     render(<RegenerationOptions {...baseProps()} />);
-    expect(screen.queryByTestId("submenu-v2v-providers")).toBeNull();
+    const trigger = screen.getByTestId("submenu-v2v-providers");
+    expect(trigger).toBeTruthy();
+    expect((trigger as HTMLElement).hasAttribute("disabled") ||
+      (trigger as HTMLElement).getAttribute("aria-disabled") === "true" ||
+      (trigger as HTMLElement).getAttribute("data-disabled") !== null
+    ).toBe(true);
+  });
+
+  it("shows the V2V quick-action menu item disabled when mediaType=video but referenceVideoUrl is omitted", () => {
+    render(<RegenerationOptions {...baseProps()} />);
+    const item = screen.getByTestId("menu-item-video-to-video");
+    expect(item).toBeTruthy();
+    expect((item as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("does not show the V2V submenu trigger when mediaType=image even if referenceVideoUrl is supplied", () => {

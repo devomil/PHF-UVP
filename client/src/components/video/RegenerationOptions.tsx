@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { RefreshCw, Image, Video, Wand2, FileQuestion, AlertTriangle, Zap, Settings2, Sparkles, Camera, Film, Palette, Repeat2 } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 import { getImageDropdownProviders, getDropdownV2VProviders } from '@shared/provider-catalog';
 import { Button } from '@/components/ui/button';
 import {
@@ -122,12 +123,22 @@ export const RegenerationOptions = ({
 }: RegenerationOptionsProps) => {
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [activeTab, setActiveTab] = useState<string>('options');
+  const { toast } = useToast();
 
   const hasReferenceVideo = mediaType === 'video' && !!referenceVideoUrl;
+  const isVideoType = mediaType === 'video';
   const hasQualityIssues = qualityIssues.length > 0;
   const isComplexPrompt = complexity?.category === 'complex' || complexity?.category === 'impossible';
   
   const handleRegenerate = async (options: RegenerateOptions) => {
+    if (options.mode === 'video-to-video' && !options.referenceUrl) {
+      toast({
+        title: 'No reference video selected',
+        description: 'Please add a reference video clip to this scene before using Video-to-Video mode.',
+        variant: 'destructive',
+      });
+      return;
+    }
     setIsRegenerating(true);
     try {
       await onRegenerate(options);
@@ -329,18 +340,22 @@ export const RegenerationOptions = ({
             </div>
           </DropdownMenuItem>
 
-          {hasReferenceVideo && (
+          {isVideoType && (
             <DropdownMenuItem
+              disabled={!hasReferenceVideo}
               onClick={() => handleRegenerate({
                 mode: 'video-to-video',
                 referenceUrl: referenceVideoUrl,
               })}
+              title={!hasReferenceVideo ? 'Add a reference video clip to this scene to enable V2V mode' : undefined}
               data-testid="menu-item-video-to-video"
             >
-              <Repeat2 className="w-4 h-4 mr-2 text-violet-500" />
+              <Repeat2 className={`w-4 h-4 mr-2 ${hasReferenceVideo ? 'text-violet-500' : 'text-gray-400'}`} />
               <div>
                 <div className="font-medium">Video-to-Video (Auto)</div>
-                <div className="text-xs text-gray-500">Transform reference clip using best V2V provider</div>
+                <div className="text-xs text-gray-500">
+                  {hasReferenceVideo ? 'Transform reference clip using best V2V provider' : 'Add a reference clip to enable V2V'}
+                </div>
               </div>
             </DropdownMenuItem>
           )}
@@ -439,10 +454,14 @@ export const RegenerationOptions = ({
             </DropdownMenuSub>
           )}
 
-          {hasReferenceVideo && (
+          {isVideoType && (
             <DropdownMenuSub>
-              <DropdownMenuSubTrigger data-testid="submenu-v2v-providers">
-                <Repeat2 className="w-4 h-4 mr-2 text-violet-500" />
+              <DropdownMenuSubTrigger
+                disabled={!hasReferenceVideo}
+                title={!hasReferenceVideo ? 'Add a reference video clip to this scene to enable V2V mode' : undefined}
+                data-testid="submenu-v2v-providers"
+              >
+                <Repeat2 className={`w-4 h-4 mr-2 ${hasReferenceVideo ? 'text-violet-500' : 'text-gray-400'}`} />
                 <span>Video-to-Video ({V2V_PROVIDERS.length})</span>
               </DropdownMenuSubTrigger>
               <DropdownMenuSubContent className="w-72">
