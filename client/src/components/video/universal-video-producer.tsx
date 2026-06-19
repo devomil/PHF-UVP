@@ -2113,8 +2113,8 @@ function ScenePreview({
     }
   };
 
-  const regenerateVideo = async (sceneId: string, provider?: string, sourceImageUrl?: string) => {
-    console.log('[regenerateVideo] FUNCTION CALLED with sceneId:', sceneId, 'provider:', provider, 'sourceImageUrl:', sourceImageUrl?.substring(0, 50), 'projectId:', projectId);
+  const regenerateVideo = async (sceneId: string, provider?: string, sourceImageUrl?: string, replacementImageUrl?: string) => {
+    console.log('[regenerateVideo] FUNCTION CALLED with sceneId:', sceneId, 'provider:', provider, 'sourceImageUrl:', sourceImageUrl?.substring(0, 50), 'replacementImageUrl:', replacementImageUrl?.substring(0, 50), 'projectId:', projectId);
     if (!projectId) {
       console.error('[regenerateVideo] EARLY RETURN - projectId is undefined');
       toast({ title: 'Error', description: 'Project ID is missing', variant: 'destructive' });
@@ -2132,6 +2132,7 @@ function ScenePreview({
       query: customPrompt[sceneId] || undefined,
       provider: provider || undefined,
       sourceImageUrl: sourceImageUrl || undefined, // For I2V: matched brand asset product photo
+      replacementImageUrl: replacementImageUrl || undefined, // For V2V: product image to swap into the reference video
       i2vSettings: sceneI2vSettings ? {
         imageControlStrength: sceneI2vSettings.imageControlStrength / 100, // Convert to 0-1
         animationStyle: sceneI2vSettings.animationStyle,
@@ -3402,7 +3403,7 @@ function ScenePreview({
                         const sourceImageUrl = userSelectedAssetUrl || scene.brandAssetUrl || scene.assets?.imageUrl || matchedProductAsset || (shouldUseLocationAsset ? matchedLocationAsset : undefined);
                         console.log('[Generate Click] sceneId:', scene.id, 'qualityTier:', sceneQuality, 'mediaType:', mediaType, 'provider:', provider, 'sourceImageUrl:', sourceImageUrl?.substring(0, 50), 'hasMatchedAsset:', !!(matchedProductAsset || matchedLocationAsset));
                         if (mediaType === 'video') {
-                          regenerateVideo(scene.id, provider, sourceImageUrl);
+                          regenerateVideo(scene.id, provider, sourceImageUrl, userSelectedAssetUrl || undefined);
                         } else {
                           regenerateImage(scene.id, provider);
                         }
