@@ -3,3 +3,7 @@ npm run lint:dialogs
 
 # Reject commits where a showInDropdown catalog entry has no matching registry entry
 npm run lint:providers
+
+# Reject commits where provider-cost-baseline.json was hand-edited instead of
+# regenerated via `npm run update-cost-baseline`
+npm run lint:baseline
