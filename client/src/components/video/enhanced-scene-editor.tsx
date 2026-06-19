@@ -12,7 +12,7 @@ import type { MicroSceneOverlayItem, ImageOverlayItem } from "@shared/video-type
 import { ProviderCapabilitySelector, getProviderRecommendationText } from "./ProviderCapabilityCard";
 import { AskSuzziePanel } from "./ask-suzzie-panel";
 import { VIDEO_PROVIDERS as PROVIDER_CONFIG, getMultiImageSupport, type MultiImageSupport } from "@shared/provider-config";
-import { getDropdownVideoProviders } from "@shared/provider-catalog";
+import { getDropdownVideoProviders, getDropdownV2VProviders } from "@shared/provider-catalog";
 import { SCENE_CONTENT_TAGS, getSceneContentTag } from "@shared/config/scene-content-tags";
 import { getVisualArtPreset, getAllVisualArtPresets } from "@shared/config/visual-art-presets";
 import { CharacterProfilesPanel } from "./character-profiles-panel";
@@ -195,6 +195,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
   const [v2vReplacementImageUrl, setV2vReplacementImageUrl] = useState<string>(
     () => scene.brandAssetUrl || ''
   );
+  const [v2vProvider, setV2vProvider] = useState<string>('auto');
   const [showLibrary, setShowLibrary] = useState(false);
   const [showEditLibrary, setShowEditLibrary] = useState(false);
   const [showMultiImageTip, setShowMultiImageTip] = useState(false);
@@ -1060,7 +1061,9 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
         credentials: "include",
         body: JSON.stringify({
           query: editValues.visualDirection,
-          provider: provider === "auto" ? undefined : provider,
+          provider: isV2V
+            ? (v2vProvider === 'auto' ? undefined : v2vProvider)
+            : (provider === "auto" ? undefined : provider),
           sourceImageUrl: !isV2V && useSourceImage ? sourceImage : undefined,
           sourceImageUrls: !isV2V && useSourceImage && referenceImageUrls.length > 1 ? referenceImageUrls : undefined,
           referenceImages: !isV2V && referenceImageUrls.length > 0 ? referenceImageUrls : undefined,
@@ -3023,6 +3026,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                   <button
                     onClick={() => {
                       setReferenceVideoUrl('');
+                      setV2vProvider('auto');
                       persistReferenceVideo('');
                     }}
                     className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-red-500 text-white flex items-center justify-center text-[8px] opacity-0 group-hover:opacity-100 transition-opacity"
@@ -3034,7 +3038,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
               )}
 
               {referenceVideoUrl && (
-                <div className="flex flex-col gap-0.5 min-w-0 flex-1 max-w-[160px]">
+                <div className="flex flex-col gap-1 min-w-0 flex-1 max-w-[200px]">
                   <div className="text-[10px] font-medium flex items-center gap-1" style={{ color: "var(--text-muted)" }}>
                     <ImagePlus className="w-3 h-3 text-violet-400" />
                     Replacement image (V2V)
@@ -3047,6 +3051,29 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                     className="h-6 text-[10px] px-1.5"
                     disabled={!isEditing}
                   />
+                  <div className="text-[10px] font-medium mt-0.5" style={{ color: "var(--text-muted)" }}>
+                    V2V provider
+                  </div>
+                  <div className="flex flex-wrap gap-1" data-testid="v2v-provider-picker">
+                    {getDropdownV2VProviders().map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        disabled={!isEditing}
+                        onClick={() => setV2vProvider(p.id)}
+                        data-testid={`v2v-provider-pill-${p.id}`}
+                        className="px-1.5 py-0.5 rounded text-[9px] font-medium border transition-colors disabled:opacity-50"
+                        style={
+                          v2vProvider === p.id
+                            ? { backgroundColor: "rgba(124,58,237,0.18)", borderColor: "rgba(124,58,237,0.6)", color: "rgb(167,139,250)" }
+                            : { backgroundColor: "transparent", borderColor: "var(--border-subtle)", color: "var(--text-muted)" }
+                        }
+                        title={p.description}
+                      >
+                        {p.name}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
 
@@ -3186,7 +3213,13 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
             {referenceVideoUrl && (
               <div className="mt-2 flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[11px]" style={{ backgroundColor: "rgba(124,58,237,0.08)", color: "rgb(124,58,237)" }}>
                 <RefreshCw className="w-3 h-3 flex-shrink-0" />
-                <span>V2V active — regenerating will transform this clip</span>
+                <span>
+                  V2V active
+                  {v2vProvider !== 'auto' && (
+                    <> · {getDropdownV2VProviders().find(p => p.id === v2vProvider)?.name ?? v2vProvider}</>
+                  )}
+                  {' '}— regenerating will transform this clip
+                </span>
               </div>
             )}
             {referenceImageUrls.length === 0 && !referenceVideoUrl && (
