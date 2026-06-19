@@ -4,8 +4,31 @@ import { Link, useSearch } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Plus, Search, Grid3x3, List, Loader2, Video, Image } from "lucide-react";
+import { Plus, Search, Grid3x3, List, Loader2, Video, Image, Mic } from "lucide-react";
 import { CanvaSyncBadge } from "@/components/canva/CanvaSyncCard";
+
+const STANDARD_VOICES: Record<string, string> = {
+  '21m00Tcm4TlvDq8ikWAM': 'Rachel',
+  'EXAVITQu4vr4xnSDxMaL': 'Sarah',
+  'XB0fDUnXU5powFXDhCwa': 'Charlotte',
+  'pNInz6obpgDQGcFmaJgB': 'Adam',
+  'GBv7mTt0atIp3Br8iCZE': 'Thomas',
+  'Yko7PKHZNXotIFUBG7I9': 'Aria',
+  'jsCqWAovK2LkecY7zXl4': 'Freya',
+  'oWAxZDx7w5VEj9dCyTzz': 'Grace',
+  'onwK4e9ZLuTAKqWW03F9': 'Daniel',
+  'N2lVS1w4EtoT3dr4eOWO': 'Callum',
+  'IKne3meq5aSn9XLyUdCD': 'Charlie',
+  'TX3LPaxmHKxFdv7VOQHJ': 'Liam',
+  'bIHbv24MWmeRgasZH58o': 'Will',
+  'cgSgspJ2msm6clMCkdW9': 'Jessica',
+  'FGY2WhTYpPnrIDTdsKH5': 'Laura',
+  'XrExE9yKIg1WjnnlVkGX': 'Matilda',
+  'pFZP5JQG7iQjIQuC4Bku': 'Lily',
+  'SAz9YHcvj6GT2YYXdXww': 'River',
+  'CwhRBWXzGAHq8TQ4Fs17': 'Roger',
+  'nPczCjzI2devNBz1zQrb': 'Brian',
+};
 
 const statusDotColor: Record<string, string> = {
   draft: "bg-gray-500",
@@ -83,6 +106,27 @@ function formatDate(dateStr: string | null | undefined) {
   return new Date(dateStr).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
+function resolveVoiceName(
+  project: any,
+  clonedVoices: { id: number; name: string; providerVoiceId: string | null; status: string }[],
+): string | null {
+  const voiceId: string | undefined =
+    project.voiceoverSettings?.voiceId ?? project.voiceId;
+  if (!voiceId) return null;
+
+  if (voiceId.startsWith("cloned:")) {
+    const numericId = parseInt(voiceId.replace("cloned:", ""), 10);
+    const found = clonedVoices.find((cv) => cv.id === numericId);
+    if (found) return `${found.name} (Cloned)`;
+    if (project.voiceName) return `${project.voiceName} (Cloned)`;
+    return "My Voice (Cloned)";
+  }
+
+  if (STANDARD_VOICES[voiceId]) return STANDARD_VOICES[voiceId];
+  if (project.voiceName) return project.voiceName;
+  return null;
+}
+
 export default function Projects() {
   const searchString = useSearch();
   const urlStatus = new URLSearchParams(searchString).get("status");
@@ -105,6 +149,14 @@ export default function Projects() {
       return data.projects || data || [];
     },
   });
+
+  const { data: clonedVoicesData } = useQuery<{
+    success: boolean;
+    voices: { id: number; name: string; providerVoiceId: string | null; status: string }[];
+  }>({
+    queryKey: ["/api/voice-cloning"],
+  });
+  const clonedVoices = clonedVoicesData?.voices ?? [];
 
   const filtered = projects.filter((p: any) => {
     const matchesFilter = activeFilter === "all" || p.status === activeFilter;
@@ -210,6 +262,7 @@ export default function Projects() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {filtered.map((project: any, index: number) => {
               const thumbnail = getProjectThumbnail(project);
+              const voiceName = resolveVoiceName(project, clonedVoices);
               return (
               <Link
                 key={project.projectId}
@@ -258,7 +311,15 @@ export default function Projects() {
                         <h3 className="font-semibold text-sm line-clamp-2 group-hover:text-purple-400 transition-colors" style={{ color: "var(--text-primary)" }}>
                           {project.title}
                         </h3>
-                        <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{formatDate(project.createdAt)}</p>
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{formatDate(project.createdAt)}</p>
+                          {voiceName && (
+                            <span className="flex items-center gap-1 text-xs shrink-0" style={{ color: "var(--text-muted)" }}>
+                              <Mic className="w-3 h-3" />
+                              {voiceName}
+                            </span>
+                          )}
+                        </div>
                       </div>
 
                       <div className="flex items-center justify-between">
@@ -284,7 +345,9 @@ export default function Projects() {
           </div>
         ) : (
           <div className="space-y-2">
-            {filtered.map((project: any) => (
+            {filtered.map((project: any) => {
+              const voiceName = resolveVoiceName(project, clonedVoices);
+              return (
               <Link
                 key={project.projectId}
                 href={`/projects/${project.projectId}`}
@@ -300,11 +363,17 @@ export default function Projects() {
                         <h3 className="font-semibold group-hover:text-purple-400 transition-colors line-clamp-1" style={{ color: "var(--text-primary)" }}>
                           {project.title}
                         </h3>
-                        <p className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>
+                        <p className="text-sm mt-1 flex items-center gap-2 flex-wrap" style={{ color: "var(--text-secondary)" }}>
                           {formatDate(project.createdAt)}
                           {project.description && (
-                            <span className="ml-2 text-xs" style={{ color: "var(--text-muted)" }}>
+                            <span className="text-xs" style={{ color: "var(--text-muted)" }}>
                               — {project.description.substring(0, 60)}{project.description.length > 60 ? "..." : ""}
+                            </span>
+                          )}
+                          {voiceName && (
+                            <span className="flex items-center gap-1 text-xs" style={{ color: "var(--text-muted)" }}>
+                              <Mic className="w-3 h-3" />
+                              {voiceName}
                             </span>
                           )}
                         </p>
@@ -328,7 +397,8 @@ export default function Projects() {
                   </div>
                 </a>
               </Link>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
