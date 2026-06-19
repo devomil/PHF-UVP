@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { providerSupportsMultiImage } from '../provider-catalog';
+import {
+  providerSupportsMultiImage,
+  IMAGE_PROVIDER_CATALOG,
+  getDropdownI2IProviders,
+  getImageDropdownProviders,
+} from '../provider-catalog';
 import { getMultiImageSupport } from '../provider-config';
 
 // Providers that carry multiImageSupport in provider-config.ts
@@ -111,6 +116,128 @@ describe('getMultiImageSupport', () => {
     }
     for (const id of NON_MULTI_IMAGE_PROVIDERS) {
       expect(getMultiImageSupport(id)).toBeNull();
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getDropdownI2IProviders — catalog flag sync
+// ---------------------------------------------------------------------------
+describe('getDropdownI2IProviders', () => {
+  const i2iCatalogEntries = IMAGE_PROVIDER_CATALOG.filter(p => p.showInI2IDropdown === true);
+
+  it('always puts the auto entry first', () => {
+    const result = getDropdownI2IProviders();
+    expect(result.length).toBeGreaterThan(0);
+    expect(result[0].id).toBe('auto');
+  });
+
+  it('contains exactly one auto entry', () => {
+    const result = getDropdownI2IProviders();
+    const autoEntries = result.filter(p => p.id === 'auto');
+    expect(autoEntries).toHaveLength(1);
+  });
+
+  it('includes every catalog entry marked showInI2IDropdown', () => {
+    const result = getDropdownI2IProviders();
+    const resultIds = result.map(p => p.id);
+    for (const entry of i2iCatalogEntries) {
+      expect(resultIds).toContain(entry.id);
+    }
+  });
+
+  it('does not include providers not marked showInI2IDropdown (except auto)', () => {
+    const flaggedIds = new Set(i2iCatalogEntries.map(p => p.id));
+    const result = getDropdownI2IProviders();
+    for (const item of result) {
+      if (item.id === 'auto') continue;
+      expect(flaggedIds.has(item.id)).toBe(true);
+    }
+  });
+
+  it.each(i2iCatalogEntries.map(p => [p.id, p.name, p.description] as const))(
+    'entry %s has correct name and description',
+    (id, name, description) => {
+      const result = getDropdownI2IProviders();
+      const entry = result.find(p => p.id === id);
+      expect(entry).toBeDefined();
+      expect(entry!.name).toBe(name);
+      expect(entry!.description).toBe(description);
+    },
+  );
+});
+
+// ---------------------------------------------------------------------------
+// getImageDropdownProviders — catalog flag sync
+// ---------------------------------------------------------------------------
+describe('getImageDropdownProviders', () => {
+  const imageDropdownEntries = IMAGE_PROVIDER_CATALOG.filter(p => p.showInImageDropdown === true);
+
+  it('always puts the auto entry first', () => {
+    const result = getImageDropdownProviders();
+    expect(result.length).toBeGreaterThan(0);
+    expect(result[0].id).toBe('auto');
+  });
+
+  it('contains exactly one auto entry', () => {
+    const result = getImageDropdownProviders();
+    const autoEntries = result.filter(p => p.id === 'auto');
+    expect(autoEntries).toHaveLength(1);
+  });
+
+  it('auto entry has supportsI2I and supportsStyle both true', () => {
+    const result = getImageDropdownProviders();
+    const auto = result.find(p => p.id === 'auto');
+    expect(auto).toBeDefined();
+    expect(auto!.supportsI2I).toBe(true);
+    expect(auto!.supportsStyle).toBe(true);
+  });
+
+  it('includes every catalog entry marked showInImageDropdown', () => {
+    const result = getImageDropdownProviders();
+    const resultIds = result.map(p => p.id);
+    for (const entry of imageDropdownEntries) {
+      expect(resultIds).toContain(entry.id);
+    }
+  });
+
+  it('does not include providers not marked showInImageDropdown (except auto)', () => {
+    const flaggedIds = new Set(imageDropdownEntries.map(p => p.id));
+    const result = getImageDropdownProviders();
+    for (const item of result) {
+      if (item.id === 'auto') continue;
+      expect(flaggedIds.has(item.id)).toBe(true);
+    }
+  });
+
+  it.each(
+    imageDropdownEntries.map(p => [p.id, p.supportsI2I === true, p.supportsStyle === true] as const),
+  )(
+    'entry %s has correct supportsI2I=%s and supportsStyle=%s from catalog',
+    (id, expectedI2I, expectedStyle) => {
+      const result = getImageDropdownProviders();
+      const entry = result.find(p => p.id === id);
+      expect(entry).toBeDefined();
+      expect(entry!.supportsI2I).toBe(expectedI2I);
+      expect(entry!.supportsStyle).toBe(expectedStyle);
+    },
+  );
+
+  it('every returned entry has a non-empty id, name, and description', () => {
+    const result = getImageDropdownProviders();
+    expect(result.length).toBeGreaterThan(0);
+    for (const entry of result) {
+      expect(entry.id.length).toBeGreaterThan(0);
+      expect(entry.name.length).toBeGreaterThan(0);
+      expect(entry.description.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('exposes supportsI2I and supportsStyle as booleans on every entry', () => {
+    const result = getImageDropdownProviders();
+    for (const entry of result) {
+      expect(typeof entry.supportsI2I).toBe('boolean');
+      expect(typeof entry.supportsStyle).toBe('boolean');
     }
   });
 });

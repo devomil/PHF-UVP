@@ -837,10 +837,12 @@ export function getDropdownV2VProviders(): Array<{ id: string; name: string; des
 }
 
 // Returns image providers for the ProviderSelector and RegenerationOptions
-// image dropdown. Any provider added to IMAGE_PROVIDER_CATALOG with
-// `showInImageDropdown: true` will automatically appear — no other code
-// change required. Each entry exposes the capability flags (supportsI2I,
-// supportsStyle) used by the UI to filter providers by reference mode.
+// image dropdown. The auto-select entry is always prepended. Any provider
+// added to IMAGE_PROVIDER_CATALOG with `showInImageDropdown: true` will
+// automatically appear — no other code change required. Each entry exposes
+// the capability flags (supportsI2I, supportsStyle) used by the UI to filter
+// providers by reference mode. The auto entry advertises both flags as true
+// so it is never excluded by reference-mode filters.
 export function getImageDropdownProviders(): Array<{
   id: string;
   name: string;
@@ -848,7 +850,14 @@ export function getImageDropdownProviders(): Array<{
   supportsI2I: boolean;
   supportsStyle: boolean;
 }> {
-  return IMAGE_PROVIDER_CATALOG
+  const auto = {
+    id: 'auto',
+    name: 'Auto (Best Match)',
+    description: 'Automatically picks the best image provider for your prompt and style',
+    supportsI2I: true,
+    supportsStyle: true,
+  };
+  const providers = IMAGE_PROVIDER_CATALOG
     .filter(p => p.showInImageDropdown === true)
     .map(p => ({
       id: p.id,
@@ -857,6 +866,7 @@ export function getImageDropdownProviders(): Array<{
       supportsI2I: p.supportsI2I === true,
       supportsStyle: p.supportsStyle === true,
     }));
+  return [auto, ...providers];
 }
 
 // Returns the list of video providers for the Quick Create and Asset Creator
