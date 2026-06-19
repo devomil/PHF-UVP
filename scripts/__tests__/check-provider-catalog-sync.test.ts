@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { spawnSync } from 'child_process';
-import path from 'path';
 import { findCatalogSyncGaps, type CatalogEntry, type SyncCheckParams } from '../provider-catalog-sync-core';
+import { runCatalogSyncCheck } from '../check-provider-catalog-sync';
 import { checkCostDrift, checkUnbaselinedProviders, type CostDriftParams, type UnbaselinedParams } from '../check-cost-drift-core';
 import { checkSoundProviderCosts, type SoundProviderEntry } from '../check-sfx-cost-core';
 
@@ -32,17 +31,13 @@ function baseParams(overrides: Partial<SyncCheckParams> = {}): SyncCheckParams {
 
 describe('check-provider-catalog-sync script (real catalog)', () => {
   it('exits 0 with the current production catalog — no gaps', () => {
-    const scriptPath = path.resolve('scripts/check-provider-catalog-sync.ts');
-    const result = spawnSync('npx', ['tsx', scriptPath], {
-      encoding: 'utf8',
-      env: { ...process.env, NODE_ENV: 'test' },
-    });
+    const result = runCatalogSyncCheck();
     expect(
-      result.stdout,
-      `lint:providers reported gaps:\n${result.stderr}`,
+      result.output,
+      `lint:providers reported gaps:\n${result.output}`,
     ).toContain('OK');
-    expect(result.status).toBe(0);
-  }, 30_000);
+    expect(result.ok).toBe(true);
+  });
 });
 
 // ── Unit tests: findCatalogSyncGaps with fixture data ────────────────────────
@@ -590,6 +585,9 @@ describe('checkUnbaselinedProviders — new provider flagged', () => {
     expect(errors).toHaveLength(1);
     expect(errors[0].id).toBe('new-provider');
     expect(errors[0].registry).toBe('shared/VIDEO_PROVIDERS');
+  });
+});
+
 // ── checkSoundProviderCosts unit tests ────────────────────────────────────────
 
 function makeSound(id: string, type: string, costFields: Record<string, unknown> = {}): Record<string, SoundProviderEntry> {
@@ -746,78 +744,42 @@ describe('checkSoundProviderCosts — real SOUND_PROVIDERS registry (integration
 
 describe('checkCostDrift — real production registry against baseline (integration)', () => {
   it('exits 0 with current production costs — no drift vs committed baseline', () => {
-    const scriptPath = path.resolve('scripts/check-provider-catalog-sync.ts');
-    const result = spawnSync('npx', ['tsx', scriptPath], {
-      encoding: 'utf8',
-      env: { ...process.env, NODE_ENV: 'test' },
-    });
+    const result = runCatalogSyncCheck();
     expect(
-      result.stdout,
-      `lint:providers reported issues:\n${result.stderr}`,
+      result.output,
+      `lint:providers reported issues:\n${result.output}`,
     ).toContain('OK');
-    expect(result.status).toBe(0);
+    expect(result.ok).toBe(true);
   });
 });
 
-// ── Script exit-code integration tests (subprocess) ──────────────────────────
+// ── Sync gap logic exit-code equivalents (direct, no subprocess) ──────────────
 
-describe('check-provider-catalog-sync script exit codes', () => {
-  it('exits 1 and prints FAIL when the catalog and registry are out of sync', () => {
-    // Write a tiny inline script that exercises the check with a deliberately
-    // mismatched fixture and exits as the real script would.
-    const inlineScript = `
-import { findCatalogSyncGaps } from './scripts/provider-catalog-sync-core.js';
-const gaps = findCatalogSyncGaps({
-  videoCatalog: [{ id: 'orphan-vid', showInDropdown: true }],
-  imageCatalog: [],
-  sharedVideoProviders: {},
-  sharedImageProviders: {},
-  aiVideoProviders: {},
-  providerTestIdMap: {},
-  serverImageProviders: {},
-});
-if (gaps.length === 0) {
-  process.exit(0);
-} else {
-  console.error('check-provider-catalog-sync: FAIL');
-  process.exit(1);
-}
-`;
-    const result = spawnSync(
-      'npx',
-      ['tsx', '--input-type=module', '--eval', inlineScript],
-      { encoding: 'utf8', env: { ...process.env, NODE_ENV: 'test' } },
-    );
-    expect(result.status).toBe(1);
-    expect(result.stderr).toContain('FAIL');
+describe('check-provider-catalog-sync gap logic — exit-code equivalents', () => {
+  it('reports gaps when the catalog and registry are out of sync', () => {
+    const gaps = findCatalogSyncGaps({
+      videoCatalog: [{ id: 'orphan-vid', showInDropdown: true }],
+      imageCatalog: [],
+      sharedVideoProviders: {},
+      sharedImageProviders: {},
+      aiVideoProviders: {},
+      providerTestIdMap: {},
+      serverImageProviders: {},
+    });
+    expect(gaps.length).toBeGreaterThan(0);
+    expect(gaps.some(g => g.id === 'orphan-vid')).toBe(true);
   });
 
-  it('exits 0 and prints OK for a fully-synced fixture', () => {
-    const inlineScript = `
-import { findCatalogSyncGaps } from './scripts/provider-catalog-sync-core.js';
-const gaps = findCatalogSyncGaps({
-  videoCatalog: [{ id: 'ok-vid', showInDropdown: true }],
-  imageCatalog: [{ id: 'ok-img', showInDropdown: true }],
-  sharedVideoProviders: { 'ok-vid': {} },
-  sharedImageProviders: { 'ok-img': {} },
-  aiVideoProviders: { 'ok-vid': {} },
-  providerTestIdMap: { 'ok-vid': ['test-1'] },
-  serverImageProviders: { 'ok-img': {} },
-});
-if (gaps.length === 0) {
-  console.log('check-provider-catalog-sync: OK');
-  process.exit(0);
-} else {
-  console.error('FAIL');
-  process.exit(1);
-}
-`;
-    const result = spawnSync(
-      'npx',
-      ['tsx', '--input-type=module', '--eval', inlineScript],
-      { encoding: 'utf8', env: { ...process.env, NODE_ENV: 'test' } },
-    );
-    expect(result.status).toBe(0);
-    expect(result.stdout).toContain('OK');
+  it('reports no gaps for a fully-synced fixture', () => {
+    const gaps = findCatalogSyncGaps({
+      videoCatalog: [{ id: 'ok-vid', showInDropdown: true }],
+      imageCatalog: [{ id: 'ok-img', showInDropdown: true }],
+      sharedVideoProviders: { 'ok-vid': {} },
+      sharedImageProviders: { 'ok-img': {} },
+      aiVideoProviders: { 'ok-vid': {} },
+      providerTestIdMap: { 'ok-vid': ['test-1'] },
+      serverImageProviders: { 'ok-img': {} },
+    });
+    expect(gaps).toHaveLength(0);
   });
 });
