@@ -480,6 +480,139 @@ describe('POST /api/voice-cloning', () => {
 });
 
 // ===========================================================================
+// POST /api/voice-cloning/:id/preview — generate a TTS preview
+// ===========================================================================
+
+describe('POST /api/voice-cloning/:id/preview', () => {
+  function seedVoice(userId: string, overrides: Partial<Row> = {}): Row {
+    const row = {
+      id: nextId++,
+      userId,
+      name: 'Preview Voice',
+      sampleUrl: '/uploads/voice-samples/preview.wav',
+      provider: 'playht',
+      status: 'ready',
+      providerVoiceId: 'v-preview',
+      errorMessage: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      ...overrides,
+    };
+    tables.cloned_voices.push(row);
+    return row;
+  }
+
+  it('returns 401 for unauthenticated requests', async () => {
+    const voice = seedVoice('user-A');
+    const res = await request(makeApp()).post(`/api/voice-cloning/${voice.id}/preview`);
+    expect(res.status).toBe(401);
+  });
+
+  it('returns 400 for a non-numeric voice ID', async () => {
+    const res = await request(makeApp())
+      .post('/api/voice-cloning/not-a-number/preview')
+      .set('x-test-user', 'user-A');
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/Invalid voice ID/i);
+  });
+
+  it("returns 404 when the voice does not exist", async () => {
+    const res = await request(makeApp())
+      .post('/api/voice-cloning/9999/preview')
+      .set('x-test-user', 'user-A');
+    expect(res.status).toBe(404);
+    expect(res.body.error).toMatch(/not found/i);
+  });
+
+  it("returns 404 when user A tries to preview user B's voice", async () => {
+    const bVoice = seedVoice('user-B');
+    const res = await request(makeApp())
+      .post(`/api/voice-cloning/${bVoice.id}/preview`)
+      .set('x-test-user', 'user-A');
+    expect(res.status).toBe(404);
+    expect(res.body.error).toMatch(/not found/i);
+  });
+
+  it('returns 400 when the voice status is not ready (pending)', async () => {
+    const voice = seedVoice('user-A', { status: 'pending', providerVoiceId: null });
+    const res = await request(makeApp())
+      .post(`/api/voice-cloning/${voice.id}/preview`)
+      .set('x-test-user', 'user-A');
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/not ready/i);
+  });
+
+  it('returns 400 when the voice status is failed', async () => {
+    const voice = seedVoice('user-A', { status: 'failed', providerVoiceId: null });
+    const res = await request(makeApp())
+      .post(`/api/voice-cloning/${voice.id}/preview`)
+      .set('x-test-user', 'user-A');
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/not ready/i);
+  });
+
+  it('returns 400 when status is ready but providerVoiceId is missing', async () => {
+    const voice = seedVoice('user-A', { status: 'ready', providerVoiceId: null });
+    const res = await request(makeApp())
+      .post(`/api/voice-cloning/${voice.id}/preview`)
+      .set('x-test-user', 'user-A');
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/not ready/i);
+  });
+
+  it('returns 503 when Play.ht credentials are not configured', async () => {
+    delete process.env.PLAYHT_API_KEY;
+    delete process.env.PLAYHT_USER_ID;
+    const voice = seedVoice('user-A');
+    const res = await request(makeApp())
+      .post(`/api/voice-cloning/${voice.id}/preview`)
+      .set('x-test-user', 'user-A');
+    expect(res.status).toBe(503);
+    expect(res.body.error).toMatch(/not configured/i);
+  });
+
+  it('streams audio/mpeg back on a valid ready voice', async () => {
+    const fakeAudio = Buffer.from([0xff, 0xfb, 0x90, 0x00]);
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      arrayBuffer: async () => fakeAudio.buffer,
+      text: async () => '',
+    });
+
+    const voice = seedVoice('user-A');
+    const res = await request(makeApp())
+      .post(`/api/voice-cloning/${voice.id}/preview`)
+      .set('x-test-user', 'user-A');
+
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toMatch(/audio\/mpeg/);
+    expect(res.headers['cache-control']).toBe('no-store');
+  });
+
+  it('calls Play.ht TTS with the correct voice ID and preview text', async () => {
+    const fakeAudio = Buffer.from([0xff, 0xfb, 0x90, 0x00]);
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      arrayBuffer: async () => fakeAudio.buffer,
+      text: async () => '',
+    });
+
+    const voice = seedVoice('user-A', { providerVoiceId: 'v-unique-123' });
+    await request(makeApp())
+      .post(`/api/voice-cloning/${voice.id}/preview`)
+      .set('x-test-user', 'user-A');
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://api.play.ht/api/v2/tts/stream',
+      expect.objectContaining({
+        method: 'POST',
+        body: expect.stringContaining('v-unique-123'),
+      }),
+    );
+  });
+});
+
+// ===========================================================================
 // DELETE /api/voice-cloning/:id — delete voice
 // ===========================================================================
 
