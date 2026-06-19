@@ -46,6 +46,9 @@ export interface ProviderCatalogEntry {
   // When true, this provider appears in the Quick Create I2I provider
   // dropdown (QC_I2I_PROVIDERS). getDropdownI2IProviders() reads this flag.
   showInI2IDropdown?: boolean;
+  // When true, this provider appears in the Quick Create V2V provider
+  // dropdown (QC_V2V_PROVIDERS). getDropdownV2VProviders() reads this flag.
+  showInV2VDropdown?: boolean;
 }
 
 export const VIDEO_PROVIDER_CATALOG: ProviderCatalogEntry[] = [
@@ -141,14 +144,15 @@ export const VIDEO_PROVIDER_CATALOG: ProviderCatalogEntry[] = [
     name: 'Kling 2.6',
     family: 'Kling',
     description: 'Latest standard Kling model. Excellent character consistency, realistic physics, and top-tier prompt adherence for marketing and social content.',
-    capabilities: ['T2V', 'I2V'],
+    capabilities: ['T2V', 'I2V', 'V2V'],
     maxDuration: 10,
     costTier: 'standard',
     type: 'video',
-    supportedModes: ['t2v', 'i2v'],
+    supportedModes: ['t2v', 'i2v', 'v2v'],
     aspectRatios: ['16:9', '9:16', '1:1'],
     highlight: 'Recommended',
     showInDropdown: true,
+    showInV2VDropdown: true,
   },
   {
     id: 'kling-2.6-pro',
@@ -287,14 +291,15 @@ export const VIDEO_PROVIDER_CATALOG: ProviderCatalogEntry[] = [
     name: 'Runway Gen-4 Aleph',
     family: 'Runway',
     description: 'Gen-4 Aleph variant with enhanced creative control and superior motion quality. Excels at dramatic lighting and advanced cinematic composition. Direct API.',
-    capabilities: ['T2V', 'I2V'],
+    capabilities: ['T2V', 'I2V', 'V2V'],
     maxDuration: 10,
     costTier: 'premium',
     type: 'video',
-    supportedModes: ['t2v', 'i2v'],
+    supportedModes: ['t2v', 'i2v', 'v2v'],
     aspectRatios: ['16:9', '9:16', '1:1'],
     highlight: 'Creative Control',
     showInDropdown: true,
+    showInV2VDropdown: true,
   },
   {
     id: 'runway-act-two',
@@ -811,6 +816,22 @@ export function getDropdownI2IProviders(): Array<{ id: string; name: string; des
   };
   const providers = IMAGE_PROVIDER_CATALOG
     .filter(p => p.showInI2IDropdown === true)
+    .map(p => ({ id: p.id, name: p.name, description: p.description }));
+  return [auto, ...providers];
+}
+
+// Returns the list of video-to-video providers for the Quick Create V2V
+// dropdown. The auto-select entry is always prepended. Any provider added to
+// VIDEO_PROVIDER_CATALOG with `showInV2VDropdown: true` will automatically
+// appear here — no other code change required.
+export function getDropdownV2VProviders(): Array<{ id: string; name: string; description: string }> {
+  const auto = {
+    id: 'auto',
+    name: 'Auto (Kling Object Replace)',
+    description: 'Automatically uses Kling for seamless object replacement',
+  };
+  const providers = VIDEO_PROVIDER_CATALOG
+    .filter(p => p.showInV2VDropdown === true)
     .map(p => ({ id: p.id, name: p.name, description: p.description }));
   return [auto, ...providers];
 }

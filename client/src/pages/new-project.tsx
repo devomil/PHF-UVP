@@ -10,7 +10,7 @@ import { AssetSuzzieChat } from "@/components/video/AssetSuzzieChat";
 import { getAvailableStyles } from "@shared/visual-style-config";
 import { getAllVisualArtPresets, isStylizedPreset, type VisualArtPreset } from "@shared/config/visual-art-presets";
 import { VIDEO_PROVIDERS as SHARED_VIDEO_PROVIDERS, getMultiImageSupport } from "@shared/provider-config";
-import { providerSupportsMultiImage, getDropdownVideoProviders, getDropdownImageProviders, getDropdownI2IProviders } from "@shared/provider-catalog";
+import { providerSupportsMultiImage, getDropdownVideoProviders, getDropdownImageProviders, getDropdownI2IProviders, getDropdownV2VProviders } from "@shared/provider-catalog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { getAllProjectTypes, getProjectType, CONTENT_STRUCTURES, LONG_STORY_DEFAULT_ART_PRESET_IDS, getAllProjectPurposes } from "@shared/config/project-types";
 import { DECK_AUDIENCES, DEFAULT_DECK_AUDIENCE_ID, getDeckAudience } from "@shared/config/deck-audiences";
@@ -2103,11 +2103,9 @@ const QC_IMAGE_PROVIDERS = getDropdownImageProviders();
 // true entries) so new I2I providers only need a one-line catalog change.
 const QC_I2I_PROVIDERS = getDropdownI2IProviders();
 
-const QC_V2V_PROVIDERS = [
-  { id: 'auto', name: 'Auto (Kling Object Replace)', description: 'Automatically uses Kling for seamless object replacement' },
-  { id: 'kling-2.6', name: 'Kling 2.6 (Object Replace)', description: 'Replace objects in video with AI-generated content' },
-  { id: 'runway-gen4-aleph', name: 'Runway Gen-4 Aleph (V2V)', description: 'Transform video content with creative Gen-4 Aleph processing' },
-];
+// QC_V2V_PROVIDERS is derived from VIDEO_PROVIDER_CATALOG (showInV2VDropdown:
+// true entries) so new V2V providers only need a one-line catalog change.
+const QC_V2V_PROVIDERS = getDropdownV2VProviders();
 
 export function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onSubmit: (data: any) => void; isLoading: boolean }) {
   const { toast } = useToast();
