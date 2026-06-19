@@ -1,4 +1,4 @@
-import { VIDEO_PROVIDERS } from './provider-config';
+import { VIDEO_PROVIDERS, IMAGE_PROVIDERS } from './provider-config';
 
 export interface ProviderCatalogEntry {
   id: string;
@@ -984,11 +984,12 @@ export function providerSupportsNativeAudio(providerId: string | undefined | nul
   return entry?.supportsNativeAudio === true;
 }
 
-// Derives multi-image capability from VIDEO_PROVIDERS in provider-config.ts
-// (the authoritative source for provider capabilities). Returns true when the
-// provider has a multiImageSupport object configured (i.e. supports @imageN syntax).
+// Derives multi-image capability from VIDEO_PROVIDERS and IMAGE_PROVIDERS in
+// provider-config.ts (the authoritative source for provider capabilities).
+// Returns true when the provider has a multiImageSupport object configured
+// (i.e. supports @imageN syntax).
 // provider-config.ts has zero imports so there is no circular-dependency risk.
 export function providerSupportsMultiImage(providerId: string | undefined | null): boolean {
   if (!providerId) return false;
-  return !!VIDEO_PROVIDERS[providerId]?.multiImageSupport;
+  return !!(VIDEO_PROVIDERS[providerId]?.multiImageSupport || IMAGE_PROVIDERS[providerId]?.multiImageSupport);
 }

@@ -1,11 +1,13 @@
 import { memo, useState } from 'react';
-import { Sparkles, Folder, Archive, ChevronDown, ChevronUp, Image, Video, Wand2, Volume2 } from 'lucide-react';
+import { Sparkles, Folder, Archive, ChevronDown, ChevronUp, Image, Video, Wand2, Volume2, Images } from 'lucide-react';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { providerSupportsNativeAudio, getImageDropdownProviders } from '@shared/provider-catalog';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { providerSupportsNativeAudio, providerSupportsMultiImage, getImageDropdownProviders } from '@shared/provider-catalog';
+import { getMultiImageSupport } from '@shared/provider-config';
 
 export interface ProviderInfo {
   id: string;
@@ -447,6 +449,28 @@ export const ProviderSelector = memo(function ProviderSelector({
                       Native audio
                     </Badge>
                   )}
+                  {providerSupportsMultiImage(provider.id) && (() => {
+                    const support = getMultiImageSupport(provider.id);
+                    const hint = support?.hint ?? 'Use @image1, @image2, etc. in your prompt to reference multiple images.';
+                    return (
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span
+                              data-testid={`provider-multi-image-badge-${provider.id}`}
+                              className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-blue-500/20 text-blue-400 whitespace-nowrap cursor-default"
+                            >
+                              <Images className="h-3 w-3" />
+                              Multi-image
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent className="max-w-xs text-left" side="right">
+                            {hint}
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    );
+                  })()}
                 </div>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                   {provider.description}
@@ -912,3 +936,4 @@ export function getProviderName(providerId: string): string {
   
   return providerId;
 }
+
