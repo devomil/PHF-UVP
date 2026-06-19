@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Palette, Type, Droplets, Image, FileText, Save, Loader2, Check, Upload, Trash2, TrendingUp, Users, Building2, Link2 } from "lucide-react";
+import { Palette, Type, Droplets, Image, FileText, Save, Loader2, Check, Upload, Trash2, TrendingUp, Users, Building2, Link2, Mic } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { CanvaConnect } from "@/components/settings/CanvaConnect";
+import { VoiceCloneManager } from "@/components/video/voice-clone-manager";
 
 interface BrandSettingsData {
   brandName: string;
@@ -538,6 +539,24 @@ export default function BrandSettings() {
                   />
                 </button>
               </div>
+            </div>
+          </div>
+
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <Mic className="w-4 h-4" style={{ color: "var(--text-secondary)" }} />
+              <h2 className="text-sm font-medium uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
+                Voice Cloning
+              </h2>
+            </div>
+            <div
+              className="border rounded-xl p-5"
+              style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)" }}
+            >
+              <p className="text-xs mb-4" style={{ color: "var(--text-muted)" }}>
+                Clone your brand voice by uploading a short audio sample. Cloned voices are available across all your video projects.
+              </p>
+              <VoiceCloneManager />
             </div>
           </div>
 
