@@ -58,6 +58,13 @@ export const IMAGE_PROVIDERS: Record<string, ImageProvider> = {
     costPerImage: 0.04,
     apiProvider: 'piapi',
   },
+  'stability': {
+    id: 'stability',
+    name: 'Stability AI',
+    modelId: 'sd3',
+    costPerImage: 0.04,
+    apiProvider: 'stability',
+  },
   'ideogram': {
     id: 'ideogram',
     name: 'Ideogram V2',

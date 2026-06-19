@@ -6,6 +6,8 @@
 // IMAGE_PROVIDER_CATALOG  → IMAGE_PROVIDERS        (shared/provider-config.ts)
 // VIDEO_PROVIDER_CATALOG  → AI_VIDEO_PROVIDERS     (server/config/ai-video-providers-static.ts)
 // VIDEO_PROVIDER_CATALOG  → server VIDEO_PROVIDERS (server/config/video-providers.ts, derived from AI_VIDEO_PROVIDERS)
+// IMAGE_PROVIDER_CATALOG  → server IMAGE_PROVIDERS (server/config/image-providers.ts)
+//   Flags checked: showInDropdown, showInImageDropdown, showInI2IDropdown
 //
 // Run via:  npm run lint:providers
 // Exit 0 = all clear, exit 1 = gaps detected, exit 2 = usage error.
@@ -13,6 +15,7 @@
 import { VIDEO_PROVIDER_CATALOG, IMAGE_PROVIDER_CATALOG } from '../shared/provider-catalog.js';
 import { VIDEO_PROVIDERS, IMAGE_PROVIDERS } from '../shared/provider-config.js';
 import { AI_VIDEO_PROVIDERS } from '../server/config/ai-video-providers-static.js';
+import { IMAGE_PROVIDERS as SERVER_IMAGE_PROVIDERS } from '../server/config/image-providers.js';
 
 interface Gap {
   catalog: string;
@@ -45,6 +48,25 @@ for (const entry of IMAGE_PROVIDER_CATALOG) {
 for (const entry of VIDEO_PROVIDER_CATALOG) {
   if (entry.showInDropdown === true && !(entry.id in AI_VIDEO_PROVIDERS)) {
     gaps.push({ catalog: 'VIDEO_PROVIDER_CATALOG', registry: 'server/AI_VIDEO_PROVIDERS', id: entry.id });
+  }
+}
+
+// SERVER_IMAGE_PROVIDERS (server/config/image-providers.ts) is the canonical
+// map that routes image-generation requests to their API provider and model.
+// Any catalog entry exposed in a UI dropdown (showInDropdown, showInImageDropdown,
+// showInI2IDropdown) must have a matching entry here or generation will fall
+// through to the 'flux' fallback silently.
+//
+// A single provider may carry multiple dropdown flags; we push at most one gap
+// per (catalog, registry, id) triple to keep the output readable.
+
+for (const entry of IMAGE_PROVIDER_CATALOG) {
+  const isDropdownVisible =
+    entry.showInDropdown === true ||
+    entry.showInImageDropdown === true ||
+    entry.showInI2IDropdown === true;
+  if (isDropdownVisible && !(entry.id in SERVER_IMAGE_PROVIDERS)) {
+    gaps.push({ catalog: 'IMAGE_PROVIDER_CATALOG', registry: 'server/IMAGE_PROVIDERS', id: entry.id });
   }
 }
 
