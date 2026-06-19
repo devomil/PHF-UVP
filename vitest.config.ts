@@ -15,6 +15,8 @@ export default defineConfig({
       'shared/**/__tests__/**/*.test.ts',
       'server/**/*.test.ts',
       'server/**/__tests__/**/*.test.ts',
+      'scripts/**/__tests__/**/*.test.ts',
+      'scripts/**/*.test.ts',
     ],
   },
   resolve: {
