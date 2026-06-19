@@ -758,6 +758,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
   const isContentTagAutoAssigned = autoAssignedContentTag !== null && contentTag === autoAssignedContentTag;
   const [sceneArtPreset, setSceneArtPreset] = useState<string>(scene.artPresetId || 'project');
   const [pipelineAssignedStyle] = useState<string | null>(scene.assignedStyleId || null);
+  const [suzzieArtSuggestion, setSuzzieArtSuggestion] = useState<{ id: string; name: string } | null>(null);
 
   const { data: projectData } = useQuery<{ qualityTier?: string }>({
     queryKey: ["project", projectId],
@@ -2905,34 +2906,61 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
               </div>
               <span className="text-[10px] font-medium block truncate" style={{ color: 'var(--text-primary)' }}>Auto</span>
             </button>
-            {getAllVisualArtPresets().map((preset) => (
-              <button
-                key={preset.id}
-                type="button"
-                onClick={() => isEditing && setSceneArtPreset(preset.id)}
-                disabled={!isEditing}
-                className="flex-shrink-0 w-[80px] rounded-lg border-2 p-1.5 transition-all disabled:opacity-70"
-                style={{
-                  backgroundColor: sceneArtPreset === preset.id ? 'rgba(139,92,246,0.15)' : 'transparent',
-                  borderColor: sceneArtPreset === preset.id ? 'rgb(139,92,246)' : 'var(--border-subtle)',
-                }}
-                title={preset.description}
-              >
-                {ART_PRESET_IMAGES[preset.id] ? (
-                  <img
-                    src={ART_PRESET_IMAGES[preset.id]}
-                    alt={preset.name}
-                    className="w-full h-10 rounded object-cover mb-1"
-                  />
-                ) : (
-                  <div
-                    className="w-full h-10 rounded mb-1"
-                    style={{ background: `linear-gradient(135deg, ${preset.thumbnailColors[0]}, ${preset.thumbnailColors[1]}, ${preset.thumbnailColors[2]})` }}
-                  />
-                )}
-                <span className="text-[10px] font-medium block truncate" style={{ color: 'var(--text-primary)' }}>{preset.name}</span>
-              </button>
-            ))}
+            {getAllVisualArtPresets().map((preset) => {
+              const isSuggested = suzzieArtSuggestion?.id === preset.id && sceneArtPreset !== preset.id;
+              return (
+                <button
+                  key={preset.id}
+                  type="button"
+                  onClick={() => {
+                    if (!isEditing) return;
+                    setSceneArtPreset(preset.id);
+                    if (suzzieArtSuggestion?.id === preset.id) setSuzzieArtSuggestion(null);
+                  }}
+                  disabled={!isEditing}
+                  className="flex-shrink-0 w-[80px] rounded-lg border-2 p-1.5 transition-all disabled:opacity-70 relative"
+                  style={{
+                    backgroundColor: sceneArtPreset === preset.id
+                      ? 'rgba(139,92,246,0.15)'
+                      : isSuggested
+                      ? 'rgba(251,146,60,0.08)'
+                      : 'transparent',
+                    borderColor: sceneArtPreset === preset.id
+                      ? 'rgb(139,92,246)'
+                      : isSuggested
+                      ? 'rgba(251,146,60,0.6)'
+                      : 'var(--border-subtle)',
+                  }}
+                  title={isSuggested ? `Suzzie suggests: ${preset.name}` : preset.description}
+                >
+                  {isSuggested && (
+                    <div
+                      className="absolute -top-1.5 left-1/2 -translate-x-1/2 px-1 py-px rounded text-[8px] font-bold whitespace-nowrap z-10"
+                      style={{
+                        background: 'linear-gradient(135deg, rgba(251,146,60,0.9), rgba(245,158,11,0.8))',
+                        color: 'white',
+                        boxShadow: '0 1px 4px rgba(251,146,60,0.4)',
+                      }}
+                    >
+                      ✦ Suzzie
+                    </div>
+                  )}
+                  {ART_PRESET_IMAGES[preset.id] ? (
+                    <img
+                      src={ART_PRESET_IMAGES[preset.id]}
+                      alt={preset.name}
+                      className="w-full h-10 rounded object-cover mb-1"
+                    />
+                  ) : (
+                    <div
+                      className="w-full h-10 rounded mb-1"
+                      style={{ background: `linear-gradient(135deg, ${preset.thumbnailColors[0]}, ${preset.thumbnailColors[1]}, ${preset.thumbnailColors[2]})` }}
+                    />
+                  )}
+                  <span className="text-[10px] font-medium block truncate" style={{ color: 'var(--text-primary)' }}>{preset.name}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -4213,8 +4241,10 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                     }}
                     onApplyArtStyle={(artStyleId) => {
                       setSceneArtPreset(artStyleId);
+                      setSuzzieArtSuggestion(null);
                       updateSceneMutation.mutate({ artPresetId: artStyleId });
                     }}
+                    onSuggestArtStyle={setSuzzieArtSuggestion}
                     onApplyCfgScale={(val) => {
                       setMsModalImageFidelity(val);
                     }}
@@ -4358,8 +4388,10 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
         }}
         onApplyArtStyle={(artStyleId) => {
           setSceneArtPreset(artStyleId);
+          setSuzzieArtSuggestion(null);
           silentSaveMutation.mutate({ artPresetId: artStyleId });
         }}
+        onSuggestArtStyle={setSuzzieArtSuggestion}
         onApplyCfgScale={(val) => {
           setSceneImageFidelity(val);
           silentSaveMutation.mutate({ imageFidelity: val });

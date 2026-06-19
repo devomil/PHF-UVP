@@ -36,6 +36,7 @@ interface AskSuzziePanelProps {
   onApplyProvider?: (providerId: string, rationale?: string) => void;
   onApplyArtStyle?: (artStyleId: string) => void;
   onApplyCfgScale?: (cfgScale: number) => void;
+  onSuggestArtStyle?: (artStyle: { id: string; name: string } | null) => void;
   zIndex?: number;
 }
 
@@ -45,7 +46,7 @@ const QUICK_ACTIONS = [
   { label: "How to add a logo?", icon: HelpCircle, prompt: "How do I add a logo or watermark to this scene?" },
 ];
 
-export function AskSuzziePanel({ sceneContext, onApplyVisualDirection, onApplyProvider, onApplyArtStyle, onApplyCfgScale, zIndex }: AskSuzziePanelProps) {
+export function AskSuzziePanel({ sceneContext, onApplyVisualDirection, onApplyProvider, onApplyArtStyle, onApplyCfgScale, onSuggestArtStyle, zIndex }: AskSuzziePanelProps) {
   const zStyle = zIndex ? { zIndex } : {};
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -172,6 +173,9 @@ export function AskSuzziePanel({ sceneContext, onApplyVisualDirection, onApplyPr
           suggestedCfgScale: typeof data.suggestedCfgScale === "number" ? data.suggestedCfgScale : undefined,
         };
         setMessages(prev => [...prev, assistantMessage]);
+        if (data.suggestedArtStyle && onSuggestArtStyle) {
+          onSuggestArtStyle(data.suggestedArtStyle);
+        }
       } else {
         setMessages(prev => [...prev, { role: "assistant", content: `Sorry, I ran into an issue: ${data.error || "Unknown error"}` }]);
       }
