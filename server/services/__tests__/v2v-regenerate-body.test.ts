@@ -17,7 +17,7 @@
 // returns any `https://` URL unchanged immediately (lines 269-276), so no mock
 // is needed for that function when we use plain HTTPS URLs in test bodies.
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import express from 'express';
 import request from 'supertest';
 
@@ -32,10 +32,16 @@ const {
   getProjectFromDbMock,
   createJobMock,
   getActiveJobForSceneMock,
+  dbSelectWhereMock,
+  bucketFileMock,
 } = vi.hoisted(() => ({
   getProjectFromDbMock: vi.fn(),
   createJobMock: vi.fn(),
   getActiveJobForSceneMock: vi.fn(),
+  // Controls what db.select().from().where() resolves to (per test).
+  dbSelectWhereMock: vi.fn(),
+  // Controls what objectStorageClient.bucket().file().download() resolves to.
+  bucketFileMock: vi.fn(),
 }));
 
 // ---------------------------------------------------------------------------
@@ -43,9 +49,18 @@ const {
 // ---------------------------------------------------------------------------
 
 // Database — replaced by a chainable stub so DB calls in the route don't throw.
+// whereMock is made thenable so it can be awaited both with and without .limit().
 vi.mock('../../db', () => {
   const limitMock = vi.fn().mockResolvedValue([]);
-  const whereMock = vi.fn().mockReturnValue({ limit: limitMock });
+
+  const whereMock = vi.fn().mockImplementation(() => {
+    const obj: any = { limit: limitMock };
+    // Thenable — lets callers do `await db.select().from(t).where(c)` without .limit().
+    obj.then = (onFulfilled: any, onRejected: any) =>
+      dbSelectWhereMock().then(onFulfilled, onRejected);
+    return obj;
+  });
+
   const orderByMock = vi.fn().mockResolvedValue([]);
   const fromMock = vi.fn().mockReturnValue({ where: whereMock, orderBy: orderByMock });
   const selectMock = vi.fn().mockReturnValue({ from: fromMock });
@@ -90,6 +105,7 @@ vi.mock('../video-generation-worker', () => ({
 }));
 
 // objectStorage — ObjectStorageService is instantiated at module load (line 77 of routes file).
+// objectStorageClient.bucket().file().download() is mocked so brand-asset URL resolution works.
 vi.mock('../../objectStorage', () => ({
   ObjectStorageService: class {
     getSignedUrl = vi.fn().mockResolvedValue('https://cdn.example.com/signed');
@@ -100,6 +116,14 @@ vi.mock('../../objectStorage', () => ({
     getObject: vi.fn().mockResolvedValue(null),
     putObject: vi.fn().mockResolvedValue(undefined),
     listObjects: vi.fn().mockResolvedValue([]),
+    // GCS-style interface used by getPublicUrlForBrandAsset:
+    //   objectStorageClient.bucket(name).file(path).download()
+    bucket: vi.fn().mockImplementation(() => ({
+      file: vi.fn().mockImplementation(() => ({
+        download: bucketFileMock,
+        getSignedUrl: vi.fn().mockResolvedValue(['https://gcs.example.com/signed']),
+      })),
+    })),
   },
 }));
 
@@ -176,6 +200,12 @@ beforeEach(async () => {
     status: 'pending',
     progress: 0,
   });
+
+  // Default: db.select().from().where() returns an empty array (no brand asset).
+  dbSelectWhereMock.mockResolvedValue([]);
+
+  // Default: bucket download returns a stub buffer.
+  bucketFileMock.mockResolvedValue([Buffer.from('fake-image-bytes')]);
 
   // Lazy-import once; module is already resolved after the first import.
   if (!universalVideoRouter) {
@@ -291,5 +321,115 @@ describe(`POST /:projectId/scenes/:sceneId/regenerate-video — replacementImage
       assetLibraryMode: 'v2v',
       referenceVideoUrl: REF_VIDEO_URL,
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Brand-asset path resolution
+// ---------------------------------------------------------------------------
+//
+// When replacementImageUrl is a brand-asset API path (/api/brand-assets/file/<id>),
+// the route must NOT forward the raw path to createJob.  Instead it calls
+// getPublicUrlForBrandAsset which:
+//   1. Parses the asset ID
+//   2. Queries the DB for the asset's settings.storagePath
+//   3. Downloads from object storage
+//   4. Uploads to PiAPI ephemeral storage
+//   5. Returns the resulting CDN URL
+// createJob must receive that CDN URL as sourceImageUrl, never the raw path.
+
+describe(`POST /:projectId/scenes/:sceneId/regenerate-video — brand-asset path resolution`, () => {
+  const PIAPI_CDN_URL = 'https://storage.theapi.app/assets/resolved-brand-123.jpg';
+  let originalFetch: typeof global.fetch;
+  let originalPiapiKey: string | undefined;
+
+  beforeEach(() => {
+    originalFetch = global.fetch;
+    originalPiapiKey = process.env.PIAPI_API_KEY;
+
+    // Set a dummy API key so uploadImageToPiAPIStorage doesn't short-circuit.
+    process.env.PIAPI_API_KEY = 'test-piapi-key';
+
+    // Mock fetch to simulate a successful PiAPI ephemeral storage upload.
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ url: PIAPI_CDN_URL }),
+    } as any);
+
+    // DB returns a brand asset with a valid storagePath when queried.
+    dbSelectWhereMock.mockResolvedValue([
+      {
+        id: 123,
+        settings: {
+          storagePath: 'repl-bucket-test|public/brand-media/123_product.jpg',
+        },
+      },
+    ]);
+
+    // Object storage download returns a stub image buffer.
+    bucketFileMock.mockResolvedValue([Buffer.from('fake-brand-asset-bytes')]);
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+    if (originalPiapiKey === undefined) {
+      delete process.env.PIAPI_API_KEY;
+    } else {
+      process.env.PIAPI_API_KEY = originalPiapiKey;
+    }
+  });
+
+  it('resolves a brand-asset path to a CDN URL and passes it to createJob — not the raw path', async () => {
+    const brandAssetPath = '/api/brand-assets/file/123';
+
+    const res = await request(makeApp())
+      .post(`/${PROJECT_ID}/scenes/${SCENE_ID}/regenerate-video`)
+      .send({
+        mode: 'video-to-video',
+        referenceUrl: REF_VIDEO_URL,
+        replacementImageUrl: brandAssetPath,
+        provider: 'kling-2.6',
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(createJobMock).toHaveBeenCalledTimes(1);
+
+    const jobArgs = createJobMock.mock.calls[0][0];
+
+    // The raw brand-asset path must NOT appear as sourceImageUrl.
+    expect(jobArgs.sourceImageUrl).not.toBe(brandAssetPath);
+
+    // The resolved CDN URL from the PiAPI upload must be what reaches the worker.
+    expect(jobArgs.sourceImageUrl).toBe(PIAPI_CDN_URL);
+  });
+
+  it('does not pass a 400 when the brand-asset path is sent — resolution failure is not a validation error', async () => {
+    // When the DB returns no asset (resolution fails), the route falls back to
+    // T2V mode rather than returning 400.  A brand-asset path is always accepted
+    // at the HTTP level; the error surfaces later in the worker if the image is
+    // truly missing.
+    dbSelectWhereMock.mockResolvedValue([]); // No asset found
+
+    const res = await request(makeApp())
+      .post(`/${PROJECT_ID}/scenes/${SCENE_ID}/regenerate-video`)
+      .send({
+        mode: 'video-to-video',
+        referenceUrl: REF_VIDEO_URL,
+        replacementImageUrl: '/api/brand-assets/file/999',
+        provider: 'kling-2.6',
+      });
+
+    // Still a 200 — the route treats a failed resolution as a T2V fallback, not an error.
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(createJobMock).toHaveBeenCalledTimes(1);
+
+    // sourceImageUrl must not be the raw brand-asset path regardless of resolution outcome.
+    // When resolution fails the route falls back to T2V, so sourceImageUrl is undefined —
+    // which is the correct behaviour (the raw path must never reach the worker).
+    const jobArgs = createJobMock.mock.calls[0][0];
+    expect(String(jobArgs.sourceImageUrl ?? '')).not.toMatch(/\/api\/brand-assets\/file\//);
   });
 });
