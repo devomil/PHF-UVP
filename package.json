@@ -10,6 +10,7 @@
     "test": "vitest run",
     "lint:dialogs": "bash scripts/check-no-native-dialogs.sh",
     "lint:providers": "tsx scripts/check-provider-catalog-sync.ts",
+    "update-cost-baseline": "tsx scripts/update-cost-baseline.ts",
     "watch:providers": "tsx scripts/watch-provider-catalog-sync.ts",
     "prepare": "husky"
   },

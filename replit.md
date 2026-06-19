@@ -6,6 +6,7 @@
 - **Build**: `vite build && esbuild server/index.ts --bundle --platform=node --format=esm --packages=external --outdir=dist/server`
 - **Typecheck**: `npm run typecheck`
 - **Lint Dialogs**: `npm run lint:dialogs`
+- **Intentional cost update workflow**: Edit `shared/provider-config.ts` with the new cost, then run `npm run update-cost-baseline` to re-snapshot `scripts/provider-cost-baseline.json`. Review the printed diff, then commit both files together. This is the only supported way to update cost baselines — do not hand-edit `provider-cost-baseline.json` directly.
 - **Health Check**: `GET /api/health`
 - **Codegen**: _Populate as you build_
 - **DB Push**: `drizzle-kit push:pg`
