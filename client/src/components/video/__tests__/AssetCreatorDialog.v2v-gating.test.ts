@@ -232,4 +232,60 @@ describe('computeAssetCreatorCanSubmit – V2V gating', () => {
       }),
     ).toBe(false);
   });
+
+  it('disables submit while image upload is in progress for i2v mode (even when all other fields are valid)', () => {
+    expect(
+      computeAssetCreatorCanSubmit({
+        mode: 'i2v',
+        prompt: 'animate gently',
+        referenceImageUrl: 'https://cdn.example.com/img.png',
+        referenceVideoUrl: '',
+        replacementImageUrl: '',
+        provider: 'auto',
+        isUploadingImage: true,
+      }),
+    ).toBe(false);
+  });
+
+  it('enables submit for i2v once image upload completes (isUploadingImage false, image URL present)', () => {
+    expect(
+      computeAssetCreatorCanSubmit({
+        mode: 'i2v',
+        prompt: 'animate gently',
+        referenceImageUrl: 'https://cdn.example.com/img.png',
+        referenceVideoUrl: '',
+        replacementImageUrl: '',
+        provider: 'auto',
+        isUploadingImage: false,
+      }),
+    ).toBe(true);
+  });
+
+  it('disables submit while image upload is in progress for i2i mode', () => {
+    expect(
+      computeAssetCreatorCanSubmit({
+        mode: 'i2i',
+        prompt: 'make it look like a painting',
+        referenceImageUrl: 'https://cdn.example.com/img.png',
+        referenceVideoUrl: '',
+        replacementImageUrl: '',
+        provider: 'auto',
+        isUploadingImage: true,
+      }),
+    ).toBe(false);
+  });
+
+  it('disables submit while image upload is in progress even for t2i mode', () => {
+    expect(
+      computeAssetCreatorCanSubmit({
+        mode: 't2i',
+        prompt: 'a beautiful landscape',
+        referenceImageUrl: '',
+        referenceVideoUrl: '',
+        replacementImageUrl: '',
+        provider: 'auto',
+        isUploadingImage: true,
+      }),
+    ).toBe(false);
+  });
 });

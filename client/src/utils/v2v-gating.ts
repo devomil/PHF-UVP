@@ -82,6 +82,7 @@ export function computeAssetCreatorCanSubmit({
   replacementImageUrl,
   provider,
   isUploadingVideo = false,
+  isUploadingImage = false,
 }: {
   mode: AssetCreatorMode;
   prompt: string;
@@ -90,11 +91,13 @@ export function computeAssetCreatorCanSubmit({
   replacementImageUrl: string;
   provider: string;
   isUploadingVideo?: boolean;
+  isUploadingImage?: boolean;
 }): boolean {
   const cfg = ASSET_CREATOR_MODE_GATING[mode];
   const needsReplacementForV2V = mode === 'v2v' && !isRunwayV2V(provider);
   return (
     !isUploadingVideo &&
+    !isUploadingImage &&
     (!cfg.needsPrompt || Boolean(prompt.trim())) &&
     (!cfg.needsRefImage || Boolean(referenceImageUrl)) &&
     (!cfg.needsRefVideo || Boolean(referenceVideoUrl)) &&
@@ -151,8 +154,9 @@ export function isQCGenerateButtonDisabled(
   prompt: string,
   referenceVideoUrl: string,
   isUploadingVideo = false,
+  isUploadingImage = false,
 ): boolean {
-  return isUploadingVideo || !prompt || (QC_MODE_GATING[genMode].needsRefVideo && !referenceVideoUrl);
+  return isUploadingVideo || isUploadingImage || !prompt || (QC_MODE_GATING[genMode].needsRefVideo && !referenceVideoUrl);
 }
 
 /**

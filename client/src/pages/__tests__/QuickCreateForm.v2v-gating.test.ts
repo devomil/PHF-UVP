@@ -128,6 +128,26 @@ describe('isQCGenerateButtonDisabled – V2V gating', () => {
   it('disables button while video upload is in progress for non-v2v modes too', () => {
     expect(isQCGenerateButtonDisabled('t2v', 'a sunset over the ocean', '', true)).toBe(true);
   });
+
+  it('disables button while image upload is in progress for i2v mode (even with valid prompt)', () => {
+    expect(isQCGenerateButtonDisabled('i2v', 'animate gently', '', false, true)).toBe(true);
+  });
+
+  it('enables button for i2v once image upload completes (isUploadingImage false)', () => {
+    expect(isQCGenerateButtonDisabled('i2v', 'animate gently', '', false, false)).toBe(false);
+  });
+
+  it('disables button while image upload is in progress for i2i mode', () => {
+    expect(isQCGenerateButtonDisabled('i2i', 'make it look like a painting', '', false, true)).toBe(true);
+  });
+
+  it('disables button while image upload is in progress for t2i mode', () => {
+    expect(isQCGenerateButtonDisabled('t2i', 'a beautiful landscape', '', false, true)).toBe(true);
+  });
+
+  it('enables button for t2i once image upload completes', () => {
+    expect(isQCGenerateButtonDisabled('t2i', 'a beautiful landscape', '', false, false)).toBe(false);
+  });
 });
 
 // ── handleSubmit early-return guard ───────────────────────────────────────────

@@ -2942,7 +2942,7 @@ export function QuickCreateForm({ onBack, onSubmit, isLoading }: { onBack: () =>
           <Button type="button" variant="outline" onClick={onBack} style={{ borderColor: "var(--border-medium)", color: "var(--text-secondary)" }}>
             <ArrowLeft className="w-4 h-4 mr-2" /> Back
           </Button>
-          <Button type="submit" className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500" disabled={isLoading || isQCGenerateButtonDisabled(genMode, prompt, referenceVideoUrl, isUploadingVideo)}>
+          <Button type="submit" className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500" disabled={isLoading || isQCGenerateButtonDisabled(genMode, prompt, referenceVideoUrl, isUploadingVideo, isUploadingImage)}>
             {isLoading ? "Generating..." : "Generate"}
           </Button>
         </div>
