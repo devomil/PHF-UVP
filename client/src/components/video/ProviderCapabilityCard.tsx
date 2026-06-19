@@ -1,4 +1,4 @@
-import { memo, useState, useEffect } from 'react';
+import { memo, useState, useLayoutEffect } from 'react';
 import { ChevronDown, ChevronUp, Sparkles, Info } from 'lucide-react';
 import { VIDEO_PROVIDERS } from '@shared/provider-config';
 import { getDropdownVideoProviders, VIDEO_PROVIDER_CATALOG } from '@shared/provider-catalog';
@@ -180,7 +180,7 @@ export const ProviderCapabilitySelector = memo(function ProviderCapabilitySelect
   const [isExpanded, setIsExpanded] = useState(false);
   const [visibleRationale, setVisibleRationale] = useState<string | undefined>(suzzieRationale);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     setVisibleRationale(suzzieRationale);
   }, [suzzieRationale]);
 

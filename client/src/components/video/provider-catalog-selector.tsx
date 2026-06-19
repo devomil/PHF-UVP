@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useLayoutEffect } from "react";
 import { Sparkles, Video, Image, Volume2, Images } from "lucide-react";
 import {
   getVideoProviders,
@@ -30,7 +30,7 @@ export function ProviderCatalogSelector({ outputType, provider, onProviderChange
   const [searchQuery, setSearchQuery] = useState("");
   const [visibleRationale, setVisibleRationale] = useState<string | undefined>(suzzieRationale);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     setVisibleRationale(suzzieRationale);
   }, [suzzieRationale]);
 
