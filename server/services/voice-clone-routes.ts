@@ -261,6 +261,22 @@ router.post('/:id/preview', async (req: Request, res: Response) => {
     });
     res.send(audioBuffer);
   } catch (err: any) {
+    if (err instanceof PlayhtApiError) {
+      const { status, message } = err;
+      if (status === 404) {
+        return res.status(404).json({ success: false, error: `Voice not found in Play.ht: ${message}` });
+      }
+      if (status === 401 || status === 403) {
+        return res.status(502).json({ success: false, error: `Play.ht authentication failed — check your API credentials. ${message}` });
+      }
+      if (status === 429) {
+        return res.status(429).json({ success: false, error: `Play.ht rate limit reached — please try again later. ${message}` });
+      }
+      if (status >= 400 && status < 500) {
+        return res.status(400).json({ success: false, error: message });
+      }
+      return res.status(502).json({ success: false, error: `Play.ht service error — please try again. ${message}` });
+    }
     console.error(`[VoiceClone] Preview error for id=${id}:`, err.message);
     res.status(500).json({ success: false, error: 'Failed to generate voice preview.' });
   }
@@ -319,6 +335,36 @@ export async function resolveClonedVoice(
   return { providerVoiceId: row.providerVoiceId, provider: row.provider };
 }
 
+// Structured error thrown when Play.ht returns a non-2xx response.
+// Carries the HTTP status so callers can map it to an appropriate response code.
+export class PlayhtApiError extends Error {
+  constructor(
+    public readonly status: number,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'PlayhtApiError';
+  }
+}
+
+// Parse a Play.ht error body into a human-readable string.
+// Play.ht typically returns JSON like { error_message: "...", error: "..." } or plain text.
+function parsePlayhtErrorBody(raw: string): string {
+  try {
+    const parsed = JSON.parse(raw);
+    const detail =
+      parsed.error_message ||
+      parsed.message ||
+      parsed.error ||
+      parsed.detail ||
+      null;
+    if (typeof detail === 'string' && detail.trim().length > 0) return detail.trim();
+  } catch {
+    // Not JSON — fall through to raw text.
+  }
+  return raw.trim() || 'Unknown error';
+}
+
 // Generate speech via Play.ht for a cloned voice ID. Returns audio buffer or null on error.
 export async function generatePlayhtSpeech(
   text: string,
@@ -349,8 +395,12 @@ export async function generatePlayhtSpeech(
   });
 
   if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`Play.ht TTS returned ${response.status}: ${body}`);
+    const raw = await response.text();
+    const reason = parsePlayhtErrorBody(raw);
+    throw new PlayhtApiError(
+      response.status,
+      `Play.ht TTS error (${response.status}): ${reason}`,
+    );
   }
 
   const arrayBuf = await response.arrayBuffer();

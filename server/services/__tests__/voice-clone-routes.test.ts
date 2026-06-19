@@ -610,6 +610,138 @@ describe('POST /api/voice-cloning/:id/preview', () => {
       }),
     );
   });
+
+  it('returns 404 when Play.ht reports the voice ID is not found (404)', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      status: 404,
+      text: async () => JSON.stringify({ error_message: 'Voice not found.' }),
+    });
+
+    const voice = seedVoice('user-A');
+    const res = await request(makeApp())
+      .post(`/api/voice-cloning/${voice.id}/preview`)
+      .set('x-test-user', 'user-A');
+
+    expect(res.status).toBe(404);
+    expect(res.body.success).toBe(false);
+    expect(res.body.error).toMatch(/voice not found in play\.ht/i);
+    expect(res.body.error).toMatch(/Voice not found\./);
+  });
+
+  it('returns 502 when Play.ht rejects credentials (401)', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      status: 401,
+      text: async () => JSON.stringify({ error_message: 'Invalid API key.' }),
+    });
+
+    const voice = seedVoice('user-A');
+    const res = await request(makeApp())
+      .post(`/api/voice-cloning/${voice.id}/preview`)
+      .set('x-test-user', 'user-A');
+
+    expect(res.status).toBe(502);
+    expect(res.body.success).toBe(false);
+    expect(res.body.error).toMatch(/authentication failed/i);
+  });
+
+  it('returns 502 when Play.ht rejects credentials (403)', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      status: 403,
+      text: async () => JSON.stringify({ message: 'Forbidden.' }),
+    });
+
+    const voice = seedVoice('user-A');
+    const res = await request(makeApp())
+      .post(`/api/voice-cloning/${voice.id}/preview`)
+      .set('x-test-user', 'user-A');
+
+    expect(res.status).toBe(502);
+    expect(res.body.error).toMatch(/authentication failed/i);
+  });
+
+  it('returns 429 when Play.ht signals rate limiting', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      status: 429,
+      text: async () => JSON.stringify({ error: 'Rate limit exceeded.' }),
+    });
+
+    const voice = seedVoice('user-A');
+    const res = await request(makeApp())
+      .post(`/api/voice-cloning/${voice.id}/preview`)
+      .set('x-test-user', 'user-A');
+
+    expect(res.status).toBe(429);
+    expect(res.body.success).toBe(false);
+    expect(res.body.error).toMatch(/rate limit/i);
+  });
+
+  it('returns 400 when Play.ht returns another 4xx client error', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      status: 422,
+      text: async () => JSON.stringify({ detail: 'Text is too long.' }),
+    });
+
+    const voice = seedVoice('user-A');
+    const res = await request(makeApp())
+      .post(`/api/voice-cloning/${voice.id}/preview`)
+      .set('x-test-user', 'user-A');
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/Text is too long\./);
+  });
+
+  it('returns 502 when Play.ht returns a 5xx server error', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      status: 500,
+      text: async () => 'Internal Server Error',
+    });
+
+    const voice = seedVoice('user-A');
+    const res = await request(makeApp())
+      .post(`/api/voice-cloning/${voice.id}/preview`)
+      .set('x-test-user', 'user-A');
+
+    expect(res.status).toBe(502);
+    expect(res.body.success).toBe(false);
+    expect(res.body.error).toMatch(/service error/i);
+  });
+
+  it('includes the human-readable reason extracted from a JSON error body', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      status: 404,
+      text: async () => JSON.stringify({ error_message: 'No voice with that ID exists.' }),
+    });
+
+    const voice = seedVoice('user-A');
+    const res = await request(makeApp())
+      .post(`/api/voice-cloning/${voice.id}/preview`)
+      .set('x-test-user', 'user-A');
+
+    expect(res.body.error).toContain('No voice with that ID exists.');
+  });
+
+  it('falls back to raw text when the Play.ht error body is not JSON', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      status: 503,
+      text: async () => 'Service Unavailable',
+    });
+
+    const voice = seedVoice('user-A');
+    const res = await request(makeApp())
+      .post(`/api/voice-cloning/${voice.id}/preview`)
+      .set('x-test-user', 'user-A');
+
+    expect(res.status).toBe(502);
+    expect(res.body.error).toMatch(/Service Unavailable/);
+  });
 });
 
 // ===========================================================================
