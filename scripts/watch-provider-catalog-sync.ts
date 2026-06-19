@@ -1,10 +1,10 @@
 #!/usr/bin/env tsx
 // Watch mode for provider catalog ↔ registry sync.
 //
-// Watches provider files for changes and re-runs findCatalogSyncGaps()
-// immediately whenever any watched file is saved. Prints a timestamped
-// pass/fail banner with a diff of new vs. resolved gaps so drift is caught
-// the moment it is introduced during development.
+// Watches provider files for changes and re-runs findCatalogSyncGaps() and
+// findCostErrors() immediately whenever any watched file is saved. Prints a
+// timestamped pass/fail banner with a diff of new vs. resolved gaps and cost
+// errors so drift is caught the moment it is introduced during development.
 //
 // Run via:  npm run watch:providers
 //
@@ -15,7 +15,7 @@ import { spawn } from 'node:child_process';
 import { watch } from 'node:fs';
 import { resolve, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { Gap } from './provider-catalog-sync-core.js';
+import type { Gap, CostError } from './provider-catalog-sync-core.js';
 
 if (process.env.NODE_ENV === 'production' || process.env.CI === 'true' || process.env.CI === '1') {
   console.log('watch:providers — skipped in CI/production environment');
@@ -37,6 +37,7 @@ const JSON_CHECK_SCRIPT = resolve(__dirname, 'provider-catalog-sync-check-json.t
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 let running = false;
 let previousGaps: Gap[] | null = null;
+let previousCostErrors: CostError[] | null = null;
 
 function timestamp(): string {
   return new Date().toLocaleTimeString();
@@ -44,6 +45,10 @@ function timestamp(): string {
 
 function gapKey(g: Gap): string {
   return `${g.catalog}|${g.registry}|${g.id}|${g.direction}`;
+}
+
+function costErrorKey(e: CostError): string {
+  return `${e.registry}|${e.id}|${e.field}`;
 }
 
 function runCheck(changedFile?: string): void {
@@ -74,35 +79,63 @@ function runCheck(changedFile?: string): void {
     }
 
     let currentGaps: Gap[];
+    let currentCostErrors: CostError[];
     try {
-      currentGaps = JSON.parse(rawOutput.trim()) as Gap[];
+      const parsed = JSON.parse(rawOutput.trim()) as { gaps: Gap[]; costErrors: CostError[] };
+      currentGaps = parsed.gaps;
+      currentCostErrors = parsed.costErrors;
     } catch {
-      console.error(`[${timestamp()}] ✗ failed to parse gap output — unexpected script output:\n${rawOutput}\n`);
+      console.error(`[${timestamp()}] ✗ failed to parse check output — unexpected script output:\n${rawOutput}\n`);
       return;
     }
 
-    if (previousGaps === null) {
+    const totalIssues = currentGaps.length + currentCostErrors.length;
+
+    if (previousGaps === null || previousCostErrors === null) {
       // First run — show baseline
-      if (currentGaps.length === 0) {
-        console.log(`[${timestamp()}] ✓ catalog in sync — no gaps detected\n`);
+      if (totalIssues === 0) {
+        console.log(`[${timestamp()}] ✓ catalog in sync, all cost fields valid — no issues detected\n`);
       } else {
-        console.error(`[${timestamp()}] ✗ ${currentGaps.length} gap(s) on startup:\n`);
-        printGaps(currentGaps);
+        if (currentGaps.length > 0) {
+          console.error(`[${timestamp()}] ✗ ${currentGaps.length} gap(s) on startup:\n`);
+          printGaps(currentGaps);
+        }
+        if (currentCostErrors.length > 0) {
+          console.error(`[${timestamp()}] ✗ ${currentCostErrors.length} cost error(s) on startup:\n`);
+          printCostErrors(currentCostErrors);
+        }
       }
     } else {
-      // Subsequent runs — show diff
-      const prevKeys = new Set(previousGaps.map(gapKey));
-      const currKeys = new Set(currentGaps.map(gapKey));
+      // Subsequent runs — show diff for gaps
+      const prevGapKeys = new Set(previousGaps.map(gapKey));
+      const currGapKeys = new Set(currentGaps.map(gapKey));
 
-      const newGaps = currentGaps.filter(g => !prevKeys.has(gapKey(g)));
-      const resolvedGaps = previousGaps.filter(g => !currKeys.has(gapKey(g)));
-      const unchanged = currentGaps.filter(g => prevKeys.has(gapKey(g)));
+      const newGaps = currentGaps.filter(g => !prevGapKeys.has(gapKey(g)));
+      const resolvedGaps = previousGaps.filter(g => !currGapKeys.has(gapKey(g)));
+      const unchangedGaps = currentGaps.filter(g => prevGapKeys.has(gapKey(g)));
 
-      if (newGaps.length === 0 && resolvedGaps.length === 0) {
-        if (currentGaps.length === 0) {
+      // Diff for cost errors
+      const prevCostKeys = new Set(previousCostErrors.map(costErrorKey));
+      const currCostKeys = new Set(currentCostErrors.map(costErrorKey));
+
+      const newCostErrors = currentCostErrors.filter(e => !prevCostKeys.has(costErrorKey(e)));
+      const resolvedCostErrors = previousCostErrors.filter(e => !currCostKeys.has(costErrorKey(e)));
+      const unchangedCostErrors = currentCostErrors.filter(e => prevCostKeys.has(costErrorKey(e)));
+
+      const anyChange =
+        newGaps.length > 0 ||
+        resolvedGaps.length > 0 ||
+        newCostErrors.length > 0 ||
+        resolvedCostErrors.length > 0;
+
+      if (!anyChange) {
+        if (totalIssues === 0) {
           console.log(`[${timestamp()}] ✓ still in sync — no change\n`);
         } else {
-          console.log(`[${timestamp()}] ✓ no change — ${unchanged.length} pre-existing gap(s) unchanged\n`);
+          console.log(
+            `[${timestamp()}] ✓ no change — ${unchangedGaps.length} pre-existing gap(s), ` +
+            `${unchangedCostErrors.length} pre-existing cost error(s) unchanged\n`,
+          );
         }
       } else {
         if (newGaps.length > 0) {
@@ -113,13 +146,26 @@ function runCheck(changedFile?: string): void {
           console.log(`[${timestamp()}] ✓ ${resolvedGaps.length} gap(s) resolved:\n`);
           printGaps(resolvedGaps, '  ✅ FIXED   ');
         }
-        if (unchanged.length > 0) {
-          console.log(`  ⚪ unchanged: ${unchanged.length} pre-existing gap(s)\n`);
+        if (unchangedGaps.length > 0) {
+          console.log(`  ⚪ unchanged: ${unchangedGaps.length} pre-existing gap(s)\n`);
+        }
+
+        if (newCostErrors.length > 0) {
+          console.error(`[${timestamp()}] ✗ ${newCostErrors.length} NEW cost error(s) introduced:\n`);
+          printCostErrors(newCostErrors, '  🔴 NEW     ');
+        }
+        if (resolvedCostErrors.length > 0) {
+          console.log(`[${timestamp()}] ✓ ${resolvedCostErrors.length} cost error(s) resolved:\n`);
+          printCostErrors(resolvedCostErrors, '  ✅ FIXED   ');
+        }
+        if (unchangedCostErrors.length > 0) {
+          console.log(`  ⚪ unchanged: ${unchangedCostErrors.length} pre-existing cost error(s)\n`);
         }
       }
     }
 
     previousGaps = currentGaps;
+    previousCostErrors = currentCostErrors;
   });
 }
 
@@ -129,6 +175,14 @@ function printGaps(gaps: Gap[], prefix = '  '): void {
       ? `${catalog}["${id}"]  →  missing from  ${registry}`
       : `${registry}["${id}"]  →  missing from  ${catalog}`;
     console.log(`${prefix}${arrow}`);
+    console.log(`${' '.repeat(prefix.length)}reason: ${reason}`);
+  }
+  console.log('');
+}
+
+function printCostErrors(errors: CostError[], prefix = '  '): void {
+  for (const { registry, id, field, reason } of errors) {
+    console.log(`${prefix}${registry}["${id}"].${field}`);
     console.log(`${' '.repeat(prefix.length)}reason: ${reason}`);
   }
   console.log('');
@@ -148,7 +202,7 @@ for (const file of WATCHED_FILES) {
   });
 }
 
-console.log('watch:providers — watching for catalog/registry drift:');
+console.log('watch:providers — watching for catalog/registry drift and cost field errors:');
 for (const file of WATCHED_FILES) {
   console.log(`  ${relative(root, file)}`);
 }

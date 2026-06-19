@@ -36,7 +36,7 @@ import { VIDEO_PROVIDER_CATALOG, IMAGE_PROVIDER_CATALOG } from '../shared/provid
 import { VIDEO_PROVIDERS, IMAGE_PROVIDERS, SOUND_PROVIDERS } from '../shared/provider-config.js';
 import { AI_VIDEO_PROVIDERS, PROVIDER_TEST_ID_MAP } from '../server/config/ai-video-providers-static.js';
 import { IMAGE_PROVIDERS as SERVER_IMAGE_PROVIDERS } from '../server/config/image-providers.js';
-import { findCatalogSyncGaps } from './provider-catalog-sync-core.js';
+import { findCatalogSyncGaps, findCostErrors } from './provider-catalog-sync-core.js';
 import { checkCostDrift, checkUnbaselinedProviders } from './check-cost-drift-core.js';
 
 const _require = createRequire(import.meta.url);
@@ -62,78 +62,13 @@ const gaps = findCatalogSyncGaps({
 // Every entry in VIDEO_PROVIDERS must have a positive, non-zero costPerSecond.
 // Every entry in IMAGE_PROVIDERS must have a positive, non-zero costPerImage.
 // A missing or zero value silently produces wrong credit estimates in billing.
+// Logic is shared with the watch script via findCostErrors() in the core module.
 
-interface CostError {
-  registry: string;
-  id: string;
-  field: string;
-  value: number | undefined;
-  reason: string;
-}
-
-const costErrors: CostError[] = [];
-
-for (const [id, entry] of Object.entries(VIDEO_PROVIDERS)) {
-  const v = entry.costPerSecond;
-  if (typeof v !== 'number' || !isFinite(v) || v <= 0) {
-    costErrors.push({
-      registry: 'shared/VIDEO_PROVIDERS',
-      id,
-      field: 'costPerSecond',
-      value: v as number | undefined,
-      reason:
-        typeof v !== 'number' || !isFinite(v)
-          ? `costPerSecond is missing or not a number (got ${JSON.stringify(v)})`
-          : `costPerSecond must be > 0, got ${v}`,
-    });
-  }
-}
-
-for (const [id, entry] of Object.entries(IMAGE_PROVIDERS)) {
-  const v = entry.costPerImage;
-  if (typeof v !== 'number' || !isFinite(v) || v <= 0) {
-    costErrors.push({
-      registry: 'shared/IMAGE_PROVIDERS',
-      id,
-      field: 'costPerImage',
-      value: v as number | undefined,
-      reason:
-        typeof v !== 'number' || !isFinite(v)
-          ? `costPerImage is missing or not a number (got ${JSON.stringify(v)})`
-          : `costPerImage must be > 0, got ${v}`,
-    });
-  }
-}
-
-// SFX / voiceover / music providers — each type has its own cost field:
-//   voiceover → costPerSecond
-//   music     → costPerTrack
-//   sfx       → costPerEffect
-// A missing or zero value silently produces wrong credit estimates.
-
-const SFX_COST_FIELD: Record<string, string> = {
-  voiceover: 'costPerSecond',
-  music: 'costPerTrack',
-  sfx: 'costPerEffect',
-};
-
-for (const [id, entry] of Object.entries(SOUND_PROVIDERS)) {
-  const field = SFX_COST_FIELD[entry.type];
-  if (!field) continue; // unknown type — skip
-  const v = (entry as Record<string, unknown>)[field] as number | undefined;
-  if (typeof v !== 'number' || !isFinite(v) || v <= 0) {
-    costErrors.push({
-      registry: 'shared/SOUND_PROVIDERS',
-      id,
-      field,
-      value: v,
-      reason:
-        typeof v !== 'number' || !isFinite(v)
-          ? `${field} is missing or not a number (got ${JSON.stringify(v)})`
-          : `${field} must be > 0, got ${v}`,
-    });
-  }
-}
+const costErrors = findCostErrors({
+  videoProviders: VIDEO_PROVIDERS as Record<string, Record<string, unknown>>,
+  imageProviders: IMAGE_PROVIDERS as Record<string, Record<string, unknown>>,
+  soundProviders: SOUND_PROVIDERS as Record<string, Record<string, unknown>>,
+});
 
 // ── 6. COST DRIFT DETECTION ───────────────────────────────────────────────────
 // Compare current cost values against the committed baseline snapshot.

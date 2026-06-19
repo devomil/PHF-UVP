@@ -1,10 +1,11 @@
-// Pure gap-finding logic for the provider catalog ↔ registry sync check.
+// Pure gap-finding and cost-validation logic for the provider catalog ↔ registry
+// sync check.
 //
 // This module is intentionally free of side-effects (no process.exit, no console
 // output) so that tests can import and exercise it directly with fixture data.
 //
 // The main script (check-provider-catalog-sync.ts) is the thin CLI wrapper that
-// calls findCatalogSyncGaps() with the real production catalogs.
+// calls findCatalogSyncGaps() / findCostErrors() with the real production catalogs.
 
 export interface CatalogEntry {
   id: string;
@@ -164,4 +165,85 @@ export function findCatalogSyncGaps(params: SyncCheckParams): Gap[] {
   }
 
   return gaps;
+}
+
+// ── Cost-field validation ─────────────────────────────────────────────────────
+// Extracted from check-provider-catalog-sync.ts so the watch script can also
+// report missing/zero cost fields in the 🔴 NEW / ✅ FIXED diff format.
+
+export interface CostError {
+  registry: string;
+  id: string;
+  field: string;
+  value: number | undefined;
+  reason: string;
+}
+
+const SFX_COST_FIELD: Record<string, string> = {
+  voiceover: 'costPerSecond',
+  music: 'costPerTrack',
+  sfx: 'costPerEffect',
+};
+
+export interface CostCheckParams {
+  videoProviders: Record<string, Record<string, unknown>>;
+  imageProviders: Record<string, Record<string, unknown>>;
+  soundProviders: Record<string, Record<string, unknown>>;
+}
+
+export function findCostErrors(params: CostCheckParams): CostError[] {
+  const { videoProviders, imageProviders, soundProviders } = params;
+  const errors: CostError[] = [];
+
+  for (const [id, entry] of Object.entries(videoProviders)) {
+    const v = entry['costPerSecond'] as number | undefined;
+    if (typeof v !== 'number' || !isFinite(v) || v <= 0) {
+      errors.push({
+        registry: 'shared/VIDEO_PROVIDERS',
+        id,
+        field: 'costPerSecond',
+        value: v,
+        reason:
+          typeof v !== 'number' || !isFinite(v)
+            ? `costPerSecond is missing or not a number (got ${JSON.stringify(v)})`
+            : `costPerSecond must be > 0, got ${v}`,
+      });
+    }
+  }
+
+  for (const [id, entry] of Object.entries(imageProviders)) {
+    const v = entry['costPerImage'] as number | undefined;
+    if (typeof v !== 'number' || !isFinite(v) || v <= 0) {
+      errors.push({
+        registry: 'shared/IMAGE_PROVIDERS',
+        id,
+        field: 'costPerImage',
+        value: v,
+        reason:
+          typeof v !== 'number' || !isFinite(v)
+            ? `costPerImage is missing or not a number (got ${JSON.stringify(v)})`
+            : `costPerImage must be > 0, got ${v}`,
+      });
+    }
+  }
+
+  for (const [id, entry] of Object.entries(soundProviders)) {
+    const field = SFX_COST_FIELD[entry['type'] as string];
+    if (!field) continue;
+    const v = entry[field] as number | undefined;
+    if (typeof v !== 'number' || !isFinite(v) || v <= 0) {
+      errors.push({
+        registry: 'shared/SOUND_PROVIDERS',
+        id,
+        field,
+        value: v,
+        reason:
+          typeof v !== 'number' || !isFinite(v)
+            ? `${field} is missing or not a number (got ${JSON.stringify(v)})`
+            : `${field} must be > 0, got ${v}`,
+      });
+    }
+  }
+
+  return errors;
 }
