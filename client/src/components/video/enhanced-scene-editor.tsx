@@ -267,6 +267,24 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
     }
   }, [scene.brandAssetUrl, scene.assets?.referenceImages, brandAssetDismissed]);
 
+  useEffect(() => {
+    if (provider === "auto") return;
+    const mode = generationMode === "auto" ? undefined : generationMode as 't2v' | 'i2v' | 'v2v';
+    const supported = getDropdownVideoProviders(mode).map(p => p.id);
+    if (!supported.includes(provider)) {
+      setProvider("auto");
+    }
+  }, [generationMode]);
+
+  useEffect(() => {
+    if (msModalProvider === "auto") return;
+    const mode = msModalMode === "auto" ? undefined : msModalMode as 't2v' | 'i2v' | 'v2v';
+    const supported = getDropdownVideoProviders(mode).map(p => p.id);
+    if (!supported.includes(msModalProvider)) {
+      setMsModalProvider("auto");
+    }
+  }, [msModalMode]);
+
   const handleRegenerateVisualDirection = async () => {
     setRegeneratingVisualDirection(true);
     toast({ title: "Regenerating visual direction..." });
