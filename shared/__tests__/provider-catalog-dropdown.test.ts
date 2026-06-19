@@ -160,6 +160,58 @@ describe('getDropdownVideoProviders', () => {
     expect(t2vList.map(p => p.id)).not.toContain('__test__i2v-only');
   });
 
+  it('mode filter: multi-mode entry (t2v + i2v) appears under each supported mode but not under v2v', () => {
+    VIDEO_PROVIDER_CATALOG.push({
+      id: '__test__multi-mode',
+      name: 'Test Multi-Mode Provider',
+      family: 'Test',
+      description: 'Supports both t2v and i2v',
+      capabilities: ['T2V', 'I2V'],
+      maxDuration: 10,
+      costTier: 'standard',
+      type: 'video',
+      supportedModes: ['t2v', 'i2v'],
+      aspectRatios: ['16:9'],
+      showInDropdown: true,
+    });
+
+    const t2vIds = getDropdownVideoProviders('t2v').map(p => p.id);
+    const i2vIds = getDropdownVideoProviders('i2v').map(p => p.id);
+    const v2vIds = getDropdownVideoProviders('v2v').map(p => p.id);
+    const allIds = getDropdownVideoProviders().map(p => p.id);
+
+    expect(t2vIds).toContain('__test__multi-mode');
+    expect(i2vIds).toContain('__test__multi-mode');
+    expect(v2vIds).not.toContain('__test__multi-mode');
+    expect(allIds).toContain('__test__multi-mode');
+  });
+
+  it('mode filter: v2v entry only appears when mode is v2v or omitted', () => {
+    VIDEO_PROVIDER_CATALOG.push({
+      id: '__test__v2v-only',
+      name: 'Test V2V Only',
+      family: 'Test',
+      description: 'Only supports v2v',
+      capabilities: ['V2V'],
+      maxDuration: 5,
+      costTier: 'budget',
+      type: 'video',
+      supportedModes: ['v2v'],
+      aspectRatios: ['16:9'],
+      showInDropdown: true,
+    });
+
+    const v2vIds = getDropdownVideoProviders('v2v').map(p => p.id);
+    const t2vIds = getDropdownVideoProviders('t2v').map(p => p.id);
+    const i2vIds = getDropdownVideoProviders('i2v').map(p => p.id);
+    const allIds = getDropdownVideoProviders().map(p => p.id);
+
+    expect(v2vIds).toContain('__test__v2v-only');
+    expect(t2vIds).not.toContain('__test__v2v-only');
+    expect(i2vIds).not.toContain('__test__v2v-only');
+    expect(allIds).toContain('__test__v2v-only');
+  });
+
   it('mode filter: auto-select entry is always first regardless of mode filter', () => {
     expect(getDropdownVideoProviders('t2v')[0]).toEqual(AUTO_VIDEO);
     expect(getDropdownVideoProviders('i2v')[0]).toEqual(AUTO_VIDEO);
