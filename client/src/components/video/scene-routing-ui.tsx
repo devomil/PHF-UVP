@@ -689,7 +689,9 @@ export function SlotTile({
           }}
           title={
             label.toLowerCase() === "logo"
-              ? "This logo comes from your Brand Bible. Update it there to change it everywhere."
+              ? "This logo comes from your Brand Bible — injected automatically. Click × to exclude it for this run."
+              : label.toLowerCase() === "character"
+              ? "Carried over from your last generation. Click × (hover the image) to remove it if you want a pure environment or product shot without a character."
               : "This slot is showing the project default. Upload a new file to override it for this scene."
           }
           data-testid={`slot-inherited-${label.toLowerCase()}`}

@@ -6788,6 +6788,9 @@ export function QuickCreateAssetPanel({ projectId, project }: { projectId: strin
               // Logo always inherits from the brand bible — it has no per-scene
               // override path in Quick Create, so flag it as inherited when present.
               const logoInherited = !!effLogo;
+              // Character is inherited (not explicitly set this session) when the slot
+              // is populated from a prior job but the user hasn't touched it this run.
+              const characterInherited = overrideCharacter === undefined && !!effCharacter;
 
               // Provider-aware slot enable/disable.
               // "auto" means the user hasn't pinned a provider yet — fall back to
@@ -6921,6 +6924,7 @@ export function QuickCreateAssetPanel({ projectId, project }: { projectId: strin
                       badgeColor="rgba(244,114,182,0.4)"
                       onClick={() => effCharacter && (setReferenceLightboxUrl(effCharacter), setReferenceLightboxOpen(true))}
                       onRemove={effCharacter ? () => setOverrideCharacter(null) : undefined}
+                      inherited={characterInherited}
                     />
                     <SlotTile
                       label="Logo"
@@ -6970,6 +6974,14 @@ export function QuickCreateAssetPanel({ projectId, project }: { projectId: strin
                       badgeColor="rgba(124,58,237,0.4)"
                     />
                   </div>
+
+                  {supportsMulti && [effProduct, effCharacter, effLogo].filter(Boolean).length >= 2 && (
+                    <p className="text-[10px] rounded-md px-2 py-1.5" style={{ color: "var(--text-muted)", backgroundColor: "rgba(124,58,237,0.06)", border: "1px solid rgba(124,58,237,0.15)" }}>
+                      <span style={{ color: "rgb(196,181,253)", fontWeight: 600 }}>Multi-image:</span>{" "}
+                      All {[effProduct, effCharacter, effLogo].filter(Boolean).length} reference images are sent to the AI together — each influences the output.
+                      Hover any slot and click × to remove references you don't need.
+                    </p>
+                  )}
 
                   {!supportsMulti && (
                     <p className="text-[10px] italic" style={{ color: "var(--text-muted)" }}>
