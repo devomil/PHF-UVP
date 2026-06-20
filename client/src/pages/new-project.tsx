@@ -1299,7 +1299,18 @@ interface CustomScene {
   type: string;
   title: string;
   narration: string;
+  visualDescription?: string;
+  mood?: string;
+  aiPrompt?: string;
+  coreStyle?: string[];
+  referenceImages?: string[];
+  sceneCharacters?: string[];
 }
+
+const CORE_STYLE_OPTIONS = [
+  "Cinematic", "Emotional", "Dramatic", "Vibrant", "Commercial",
+  "Documentary", "Minimalist", "Lifestyle", "Fantasy", "Luxury",
+];
 
 const SCENE_TYPES = [
   { value: "hook", label: "Opening / Hook", description: "Grabs attention and introduces the video" },
@@ -1314,7 +1325,7 @@ const SCENE_TYPES = [
 function CustomScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void; onSubmit: (data: any) => void; isLoading: boolean }) {
   const [title, setTitle] = useState("");
   const [scenes, setScenes] = useState<CustomScene[]>([
-    { id: crypto.randomUUID(), type: "hook", title: "", narration: "" },
+    { id: crypto.randomUUID(), type: "hook", title: "", narration: "", coreStyle: [], referenceImages: [], sceneCharacters: [] },
   ]);
   const [duration, setDuration] = useState("60");
   const [platform, setPlatform] = useState("YouTube");
@@ -1326,6 +1337,7 @@ function CustomScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void;
   const [artPresetId, setArtPresetId] = useState("auto");
   const [characterConsistency, setCharacterConsistency] = useState(false);
   const [characters, setCharacters] = useState<any[]>([]);
+  const [expandedVisualPanels, setExpandedVisualPanels] = useState<Set<string>>(new Set());
 
   const hasLockedCharactersCustom = characters.some((c: any) => c.locked && c.referenceImageUrl);
   const showCharacterI2VCustom = artPresetId === '3d-illustration' && hasLockedCharactersCustom;
@@ -1349,16 +1361,63 @@ function CustomScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void;
   const addScene = (type?: string) => {
     const lastScene = scenes[scenes.length - 1];
     const nextType = type || (lastScene?.type === "hook" ? "benefit" : lastScene?.type === "benefit" ? "feature" : "content");
-    setScenes([...scenes, { id: crypto.randomUUID(), type: nextType, title: "", narration: "" }]);
+    setScenes([...scenes, { id: crypto.randomUUID(), type: nextType, title: "", narration: "", coreStyle: [], referenceImages: [], sceneCharacters: [] }]);
   };
 
   const removeScene = (id: string) => {
     if (scenes.length <= 1) return;
     setScenes(scenes.filter((s) => s.id !== id));
+    setExpandedVisualPanels((prev) => { const next = new Set(prev); next.delete(id); return next; });
   };
 
-  const updateScene = (id: string, field: keyof CustomScene, value: string) => {
+  const updateScene = (id: string, field: keyof CustomScene, value: string | string[]) => {
     setScenes(scenes.map((s) => (s.id === id ? { ...s, [field]: value } : s)));
+  };
+
+  const toggleCoreStyle = (sceneId: string, style: string) => {
+    setScenes(scenes.map((s) => {
+      if (s.id !== sceneId) return s;
+      const current = s.coreStyle || [];
+      return { ...s, coreStyle: current.includes(style) ? current.filter((x) => x !== style) : [...current, style] };
+    }));
+  };
+
+  const toggleSceneCharacter = (sceneId: string, charId: string) => {
+    setScenes(scenes.map((s) => {
+      if (s.id !== sceneId) return s;
+      const current = s.sceneCharacters || [];
+      return { ...s, sceneCharacters: current.includes(charId) ? current.filter((x) => x !== charId) : [...current, charId] };
+    }));
+  };
+
+  const addReferenceImage = (sceneId: string, file: File) => {
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const dataUrl = ev.target?.result as string;
+      if (!dataUrl) return;
+      setScenes(scenes.map((s) => {
+        if (s.id !== sceneId) return s;
+        const current = s.referenceImages || [];
+        if (current.length >= 3) return s;
+        return { ...s, referenceImages: [...current, dataUrl] };
+      }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const removeReferenceImage = (sceneId: string, imgIndex: number) => {
+    setScenes(scenes.map((s) => {
+      if (s.id !== sceneId) return s;
+      return { ...s, referenceImages: (s.referenceImages || []).filter((_, i) => i !== imgIndex) };
+    }));
+  };
+
+  const toggleVisualPanel = (sceneId: string) => {
+    setExpandedVisualPanels((prev) => {
+      const next = new Set(prev);
+      if (next.has(sceneId)) next.delete(sceneId); else next.add(sceneId);
+      return next;
+    });
   };
 
   const moveScene = (index: number, direction: "up" | "down") => {
@@ -1386,6 +1445,12 @@ function CustomScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void;
         narration: s.narration,
         order: i,
         duration: sceneDuration,
+        visualDescription: s.visualDescription?.trim() || undefined,
+        mood: s.mood?.trim() || undefined,
+        aiPrompt: s.aiPrompt?.trim() || undefined,
+        coreStyle: s.coreStyle && s.coreStyle.length > 0 ? s.coreStyle : undefined,
+        referenceImages: s.referenceImages && s.referenceImages.length > 0 ? s.referenceImages : undefined,
+        sceneCharacters: s.sceneCharacters && s.sceneCharacters.length > 0 ? s.sceneCharacters : undefined,
       })),
       numScenes: scenes.length,
       duration: totalDuration,
@@ -1475,6 +1540,158 @@ function CustomScriptForm({ onBack, onSubmit, isLoading }: { onBack: () => void;
                   className="text-sm"
                   style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }}
                 />
+
+                <button
+                  type="button"
+                  onClick={() => toggleVisualPanel(scene.id)}
+                  className="mt-2 w-full flex items-center gap-2 py-1.5 px-2 rounded text-xs transition-all hover:bg-purple-500/5"
+                  style={{ color: expandedVisualPanels.has(scene.id) ? "var(--accent-primary)" : "var(--text-muted)", border: "1px dashed", borderColor: expandedVisualPanels.has(scene.id) ? "var(--accent-primary)" : "var(--border-subtle)" }}
+                >
+                  <Palette className="w-3.5 h-3.5" />
+                  <span className="font-medium">{expandedVisualPanels.has(scene.id) ? "Hide Visual Direction" : "Add Visual Direction, Mood & AI Prompt"}</span>
+                  <ChevronRight className={`w-3.5 h-3.5 ml-auto transition-transform ${expandedVisualPanels.has(scene.id) ? "rotate-90" : ""}`} />
+                </button>
+
+                {expandedVisualPanels.has(scene.id) && (
+                  <div className="mt-3 space-y-3 pt-3 rounded-lg p-3" style={{ backgroundColor: "var(--surface-elevated)", border: "1px solid var(--border-subtle)" }}>
+                    <div>
+                      <p className="text-xs font-medium mb-1.5 flex items-center gap-1.5" style={{ color: "var(--text-secondary)" }}>
+                        <Sparkles className="w-3 h-3 text-purple-400" /> Core Style
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {CORE_STYLE_OPTIONS.map((style) => {
+                          const active = (scene.coreStyle || []).includes(style);
+                          return (
+                            <button
+                              key={style}
+                              type="button"
+                              onClick={() => toggleCoreStyle(scene.id, style)}
+                              className="px-2 py-0.5 rounded-full text-xs font-medium transition-all"
+                              style={{
+                                backgroundColor: active ? "var(--accent-primary)" : "var(--surface-active)",
+                                color: active ? "#fff" : "var(--text-secondary)",
+                                border: "1px solid",
+                                borderColor: active ? "var(--accent-primary)" : "var(--border-subtle)",
+                              }}
+                            >
+                              {style}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div>
+                      <Label className="text-xs font-medium mb-1 block" style={{ color: "var(--text-secondary)" }}>Visual Description</Label>
+                      <p className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>Describe exactly what should be visible — camera angle, lighting, setting, movement</p>
+                      <Textarea
+                        value={scene.visualDescription || ""}
+                        onChange={(e) => updateScene(scene.id, "visualDescription", e.target.value)}
+                        placeholder="e.g. Extreme close-up of a cast bronze lion-head door knocker. Shallow depth of field. Warm amber light from below. Slow push in. Nothing else is visible."
+                        rows={4}
+                        className="text-sm"
+                        style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }}
+                      />
+                    </div>
+
+                    <div>
+                      <Label className="text-xs font-medium mb-1 block" style={{ color: "var(--text-secondary)" }}>Mood</Label>
+                      <Input
+                        value={scene.mood || ""}
+                        onChange={(e) => updateScene(scene.id, "mood", e.target.value)}
+                        placeholder="e.g. Anticipation — you are about to enter somewhere significant"
+                        className="text-sm"
+                        style={{ backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)", color: "var(--text-primary)" }}
+                      />
+                    </div>
+
+                    <div>
+                      <Label className="text-xs font-medium mb-1 block flex items-center gap-1.5" style={{ color: "var(--text-secondary)" }}>
+                        <Zap className="w-3 h-3 text-amber-400" /> AI Prompt
+                      </Label>
+                      <p className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>Optimized prompt sent directly to the AI video generator (overrides auto-generated prompt)</p>
+                      <Textarea
+                        value={scene.aiPrompt || ""}
+                        onChange={(e) => updateScene(scene.id, "aiPrompt", e.target.value)}
+                        placeholder="e.g. Extreme close-up of a cast bronze lion-head door knocker on a massive dark stained wood double door, warm amber uplighting, shallow depth of field, slow cinematic push-in, 4K. No text in scene."
+                        rows={3}
+                        className="text-sm font-mono"
+                        style={{ backgroundColor: "rgba(0,0,0,0.3)", borderColor: "var(--border-subtle)", color: "var(--text-primary)" }}
+                      />
+                    </div>
+
+                    <div>
+                      <Label className="text-xs font-medium mb-1 block flex items-center gap-1.5" style={{ color: "var(--text-secondary)" }}>
+                        <ImagePlus className="w-3 h-3 text-blue-400" /> Reference Images
+                        <span className="text-xs font-normal" style={{ color: "var(--text-muted)" }}>— up to 3</span>
+                      </Label>
+                      {(scene.referenceImages || []).length > 0 && (
+                        <div className="flex flex-wrap gap-2 mb-2">
+                          {(scene.referenceImages || []).map((img, imgIdx) => (
+                            <div key={imgIdx} className="relative group">
+                              <img src={img} alt="" className="w-16 h-16 object-cover rounded-lg" style={{ border: "1px solid var(--border-subtle)" }} />
+                              <button
+                                type="button"
+                                onClick={() => removeReferenceImage(scene.id, imgIdx)}
+                                className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                              >
+                                <X className="w-2.5 h-2.5 text-white" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {(scene.referenceImages || []).length < 3 && (
+                        <label className="flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-all hover:border-purple-500/50 hover:bg-purple-500/5 text-xs" style={{ border: "1px dashed var(--border-subtle)", color: "var(--text-muted)" }}>
+                          <Upload className="w-3.5 h-3.5" />
+                          Upload reference image
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) addReferenceImage(scene.id, file);
+                              e.target.value = "";
+                            }}
+                          />
+                        </label>
+                      )}
+                    </div>
+
+                    {characters.length > 0 && (
+                      <div>
+                        <Label className="text-xs font-medium mb-1.5 block flex items-center gap-1.5" style={{ color: "var(--text-secondary)" }}>
+                          <Users className="w-3 h-3 text-green-400" /> Characters in this scene
+                        </Label>
+                        <div className="flex flex-wrap gap-2">
+                          {characters.map((char: any) => {
+                            const active = (scene.sceneCharacters || []).includes(char.id);
+                            return (
+                              <button
+                                key={char.id}
+                                type="button"
+                                onClick={() => toggleSceneCharacter(scene.id, char.id)}
+                                className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-medium transition-all"
+                                style={{
+                                  backgroundColor: active ? "rgba(34,197,94,0.15)" : "var(--surface-active)",
+                                  color: active ? "#4ade80" : "var(--text-secondary)",
+                                  border: "1px solid",
+                                  borderColor: active ? "#4ade80" : "var(--border-subtle)",
+                                }}
+                              >
+                                {char.referenceImageUrl && (
+                                  <img src={char.referenceImageUrl} alt="" className="w-4 h-4 rounded-full object-cover" />
+                                )}
+                                {char.name || "Character"}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
           </div>

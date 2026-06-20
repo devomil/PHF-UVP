@@ -360,7 +360,12 @@ export async function registerRoutes(app: Express) {
             type: cs.type || "content",
             title: cs.title || "",
             narration: cs.narration || "",
-            visualDirection: "",
+            visualDirection: cs.visualDescription || "",
+            emotionalBeat: cs.mood || "",
+            imagePrompt: cs.aiPrompt || "",
+            coreStyle: Array.isArray(cs.coreStyle) ? cs.coreStyle : [],
+            referenceImages: Array.isArray(cs.referenceImages) ? cs.referenceImages : [],
+            sceneCharacters: Array.isArray(cs.sceneCharacters) ? cs.sceneCharacters : [],
             duration: cs.duration || (sceneDur + (index === customScenes.length - 1 ? remainder : 0)),
             order: index,
           }));
