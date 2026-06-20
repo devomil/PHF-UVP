@@ -6175,6 +6175,7 @@ export function QuickCreateAssetPanel({ projectId, project }: { projectId: strin
   const [editNegativePrompt, setEditNegativePrompt] = useState(false);
   const [imageFidelity, setImageFidelity] = useState<number | null>(null);
   const [suzzieSuggestedFidelity, setSuzzieSuggestedFidelity] = useState<number | null>(null);
+  const [suzzieProviderRationale, setSuzzieProviderRationale] = useState<string | undefined>(undefined);
   const [artPresetId, setArtPresetId] = useState("");
   const [overrideSourceImage, setOverrideSourceImage] = useState<string | null | undefined>(undefined);
   const [overrideCharacter, setOverrideCharacter] = useState<string | null | undefined>(undefined);
