@@ -3234,32 +3234,49 @@ router.post('/projects/:projectId/generate-script', isAuthenticated, async (req:
         console.log(`[GenerateScript] Chapter-based multi-style assignment completed`);
       }
     } else {
-      const trendHooks = (projectData.progress as any)?.selectedTrendHooks || null;
-      const projectPurpose = (projectData.progress as any)?.projectPurpose || null;
-      const pipelineResult = await runScriptPipeline({
-        description: script,
-        platform,
-        targetDuration,
-        targetAudience: projectData.targetAudience || null,
-        artPresetId: artPresetIdFromProgress,
-        artPresetIds: artPresetIdsFromProgress,
-        productContext,
-        scriptPresets,
-        projectType,
-        contentStructure,
-        trendHooks,
-        projectPurpose,
-        // Deck-to-Video: force a dedicated scene per user-flagged slide.
-        requiredDeckSlides,
-        // Phase 20D (Task #126): seed per-scene defaults from the
-        // project's visual style when the LLM omits a duration.
-        visualStyle,
-      });
-      scenes = pipelineResult.scenes;
-      summary = pipelineResult.summary;
-      pipelineStrategy = pipelineResult.strategy;
-      pipelineNarrative = pipelineResult.narrative;
-      pipelineStyleRationale = pipelineResult.styleRationale;
+      // Custom-script projects ("script-based") pre-seed scenes at creation time
+      // with the user's own narration, visual direction, mood, and AI prompts.
+      // Running the full AI pipeline would throw all of that away and regenerate
+      // scenes from scratch using only the plain narration text. Instead, we
+      // preserve the existing scenes and skip the pipeline entirely.
+      const existingScenes = Array.isArray(projectData.scenes) ? (projectData.scenes as any[]) : [];
+      const isPreSeededCustomScript =
+        projectData.type === 'script-based' &&
+        (projectData.progress as any)?.phase === 'scenes-ready' &&
+        existingScenes.length > 0;
+
+      if (isPreSeededCustomScript) {
+        scenes = existingScenes;
+        summary = { title: projectData.title || '', overview: projectData.description || '' };
+        console.log(`[GenerateScript] Custom script: preserving ${scenes.length} pre-seeded scenes (visual directions, moods, AI prompts retained)`);
+      } else {
+        const trendHooks = (projectData.progress as any)?.selectedTrendHooks || null;
+        const projectPurpose = (projectData.progress as any)?.projectPurpose || null;
+        const pipelineResult = await runScriptPipeline({
+          description: script,
+          platform,
+          targetDuration,
+          targetAudience: projectData.targetAudience || null,
+          artPresetId: artPresetIdFromProgress,
+          artPresetIds: artPresetIdsFromProgress,
+          productContext,
+          scriptPresets,
+          projectType,
+          contentStructure,
+          trendHooks,
+          projectPurpose,
+          // Deck-to-Video: force a dedicated scene per user-flagged slide.
+          requiredDeckSlides,
+          // Phase 20D (Task #126): seed per-scene defaults from the
+          // project's visual style when the LLM omits a duration.
+          visualStyle,
+        });
+        scenes = pipelineResult.scenes;
+        summary = pipelineResult.summary;
+        pipelineStrategy = pipelineResult.strategy;
+        pipelineNarrative = pipelineResult.narrative;
+        pipelineStyleRationale = pipelineResult.styleRationale;
+      }
     }
 
     if (productMediaUrl && scenes.length > 0) {
