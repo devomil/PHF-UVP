@@ -1009,7 +1009,7 @@ export async function registerRoutes(app: Express) {
       }
       const { projectId } = req.params;
       const userId = (req.user as any).id;
-      const { prompt: newPrompt, provider: newProvider, duration: newDuration, aspectRatio: newAspectRatio, negativePrompt: newNegativePrompt, imageFidelity: newImageFidelity, artPresetId: newArtPresetId, sourceImageUrl: newSourceImageUrl, removeSourceImage, characterRefImageUrl: newCharacterRefImageUrl, referenceImages: newReferenceImages, excludeLogo: newExcludeLogo, customLogoUrl: newCustomLogoUrl } = req.body || {};
+      const { prompt: newPrompt, provider: newProvider, duration: newDuration, aspectRatio: newAspectRatio, negativePrompt: newNegativePrompt, imageFidelity: newImageFidelity, artPresetId: newArtPresetId, sourceImageUrl: newSourceImageUrl, removeSourceImage, characterRefImageUrl: newCharacterRefImageUrl, referenceImages: newReferenceImages, excludeLogo: newExcludeLogo, customLogoUrl: newCustomLogoUrl, generationMode: newGenerationMode, i2iStrength: newI2iStrength, i2iTransformType: newI2iTransformType } = req.body || {};
 
       const [project] = await db
         .select()
@@ -1108,10 +1108,20 @@ export async function registerRoutes(app: Express) {
       const finalSourceImage = removeSourceImage
         ? undefined
         : (newSourceImageUrl || originalJob?.sourceImageUrl || projectProductDefault);
-      if (removeSourceImage && finalSceneType === "i2v") {
+      if (removeSourceImage && (finalSceneType === "i2v" || finalSceneType === "i2i")) {
         finalSceneType = project.mediaMode === "image" ? "image" : "video";
-      } else if (newSourceImageUrl && !originalJob?.sourceImageUrl) {
+      } else if (newSourceImageUrl && !originalJob?.sourceImageUrl && finalSceneType !== "i2i") {
+        // Only upgrade to i2v if not already in i2i mode
         finalSceneType = "i2v";
+      }
+      // Honor an explicit mode switch from the client.  When the user flips the
+      // "Transform this image" toggle (i2i) in the Quick Create panel we receive
+      // generationMode='i2i' and must override the sceneType derived from the
+      // prior job (which may have been a plain T2I run).
+      if (newGenerationMode === "i2i" && finalSourceImage) {
+        finalSceneType = "i2i";
+      } else if (newGenerationMode === "t2i" && finalSceneType === "i2i") {
+        finalSceneType = project.mediaMode === "image" ? "image" : "video";
       }
 
       const finalNegativePrompt = newNegativePrompt !== undefined ? (newNegativePrompt || null) : (originalJob?.negativePrompt || undefined);
@@ -1229,6 +1239,10 @@ export async function registerRoutes(app: Express) {
             brandLogoUrl: _origLogo,
             logoExcluded: _origLogoExcl,
             customLogoUrl: _origCustomLogo,
+            // Strip stale i2i-specific fields; we re-add them below when needed.
+            generationMode: _origGenMode,
+            i2iTransformType: _origI2iTransform,
+            i2iStrength: _origI2iStrength,
             ...cleanedOriginal
           } = (originalI2vSettings || {}) as any;
           return {
@@ -1250,11 +1264,23 @@ export async function registerRoutes(app: Express) {
             ...(typeof newCustomLogoUrl === "string" && newCustomLogoUrl.length > 0
               ? { customLogoUrl: newCustomLogoUrl }
               : {}),
+            // I2I mode: carry forward transformation settings so the job
+            // processor routes through imageGenerationService.generateImageToImage().
+            ...(finalSceneType === "i2i" ? {
+              generationMode: "i2i",
+              i2iTransformType: (typeof newI2iTransformType === "string" && newI2iTransformType)
+                ? newI2iTransformType
+                : (_origI2iTransform || "scene-integration"),
+              i2iStrength: newI2iStrength !== undefined
+                ? Number(newI2iStrength)
+                : (_origI2iStrength !== undefined ? Number(_origI2iStrength) : 0.65),
+            } : {}),
             // Worker reads `sourceImageUrls` for multi-image-aware providers
             // (Kling 2.x, Veo 3.1, Luma, Hailuo, Runway). Build it whenever any
             // typed ref exists, not only when extras are present, so character-only,
             // product+character, and product+logo flows still get the array.
-            ...((finalCharacterRefImageUrl || finalLogoUrl || (finalReferenceImages && finalReferenceImages.length > 0))
+            // Skip for I2I — the worker reads sourceImageUrl directly.
+            ...(finalSceneType !== "i2i" && (finalCharacterRefImageUrl || finalLogoUrl || (finalReferenceImages && finalReferenceImages.length > 0))
               ? {
                   sourceImageUrls: [
                     ...(finalSourceImage ? [finalSourceImage] : []),

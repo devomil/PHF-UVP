@@ -6174,6 +6174,7 @@ export function QuickCreateAssetPanel({ projectId, project }: { projectId: strin
   const [visualGenerating, setVisualGenerating] = useState(false);
   const [editNegativePrompt, setEditNegativePrompt] = useState(false);
   const [imageFidelity, setImageFidelity] = useState<number | null>(null);
+  const [qcGenerationMode, setQcGenerationMode] = useState<"t2i" | "i2i">("t2i");
   const [suzzieSuggestedFidelity, setSuzzieSuggestedFidelity] = useState<number | null>(null);
   const [suzzieProviderRationale, setSuzzieProviderRationale] = useState<string | undefined>(undefined);
   const [artPresetId, setArtPresetId] = useState("");
@@ -6300,6 +6301,7 @@ export function QuickCreateAssetPanel({ projectId, project }: { projectId: strin
         if (genInfo.negativePrompt) setNegativePrompt(genInfo.negativePrompt);
         setImageFidelity(genInfo.imageFidelity ?? (genInfo.sceneType === "i2v" ? 0.5 : null));
         if (genInfo.artPresetId) setArtPresetId(genInfo.artPresetId);
+        setQcGenerationMode(genInfo.sceneType === "i2i" ? "i2i" : "t2i");
       }
       setSelectedAspectRatio(assetsQuery.data.generationInfo?.aspectRatio || project?.outputFormat?.aspectRatio || "16:9");
       const hydratedDuration =
@@ -6365,6 +6367,9 @@ export function QuickCreateAssetPanel({ projectId, project }: { projectId: strin
       } else if (overrideSourceImage) {
         body.sourceImageUrl = overrideSourceImage;
       }
+      // Send generationMode so the server can route to Flux I2I when the user
+      // has toggled "Transform this image" on a project that was originally T2I.
+      body.generationMode = qcGenerationMode;
       // Task 69: typed reference slots.
       if (overrideCharacter !== undefined) {
         body.characterRefImageUrl = overrideCharacter || "";
@@ -6682,6 +6687,7 @@ export function QuickCreateAssetPanel({ projectId, project }: { projectId: strin
                   const genInfo = assetsQuery.data?.generationInfo;
                   if (!genInfo) return null;
                   const modeLabels: Record<string, { label: string; color: string }> = {
+                    i2i: { label: "Image-to-Image", color: "text-orange-400" },
                     i2v: { label: "Image-to-Video", color: "text-cyan-400" },
                     v2v: { label: "Video-to-Video", color: "text-green-400" },
                     image: { label: "Text-to-Image", color: "text-amber-400" },
@@ -6850,6 +6856,33 @@ export function QuickCreateAssetPanel({ projectId, project }: { projectId: strin
                       Reference Images
                     </label>
                     <div className="flex items-center gap-2">
+                    {/* I2I mode toggle: only meaningful for image-mode projects with a reference image */}
+                    {project.mediaMode === "image" && effProduct && (
+                      <div className="flex items-center gap-0.5 rounded-md p-0.5" style={{ backgroundColor: "rgba(0,0,0,0.3)", border: "1px solid rgba(255,255,255,0.08)" }}>
+                        <button
+                          type="button"
+                          onClick={() => setQcGenerationMode("t2i")}
+                          className="text-[10px] px-2 py-0.5 rounded transition-all font-medium"
+                          style={qcGenerationMode === "t2i"
+                            ? { backgroundColor: "rgba(245,158,11,0.25)", color: "rgb(252,211,77)", border: "1px solid rgba(245,158,11,0.4)" }
+                            : { color: "var(--text-muted)", border: "1px solid transparent" }}
+                          title="Use image as style inspiration — sent as a multi-image reference"
+                        >
+                          Inspire
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setQcGenerationMode("i2i")}
+                          className="text-[10px] px-2 py-0.5 rounded transition-all font-medium"
+                          style={qcGenerationMode === "i2i"
+                            ? { backgroundColor: "rgba(249,115,22,0.25)", color: "rgb(253,186,116)", border: "1px solid rgba(249,115,22,0.4)" }
+                            : { color: "var(--text-muted)", border: "1px solid transparent" }}
+                          title="Edit this exact image with Flux — adds elements while preserving the original"
+                        >
+                          Transform
+                        </button>
+                      </div>
+                    )}
                       {isStale && (
                         <span
                           className="text-[10px] font-medium px-2 py-0.5 rounded-full flex items-center gap-1"
