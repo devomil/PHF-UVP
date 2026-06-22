@@ -6,3 +6,4 @@
 - [LLM JSON truncation](llm-json-truncation.md) — LLM JSON silently truncates at max_tokens; put the longest array last, give max_tokens headroom, and repair the truncated tail before throwing.
 - [Scene brand references](scene-brand-references.md) — brandReferences use `assetUrl` as the canonical URL; some legacy readers only read `url`/`imageUrl` — read `assetUrl` first when flattening.
 - [Testing long pipelines](testing-long-pipelines.md) — bash caps at 120s and reaps background procs; shrink input (pdfseparate/pdfunite) and run the real pipeline synchronously in one tsx call.
+- [PiAPI Flux Kontext model ID](piapi-kontext-model.md) — Flux Kontext I2I uses model `Qubico/flux1-dev` + task_type `img2img-kontext`; the separate `Qubico/flux1-kontext-dev` namespace does not exist and returns HTTP 400.

@@ -222,7 +222,7 @@ class ImageGenerationService {
     }
     
     if (isKontext) {
-      console.log(`[I2I] Using Kontext mode (img2img-kontext) as fallback`);
+      console.log(`[I2I] Using Kontext mode (img2img-kontext)`);
       try {
         const kontextResult = await this.generateWithKontext(resizedRefUrl, request.prompt, piApiKey);
         console.log(`[I2I] Kontext generation complete: ${kontextResult.url.substring(0, 50)}...`);
@@ -234,7 +234,29 @@ class ImageGenerationService {
           sourceAsset: request.referenceImageUrl,
         };
       } catch (kontextError: any) {
-        console.warn(`[I2I] Kontext failed: ${kontextError.message}, falling back to standard img2img`);
+        console.warn(`[I2I] Kontext failed: ${kontextError.message}, falling back to Nano Banana`);
+        // Kontext failed — try Nano Banana (real I2I) before giving up on image fidelity
+        if (!isNanoBanana) {
+          try {
+            const nbFallbackResult = await this.generateWithNanoBanana(resizedRefUrl, request.prompt, piApiKey, {
+              outputFormat: request.outputFormat,
+              additionalImageUrls: request.additionalImageUrls,
+              aspectRatio: request.aspectRatio,
+              resolution: request.resolution,
+              safetyLevel: request.safetyLevel,
+            });
+            console.log(`[I2I] Nano Banana fallback complete: ${nbFallbackResult.url.substring(0, 50)}...`);
+            return {
+              ...nbFallbackResult,
+              provider: 'nano-banana-pro',
+              prompt: request.prompt,
+              generationType: 'img2img',
+              sourceAsset: request.referenceImageUrl,
+            };
+          } catch (nbFallbackError: any) {
+            console.warn(`[I2I] Nano Banana fallback also failed: ${nbFallbackError.message}, falling back to standard img2img`);
+          }
+        }
       }
     }
     
@@ -457,7 +479,7 @@ class ImageGenerationService {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'Qubico/flux1-kontext-dev',
+        model: 'Qubico/flux1-dev',
         task_type: 'img2img-kontext',
         input: {
           prompt,
