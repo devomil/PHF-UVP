@@ -472,17 +472,20 @@ class ImageGenerationService {
     prompt: string, 
     apiKey: string
   ): Promise<{ url: string; width: number; height: number }> {
-    // Try candidate model IDs in order — PiAPI's Kontext endpoint model name
-    // has changed; we probe each until one returns a task_id.
+    // Confirmed model from PiAPI docs (piapi.ai/docs/flux-api/kontext):
+    //   model: Qubico/flux1-dev-advanced, task_type: img2img-kontext (or 'kontext')
+    //   input requires: prompt, image, width, height (optional: steps, seed)
+    // Keep fallbacks in case PiAPI renames again.
     const candidates = [
+      { model: 'Qubico/flux1-dev-advanced', task_type: 'img2img-kontext' },
+      { model: 'Qubico/flux1-dev-advanced', task_type: 'kontext' },
+      // Legacy guesses kept as last-ditch fallbacks
       { model: 'black-forest-labs/FLUX.1-kontext-dev', task_type: 'img2img-kontext' },
-      { model: 'black-forest-labs/FLUX.1-kontext-pro', task_type: 'img2img-kontext' },
       { model: 'black-forest-labs/flux-kontext-dev',   task_type: 'img2img-kontext' },
-      { model: 'black-forest-labs/flux-kontext-pro',   task_type: 'img2img-kontext' },
     ];
 
     for (const { model, task_type } of candidates) {
-      console.log(`[I2I-Kontext] Trying model: ${model}`);
+      console.log(`[I2I-Kontext] Trying model: ${model} task: ${task_type}`);
       const response = await fetch('https://api.piapi.ai/api/v1/task', {
         method: 'POST',
         headers: {
@@ -492,18 +495,18 @@ class ImageGenerationService {
         body: JSON.stringify({
           model,
           task_type,
-          input: { prompt, image: imageUrl },
+          input: { prompt, image: imageUrl, width: 1024, height: 576, steps: 10, seed: -1 },
         }),
       });
 
       if (!response.ok) {
         const errorText = await response.text();
-        const isModelError = errorText.includes('invalid model') || errorText.includes('invalid task type');
-        if (isModelError) {
-          console.warn(`[I2I-Kontext] ${model} rejected (${response.status}), trying next candidate`);
-          continue;
-        }
-        console.error(`[I2I-Kontext] API error: ${response.status} - ${errorText}`);
+        // Log the FULL body so we can see the exact rejection reason
+        const errMsg = (() => { try { return JSON.parse(errorText)?.message || JSON.parse(errorText)?.data?.error?.message || errorText; } catch { return errorText; } })();
+        const isModelError = errorText.includes('invalid model') || errorText.includes('invalid task type') || errorText.includes('model not found');
+        console.warn(`[I2I-Kontext] ${model}/${task_type} rejected (${response.status}): ${errMsg}`);
+        if (isModelError) continue;
+        // Non-model error (auth, quota, etc.) — throw immediately
         throw new Error(`Kontext generation failed: ${errorText}`);
       }
 
@@ -514,7 +517,7 @@ class ImageGenerationService {
         continue;
       }
 
-      console.log(`[I2I-Kontext] Task created with ${model}: ${taskId}`);
+      console.log(`[I2I-Kontext] ✓ Task created with model=${model} task=${task_type}: ${taskId}`);
       return this.pollForI2ICompletion(taskId, apiKey);
     }
 
