@@ -234,11 +234,17 @@ export function DeckSlideOverview({
         })}
       </div>
 
-      {/* Action bar — visible when at least one unused slide is selected */}
+      {/* Action bar — sticky, visible when at least one unused slide is selected */}
       {selectionCount > 0 && (
         <div
-          className="flex items-center justify-between gap-3 rounded-lg px-3 py-2.5"
-          style={{ backgroundColor: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.35)' }}
+          className="sticky bottom-0 z-10 flex items-center justify-between gap-3 rounded-lg px-3 py-2.5"
+          style={{
+            backgroundColor: 'rgba(40,28,70,0.92)',
+            border: '1px solid rgba(139,92,246,0.45)',
+            backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)',
+            boxShadow: '0 -6px 18px rgba(0,0,0,0.35)',
+          }}
           data-testid="deck-overview-action-bar"
         >
           <div className="min-w-0">

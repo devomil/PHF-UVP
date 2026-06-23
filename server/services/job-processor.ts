@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { aiVideoService } from "./ai-video-service";
 import { imageGenerationService } from "./image-generation-service";
 import { assetUrlResolver } from "./asset-url-resolver";
+import { optimizeI2IEditPrompt } from "./i2i-prompt-optimizer";
 
 export async function recoverStuckJobs() {
   try {
@@ -132,9 +133,18 @@ export async function processVideoJob(jobId: string) {
         'product-placement': 'Create a professional marketing visual featuring the product from the reference image:',
       };
       const prefix = transformPrefixes[i2iUseCase] || transformPrefixes['scene-integration'];
-      const enhancedPrompt = isKontextProvider
-        ? (job.prompt || '')
-        : `${prefix} ${job.prompt || ""}`;
+
+      // Direct-edit models (Kontext / Nano Banana) follow the instruction literally.
+      // Preservation-heavy user prompts make them freeze the image and change nothing,
+      // so rewrite into an action-first edit instruction. Falls back to the raw prompt
+      // on any failure. Traditional img2img providers keep the subject-extraction prefix.
+      let enhancedPrompt: string;
+      if (isKontextProvider) {
+        const { prompt: optimized } = await optimizeI2IEditPrompt(job.prompt || '');
+        enhancedPrompt = optimized;
+      } else {
+        enhancedPrompt = `${prefix} ${job.prompt || ""}`;
+      }
 
       console.log(`[JobProcessor] I2I job ${job.jobId}: useCase=${i2iUseCase}, strength=${i2iStrength}, provider=${job.provider}, aspect=${job.aspectRatio}`);
 
