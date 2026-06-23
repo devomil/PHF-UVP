@@ -14,3 +14,11 @@ PiAPI Flux Kontext (image editing via reference image + prompt) uses:
 **Why:** Every other guessed namespace (`black-forest-labs/FLUX.1-kontext-*`, `Qubico/flux1-kontext*`, no-namespace variants) returns "invalid model". The correct ID was confirmed via PiAPI docs at `piapi.ai/docs/flux-api/kontext` (June 2026). The task type `img2img-kontext` is valid on PiAPI but only with this exact model.
 
 **How to apply:** In `server/services/image-generation-service.ts`, `generateWithKontext` probes `Qubico/flux1-dev-advanced` with `img2img-kontext` first. If PiAPI renames again, add a new candidate to the top of the `candidates` array and re-probe.
+
+## Steps parameter
+- **10 steps** (PiAPI doc example): barely touches the reference image — useless for spatial/layout edits
+- **25 steps**: correct value for complex spatial edits (clearing areas, repositioning furniture, adding people)
+- Changing steps does NOT affect cost on PiAPI's Kontext endpoint; it only affects generation time (~linearly)
+
+## Dimensions
+- Always pass `width`/`height` from the caller; the default 1024×576 is fine for 16:9 but wrong for other aspect ratios

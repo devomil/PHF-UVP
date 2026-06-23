@@ -224,7 +224,10 @@ class ImageGenerationService {
     if (isKontext) {
       console.log(`[I2I] Using Kontext mode (img2img-kontext)`);
       try {
-        const kontextResult = await this.generateWithKontext(resizedRefUrl, request.prompt, piApiKey);
+        const kontextResult = await this.generateWithKontext(resizedRefUrl, request.prompt, piApiKey, {
+          width: request.width,
+          height: request.height,
+        });
         console.log(`[I2I] Kontext generation complete: ${kontextResult.url.substring(0, 50)}...`);
         return {
           ...kontextResult,
@@ -470,22 +473,28 @@ class ImageGenerationService {
   private async generateWithKontext(
     imageUrl: string, 
     prompt: string, 
-    apiKey: string
+    apiKey: string,
+    opts: { width?: number; height?: number } = {}
   ): Promise<{ url: string; width: number; height: number }> {
     // Confirmed model from PiAPI docs (piapi.ai/docs/flux-api/kontext):
     //   model: Qubico/flux1-dev-advanced, task_type: img2img-kontext (or 'kontext')
     //   input requires: prompt, image, width, height (optional: steps, seed)
-    // Keep fallbacks in case PiAPI renames again.
+    // steps: 25 is the sweet spot for complex spatial/layout edits (10 is the API
+    // minimum example but is too low for instruction following on complex scenes).
+    const width  = opts.width  || 1024;
+    const height = opts.height || 576;
+    const STEPS  = 25;
+
     const candidates = [
       { model: 'Qubico/flux1-dev-advanced', task_type: 'img2img-kontext' },
       { model: 'Qubico/flux1-dev-advanced', task_type: 'kontext' },
-      // Legacy guesses kept as last-ditch fallbacks
+      // Legacy fallbacks in case PiAPI renames the model again
       { model: 'black-forest-labs/FLUX.1-kontext-dev', task_type: 'img2img-kontext' },
       { model: 'black-forest-labs/flux-kontext-dev',   task_type: 'img2img-kontext' },
     ];
 
     for (const { model, task_type } of candidates) {
-      console.log(`[I2I-Kontext] Trying model: ${model} task: ${task_type}`);
+      console.log(`[I2I-Kontext] Trying model: ${model} task: ${task_type} steps: ${STEPS}`);
       const response = await fetch('https://api.piapi.ai/api/v1/task', {
         method: 'POST',
         headers: {
@@ -495,7 +504,7 @@ class ImageGenerationService {
         body: JSON.stringify({
           model,
           task_type,
-          input: { prompt, image: imageUrl, width: 1024, height: 576, steps: 10, seed: -1 },
+          input: { prompt, image: imageUrl, width, height, steps: STEPS, seed: -1 },
         }),
       });
 
