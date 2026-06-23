@@ -472,37 +472,53 @@ class ImageGenerationService {
     prompt: string, 
     apiKey: string
   ): Promise<{ url: string; width: number; height: number }> {
-    const response = await fetch('https://api.piapi.ai/api/v1/task', {
-      method: 'POST',
-      headers: {
-        'X-API-Key': apiKey,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'Qubico/flux1-dev',
-        task_type: 'img2img-kontext',
-        input: {
-          prompt,
-          image: imageUrl,
+    // Try candidate model IDs in order — PiAPI's Kontext endpoint model name
+    // has changed; we probe each until one returns a task_id.
+    const candidates = [
+      { model: 'black-forest-labs/FLUX.1-kontext-dev', task_type: 'img2img-kontext' },
+      { model: 'black-forest-labs/FLUX.1-kontext-pro', task_type: 'img2img-kontext' },
+      { model: 'black-forest-labs/flux-kontext-dev',   task_type: 'img2img-kontext' },
+      { model: 'black-forest-labs/flux-kontext-pro',   task_type: 'img2img-kontext' },
+    ];
+
+    for (const { model, task_type } of candidates) {
+      console.log(`[I2I-Kontext] Trying model: ${model}`);
+      const response = await fetch('https://api.piapi.ai/api/v1/task', {
+        method: 'POST',
+        headers: {
+          'X-API-Key': apiKey,
+          'Content-Type': 'application/json',
         },
-      }),
-    });
+        body: JSON.stringify({
+          model,
+          task_type,
+          input: { prompt, image: imageUrl },
+        }),
+      });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`[I2I-Kontext] API error: ${response.status} - ${errorText}`);
-      throw new Error(`Kontext generation failed: ${errorText}`);
+      if (!response.ok) {
+        const errorText = await response.text();
+        const isModelError = errorText.includes('invalid model') || errorText.includes('invalid task type');
+        if (isModelError) {
+          console.warn(`[I2I-Kontext] ${model} rejected (${response.status}), trying next candidate`);
+          continue;
+        }
+        console.error(`[I2I-Kontext] API error: ${response.status} - ${errorText}`);
+        throw new Error(`Kontext generation failed: ${errorText}`);
+      }
+
+      const data = await response.json();
+      const taskId = data.data?.task_id || data.task_id;
+      if (!taskId) {
+        console.warn(`[I2I-Kontext] ${model} returned no task_id, trying next candidate`);
+        continue;
+      }
+
+      console.log(`[I2I-Kontext] Task created with ${model}: ${taskId}`);
+      return this.pollForI2ICompletion(taskId, apiKey);
     }
 
-    const data = await response.json();
-    const taskId = data.data?.task_id || data.task_id;
-
-    if (!taskId) {
-      throw new Error('No task ID returned from Kontext API');
-    }
-
-    console.log(`[I2I-Kontext] Task created: ${taskId}`);
-    return this.pollForI2ICompletion(taskId, apiKey);
+    throw new Error('Kontext generation failed: no valid model found — all candidates rejected');
   }
 
   private async pollForI2ICompletion(taskId: string, apiKey: string): Promise<{ url: string; width: number; height: number }> {
