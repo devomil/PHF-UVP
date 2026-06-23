@@ -2,7 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 
 const PIAPI_LLM_ENDPOINT = "https://api.piapi.ai/v1/chat/completions";
 const PIAPI_MODEL = "claude-sonnet-4-6";
-const ANTHROPIC_MODEL = "claude-sonnet-4-20250514";
+const ANTHROPIC_MODEL = "claude-sonnet-4-5-20250929";
 
 export interface LLMImageContent {
   type: "image";
@@ -51,7 +51,7 @@ class PiAPILLMClient {
     }
 
     const primary = this.piapiKey ? "PiAPI (claude-sonnet-4-6)" : "none";
-    const fallback = this.anthropicKey ? "Anthropic direct (claude-sonnet-4)" : "none";
+    const fallback = this.anthropicKey ? `Anthropic direct (${ANTHROPIC_MODEL})` : "none";
     console.log(`[LLMClient] Primary: ${primary} | Fallback: ${fallback}`);
   }
 
