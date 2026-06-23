@@ -121,10 +121,10 @@ export async function processVideoJob(jobId: string) {
       };
       const dims = aspectRatioMap[(job.aspectRatio as string) || '16:9'] || { w: 1920, h: 1080 };
 
-      // Kontext operates on the reference image directly with editing instructions —
-      // prepending a "place the subject" prefix corrupts its intent entirely.
-      // Only apply subject-extraction prefixes for non-Kontext providers.
-      const isKontextProvider = job.provider === 'flux-kontext';
+      // Kontext and Nano Banana Pro both operate on the reference image via direct
+      // prompt instructions — the "place the subject" prefix corrupts their intent.
+      // Only apply subject-extraction prefixes for traditional flux img2img providers.
+      const isKontextProvider = job.provider === 'flux-kontext' || job.provider === 'nano-banana-pro';
       const transformPrefixes: Record<string, string> = {
         'scene-integration': 'Place the subject from the reference image into this scene, preserving their appearance and identity:',
         'background-generation': 'Keep the subject from the reference image exactly as they are, but replace the background with:',
