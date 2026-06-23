@@ -328,7 +328,7 @@ export async function registerRoutes(app: Express) {
         return res.status(401).json({ error: "Not authenticated" });
       }
 
-      const { mode, title, description, targetAudience, duration, platform, aspectRatio, mediaMode, videoGenerationMode, qualityTier, script, numScenes, visualStyle, voiceStyle, outputType, prompt, imageStyle, provider, saveToLibrary, customScenes, artPresetId, artPresetIds, characterConsistency, characters, characterReferenceUrl, characterName, characterDescription, generationMode, negativePrompt, sourceImageUrl, referenceVideoUrl, imageFidelity, productMediaUrl, scriptPresets, projectType, contentStructure, projectPurpose, productVisualDescription, i2iTransformType, i2iStrength, projectName, deck } = req.body;
+      const { mode, title, description, targetAudience, duration, platform, aspectRatio, mediaMode, videoGenerationMode, qualityTier, script, numScenes, visualStyle, voiceStyle, outputType, prompt, imageStyle, provider, saveToLibrary, customScenes, artPresetId, artPresetIds, characterConsistency, characters, characterReferenceUrl, characterName, characterDescription, generationMode, negativePrompt, sourceImageUrl, referenceVideoUrl, imageFidelity, productMediaUrl, scriptPresets, projectType, contentStructure, projectPurpose, productVisualDescription, i2iTransformType, i2iStrength, projectName, deck, referenceImages } = req.body;
 
       const projectId = crypto.randomUUID();
 
@@ -533,6 +533,16 @@ export async function registerRoutes(app: Express) {
         // from project" hint and treats subsequent uploads as per-scene overrides.
         const qcSourceImage = sourceImageUrl || characterReferenceUrl || undefined;
 
+        // Extra reference images (multi-image I2V providers — Kling 2.x, Veo 3.1,
+        // Luma, Hailuo, Runway). The client sends an array of URLs. Mirror the
+        // /quick-create/generate-visual behavior so refs are not dropped on the
+        // very first generation of a new project.
+        const qcReferenceImages: string[] = Array.isArray(referenceImages)
+          ? referenceImages
+              .map((u: any) => (typeof u === "string" ? u.trim() : ""))
+              .filter((u: string) => u.length > 0)
+          : [];
+
         const [project] = await db.insert(universalVideoProjects).values({
           projectId,
           ownerId: qcUserId,
@@ -597,6 +607,18 @@ export async function registerRoutes(app: Express) {
             ...(isI2V && imageFidelity !== undefined ? { imageControlStrength: imageFidelity } : {}),
             ...(isV2V ? { referenceVideoUrl, generationMode: 'v2v' } : {}),
             ...(isI2I ? { generationMode: 'i2i', i2iTransformType: i2iTransformType || 'scene-integration', i2iStrength: i2iStrength !== undefined ? i2iStrength : 0.65 } : {}),
+            // Multi-image references — persist them, and build the sourceImageUrls
+            // array the worker reads for multi-image-aware providers. Skip for I2I
+            // (the worker reads sourceImageUrl directly there).
+            ...(qcReferenceImages.length > 0 ? { referenceImages: qcReferenceImages } : {}),
+            ...(qcSceneType !== "i2i" && qcReferenceImages.length > 0
+              ? {
+                  sourceImageUrls: [
+                    ...(qcSourceImage ? [qcSourceImage] : []),
+                    ...qcReferenceImages,
+                  ].filter((u, i, arr) => arr.indexOf(u) === i),
+                }
+              : {}),
           },
           triggeredBy: (req.user as any).id,
         });
