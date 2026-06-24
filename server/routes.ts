@@ -171,6 +171,12 @@ export async function registerRoutes(app: Express) {
       console.error("[Routes] Stuck job recovery failed:", err?.message || err);
     });
   }, 3000);
+
+  setInterval(() => {
+    recoverStuckJobs().catch((err) => {
+      console.error("[Routes] Periodic stuck job recovery failed:", err?.message || err);
+    });
+  }, 5 * 60 * 1000);
   app.get("/api/health", (_req, res) => {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
   });

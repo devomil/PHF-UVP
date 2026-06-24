@@ -407,6 +407,19 @@ class VideoGenerationWorker {
       .catch((error) => {
         log.error(" Error recovering stuck jobs:", error);
       });
+
+    setInterval(() => {
+      storage
+        .recoverStuckVideoGenerationJobs(10)
+        .then((recovered) => {
+          if (recovered > 0) {
+            log.info(`[PERIODIC_RECOVERY] Reset ${recovered} stuck scene jobs back to pending`);
+          }
+        })
+        .catch((error) => {
+          log.error("[PERIODIC_RECOVERY] Error recovering stuck jobs:", error);
+        });
+    }, 5 * 60 * 1000);
   }
 
   stopWorker() {
