@@ -1,8 +1,11 @@
 import Anthropic from "@anthropic-ai/sdk";
 
 const PIAPI_LLM_ENDPOINT = "https://api.piapi.ai/v1/chat/completions";
-const PIAPI_MODEL = "claude-sonnet-4-6";
-const ANTHROPIC_MODEL = "claude-sonnet-4-5-20250929";
+
+// Defaults — override via PIAPI_LLM_MODEL / ANTHROPIC_LLM_MODEL env vars so a
+// broken model id can be fixed without a code deploy.
+const DEFAULT_PIAPI_MODEL = "claude-sonnet-4-6";
+const DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-5-20250929";
 
 export interface LLMImageContent {
   type: "image";
@@ -41,18 +44,30 @@ class PiAPILLMClient {
   private anthropic: Anthropic | null = null;
   private piapiKey: string | null = null;
   private anthropicKey: string | null = null;
+  private piapiModel: string;
+  private anthropicModel: string;
 
   constructor() {
     this.piapiKey = process.env.PIAPI_API_KEY || null;
     this.anthropicKey = process.env.ANTHROPIC_API_KEY || null;
 
+    // Centralised model config — env vars let ops correct a bad model id at runtime
+    this.piapiModel = process.env.PIAPI_LLM_MODEL || DEFAULT_PIAPI_MODEL;
+    this.anthropicModel = process.env.ANTHROPIC_LLM_MODEL || DEFAULT_ANTHROPIC_MODEL;
+
     if (this.anthropicKey) {
       this.anthropic = new Anthropic({ apiKey: this.anthropicKey });
     }
 
-    const primary = this.piapiKey ? "PiAPI (claude-sonnet-4-6)" : "none";
-    const fallback = this.anthropicKey ? `Anthropic direct (${ANTHROPIC_MODEL})` : "none";
+    const primary = this.piapiKey ? `PiAPI (${this.piapiModel})` : "none";
+    const fallback = this.anthropicKey ? `Anthropic direct (${this.anthropicModel})` : "none";
     console.log(`[LLMClient] Primary: ${primary} | Fallback: ${fallback}`);
+
+    // Non-blocking startup check: catch a misconfigured fallback model before it
+    // silently no-ops inside a fail-open helper at generation time.
+    if (this.anthropic && this.anthropicKey) {
+      void this.validateAnthropicModel();
+    }
   }
 
   isAvailable(): boolean {
@@ -91,6 +106,39 @@ class PiAPILLMClient {
     throw new Error("No LLM provider available");
   }
 
+  private async validateAnthropicModel(): Promise<void> {
+    try {
+      const response = await fetch("https://api.anthropic.com/v1/models", {
+        headers: {
+          "x-api-key": this.anthropicKey!,
+          "anthropic-version": "2023-06-01",
+        },
+      });
+
+      if (!response.ok) {
+        console.warn(`[LLMClient] Anthropic model validation: HTTP ${response.status} — cannot verify "${this.anthropicModel}".`);
+        return;
+      }
+
+      const data = await response.json();
+      const available: string[] = (data.data || []).map((m: any) => m.id as string);
+
+      if (!available.includes(this.anthropicModel)) {
+        const sonnetOptions = available.filter((id) => id.toLowerCase().includes("sonnet")).join(", ");
+        console.error(
+          `[LLMClient] ⚠️  ANTHROPIC_LLM_MODEL "${this.anthropicModel}" is NOT accessible with this key. ` +
+          `The Anthropic fallback will 404 at generation time. ` +
+          `Available Sonnet models: ${sonnetOptions || "(none found)"}. ` +
+          `Set ANTHROPIC_LLM_MODEL env var to a valid id to fix without a code deploy.`
+        );
+      } else {
+        console.log(`[LLMClient] Anthropic fallback model "${this.anthropicModel}" verified ✓`);
+      }
+    } catch (err: any) {
+      console.warn(`[LLMClient] Anthropic model validation skipped (${err?.message || err})`);
+    }
+  }
+
   private async callPiAPI(options: LLMCompletionOptions): Promise<LLMCompletionResult> {
     const messages: any[] = [
       { role: "system", content: options.systemPrompt },
@@ -118,7 +166,7 @@ class PiAPILLMClient {
     }
 
     const body = {
-      model: PIAPI_MODEL,
+      model: this.piapiModel,
       messages,
       max_tokens: options.maxTokens,
       ...(options.temperature !== undefined && { temperature: options.temperature }),
@@ -151,8 +199,8 @@ class PiAPILLMClient {
         throw new Error("PiAPI LLM returned empty response");
       }
 
-      console.log(`[LLMClient] PiAPI success (${PIAPI_MODEL}), tokens: ${data.usage?.total_tokens || "?"}`);
-      return { text, provider: "piapi", model: PIAPI_MODEL };
+      console.log(`[LLMClient] PiAPI success (${this.piapiModel}), tokens: ${data.usage?.total_tokens || "?"}`);
+      return { text, provider: "piapi", model: this.piapiModel };
     } finally {
       clearTimeout(timeout);
     }
@@ -189,7 +237,7 @@ class PiAPILLMClient {
     }
 
     const response = await this.anthropic.messages.create({
-      model: ANTHROPIC_MODEL,
+      model: this.anthropicModel,
       max_tokens: options.maxTokens,
       system: options.systemPrompt,
       messages,
@@ -200,8 +248,8 @@ class PiAPILLMClient {
       throw new Error("Unexpected Anthropic response type");
     }
 
-    console.log(`[LLMClient] Anthropic fallback success (${ANTHROPIC_MODEL})`);
-    return { text: content.text, provider: "anthropic", model: ANTHROPIC_MODEL };
+    console.log(`[LLMClient] Anthropic fallback success (${this.anthropicModel})`);
+    return { text: content.text, provider: "anthropic", model: this.anthropicModel };
   }
 }
 
