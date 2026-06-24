@@ -3069,7 +3069,7 @@ export default function ProjectDetail({ params }: { params?: { id: string } }) {
   const { data: project, isLoading, error } = useQuery<any, Error & { status?: number }>({
     queryKey: ["project", projectId],
     queryFn: async () => {
-      const res = await fetch(`/api/projects/${projectId}`, { credentials: "include" });
+      const res = await fetch(`/api/projects/${projectId}`, { credentials: "include", cache: "no-store" });
       if (!res.ok) {
         // Preserve the real HTTP status on the thrown error so the
         // empty-state UI can distinguish "actually missing" (404) from

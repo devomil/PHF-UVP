@@ -628,7 +628,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
     if (regeneratingType) {
       const regenStartTime = Date.now();
       pollIntervalRef.current = setInterval(async () => {
-        queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+        queryClient.refetchQueries({ queryKey: ["project", projectId] });
         if (regeneratingType !== 'video') return;
         try {
           const res = await fetch(`/api/universal-video/${projectId}/scenes/${sceneId}/active-jobs`, { credentials: "include" });
@@ -643,7 +643,16 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                   setRegenStartedAt(null);
                   setRegenElapsed(0);
                   if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+                  if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
                   toast({ title: "Generation failed", description: latest.error || "The video provider returned an error. Try a different provider or shorter prompt.", variant: "destructive" });
+                } else if (latest.success && latest.status === 'succeeded') {
+                  await queryClient.refetchQueries({ queryKey: ["project", projectId] });
+                  setRegeneratingType(null);
+                  setRegenStartedAt(null);
+                  setRegenElapsed(0);
+                  if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+                  if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+                  toast({ title: "Video Ready", description: "Your new video has been generated." });
                 }
               }
             }
