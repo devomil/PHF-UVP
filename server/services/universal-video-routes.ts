@@ -13,6 +13,7 @@ import type { Phase8AnalysisResult } from '../../shared/video-types';
 import { sceneRegenerationService } from '../services/scene-regeneration-service';
 import { requireCredits } from '../middleware/requireCredits';
 import { autoRegenerationService, SceneForRegeneration, RegenerationResult } from '../services/auto-regeneration-service';
+import { processVideoJob } from './job-processor';
 import { intelligentRegenerationService } from '../services/intelligent-regeneration-service';
 import { intelligentPromptImprover } from '../services/intelligent-prompt-improver';
 import { regenerationStrategyEngine } from '../services/regeneration-strategy-engine';
@@ -7886,6 +7887,12 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, req
     });
     
     console.log(`[Phase9B-Async] Created job ${job.jobId} for scene ${sceneId}`);
+
+    // Kick off processing immediately — the VideoWorker excludes Quick Create projects,
+    // so we must invoke processVideoJob directly for QC jobs to actually execute.
+    processVideoJob(job.jobId).catch((err) => {
+      console.error(`[Phase9B-Async] Background job ${job.jobId} failed:`, err.message);
+    });
 
     // Task 45: Clear stale provider/mismatch chips on the scene so the UI doesn't keep
     // showing an old badge (e.g. Runway) while the new render (e.g. Seedance) is queued.

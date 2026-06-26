@@ -6772,7 +6772,7 @@ export function QuickCreateAssetPanel({ projectId, project }: { projectId: strin
                   );
                 })()}
               </div>
-              {assetStatusBadge(visualGenerating && (assets.visual?.status === "completed" || !assets.visual?.status) ? "generating" : assets.visual?.status)}
+              {assetStatusBadge(visualGenerating && (assets.visual?.status === "completed" || !assets.visual?.status) ? "generating" : (assets.visual?.status || "pending"))}
             </div>
 
             <div className={selectedAspectRatio === "9:16" ? "flex gap-4 items-start" : ""}>
@@ -6796,7 +6796,7 @@ export function QuickCreateAssetPanel({ projectId, project }: { projectId: strin
                 >
                   {previewSizing.label}
                 </span>
-                {(visualGenerating || assets.visual?.status === "generating" || assets.visual?.status === "queued" || assets.visual?.status === "processing") && (
+                {(visualGenerating || assets.visual?.status === "generating" || assets.visual?.status === "queued" || assets.visual?.status === "pending" || assets.visual?.status === "processing") && (
                   <div className="absolute inset-0 flex flex-col items-center justify-center gap-3" style={{ backgroundColor: "rgba(0,0,0,0.65)", backdropFilter: "blur(2px)" }}>
                     <Loader2 className="w-8 h-8 animate-spin text-purple-400" />
                     <div className="text-center">

@@ -897,6 +897,12 @@ export async function registerRoutes(app: Express) {
       if (visualStatus === "generating" && latestJob?.status === "completed") {
         visualStatus = "completed";
       }
+      // If there's a fresh pending/running job that postdates the last completed
+      // render, surface it as "queued"/"generating" so the UI overlay appears
+      // even if the project-assets JSONB still shows the old "completed" status.
+      if (latestJob && (latestJob.status === "pending" || latestJob.status === "running")) {
+        visualStatus = latestJob.status === "running" ? "generating" : "queued";
+      }
 
       // Pull brand logo (read-only) for the LOGO reference slot in Quick Create.
       let brandLogoUrl: string | null = null;
