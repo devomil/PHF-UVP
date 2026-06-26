@@ -6201,6 +6201,9 @@ export function QuickCreateAssetPanel({ projectId, project }: { projectId: strin
   const [showQcAleph2Panel, setShowQcAleph2Panel] = useState(false);
   const [qcAleph2Prompt, setQcAleph2Prompt] = useState('');
   const [qcAleph2Submitting, setQcAleph2Submitting] = useState(false);
+  const [qcAleph2RefImage, setQcAleph2RefImage] = useState<string | null>(null);
+  const [qcAleph2RefUploading, setQcAleph2RefUploading] = useState(false);
+  const qcAleph2RefInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const handleSourceImageChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -6248,6 +6251,26 @@ export function QuickCreateAssetPanel({ projectId, project }: { projectId: strin
     pendingUploadSlotRef.current = "product";
     e.target.value = "";
   }, [toast, queryClient, projectId]);
+
+  const handleQcAleph2RefImageChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setQcAleph2RefUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const uploadRes = await fetch("/api/videos/uploads", { method: "POST", credentials: "include", body: formData });
+      if (!uploadRes.ok) throw new Error("Upload failed: " + uploadRes.status);
+      const data = await uploadRes.json();
+      const url = data.url || data.fileUrl;
+      if (url) setQcAleph2RefImage(url);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Upload failed";
+      toast({ title: "Upload Error", description: msg, variant: "destructive" });
+    }
+    setQcAleph2RefUploading(false);
+    e.target.value = "";
+  }, [toast]);
 
   const assetsQuery = useQuery({
     queryKey: ["quick-create-assets", projectId],
@@ -6369,10 +6392,12 @@ export function QuickCreateAssetPanel({ projectId, project }: { projectId: strin
       return;
     }
     const promptSnapshot = qcAleph2Prompt;
+    const refImageSnapshot = qcAleph2RefImage;
 
     // Close the panel and show feedback IMMEDIATELY — synchronous, before any await.
     setShowQcAleph2Panel(false);
     setQcAleph2Prompt('');
+    setQcAleph2RefImage(null);
     visualGenStartTimeRef.current = Date.now();
     setVisualGenerating(true);
     toast({ title: "Aleph 2.0 Editing", description: "Runway Aleph 2.0 is re-styling your clip. This typically takes 1–3 minutes." });
@@ -6387,6 +6412,7 @@ export function QuickCreateAssetPanel({ projectId, project }: { projectId: strin
         provider: "runway-aleph-2",
         generationMode: "v2v",
         referenceVideoUrl: videoUrl,
+        ...(refImageSnapshot ? { sourceImageUrl: refImageSnapshot } : {}),
       }),
     })
       .then(async (res) => {
@@ -6839,6 +6865,13 @@ export function QuickCreateAssetPanel({ projectId, project }: { projectId: strin
                 </button>
                 {showQcAleph2Panel && (
                   <div className="mt-2 rounded-xl border p-3.5" style={{ borderColor: "rgba(124,58,237,0.35)", backgroundColor: "rgba(124,58,237,0.06)" }}>
+                    <input
+                      ref={qcAleph2RefInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleQcAleph2RefImageChange}
+                    />
                     <div className="flex items-center gap-2 mb-2.5">
                       <Sparkles className="w-3.5 h-3.5 text-purple-400 shrink-0" />
                       <span className="text-[11px] font-semibold" style={{ color: "var(--text-primary)" }}>Edit with Runway Aleph 2.0</span>
@@ -6859,7 +6892,69 @@ export function QuickCreateAssetPanel({ projectId, project }: { projectId: strin
                       className="w-full text-xs rounded-lg border px-2.5 py-2 bg-transparent resize-none outline-none focus:border-purple-500/60 transition-colors"
                       style={{ borderColor: "rgba(124,58,237,0.25)", color: "var(--text-primary)" }}
                     />
-                    <div className="flex justify-end mt-2">
+                    {/* Reference image slot — anchors Aleph 2.0 style transfer to a specific subject */}
+                    <div className="mt-2.5">
+                      <p className="text-[10px] font-medium mb-1.5" style={{ color: "var(--text-secondary)" }}>
+                        Subject reference <span className="opacity-50 font-normal">(optional)</span>
+                      </p>
+                      {qcAleph2RefImage ? (
+                        <div className="flex items-center gap-2">
+                          <img src={qcAleph2RefImage} alt="Reference" className="w-10 h-10 rounded-md object-cover shrink-0" style={{ border: "1px solid rgba(255,255,255,0.12)" }} />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[10px] truncate" style={{ color: "var(--text-secondary)" }}>Reference image selected</p>
+                            <button
+                              onClick={() => setQcAleph2RefImage(null)}
+                              className="text-[10px] flex items-center gap-0.5 mt-0.5 hover:opacity-80 transition-opacity"
+                              style={{ color: "var(--text-muted)" }}
+                            >
+                              <X className="w-2.5 h-2.5" /> Remove
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <button
+                            onClick={() => qcAleph2RefInputRef.current?.click()}
+                            disabled={qcAleph2RefUploading}
+                            className="text-[10px] px-2 py-1 rounded-md flex items-center gap-1 transition-colors hover:bg-white/5 disabled:opacity-50"
+                            style={{ border: "1px solid rgba(255,255,255,0.12)", color: "var(--text-secondary)" }}
+                          >
+                            {qcAleph2RefUploading ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : <Upload className="w-2.5 h-2.5" />}
+                            Upload
+                          </button>
+                          {(() => {
+                            const gi = assetsQuery.data?.generationInfo;
+                            const charUrl = overrideCharacter !== null && overrideCharacter !== undefined ? overrideCharacter : (gi?.characterRefImageUrl || null);
+                            const prodUrl = overrideSourceImage !== null && overrideSourceImage !== undefined ? overrideSourceImage : (gi?.sourceImageUrl || gi?.projectProductMediaUrl || (Array.isArray(gi?.referenceImages) && gi.referenceImages.length > 0 ? gi.referenceImages[0] : null));
+                            return (
+                              <>
+                                {charUrl && (
+                                  <button
+                                    onClick={() => setQcAleph2RefImage(charUrl)}
+                                    className="text-[10px] px-2 py-1 rounded-md flex items-center gap-1 transition-colors hover:bg-white/5"
+                                    style={{ border: "1px solid rgba(255,255,255,0.12)", color: "var(--text-secondary)" }}
+                                  >
+                                    <img src={charUrl} alt="" className="w-3.5 h-3.5 rounded object-cover" />
+                                    Character
+                                  </button>
+                                )}
+                                {prodUrl && (
+                                  <button
+                                    onClick={() => setQcAleph2RefImage(prodUrl)}
+                                    className="text-[10px] px-2 py-1 rounded-md flex items-center gap-1 transition-colors hover:bg-white/5"
+                                    style={{ border: "1px solid rgba(255,255,255,0.12)", color: "var(--text-secondary)" }}
+                                  >
+                                    <img src={prodUrl} alt="" className="w-3.5 h-3.5 rounded object-cover" />
+                                    Product
+                                  </button>
+                                )}
+                              </>
+                            );
+                          })()}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex justify-end mt-2.5">
                       <button
                         onClick={handleQcAleph2Apply}
                         disabled={qcAleph2Submitting || !qcAleph2Prompt.trim()}
