@@ -968,7 +968,9 @@ export async function registerRoutes(app: Express) {
           imageFidelity: latestI2vSettings.imageControlStrength ?? null,
           referenceVideoUrl: latestI2vSettings.referenceVideoUrl || null,
           characterRefImageUrl: latestI2vSettings.characterRefImageUrl || null,
-          referenceImages: Array.isArray(latestI2vSettings.referenceImages) ? latestI2vSettings.referenceImages : [],
+          referenceImages: Array.isArray(latestI2vSettings.referenceImages)
+            ? latestI2vSettings.referenceImages
+            : (Array.isArray(qc.i2vSettings?.referenceImages) ? qc.i2vSettings.referenceImages : []),
           // Effective logo URL after applying any per-run override from the
           // last job (custom upload, exclusion, or fall back to brand bible).
           brandLogoUrl: latestI2vSettings.logoExcluded === true

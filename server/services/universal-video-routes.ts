@@ -7856,8 +7856,24 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, req
       console.log(`[Phase16] Using intelligent motion control for scene type: ${scene.type || 'content'}`);
     }
     
+    // For Quick Create scenes the canonical referenceImages are stored in
+    // assets.quickCreate.i2vSettings.referenceImages. V2V-mode jobs (e.g.
+    // Aleph 2.0 edits) only carry {assetLibraryMode:'v2v', referenceVideoUrl,
+    // sourceVideoUrl} in their i2vSettings, so referenceImages would be
+    // dropped from the job record. Carry them forward here so every job is
+    // self-contained and subsequent V2V edits don't lose the slot either.
+    const storedQcReferenceImages = sceneId === 'quick-create'
+      ? ((projectData as any).assets?.quickCreate?.i2vSettings?.referenceImages as string[] | undefined)
+      : undefined;
+
     const jobI2vWithHint = {
       ...(i2vSettings || {}),
+      // Merge stored referenceImages only when the request body didn't supply
+      // them (avoids overwriting an intentional clear from the client).
+      ...((!i2vSettings?.referenceImages || (i2vSettings.referenceImages as any[]).length === 0)
+        && Array.isArray(storedQcReferenceImages) && storedQcReferenceImages.length > 0
+        ? { referenceImages: storedQcReferenceImages }
+        : {}),
       ...(!provider && sceneProviderHint ? { providerHint: sceneProviderHint } : {}),
       // When the brandAsset is being used in a people/activity scene, force the provider into
       // reference-image composition mode (vs first-frame animation). Existing flag, repurposed
