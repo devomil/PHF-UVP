@@ -6827,7 +6827,7 @@ export function QuickCreateAssetPanel({ projectId, project }: { projectId: strin
                 )}
               </div>
             )}
-            {project.mediaMode !== "image" && (assets.visual?.status === "completed" || visualGenerating || assets.visual?.status === "queued" || assets.visual?.status === "generating") && (assets.visual?.url || lastCompletedVideoUrlRef.current) && (
+            {project.mediaMode !== "image" && (assets.visual?.status === "completed" || assets.visual?.status === "failed" || visualGenerating || assets.visual?.status === "queued" || assets.visual?.status === "generating") && (assets.visual?.url || lastCompletedVideoUrlRef.current) && (
               <div className="mb-3">
                 <button
                   onClick={() => setShowQcAleph2Panel(p => !p)}
