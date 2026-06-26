@@ -14,7 +14,8 @@ export type AssetCreatorMode =
   | 't2i' | 't2v' | 'i2v' | 'i2i' | 'v2v'
   | 'upscale-image' | 'upscale-video'
   | 'bg-remove-image' | 'bg-remove-video'
-  | 'character-performance' | 'character';
+  | 'character-performance' | 'character'
+  | 'agent-2';
 
 export type ModeCategory = 'generate' | 'transform' | 'toolkit';
 
@@ -33,6 +34,7 @@ export const ASSET_CREATOR_MODE_GATING: Record<AssetCreatorMode, AssetCreatorMod
   'v2v':                 { needsPrompt: true,  needsRefImage: false, needsRefVideo: true,  category: 'transform' },
   'character':           { needsPrompt: false, needsRefImage: false, needsRefVideo: false, category: 'generate' },
   'character-performance': { needsPrompt: false, needsRefImage: true, needsRefVideo: true, category: 'transform' },
+  'agent-2':             { needsPrompt: true,  needsRefImage: false, needsRefVideo: false, category: 'generate' },
   'upscale-image':       { needsPrompt: false, needsRefImage: true,  needsRefVideo: false, category: 'toolkit' },
   'upscale-video':       { needsPrompt: false, needsRefImage: false, needsRefVideo: true,  category: 'toolkit' },
   'bg-remove-image':     { needsPrompt: false, needsRefImage: true,  needsRefVideo: false, category: 'toolkit' },

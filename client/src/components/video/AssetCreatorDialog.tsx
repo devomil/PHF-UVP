@@ -47,7 +47,8 @@ type GenerationMode =
   | 'upscale-image' | 'upscale-video'
   | 'bg-remove-image' | 'bg-remove-video'
   | 'character-performance'
-  | 'character';
+  | 'character'
+  | 'agent-2';
 
 type ModeCategory = 'generate' | 'transform' | 'toolkit';
 
@@ -136,6 +137,7 @@ const MODE_CONFIG: Record<GenerationMode, ModeConfig> = {
   'v2v': { label: 'Video to Video', shortLabel: 'V2V', icon: Film, description: 'Transform video with Runway Aleph or Kling object replace', category: 'transform', outputType: 'video', needsPrompt: true, needsRefImage: false, needsRefVideo: true, needsReplacementImage: false },
   'character': { label: 'Character', shortLabel: 'Character', icon: Wand2, description: 'Generate a Disney/Pixar 3D character reference image', category: 'generate', outputType: 'image', needsPrompt: false, needsRefImage: false, needsRefVideo: false, needsReplacementImage: false },
   'character-performance': { label: 'Character Performance', shortLabel: 'Act Two', icon: User, description: 'Runway Act Two — animate a character from a reference video', category: 'transform', outputType: 'video', needsPrompt: false, needsRefImage: true, needsRefVideo: true, needsReplacementImage: false },
+  'agent-2': { label: 'Runway Agent 2.0', shortLabel: 'Agent 2', icon: Sparkles, description: 'Agentic video builder — describe a brief and Runway builds the full video', category: 'generate', outputType: 'video', needsPrompt: true, needsRefImage: false, needsRefVideo: false, needsReplacementImage: false },
   'upscale-image': { label: 'Upscale Image', shortLabel: 'Upscale', icon: ArrowUpCircle, description: 'Enhance image resolution with AI upscaling', category: 'toolkit', outputType: 'image', needsPrompt: false, needsRefImage: true, needsRefVideo: false, needsReplacementImage: false },
   'upscale-video': { label: 'Upscale Video', shortLabel: 'Upscale', icon: ArrowUpCircle, description: 'Enhance video resolution with AI upscaling', category: 'toolkit', outputType: 'video', needsPrompt: false, needsRefImage: false, needsRefVideo: true, needsReplacementImage: false },
   'bg-remove-image': { label: 'Remove BG (Image)', shortLabel: 'BG Remove', icon: Scissors, description: 'Remove background from an image', category: 'toolkit', outputType: 'image', needsPrompt: false, needsRefImage: true, needsRefVideo: false, needsReplacementImage: false },
@@ -143,7 +145,7 @@ const MODE_CONFIG: Record<GenerationMode, ModeConfig> = {
 };
 
 const CATEGORY_MODES: Record<ModeCategory, GenerationMode[]> = {
-  generate: ['t2i', 't2v', 'i2v', 'character'],
+  generate: ['t2i', 't2v', 'i2v', 'character', 'agent-2'],
   transform: ['i2i', 'v2v', 'character-performance'],
   toolkit: ['upscale-image', 'upscale-video', 'bg-remove-image', 'bg-remove-video'],
 };
@@ -222,6 +224,7 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
     if (mode === 'v2v') return V2V_PROVIDERS;
     if (cfg.category === 'toolkit') return TOOLKIT_PROVIDER;
     if (mode === 'character-performance') return [{ id: 'runway-act-two', name: 'Runway Act Two' }];
+    if (mode === 'agent-2') return [{ id: 'runway-agent-2', name: 'Runway Agent 2.0' }];
     if (cfg.outputType === 'image') return IMAGE_PROVIDERS;
     return getDropdownVideoProviders(mode as 't2v' | 'i2v');
   };

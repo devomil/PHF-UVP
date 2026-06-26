@@ -17,6 +17,15 @@
     "runway-act-two": {
       "costPerSecond": 0.07
     },
+    "runway-aleph-2": {
+      "costPerSecond": 0.09
+    },
+    "runway-agent-2": {
+      "costPerSecond": 0.1
+    },
+    "runway-happy-horse-1": {
+      "costPerSecond": 0.08
+    },
     "kling": {
       "costPerSecond": 0.03
     },

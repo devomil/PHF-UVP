@@ -6,6 +6,9 @@ const RUNWAY_MODEL_MAP: Record<string, string> = {
   'runway-gen4-aleph': 'gen4.5',
   'runway-4.5': 'gen4.5',
   'runway-act-two': 'act_two',
+  'runway-aleph-2': 'aleph_2',
+  'runway-agent-2': 'agent_2',
+  'runway-happy-horse-1': 'happy_horse_1',
 };
 
 const RUNWAY_COST_PER_SECOND: Record<string, number> = {
@@ -14,6 +17,9 @@ const RUNWAY_COST_PER_SECOND: Record<string, number> = {
   'runway-gen4-aleph': 0.06,
   'runway-4.5': 0.07,
   'runway-act-two': 0.06,
+  'runway-aleph-2': 0.09,
+  'runway-agent-2': 0.1,
+  'runway-happy-horse-1': 0.08,
 };
 
 interface RunwayGenerationResult {
@@ -286,6 +292,92 @@ class RunwayVideoService {
       };
     } catch (error: any) {
       console.error(`[Runway:ActTwo] Generation failed:`, error.message);
+      return { success: false, error: error.message, generationTimeMs: Date.now() - startTime };
+    }
+  }
+
+  async generateWithAgent(options: {
+    brief: string;
+    referenceImageUrl?: string;
+    aspectRatio?: string;
+    duration?: number;
+  }): Promise<RunwayGenerationResult> {
+    if (!this.isAvailable()) {
+      return { success: false, error: 'RUNWAY_API_KEY not configured' };
+    }
+
+    this.apiKey = process.env.RUNWAY_API_KEY!;
+    const startTime = Date.now();
+    const providerKey = 'runway-agent-2';
+    const apiModel = this.resolveApiModel(providerKey);
+
+    try {
+      const clampedDuration = Math.round(Math.min(options.duration || 10, 30));
+      console.log(`[Runway:Agent2] Starting agentic generation with model: ${apiModel}`);
+      console.log(`[Runway:Agent2] Brief: ${options.brief.substring(0, 100)}...`);
+
+      const truncatedBrief = options.brief.length > 1000
+        ? options.brief.substring(0, 997) + '...'
+        : options.brief;
+
+      const ratio = options.aspectRatio === '9:16' ? '720:1280' : '1280:720';
+
+      let endpoint: string;
+      let body: any;
+
+      if (options.referenceImageUrl) {
+        endpoint = `${RUNWAY_API_BASE}/image_to_video`;
+        body = {
+          model: apiModel,
+          promptImage: options.referenceImageUrl,
+          promptText: truncatedBrief,
+          duration: clampedDuration,
+          ratio,
+        };
+      } else {
+        endpoint = `${RUNWAY_API_BASE}/text_to_video`;
+        body = {
+          model: apiModel,
+          promptText: truncatedBrief,
+          duration: clampedDuration,
+          ratio,
+        };
+      }
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify(body),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`[Runway:Agent2] API error: ${response.status} - ${errorText}`);
+        return { success: false, error: `Runway Agent 2.0 API error: ${response.status}`, generationTimeMs: Date.now() - startTime };
+      }
+
+      const data = await response.json();
+      const taskId = data.id;
+
+      if (!taskId) {
+        return { success: false, error: 'No task ID in Runway Agent 2.0 response', generationTimeMs: Date.now() - startTime };
+      }
+
+      console.log(`[Runway:Agent2] Task created: ${taskId}`);
+
+      const result = await this.pollForCompletion(taskId);
+      const costPerSec = RUNWAY_COST_PER_SECOND[providerKey] || 0.1;
+
+      return {
+        ...result,
+        taskId,
+        duration: clampedDuration,
+        cost: clampedDuration * costPerSec,
+        generationTimeMs: Date.now() - startTime,
+        provider: providerKey,
+      };
+    } catch (error: any) {
+      console.error(`[Runway:Agent2] Generation failed:`, error.message);
       return { success: false, error: error.message, generationTimeMs: Date.now() - startTime };
     }
   }

@@ -82,6 +82,9 @@ function formatEditorProviderName(raw: string): string {
     ['stock', 'Stock'],
     ['i2i', 'Image-to-Image'],
     ['fal.ai', 'Flux (fal.ai)'],
+    ['runway-aleph-2', 'Runway Aleph 2.0'],
+    ['runway-agent-2', 'Runway Agent 2.0'],
+    ['runway-happy-horse-1', 'Runway Happy Horse 1.0'],
     ['kling-2.6-pro', 'Kling 2.6 Pro'],
     ['kling-2.6', 'Kling 2.6'],
     ['hailuo', 'Hailuo'],
@@ -200,6 +203,10 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
   const [showEditLibrary, setShowEditLibrary] = useState(false);
   const [showMultiImageTip, setShowMultiImageTip] = useState(false);
   const [regeneratingType, setRegeneratingType] = useState<'video' | 'image' | null>(null);
+  const [showAleph2Panel, setShowAleph2Panel] = useState(false);
+  const [aleph2Prompt, setAleph2Prompt] = useState('');
+  const [aleph2Submitting, setAleph2Submitting] = useState(false);
+  const aleph2FileRef = useRef<HTMLInputElement>(null);
   const [providerMismatchOpen, setProviderMismatchOpen] = useState(false);
   const [providerMismatchInfo, setProviderMismatchInfo] = useState<{
     providerLabel: string;
@@ -1056,6 +1063,47 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
       toast({ title: "Error", description: err.message, variant: "destructive" });
     },
   });
+
+  const handleAleph2Apply = async () => {
+    if (!aleph2Prompt.trim()) {
+      toast({ title: "Direction required", description: "Describe how you want to edit the video.", variant: "destructive" });
+      return;
+    }
+    if (!videoUrl) {
+      toast({ title: "No video to edit", description: "Generate a video for this scene first.", variant: "destructive" });
+      return;
+    }
+    setAleph2Submitting(true);
+    try {
+      const res = await fetch(`/api/universal-video/${projectId}/scenes/${sceneId}/regenerate-video`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          query: aleph2Prompt,
+          provider: "runway-aleph-2",
+          generationMode: "v2v",
+          referenceVideoUrl: videoUrl,
+        }),
+      });
+      if (!res.ok) {
+        const errText = await res.text().catch(() => '');
+        let msg = `Server error ${res.status}`;
+        try { msg = JSON.parse(errText).error || msg; } catch {}
+        throw new Error(msg);
+      }
+      setShowAleph2Panel(false);
+      setAleph2Prompt('');
+      setRegeneratingType('video');
+      setRegenStartedAt(Date.now());
+      setRegenElapsed(0);
+      toast({ title: "Aleph 2.0 Editing", description: "Runway Aleph 2.0 is re-styling your clip. This typically takes 1-3 minutes." });
+    } catch (err: any) {
+      toast({ title: "Aleph 2.0 failed", description: err.message, variant: "destructive" });
+    } finally {
+      setAleph2Submitting(false);
+    }
+  };
 
   const regenVideoMutation = useMutation({
     mutationFn: async () => {
@@ -2421,8 +2469,73 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                 {(regenVideoMutation.isPending || regeneratingType === 'video') ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
                 {regeneratingType === 'video' ? 'Generating...' : regeneratingType === 'image' ? 'Working...' : 'Regenerate'}
               </button>
+              {hasVideo && (
+                <button
+                  onClick={() => setShowAleph2Panel(p => !p)}
+                  disabled={isRegenerating}
+                  title="Edit this clip with Runway Aleph 2.0 — frame-based video editing"
+                  className={`text-xs px-2.5 py-1.5 rounded-lg font-medium flex items-center gap-1 disabled:opacity-50 transition-colors border ${
+                    showAleph2Panel
+                      ? 'border-purple-500/60 bg-purple-500/15 text-purple-300'
+                      : 'border-purple-500/30 text-purple-400 hover:bg-purple-500/10 hover:border-purple-500/50'
+                  }`}
+                  data-testid="aleph2-toggle-button"
+                >
+                  <Sparkles className="w-3 h-3" />
+                  Aleph 2.0
+                </button>
+              )}
             </div>
           </div>
+          )}
+
+          {hasVideo && showAleph2Panel && (
+            <div
+              className="mt-2 rounded-xl border p-3.5 animate-in slide-in-from-top-2 duration-200"
+              style={{
+                borderColor: "rgba(124,58,237,0.35)",
+                backgroundColor: "rgba(124,58,237,0.06)",
+              }}
+            >
+              <div className="flex items-center gap-2 mb-2.5">
+                <Sparkles className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+                <span className="text-[11px] font-semibold" style={{ color: "var(--text-primary)" }}>
+                  Edit with Runway Aleph 2.0
+                </span>
+                <button
+                  onClick={() => setShowAleph2Panel(false)}
+                  className="ml-auto w-5 h-5 rounded-full flex items-center justify-center hover:bg-white/10 transition-colors"
+                  style={{ color: "var(--text-muted)" }}
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              <p className="text-[10px] mb-2.5" style={{ color: "var(--text-muted)" }}>
+                Describe how to re-style or correct this clip. Aleph 2.0 edits the entire video to match your direction.
+              </p>
+              <textarea
+                value={aleph2Prompt}
+                onChange={e => setAleph2Prompt(e.target.value)}
+                placeholder={`e.g. "Change to dark noir aesthetic", "Make it golden-hour lighting", "Shift to watercolor painting style"`}
+                rows={2}
+                className="w-full text-xs rounded-lg border px-2.5 py-2 bg-transparent resize-none outline-none focus:border-purple-500/60 transition-colors"
+                style={{
+                  borderColor: "rgba(124,58,237,0.25)",
+                  color: "var(--text-primary)",
+                }}
+              />
+              <div className="flex justify-end mt-2">
+                <button
+                  onClick={handleAleph2Apply}
+                  disabled={aleph2Submitting || !aleph2Prompt.trim() || isRegenerating}
+                  className="text-xs px-3 py-1.5 rounded-lg font-medium flex items-center gap-1.5 disabled:opacity-50 transition-colors bg-purple-600 text-white hover:bg-purple-500"
+                  data-testid="aleph2-apply-button"
+                >
+                  {aleph2Submitting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                  {aleph2Submitting ? 'Starting...' : 'Apply Aleph 2.0'}
+                </button>
+              </div>
+            </div>
           )}
         </div>
 

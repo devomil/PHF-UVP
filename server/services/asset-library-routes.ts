@@ -83,7 +83,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
 const ALL_MODES = [
   't2i', 't2v', 'i2v', 'i2i', 'v2v',
   'upscale-image', 'upscale-video', 'bg-remove-image', 'bg-remove-video',
-  'character-performance',
+  'character-performance', 'agent-2',
 ];
 
 const IMAGE_OUTPUT_MODES = ['t2i', 'i2i', 'upscale-image', 'bg-remove-image'];
@@ -734,6 +734,7 @@ const STALL_THRESHOLDS_MS: Record<string, number> = {
   'i2v': 10 * 60 * 1000,
   'v2v': 15 * 60 * 1000,
   'character-performance': 15 * 60 * 1000,
+  'agent-2': 10 * 60 * 1000,
   'upscale-image': 5 * 60 * 1000,
   'upscale-video': 10 * 60 * 1000,
   'bg-remove-image': 5 * 60 * 1000,
@@ -1084,6 +1085,29 @@ async function processAssetLibraryJob(jobId: string, userId: string, mode: strin
           });
         }
         console.log(`[AssetLibrary] V2V job ${jobId} completed`);
+        break;
+      }
+
+      case 'agent-2': {
+        const agentPrompt = job.prompt;
+        if (!agentPrompt) throw new Error('Prompt is required for Runway Agent 2.0');
+
+        const agentResult = await runwayVideoService.generateWithAgent({
+          brief: agentPrompt,
+          duration: settings.duration ?? 5,
+          aspectRatio: settings.aspectRatio || '16:9',
+        });
+
+        if (!agentResult.success || !agentResult.videoUrl) throw new Error(agentResult.error || 'Agent 2.0 generation failed');
+
+        await saveCompletedJob(jobId, agentResult.videoUrl, 'video', {
+          provider: 'runway-agent-2',
+          prompt: agentPrompt,
+          contentType: 'agent-2',
+          userId,
+          duration: String(agentResult.duration || settings.duration || 5),
+        });
+        console.log(`[AssetLibrary] Agent 2.0 job ${jobId} completed`);
         break;
       }
 
