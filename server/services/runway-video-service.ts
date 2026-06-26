@@ -216,10 +216,9 @@ class RunwayVideoService {
       };
 
       // Aleph 2.0 accepts an optional frame reference alongside the source video.
-      // If the user picked a specific frame (or the scene thumbnail), include it
-      // as `promptImage` to anchor the style transformation to that visual reference.
+      // promptImage must be an array (Runway API validation rejects a plain string).
       if (options.referenceImageUrl) {
-        body.promptImage = options.referenceImageUrl;
+        body.promptImage = [options.referenceImageUrl];
       }
 
       const response = await fetch(`${RUNWAY_API_BASE}/video_to_video`, {
