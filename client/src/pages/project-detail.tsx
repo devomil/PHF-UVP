@@ -6395,9 +6395,11 @@ export function QuickCreateAssetPanel({ projectId, project }: { projectId: strin
     const refImageSnapshot = qcAleph2RefImage;
 
     // Close the panel and show feedback IMMEDIATELY — synchronous, before any await.
+    // NOTE: qcAleph2RefImage is intentionally NOT cleared here — it is only
+    // cleared on success so that a failed request leaves the slot intact and
+    // the user can retry without having to re-upload / re-select the image.
     setShowQcAleph2Panel(false);
     setQcAleph2Prompt('');
-    setQcAleph2RefImage(null);
     visualGenStartTimeRef.current = Date.now();
     setVisualGenerating(true);
     toast({ title: "Aleph 2.0 Editing", description: "Runway Aleph 2.0 is re-styling your clip. This typically takes 1–3 minutes." });
@@ -6422,6 +6424,8 @@ export function QuickCreateAssetPanel({ projectId, project }: { projectId: strin
           try { msg = JSON.parse(errText).error || msg; } catch {}
           throw new Error(msg);
         }
+        // Request accepted — now safe to clear the reference image slot.
+        setQcAleph2RefImage(null);
         queryClient.invalidateQueries({ queryKey: ["quick-create-assets", projectId] });
       })
       .catch((err) => {
