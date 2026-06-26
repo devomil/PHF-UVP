@@ -145,6 +145,9 @@ interface GeneratedImage {
   cost?: number;
   generationType?: 'txt2img' | 'img2img';
   sourceAsset?: string;
+  /** Set when a requested provider failed and a fallback was used. Routes should
+   *  include this in their JSON response so the client can show a warning toast. */
+  providerWarning?: string;
 }
 
 class ImageGenerationService {
@@ -578,9 +581,16 @@ class ImageGenerationService {
   ): Promise<GeneratedImage> {
     const width = options.width || 1280;
     const height = options.height || 720;
-    
+    const fluxFallback = IMAGE_PROVIDERS['flux-1.1-pro'] || IMAGE_PROVIDERS['flux'];
+
+    const fallbackWithWarning = async (warning: string): Promise<GeneratedImage> => {
+      console.warn(`[ImageGen] MidJourney fallback: ${warning}`);
+      const fallbackResult = await this.generateWithFlux(options, fluxFallback);
+      return { ...fallbackResult, providerWarning: `MidJourney unavailable — ${warning}. Generated with Flux 1.1 Pro instead.` };
+    };
+
     if (!legNextClient.isConfigured()) {
-      throw new Error('MidJourney generation requires PIAPI_API_KEY to be configured. Please contact your administrator.');
+      return fallbackWithWarning('PIAPI_API_KEY not configured');
     }
     
     try {
@@ -597,8 +607,7 @@ class ImageGenerationService {
       
       if (!result.success || !result.imageUrl) {
         const reason = result.error || 'Unknown error from PiAPI MidJourney';
-        console.error(`[ImageGen] MidJourney failed: ${reason}`);
-        throw new Error(`MidJourney image generation failed: ${reason}`);
+        return fallbackWithWarning(reason);
       }
       
       console.log(`[ImageGen] MidJourney success: ${result.imageUrl.substring(0, 50)}...`);
@@ -613,11 +622,7 @@ class ImageGenerationService {
       };
       
     } catch (error: any) {
-      // Re-throw with a clear label so the route handler can return a proper
-      // error response that the client's error-toast handler will display.
-      const message = error.message?.startsWith('MidJourney') ? error.message : `MidJourney error: ${error.message}`;
-      console.error('[ImageGen] MidJourney generation error:', message);
-      throw new Error(message);
+      return fallbackWithWarning(error.message);
     }
   }
   

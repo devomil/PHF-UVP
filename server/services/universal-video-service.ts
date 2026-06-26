@@ -1214,6 +1214,14 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
           ...(recraftTextLayout ? { textLayout: recraftTextLayout } : {}),
         });
         if (smartResult?.url) {
+          if (smartResult.providerWarning) {
+            this.addNotification({
+              type: 'warning',
+              service: selected,
+              message: smartResult.providerWarning,
+              fallbackUsed: smartResult.provider,
+            });
+          }
           return {
             url: smartResult.url,
             source: smartResult.provider || selected,
