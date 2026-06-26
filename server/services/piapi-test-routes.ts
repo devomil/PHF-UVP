@@ -484,24 +484,29 @@ router.post('/api/piapi-tests/submit/:testId', async (req: Request, res: Respons
           bodyControl: test.input.body_control !== false,
         });
       } else {
-        result = await runwayVideoService.generateVideo({
+        // Non-blocking: submit only and return taskId so the client can poll.
+        // Blocking the HTTP connection for the full generation (up to 10 min) causes
+        // the Replit proxy to time out and return HTML, breaking the JSON parse.
+        const submitResult = await runwayVideoService.submitJob({
           prompt: test.input.prompt,
           duration: test.input.duration || 5,
           aspectRatio: test.input.aspect_ratio === '9:16' ? '9:16' : test.input.aspect_ratio === '1:1' ? '1:1' : '16:9',
           model: test.id,
         });
+        if (submitResult.error) {
+          return res.json({
+            id: test.id, name: test.name, category: test.category,
+            status: 'fail', responseTime: Date.now() - startTime,
+            error: submitResult.error,
+          } as TestResult);
+        }
+        return res.json({
+          id: test.id, name: test.name, category: test.category,
+          status: 'pending',
+          responseTime: Date.now() - startTime,
+          taskId: submitResult.taskId,
+        });
       }
-
-      return res.json({
-        id: test.id,
-        name: test.name,
-        category: test.category,
-        status: result.success ? 'pass' : 'fail',
-        responseTime: result.generationTimeMs || (Date.now() - startTime),
-        taskId: result.taskId,
-        outputUrl: result.videoUrl,
-        error: result.error,
-      } as TestResult);
     }
 
     if (test.endpoint === 'recraft-direct') {
@@ -698,6 +703,24 @@ router.get('/api/piapi-tests/poll/:taskId', async (req: Request, res: Response) 
 
   const pollTaskId = req.params.taskId as string;
   const testId = req.query.testId as string | undefined;
+
+  // Runway tests use Runway's own task status API — not PiAPI's polling endpoint.
+  if (testId) {
+    const test = PIAPI_TEST_DEFINITIONS.find(t => t.id === testId);
+    if (test?.taskType?.startsWith('runway-direct')) {
+      try {
+        const runwayStatus = await runwayVideoService.getTaskStatus(pollTaskId);
+        return res.json({
+          taskId: pollTaskId,
+          status: runwayStatus.status,
+          outputUrl: runwayStatus.videoUrl || null,
+          error: runwayStatus.error || null,
+        });
+      } catch (error: any) {
+        return res.json({ status: 'error', error: error.message });
+      }
+    }
+  }
 
   const FALLBACK_POLL_ENDPOINTS: Record<string, string> = {
     'luma': '/api/luma/v1/video',

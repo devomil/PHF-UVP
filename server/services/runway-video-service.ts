@@ -408,6 +408,73 @@ class RunwayVideoService {
     }
   }
 
+  async submitJob(options: {
+    prompt: string;
+    duration?: number;
+    aspectRatio?: string;
+    imageUrl?: string;
+    model?: string;
+  }): Promise<{ taskId?: string; error?: string }> {
+    if (!this.isAvailable()) return { error: 'RUNWAY_API_KEY not configured' };
+    this.apiKey = process.env.RUNWAY_API_KEY!;
+    const providerKey = options.model || 'runway';
+    const apiModel = this.resolveApiModel(providerKey);
+    const clampedDuration = Math.round(Math.min(options.duration || 5, 10));
+    const ratio = options.aspectRatio === '9:16' ? '720:1280' : '1280:720';
+    const truncatedPrompt = options.prompt.length > 1000 ? options.prompt.substring(0, 997) + '...' : options.prompt;
+    let endpoint: string;
+    let body: any;
+    if (options.imageUrl) {
+      endpoint = `${RUNWAY_API_BASE}/image_to_video`;
+      body = { model: apiModel, promptImage: options.imageUrl, promptText: truncatedPrompt, duration: clampedDuration, ratio };
+    } else {
+      endpoint = `${RUNWAY_API_BASE}/text_to_video`;
+      body = { model: apiModel, promptText: truncatedPrompt, duration: clampedDuration, ratio };
+    }
+    console.log(`[Runway:submitJob] Submitting — provider: ${providerKey}, model: ${apiModel}`);
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: this.getHeaders(apiModel),
+      body: JSON.stringify(body),
+    });
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`[Runway:submitJob] API error: ${response.status} — model=${apiModel} body=${errorText}`);
+      return { error: `Runway API error: ${response.status} — ${errorText.substring(0, 200)}` };
+    }
+    const data = await response.json();
+    const taskId = data.id;
+    if (!taskId) return { error: 'No task ID in Runway response' };
+    console.log(`[Runway:submitJob] Task created: ${taskId}`);
+    return { taskId };
+  }
+
+  async getTaskStatus(taskId: string): Promise<{ status: string; videoUrl?: string; error?: string }> {
+    if (!this.isAvailable()) return { status: 'error', error: 'RUNWAY_API_KEY not configured' };
+    this.apiKey = process.env.RUNWAY_API_KEY!;
+    try {
+      const response = await fetch(`${RUNWAY_API_BASE}/tasks/${taskId}`, {
+        headers: { 'Authorization': `Bearer ${this.apiKey}`, 'X-Runway-Version': RUNWAY_DEFAULT_API_VERSION },
+      });
+      if (!response.ok) {
+        const errText = await response.text().catch(() => '');
+        return { status: 'error', error: `Runway tasks API: ${response.status} — ${errText.substring(0, 100)}` };
+      }
+      const data = await response.json();
+      console.log(`[Runway:getTaskStatus] Task ${taskId}: ${data.status}`);
+      if (data.status === 'SUCCEEDED') {
+        const videoUrl = data.output?.[0] || data.artifacts?.[0]?.url;
+        return { status: 'succeeded', videoUrl };
+      }
+      if (data.status === 'FAILED') {
+        return { status: 'failed', error: data.failure || 'Generation failed' };
+      }
+      return { status: 'processing' };
+    } catch (error: any) {
+      return { status: 'error', error: error.message };
+    }
+  }
+
   private async pollForCompletion(taskId: string): Promise<{ success: boolean; videoUrl?: string; error?: string }> {
     const maxAttempts = 120;
     const pollInterval = 5000;
