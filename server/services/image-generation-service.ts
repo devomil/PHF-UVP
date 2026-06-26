@@ -1175,7 +1175,33 @@ class ImageGenerationService {
 
     const width = options.width || 1024;
     const height = options.height || 1024;
-    const size = width === height ? '1024x1024' : (width > height ? '1536x1024' : '1024x1536');
+
+    const isDallE3 = provider.id === 'dalle3' || provider.modelId === 'dall-e-3';
+
+    let size: string;
+    let requestBody: Record<string, unknown>;
+
+    if (isDallE3) {
+      size = width === height ? '1024x1024' : (width > height ? '1792x1024' : '1024x1792');
+      requestBody = {
+        model: provider.modelId,
+        prompt: options.prompt,
+        n: 1,
+        size,
+        quality: 'standard',
+        response_format: 'url',
+      };
+    } else {
+      size = width === height ? '1024x1024' : (width > height ? '1536x1024' : '1024x1536');
+      requestBody = {
+        model: provider.modelId,
+        prompt: options.prompt,
+        n: 1,
+        size,
+        quality: 'high',
+        output_format: 'png',
+      };
+    }
 
     console.log(`[ImageGen] ${provider.name} (${provider.modelId}): Generating (size=${size})`);
 
@@ -1186,14 +1212,7 @@ class ImageGenerationService {
           'Authorization': `Bearer ${openaiKey}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          model: provider.modelId,
-          prompt: options.prompt,
-          n: 1,
-          size,
-          quality: 'high',
-          output_format: 'png',
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       if (!response.ok) {
