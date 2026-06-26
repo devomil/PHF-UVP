@@ -845,6 +845,28 @@ export const VIDEO_PROVIDERS: Record<string, VideoProvider> = {
       hint: 'Use @image1, @image2, etc. in your prompt to reference each image. Example: "@image1 transforms into @image2" for morphing effects.',
     },
   },
+  'seedance-2-lr': {
+    id: 'seedance-2-lr',
+    name: 'seedance-2-lr',
+    displayName: 'Seedance 2 Less Restricted',
+    costPerSecond: 0.035,
+    maxDuration: 15,
+    family: 'seedance',
+    tier: 'standard',
+    specialization: 'general',
+    strengths: ['Full-face support', 'Less content restrictions', '1080p output', '15s duration', 'Multi-image references'],
+    weaknesses: [],
+    bestFor: ['general', 'character', 'face', 'portrait', 'commercial'],
+    specialties: ['Full-face generation', 'Character close-ups', 'Multi-image @imageN references'],
+    limitations: ['Less restrictive content filter — use responsibly'],
+    visualCategory: ['general', 'human_subjects', 'cinematic'],
+    qualityNotes: 'Seedance 2 Less Restriction variant — same quality as Seedance 2 with expanded face support and reduced content filtering',
+    multiImageSupport: {
+      maxImages: 4,
+      promptSyntax: '@imageN',
+      hint: 'Use @image1, @image2, etc. in your prompt to reference each image.',
+    },
+  },
 
   // Remotion (Motion Graphics)
   'remotion-motion-graphics': {
@@ -979,6 +1001,24 @@ export const IMAGE_PROVIDERS: Record<string, ImageProvider> = {
     costPerImage: 0.04,
     strengths: ['Strong prompt understanding', 'Creative interpretation', 'Reliable quality', 'Diverse subjects'],
     bestFor: ['general', 'creative', 'concept', 'illustration'],
+  },
+
+  'gpt-image-2': {
+    id: 'gpt-image-2',
+    name: 'gpt-image-2',
+    displayName: 'GPT-Image-2',
+    costPerImage: 0.04,
+    strengths: ['Superior prompt adherence', 'High-detail output', 'Reliable quality', 'Latest OpenAI model'],
+    bestFor: ['general', 'creative', 'concept', 'illustration', 'premium'],
+  },
+
+  'seedream-5-lite': {
+    id: 'seedream-5-lite',
+    name: 'seedream-5-lite',
+    displayName: 'Seedream 5 Lite',
+    costPerImage: 0.04,
+    strengths: ['High aesthetic quality', 'Strong composition', 'Lifestyle scenes', 'Creative content'],
+    bestFor: ['lifestyle', 'creative', 'aesthetic', 'artistic', 'natural-scene'],
   },
 
   'flux-kontext': {

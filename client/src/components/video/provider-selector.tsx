@@ -308,6 +308,17 @@ export const VIDEO_PROVIDERS: ProviderInfo[] = [
     supportsI2V: true,
     supportsStyle: false,
   },
+  {
+    id: 'seedance-2-lr',
+    name: 'Seedance 2 Less Restricted',
+    description: 'Full-face support, fewer content restrictions',
+    bestFor: ['face', 'portrait', 'character', 'commercial'],
+    icon: '🔓',
+    color: 'orange',
+    supportsI2I: false,
+    supportsI2V: true,
+    supportsStyle: false,
+  },
 ];
 
 // Display metadata for image providers — icon, color, and bestFor keywords.
@@ -321,6 +332,8 @@ const IMAGE_PROVIDER_DISPLAY: Record<string, { icon: string; color: string; best
   ideogram:    { icon: '✏️', color: 'teal',   bestFor: ['text', 'logo', 'typography', 'branding'] },
   midjourney:  { icon: '🎭', color: 'pink',   bestFor: ['artistic', 'stylized', 'creative', 'aesthetic'] },
   dalle3:      { icon: '🌈', color: 'green',  bestFor: ['diverse', 'text', 'complex'] },
+  'gpt-image-2':    { icon: '✨', color: 'blue',   bestFor: ['premium', 'creative', 'complex', 'detailed'] },
+  'seedream-5-lite': { icon: '🌸', color: 'rose',   bestFor: ['lifestyle', 'aesthetic', 'artistic', 'natural'] },
 };
 
 // IMAGE_PROVIDERS is derived from IMAGE_PROVIDER_CATALOG (showInImageDropdown:

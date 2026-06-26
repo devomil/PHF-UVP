@@ -80,6 +80,21 @@ export const IMAGE_PROVIDERS: Record<string, ImageProvider> = {
     costPerImage: 0.04,
     apiProvider: 'openai',
   },
+  'gpt-image-2': {
+    id: 'gpt-image-2',
+    name: 'GPT-Image-2',
+    modelId: 'gpt-image-2',
+    costPerImage: 0.04,
+    apiProvider: 'openai',
+  },
+  'seedream-5-lite': {
+    id: 'seedream-5-lite',
+    name: 'Seedream 5 Lite',
+    modelId: 'bytedance/seedream-v5.0-lite',
+    costPerImage: 0.04,
+    apiProvider: 'piapi',
+    defaultParams: { taskType: 'txt2img' },
+  },
   'nano-banana-pro': {
     id: 'nano-banana-pro',
     name: 'Nano Banana Pro',
@@ -139,6 +154,11 @@ export function getImageProviderForStyle(style: ImageStyle, qualityTier: string)
 export function isLegNextProvider(providerId: string): boolean {
   const provider = IMAGE_PROVIDERS[providerId];
   return provider?.apiProvider === 'legnext';
+}
+
+export function isOpenAIProvider(providerId: string): boolean {
+  const provider = IMAGE_PROVIDERS[providerId];
+  return provider?.apiProvider === 'openai';
 }
 
 const LEGACY_PROVIDER_ID_MAP: Record<string, string> = {

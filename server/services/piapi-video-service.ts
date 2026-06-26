@@ -662,6 +662,27 @@ class PiAPIVideoService {
           },
         };
       }
+
+      case 'seedance-2-lr': {
+        const isPeakHours = this.isSeedancePeakHours();
+        if (isPeakHours) {
+          console.warn(`[PiAPI T2V] ⚠ Seedance 2 Less Restriction request during peak hours (09:00-15:00 GMT) — expect longer queue times`);
+        }
+        const wantsAudio = options.generateNativeAudio === true;
+        console.log(`[PiAPI T2V] Using Seedance 2 Less Restriction (text_to_video mode, less_restriction=true, generate_audio=${wantsAudio})`);
+        return {
+          model: 'seedance',
+          task_type: 'seedance-2',
+          input: {
+            prompt: safePrompt,
+            mode: 'text_to_video',
+            duration: clampSeedance2Duration(options.duration),
+            aspect_ratio: options.aspectRatio || '16:9',
+            less_restriction: true,
+            generate_audio: wantsAudio,
+          },
+        };
+      }
       
       // Wan Family (Alibaba - via Hailuo API)
       case 'wan-2.1':
@@ -952,6 +973,7 @@ class PiAPIVideoService {
       'seedance-1.0': { modelId: 'hailuo', maxDuration: 6 },
       'seedance-2.0': { modelId: 'seedance', maxDuration: 15 },
       'seedance-2.0-fast': { modelId: 'seedance', maxDuration: 15 },
+      'seedance-2-lr': { modelId: 'seedance', maxDuration: 15 },
       // Wan Family (Alibaba via PiAPI)
       'wan-2.1': { modelId: 'Qubico/wanx', maxDuration: 10 },
       'wan-2.6': { modelId: 'Wan', maxDuration: 5 },
@@ -1394,8 +1416,9 @@ class PiAPIVideoService {
     }
     
     // Seedance 2 - uses @imageN syntax in prompts with image_urls array
-    if (options.model === 'seedance-2.0' || options.model === 'seedance-2.0-fast') {
-      const taskType = options.model === 'seedance-2.0' ? 'seedance-2' : 'seedance-2-fast';
+    if (options.model === 'seedance-2.0' || options.model === 'seedance-2.0-fast' || options.model === 'seedance-2-lr') {
+      const taskType = (options.model === 'seedance-2.0' || options.model === 'seedance-2-lr') ? 'seedance-2' : 'seedance-2-fast';
+      const isLessRestriction = options.model === 'seedance-2-lr';
       const useFirstLastFrames = options.i2vSettings?.useFirstLastFrames === true;
       const endFrameUrl = options.i2vSettings?.endFrameUrl;
 
@@ -1433,6 +1456,7 @@ class PiAPIVideoService {
             image_urls: flfImageUrls,
             duration: clampSeedance2Duration(options.duration),
             aspect_ratio: 'auto',
+            ...(isLessRestriction ? { less_restriction: true } : {}),
             generate_audio: wantsAudio,
           },
         };
@@ -1491,6 +1515,7 @@ class PiAPIVideoService {
           // first_last_frames inherits aspect from the anchor image; omni_reference
           // accepts an explicit aspect_ratio.
           aspect_ratio: seedanceMode === 'first_last_frames' ? 'auto' : (options.aspectRatio || '16:9'),
+          ...(isLessRestriction ? { less_restriction: true } : {}),
           generate_audio: wantsAudioOmni,
         },
       };

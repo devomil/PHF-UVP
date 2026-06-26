@@ -296,6 +296,14 @@ export const AI_VIDEO_PROVIDERS: Record<string, AIVideoProviderConfig> = {
     capabilities: { t2v: true, i2v: true, v2v: false },
     supportedAspectRatios: ['16:9', '9:16', '1:1'],
   },
+  'seedance-2-lr': {
+    modelId: 'seedance',
+    apiProvider: 'piapi',
+    costPerSecond: 0.035,
+    maxDuration: 15,
+    capabilities: { t2v: true, i2v: true, v2v: false },
+    supportedAspectRatios: ['16:9', '9:16', '1:1'],
+  },
   'pika': {
     modelId: 'pika',
     apiProvider: 'piapi',

@@ -122,6 +122,9 @@
     "seedance-2.0-fast": {
       "costPerSecond": 0.02
     },
+    "seedance-2-lr": {
+      "costPerSecond": 0.035
+    },
     "remotion-motion-graphics": {
       "costPerSecond": 0.001
     }
@@ -136,9 +139,6 @@
     "falai": {
       "costPerImage": 0.02
     },
-    "stability": {
-      "costPerImage": 0.02
-    },
     "midjourney": {
       "costPerImage": 0.05
     },
@@ -148,7 +148,16 @@
     "nano-banana-pro": {
       "costPerImage": 0.04
     },
+    "stability": {
+      "costPerImage": 0.02
+    },
     "dalle3": {
+      "costPerImage": 0.04
+    },
+    "gpt-image-2": {
+      "costPerImage": 0.04
+    },
+    "seedream-5-lite": {
       "costPerImage": 0.04
     },
     "flux-kontext": {
