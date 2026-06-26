@@ -6356,7 +6356,7 @@ export function QuickCreateAssetPanel({ projectId, project }: { projectId: strin
   const isI2V = assetsQuery.data?.generationInfo?.sceneType === "i2v";
   const allPresets = getAllVisualArtPresets();
 
-  const handleQcAleph2Apply = async () => {
+  const handleQcAleph2Apply = () => {
     if (!qcAleph2Prompt.trim()) {
       toast({ title: "Direction required", description: "Describe how you want to edit the video.", variant: "destructive" });
       return;
@@ -6368,36 +6368,40 @@ export function QuickCreateAssetPanel({ projectId, project }: { projectId: strin
       toast({ title: "No video to edit", description: "Generate a video first.", variant: "destructive" });
       return;
     }
-    setQcAleph2Submitting(true);
-    try {
-      const res = await fetch(`/api/universal-video/${projectId}/scenes/quick-create/regenerate-video`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          query: qcAleph2Prompt,
-          provider: "runway-aleph-2",
-          generationMode: "v2v",
-          referenceVideoUrl: videoUrl,
-        }),
+    const promptSnapshot = qcAleph2Prompt;
+
+    // Close the panel and show feedback IMMEDIATELY — synchronous, before any await.
+    setShowQcAleph2Panel(false);
+    setQcAleph2Prompt('');
+    visualGenStartTimeRef.current = Date.now();
+    setVisualGenerating(true);
+    toast({ title: "Aleph 2.0 Editing", description: "Runway Aleph 2.0 is re-styling your clip. This typically takes 1–3 minutes." });
+
+    // Fire-and-forget the API call in the background.
+    fetch(`/api/universal-video/${projectId}/scenes/quick-create/regenerate-video`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        query: promptSnapshot,
+        provider: "runway-aleph-2",
+        generationMode: "v2v",
+        referenceVideoUrl: videoUrl,
+      }),
+    })
+      .then(async (res) => {
+        if (!res.ok) {
+          const errText = await res.text().catch(() => '');
+          let msg = `Server error ${res.status}`;
+          try { msg = JSON.parse(errText).error || msg; } catch {}
+          throw new Error(msg);
+        }
+        queryClient.invalidateQueries({ queryKey: ["quick-create-assets", projectId] });
+      })
+      .catch((err) => {
+        toast({ title: "Aleph 2.0 failed", description: err.message, variant: "destructive" });
+        setVisualGenerating(false);
       });
-      if (!res.ok) {
-        const errText = await res.text().catch(() => '');
-        let msg = `Server error ${res.status}`;
-        try { msg = JSON.parse(errText).error || msg; } catch {}
-        throw new Error(msg);
-      }
-      setShowQcAleph2Panel(false);
-      setQcAleph2Prompt('');
-      visualGenStartTimeRef.current = Date.now();
-      setVisualGenerating(true);
-      queryClient.invalidateQueries({ queryKey: ["quick-create-assets", projectId] });
-      toast({ title: "Aleph 2.0 Editing", description: "Runway Aleph 2.0 is re-styling your clip. This typically takes 1–3 minutes." });
-    } catch (err: any) {
-      toast({ title: "Aleph 2.0 failed", description: err.message, variant: "destructive" });
-    } finally {
-      setQcAleph2Submitting(false);
-    }
   };
 
   const generateVisualMutation = useMutation({
