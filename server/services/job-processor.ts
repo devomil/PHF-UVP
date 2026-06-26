@@ -1,6 +1,6 @@
 import { db } from "../db";
 import { videoGenerationJobs, universalVideoProjects } from "../../shared/schema";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { aiVideoService } from "./ai-video-service";
 import { imageGenerationService } from "./image-generation-service";
 import { assetUrlResolver } from "./asset-url-resolver";
@@ -13,7 +13,34 @@ export async function recoverStuckJobs() {
       .from(videoGenerationJobs)
       .where(eq(videoGenerationJobs.status, "processing"));
 
+    if (stuckJobs.length === 0) return;
+
+    // Batch-fetch the projects for all stuck jobs so we can identify Quick Create
+    // projects in one query rather than N individual lookups.
+    const uniqueProjectIds = [...new Set(stuckJobs.map(j => j.projectId))];
+    const projects = await db
+      .select({ projectId: universalVideoProjects.projectId, outputFormat: universalVideoProjects.outputFormat })
+      .from(universalVideoProjects)
+      .where(inArray(universalVideoProjects.projectId, uniqueProjectIds));
+
+    // Quick Create projects are managed directly by processVideoJob (called from the
+    // Phase9B-Async route handler immediately after job creation).  The recovery loop
+    // must NOT re-trigger them — Runway Aleph 2.0 takes ~4-5 minutes, which exceeds
+    // the 2-minute stall threshold, causing a duplicate render and double credit charge.
+    const qcProjectIds = new Set(
+      projects
+        .filter(p => (p.outputFormat as any)?.platform === 'quick-create')
+        .map(p => p.projectId)
+    );
+
+    let checked = 0;
     for (const job of stuckJobs) {
+      // Belt-and-suspenders: also skip on sceneId even if project lookup missed it.
+      if (qcProjectIds.has(job.projectId) || job.sceneId === 'quick-create') {
+        console.log(`[JobProcessor] Skipping stall recovery for Quick Create job ${job.jobId} (managed by JobProcessor directly)`);
+        continue;
+      }
+
       const stuckMinutes = (Date.now() - new Date(job.updatedAt || job.createdAt || Date.now()).getTime()) / 60000;
       if (stuckMinutes > 2) {
         console.log(`[JobProcessor] Recovering stuck job ${job.jobId} (stuck ${Math.round(stuckMinutes)}min, provider: ${job.provider})`);
@@ -24,10 +51,11 @@ export async function recoverStuckJobs() {
         processVideoJob(job.jobId).catch((err) => {
           console.error(`[JobProcessor] Recovery retry failed for ${job.jobId}:`, err.message);
         });
+        checked++;
       }
     }
     if (stuckJobs.length > 0) {
-      console.log(`[JobProcessor] Checked ${stuckJobs.length} processing jobs for recovery`);
+      console.log(`[JobProcessor] Checked ${stuckJobs.length} processing jobs for recovery (recovered: ${checked}, skipped QC: ${stuckJobs.length - checked})`);
     }
   } catch (err: any) {
     console.error("[JobProcessor] Stuck job recovery error:", err.message);
