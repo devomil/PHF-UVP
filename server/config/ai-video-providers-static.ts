@@ -51,6 +51,7 @@ export const PROVIDER_TEST_ID_MAP: Record<string, string[]> = {
   'seedance-1.0': ['seedance-1.0', 'seedance-pro'],
   'seedance-2.0': ['seedance-2'],
   'seedance-2.0-fast': ['seedance-2-fast'],
+  'seedance-2-lr': ['seedance-2'],
   'sora-2': ['sora-2'],
   'sora-2-pro': ['sora-2-pro'],
   'hunyuan': ['hunyuan'],
