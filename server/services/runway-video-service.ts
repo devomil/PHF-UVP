@@ -215,10 +215,14 @@ class RunwayVideoService {
         model: apiModel,
       };
 
-      // Aleph 2.0 accepts an optional frame reference alongside the source video.
-      // promptImage must be an array (Runway API validation rejects a plain string).
-      if (options.referenceImageUrl) {
-        body.promptImage = [options.referenceImageUrl];
+      // Aleph 2.0 accepts an optional still-frame reference alongside the source video.
+      // promptImage must be an array of objects: [{ uri: "..." }]
+      // Skip if referenceImageUrl is actually a video (mp4/webm/mov) — the V2V
+      // pipeline sometimes falls back to brandAssetUrl which is an mp4, not an image.
+      const refUrl = options.referenceImageUrl;
+      const isImageRef = refUrl && !/\.(mp4|webm|mov|avi|mkv)(\?|$)/i.test(refUrl);
+      if (isImageRef) {
+        body.promptImage = [{ uri: refUrl }];
       }
 
       const response = await fetch(`${RUNWAY_API_BASE}/video_to_video`, {
