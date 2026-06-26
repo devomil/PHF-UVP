@@ -17,12 +17,20 @@ const RUNWAY_MODEL_MAP: Record<string, string> = {
   'runway-gen4-aleph':   'gen4.5',
   'runway-4.5':          'gen4.5',
   'runway-act-two':      'act_two',
-  // Aleph 2.0 uses Gen-4 engine (gen4.5) for both T2V and V2V
+  // Aleph 2.0 uses Gen-4 engine (gen4.5) for T2V
   'runway-aleph-2':      'gen4.5',
   // Agent 2.0 not yet available on Runway text_to_video endpoint; placeholder uses Gen-4
   'runway-agent-2':      'gen4.5',
   // Happy Horse 1.0 — correct API model ID confirmed from Runway API validation response
   'runway-happy-horse-1':'happyhorse_1_0',
+};
+
+// The /video_to_video endpoint uses a different model ID namespace than /text_to_video.
+// These IDs are confirmed from the Runway V2V API validation error response.
+const RUNWAY_V2V_MODEL_MAP: Record<string, string> = {
+  'runway-gen4-aleph':   'gen4_aleph',
+  'runway-aleph-2':      'aleph2',
+  'runway-agent-2':      'aleph2_alpha',
 };
 
 const RUNWAY_COST_PER_SECOND: Record<string, number> = {
@@ -190,10 +198,11 @@ class RunwayVideoService {
     this.apiKey = process.env.RUNWAY_API_KEY!;
     const startTime = Date.now();
     const providerKey = options.model || 'runway-gen4-aleph';
-    const apiModel = this.resolveApiModel(providerKey);
+    // V2V endpoint uses a different model ID namespace — prefer V2V map, fall back to T2V map.
+    const apiModel = RUNWAY_V2V_MODEL_MAP[providerKey] || this.resolveApiModel(providerKey);
 
     try {
-      console.log(`[Runway:V2V] Starting video-to-video with model: ${apiModel}`);
+      console.log(`[Runway:V2V] Starting video-to-video with model: ${apiModel} (provider: ${providerKey})`);
       console.log(`[Runway:V2V] Source video: ${options.videoUrl.substring(0, 80)}...`);
       console.log(`[Runway:V2V] Prompt: ${options.prompt.substring(0, 100)}...`);
       if (options.referenceImageUrl) {
