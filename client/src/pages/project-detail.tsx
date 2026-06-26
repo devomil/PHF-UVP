@@ -6335,6 +6335,14 @@ export function QuickCreateAssetPanel({ projectId, project }: { projectId: strin
   }, [assetsQuery.data]);
 
   const visualGenStartTimeRef = useRef<number>(0);
+  // Tracks the last URL we know is "completed" — survives the job-processor's
+  // transient null while a new generation is in-flight.
+  const lastCompletedVideoUrlRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (assetsQuery.data?.visual?.status === "completed" && assetsQuery.data.visual?.url) {
+      lastCompletedVideoUrlRef.current = assetsQuery.data.visual.url;
+    }
+  }, [assetsQuery.data]);
   useEffect(() => {
     if (visualGenerating && assetsQuery.data) {
       const vs = assetsQuery.data.visual?.status;
@@ -6353,7 +6361,9 @@ export function QuickCreateAssetPanel({ projectId, project }: { projectId: strin
       toast({ title: "Direction required", description: "Describe how you want to edit the video.", variant: "destructive" });
       return;
     }
-    const videoUrl = assetsQuery.data?.visual?.url;
+    // Use the cached last-completed URL so a transient null from job-processor
+    // (which clears visual.url while generating) doesn't block the apply.
+    const videoUrl = assetsQuery.data?.visual?.url || lastCompletedVideoUrlRef.current;
     if (!videoUrl) {
       toast({ title: "No video to edit", description: "Generate a video first.", variant: "destructive" });
       return;
@@ -6379,6 +6389,7 @@ export function QuickCreateAssetPanel({ projectId, project }: { projectId: strin
       }
       setShowQcAleph2Panel(false);
       setQcAleph2Prompt('');
+      visualGenStartTimeRef.current = Date.now();
       setVisualGenerating(true);
       queryClient.invalidateQueries({ queryKey: ["quick-create-assets", projectId] });
       toast({ title: "Aleph 2.0 Editing", description: "Runway Aleph 2.0 is re-styling your clip. This typically takes 1–3 minutes." });
@@ -6801,7 +6812,7 @@ export function QuickCreateAssetPanel({ projectId, project }: { projectId: strin
                 )}
               </div>
             )}
-            {project.mediaMode !== "image" && assets.visual?.status === "completed" && assets.visual?.url && (
+            {project.mediaMode !== "image" && (assets.visual?.status === "completed" || visualGenerating || assets.visual?.status === "queued" || assets.visual?.status === "generating") && (assets.visual?.url || lastCompletedVideoUrlRef.current) && (
               <div className="mb-3">
                 <button
                   onClick={() => setShowQcAleph2Panel(p => !p)}
