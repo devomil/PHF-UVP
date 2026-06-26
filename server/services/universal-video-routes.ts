@@ -7395,7 +7395,23 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, req
     }
     
     // Find the scene to get the visual direction/prompt FIRST (needed for job validation)
-    const scene = projectData.scenes.find((s: Scene) => s.id === sceneId);
+    let scene = projectData.scenes.find((s: Scene) => s.id === sceneId);
+    // Quick Create projects store their asset in project-level JSONB, not in the
+    // scenes array (which is empty). Synthesize a virtual scene so Phase9B can
+    // proceed without 404-ing on every Aleph 2.0 / re-generate request.
+    if (!scene && sceneId === 'quick-create') {
+      const qcData = (projectData as any).assets?.quickCreate || {};
+      const qcVisualUrl = qcData.visual?.url || (projectData as any).outputUrl || null;
+      scene = {
+        id: 'quick-create',
+        type: 'content',
+        visualDirection: query || qcData.visual?.prompt || '',
+        brandAssetUrl: qcVisualUrl,
+        duration: (projectData as any).settings?.duration || (projectData as any).outputFormat?.duration || 6,
+        assets: { videoProvider: qcData.visual?.provider || undefined },
+      } as unknown as Scene;
+      console.log(`[Phase9B-Async] Synthesized virtual QC scene (no scenes array). brandAssetUrl=${qcVisualUrl?.substring(0, 60) || 'none'}`);
+    }
     if (!scene) {
       return res.status(404).json({ success: false, error: 'Scene not found' });
     }
