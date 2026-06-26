@@ -580,19 +580,11 @@ class ImageGenerationService {
     const height = options.height || 720;
     
     if (!legNextClient.isConfigured()) {
-      console.log('[ImageGen] LegNext not configured, falling back to Flux');
-      return this.generateWithFlux(options, IMAGE_PROVIDERS['flux-1.1-pro'] || IMAGE_PROVIDERS['flux']);
-    }
-    
-    const hasCredits = await legNextClient.hasAvailableCredits(4);
-    if (!hasCredits) {
-      console.log('[ImageGen] LegNext credits low, falling back to Flux');
-      return this.generateWithFlux(options, IMAGE_PROVIDERS['flux-1.1-pro'] || IMAGE_PROVIDERS['flux']);
+      throw new Error('MidJourney generation requires PIAPI_API_KEY to be configured. Please contact your administrator.');
     }
     
     try {
       const enhancedPrompt = this.enhancePromptForMidjourney(options.prompt, options.style);
-      
       const aspectRatio = options.aspectRatio || this.calculateAspectRatio(width, height);
       
       const result = await legNextClient.generateImage({
@@ -604,11 +596,12 @@ class ImageGenerationService {
       });
       
       if (!result.success || !result.imageUrl) {
-        console.error(`[ImageGen] LegNext failed: ${result.error}, falling back`);
-        return this.generateWithFlux(options, IMAGE_PROVIDERS['flux-1.1-pro'] || IMAGE_PROVIDERS['flux']);
+        const reason = result.error || 'Unknown error from PiAPI MidJourney';
+        console.error(`[ImageGen] MidJourney failed: ${reason}`);
+        throw new Error(`MidJourney image generation failed: ${reason}`);
       }
       
-      console.log(`[ImageGen] LegNext success: ${result.imageUrl.substring(0, 50)}...`);
+      console.log(`[ImageGen] MidJourney success: ${result.imageUrl.substring(0, 50)}...`);
       
       return {
         url: result.imageUrl,
@@ -620,8 +613,11 @@ class ImageGenerationService {
       };
       
     } catch (error: any) {
-      console.error('[ImageGen] LegNext error:', error.message);
-      return this.generateWithFlux(options, IMAGE_PROVIDERS['flux-1.1-pro'] || IMAGE_PROVIDERS['flux']);
+      // Re-throw with a clear label so the route handler can return a proper
+      // error response that the client's error-toast handler will display.
+      const message = error.message?.startsWith('MidJourney') ? error.message : `MidJourney error: ${error.message}`;
+      console.error('[ImageGen] MidJourney generation error:', message);
+      throw new Error(message);
     }
   }
   
