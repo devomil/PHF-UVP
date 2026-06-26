@@ -505,6 +505,7 @@ router.post('/api/piapi-tests/submit/:testId', async (req: Request, res: Respons
           status: 'pending',
           responseTime: Date.now() - startTime,
           taskId: submitResult.taskId,
+          timeoutMs: test.timeoutMs,
         });
       }
     }

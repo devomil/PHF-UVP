@@ -401,7 +401,7 @@ export default function ApiTesting() {
             status: "polling",
             taskId: data.taskId,
           });
-          pollTask(testId, data.taskId, startTime, testTimeout);
+          pollTask(testId, data.taskId, startTime, data.timeoutMs || testTimeout);
         } else {
           const result = {
             status: "fail" as const,
