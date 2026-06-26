@@ -851,6 +851,7 @@ export const IMAGE_PROVIDER_CATALOG: ProviderCatalogEntry[] = [
     aspectRatios: ['16:9', '9:16', '1:1'],
     highlight: 'Latest OpenAI',
     showInImageDropdown: true,
+    showInDropdown: true,
   },
   {
     id: 'seedream-5-lite',
@@ -864,6 +865,7 @@ export const IMAGE_PROVIDER_CATALOG: ProviderCatalogEntry[] = [
     supportedModes: ['t2i'],
     aspectRatios: ['16:9', '9:16', '1:1'],
     showInImageDropdown: true,
+    showInDropdown: true,
   },
   {
     id: 'falai',
