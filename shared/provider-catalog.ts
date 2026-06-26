@@ -337,7 +337,7 @@ export const VIDEO_PROVIDER_CATALOG: ProviderCatalogEntry[] = [
     description: 'Agentic video builder. Describe an idea or drop in content and Agent 2.0 analyzes, strategizes, and builds out the full video in one shot. Direct API.',
     capabilities: ['T2V', 'I2V'],
     maxDuration: 30,
-    costTier: 'ultra',
+    costTier: 'premium',
     type: 'video',
     supportedModes: ['t2v', 'i2v'],
     aspectRatios: ['16:9', '9:16', '1:1'],

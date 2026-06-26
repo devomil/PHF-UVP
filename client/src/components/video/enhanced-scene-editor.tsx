@@ -206,6 +206,9 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
   const [showAleph2Panel, setShowAleph2Panel] = useState(false);
   const [aleph2Prompt, setAleph2Prompt] = useState('');
   const [aleph2Submitting, setAleph2Submitting] = useState(false);
+  const [aleph2FrameUrl, setAleph2FrameUrl] = useState('');
+  const [aleph2FrameUploading, setAleph2FrameUploading] = useState(false);
+  const [aleph2FramePreview, setAleph2FramePreview] = useState<string | null>(null);
   const aleph2FileRef = useRef<HTMLInputElement>(null);
   const [providerMismatchOpen, setProviderMismatchOpen] = useState(false);
   const [providerMismatchInfo, setProviderMismatchInfo] = useState<{
@@ -1064,6 +1067,29 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
     },
   });
 
+  const handleAleph2FrameUpload = async (file: File) => {
+    setAleph2FrameUploading(true);
+    try {
+      const preview = URL.createObjectURL(file);
+      setAleph2FramePreview(preview);
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch('/api/videos/uploads', { method: 'POST', body: formData, credentials: 'include' });
+      const data = await res.json();
+      if (data.url) {
+        setAleph2FrameUrl(data.url);
+      } else {
+        throw new Error(data.error || 'Upload failed');
+      }
+    } catch (err: any) {
+      toast({ title: "Frame upload failed", description: err.message, variant: "destructive" });
+      setAleph2FramePreview(null);
+      setAleph2FrameUrl('');
+    } finally {
+      setAleph2FrameUploading(false);
+    }
+  };
+
   const handleAleph2Apply = async () => {
     if (!aleph2Prompt.trim()) {
       toast({ title: "Direction required", description: "Describe how you want to edit the video.", variant: "destructive" });
@@ -1073,6 +1099,8 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
       toast({ title: "No video to edit", description: "Generate a video for this scene first.", variant: "destructive" });
       return;
     }
+    // Use the uploaded frame URL, or fall back to the scene's thumbnail image
+    const referenceFrame = aleph2FrameUrl || imageUrl || undefined;
     setAleph2Submitting(true);
     try {
       const res = await fetch(`/api/universal-video/${projectId}/scenes/${sceneId}/regenerate-video`, {
@@ -1082,7 +1110,9 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
         body: JSON.stringify({
           query: aleph2Prompt,
           provider: "runway-aleph-2",
-          generationMode: "v2v",
+          generationMode: "i2v",
+          sourceImageUrl: referenceFrame,
+          // Also pass the source video so the server can use it for context
           referenceVideoUrl: videoUrl,
         }),
       });
@@ -1094,6 +1124,8 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
       }
       setShowAleph2Panel(false);
       setAleph2Prompt('');
+      setAleph2FrameUrl('');
+      setAleph2FramePreview(null);
       setRegeneratingType('video');
       setRegenStartedAt(Date.now());
       setRegenElapsed(0);
@@ -2497,21 +2529,91 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                 backgroundColor: "rgba(124,58,237,0.06)",
               }}
             >
+              {/* hidden file input */}
+              <input
+                ref={aleph2FileRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={e => {
+                  const file = e.target.files?.[0];
+                  if (file) handleAleph2FrameUpload(file);
+                  e.target.value = '';
+                }}
+              />
+
               <div className="flex items-center gap-2 mb-2.5">
                 <Sparkles className="w-3.5 h-3.5 text-purple-400 shrink-0" />
                 <span className="text-[11px] font-semibold" style={{ color: "var(--text-primary)" }}>
                   Edit with Runway Aleph 2.0
                 </span>
                 <button
-                  onClick={() => setShowAleph2Panel(false)}
+                  onClick={() => { setShowAleph2Panel(false); setAleph2FrameUrl(''); setAleph2FramePreview(null); }}
                   className="ml-auto w-5 h-5 rounded-full flex items-center justify-center hover:bg-white/10 transition-colors"
                   style={{ color: "var(--text-muted)" }}
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
               </div>
-              <p className="text-[10px] mb-2.5" style={{ color: "var(--text-muted)" }}>
-                Describe how to re-style or correct this clip. Aleph 2.0 edits the entire video to match your direction.
+
+              {/* Reference frame picker */}
+              <div className="mb-2.5">
+                <p className="text-[10px] font-medium mb-1.5" style={{ color: "var(--text-secondary)" }}>
+                  Reference frame
+                </p>
+                <div className="flex gap-2 items-start">
+                  {/* Frame preview */}
+                  <div
+                    className="w-16 h-10 rounded-lg shrink-0 overflow-hidden border flex items-center justify-center relative"
+                    style={{ borderColor: "rgba(124,58,237,0.25)", backgroundColor: "rgba(0,0,0,0.3)" }}
+                  >
+                    {aleph2FrameUploading ? (
+                      <Loader2 className="w-4 h-4 text-purple-400 animate-spin" />
+                    ) : (aleph2FramePreview || imageUrl) ? (
+                      <img
+                        src={aleph2FramePreview || imageUrl || ''}
+                        alt="Reference frame"
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <Image className="w-4 h-4 opacity-30" style={{ color: "var(--text-muted)" }} />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[10px] mb-1" style={{ color: "var(--text-muted)" }}>
+                      {aleph2FramePreview
+                        ? 'Custom frame uploaded'
+                        : imageUrl
+                          ? 'Using scene thumbnail (default)'
+                          : 'No frame — upload one below'}
+                    </p>
+                    <div className="flex gap-1.5">
+                      <button
+                        onClick={() => aleph2FileRef.current?.click()}
+                        disabled={aleph2FrameUploading}
+                        className="text-[10px] px-2 py-1 rounded border transition-colors flex items-center gap-1 disabled:opacity-50"
+                        style={{ borderColor: "rgba(124,58,237,0.3)", color: "var(--text-secondary)" }}
+                      >
+                        <Upload className="w-2.5 h-2.5" />
+                        {aleph2FramePreview ? 'Replace frame' : 'Upload frame'}
+                      </button>
+                      {aleph2FramePreview && (
+                        <button
+                          onClick={() => { setAleph2FrameUrl(''); setAleph2FramePreview(null); }}
+                          className="text-[10px] px-2 py-1 rounded border transition-colors"
+                          style={{ borderColor: "rgba(239,68,68,0.3)", color: "rgba(239,68,68,0.8)" }}
+                        >
+                          Reset
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Direction prompt */}
+              <p className="text-[10px] font-medium mb-1" style={{ color: "var(--text-secondary)" }}>
+                Edit direction
               </p>
               <textarea
                 value={aleph2Prompt}
@@ -2527,7 +2629,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
               <div className="flex justify-end mt-2">
                 <button
                   onClick={handleAleph2Apply}
-                  disabled={aleph2Submitting || !aleph2Prompt.trim() || isRegenerating}
+                  disabled={aleph2Submitting || !aleph2Prompt.trim() || isRegenerating || aleph2FrameUploading}
                   className="text-xs px-3 py-1.5 rounded-lg font-medium flex items-center gap-1.5 disabled:opacity-50 transition-colors bg-purple-600 text-white hover:bg-purple-500"
                   data-testid="aleph2-apply-button"
                 >

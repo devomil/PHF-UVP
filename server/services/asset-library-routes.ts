@@ -1096,6 +1096,7 @@ async function processAssetLibraryJob(jobId: string, userId: string, mode: strin
           brief: agentPrompt,
           duration: settings.duration ?? 5,
           aspectRatio: settings.aspectRatio || '16:9',
+          referenceImageUrl: settings.referenceImageUrl || undefined,
         });
 
         if (!agentResult.success || !agentResult.videoUrl) throw new Error(agentResult.error || 'Agent 2.0 generation failed');

@@ -7485,7 +7485,11 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, req
     // If explicit generationMode is "t2v", skip all source images (user chose text-to-video).
     const explicitMode = generationMode || 'auto';
     const forceT2V = !isV2VMode && explicitMode === 't2v';
-    const forceI2V = !isV2VMode && explicitMode === 'i2v';
+    // runway-aleph-2 always uses I2V semantics when a reference frame/source image is present —
+    // regardless of the explicit generationMode sent by the client. The frame is the edit anchor;
+    // we must not fall through to T2V or pure-V2V paths that would discard it.
+    const isAleph2WithFrame = provider === 'runway-aleph-2' && !!sourceImageUrl;
+    const forceI2V = !isV2VMode && (explicitMode === 'i2v' || isAleph2WithFrame);
     // forceV2V covers both the legacy mode='video-to-video' path (isV2VMode) and the
     // newer generationMode='v2v' + referenceVideoUrl path from the scene editor.
     const forceV2V = isV2VMode || (explicitMode === 'v2v' && !!reqReferenceVideoUrl);

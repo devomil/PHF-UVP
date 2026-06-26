@@ -443,6 +443,9 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
       if (mode === 'character-performance') {
         body.bodyControl = bodyControl;
       }
+      if (mode === 'agent-2' && referenceImageUrl) {
+        body.referenceImageUrl = referenceImageUrl;
+      }
 
       const res = await apiRequest('POST', '/api/asset-library/generate', body);
       const data = await res.json();
@@ -1245,6 +1248,48 @@ export function AssetCreatorDialog({ open, onOpenChange, onJobStarted }: AssetCr
                 checked={bodyControl}
                 onCheckedChange={setBodyControl}
               />
+            </div>
+          )}
+
+          {mode === 'agent-2' && (
+            <div>
+              <Label className="text-sm text-gray-400 mb-1.5 block">
+                Reference Image <span className="text-gray-600 font-normal">(optional)</span>
+              </Label>
+              <p className="text-[10px] text-gray-500 mb-2">
+                Drop in existing content for Agent 2.0 to analyze and incorporate. Leave empty for a pure brief-driven generation.
+              </p>
+              {referenceImagePreview ? (
+                <div className="relative rounded-lg overflow-hidden border border-gray-700 w-40 h-24">
+                  <img src={referenceImagePreview} alt="Reference" className="w-full h-full object-cover" />
+                  <button
+                    onClick={() => { setReferenceImageUrl(''); setReferenceImagePreview(null); }}
+                    className="absolute top-1 right-1 p-0.5 rounded-full bg-black/70 text-white hover:bg-black"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Paste image URL..."
+                    value={referenceImageUrl}
+                    onChange={(e) => { setReferenceImageUrl(e.target.value); if (e.target.value) setReferenceImagePreview(e.target.value); }}
+                    className="bg-gray-900 border-gray-700 text-white placeholder:text-gray-600 flex-1"
+                  />
+                  <Button
+                    variant="outline" size="sm"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isUploadingRef}
+                    className="border-gray-700 text-gray-300 hover:bg-gray-800"
+                  >
+                    {isUploadingRef ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                  </Button>
+                  <input ref={fileInputRef} type="file" accept="image/*" className="hidden"
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadFile(f, setReferenceImageUrl, setReferenceImagePreview, setIsUploadingRef, 'Image'); }}
+                  />
+                </div>
+              )}
             </div>
           )}
 
