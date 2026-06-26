@@ -6380,6 +6380,7 @@ export function QuickCreateAssetPanel({ projectId, project }: { projectId: strin
       setShowQcAleph2Panel(false);
       setQcAleph2Prompt('');
       setVisualGenerating(true);
+      queryClient.invalidateQueries({ queryKey: ["quick-create-assets", projectId] });
       toast({ title: "Aleph 2.0 Editing", description: "Runway Aleph 2.0 is re-styling your clip. This typically takes 1–3 minutes." });
     } catch (err: any) {
       toast({ title: "Aleph 2.0 failed", description: err.message, variant: "destructive" });
@@ -6797,6 +6798,52 @@ export function QuickCreateAssetPanel({ projectId, project }: { projectId: strin
                 )}
                 {assets.visual.cost && (
                   <span>Cost: <strong style={{ color: "var(--text-secondary)" }}>${assets.visual.cost.toFixed(3)}</strong></span>
+                )}
+              </div>
+            )}
+            {project.mediaMode !== "image" && assets.visual?.status === "completed" && assets.visual?.url && (
+              <div className="mb-3">
+                <button
+                  onClick={() => setShowQcAleph2Panel(p => !p)}
+                  title="Edit this clip with Runway Aleph 2.0 — video-to-video re-styling"
+                  className={`w-full text-xs px-3 py-2 rounded-lg font-medium flex items-center justify-center gap-1.5 border transition-colors ${showQcAleph2Panel ? 'border-purple-500/60 bg-purple-500/15 text-purple-300' : 'border-purple-500/30 text-purple-400 hover:bg-purple-500/10 hover:border-purple-500/50'}`}
+                >
+                  <Sparkles className="w-3 h-3" />
+                  {showQcAleph2Panel ? 'Hide Aleph 2.0 Editor' : 'Edit with Aleph 2.0'}
+                </button>
+                {showQcAleph2Panel && (
+                  <div className="mt-2 rounded-xl border p-3.5" style={{ borderColor: "rgba(124,58,237,0.35)", backgroundColor: "rgba(124,58,237,0.06)" }}>
+                    <div className="flex items-center gap-2 mb-2.5">
+                      <Sparkles className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+                      <span className="text-[11px] font-semibold" style={{ color: "var(--text-primary)" }}>Edit with Runway Aleph 2.0</span>
+                      <button
+                        onClick={() => { setShowQcAleph2Panel(false); setQcAleph2Prompt(''); }}
+                        className="ml-auto w-5 h-5 rounded-full flex items-center justify-center hover:bg-white/10 transition-colors"
+                        style={{ color: "var(--text-muted)" }}
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    <p className="text-[10px] font-medium mb-1" style={{ color: "var(--text-secondary)" }}>Edit direction</p>
+                    <textarea
+                      value={qcAleph2Prompt}
+                      onChange={e => setQcAleph2Prompt(e.target.value)}
+                      placeholder={`e.g. "Change to dark noir aesthetic", "Make it golden-hour lighting", "Shift to watercolor painting style"`}
+                      rows={2}
+                      className="w-full text-xs rounded-lg border px-2.5 py-2 bg-transparent resize-none outline-none focus:border-purple-500/60 transition-colors"
+                      style={{ borderColor: "rgba(124,58,237,0.25)", color: "var(--text-primary)" }}
+                    />
+                    <div className="flex justify-end mt-2">
+                      <button
+                        onClick={handleQcAleph2Apply}
+                        disabled={qcAleph2Submitting || !qcAleph2Prompt.trim()}
+                        className="text-xs px-3 py-1.5 rounded-lg font-medium flex items-center gap-1.5 disabled:opacity-50 transition-colors bg-purple-600 text-white hover:bg-purple-500"
+                      >
+                        {qcAleph2Submitting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                        {qcAleph2Submitting ? 'Starting...' : 'Apply Aleph 2.0'}
+                      </button>
+                    </div>
+                  </div>
                 )}
               </div>
             )}
@@ -7353,51 +7400,7 @@ export function QuickCreateAssetPanel({ projectId, project }: { projectId: strin
                     </>
                   )}
                 </Button>
-                {project.mediaMode !== "image" && assets.visual?.status === "completed" && assets.visual?.url && (
-                  <button
-                    onClick={() => setShowQcAleph2Panel(p => !p)}
-                    title="Edit this clip with Runway Aleph 2.0 — video-to-video re-styling"
-                    className={`text-xs px-2.5 py-2 rounded-lg font-medium flex items-center gap-1 border transition-colors ${showQcAleph2Panel ? 'border-purple-500/60 bg-purple-500/15 text-purple-300' : 'border-purple-500/30 text-purple-400 hover:bg-purple-500/10 hover:border-purple-500/50'}`}
-                  >
-                    <Sparkles className="w-3 h-3" />
-                    Aleph 2.0
-                  </button>
-                )}
               </div>
-              {showQcAleph2Panel && project.mediaMode !== "image" && assets.visual?.url && (
-                <div className="rounded-xl border p-3.5" style={{ borderColor: "rgba(124,58,237,0.35)", backgroundColor: "rgba(124,58,237,0.06)" }}>
-                  <div className="flex items-center gap-2 mb-2.5">
-                    <Sparkles className="w-3.5 h-3.5 text-purple-400 shrink-0" />
-                    <span className="text-[11px] font-semibold" style={{ color: "var(--text-primary)" }}>Edit with Runway Aleph 2.0</span>
-                    <button
-                      onClick={() => { setShowQcAleph2Panel(false); setQcAleph2Prompt(''); }}
-                      className="ml-auto w-5 h-5 rounded-full flex items-center justify-center hover:bg-white/10 transition-colors"
-                      style={{ color: "var(--text-muted)" }}
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                  <p className="text-[10px] font-medium mb-1" style={{ color: "var(--text-secondary)" }}>Edit direction</p>
-                  <textarea
-                    value={qcAleph2Prompt}
-                    onChange={e => setQcAleph2Prompt(e.target.value)}
-                    placeholder={`e.g. "Change to dark noir aesthetic", "Make it golden-hour lighting", "Shift to watercolor painting style"`}
-                    rows={2}
-                    className="w-full text-xs rounded-lg border px-2.5 py-2 bg-transparent resize-none outline-none focus:border-purple-500/60 transition-colors"
-                    style={{ borderColor: "rgba(124,58,237,0.25)", color: "var(--text-primary)" }}
-                  />
-                  <div className="flex justify-end mt-2">
-                    <button
-                      onClick={handleQcAleph2Apply}
-                      disabled={qcAleph2Submitting || !qcAleph2Prompt.trim()}
-                      className="text-xs px-3 py-1.5 rounded-lg font-medium flex items-center gap-1.5 disabled:opacity-50 transition-colors bg-purple-600 text-white hover:bg-purple-500"
-                    >
-                      {qcAleph2Submitting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-                      {qcAleph2Submitting ? 'Starting...' : 'Apply Aleph 2.0'}
-                    </button>
-                  </div>
-                </div>
-              )}
             </div>
             </div>
             </div>
