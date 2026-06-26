@@ -4,24 +4,25 @@ const RUNWAY_API_BASE = 'https://api.dev.runwayml.com/v1';
 // Aleph 2.0 and Agent 2.0 default to the same version as Gen-4;
 // update here without a code re-deploy by setting the correct date string.
 const RUNWAY_MODEL_API_VERSION: Record<string, string> = {
-  'gen3a_turbo': '2024-11-06',
-  'gen4.5':      '2024-11-06',
-  'act_two':     '2024-11-06',
-  'aleph_2':     '2024-11-06',
-  'agent_2':     '2024-11-06',
-  'happy_horse_1': '2024-11-06',
+  'gen3a_turbo':   '2024-11-06',
+  'gen4.5':        '2024-11-06',
+  'act_two':       '2024-11-06',
+  'happyhorse_1_0':'2024-11-06',
 };
 const RUNWAY_DEFAULT_API_VERSION = '2024-11-06';
 
 const RUNWAY_MODEL_MAP: Record<string, string> = {
-  'runway': 'gen3a_turbo',
-  'runway-gen4': 'gen4.5',
-  'runway-gen4-aleph': 'gen4.5',
-  'runway-4.5': 'gen4.5',
-  'runway-act-two': 'act_two',
-  'runway-aleph-2': 'aleph_2',
-  'runway-agent-2': 'agent_2',
-  'runway-happy-horse-1': 'happy_horse_1',
+  'runway':              'gen3a_turbo',
+  'runway-gen4':         'gen4.5',
+  'runway-gen4-aleph':   'gen4.5',
+  'runway-4.5':          'gen4.5',
+  'runway-act-two':      'act_two',
+  // Aleph 2.0 uses Gen-4 engine (gen4.5) for both T2V and V2V
+  'runway-aleph-2':      'gen4.5',
+  // Agent 2.0 not yet available on Runway text_to_video endpoint; placeholder uses Gen-4
+  'runway-agent-2':      'gen4.5',
+  // Happy Horse 1.0 — correct API model ID confirmed from Runway API validation response
+  'runway-happy-horse-1':'happyhorse_1_0',
 };
 
 const RUNWAY_COST_PER_SECOND: Record<string, number> = {
@@ -144,8 +145,8 @@ class RunwayVideoService {
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error(`[Runway] API error: ${response.status} - ${errorText}`);
-        return { success: false, error: `Runway API error: ${response.status}`, generationTimeMs: Date.now() - startTime };
+        console.error(`[Runway] API error: ${response.status} - model=${apiModel} endpoint=${endpoint} body=${errorText}`);
+        return { success: false, error: `Runway API error: ${response.status} - ${errorText.substring(0, 200)}`, generationTimeMs: Date.now() - startTime };
       }
 
       const data = await response.json();
