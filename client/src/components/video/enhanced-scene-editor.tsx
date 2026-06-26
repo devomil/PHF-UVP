@@ -210,6 +210,10 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
   const [aleph2FrameUploading, setAleph2FrameUploading] = useState(false);
   const [aleph2FramePreview, setAleph2FramePreview] = useState<string | null>(null);
   const aleph2FileRef = useRef<HTMLInputElement>(null);
+  const aleph2VideoRef = useRef<HTMLVideoElement>(null);
+  const aleph2CanvasRef = useRef<HTMLCanvasElement>(null);
+  const [aleph2FrameTime, setAleph2FrameTime] = useState(0);
+  const [aleph2VideoDuration, setAleph2VideoDuration] = useState(0);
   const [providerMismatchOpen, setProviderMismatchOpen] = useState(false);
   const [providerMismatchInfo, setProviderMismatchInfo] = useState<{
     providerLabel: string;
@@ -1090,6 +1094,53 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
     }
   };
 
+  const handleAleph2FrameSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const time = parseFloat(e.target.value);
+    setAleph2FrameTime(time);
+    const video = aleph2VideoRef.current;
+    if (video) video.currentTime = time;
+  };
+
+  const handleAleph2FrameCapture = async () => {
+    const video = aleph2VideoRef.current;
+    const canvas = aleph2CanvasRef.current;
+    if (!video || !canvas) return;
+    setAleph2FrameUploading(true);
+    try {
+      canvas.width = video.videoWidth || 320;
+      canvas.height = video.videoHeight || 180;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('Canvas unavailable');
+      ctx.drawImage(video, 0, 0);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+      setAleph2FramePreview(dataUrl);
+      const blob = await new Promise<Blob | null>(resolve =>
+        canvas.toBlob(resolve, 'image/jpeg', 0.9),
+      );
+      if (!blob) throw new Error('Frame capture failed');
+      const file = new File([blob], `frame_${aleph2FrameTime.toFixed(1)}s.jpg`, { type: 'image/jpeg' });
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch('/api/videos/uploads', { method: 'POST', body: formData, credentials: 'include' });
+      const data = await res.json();
+      if (data.url) {
+        setAleph2FrameUrl(data.url);
+        toast({ title: "Frame captured", description: `Frame at ${aleph2FrameTime.toFixed(1)}s set as reference.` });
+      } else {
+        throw new Error(data.error || 'Upload failed');
+      }
+    } catch (err: any) {
+      setAleph2FramePreview(null);
+      toast({
+        title: "Capture failed",
+        description: "CORS restriction on clip URL — upload a frame image manually.",
+        variant: "destructive",
+      });
+    } finally {
+      setAleph2FrameUploading(false);
+    }
+  };
+
   const handleAleph2Apply = async () => {
     if (!aleph2Prompt.trim()) {
       toast({ title: "Direction required", description: "Describe how you want to edit the video.", variant: "destructive" });
@@ -1099,7 +1150,8 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
       toast({ title: "No video to edit", description: "Generate a video for this scene first.", variant: "destructive" });
       return;
     }
-    // Use the uploaded frame URL, or fall back to the scene's thumbnail image
+    // Route as V2V: the existing clip is the source, the reference frame is the
+    // style anchor forwarded to Runway as `promptImage` alongside `videoUri`.
     const referenceFrame = aleph2FrameUrl || imageUrl || undefined;
     setAleph2Submitting(true);
     try {
@@ -1110,10 +1162,11 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
         body: JSON.stringify({
           query: aleph2Prompt,
           provider: "runway-aleph-2",
-          generationMode: "i2v",
-          sourceImageUrl: referenceFrame,
-          // Also pass the source video so the server can use it for context
+          // V2V: the existing clip is promoted to sourceVideoUrl server-side
+          generationMode: "v2v",
           referenceVideoUrl: videoUrl,
+          // Frame reference — forwarded as promptImage to Aleph 2.0
+          sourceImageUrl: referenceFrame,
         }),
       });
       if (!res.ok) {
@@ -1126,6 +1179,8 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
       setAleph2Prompt('');
       setAleph2FrameUrl('');
       setAleph2FramePreview(null);
+      setAleph2FrameTime(0);
+      setAleph2VideoDuration(0);
       setRegeneratingType('video');
       setRegenStartedAt(Date.now());
       setRegenElapsed(0);
@@ -2556,6 +2611,21 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                 </button>
               </div>
 
+              {/* Hidden video + canvas for frame scrubbing */}
+              <video
+                ref={aleph2VideoRef}
+                src={videoUrl || undefined}
+                muted
+                preload="metadata"
+                crossOrigin="anonymous"
+                className="hidden"
+                onLoadedMetadata={e => {
+                  const dur = (e.target as HTMLVideoElement).duration;
+                  if (dur && isFinite(dur)) setAleph2VideoDuration(dur);
+                }}
+              />
+              <canvas ref={aleph2CanvasRef} className="hidden" />
+
               {/* Reference frame picker */}
               <div className="mb-2.5">
                 <p className="text-[10px] font-medium mb-1.5" style={{ color: "var(--text-secondary)" }}>
@@ -2582,12 +2652,23 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                   <div className="flex-1 min-w-0">
                     <p className="text-[10px] mb-1" style={{ color: "var(--text-muted)" }}>
                       {aleph2FramePreview
-                        ? 'Custom frame uploaded'
+                        ? 'Frame set as style anchor'
                         : imageUrl
                           ? 'Using scene thumbnail (default)'
-                          : 'No frame — upload one below'}
+                          : 'No frame — scrub or upload one below'}
                     </p>
-                    <div className="flex gap-1.5">
+                    <div className="flex gap-1.5 flex-wrap">
+                      {aleph2VideoDuration > 0 && (
+                        <button
+                          onClick={handleAleph2FrameCapture}
+                          disabled={aleph2FrameUploading}
+                          className="text-[10px] px-2 py-1 rounded border transition-colors flex items-center gap-1 disabled:opacity-50"
+                          style={{ borderColor: "rgba(124,58,237,0.3)", color: "var(--text-secondary)" }}
+                        >
+                          <Image className="w-2.5 h-2.5" />
+                          Capture
+                        </button>
+                      )}
                       <button
                         onClick={() => aleph2FileRef.current?.click()}
                         disabled={aleph2FrameUploading}
@@ -2595,7 +2676,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                         style={{ borderColor: "rgba(124,58,237,0.3)", color: "var(--text-secondary)" }}
                       >
                         <Upload className="w-2.5 h-2.5" />
-                        {aleph2FramePreview ? 'Replace frame' : 'Upload frame'}
+                        Upload
                       </button>
                       {aleph2FramePreview && (
                         <button
@@ -2609,6 +2690,26 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
                     </div>
                   </div>
                 </div>
+
+                {/* Time slider — shown once the hidden video exposes its duration */}
+                {aleph2VideoDuration > 0 && (
+                  <div className="mt-2">
+                    <div className="flex items-center justify-between mb-0.5">
+                      <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>
+                        Scrub clip · {aleph2FrameTime.toFixed(1)}s / {aleph2VideoDuration.toFixed(1)}s
+                      </p>
+                    </div>
+                    <input
+                      type="range"
+                      min={0}
+                      max={aleph2VideoDuration}
+                      step={0.1}
+                      value={aleph2FrameTime}
+                      onChange={handleAleph2FrameSeek}
+                      className="w-full h-1.5 rounded-full cursor-pointer accent-purple-500"
+                    />
+                  </div>
+                )}
               </div>
 
               {/* Direction prompt */}

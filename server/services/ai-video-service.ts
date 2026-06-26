@@ -582,8 +582,11 @@ class AIVideoService {
 
     console.log(`[AIVideo] Using direct Runway API for ${providerKey}`);
 
-    // Route V2V through Runway's dedicated video-to-video endpoint
-    if (options.sourceVideoUrl && !options.imageUrl) {
+    // Route V2V through Runway's dedicated video-to-video endpoint.
+    // Aleph 2.0 supports an optional frame reference (promptImage) alongside the
+    // source video, so allow imageUrl to coexist with sourceVideoUrl for that model.
+    const isAleph2 = providerKey === 'runway-aleph-2';
+    if (options.sourceVideoUrl && (!options.imageUrl || isAleph2)) {
       console.log(`[AIVideo] Routing V2V to Runway for ${providerKey}`);
       const result = await runwayVideoService.generateVideoToVideo({
         videoUrl: options.sourceVideoUrl,
@@ -591,6 +594,7 @@ class AIVideoService {
         model: providerKey,
         duration: options.duration,
         aspectRatio: options.aspectRatio,
+        referenceImageUrl: isAleph2 ? options.imageUrl : undefined,
       });
       return {
         success: result.success,

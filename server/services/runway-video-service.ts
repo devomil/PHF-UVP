@@ -1,5 +1,18 @@
 const RUNWAY_API_BASE = 'https://api.dev.runwayml.com/v1';
 
+// Model-aware API version — bump per model if Runway docs require a newer date.
+// Aleph 2.0 and Agent 2.0 default to the same version as Gen-4;
+// update here without a code re-deploy by setting the correct date string.
+const RUNWAY_MODEL_API_VERSION: Record<string, string> = {
+  'gen3a_turbo': '2024-11-06',
+  'gen4.5':      '2024-11-06',
+  'act_two':     '2024-11-06',
+  'aleph_2':     '2024-11-06',
+  'agent_2':     '2024-11-06',
+  'happy_horse_1': '2024-11-06',
+};
+const RUNWAY_DEFAULT_API_VERSION = '2024-11-06';
+
 const RUNWAY_MODEL_MAP: Record<string, string> = {
   'runway': 'gen3a_turbo',
   'runway-gen4': 'gen4.5',
@@ -57,11 +70,12 @@ class RunwayVideoService {
     return RUNWAY_MODEL_MAP[providerKey] || 'gen4_turbo';
   }
 
-  private getHeaders() {
+  private getHeaders(apiModel?: string) {
+    const version = (apiModel && RUNWAY_MODEL_API_VERSION[apiModel]) || RUNWAY_DEFAULT_API_VERSION;
     return {
       'Authorization': `Bearer ${this.apiKey}`,
       'Content-Type': 'application/json',
-      'X-Runway-Version': '2024-11-06',
+      'X-Runway-Version': version,
     };
   }
 
@@ -124,7 +138,7 @@ class RunwayVideoService {
 
       const response = await fetch(endpoint, {
         method: 'POST',
-        headers: this.getHeaders(),
+        headers: this.getHeaders(apiModel),
         body: JSON.stringify(body),
       });
 
@@ -166,6 +180,7 @@ class RunwayVideoService {
     model?: string;
     duration?: number;
     aspectRatio?: string;
+    referenceImageUrl?: string;
   }): Promise<RunwayGenerationResult> {
     if (!this.isAvailable()) {
       return { success: false, error: 'RUNWAY_API_KEY not configured' };
@@ -180,16 +195,26 @@ class RunwayVideoService {
       console.log(`[Runway:V2V] Starting video-to-video with model: ${apiModel}`);
       console.log(`[Runway:V2V] Source video: ${options.videoUrl.substring(0, 80)}...`);
       console.log(`[Runway:V2V] Prompt: ${options.prompt.substring(0, 100)}...`);
+      if (options.referenceImageUrl) {
+        console.log(`[Runway:V2V] Reference frame image: ${options.referenceImageUrl.substring(0, 80)}...`);
+      }
 
-      const body = {
+      const body: any = {
         videoUri: options.videoUrl,
         promptText: options.prompt,
         model: apiModel,
       };
 
+      // Aleph 2.0 accepts an optional frame reference alongside the source video.
+      // If the user picked a specific frame (or the scene thumbnail), include it
+      // as `promptImage` to anchor the style transformation to that visual reference.
+      if (options.referenceImageUrl) {
+        body.promptImage = options.referenceImageUrl;
+      }
+
       const response = await fetch(`${RUNWAY_API_BASE}/video_to_video`, {
         method: 'POST',
-        headers: this.getHeaders(),
+        headers: this.getHeaders(apiModel),
         body: JSON.stringify(body),
       });
 
@@ -260,7 +285,7 @@ class RunwayVideoService {
 
       const response = await fetch(`${RUNWAY_API_BASE}/character_performance`, {
         method: 'POST',
-        headers: this.getHeaders(),
+        headers: this.getHeaders('act_two'),
         body: JSON.stringify(body),
       });
 
@@ -346,7 +371,7 @@ class RunwayVideoService {
 
       const response = await fetch(endpoint, {
         method: 'POST',
-        headers: this.getHeaders(),
+        headers: this.getHeaders(apiModel),
         body: JSON.stringify(body),
       });
 

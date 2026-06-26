@@ -838,12 +838,16 @@ class VideoGenerationWorker {
           let v2vVideoUrl: string | undefined;
           if (isRunwayV2V) {
             const { runwayVideoService } = await import('./runway-video-service');
+            // Aleph 2.0 accepts an optional frame reference image alongside the
+            // source video to anchor the style transformation.  Pass sourceImageUrl
+            // (the frame the user scrubbed/uploaded) as referenceImageUrl when present.
             const v2vResult = await runwayVideoService.generateVideoToVideo({
               videoUrl: refVideoUrl,
               prompt: job.prompt || '',
               model: jobProvider,
               duration: job.duration || 5,
               aspectRatio: aspectRatio as '16:9' | '9:16' | '1:1',
+              referenceImageUrl: jobProvider === 'runway-aleph-2' ? job.sourceImageUrl : undefined,
             });
             if (!v2vResult.success || !v2vResult.videoUrl) {
               throw new Error(v2vResult.error || 'Runway V2V generation failed');

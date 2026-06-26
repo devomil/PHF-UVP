@@ -931,15 +931,6 @@ export const IMAGE_PROVIDERS: Record<string, ImageProvider> = {
     },
   },
 
-  stability: {
-    id: 'stability',
-    name: 'stability',
-    displayName: 'Stable Diffusion 3',
-    costPerImage: 0.02,
-    strengths: ['Versatile', 'Good text rendering', 'Fast'],
-    bestFor: ['general', 'text-in-image', 'artistic'],
-  },
-
   midjourney: {
     id: 'midjourney',
     name: 'midjourney',

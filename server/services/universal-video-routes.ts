@@ -7485,11 +7485,11 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, req
     // If explicit generationMode is "t2v", skip all source images (user chose text-to-video).
     const explicitMode = generationMode || 'auto';
     const forceT2V = !isV2VMode && explicitMode === 't2v';
-    // runway-aleph-2 always uses I2V semantics when a reference frame/source image is present —
-    // regardless of the explicit generationMode sent by the client. The frame is the edit anchor;
-    // we must not fall through to T2V or pure-V2V paths that would discard it.
+    // Aleph 2.0 routes as V2V (existing clip → sourceVideoUrl) with an optional
+    // reference frame forwarded as promptImage.  Track the combo so relativeSourceUrl
+    // preserves the frame in the forceV2V branch even though I2V is not active.
     const isAleph2WithFrame = provider === 'runway-aleph-2' && !!sourceImageUrl;
-    const forceI2V = !isV2VMode && (explicitMode === 'i2v' || isAleph2WithFrame);
+    const forceI2V = !isV2VMode && explicitMode === 'i2v';
     // forceV2V covers both the legacy mode='video-to-video' path (isV2VMode) and the
     // newer generationMode='v2v' + referenceVideoUrl path from the scene editor.
     const forceV2V = isV2VMode || (explicitMode === 'v2v' && !!reqReferenceVideoUrl);
@@ -7501,7 +7501,9 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, req
       : isV2VMode
         ? (reqReplacementImageUrl || sourceImageUrl || scene.brandAssetUrl || undefined)
         : forceV2V
-          ? (reqReplacementImageUrl || scene.brandAssetUrl || undefined)
+          // Aleph 2.0 sends a reference frame alongside the source video; preserve
+          // it here so it flows through to generateVideoToVideo as promptImage.
+          ? (reqReplacementImageUrl || (isAleph2WithFrame ? sourceImageUrl : undefined) || scene.brandAssetUrl || undefined)
           : (sourceImageUrl || (shouldUseBrandAsset ? scene.brandAssetUrl : undefined));
     console.log(`[Phase9B-Async] Explicit generation mode: ${isV2VMode ? 'video-to-video' : explicitMode} (forceI2V=${forceI2V})`);
 
