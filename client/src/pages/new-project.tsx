@@ -3540,7 +3540,14 @@ export function DeckToVideoForm({ onBack, onSubmit, isLoading }: { onBack: () =>
 export default function NewProject() {
   // Resume an interrupted Deck-to-Video flow after an unexpected reload: if a
   // completed analysis draft was persisted, drop the user straight back into it.
-  const [mode, setMode] = useState<Mode>(() => (readDeckDraft() ? "deck-to-video" : null));
+  // Also support ?mode=X deep-link from the dashboard creation cards.
+  const [mode, setMode] = useState<Mode>(() => {
+    if (readDeckDraft()) return "deck-to-video";
+    const params = new URLSearchParams(window.location.search);
+    const m = params.get("mode") as Mode;
+    const valid: Mode[] = ["ai-script", "custom-script", "quick-create", "studio-polish", "deck-to-video"];
+    return (m && valid.includes(m)) ? m : null;
+  });
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();

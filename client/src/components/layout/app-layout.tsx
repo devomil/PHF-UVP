@@ -8,7 +8,6 @@ import {
   Images,
   Palette,
   Layers,
-  Cpu,
   FlaskConical,
   Plus,
   ChevronLeft,
@@ -45,7 +44,6 @@ const navItems: NavItem[] = [
   { label: "Brand", icon: Palette, path: "/brand" },
   { label: "Trends", icon: TrendingUp, path: "/trends" },
   { label: "Render Queue", icon: Layers, path: "/render-queue" },
-  { label: "AI Providers", icon: Cpu, path: "/providers", adminOnly: true },
   { label: "API Testing", icon: FlaskConical, path: "/api-testing", adminOnly: true },
   { label: "Pricing", icon: Tag, path: "/pricing" },
 ];

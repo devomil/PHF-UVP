@@ -11,7 +11,6 @@ import ProjectDetail from "@/pages/project-detail";
 import AssetLibrary from "@/pages/asset-library";
 import BrandSettings from "@/pages/brand-settings";
 import RenderQueue from "@/pages/render-queue";
-import Providers from "@/pages/providers";
 import Profile from "@/pages/profile";
 import NewProject from "@/pages/new-project";
 import TrendsDashboard from "@/pages/trends-dashboard";
@@ -92,7 +91,6 @@ function AuthenticatedApp() {
             <Route path="/social/accounts" component={SocialAccounts} />
             <Route path="/social/new" component={SocialNewPost} />
             <Route path="/render-queue" component={RenderQueue} />
-            <Route path="/providers" component={() => <InlineAdminGuard component={Providers} />} />
             <Route path="/api-testing" component={() => <InlineAdminGuard component={ApiTesting} />} />
             <Route path="/profile" component={Profile} />
             <Route path="/billing" component={BillingPage} />

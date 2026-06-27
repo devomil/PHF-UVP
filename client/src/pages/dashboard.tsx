@@ -17,6 +17,10 @@ import {
   CheckCircle,
   FileEdit,
   ChevronRight,
+  Zap,
+  Film,
+  FileText,
+  Presentation,
 } from "lucide-react";
 
 const projectGradients = [
@@ -76,30 +80,66 @@ function formatRelativeTime(dateStr: string | null | undefined) {
   return formatDate(dateStr);
 }
 
-const onboardingSteps = [
+const creationModes = [
   {
-    step: 1,
-    title: "Set Up Your Brand",
-    description: "Add your logo, colors, and brand voice so every video feels on-brand.",
-    href: "/brand",
-    icon: Palette,
-    color: "purple",
-  },
-  {
-    step: 2,
-    title: "Create Your First Video",
-    description: "Describe your video and let AI handle script, visuals, and editing.",
-    href: "/projects/new",
+    id: "ai-script",
     icon: Sparkles,
-    color: "indigo",
+    title: "AI-Generated Script",
+    description: "Describe your vision and let AI create a complete script with scenes, narration, and visual directions",
+    bestFor: "Full productions, multi-scene videos, marketing campaigns",
+    gradient: "from-purple-500/20 to-purple-600/5",
+    border: "border-purple-500/20 hover:border-purple-500/50",
+    glow: "hover:shadow-purple-500/10",
+    iconColor: "text-purple-400",
+    iconBg: "bg-purple-500/15",
   },
   {
-    step: 3,
-    title: "Upload Brand Assets",
-    description: "Add product images, logos, and media to use across all your videos.",
-    href: "/assets",
-    icon: Upload,
-    color: "emerald",
+    id: "custom-script",
+    icon: FileText,
+    title: "Custom Script",
+    description: "Write your own script and break it into scenes with full control over every detail",
+    bestFor: "Precise control, existing scripts, specific requirements",
+    gradient: "from-blue-500/20 to-blue-600/5",
+    border: "border-blue-500/20 hover:border-blue-500/50",
+    glow: "hover:shadow-blue-500/10",
+    iconColor: "text-blue-400",
+    iconBg: "bg-blue-500/15",
+  },
+  {
+    id: "quick-create",
+    icon: Zap,
+    title: "Quick Create",
+    description: "Generate a single video clip or image instantly. Perfect for social media or adding to your asset library",
+    bestFor: "Single clips, social posts, quick assets, images",
+    gradient: "from-cyan-500/20 to-teal-600/5",
+    border: "border-cyan-500/20 hover:border-cyan-500/50",
+    glow: "hover:shadow-cyan-500/10",
+    iconColor: "text-cyan-400",
+    iconBg: "bg-cyan-500/15",
+  },
+  {
+    id: "studio-polish",
+    icon: Film,
+    title: "Studio Polish",
+    description: "Upload your existing videos or images and apply professional finishing — intros, outros, captions, voiceover, music, and cinematic treatments",
+    bestFor: "Manufacturer videos, raw footage, brand content, multi-clip productions",
+    gradient: "from-amber-500/20 to-yellow-600/5",
+    border: "border-amber-500/20 hover:border-amber-500/50",
+    glow: "hover:shadow-amber-500/10",
+    iconColor: "text-amber-400",
+    iconBg: "bg-amber-500/15",
+  },
+  {
+    id: "deck-to-video",
+    icon: Presentation,
+    title: "Deck to Video",
+    description: "Upload a PDF pitch or concept deck and we'll analyze its message and visuals to auto-draft a brand-consistent marketing video",
+    bestFor: "Pitch decks, concept decks, sales one-pagers, marketing slides",
+    gradient: "from-pink-500/20 to-rose-600/5",
+    border: "border-pink-500/20 hover:border-pink-500/50",
+    glow: "hover:shadow-pink-500/10",
+    iconColor: "text-pink-400",
+    iconBg: "bg-pink-500/15",
   },
 ];
 
@@ -190,46 +230,49 @@ export default function Dashboard() {
           </Link>
         )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          <Link href="/projects/new">
-            <div className="p-5 rounded-lg bg-gradient-to-br from-purple-600/20 to-purple-900/20 border border-purple-500/20 hover:border-purple-500/40 hover:shadow-lg hover:shadow-purple-500/10 transition-all cursor-pointer group">
-              <div className="flex items-start justify-between mb-3">
-                <Sparkles className="w-6 h-6 text-purple-400 group-hover:text-purple-300 transition-colors" />
-              </div>
-              <h3 className="font-semibold group-hover:text-purple-100 transition-colors" style={{ color: "var(--text-primary)" }}>AI Video</h3>
-              <p className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>Create with AI</p>
-            </div>
-          </Link>
-
-          <Link href="/brand">
-            <div className="p-5 rounded-lg bg-gradient-to-br from-cyan-600/20 to-cyan-900/20 border border-cyan-500/20 hover:border-cyan-500/40 hover:shadow-lg hover:shadow-cyan-500/10 transition-all cursor-pointer group">
-              <div className="flex items-start justify-between mb-3">
-                <Palette className="w-6 h-6 text-cyan-400 group-hover:text-cyan-300 transition-colors" />
-              </div>
-              <h3 className="font-semibold group-hover:text-cyan-100 transition-colors" style={{ color: "var(--text-primary)" }}>Brand Setup</h3>
-              <p className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>Logo, colors & voice</p>
-            </div>
-          </Link>
-
-          <Link href="/assets">
-            <div className="p-5 rounded-lg bg-gradient-to-br from-emerald-600/20 to-emerald-900/20 border border-emerald-500/20 hover:border-emerald-500/40 hover:shadow-lg hover:shadow-emerald-500/10 transition-all cursor-pointer group">
-              <div className="flex items-start justify-between mb-3">
-                <Upload className="w-6 h-6 text-emerald-400 group-hover:text-emerald-300 transition-colors" />
-              </div>
-              <h3 className="font-semibold group-hover:text-emerald-100 transition-colors" style={{ color: "var(--text-primary)" }}>Upload Asset</h3>
-              <p className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>Add media</p>
-            </div>
-          </Link>
+        {/* Create New Project */}
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold">Create New Project</h2>
+            <p className="text-sm" style={{ color: "var(--text-muted)" }}>Choose how you want to create your video</p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+            {creationModes.map((mode) => {
+              const Icon = mode.icon;
+              return (
+                <Link key={mode.id} href={`/projects/new?mode=${mode.id}`}>
+                  <div
+                    className={`relative rounded-xl border bg-gradient-to-br ${mode.gradient} ${mode.border} ${mode.glow} hover:shadow-lg p-4 cursor-pointer group transition-all h-full flex flex-col`}
+                    style={{ borderColor: undefined }}
+                  >
+                    <div className={`w-9 h-9 rounded-lg ${mode.iconBg} flex items-center justify-center mb-3 shrink-0`}>
+                      <Icon className={`w-4.5 h-4.5 ${mode.iconColor}`} />
+                    </div>
+                    <h3 className={`text-sm font-semibold mb-1.5 group-hover:opacity-90 transition-opacity leading-snug`} style={{ color: "var(--text-primary)" }}>
+                      {mode.title}
+                    </h3>
+                    <p className="text-xs leading-relaxed flex-1" style={{ color: "var(--text-secondary)" }}>
+                      {mode.description}
+                    </p>
+                    <p className="text-[10px] mt-2.5 font-medium" style={{ color: "var(--text-muted)" }}>
+                      Best for: {mode.bestFor}
+                    </p>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Stats + secondary actions */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
           <Link href="/projects">
             <div
-              className="p-5 rounded-lg backdrop-blur border transition-all hover:border-purple-500/30 cursor-pointer group"
+              className="p-5 rounded-lg backdrop-blur border transition-all hover:border-purple-500/30 cursor-pointer group col-span-1"
               style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)" }}
             >
               <div className="flex items-center justify-between mb-2">
-                <p className="text-sm" style={{ color: "var(--text-secondary)" }}>Total Projects</p>
+                <p className="text-sm" style={{ color: "var(--text-secondary)" }}>Projects</p>
                 <FolderOpen className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity text-purple-400" />
               </div>
               <p className="text-3xl font-bold" style={{ color: "var(--text-primary)" }}>{totalProjects}</p>
@@ -237,12 +280,12 @@ export default function Dashboard() {
           </Link>
           <Link href="/render-queue">
             <div
-              className={`p-5 rounded-lg backdrop-blur border transition-all hover:border-amber-500/30 cursor-pointer group relative overflow-hidden ${activeRenders > 0 ? "border-amber-500/20" : ""}`}
+              className={`p-5 rounded-lg backdrop-blur border transition-all hover:border-amber-500/30 cursor-pointer group relative overflow-hidden col-span-1 ${activeRenders > 0 ? "border-amber-500/20" : ""}`}
               style={{ backgroundColor: "var(--surface)", borderColor: activeRenders > 0 ? undefined : "var(--border-subtle)" }}
             >
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
-                  <p className="text-sm" style={{ color: "var(--text-secondary)" }}>Active Renders</p>
+                  <p className="text-sm" style={{ color: "var(--text-secondary)" }}>Rendering</p>
                   {activeRenders > 0 && (
                     <span className="relative flex h-2 w-2">
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
@@ -262,7 +305,7 @@ export default function Dashboard() {
           </Link>
           <Link href="/projects?status=completed">
             <div
-              className="p-5 rounded-lg backdrop-blur border transition-all hover:border-emerald-500/30 cursor-pointer group"
+              className="p-5 rounded-lg backdrop-blur border transition-all hover:border-emerald-500/30 cursor-pointer group col-span-1"
               style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)" }}
             >
               <div className="flex items-center justify-between mb-2">
@@ -274,7 +317,7 @@ export default function Dashboard() {
           </Link>
           <Link href="/projects?status=draft">
             <div
-              className="p-5 rounded-lg backdrop-blur border transition-all hover:border-blue-500/30 cursor-pointer group"
+              className="p-5 rounded-lg backdrop-blur border transition-all hover:border-blue-500/30 cursor-pointer group col-span-1"
               style={{ backgroundColor: "var(--surface)", borderColor: "var(--border-subtle)" }}
             >
               <div className="flex items-center justify-between mb-2">
@@ -282,6 +325,24 @@ export default function Dashboard() {
                 <FileEdit className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity text-blue-400" />
               </div>
               <p className="text-3xl font-bold text-blue-400">{draftCount}</p>
+            </div>
+          </Link>
+          <Link href="/brand">
+            <div className="p-5 rounded-lg bg-gradient-to-br from-cyan-600/20 to-cyan-900/20 border border-cyan-500/20 hover:border-cyan-500/40 hover:shadow-lg hover:shadow-cyan-500/10 transition-all cursor-pointer group col-span-1">
+              <div className="flex items-start justify-between mb-2">
+                <Palette className="w-5 h-5 text-cyan-400 group-hover:text-cyan-300 transition-colors" />
+              </div>
+              <p className="text-sm font-semibold group-hover:text-cyan-100 transition-colors" style={{ color: "var(--text-primary)" }}>Brand</p>
+              <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>Logo & colors</p>
+            </div>
+          </Link>
+          <Link href="/assets">
+            <div className="p-5 rounded-lg bg-gradient-to-br from-emerald-600/20 to-emerald-900/20 border border-emerald-500/20 hover:border-emerald-500/40 hover:shadow-lg hover:shadow-emerald-500/10 transition-all cursor-pointer group col-span-1">
+              <div className="flex items-start justify-between mb-2">
+                <Upload className="w-5 h-5 text-emerald-400 group-hover:text-emerald-300 transition-colors" />
+              </div>
+              <p className="text-sm font-semibold group-hover:text-emerald-100 transition-colors" style={{ color: "var(--text-primary)" }}>Assets</p>
+              <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>Upload media</p>
             </div>
           </Link>
         </div>
@@ -309,37 +370,11 @@ export default function Dashboard() {
                   <Video className="w-8 h-8 text-purple-400" />
                 </div>
                 <h3 className="text-xl font-semibold mb-2" style={{ color: "var(--text-primary)" }}>
-                  Get started in 3 steps
+                  No projects yet
                 </h3>
-                <p className="text-sm mb-8 max-w-md mx-auto" style={{ color: "var(--text-secondary)" }}>
-                  Set up your brand, create your first video, and upload your assets to start producing professional content.
+                <p className="text-sm mb-4 max-w-md mx-auto" style={{ color: "var(--text-secondary)" }}>
+                  Pick a creation mode above to get started with your first video.
                 </p>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 border-t" style={{ borderColor: "var(--border-subtle)" }}>
-                {onboardingSteps.map((step) => {
-                  const Icon = step.icon;
-                  return (
-                    <Link key={step.step} href={step.href}>
-                      <div
-                        className="p-6 flex flex-col items-center text-center cursor-pointer group hover:bg-white/[0.02] transition-colors border-b md:border-b-0 md:border-r last:border-r-0 last:border-b-0"
-                        style={{ borderColor: "var(--border-subtle)" }}
-                      >
-                        <div className="flex items-center gap-2 mb-3">
-                          <span className="text-xs font-bold w-5 h-5 rounded-full bg-purple-500/20 text-purple-400 flex items-center justify-center">
-                            {step.step}
-                          </span>
-                          <Icon className="w-4 h-4 text-purple-400" />
-                        </div>
-                        <h4 className="font-medium text-sm mb-1 group-hover:text-purple-300 transition-colors" style={{ color: "var(--text-primary)" }}>
-                          {step.title}
-                        </h4>
-                        <p className="text-xs leading-relaxed" style={{ color: "var(--text-muted)" }}>
-                          {step.description}
-                        </p>
-                      </div>
-                    </Link>
-                  );
-                })}
               </div>
             </div>
           ) : (
