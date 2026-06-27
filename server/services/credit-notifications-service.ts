@@ -19,7 +19,9 @@ export type CreditNotificationThreshold =
   | "RESET_TOMORROW"
   | "RESET_TODAY";
 
-const FROM_EMAIL = process.env.SENDGRID_FROM_EMAIL || "ryan@pinehillfarm.co";
+const FROM_EMAIL = process.env.SENDGRID_FROM_EMAIL || "noreply@neuralcut.ai";
+const APP_URL = process.env.APP_URL
+  || (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : "https://neuralcut.ai");
 
 let sgInitialized = false;
 function initSendGrid(): boolean {
@@ -91,7 +93,7 @@ async function sendThresholdEmail(
       <h1 style="margin:0 0 16px;font-size:22px;color:#f4f4f5;">${spec.subjectShort}</h1>
       <p style="margin:0 0 24px;font-size:15px;line-height:1.6;color:#a1a1aa;">Hi ${firstName || "there"},</p>
       <p style="margin:0 0 24px;font-size:15px;line-height:1.6;color:#a1a1aa;">${spec.bodyShort}</p>
-      <a href="https://neuralcut.ai/billing" style="display:inline-block;background:linear-gradient(135deg,#a855f7,#7c3aed);color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;">Manage credits →</a>
+      <a href="${APP_URL}/billing" style="display:inline-block;background:linear-gradient(135deg,#a855f7,#7c3aed);color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;">Manage credits →</a>
     </div>
     <p style="margin:24px 0 0;font-size:12px;color:#52525b;text-align:center;">NeuralCut.AI · You can adjust credit notifications anytime in Billing.</p>
   </div>

@@ -129,6 +129,7 @@ export const mediaAssets = pgTable("media_assets", {
 }, (table) => ({
   typeIdx: index("idx_media_assets_type").on(table.type),
   sourceIdx: index("idx_media_assets_source").on(table.source),
+  sourceIdIdx: index("idx_media_assets_source_id").on(table.sourceId),
   categoryIdx: index("idx_media_assets_category").on(table.category),
   moodIdx: index("idx_media_assets_mood").on(table.mood),
   qualityIdx: index("idx_media_assets_quality").on(table.qualityScore),
@@ -296,6 +297,8 @@ export const productionLogs = pgTable("production_logs", {
   phaseIdx: index("idx_production_logs_phase").on(table.phaseId),
   levelIdx: index("idx_production_logs_level").on(table.level),
   timestampIdx: index("idx_production_logs_timestamp").on(table.timestamp),
+  apiServiceIdx: index("idx_production_logs_api_service").on(table.apiService),
+  categoryIdx: index("idx_production_logs_category").on(table.category),
 }));
 
 export const mediaAssetsRelations = relations(mediaAssets, ({ one, many }) => ({

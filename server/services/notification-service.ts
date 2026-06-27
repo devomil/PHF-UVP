@@ -1,8 +1,8 @@
 import sgMail from "@sendgrid/mail";
 
-const ADMIN_EMAIL = process.env.ADMIN_NOTIFICATION_EMAIL || "ryan@pinehillfarm.co";
-const ADMIN_PHONE = process.env.ADMIN_NOTIFICATION_PHONE || "+18474015540";
-const FROM_EMAIL = process.env.SENDGRID_FROM_EMAIL || "ryan@pinehillfarm.co";
+const ADMIN_EMAIL = process.env.ADMIN_NOTIFICATION_EMAIL || "";
+const ADMIN_PHONE = process.env.ADMIN_NOTIFICATION_PHONE || "";
+const FROM_EMAIL = process.env.SENDGRID_FROM_EMAIL || "noreply@neuralcut.ai";
 
 let sgInitialized = false;
 let twilioClient: any = null;

@@ -126,7 +126,7 @@ export async function saveProjectToDb(
   } else {
     await (db.insert(universalVideoProjects) as any).values({
       projectId,
-      ownerId: typeof ownerId === 'string' ? parseInt(ownerId) || 0 : ownerId,
+      ownerId: String(ownerId),
       status: project.status,
       progress: progressToSave,
       title: project.title || 'Untitled',
