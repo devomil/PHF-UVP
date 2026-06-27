@@ -872,6 +872,21 @@ export const PIAPI_TEST_DEFINITIONS: PiAPITestDefinition[] = [
     notes: 'Uses OpenAI API directly (OPENAI_API_KEY) - best text rendering quality',
   },
   {
+    id: 'gpt-image-2',
+    name: 'GPT-Image-2 (OpenAI Direct)',
+    category: 'image',
+    model: 'gpt-image-2',
+    taskType: 'txt2img',
+    input: {
+      prompt: 'A photorealistic luxury watch on a reflective marble surface with soft studio lighting, product photography',
+    },
+    endpoint: 'openai-direct',
+    pollForResult: false,
+    estimatedCost: '$0.04',
+    estimatedTime: '~15s',
+    notes: 'Uses OpenAI API directly (OPENAI_API_KEY) — latest OpenAI image model, superior prompt adherence',
+  },
+  {
     id: 'gpt-image-1-piapi',
     name: 'GPT-Image-1 (PiAPI)',
     category: 'image',
@@ -997,6 +1012,20 @@ export const PIAPI_TEST_DEFINITIONS: PiAPITestDefinition[] = [
     estimatedTime: '~8s',
     disabled: true,
     disabledReason: 'Seedream requires direct API access - not available via PiAPI',
+  },
+  {
+    id: 'seedream-5-lite',
+    name: 'Seedream 5 Lite',
+    category: 'image',
+    model: 'bytedance/seedream-v5.0-lite',
+    taskType: 'txt2img',
+    input: {
+      prompt: 'A majestic eagle soaring above snow-capped mountains at golden hour, cinematic lighting, ultra detail',
+    },
+    pollForResult: true,
+    estimatedCost: '$0.04',
+    estimatedTime: '~10s',
+    notes: 'Seedream 5 Lite via PiAPI — updated v5.0 model with more stable output quality',
   },
   {
     id: 'z-image-turbo',
