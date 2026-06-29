@@ -1039,6 +1039,7 @@ export function EnhancedSceneEditor({ scene, sceneIndex, projectId, onClose, asp
         credentials: "include",
         body: JSON.stringify({
           prompt: editValues.visualDirection,
+          provider: provider !== "auto" ? provider : undefined,
           generationMode: activeMode,
           sourceImageUrl: activeMode === "i2i" ? sourceImage : undefined,
         }),

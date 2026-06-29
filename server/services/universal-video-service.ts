@@ -6754,19 +6754,22 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
     
     // Handle explicit I2I mode from UI
     if (mode === 'i2i' && sourceImageUrl) {
-      console.log(`[Regenerate] Explicit I2I mode with source: ${sourceImageUrl.substring(0, 80)}`);
+      console.log(`[Regenerate] Explicit I2I mode with source: ${sourceImageUrl.substring(0, 80)}, provider: ${provider || 'auto'}`);
       try {
-        const i2iResult = await this.generateImageWithReference(
+        const { imageGenerationService: igs } = await import('./image-generation-service');
+        const i2iResult = await igs.generateImageToImage({
+          referenceImageUrl: sourceImageUrl,
           prompt,
-          sourceImageUrl,
-          { strength: 0.7, preserveComposition: true },
-          sceneId
-        );
-        if (i2iResult.success && i2iResult.url) {
-          console.log(`[Regenerate] I2I image generated successfully: ${i2iResult.source}`);
-          return { success: true, newImageUrl: i2iResult.url, source: i2iResult.source };
+          strength: 0.7,
+          provider: provider || undefined,
+          aspectRatio: imgAspectRatio,
+          useCase: 'scene-integration',
+        });
+        if (i2iResult.url) {
+          console.log(`[Regenerate] I2I image generated successfully via ${i2iResult.provider}`);
+          return { success: true, newImageUrl: i2iResult.url, source: i2iResult.provider };
         }
-        console.log(`[Regenerate] Explicit I2I failed: ${i2iResult.error || 'no URL'} - falling through`);
+        console.log(`[Regenerate] Explicit I2I returned no URL - falling through`);
       } catch (err: any) {
         console.error(`[Regenerate] Explicit I2I error:`, err.message);
       }
@@ -6788,30 +6791,29 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
     
     // ===== PHASE 13D: IMAGE-TO-IMAGE REFERENCE SUPPORT FOR REGENERATION =====
     const refConfig = (scene as any).referenceConfig;
-    if (refConfig?.mode === 'image-to-image' && refConfig?.sourceUrl) {
+    const storedRefUrl = refConfig?.sourceUrl || refConfig?.imageUrl;
+    if (refConfig?.mode === 'image-to-image' && storedRefUrl) {
       const i2iSettings = refConfig.i2iSettings || {};
-      const referenceUrl = refConfig.sourceUrl;
       
-      console.log(`[Regenerate] Scene has I2I reference image: ${referenceUrl}`);
+      console.log(`[Regenerate] Scene has I2I reference image: ${storedRefUrl}, provider: ${provider || 'auto'}`);
       console.log(`[Regenerate] I2I settings: strength=${i2iSettings.strength || 0.7}`);
       
       try {
-        const i2iResult = await this.generateImageWithReference(
+        const { imageGenerationService: igs } = await import('./image-generation-service');
+        const i2iResult = await igs.generateImageToImage({
+          referenceImageUrl: storedRefUrl,
           prompt,
-          referenceUrl,
-          {
-            strength: i2iSettings.strength,
-            preserveComposition: i2iSettings.preserveComposition,
-            preserveColors: i2iSettings.preserveColors,
-          },
-          sceneId
-        );
+          strength: i2iSettings.strength ?? 0.7,
+          provider: provider || undefined,
+          aspectRatio: imgAspectRatio,
+          useCase: 'scene-integration',
+        });
         
-        if (i2iResult.success && i2iResult.url) {
-          console.log(`[Regenerate] I2I image generated successfully: ${i2iResult.source}`);
-          return { success: true, newImageUrl: i2iResult.url, source: i2iResult.source };
+        if (i2iResult.url) {
+          console.log(`[Regenerate] I2I image generated successfully via ${i2iResult.provider}`);
+          return { success: true, newImageUrl: i2iResult.url, source: i2iResult.provider };
         }
-        console.log(`[Regenerate] I2I generation failed: ${i2iResult.error || 'no URL'} - falling through to standard generation`);
+        console.log(`[Regenerate] I2I generation returned no URL - falling through to standard generation`);
       } catch (err: any) {
         console.error(`[Regenerate] I2I generation error:`, err.message);
       }
