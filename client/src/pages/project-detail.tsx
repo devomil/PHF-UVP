@@ -6400,6 +6400,7 @@ export function QuickCreateAssetPanel({ projectId, project }: { projectId: strin
     // the user can retry without having to re-upload / re-select the image.
     setShowQcAleph2Panel(false);
     setQcAleph2Prompt('');
+    setQcAleph2Submitting(true);
     visualGenStartTimeRef.current = Date.now();
     setVisualGenerating(true);
     toast({ title: "Aleph 2.0 Editing", description: "Runway Aleph 2.0 is re-styling your clip. This typically takes 1–3 minutes." });
@@ -6426,11 +6427,13 @@ export function QuickCreateAssetPanel({ projectId, project }: { projectId: strin
         }
         // Request accepted — now safe to clear the reference image slot.
         setQcAleph2RefImage(null);
+        setQcAleph2Submitting(false);
         queryClient.invalidateQueries({ queryKey: ["quick-create-assets", projectId] });
       })
       .catch((err) => {
         toast({ title: "Aleph 2.0 failed", description: err.message, variant: "destructive" });
         setVisualGenerating(false);
+        setQcAleph2Submitting(false);
       });
   };
 
@@ -6831,7 +6834,7 @@ export function QuickCreateAssetPanel({ projectId, project }: { projectId: strin
                     <Loader2 className="w-8 h-8 animate-spin text-purple-400" />
                     <div className="text-center">
                       <p className="text-sm font-semibold text-white">
-                        {visualGenerating && assets.visual?.status === "completed" ? "Aleph 2.0 Editing..." : "Generating..."}
+                        {qcAleph2Submitting ? "Aleph 2.0 Editing..." : "Generating..."}
                       </p>
                       <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.55)" }}>This typically takes 1–3 min</p>
                     </div>
