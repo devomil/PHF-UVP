@@ -905,14 +905,18 @@ export async function registerRoutes(app: Express) {
       }
 
       // Pull brand logo (read-only) for the LOGO reference slot in Quick Create.
+      // Skipped when the project has disabled brand carryover.
+      const disableBrandCarryover = !!(assets.disableBrandCarryover);
       let brandLogoUrl: string | null = null;
-      try {
-        const { brandBibleService } = await import('./services/brand-bible-service');
-        const bb = await brandBibleService.getBrandBible(userId);
-        const logo = bb?.logos?.main || bb?.logos?.intro || bb?.logos?.outro || bb?.logos?.watermark;
-        brandLogoUrl = logo?.url || null;
-      } catch {
-        brandLogoUrl = null;
+      if (!disableBrandCarryover) {
+        try {
+          const { brandBibleService } = await import('./services/brand-bible-service');
+          const bb = await brandBibleService.getBrandBible(userId);
+          const logo = bb?.logos?.main || bb?.logos?.intro || bb?.logos?.outro || bb?.logos?.watermark;
+          brandLogoUrl = logo?.url || null;
+        } catch {
+          brandLogoUrl = null;
+        }
       }
 
       res.json({
@@ -986,11 +990,56 @@ export async function registerRoutes(app: Express) {
           // image matches this and there's no per-scene override.
           projectProductMediaUrl: assets?.productMediaUrl || null,
           provider: qc.visual?.provider || latestJob?.provider || null,
+          // Per-project brand carryover toggle (stored in assets.disableBrandCarryover).
+          disableBrandCarryover,
         },
       });
     } catch (error) {
       console.error("Failed to fetch Quick Create assets:", error);
       res.status(500).json({ error: "Failed to fetch assets" });
+    }
+  });
+
+  // Per-project settings (currently: brand carryover toggle).
+  app.patch("/api/projects/:projectId/quick-create/settings", async (req, res) => {
+    try {
+      if (!req.isAuthenticated() || !req.user) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+      const { projectId } = req.params;
+      const userId = (req.user as any).id;
+      const { disableBrandCarryover } = req.body;
+
+      const [project] = await db
+        .select()
+        .from(universalVideoProjects)
+        .where(eq(universalVideoProjects.projectId, projectId))
+        .limit(1);
+
+      if (!project || project.ownerId !== userId) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+
+      const outputFormat = (project.outputFormat as any) || {};
+      if (outputFormat.platform !== "quick-create") {
+        return res.status(400).json({ error: "Not a Quick Create project" });
+      }
+
+      const currentAssets = (project.assets as any) || {};
+      const updatedAssets = {
+        ...currentAssets,
+        disableBrandCarryover: disableBrandCarryover === true,
+      };
+
+      await db.update(universalVideoProjects).set({
+        assets: updatedAssets,
+        updatedAt: new Date(),
+      }).where(eq(universalVideoProjects.projectId, projectId));
+
+      res.json({ success: true, disableBrandCarryover: updatedAssets.disableBrandCarryover });
+    } catch (error) {
+      console.error("Failed to update Quick Create settings:", error);
+      res.status(500).json({ error: "Failed to update settings" });
     }
   });
 
@@ -1183,14 +1232,18 @@ export async function registerRoutes(app: Express) {
       // job, otherwise the worker has no way to know about it. Only attach when
       // the chosen provider supports multi-image composition (so we don't
       // overwrite the product on single-ref providers).
+      // Skipped when the project has disabled brand carryover.
+      const disableBrandCarryoverGen = !!((project.assets as any)?.disableBrandCarryover);
       let brandLogoUrl: string | null = null;
-      try {
-        const { brandBibleService } = await import('./services/brand-bible-service');
-        const bb = await brandBibleService.getBrandBible(userId);
-        const logo = bb?.logos?.main || bb?.logos?.intro || bb?.logos?.outro || bb?.logos?.watermark;
-        brandLogoUrl = logo?.url || null;
-      } catch {
-        brandLogoUrl = null;
+      if (!disableBrandCarryoverGen) {
+        try {
+          const { brandBibleService } = await import('./services/brand-bible-service');
+          const bb = await brandBibleService.getBrandBible(userId);
+          const logo = bb?.logos?.main || bb?.logos?.intro || bb?.logos?.outro || bb?.logos?.watermark;
+          brandLogoUrl = logo?.url || null;
+        } catch {
+          brandLogoUrl = null;
+        }
       }
       const { VIDEO_PROVIDERS } = await import('../shared/provider-config');
       // When provider is "auto" the actual model is picked downstream, so fall

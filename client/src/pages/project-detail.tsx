@@ -6184,6 +6184,8 @@ export function QuickCreateAssetPanel({ projectId, project }: { projectId: strin
   // Logo override: undefined = inherit brand bible, null = exclude for this run,
   // string = use this custom URL instead of the brand bible logo.
   const [overrideLogo, setOverrideLogo] = useState<string | null | undefined>(undefined);
+  // Per-project brand carryover toggle — persisted server-side in project assets.
+  const [disableBrandCarryover, setDisableBrandCarryover] = useState<boolean>(false);
   // Routes the next file-picker selection into the correct typed slot.
   const pendingUploadSlotRef = useRef<"product" | "character" | "extra" | "logo">("product");
   const [uploadingSourceImage, setUploadingSourceImage] = useState(false);
@@ -6348,6 +6350,10 @@ export function QuickCreateAssetPanel({ projectId, project }: { projectId: strin
           (project as any)?.description ||
           "";
         if (fallbackNarration) setNarrationText(fallbackNarration);
+      }
+      // Hydrate brand carryover toggle from server-persisted value.
+      if (genInfo?.disableBrandCarryover === true) {
+        setDisableBrandCarryover(true);
       }
       initializedRef.current = true;
     }
@@ -6618,6 +6624,18 @@ export function QuickCreateAssetPanel({ projectId, project }: { projectId: strin
       toast({ title: "Error", description: err.message, variant: "destructive" });
     },
   });
+
+  const handleBrandCarryoverToggle = useCallback((disabled: boolean) => {
+    setDisableBrandCarryover(disabled);
+    fetch(`/api/projects/${projectId}/quick-create/settings`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ disableBrandCarryover: disabled }),
+    })
+      .then(() => queryClient.invalidateQueries({ queryKey: [`/api/projects/${projectId}/quick-create/assets`] }))
+      .catch(() => {});
+  }, [projectId, queryClient]);
 
   const saveOverlayTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleOverlayChange = useCallback((items: SceneOverlayItem[]) => {
@@ -6993,12 +7011,14 @@ export function QuickCreateAssetPanel({ projectId, project }: { projectId: strin
                   ? null
                   : (overrideSourceImage || genInfo.sourceImageUrl || projectProductUrl || null);
               const effCharacter = overrideCharacter === null ? null : (overrideCharacter || genInfo.characterRefImageUrl || null);
-              // Logo: client-side override wins (null = excluded, string = custom),
-              // otherwise the server-resolved effective logo (which already accounts
-              // for any persisted exclude/custom override from the last job).
-              const effLogo = overrideLogo === null
+              // Logo: brand carryover disabled → always null (overrides everything).
+              // Otherwise: client-side override wins (null = excluded for this run,
+              // string = custom), then the server-resolved effective logo.
+              const effLogo = disableBrandCarryover
                 ? null
-                : (overrideLogo || genInfo.brandLogoUrl || null);
+                : overrideLogo === null
+                  ? null
+                  : (overrideLogo || genInfo.brandLogoUrl || null);
               const serverExtras: string[] = Array.isArray(genInfo.referenceImages) ? genInfo.referenceImages : [];
               const effExtras: string[] = overrideExtras !== undefined ? overrideExtras : serverExtras;
 
@@ -7074,6 +7094,21 @@ export function QuickCreateAssetPanel({ projectId, project }: { projectId: strin
                       Reference Images
                     </label>
                     <div className="flex items-center gap-2">
+                    {/* Brand carryover toggle — only shown when a brand logo is available */}
+                    {genInfo.brandBibleLogoUrl && (
+                      <button
+                        type="button"
+                        onClick={() => handleBrandCarryoverToggle(!disableBrandCarryover)}
+                        title={disableBrandCarryover ? "Brand logo is excluded from this project — click to re-enable" : "Auto-include brand logo from your Brand page — click to disable"}
+                        className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded transition-all"
+                        style={disableBrandCarryover
+                          ? { color: "var(--text-muted)", border: "1px solid rgba(255,255,255,0.1)", backgroundColor: "transparent" }
+                          : { color: "rgb(167,139,250)", border: "1px solid rgba(139,92,246,0.35)", backgroundColor: "rgba(139,92,246,0.1)" }}
+                      >
+                        <span style={{ fontSize: 8 }}>{disableBrandCarryover ? "○" : "●"}</span>
+                        Brand logo
+                      </button>
+                    )}
                     {/* I2I mode toggle: only meaningful for image-mode projects with a reference image */}
                     {project.mediaMode === "image" && effProduct && (
                       <div className="flex items-center gap-0.5 rounded-md p-0.5" style={{ backgroundColor: "rgba(0,0,0,0.3)", border: "1px solid rgba(255,255,255,0.08)" }}>
