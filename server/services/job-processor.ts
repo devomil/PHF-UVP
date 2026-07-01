@@ -135,6 +135,30 @@ export async function processVideoJob(jobId: string) {
       }
     }
 
+    // Resolve additional reference images (character, logo, extras) stored in
+    // i2vSettings.referenceImages. These feed the multi-image I2V path in
+    // piapi-video-service (reference_images[] / elements[]) so the provider
+    // receives all reference images, not just the first-frame source image.
+    let resolvedImageUrls: string[] | undefined = undefined;
+    const rawRefImages = Array.isArray(jobI2vSettings.referenceImages)
+      ? (jobI2vSettings.referenceImages as string[]).filter(Boolean)
+      : [];
+    if (rawRefImages.length > 0 && resolvedImageUrl) {
+      const resolvedRefs = await Promise.all(
+        rawRefImages.map(async (url: string) => {
+          if (url.startsWith('https://')) return url;
+          const r = await assetUrlResolver.resolve(url);
+          if (r) console.log(`[JobProcessor] Resolved ref image: ${url.substring(0, 60)} → ${r.substring(0, 60)}...`);
+          return r || null;
+        })
+      );
+      const validRefs = resolvedRefs.filter((u): u is string => !!u);
+      // imageUrls = [sourceImage, ...additionalRefs] — source goes first so
+      // it maps to @image1 and subsequent refs to @image2, @image3, etc.
+      resolvedImageUrls = [resolvedImageUrl, ...validRefs];
+      console.log(`[JobProcessor] Multi-image I2V: ${resolvedImageUrls.length} images (source + ${validRefs.length} refs)`);
+    }
+
     const isI2IJob = job.sceneType === 'i2i' && resolvedImageUrl;
 
     let result: any;
@@ -205,6 +229,9 @@ export async function processVideoJob(jobId: string) {
         preferredProvider: job.provider || "auto",
         negativePrompt: job.negativePrompt || undefined,
         imageUrl: resolvedImageUrl,
+        // Forward all resolved reference images so multi-image providers
+        // (Kling 2.5, Seedance) receive them in reference_images[]/elements[].
+        ...(resolvedImageUrls && resolvedImageUrls.length > 1 ? { imageUrls: resolvedImageUrls } : {}),
         sourceVideoUrl: jobI2vSettings.sourceVideoUrl || undefined,
         ...(jobI2vSettings.isCharacterReference ? { isCharacterReference: true } : {}),
         ...(jobI2vSettings.artPresetId ? { artPresetId: jobI2vSettings.artPresetId } : {}),
