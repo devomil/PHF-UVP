@@ -9,6 +9,7 @@ import {
   getCfgControlSupport,
   getIpAdapterSupport,
 } from '../../shared/provider-config';
+import { buildProviderSpecificGuidance } from './suzzie-provider-guides';
 
 interface SuzzieSceneContext {
   narration?: string;
@@ -319,6 +320,21 @@ export function buildSuzzieSystemPrompt(context: SuzzieSceneContext): string {
   const cfgControlSupport = context.provider ? getCfgControlSupport(context.provider) : null;
   const ipAdapterSupport = context.provider ? getIpAdapterSupport(context.provider) : null;
 
+  // Deep provider-specific prompting guide — injected when a provider is selected.
+  // This is the highest-priority section: Suzzie must apply this provider's vocabulary,
+  // syntax, and philosophy when writing prompts.
+  const providerDisplayName = context.provider
+    ? (VIDEO_PROVIDERS[context.provider]?.displayName ?? context.provider)
+    : '';
+  const providerGuideSection = context.provider
+    ? buildProviderSpecificGuidance(
+        context.provider,
+        providerDisplayName,
+        !!multiImageSupport,
+        multiImageSupport?.promptSyntax,
+      )
+    : '';
+
   let sceneContext = '';
   if (context.narration || context.sceneType || context.artPresetName) {
     sceneContext = `\n## Current Scene Context`;
@@ -331,26 +347,37 @@ export function buildSuzzieSystemPrompt(context: SuzzieSceneContext): string {
     if (context.visualDirection) sceneContext += `\nCurrent Visual Direction: "${context.visualDirection}"`;
   }
 
-  const multiImageGuidance = multiImageSupport ? `
+  const multiImageGuidance = multiImageSupport ? (() => {
+    // Derive concrete image reference tags from the provider's promptSyntax.
+    // promptSyntax is stored as '@image_N' (Kling) or '@imageN' (Seedance/Flux).
+    // Replace 'N' with actual numbers for example prompts.
+    const syn = multiImageSupport.promptSyntax ?? '@imageN';
+    const img1 = syn.replace('N', '1');
+    const img2 = syn.replace('N', '2');
+    const img3 = syn.replace('N', '3');
+    return `
 
 ## @imageN Syntax — Multi-Image References
-The selected provider (${context.provider}) supports up to ${multiImageSupport.maxImages} reference images using **@imageN** syntax directly inside the visual direction prompt.
+The selected provider (${context.provider}) supports up to ${multiImageSupport.maxImages} reference images using **${syn}** syntax directly inside the visual direction prompt.
+
+**CRITICAL: Use EXACTLY \`${img1}\`, \`${img2}\`, \`${img3}\` — match the provider's exact format (underscores or no underscores matter).**
 
 **How it works:**
-- The user uploads multiple reference images to the scene (image1, image2, …)
-- They reference each one in the prompt using @image1, @image2, @image3, etc.
+- The user uploads multiple reference images to the scene (image 1, image 2, …)
+- They reference each one in the prompt using ${img1}, ${img2}, ${img3}, etc.
 - The AI uses them as anchors, morphing sources, or character references within a single generated clip
 
-**Example prompts to suggest:**
-- "@image1 morphs into @image2 with a liquid dissolve transition, slow and cinematic"
-- "@image1 as the opening frame — camera slowly orbits right to reveal @image2 in the same golden-hour environment"
-- "A woman (@image1) walks toward the camera; @image2 fades in beside her, same warm studio lighting"
-- "@image1 dissolves into @image2 like watercolor paint bleeding through wet canvas — dreamy, slow"
-- "Start on @image1 product, sweep the camera right, blend to @image2 product with a warm light transition"
+**Example prompts to suggest (use this EXACT syntax):**
+- "${img1} morphs into ${img2} with a liquid dissolve transition, slow and cinematic"
+- "${img1} as the opening frame — camera slowly orbits right to reveal ${img2} in the same golden-hour environment"
+- "A woman (${img1}) walks toward the camera; ${img2} fades in beside her, same warm studio lighting"
+- "${img1} dissolves into ${img2} like watercolor paint bleeding through wet canvas — dreamy, slow"
+- "Start on ${img1} product, sweep the camera right, blend to ${img2} product with a warm light transition"
 
 **Tip:** ${multiImageSupport.hint}
 
-When the user asks about using multiple images, combining subjects, or creating morphing transitions, proactively suggest the @imageN pattern and offer to write an optimized prompt using it.` : '';
+When the user asks about using multiple images, combining subjects, or creating morphing transitions, proactively suggest the ${syn} pattern and offer to write an optimized prompt using it.`;
+  })() : '';
 
   const voiceCloneGuidance = voiceCloneSupport ? `
 
@@ -467,6 +494,7 @@ ${referenceAudioGuidance}
 ${cfgControlGuidance}
 ${ipAdapterGuidance}
 ${i2vGuidance}
+${providerGuideSection ? `\n${providerGuideSection}` : ''}
 
 ## Image Analysis
 When the user attaches an image (photo of a location, store, product, etc.), analyze it in detail:
