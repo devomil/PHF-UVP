@@ -1223,6 +1223,10 @@ class PiAPIVideoService {
     isCharacterReference?: boolean;
     artPresetId?: string;
   }, sanitizedPrompt: string): any {
+    // Normalize @image_N and "@image N" (space-separated) → @imageN so the
+    // /@image\d/ regex and provider APIs receive the canonical no-separator form.
+    sanitizedPrompt = sanitizedPrompt.replace(/@image[_ ](\d+)/gi, '@image$1');
+
     let animationStyle = options.i2vSettings?.animationStyle ?? 'product-hero';
     if (animationStyle === 'product-hero' && !options.i2vSettings?.animationStyle) {
       if (hasActionPrompt(sanitizedPrompt)) {
@@ -1867,17 +1871,15 @@ class PiAPIVideoService {
       const isLegacyVersion = version === '1.6' || version === '1.0';
 
       if (hasMultipleImages) {
-        if (isLegacyVersion) {
-          console.log(`[PiAPI I2V] Kling multi-image mode: ${allImageUrls.length} images via elements[] (v${version})`);
-        } else {
-          console.log(`[PiAPI I2V] Kling v${version}: elements[] not supported, using first reference image only (${allImageUrls.length} provided)`);
-        }
+        console.log(`[PiAPI I2V] Kling v${version} multi-image mode: ${allImageUrls.length} images`);
       }
 
       if (requiresNewContent) {
+        // reference_images accepts all images for all Kling versions — pass the
+        // full list so character/extra reference images are honoured by the model.
         const refInput: any = {
           prompt: klingI2vPrompt,
-          reference_images: [options.imageUrl],
+          reference_images: allImageUrls,
           duration: options.duration,
           aspect_ratio: options.aspectRatio,
           negative_prompt: i2vNegativePrompt,
@@ -1886,6 +1888,7 @@ class PiAPIVideoService {
           cfg_scale: cfgScale,
           ...motionParams,
         };
+        // Legacy Kling (1.6/1.0) also accepts elements[] for character refs.
         if (hasMultipleImages && isLegacyVersion) {
           refInput.elements = allImageUrls.map(url => ({ image_url: url }));
         }
@@ -1896,8 +1899,9 @@ class PiAPIVideoService {
         };
       }
       
-      // Animation mode: use image_url for first-frame animation
-      // No camera_control here - motion comes from prompt directives
+      // Animation mode: use image_url for first-frame animation.
+      // Extra reference images are passed via elements[] (all Kling versions)
+      // so the model can honour character/style references in the prompt.
       const klingInput: any = {
         prompt: klingI2vPrompt,
         image_url: options.imageUrl,
@@ -1908,7 +1912,9 @@ class PiAPIVideoService {
         version,
         cfg_scale: cfgScale,
       };
-      if (hasMultipleImages && isLegacyVersion) {
+      if (hasMultipleImages) {
+        // Send all images as elements[] regardless of version — newer Kling
+        // versions accept the same character-reference field as legacy 1.6.
         klingInput.elements = allImageUrls.map(url => ({ image_url: url }));
       } else if (isLegacyVersion) {
         klingInput.elements = [{ image_url: options.imageUrl }];
