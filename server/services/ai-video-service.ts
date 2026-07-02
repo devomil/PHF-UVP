@@ -89,8 +89,8 @@ const TIER_PROVIDER_VERSIONS: Record<string, Record<string, string>> = {
   },
   veo: {
     ultra: 'veo-3.1',
-    premium: 'veo-3',
-    standard: 'veo-3',
+    premium: 'veo-3.1',
+    standard: 'veo-3.1',
     draft: 'seedance-2.0-fast',
   },
   hunyuan: {
@@ -416,7 +416,7 @@ class AIVideoService {
     
     let sceneTypeMappedProviders: Set<string> = new Set();
     if (!enhancedOptions.preferredProvider || enhancedOptions.preferredProvider === 'auto') {
-      const hierarchy = artPreset?.providerHierarchy || { primary: 'seedance-2.0', fallback: ['runway-gen4', 'kling-2.6-pro', 'veo-3'] };
+      const hierarchy = artPreset?.providerHierarchy || { primary: 'seedance-2.0', fallback: ['kling-2.6-pro', 'veo-3.1', 'kling-2.6'] };
       const hierarchyChain = [hierarchy.primary, ...hierarchy.fallback];
       const availableHierarchy = hierarchyChain.filter(p => configuredProviders.some(cp => cp === p || cp.startsWith(p + '-') || cp.startsWith(p)));
       
@@ -511,11 +511,30 @@ class AIVideoService {
       return true;
     });
 
-    const primaryProvider = validOrder[0];
-    const circuitFilteredOrder = this.filterByCircuitBreaker(validOrder, primaryProvider);
+    // Safety guard: never silently fall back to the direct Runway API unless the
+    // user explicitly chose a Runway provider.  The user may have RUNWAY_API_KEY
+    // configured only for intentional Aleph 2 usage; auto-routing to runway-gen4
+    // (or any other runway-* variant) would charge Runway credits without the
+    // user's knowledge.
+    const isExplicitRunwayRequest = isExplicitSelection &&
+      (AI_VIDEO_PROVIDERS[enhancedOptions.preferredProvider!]?.apiProvider === 'runway' ||
+       runwayVideoService.isRunwayModel(enhancedOptions.preferredProvider!));
+    const runwaySafeOrder = isExplicitRunwayRequest
+      ? validOrder
+      : validOrder.filter(p => {
+          const prov = AI_VIDEO_PROVIDERS[p];
+          const isRunway = prov?.apiProvider === 'runway' || runwayVideoService.isRunwayModel(p);
+          if (isRunway) {
+            console.warn(`[AIVideo] ⚡ Runway provider "${p}" blocked from auto-routing — use an explicit Runway provider selection to enable it`);
+          }
+          return !isRunway;
+        });
+
+    const primaryProvider = runwaySafeOrder[0];
+    const circuitFilteredOrder = this.filterByCircuitBreaker(runwaySafeOrder, primaryProvider);
 
     console.log(`[AIVideo] Scene: ${enhancedOptions.sceneType}, Quality: ${qualityTier}`);
-    console.log(`[AIVideo] Provider order: ${circuitFilteredOrder.join(' → ')}${circuitFilteredOrder.length < validOrder.length ? ` (${validOrder.length - circuitFilteredOrder.length} skipped by circuit breaker)` : ''}`);
+    console.log(`[AIVideo] Provider order: ${circuitFilteredOrder.join(' → ')}${circuitFilteredOrder.length < runwaySafeOrder.length ? ` (${runwaySafeOrder.length - circuitFilteredOrder.length} skipped by circuit breaker)` : ''}`);
 
     const artPresetName = artPreset?.name || 'Auto';
     const artPresetIdentifier = options.artPresetId || 'auto';
