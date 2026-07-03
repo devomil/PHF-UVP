@@ -44,6 +44,17 @@ const RUNWAY_COST_PER_SECOND: Record<string, number> = {
   'runway-happy-horse-1': 0.08,
 };
 
+// ── Hard cost safeguard ──────────────────────────────────────────────
+// Policy: Runway is ONLY for explicit Aleph 2 usage; every other model
+// must route through PiAPI. `assertRunwayAllowed()` (below) is the single
+// choke point that enforces this — it runs BEFORE any task-creating request
+// (a Runway task is what gets billed), so no auto-fallback, test route,
+// retry, or future code path can charge Runway for a disallowed model.
+//   RUNWAY_DISABLED=1|true|yes   emergency lock — blocks ALL Runway calls
+//                                (including Aleph); flip from secrets, no deploy.
+//   RUNWAY_ALLOWED_MODELS="a,b"  override the allow-list (defaults to Aleph).
+const DEFAULT_RUNWAY_ALLOWED_MODELS = ['runway-gen4-aleph', 'runway-aleph-2'];
+
 interface RunwayGenerationResult {
   success: boolean;
   videoUrl?: string;
@@ -79,6 +90,36 @@ class RunwayVideoService {
     return RUNWAY_MODEL_MAP[providerKey] || 'gen4_turbo';
   }
 
+  private isTruthyEnv(v?: string): boolean {
+    return ['1', 'true', 'yes', 'on'].includes((v || '').trim().toLowerCase());
+  }
+
+  private getAllowedRunwayModels(): Set<string> {
+    const raw = process.env.RUNWAY_ALLOWED_MODELS;
+    if (raw && raw.trim()) {
+      return new Set(raw.split(',').map(s => s.trim()).filter(Boolean));
+    }
+    return new Set(DEFAULT_RUNWAY_ALLOWED_MODELS);
+  }
+
+  /**
+   * Cost safeguard. Returns an error string if this Runway call must be
+   * blocked, or null if allowed. Callers MUST invoke this before creating a
+   * task so a disallowed model never incurs a charge.
+   */
+  private assertRunwayAllowed(providerKey: string): string | null {
+    if (this.isTruthyEnv(process.env.RUNWAY_DISABLED)) {
+      console.warn(`[Runway] ⛔ BLOCKED "${providerKey}" — RUNWAY_DISABLED is set; all Runway generation is disabled.`);
+      return 'Runway generation is disabled (RUNWAY_DISABLED). No Runway task was created.';
+    }
+    const allowed = this.getAllowedRunwayModels();
+    if (!allowed.has(providerKey)) {
+      console.warn(`[Runway] ⛔ BLOCKED non-Aleph model "${providerKey}" — Runway is restricted to [${[...allowed].join(', ')}]; everything else routes through PiAPI. Set RUNWAY_ALLOWED_MODELS to change.`);
+      return `Runway is restricted to Aleph 2 only on this account — "${providerKey}" was blocked to prevent an unintended charge. Route this model through PiAPI, or add it to RUNWAY_ALLOWED_MODELS.`;
+    }
+    return null;
+  }
+
   private getHeaders(apiModel?: string) {
     const version = (apiModel && RUNWAY_MODEL_API_VERSION[apiModel]) || RUNWAY_DEFAULT_API_VERSION;
     return {
@@ -109,6 +150,9 @@ class RunwayVideoService {
     const startTime = Date.now();
     const providerKey = options.model || 'runway';
     const apiModel = this.resolveApiModel(providerKey);
+
+    const blocked = this.assertRunwayAllowed(providerKey);
+    if (blocked) return { success: false, error: blocked, generationTimeMs: Date.now() - startTime };
 
     try {
       const clampedDuration = Math.round(Math.min(options.duration || 5, 10));
@@ -201,6 +245,9 @@ class RunwayVideoService {
     // V2V endpoint uses a different model ID namespace — prefer V2V map, fall back to T2V map.
     const apiModel = RUNWAY_V2V_MODEL_MAP[providerKey] || this.resolveApiModel(providerKey);
 
+    const blocked = this.assertRunwayAllowed(providerKey);
+    if (blocked) return { success: false, error: blocked, generationTimeMs: Date.now() - startTime };
+
     try {
       console.log(`[Runway:V2V] Starting video-to-video with model: ${apiModel} (provider: ${providerKey})`);
       console.log(`[Runway:V2V] Source video: ${options.videoUrl.substring(0, 80)}...`);
@@ -277,6 +324,9 @@ class RunwayVideoService {
     this.apiKey = process.env.RUNWAY_API_KEY!;
     const startTime = Date.now();
 
+    const blocked = this.assertRunwayAllowed('runway-act-two');
+    if (blocked) return { success: false, error: blocked, generationTimeMs: Date.now() - startTime };
+
     try {
       console.log(`[Runway:ActTwo] Starting character performance`);
       console.log(`[Runway:ActTwo] Character image: ${options.characterImageUrl.substring(0, 80)}...`);
@@ -348,6 +398,9 @@ class RunwayVideoService {
     const startTime = Date.now();
     const providerKey = 'runway-agent-2';
     const apiModel = this.resolveApiModel(providerKey);
+
+    const blocked = this.assertRunwayAllowed(providerKey);
+    if (blocked) return { success: false, error: blocked, generationTimeMs: Date.now() - startTime };
 
     try {
       const clampedDuration = Math.round(Math.min(options.duration || 10, 30));
@@ -430,6 +483,8 @@ class RunwayVideoService {
     if (!this.isAvailable()) return { error: 'RUNWAY_API_KEY not configured' };
     this.apiKey = process.env.RUNWAY_API_KEY!;
     const providerKey = options.model || 'runway';
+    const blocked = this.assertRunwayAllowed(providerKey);
+    if (blocked) return { error: blocked };
     const apiModel = this.resolveApiModel(providerKey);
     const clampedDuration = Math.round(Math.min(options.duration || 5, 10));
     const ratio = options.aspectRatio === '9:16' ? '720:1280' : '1280:720';
