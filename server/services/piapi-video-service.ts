@@ -1242,11 +1242,17 @@ class PiAPIVideoService {
 
       const p = prompt.toLowerCase();
 
-      const humanSubjects = /\b(?:people|person|woman|man|child|children|kids|family|couple|adults|customer|customers|farmer|farmers|worker|workers|athlete|athletes|patient|patients|practitioner|nurse|doctor)\b/;
-      const activityVerbs = /\b(?:walk(?:s|ing)?|run(?:s|ning)?|talk(?:s|ing)?|danc(?:e|es|ing)|exercis(?:e|es|ing)|cook(?:s|ing)?|hik(?:e|es|ing)|shop(?:s|ping)?|eat(?:s|ing)?|laugh(?:s|ing)?|play(?:s|ing)?|sit(?:s|ting)?|stand(?:s|ing)?|brows(?:e|es|ing)|train(?:s|ing)?|practic(?:e|es|ing)|enjoy(?:s|ing)?|work(?:s|ing)?|gather(?:s|ing)?|celebrat(?:e|es|ing)|welcom(?:e|es|ing)|greet(?:s|ing)?|serv(?:e|es|ing)|present(?:s|ing)?|speak(?:s|ing)?|stretch(?:es|ing)?|meditat(?:e|es|ing))\b/;
+      // Human subjects — includes hospitality/social context terms so prompts
+      // describing bar patrons, restaurant guests, event attendees, etc. correctly
+      // trigger REFERENCE MODE (new content generation) instead of ANIMATE MODE.
+      const humanSubjects = /\b(?:people|person|woman|man|child|children|kids|family|couple|adults|customer|customers|farmer|farmers|worker|workers|athlete|athletes|patient|patients|practitioner|nurse|doctor|patron|patrons|guest|guests|visitor|visitors|diner|diners|attendee|attendees|bartender|bartenders|server|servers|staff|shopper|shoppers|client|clients|spectator|spectators|bystander|bystanders|crowd|crowds)\b/;
+      const activityVerbs = /\b(?:walk(?:s|ing)?|run(?:s|ning)?|talk(?:s|ing)?|danc(?:e|es|ing)|exercis(?:e|es|ing)|cook(?:s|ing)?|hik(?:e|es|ing)|shop(?:s|ping)?|eat(?:s|ing)?|laugh(?:s|ing)?|play(?:s|ing)?|sit(?:s|ting)?|stand(?:s|ing)?|brows(?:e|es|ing)|train(?:s|ing)?|practic(?:e|es|ing)|enjoy(?:s|ing)?|work(?:s|ing)?|gather(?:s|ing)?|celebrat(?:e|es|ing)|welcom(?:e|es|ing)|greet(?:s|ing)?|serv(?:e|es|ing)|present(?:s|ing)?|speak(?:s|ing)?|stretch(?:es|ing)?|meditat(?:e|es|ing)|socializ(?:e|es|ing)?|mingl(?:e|es|ing)?|cheer(?:s|ing)?|toast(?:s|ing)?|chat(?:s|ting)?|convers(?:e|es|ing)?|sip(?:s|ping)?|loung(?:e|es|ing)?|danc(?:e|es|ing)?|pour(?:s|ing)?|mix(?:es|ing)?)\b/;
 
       if (/\bmontage\s+of\b/.test(p)) return true;
-      if (/\b(?:group|crowd|audience|team)\s+of\s+(?:people|workers|athletes|customers|patients)\b/.test(p)) return true;
+      if (/\b(?:group|crowd|audience|team|cluster|clusters|throng|throngs)\s+of\s+(?:people|workers|athletes|customers|patients|patrons|guests|diners|attendees|visitors)\b/.test(p)) return true;
+      // Packed/busy social environment cues (bar, restaurant, event) with any
+      // human activity strongly imply new content generation is needed.
+      if (/\b(?:packed|bustling|buzzing|lively|crowded|full\s+of|filled\s+with)\b/.test(p) && humanSubjects.test(p)) return true;
 
       if (humanSubjects.test(p) && activityVerbs.test(p)) return true;
 

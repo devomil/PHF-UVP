@@ -183,9 +183,18 @@ export async function processVideoJob(jobId: string) {
     const rawRefImages = Array.isArray(jobI2vSettings.referenceImages)
       ? (jobI2vSettings.referenceImages as string[]).filter(Boolean)
       : [];
-    if (rawRefImages.length > 0 && resolvedImageUrl) {
+
+    // Also include brandLogoUrl in the reference image array — it is stored
+    // separately in i2vSettings but must reach elements[] (Kling 1.6) and
+    // reference_images[] (other providers) alongside the other ref images.
+    const brandLogoUrl = (jobI2vSettings.brandLogoUrl as string | undefined) || undefined;
+    const rawRefImagesWithLogo = brandLogoUrl && !rawRefImages.includes(brandLogoUrl)
+      ? [...rawRefImages, brandLogoUrl]
+      : rawRefImages;
+
+    if (rawRefImagesWithLogo.length > 0 && resolvedImageUrl) {
       const resolvedRefs = await Promise.all(
-        rawRefImages.map(async (url: string) => {
+        rawRefImagesWithLogo.map(async (url: string) => {
           if (url.startsWith('https://')) return url;
           const r = await assetUrlResolver.resolve(url);
           if (r) console.log(`[JobProcessor] Resolved ref image: ${url.substring(0, 60)} → ${r.substring(0, 60)}...`);
@@ -196,7 +205,13 @@ export async function processVideoJob(jobId: string) {
       // imageUrls = [sourceImage, ...additionalRefs] — source goes first so
       // it maps to @image1 and subsequent refs to @image2, @image3, etc.
       resolvedImageUrls = [resolvedImageUrl, ...validRefs];
-      console.log(`[JobProcessor] Multi-image I2V: ${resolvedImageUrls.length} images (source + ${validRefs.length} refs)`);
+      console.log(`[JobProcessor] Multi-image I2V: ${resolvedImageUrls.length} images (source + ${validRefs.length} refs${brandLogoUrl ? ', including brand logo' : ''})`);
+    }
+
+    // Forward brandLogoUrl in i2vSettingsForProvider so Seedance's explicit
+    // @imageN brand-mark injection still works (it reads from options.i2vSettings).
+    if (brandLogoUrl) {
+      i2vSettingsForProvider.brandLogoUrl = brandLogoUrl;
     }
 
     const isI2IJob = job.sceneType === 'i2i' && resolvedImageUrl;
