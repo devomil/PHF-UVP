@@ -1880,7 +1880,7 @@ class PiAPIVideoService {
         const refInput: any = {
           prompt: klingI2vPrompt,
           reference_images: allImageUrls,
-          duration: options.duration,
+          duration: Math.min(options.duration, 10), // Kling max 10s
           aspect_ratio: options.aspectRatio,
           negative_prompt: i2vNegativePrompt,
           mode,
@@ -1900,22 +1900,27 @@ class PiAPIVideoService {
       }
       
       // Animation mode: use image_url for first-frame animation.
-      // Extra reference images are passed via elements[] (all Kling versions)
-      // so the model can honour character/style references in the prompt.
+      // Extra reference images are passed via elements[] on legacy Kling
+      // (1.6/1.0) only — PiAPI rejects elements[] on newer versions.
       const klingInput: any = {
         prompt: klingI2vPrompt,
         image_url: options.imageUrl,
-        duration: options.duration,
+        duration: Math.min(options.duration, 10), // Kling max 10s
         aspect_ratio: options.aspectRatio,
         negative_prompt: i2vNegativePrompt,
         mode,
         version,
         cfg_scale: cfgScale,
       };
-      if (hasMultipleImages) {
-        // Send all images as elements[] regardless of version — newer Kling
-        // versions accept the same character-reference field as legacy 1.6.
+      if (hasMultipleImages && isLegacyVersion) {
         klingInput.elements = allImageUrls.map(url => ({ image_url: url }));
+      } else if (hasMultipleImages) {
+        // PiAPI rejects elements[] for Kling versions other than 1.6 with
+        // code 10000: "the elements feature is only supported in version 1.6".
+        // Newer Kling versions can only animate a single anchor image, so use
+        // the primary image and drop extra references instead of failing the task.
+        console.log(`[PiAPI I2V] Kling v${version}: elements[] not supported on PiAPI — animating primary image only, ignoring ${allImageUrls.length - 1} extra reference image(s)`);
+        klingInput.prompt = klingInput.prompt.replace(/@image[_\s]?\d+/gi, 'the source image');
       } else if (isLegacyVersion) {
         klingInput.elements = [{ image_url: options.imageUrl }];
         klingInput.first_frame_image = options.imageUrl;

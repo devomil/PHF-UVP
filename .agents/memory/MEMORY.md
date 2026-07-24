@@ -11,3 +11,4 @@
 - [LLM fallback model access](llm-fallback-model-access.md) — fail-open LLM helper silently no-ops forever if the Anthropic fallback model id 404s; verify the id against the key's /v1/models, test the fallback path directly.
 - [Runway multi-model gateway](runway-multimodel-gateway.md) — Runway now resells Seedance/Veo; this app never sends those IDs to Runway, so Seedance/Veo on the Runway dashboard aren't from the app. Rotate the key to stop external usage; the kill-switch only covers this app.
 - [Runway V2V API schema](runway-v2v-api-schema.md) — /video_to_video uses different model IDs than T2V; promptImage must be Array<{uri}> and must never be a video URL.
+- [PiAPI Kling elements v1.6-only](piapi-kling-elements.md) — Kling multi-image `elements[]` is rejected on 2.x (code 10000); send it only for v1.6/1.0, else animate primary image; clamp duration ≤10s.
