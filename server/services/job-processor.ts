@@ -8,54 +8,94 @@ import { optimizeI2IEditPrompt } from "./i2i-prompt-optimizer";
 
 export async function recoverStuckJobs() {
   try {
-    const stuckJobs = await db
-      .select()
-      .from(videoGenerationJobs)
-      .where(eq(videoGenerationJobs.status, "processing"));
+    // Query both "processing" jobs (which stalled) AND "pending" QC jobs
+    // (which were reset to pending by a previous recovery run but whose
+    // processVideoJob call was lost because the server restarted again
+    // before it could execute — the VideoWorker skips QC projects so
+    // nobody else will pick these up).
+    const [processingJobs, pendingQcJobs] = await Promise.all([
+      db.select().from(videoGenerationJobs)
+        .where(eq(videoGenerationJobs.status, "processing")),
+      db.select().from(videoGenerationJobs)
+        .where(eq(videoGenerationJobs.status, "pending")),
+    ]);
 
-    if (stuckJobs.length === 0) return;
+    const stuckJobs = processingJobs;
+    const allJobsToCheck = [...processingJobs, ...pendingQcJobs];
 
-    // Batch-fetch the projects for all stuck jobs so we can identify Quick Create
-    // projects in one query rather than N individual lookups.
-    const uniqueProjectIds = [...new Set(stuckJobs.map(j => j.projectId))];
-    const projects = await db
-      .select({ projectId: universalVideoProjects.projectId, outputFormat: universalVideoProjects.outputFormat })
-      .from(universalVideoProjects)
-      .where(inArray(universalVideoProjects.projectId, uniqueProjectIds));
+    if (allJobsToCheck.length === 0) return;
+
+    // Batch-fetch projects for all jobs so we can identify Quick Create ones.
+    const uniqueProjectIds = [...new Set(allJobsToCheck.map(j => j.projectId))];
+    const projects = uniqueProjectIds.length > 0
+      ? await db
+          .select({ projectId: universalVideoProjects.projectId, outputFormat: universalVideoProjects.outputFormat })
+          .from(universalVideoProjects)
+          .where(inArray(universalVideoProjects.projectId, uniqueProjectIds))
+      : [];
 
     // Quick Create projects are managed directly by processVideoJob (called from the
-    // Phase9B-Async route handler immediately after job creation).  The recovery loop
-    // must NOT re-trigger them — Runway Aleph 2.0 takes ~4-5 minutes, which exceeds
-    // the 2-minute stall threshold, causing a duplicate render and double credit charge.
+    // Phase9B-Async route handler immediately after job creation). We must NOT
+    // re-trigger them while they could still be legitimately in-flight — Runway
+    // Aleph takes ~4-5 minutes, which would exceed a short threshold.
+    //
+    // Recovery rules for QC jobs:
+    //   "processing" + ≤15 min  → still in-flight, skip
+    //   "processing" + >15 min  → orphaned by restart (provider finished, server lost polling) → reset + re-run
+    //   "pending"    + >1  min  → processVideoJob call was lost (server restarted again before
+    //                              the async call executed); VideoWorker skips QC projects so
+    //                              nobody else will pick this up → call processVideoJob directly
+    const QC_INFLIGHT_THRESHOLD_MINUTES = 15;
+    const QC_PENDING_STALE_MINUTES = 1;
+
     const qcProjectIds = new Set(
       projects
         .filter(p => (p.outputFormat as any)?.platform === 'quick-create')
         .map(p => p.projectId)
     );
 
-    let checked = 0;
-    for (const job of stuckJobs) {
-      // Belt-and-suspenders: also skip on sceneId even if project lookup missed it.
-      if (qcProjectIds.has(job.projectId) || job.sceneId === 'quick-create') {
-        console.log(`[JobProcessor] Skipping stall recovery for Quick Create job ${job.jobId} (managed by JobProcessor directly)`);
-        continue;
-      }
+    let recovered = 0;
+    let skipped = 0;
 
-      const stuckMinutes = (Date.now() - new Date(job.updatedAt || job.createdAt || Date.now()).getTime()) / 60000;
-      if (stuckMinutes > 2) {
-        console.log(`[JobProcessor] Recovering stuck job ${job.jobId} (stuck ${Math.round(stuckMinutes)}min, provider: ${job.provider})`);
-        await db
-          .update(videoGenerationJobs)
-          .set({ status: "pending", startedAt: null, updatedAt: new Date() })
-          .where(eq(videoGenerationJobs.jobId, job.jobId));
+    for (const job of allJobsToCheck) {
+      const ageMins = (Date.now() - new Date(job.updatedAt || job.createdAt || Date.now()).getTime()) / 60000;
+      const isQC = qcProjectIds.has(job.projectId) || job.sceneId === 'quick-create';
+
+      if (job.status === 'processing') {
+        if (isQC && ageMins <= QC_INFLIGHT_THRESHOLD_MINUTES) {
+          // Still within the normal generation window for a QC job.
+          console.log(`[JobProcessor] QC job ${job.jobId} processing for ${Math.round(ageMins)}min — within normal window, skipping`);
+          skipped++;
+          continue;
+        }
+        if (ageMins > 2) {
+          const reason = isQC
+            ? `QC orphan (${Math.round(ageMins)}min > ${QC_INFLIGHT_THRESHOLD_MINUTES}min threshold)`
+            : `${Math.round(ageMins)}min stall`;
+          console.log(`[JobProcessor] Recovering stuck job ${job.jobId} (${reason}, provider: ${job.provider})`);
+          await db
+            .update(videoGenerationJobs)
+            .set({ status: "pending", startedAt: null, updatedAt: new Date() })
+            .where(eq(videoGenerationJobs.jobId, job.jobId));
+          processVideoJob(job.jobId).catch((err) => {
+            console.error(`[JobProcessor] Recovery retry failed for ${job.jobId}:`, err.message);
+          });
+          recovered++;
+        }
+      } else if (job.status === 'pending' && isQC && ageMins > QC_PENDING_STALE_MINUTES) {
+        // QC job stuck as "pending" — nobody will pick it up (VideoWorker skips QC
+        // projects). This happens when a server restart killed the async processVideoJob
+        // call that was fired by a previous recovery run. Re-trigger it directly.
+        console.log(`[JobProcessor] QC job ${job.jobId} stuck pending ${Math.round(ageMins)}min — re-triggering processVideoJob`);
         processVideoJob(job.jobId).catch((err) => {
-          console.error(`[JobProcessor] Recovery retry failed for ${job.jobId}:`, err.message);
+          console.error(`[JobProcessor] Re-trigger failed for pending QC job ${job.jobId}:`, err.message);
         });
-        checked++;
+        recovered++;
       }
     }
-    if (stuckJobs.length > 0) {
-      console.log(`[JobProcessor] Checked ${stuckJobs.length} processing jobs for recovery (recovered: ${checked}, skipped QC: ${stuckJobs.length - checked})`);
+
+    if (allJobsToCheck.length > 0) {
+      console.log(`[JobProcessor] Recovery scan: ${allJobsToCheck.length} jobs checked, ${recovered} recovered/re-triggered, ${skipped} in-flight skipped`);
     }
   } catch (err: any) {
     console.error("[JobProcessor] Stuck job recovery error:", err.message);
