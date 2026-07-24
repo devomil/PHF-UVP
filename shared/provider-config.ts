@@ -227,11 +227,6 @@ export const VIDEO_PROVIDERS: Record<string, VideoProvider> = {
     limitations: ['Less cinematic feel than premium providers'],
     visualCategory: ['human_subjects', 'lifestyle', 'testimonial'],
     qualityNotes: 'Excellent human rendering with natural expressions at a cost-effective price point',
-    multiImageSupport: {
-      maxImages: 4,
-      promptSyntax: '@image_N',
-      hint: 'Use @image_1, @image_2, etc. in your prompt to reference each image. Example: "use @image_1 as start frame, a woman @image_2 is introducing herself"',
-    },
   },
 
   'kling-1.6': {
@@ -271,11 +266,6 @@ export const VIDEO_PROVIDERS: Record<string, VideoProvider> = {
     limitations: ['Moderate cost for standard tier'],
     visualCategory: ['human_subjects', 'lifestyle'],
     qualityNotes: 'Good balance of quality and cost for people-focused content',
-    multiImageSupport: {
-        maxImages: 4,
-        promptSyntax: '@image_N',
-        hint: 'Use @image_1, @image_2, etc. in your prompt to reference each image. Example: "use @image_1 as start frame, a woman @image_2 is introducing herself"',
-      },
   },
 
   'kling-2.1': {
@@ -293,11 +283,6 @@ export const VIDEO_PROVIDERS: Record<string, VideoProvider> = {
     limitations: ['Higher cost than Kling 2.0'],
     visualCategory: ['human_subjects', 'emotional'],
     qualityNotes: 'Enhanced realism with better facial expressions for emotional content',
-    multiImageSupport: {
-        maxImages: 4,
-        promptSyntax: '@image_N',
-        hint: 'Use @image_1, @image_2, etc. in your prompt to reference each image. Example: "use @image_1 as start frame, a woman @image_2 is introducing herself"',
-      },
   },
 
   'kling-2.5-turbo': {
@@ -315,11 +300,6 @@ export const VIDEO_PROVIDERS: Record<string, VideoProvider> = {
     limitations: ['Premium pricing tier'],
     visualCategory: ['cinematic', 'action', 'dynamic'],
     qualityNotes: 'Fastest Kling model with premium motion quality for dynamic content',
-    multiImageSupport: {
-        maxImages: 4,
-        promptSyntax: '@image_N',
-        hint: 'Use @image_1, @image_2, etc. in your prompt to reference each image. Example: "use @image_1 as start frame, a woman @image_2 is introducing herself"',
-      },
   },
 
   'omni-human-1.5': {
@@ -408,11 +388,6 @@ export const VIDEO_PROVIDERS: Record<string, VideoProvider> = {
     limitations: ['Highest cost in Kling family'],
     visualCategory: ['cinematic', 'human_subjects', 'premium'],
     qualityNotes: 'Premium tier of Kling with maximum quality rendering for hero content',
-    multiImageSupport: {
-        maxImages: 4,
-        promptSyntax: '@image_N',
-        hint: 'Use @image_1, @image_2, etc. in your prompt to reference each image. Example: "use @image_1 as start frame, a woman @image_2 is introducing herself"',
-      },
     cfgControlSupport: {
       minCfg: 0,
       maxCfg: 1,
@@ -436,11 +411,6 @@ export const VIDEO_PROVIDERS: Record<string, VideoProvider> = {
     limitations: ['No native audio generation'],
     visualCategory: ['human_subjects', 'lifestyle', 'product_reveal'],
     qualityNotes: 'Strong temporal consistency for lifestyle and product demo content',
-    multiImageSupport: {
-        maxImages: 4,
-        promptSyntax: '@image_N',
-        hint: 'Use @image_1, @image_2, etc. in your prompt to reference each image. Example: "use @image_1 as start frame, a woman @image_2 is introducing herself"',
-      },
   },
 
   'kling-2.6': {
@@ -460,11 +430,6 @@ export const VIDEO_PROVIDERS: Record<string, VideoProvider> = {
     limitations: ['Newer model with less community testing'],
     visualCategory: ['human_subjects', 'dialogue', 'audio-visual'],
     qualityNotes: 'Best for human subjects with native audio, lip-sync, and sound effect generation',
-    multiImageSupport: {
-        maxImages: 4,
-        promptSyntax: '@image_N',
-        hint: 'Use @image_1, @image_2, etc. in your prompt to reference each image. Example: "use @image_1 as start frame, a woman @image_2 is introducing herself"',
-      },
   },
 
   'kling-2.6-pro': {
@@ -484,11 +449,6 @@ export const VIDEO_PROVIDERS: Record<string, VideoProvider> = {
     limitations: ['Higher cost for premium audio tier'],
     visualCategory: ['human_subjects', 'professional', 'dialogue'],
     qualityNotes: 'Professional-grade Kling with enhanced audio fidelity for broadcast-ready content',
-    multiImageSupport: {
-        maxImages: 4,
-        promptSyntax: '@image_N',
-        hint: 'Use @image_1, @image_2, etc. in your prompt to reference each image. Example: "use @image_1 as start frame, a woman @image_2 is introducing herself"',
-      },
     cfgControlSupport: {
       minCfg: 0,
       maxCfg: 1,

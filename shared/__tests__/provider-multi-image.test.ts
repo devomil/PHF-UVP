@@ -13,16 +13,10 @@ import {
 import { getMultiImageSupport } from '../provider-config';
 
 // Video providers that carry multiImageSupport in provider-config.ts
+// NOTE: Kling multi-image (elements[]) is ONLY supported on v1.6 via PiAPI.
+// All other Kling versions (2.x) silently rejected elements[] with code 10000.
 const MULTI_IMAGE_VIDEO_PROVIDERS = [
-  'kling',
   'kling-1.6',
-  'kling-2.0',
-  'kling-2.1',
-  'kling-2.5',
-  'kling-2.5-turbo',
-  'kling-2.6',
-  'kling-2.6-pro',
-  'kling-2.1-master',
   'seedance-2.0',
   'seedance-2.0-fast',
 ];
@@ -55,6 +49,15 @@ const NON_MULTI_IMAGE_VIDEO_PROVIDERS = [
   'sora-2-pro',
   'hunyuan',
   'seedance-1.0',
+  // Kling 2.x — PiAPI rejects elements[] (multi-image) on anything other than v1.6
+  'kling',
+  'kling-2.0',
+  'kling-2.1',
+  'kling-2.5',
+  'kling-2.5-turbo',
+  'kling-2.6',
+  'kling-2.6-pro',
+  'kling-2.1-master',
   'kling-effects',
   'kling-avatar',
   'kling-2.6-motion-control',
