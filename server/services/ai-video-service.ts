@@ -360,7 +360,7 @@ class AIVideoService {
         console.log(`[AIVideo] T2V style reinforcement (prefix+suffix) applied for "${artPreset.name}"`);
       }
 
-      const FINAL_MAX_WORDS = isStylizedArt ? 250 : 120;
+      const FINAL_MAX_WORDS = isStylizedArt ? 250 : 200;
       const finalWords = finalPrompt.split(/\s+/);
       console.log(`[AIVideo] Pre-enforcement: ${finalWords.length} words, ${finalPrompt.length} chars (limit: ${FINAL_MAX_WORDS} words, stylized=${isStylizedArt})`);
       if (finalWords.length > FINAL_MAX_WORDS) {
@@ -377,7 +377,29 @@ class AIVideoService {
         const protectedWordCount = stylePrefix.split(/\s+/).filter(Boolean).length + styleSuffix.split(/\s+/).filter(Boolean).length + charBlocks.reduce((sum, b) => sum + b.split(/\s+/).length, 0);
         const allowedMiddleWords = Math.max(isStylizedArt ? 80 : 20, FINAL_MAX_WORDS - protectedWordCount);
         if (middleWords.length > allowedMiddleWords) {
-          middleContent = middleWords.slice(0, allowedMiddleWords).join(' ');
+          const sentences = middleContent.match(/[^.!?]+[.!?]+\s*/g) || [];
+          let kept = '';
+          let keptWords = 0;
+          for (const s of sentences) {
+            const w = s.trim().split(/\s+/).filter(Boolean).length;
+            if (keptWords + w > allowedMiddleWords && kept) break;
+            kept += s;
+            keptWords += w;
+          }
+          // Fallback: no sentence boundary fits the budget (e.g. one very long
+          // clause). Preserve the old behavior rather than emitting an empty prompt.
+          if (!kept.trim()) {
+            kept = middleWords.slice(0, allowedMiddleWords).join(' ');
+            keptWords = allowedMiddleWords;
+          }
+          const dropped = middleContent.slice(kept.length).trim();
+          if (dropped) {
+            console.warn(
+              `[AIVideo] PROMPT TRUNCATED: ${middleWords.length} → ${keptWords} words ` +
+              `(limit ${FINAL_MAX_WORDS}, stylized=${isStylizedArt}). DROPPED: "${dropped}"`
+            );
+          }
+          middleContent = kept.trim();
         }
         let blockIdx = 0;
         middleContent = middleContent.replace(/__CB__/g, () => charBlocks[blockIdx++] || '');
