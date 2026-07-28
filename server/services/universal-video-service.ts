@@ -37,13 +37,154 @@ import { motionGraphicsRouter } from "./motion-graphics-router";
 import { resolveClonedVoice, generatePlayhtSpeech } from "./voice-clone-routes";
 import { motionGraphicsGenerator } from "./motion-graphics-generator";
 import { MotionGraphicConfig, RoutingDecision } from "../../shared/types/motion-graphics-types";
-import { 
-  HEALTH_SCRIPT_SYSTEM_PROMPT, 
-  buildHealthScriptContext, 
-  detectProductType,
-  isClaimRisky,
-  getRelevantStatistics
-} from "./health-script-context";
+// ---------------------------------------------------------------------------
+// Inline helpers (formerly in health-script-context.ts – Pine Hill persona removed)
+// ---------------------------------------------------------------------------
+
+const HEALTH_SCRIPT_SYSTEM_PROMPT = `You are a health and wellness marketing scriptwriter for a family-owned organic supplement company.
+
+## YOUR ROLE
+Create compelling video scripts that:
+1. Highlight genuine health benefits (not medical claims)
+2. Include relevant statistics when they strengthen the message
+3. Focus on lifestyle improvement and wellness support
+4. Maintain FDA/FTC compliance (no disease claims)
+
+## BRAND VOICE
+- Warm, authentic, family-owned feel
+- Trustworthy and transparent
+- Health-conscious but not preachy
+- Community and local focus
+- Quality and care in every product
+
+## SCRIPT STRUCTURE FOR VIDEO
+Each scene should be designed for AI video generation:
+- HOOK: Grab attention in first 3 seconds (relatable problem or aspiration)
+- PROBLEM: The challenge your audience faces (keep brief, 1 scene)
+- SOLUTION: Introduce the product naturally (show, don't just tell)
+- BENEFIT: How life improves with the product (emotional payoff)
+- SOCIAL PROOF: Statistic or testimonial reference (builds credibility)
+- CTA: Clear next step (visit website, try today, etc.)
+
+## COMPLIANCE RULES (CRITICAL)
+✅ CAN SAY: "supports healthy lifestyle", "made with organic ingredients", "may help support wellness"
+❌ CANNOT SAY: "cures", "treats", "prevents disease", "FDA approved", "guaranteed results", "eliminates", "fixes"
+
+## OUTPUT FORMAT
+Return a JSON object with this structure:
+{
+  "title": "Video title",
+  "targetDuration": 30,
+  "scenes": [
+    {
+      "type": "hook|problem|solution|benefit|social_proof|cta",
+      "narration": "What the voiceover says",
+      "visualDirection": "Simple description for video generation",
+      "duration": 5,
+      "includeProduct": true/false,
+      "textOverlays": [{ "text": "on-screen text", "style": "title|subtitle|headline|cta" }]
+    }
+  ],
+  "suggestedStatistic": "Optional relevant statistic to include",
+  "keyMessage": "The one thing viewers should remember"
+}
+
+## VISUAL DESCRIPTION RULES (CRITICAL)
+Keep visual descriptions SIMPLE. These will be used for AI video generation.
+
+✅ GOOD: "A woman in her 40s taking supplements with morning coffee in a sunny kitchen"
+✅ GOOD: "Hands opening a supplement bottle on a wooden table"
+✅ GOOD: "Happy family having breakfast together, warm morning light"
+
+❌ BAD: "Cinematic shot with golden hour lighting, shallow depth of field, 35mm lens"
+❌ BAD: "Rule of thirds composition, film grain texture, teal and orange color grading"
+❌ BAD: "A tub with a label reading [Brand Name]" (NEVER describe text on labels)
+
+Focus on: WHO is doing WHAT, WHERE, with WHAT MOOD
+Avoid: Camera jargon, lighting instructions, film terminology, lens specifications
+
+## NO TEXT IN VIDEO (CRITICAL)
+- NEVER describe text, words, labels, brand names, logos, or typography in visual directions
+- AI video models CANNOT render readable text — any mentioned text appears as garbled characters
+- Describe PHYSICAL APPEARANCE of products (shape, color, size) but NOT what is written on them
+- Text overlays are added separately in post-production by Remotion`;
+
+function detectProductType(description: string): string {
+  const desc = description.toLowerCase();
+  if (desc.includes('immune') || desc.includes('elderberry') || desc.includes('vitamin c') || desc.includes('zinc')) return 'immune-support';
+  if (desc.includes('weight') || desc.includes('metabolism') || desc.includes('fat') || desc.includes('slim')) return 'weight-support';
+  if (desc.includes('sleep') || desc.includes('relax') || desc.includes('calm') || desc.includes('melatonin')) return 'sleep-support';
+  if (desc.includes('joint') || desc.includes('mobility') || desc.includes('glucosamine') || desc.includes('arthrit')) return 'joint-support';
+  if (desc.includes('digest') || desc.includes('gut') || desc.includes('probiotic') || desc.includes('bloat')) return 'digestive-support';
+  return 'general-supplement';
+}
+
+function isClaimRisky(claim: string): boolean {
+  const riskyPatterns = [
+    /\bcure[sd]?\b/i, /\btreat[s]?\b/i, /\bprevent[s]?\b/i, /\bdiagnos/i,
+    /\bFDA\s*approved\b/i, /\bclinically\s+proven\b/i, /\bguarantee[d]?\b/i,
+    /\bmiracle\b/i, /\bbreakthrough\b/i, /\beliminate[s]?\b/i, /\bfix(es)?\b/i,
+    /\bheal[s]?\b/i, /\breverse[s]?\b/i, /\bno\s+side\s+effects\b/i,
+    /\b100%\s+(safe|effective|natural)\b/i,
+  ];
+  return riskyPatterns.some(p => p.test(claim));
+}
+
+interface _HealthStatistic { claim: string; statistic: string; source: string; year: number; }
+const _HEALTH_STATISTICS: _HealthStatistic[] = [
+  { claim: 'supplement usage', statistic: '57% of U.S. adults use dietary supplements', source: 'CRN Consumer Survey', year: 2023 },
+  { claim: 'organic preference', statistic: '76% of consumers seek organic options when available', source: 'Organic Trade Association', year: 2023 },
+  { claim: 'natural ingredients', statistic: '73% of supplement users prioritize natural ingredients', source: 'Natural Products Association', year: 2023 },
+  { claim: 'immune health', statistic: '72% of adults actively seek immune support products', source: 'IQVIA Consumer Health Survey', year: 2024 },
+  { claim: 'sleep concerns', statistic: '35% of adults report getting less than recommended sleep', source: 'CDC Sleep Statistics', year: 2023 },
+  { claim: 'joint health', statistic: '54% of adults over 40 are concerned about joint health', source: 'Arthritis Foundation Survey', year: 2023 },
+  { claim: 'weight management', statistic: '45% of American adults are trying to lose weight', source: 'CDC National Health Statistics', year: 2023 },
+];
+
+function getRelevantStatistics(topic: string, limit: number = 2): _HealthStatistic[] {
+  const keywords = topic.toLowerCase().split(/\s+/);
+  return _HEALTH_STATISTICS
+    .map(stat => ({ stat, score: keywords.filter(kw => kw.length > 3 && `${stat.claim} ${stat.statistic}`.toLowerCase().includes(kw)).length }))
+    .filter(s => s.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit)
+    .map(s => s.stat);
+}
+
+function buildHealthScriptContext(description: string, productType?: string, platform: string = 'youtube'): string {
+  const PRODUCT_BENEFITS: Record<string, { category: string; audience: string; benefits: string[]; ingredients: string[]; safeClaims: string[]; avoidClaims: string[] }> = {
+    'immune-support':    { category: 'immune health',        audience: 'adults looking to support their immune health naturally',         benefits: ['supports immune system function', 'contains vitamin C and zinc'],      ingredients: ['elderberry', 'vitamin C', 'zinc', 'echinacea'],           safeClaims: ['supports immune system', 'daily wellness support'],     avoidClaims: ['prevents illness', 'cures colds or flu'] },
+    'weight-support':    { category: 'weight management',    audience: 'adults pursuing weight management goals with healthy habits',      benefits: ['supports healthy metabolism', 'supports energy levels'],              ingredients: ['green tea extract', 'garcinia', 'chromium', 'B vitamins'], safeClaims: ['supports metabolism', 'natural energy support'],         avoidClaims: ['causes weight loss', 'burns fat'] },
+    'sleep-support':     { category: 'sleep and relaxation', audience: 'adults seeking natural support for occasional sleeplessness',      benefits: ['supports restful sleep', 'non-habit forming'],                        ingredients: ['melatonin', 'valerian root', 'chamomile', 'magnesium'],   safeClaims: ['supports relaxation', 'calming formula'],               avoidClaims: ['cures insomnia', 'treats sleep disorders'] },
+    'joint-support':     { category: 'joint and mobility',   audience: 'active adults wanting to support joint health',                   benefits: ['supports joint comfort', 'promotes flexibility'],                     ingredients: ['glucosamine', 'chondroitin', 'MSM', 'turmeric'],          safeClaims: ['supports joint health', 'promotes flexibility'],         avoidClaims: ['cures arthritis', 'eliminates pain'] },
+    'digestive-support': { category: 'digestive health',     audience: 'adults seeking digestive wellness support',                       benefits: ['supports digestive comfort', 'contains probiotics'],                  ingredients: ['probiotics', 'digestive enzymes', 'ginger', 'peppermint'], safeClaims: ['supports digestion', 'gut-friendly formula'],            avoidClaims: ['cures digestive disorders', 'treats IBS'] },
+    'general-supplement':{ category: 'dietary supplements',  audience: 'health-conscious adults seeking natural wellness solutions',       benefits: ['supports overall wellness', 'made with organic ingredients'],         ingredients: ['organic herbs', 'natural vitamins', 'plant-based minerals'], safeClaims: ['supports healthy lifestyle', 'quality ingredients'],     avoidClaims: ['cures disease', 'FDA approved'] },
+  };
+  const key = productType && PRODUCT_BENEFITS[productType] ? productType : 'general-supplement';
+  const p = PRODUCT_BENEFITS[key];
+  const stats = getRelevantStatistics(description, 3);
+  return `
+## PRODUCT CONTEXT
+Product Category: ${p.category}
+Target Audience: ${p.audience}
+Key Benefits: ${p.benefits.join(', ')}
+Key Ingredients: ${p.ingredients.join(', ')}
+
+## AVAILABLE STATISTICS (use if relevant)
+${stats.length > 0 ? stats.map(s => `- ${s.statistic} (${s.source}, ${s.year})`).join('\n') : '- 57% of U.S. adults use dietary supplements (CRN Consumer Survey, 2023)'}
+
+## SAFE CLAIMS FOR THIS PRODUCT
+${p.safeClaims.map(c => `- "${c}"`).join('\n')}
+
+## CLAIMS TO AVOID
+${p.avoidClaims.map(c => `- "${c}"`).join('\n')}
+
+## PLATFORM: ${platform.toUpperCase()}
+${platform === 'tiktok' || platform === 'reels' ? 'Keep fast-paced, hook in first 1-2 seconds, vertical format mindset, trendy and relatable tone' : ''}
+${platform === 'youtube' ? 'Can be more detailed, horizontal format, allow for story development, professional but warm' : ''}
+${platform === 'facebook' ? 'Community-focused, shareable content, appeal to family values' : ''}
+`;
+}
 import { optimizePrompt, logPromptOptimization } from "./video-prompt-optimizer";
 import { intelligentProviderSelector, SceneContent } from "./intelligent-provider-selector";
 import { getVisualArtPreset, VisualArtPreset, isStylizedPreset } from "../../shared/config/visual-art-presets";
