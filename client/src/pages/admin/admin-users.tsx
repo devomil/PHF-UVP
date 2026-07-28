@@ -1,11 +1,12 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { AdminLayout } from "./admin-layout";
 import React, { useState, useEffect, useCallback } from "react";
-import { Search, Shield, ShieldCheck, User, MoreVertical, CheckCircle, XCircle, ChevronDown, ChevronRight, DollarSign, Trash2 } from "lucide-react";
+import { Search, Shield, ShieldCheck, User, MoreVertical, CheckCircle, XCircle, ChevronDown, ChevronRight, DollarSign, Trash2, Info } from "lucide-react";
 
 export default function AdminUsers() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState<"all" | "admin" | "employee" | "user">("all");
   const [editingUser, setEditingUser] = useState<string | null>(null);
   const [expandedUser, setExpandedUser] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
@@ -75,9 +76,12 @@ export default function AdminUsers() {
   });
 
   const users = data?.users || [];
-  const filtered = users.filter((u: any) =>
-    !search || u.email?.toLowerCase().includes(search.toLowerCase()) || u.firstName?.toLowerCase().includes(search.toLowerCase()) || u.lastName?.toLowerCase().includes(search.toLowerCase()) || u.company?.toLowerCase().includes(search.toLowerCase())
-  );
+  const adminCount = users.filter((u: any) => u.role === "admin").length;
+  const filtered = users.filter((u: any) => {
+    const matchesRole = roleFilter === "all" || u.role === roleFilter;
+    const matchesSearch = !search || u.email?.toLowerCase().includes(search.toLowerCase()) || u.firstName?.toLowerCase().includes(search.toLowerCase()) || u.lastName?.toLowerCase().includes(search.toLowerCase()) || u.company?.toLowerCase().includes(search.toLowerCase());
+    return matchesRole && matchesSearch;
+  });
 
   const roleIcon = (role: string) => {
     if (role === "admin") return <ShieldCheck className="w-3.5 h-3.5 text-purple-400" />;
@@ -114,9 +118,16 @@ export default function AdminUsers() {
     );
   };
 
+  const roleFilterTabs: { key: typeof roleFilter; label: string; count?: number }[] = [
+    { key: "all", label: "All Users", count: users.length },
+    { key: "admin", label: "Admins", count: adminCount },
+    { key: "employee", label: "Employees", count: users.filter((u: any) => u.role === "employee").length },
+    { key: "user", label: "Users", count: users.filter((u: any) => u.role === "user").length },
+  ];
+
   return (
     <AdminLayout>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-2xl font-bold" style={{ color: "var(--text-primary)" }}>Users</h1>
           <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>{users.length} registered user{users.length !== 1 ? "s" : ""}</p>
@@ -133,6 +144,51 @@ export default function AdminUsers() {
           />
         </div>
       </div>
+
+      {/* Role filter tabs */}
+      <div className="flex items-center gap-1 mb-4">
+        {roleFilterTabs.map(tab => (
+          <button
+            key={tab.key}
+            onClick={() => setRoleFilter(tab.key)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+            style={{
+              background: roleFilter === tab.key ? "rgba(139,92,246,0.18)" : "transparent",
+              color: roleFilter === tab.key ? "#a78bfa" : "var(--text-muted)",
+              border: roleFilter === tab.key ? "1px solid rgba(139,92,246,0.3)" : "1px solid transparent",
+            }}
+          >
+            {tab.key === "admin" && <ShieldCheck className="w-3.5 h-3.5" />}
+            {tab.key === "employee" && <Shield className="w-3.5 h-3.5" />}
+            {tab.key === "user" && <User className="w-3.5 h-3.5" />}
+            {tab.label}
+            {tab.count !== undefined && (
+              <span className="ml-0.5 px-1.5 py-0.5 rounded-full text-[10px]"
+                style={{ background: "rgba(255,255,255,0.08)", color: "inherit" }}>
+                {tab.count}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* Bootstrap info banner — shown when viewing admins or when there are no admins yet */}
+      {(roleFilter === "admin" || adminCount === 0) && (
+        <div className="flex items-start gap-3 mb-4 px-4 py-3 rounded-xl border"
+          style={{ background: "rgba(139,92,246,0.07)", borderColor: "rgba(139,92,246,0.2)" }}>
+          <Info className="w-4 h-4 mt-0.5 shrink-0 text-purple-400" />
+          <div className="text-xs leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+            <span className="font-semibold" style={{ color: "var(--text-primary)" }}>Promoting &amp; demoting admins</span>{" "}
+            Use the <span className="font-medium">⋮</span> menu on any row to set a user's role.
+            Changes are saved to the database immediately — no restart needed.
+            {adminCount === 0 && (
+              <>{" "}<span className="font-semibold text-purple-300">No admins exist yet.</span>{" "}
+              Set <code className="px-1 py-0.5 rounded text-[11px]" style={{ background: "rgba(255,255,255,0.08)" }}>ADMIN_EMAILS=you@example.com</code> in the environment
+              and sign in once to bootstrap the first admin.</>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="rounded-xl border overflow-hidden" style={{ background: "var(--bg-secondary)", borderColor: "var(--border-subtle)" }}>
         {isLoading ? (
@@ -333,7 +389,11 @@ export default function AdminUsers() {
               {filtered.length === 0 && (
                 <tr>
                   <td colSpan={10} className="text-center py-8 text-sm" style={{ color: "var(--text-muted)" }}>
-                    {search ? "No users match your search" : "No users found"}
+                    {search
+                      ? "No users match your search"
+                      : roleFilter !== "all"
+                        ? `No ${roleFilter}s found`
+                        : "No users found"}
                   </td>
                 </tr>
               )}
