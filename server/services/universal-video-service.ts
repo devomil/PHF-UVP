@@ -375,7 +375,7 @@ class UniversalVideoService {
       const response = await fetch(url, {
         signal: controller.signal,
         headers: {
-          'User-Agent': 'PineHillFarm-VideoProducer/1.0',
+          'User-Agent': 'VideoProducer/1.0',
         },
       });
 
