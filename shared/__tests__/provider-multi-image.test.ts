@@ -292,7 +292,7 @@ describe('getMultiImageSupport — image providers', () => {
       expect(support).not.toBeNull();
       expect(support!.maxImages).toBeGreaterThan(0);
       expect(typeof support!.promptSyntax).toBe('string');
-      expect(support!.promptSyntax.length).toBeGreaterThan(0);
+      expect(support!.promptSyntax!.length).toBeGreaterThan(0);
       expect(typeof support!.hint).toBe('string');
       expect(support!.hint.length).toBeGreaterThan(0);
     },

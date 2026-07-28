@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
-import { eq, desc, inArray, and, or, like } from 'drizzle-orm';
+import { eq, desc, inArray, and, or, like, sql } from 'drizzle-orm';
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { isAuthenticated, requireRole } from '../auth';
 import { universalVideoService } from '../services/universal-video-service';
@@ -615,7 +615,7 @@ router.get('/api-connectivity-test', isAuthenticated, requireRole(['admin', 'man
 router.post('/projects/:projectId/scenes/:sceneIndex/assemble', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId, sceneIndex } = req.params;
+    const { projectId, sceneIndex } = req.params as Record<string, string>;
     const idx = parseInt(sceneIndex, 10);
     if (Number.isNaN(idx)) {
       return res.status(400).json({ success: false, error: 'Invalid scene index' });
@@ -663,7 +663,7 @@ router.post('/projects/:projectId/scenes/:sceneIndex/assemble', isAuthenticated,
 router.post('/projects/:projectId/assemble-all', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
 
     const projectData = await getProjectFromDb(projectId);
     if (!projectData) return res.status(404).json({ success: false, error: 'Project not found' });
@@ -738,7 +738,7 @@ router.post('/projects/:projectId/assemble-all', isAuthenticated, async (req: Re
 router.patch('/projects/:projectId/scenes/:sceneIndex/assembly-invalidate', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId, sceneIndex } = req.params;
+    const { projectId, sceneIndex } = req.params as Record<string, string>;
     const idx = parseInt(sceneIndex, 10);
     if (Number.isNaN(idx)) return res.status(400).json({ success: false, error: 'Invalid scene index' });
 
@@ -787,7 +787,7 @@ router.delete('/projects/:projectId', isAuthenticated, async (req: Request, res:
       return res.status(401).json({ success: false, error: 'Unauthorized' });
     }
     
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
     
     if (!projectId || typeof projectId !== 'string') {
       return res.status(400).json({ success: false, error: 'Invalid project ID' });
@@ -1143,7 +1143,7 @@ router.post('/projects/product', isAuthenticated, async (req: Request, res: Resp
     
     console.log('[UniversalVideo] Creating product video project:', validatedInput.productName);
     
-    const project = await universalVideoService.createProductVideoProject(validatedInput);
+    const project = await universalVideoService.createProductVideoProject(validatedInput as any);
     
     // Set ACL for any product images to make them publicly accessible
     if (project.assets.productImages && project.assets.productImages.length > 0) {
@@ -1153,7 +1153,7 @@ router.post('/projects/product', isAuthenticated, async (req: Request, res: Resp
           const normalizedPath = objectStorageService.normalizeObjectEntityPath(img.url);
           await objectStorageService.trySetObjectEntityAclPolicy(
             normalizedPath,
-            { owner: userId, visibility: 'public' }
+            { owner: userId, visibility: 'public' } as any
           );
           console.log('[UniversalVideo] Set public ACL for:', normalizedPath);
         } catch (aclError) {
@@ -1176,7 +1176,7 @@ router.post('/projects/product', isAuthenticated, async (req: Request, res: Resp
       return res.status(400).json({ 
         success: false, 
         error: 'Invalid input', 
-        details: error.errors 
+        details: (error as any).errors 
       });
     }
     res.status(500).json({ 
@@ -1193,7 +1193,7 @@ router.post('/projects/script', isAuthenticated, async (req: Request, res: Respo
     
     console.log('[UniversalVideo] Parsing script for:', validatedInput.title);
     
-    const scenes = await universalVideoService.parseScript(validatedInput);
+    const scenes = await universalVideoService.parseScript(validatedInput as any);
     
     const scriptBrandCtx = await getBrandContext(userId);
     const scriptBrand = scriptBrandCtx.brandName
@@ -1208,7 +1208,7 @@ router.post('/projects/script', isAuthenticated, async (req: Request, res: Respo
       fps: 30,
       totalDuration: scenes.reduce((acc, s) => acc + s.duration, 0),
       outputFormat: OUTPUT_FORMATS[validatedInput.platform] || OUTPUT_FORMATS.youtube,
-      brand: scriptBrand,
+      brand: scriptBrand as any,
       scenes,
       voiceId: validatedInput.voiceId || '21m00Tcm4TlvDq8ikWAM',
       voiceName: validatedInput.voiceName || 'Rachel',
@@ -1286,7 +1286,7 @@ router.post('/projects/script', isAuthenticated, async (req: Request, res: Respo
       return res.status(400).json({ 
         success: false, 
         error: 'Invalid input', 
-        details: error.errors 
+        details: (error as any).errors 
       });
     }
     res.status(500).json({ 
@@ -1339,7 +1339,7 @@ router.get('/projects/:projectId', isAuthenticated, async (req: Request, res: Re
       return res.status(401).json({ success: false, error: 'Unauthorized' });
     }
     
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
     const projectData = await getProjectFromDb(projectId);
     
     if (!projectData) {
@@ -1388,7 +1388,7 @@ router.get('/projects/:projectId', isAuthenticated, async (req: Request, res: Re
 router.put('/projects/:projectId/scenes', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
     const { scenes } = req.body;
 
     if (!Array.isArray(scenes)) {
@@ -1448,7 +1448,7 @@ router.put('/projects/:projectId/scenes', isAuthenticated, async (req: Request, 
 router.patch('/projects/:projectId/scenes/:sceneId/narration', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId, sceneId } = req.params;
+    const { projectId, sceneId } = req.params as Record<string, string>;
     const { narration } = req.body;
     
     if (!narration || typeof narration !== 'string') {
@@ -1490,7 +1490,7 @@ router.patch('/projects/:projectId/scenes/:sceneId/narration', isAuthenticated, 
 router.patch('/projects/:projectId/scenes/:sceneId/visual-direction', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId, sceneId } = req.params;
+    const { projectId, sceneId } = req.params as Record<string, string>;
     const { visualDirection, searchQuery, fallbackQuery } = req.body;
     
     if (!visualDirection || typeof visualDirection !== 'string') {
@@ -1544,7 +1544,7 @@ router.patch('/projects/:projectId/scenes/:sceneId/visual-direction', isAuthenti
 router.post('/projects/:projectId/scenes/:sceneId/regenerate-visual-direction', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId, sceneId } = req.params;
+    const { projectId, sceneId } = req.params as Record<string, string>;
     console.log(`[RegenVisualDir] Request received - project: ${projectId}, scene: ${sceneId}, user: ${userId}`);
 
     const projectData = await getProjectFromDb(projectId);
@@ -1828,7 +1828,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
 
     projectData.scenes[sceneIndex].visualDirection = visualDirection;
     if (!projectData.scenes[sceneIndex].background) {
-      projectData.scenes[sceneIndex].background = {};
+      projectData.scenes[sceneIndex].background = { type: 'image', source: '' };
     }
     projectData.scenes[sceneIndex].background.source = visualDirection;
     if (microScenes.length > 0) {
@@ -1856,7 +1856,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
 router.get('/projects/:projectId/scenes/:sceneId/reference-config', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId, sceneId } = req.params;
+    const { projectId, sceneId } = req.params as Record<string, string>;
     
     const projectData = await getProjectFromDb(projectId);
     if (!projectData) {
@@ -1885,7 +1885,7 @@ router.get('/projects/:projectId/scenes/:sceneId/reference-config', isAuthentica
 router.patch('/projects/:projectId/scenes/:sceneId/reference-config', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId, sceneId } = req.params;
+    const { projectId, sceneId } = req.params as Record<string, string>;
     const { mode, sourceUrl, sourceType, settings } = req.body;
     
     const validModes = ['none', 'image-to-image', 'image-to-video', 'style-reference'];
@@ -1941,7 +1941,7 @@ router.patch('/projects/:projectId/scenes/:sceneId/reference-config', isAuthenti
 router.patch('/projects/:projectId/scenes/:sceneId/content-type', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId, sceneId } = req.params;
+    const { projectId, sceneId } = req.params as Record<string, string>;
     const { contentType } = req.body;
     
     const validTypes = [
@@ -1991,7 +1991,7 @@ router.patch('/projects/:projectId/scenes/:sceneId/content-type', isAuthenticate
 router.patch('/projects/:projectId/scenes/:sceneId/brand-assets', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId, sceneId } = req.params;
+    const { projectId, sceneId } = req.params as Record<string, string>;
     const { useBrandAssets } = req.body;
     
     if (typeof useBrandAssets !== 'boolean') {
@@ -2040,7 +2040,7 @@ router.patch('/projects/:projectId/scenes/:sceneId/brand-assets', isAuthenticate
 router.patch('/projects/:projectId/scenes/:sceneId/deck-image', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId, sceneId } = req.params;
+    const { projectId, sceneId } = req.params as Record<string, string>;
     const { imageId } = req.body as { imageId?: string | null };
 
     const projectData = await getProjectFromDb(projectId);
@@ -2117,7 +2117,7 @@ router.patch('/projects/:projectId/scenes/:sceneId/deck-image', isAuthenticated,
 router.post('/projects/:projectId/apply-product-references', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
 
     const projectData = await getProjectFromDb(projectId);
     if (!projectData) {
@@ -2191,7 +2191,7 @@ router.post('/projects/:projectId/apply-product-references', isAuthenticated, as
 router.post('/projects/:projectId/apply-brand-reference-set', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
     const setId = Number(req.body?.setId);
     const replaceExisting = req.body?.replaceExisting === true;
 
@@ -2274,7 +2274,7 @@ router.post('/projects/:projectId/apply-brand-reference-set', isAuthenticated, a
 router.patch('/projects/:projectId/quality-tier', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
     const { qualityTier } = req.body;
     
     const validTiers = ['ultra', 'premium', 'standard', 'draft'];
@@ -2313,7 +2313,7 @@ router.patch('/projects/:projectId/quality-tier', isAuthenticated, async (req: R
 router.patch('/projects/:projectId/media-mode', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
     const { mediaMode } = req.body;
     
     const validModes = ['image', 'video'];
@@ -2351,7 +2351,7 @@ router.patch('/projects/:projectId/media-mode', isAuthenticated, async (req: Req
 router.patch('/projects/:projectId/aspect-ratio', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
     const { aspectRatio } = req.body;
     
     const validRatios = ['16:9', '9:16', '1:1', '4:3'];
@@ -2397,7 +2397,7 @@ router.patch('/projects/:projectId/aspect-ratio', isAuthenticated, async (req: R
 router.patch('/projects/:projectId/storyboard-resolution', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
     const raw = req.body?.resolution;
 
     let next: '1K' | '2K' | '4K' | null;
@@ -2437,7 +2437,7 @@ router.patch('/projects/:projectId/storyboard-resolution', isAuthenticated, asyn
 router.patch('/projects/:projectId/render-settings', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
     const { voiceover, music, soundDesign, filmTreatment, transitions, introEnabled, introTemplate, outroEnabled, outroTemplate, introBackgroundRandom, captions, nativeVideoAudio } = req.body;
     
     const projectData = await getProjectFromDb(projectId);
@@ -2685,7 +2685,7 @@ router.patch('/projects/:projectId/render-settings', isAuthenticated, async (req
 router.get('/projects/:projectId/render-settings', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
     
     const projectData = await getProjectFromDb(projectId);
     if (!projectData) {
@@ -2855,7 +2855,7 @@ async function runBackgroundSceneAnalysis(projectId: string, userId: number | st
 router.post('/projects/:projectId/generate-outline', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
 
     const projectData = await getProjectFromDb(projectId);
     if (!projectData) {
@@ -2895,7 +2895,7 @@ router.post('/projects/:projectId/generate-outline', isAuthenticated, async (req
 router.post('/projects/:projectId/approve-outline', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
     const { chapters } = req.body;
 
     const projectData = await getProjectFromDb(projectId);
@@ -2938,7 +2938,7 @@ router.post('/projects/:projectId/approve-outline', isAuthenticated, async (req:
 router.post('/projects/:projectId/repurpose', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
     const { type } = req.body;
 
     if (!type || !['highlight', 'clips'].includes(type)) {
@@ -2957,7 +2957,7 @@ router.post('/projects/:projectId/repurpose', isAuthenticated, async (req: Reque
     if (sourceProgress.projectType !== 'long-story') {
       return res.status(400).json({ success: false, error: 'Repurpose is only available for Long Story projects' });
     }
-    if (sourceProject.status !== 'completed' && !sourceProject.outputUrl) {
+    if (sourceProject.status !== 'complete' && !sourceProject.outputUrl) {
       return res.status(400).json({ success: false, error: 'Source project must be completed before repurposing' });
     }
 
@@ -3049,7 +3049,7 @@ router.post('/projects/:projectId/repurpose', isAuthenticated, async (req: Reque
 router.post('/projects/:projectId/generate-script', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
 
     const projectData = await getProjectFromDb(projectId);
     if (!projectData) {
@@ -3542,6 +3542,7 @@ router.post('/projects/:projectId/generate-script', isAuthenticated, async (req:
         videos: { status: 'pending', progress: 0, message: '' },
         music: { status: 'pending', progress: 0, message: '' },
         assembly: { status: 'pending', progress: 0, message: '' },
+        rendering: { status: 'pending', progress: 0, message: '' },
       },
     };
 
@@ -3587,7 +3588,7 @@ router.post('/projects/:projectId/generate-script', isAuthenticated, async (req:
 router.post('/projects/:projectId/rerun-stage4', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
 
     const projectData = await getProjectFromDb(projectId);
     if (!projectData) return res.status(404).json({ success: false, error: 'Project not found' });
@@ -3683,7 +3684,7 @@ router.post('/projects/:projectId/rerun-stage4', isAuthenticated, async (req: Re
 router.patch('/projects/:projectId/scenes/:sceneId', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId, sceneId } = req.params;
+    const { projectId, sceneId } = req.params as Record<string, string>;
     const updates = req.body;
     const updateKeys = Object.keys(updates);
     console.log(`[UpdateScene] PATCH scene ${sceneId} in project ${projectId} - fields: ${updateKeys.join(', ')}`);
@@ -3781,7 +3782,6 @@ router.patch('/projects/:projectId/scenes/:sceneId', isAuthenticated, async (req
 
       const { patchSceneAtomic } = await import('./video-project-db');
       const rowCount = await patchSceneAtomic(projectId, sceneId, {
-        renderSystemType: updates.renderSystemType,
         ...overrideStamp,
       });
       if (rowCount === 0) {
@@ -3841,7 +3841,7 @@ router.patch('/projects/:projectId/scenes/:sceneId', isAuthenticated, async (req
           (s) => s?.id === sceneId,
         );
         if (freshScene) {
-          const target = scenes[sceneIndex] as Record<string, unknown>;
+          const target = scenes[sceneIndex] as unknown as Record<string, unknown>;
           const classifierKeys = ['renderSystemType', 'classifierConfidence', 'classifierReasoning', 'classifiedAt', 'manuallyClassified'] as const;
           for (const k of classifierKeys) {
             if (k in freshScene) {
@@ -3877,7 +3877,7 @@ router.patch('/projects/:projectId/scenes/:sceneId', isAuthenticated, async (req
         (s) => s?.id === sceneId,
       );
       if (freshScene) {
-        const target = scenes[sceneIndex] as Record<string, unknown>;
+        const target = scenes[sceneIndex] as unknown as Record<string, unknown>;
         const classifierKeys = ['renderSystemType', 'classifierConfidence', 'classifierReasoning', 'classifiedAt', 'manuallyClassified'] as const;
         for (const k of classifierKeys) {
           if (k in freshScene) {
@@ -3970,7 +3970,7 @@ router.post(
   async (req: Request<{ projectId: string }>, res: Response) => {
     try {
       const userId = (req.user as { id?: string } | undefined)?.id;
-      const { projectId } = req.params;
+      const { projectId } = req.params as Record<string, string>;
       const projectData = await getProjectFromDb(projectId);
       if (!projectData) {
         return res.status(404).json({ success: false, error: 'Project not found' });
@@ -4038,7 +4038,7 @@ router.post(
 router.post('/projects/:projectId/scenes/:sceneId/generate-thumbnail', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId, sceneId } = req.params;
+    const { projectId, sceneId } = req.params as Record<string, string>;
 
     const projectData = await getProjectFromDb(projectId);
     if (!projectData) {
@@ -4199,7 +4199,7 @@ router.post('/projects/:projectId/scenes/:sceneId/generate-thumbnail', isAuthent
 router.post('/projects/:projectId/generate-storyboard', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
 
     const projectData = await getProjectFromDb(projectId);
     if (!projectData) return res.status(404).json({ success: false, error: 'Project not found' });
@@ -4430,7 +4430,7 @@ router.post('/projects/:projectId/generate-storyboard', isAuthenticated, async (
 router.patch('/projects/:projectId/scenes/:sceneId/micro-scenes/:msIdx/overlays', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId, sceneId, msIdx: msIdxStr } = req.params;
+    const { projectId, sceneId, msIdx: msIdxStr } = req.params as Record<string, string>;
     const msIdx = parseInt(msIdxStr, 10);
     const { overlayItems } = req.body;
 
@@ -4480,7 +4480,7 @@ router.patch('/projects/:projectId/scenes/:sceneId/micro-scenes/:msIdx/overlays'
 router.delete('/projects/:projectId/scenes/:sceneId', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId, sceneId } = req.params;
+    const { projectId, sceneId } = req.params as Record<string, string>;
 
     const projectData = await getProjectFromDb(projectId);
     if (!projectData) {
@@ -4509,7 +4509,7 @@ router.delete('/projects/:projectId/scenes/:sceneId', isAuthenticated, async (re
 router.patch('/projects/:projectId/reference-images', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
     const { referenceImages } = req.body || {};
 
     if (!Array.isArray(referenceImages)) {
@@ -4541,7 +4541,7 @@ router.patch('/projects/:projectId/reference-images', isAuthenticated, async (re
 router.patch('/projects/:projectId/visual-style-rationale', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
     const { visualStyleRationale } = req.body || {};
 
     if (typeof visualStyleRationale !== 'string') {
@@ -4577,7 +4577,7 @@ router.post('/projects/:projectId/generate-assets', isAuthenticated, requireCred
 }), async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
     const { skipMusic, skipAnalysis, voiceId, soundProvider, referenceImages, videoProvider, seamlessTransitions } = req.body || {};
     
     const projectData = await getProjectFromDb(projectId);
@@ -4630,7 +4630,7 @@ router.post('/projects/:projectId/generate-assets', isAuthenticated, requireCred
     
     projectData.status = 'queued';
     if (!projectData.progress) {
-      projectData.progress = {};
+      projectData.progress = {} as any;
     }
     projectData.progress.overallPercent = 0;
     projectData.progress.currentStep = 'voiceover';
@@ -4667,7 +4667,7 @@ router.post('/projects/:projectId/generate-assets', isAuthenticated, requireCred
 router.post('/projects/:projectId/generate-step', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
     const { step, skipMusic } = req.body || {};
 
     const validSteps = ['voiceover', 'images', 'videos', 'music', 'assembly'];
@@ -4718,7 +4718,7 @@ router.post('/projects/:projectId/generate-step', isAuthenticated, async (req: R
     console.error('[UniversalVideo] Error in step-by-step generation:', error);
 
     try {
-      const failedProject = await getProjectFromDb(req.params.projectId);
+      const failedProject = await getProjectFromDb(req.params.projectId as string);
       if (failedProject) {
         failedProject.status = 'draft';
         failedProject.progress.errors = failedProject.progress.errors || [];
@@ -4736,7 +4736,7 @@ router.post('/projects/:projectId/generate-step', isAuthenticated, async (req: R
 router.post('/projects/:projectId/skip-to-step', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
     const { targetStep } = req.body || {};
 
     const validTargets = ['music', 'assembly', 'render'];
@@ -4791,7 +4791,7 @@ router.post('/projects/:projectId/skip-to-step', isAuthenticated, async (req: Re
 router.post('/projects/:projectId/reset-status', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
     
     const projectData = await getProjectFromDb(projectId);
     if (!projectData) {
@@ -4855,7 +4855,7 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
   try {
     const userId = (req.user as any)?.id;
     const userRole = (req.user as any)?.role;
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
     const { forceRender } = req.body;
     console.log('🎬 [RENDER] Project:', projectId, 'User:', userId, 'Role:', userRole);
     
@@ -5230,8 +5230,8 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
       const sceneDurationFrames = Math.round((scene.duration || 5) * fps);
       
       const hasSceneVoiceover = scene.voiceoverUrl ||
-                          scene.voiceover?.audioUrl || 
-                          scene.assets?.voiceover?.url ||
+                          (scene as any).voiceover?.audioUrl || 
+                          (scene.assets as any)?.voiceover?.url ||
                           preparedProject.assets?.voiceover?.fullTrackUrl;
       
       if (hasSceneVoiceover) {
@@ -5272,7 +5272,7 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
     const brandWithCachedLogo = {
       ...baseBrand,
       colors: { ...defaultBrandColors, ...(baseBrand.colors || {}) },
-      fonts: { ...defaultBrandFonts, ...(baseBrand.fonts || {}) },
+      fonts: { ...defaultBrandFonts, ...((baseBrand as any).fonts || {}) },
       logoUrl: endCardConfig?.logo?.url || baseBrand.logoUrl,
     };
     
@@ -5301,7 +5301,7 @@ router.post('/projects/:projectId/render', isAuthenticated, async (req: Request,
       
       const overlayConfigsMap = await overlayConfigurationService.generateOverlaysForProject(
         projectId,
-        sceneInputs
+        sceneInputs as any
       );
       
       // Convert Map to Record for JSON serialization
@@ -6019,7 +6019,7 @@ const STALL_DETECTION_MS = 300000; // 5 minutes - Lambda cold starts + complex s
 router.get('/projects/:projectId/render-status', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
     const { renderId, bucketName } = req.query;
     
     const projectData = await getProjectFromDb(projectId);
@@ -6036,14 +6036,14 @@ router.get('/projects/:projectId/render-status', isAuthenticated, async (req: Re
     if (renderMethod === 'chunked') {
       console.log(`[UniversalVideo] Chunked render status for ${projectId}: ${projectData.status}, progress: ${projectData.progress.steps.rendering?.progress || 0}%`);
       
-      const isDone = projectData.status === 'complete' || projectData.status === 'completed' || projectData.status === 'error';
+      const isDone = projectData.status === 'complete' || (projectData.status as string) === 'completed' || projectData.status === 'error';
       const renderProgress = projectData.progress.steps.rendering;
       
       return res.json({
         success: projectData.status !== 'error',
         done: isDone,
         progress: (renderProgress?.progress || 0) / 100,
-        outputUrl: isDone && (projectData.status === 'complete' || projectData.status === 'completed') ? projectData.outputUrl : null,
+        outputUrl: isDone && (projectData.status === 'complete' || (projectData.status as string) === 'completed') ? projectData.outputUrl : null,
         errors: projectData.status === 'error' ? projectData.progress.errors : [],
         project: projectData,
         renderMethod: 'chunked',
@@ -6057,7 +6057,7 @@ router.get('/projects/:projectId/render-status', isAuthenticated, async (req: Re
       console.log(`[UniversalVideo] No renderId for ${projectId}, returning current state`);
       return res.json({
         success: true,
-        done: projectData.status === 'complete' || projectData.status === 'completed' || projectData.status === 'error',
+        done: projectData.status === 'complete' || (projectData.status as string) === 'completed' || projectData.status === 'error',
         progress: (projectData.progress.steps.rendering?.progress || 0) / 100,
         outputUrl: projectData.outputUrl || null,
         errors: projectData.progress.errors || [],
@@ -6143,13 +6143,13 @@ router.get('/projects/:projectId/render-status', isAuthenticated, async (req: Re
       }
       
       if (statusResult.done) {
-        projectData.status = 'completed';
+        projectData.status = 'complete';
         projectData.progress.steps.rendering.status = 'complete';
         projectData.progress.steps.rendering.progress = 100;
         projectData.progress.overallPercent = 100;
         projectData.progress.currentStep = null;
         projectData.progress.percentage = 0;
-        projectData.outputUrl = statusResult.outputFile;
+        projectData.outputUrl = statusResult.outputFile ?? undefined;
         projectData.updatedAt = new Date().toISOString();
         
         await saveProjectToDb(
@@ -6664,7 +6664,7 @@ router.post('/upload-motion-reference', isAuthenticated, async (req: Request, re
 // Phase 13: Apply generation settings to project scenes
 router.post('/projects/:projectId/apply-generation-settings', isAuthenticated, async (req: Request, res: Response) => {
   try {
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
     const userId = (req.user as any)?.id?.toString();
     if (!userId) {
       return res.status(401).json({ success: false, error: 'User ID required' });
@@ -6719,7 +6719,7 @@ router.post('/projects/:projectId/apply-generation-settings', isAuthenticated, a
 router.get('/:projectId/scenes/:sceneId/routing-preview', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId, sceneId } = req.params;
+    const { projectId, sceneId } = req.params as Record<string, string>;
     const draftVisualDirection = (req.query.visualDirection as string | undefined) || undefined;
     const draftNarration = (req.query.narration as string | undefined) || undefined;
 
@@ -6788,7 +6788,7 @@ router.get('/:projectId/scenes/:sceneId/routing-preview', isAuthenticated, async
 router.get('/:projectId/scenes/:sceneId/prompt-preview', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId, sceneId } = req.params;
+    const { projectId, sceneId } = req.params as Record<string, string>;
     const draftVisualDirection = (req.query.visualDirection as string | undefined) || undefined;
 
     const projectData = await getProjectFromDb(projectId);
@@ -6866,7 +6866,7 @@ const ALLOWED_IMAGE_LOCK_PROVIDERS = new Set([
 router.patch('/:projectId/scenes/:sceneId/provider-lock', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId, sceneId } = req.params;
+    const { projectId, sceneId } = req.params as Record<string, string>;
     const { imageProviderLock: rawImageProviderLock, videoProviderLock } = req.body || {};
     const imageProviderLock = typeof rawImageProviderLock === 'string' && rawImageProviderLock !== ''
       ? normalizeImageProviderId(rawImageProviderLock)
@@ -6915,7 +6915,7 @@ router.patch('/:projectId/scenes/:sceneId/provider-lock', isAuthenticated, async
 // Phase 13D: Apply reference config to a specific scene
 router.post('/projects/:projectId/scenes/:sceneId/reference-config', isAuthenticated, async (req: Request, res: Response) => {
   try {
-    const { projectId, sceneId } = req.params;
+    const { projectId, sceneId } = req.params as Record<string, string>;
     const userId = (req.user as any)?.id?.toString();
     if (!userId) {
       return res.status(401).json({ success: false, error: 'User ID required' });
@@ -6964,7 +6964,7 @@ router.post('/projects/:projectId/scenes/:sceneId/reference-config', isAuthentic
 // Phase 13D: Clear reference config from a scene
 router.delete('/projects/:projectId/scenes/:sceneId/reference-config', isAuthenticated, async (req: Request, res: Response) => {
   try {
-    const { projectId, sceneId } = req.params;
+    const { projectId, sceneId } = req.params as Record<string, string>;
     const userId = (req.user as any)?.id?.toString();
     if (!userId) {
       return res.status(401).json({ success: false, error: 'User ID required' });
@@ -7003,7 +7003,7 @@ router.delete('/projects/:projectId/scenes/:sceneId/reference-config', isAuthent
 
 router.post('/projects/:projectId/product-images', isAuthenticated, async (req: Request, res: Response) => {
   try {
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
     const { objectPath, name, description, isPrimary } = req.body;
     
     const userId = (req.user as any)?.id?.toString();
@@ -7028,7 +7028,7 @@ router.post('/projects/:projectId/product-images', isAuthenticated, async (req: 
     
     await objectStorageService.trySetObjectEntityAclPolicy(
       normalizedPath,
-      { owner: userId, visibility: 'public' }
+      { owner: userId, visibility: 'public' } as any
     );
     
     const imageId = `img_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -7067,7 +7067,7 @@ router.post('/projects/:projectId/product-images', isAuthenticated, async (req: 
 router.get('/projects/:projectId/product-images', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
     
     const projectData = await getProjectFromDb(projectId);
     if (!projectData) {
@@ -7091,7 +7091,7 @@ router.get('/projects/:projectId/product-images', isAuthenticated, async (req: R
 router.delete('/projects/:projectId/product-images/:imageId', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId, imageId } = req.params;
+    const { projectId, imageId } = req.params as Record<string, string>;
     
     const projectData = await getProjectFromDb(projectId);
     if (!projectData) {
@@ -7130,7 +7130,7 @@ router.delete('/projects/:projectId/product-images/:imageId', isAuthenticated, a
 router.put('/projects/:projectId/scenes/:sceneId/assign-image', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId, sceneId } = req.params;
+    const { projectId, sceneId } = req.params as Record<string, string>;
     const { imageId, useAI } = req.body;
     
     const projectData = await getProjectFromDb(projectId);
@@ -7197,7 +7197,7 @@ router.put('/projects/:projectId/scenes/:sceneId/assign-image', isAuthenticated,
 router.patch('/:projectId/scene/:sceneId/overlay', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId, sceneId } = req.params;
+    const { projectId, sceneId } = req.params as Record<string, string>;
     const { useProductOverlay } = req.body;
     
     if (typeof useProductOverlay !== 'boolean') {
@@ -7242,7 +7242,7 @@ router.patch('/:projectId/scene/:sceneId/overlay', isAuthenticated, async (req: 
 router.post('/:projectId/scenes/:sceneId/regenerate-image', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId, sceneId } = req.params;
+    const { projectId, sceneId } = req.params as Record<string, string>;
     const { prompt, provider, generationMode, sourceImageUrl } = req.body;
 
     const projectData = await getProjectFromDb(projectId);
@@ -7376,7 +7376,7 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, req
 }), async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId, sceneId } = req.params;
+    const { projectId, sceneId } = req.params as Record<string, string>;
     const { query, provider, sourceImageUrl, sourceImageUrls: reqImageUrls, referenceImages: reqReferenceImages, i2vSettings, motionControl, forceRegenerate, generationMode, strongAnchor, mode: regenerateMode, referenceUrl: v2vReferenceUrl, referenceVideoUrl: reqReferenceVideoUrl, replacementImageUrl: reqReplacementImageUrl } = req.body;
     
     console.log(`[Phase9B-Async] Creating async video generation job for scene ${sceneId} with provider: ${provider || 'default'}${sourceImageUrl ? ', using I2V with source image' : ''}${i2vSettings ? ', with I2V settings' : ''}${forceRegenerate ? ', FORCE REGENERATE' : ''}${reqReferenceVideoUrl ? ', V2V mode' : ''}`);
@@ -7442,7 +7442,7 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, req
       
       const existingSourceImage = (existingJob as any).sourceImageUrl || '';
       const sourceImagesMatch = !sourceImageUrl || existingSourceImage === sourceImageUrl;
-      const jobAgeMs = Date.now() - new Date(existingJob.createdAt).getTime();
+      const jobAgeMs = Date.now() - new Date(existingJob.createdAt ?? 0).getTime();
       const isStale = existingJob.status === 'pending' && jobAgeMs > 5 * 60 * 1000;
       
       if (promptsMatch && providersMatch && sourceImagesMatch && !isStale) {
@@ -7968,7 +7968,7 @@ router.post('/:projectId/scenes/:sceneId/regenerate-video', isAuthenticated, req
 router.post('/:projectId/scenes/:sceneId/micro-scene/:microSceneIndex/regenerate-video', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId, sceneId, microSceneIndex } = req.params;
+    const { projectId, sceneId, microSceneIndex } = req.params as Record<string, string>;
     const { provider, generationMode, query, sourceImageUrl, sourceImageUrls: reqSourceImageUrls, referenceVideoUrl: reqRefVideoUrl } = req.body;
     const msIdx = parseInt(microSceneIndex, 10);
 
@@ -8144,7 +8144,7 @@ router.post('/:projectId/scenes/:sceneId/micro-scene/:microSceneIndex/regenerate
       sourceImageUrl: isV2VMode ? undefined : finalSourceImageUrl,
       sourceImageUrls: isV2VMode ? undefined : finalSourceImageUrls,
       sourceVideoUrl: isV2VMode ? reqRefVideoUrl : undefined,
-      i2vSettings: finalMsI2vSettings,
+      i2vSettings: finalMsI2vSettings as any,
       sceneType: scene.type || 'content',
     });
 
@@ -8166,7 +8166,7 @@ router.post('/:projectId/scenes/:sceneId/micro-scene/:microSceneIndex/regenerate
 router.post('/:projectId/scenes/:sceneId/regenerate-all-micro-scene-videos', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId, sceneId } = req.params;
+    const { projectId, sceneId } = req.params as Record<string, string>;
     const { provider, generationMode } = req.body;
 
     const projectData = await getProjectFromDb(projectId);
@@ -8338,7 +8338,7 @@ router.post('/:projectId/scenes/:sceneId/regenerate-all-micro-scene-videos', isA
 router.get('/:projectId/scenes/:sceneId/micro-scene-jobs', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId, sceneId } = req.params;
+    const { projectId, sceneId } = req.params as Record<string, string>;
     const projectData = await getProjectFromDb(projectId);
     if (!projectData || projectData.ownerId !== userId) {
       return res.status(404).json({ success: false, error: 'Not found' });
@@ -8372,7 +8372,7 @@ router.get('/:projectId/scenes/:sceneId/micro-scene-jobs', isAuthenticated, asyn
 router.get('/:projectId/scenes/:sceneId/video-job/:jobId', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId, sceneId, jobId } = req.params;
+    const { projectId, sceneId, jobId } = req.params as Record<string, string>;
     
     const projectData = await getProjectFromDb(projectId);
     if (!projectData) {
@@ -8415,7 +8415,7 @@ router.get('/:projectId/scenes/:sceneId/video-job/:jobId', isAuthenticated, asyn
         projectData.scenes[sceneIndex].background!.videoUrl = job.videoUrl;
         
         // Track generation method based on source type and job metadata
-        if (job.source === 'stock' || job.provider?.includes('pexels') || job.provider?.includes('pixabay')) {
+        if ((job as any).source === 'stock' || job.provider?.includes('pexels') || job.provider?.includes('pixabay')) {
           projectData.scenes[sceneIndex].generationMethod = 'stock';
         } else {
           // Check if we used a source video (V2V) or source image (I2V) or just text prompt (T2V)
@@ -8521,7 +8521,7 @@ router.get('/:projectId/scenes/:sceneId/video-job/:jobId', isAuthenticated, asyn
 router.get('/:projectId/scenes/:sceneId/active-jobs', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId, sceneId } = req.params;
+    const { projectId, sceneId } = req.params as Record<string, string>;
     
     const projectData = await getProjectFromDb(projectId);
     if (!projectData) {
@@ -8557,7 +8557,7 @@ router.get('/:projectId/scenes/:sceneId/active-jobs', isAuthenticated, async (re
 router.get('/:projectId/scenes/:sceneId/latest-job-status', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId, sceneId } = req.params;
+    const { projectId, sceneId } = req.params as Record<string, string>;
     const sinceMs = req.query.since ? parseInt(req.query.since as string, 10) : 0;
     
     const projectData = await getProjectFromDb(projectId);
@@ -8614,7 +8614,7 @@ const replaceObjectSchema = z.object({
 router.post('/:projectId/scenes/:sceneId/replace-object', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId, sceneId } = req.params;
+    const { projectId, sceneId } = req.params as Record<string, string>;
     
     // Debug logging
     console.log('[ObjectReplace] Raw request body:', JSON.stringify(req.body, null, 2));
@@ -8622,11 +8622,11 @@ router.post('/:projectId/scenes/:sceneId/replace-object', isAuthenticated, async
     // Validate request body with Zod
     const validationResult = replaceObjectSchema.safeParse(req.body);
     if (!validationResult.success) {
-      console.error('[ObjectReplace] Validation failed:', validationResult.error.errors);
+      console.error('[ObjectReplace] Validation failed:', (validationResult.error as any).errors);
       console.error('[ObjectReplace] Received replacementImageUrl:', req.body?.replacementImageUrl);
       return res.status(400).json({ 
         success: false, 
-        error: 'Invalid request: ' + validationResult.error.errors.map(e => e.message).join(', ')
+        error: 'Invalid request: ' + (validationResult.error as any).errors.map((e: any) => e.message).join(', ')
       });
     }
     
@@ -8678,6 +8678,7 @@ router.post('/:projectId/scenes/:sceneId/replace-object', isAuthenticated, async
               const filePath = parts[1];
               
               if (bucketName && filePath) {
+                // @ts-ignore — @replit/object-storage has no type declarations in this project
                 const { signObjectURL } = await import('@replit/object-storage');
                 resolvedImageUrl = await signObjectURL({
                   bucketName,
@@ -8769,7 +8770,7 @@ router.post('/:projectId/scenes/:sceneId/replace-object', isAuthenticated, async
 router.post('/:projectId/scenes/:sceneId/switch-background', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId, sceneId } = req.params;
+    const { projectId, sceneId } = req.params as Record<string, string>;
     const { preferVideo } = req.body;
     
     const projectData = await getProjectFromDb(projectId);
@@ -8804,7 +8805,7 @@ router.post('/:projectId/scenes/:sceneId/switch-background', isAuthenticated, as
 router.patch('/:projectId/scenes/:sceneId/set-media', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId, sceneId } = req.params;
+    const { projectId, sceneId } = req.params as Record<string, string>;
     const { mediaUrl, mediaType, source } = req.body;
     
     if (!mediaUrl || !mediaType || !source) {
@@ -8886,7 +8887,7 @@ router.patch('/:projectId/scenes/:sceneId/set-media', isAuthenticated, async (re
 router.patch('/:projectId/scenes/:sceneId/product-overlay', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId, sceneId } = req.params;
+    const { projectId, sceneId } = req.params as Record<string, string>;
     const { enabled, position, scale, animation } = req.body;
     
     const projectData = await getProjectFromDb(projectId);
@@ -8926,7 +8927,7 @@ router.patch('/:projectId/scenes/:sceneId/product-overlay', isAuthenticated, asy
 router.post('/:projectId/regenerate-voiceover', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
     const { voiceId, sceneIds, provider } = req.body;
     
     const projectData = await getProjectFromDb(projectId);
@@ -8967,7 +8968,7 @@ router.post('/:projectId/regenerate-voiceover', isAuthenticated, async (req: Req
 router.post('/:projectId/regenerate-music', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
     const { style, mood, musicStyle, customPrompt } = req.body;
     
     const projectData = await getProjectFromDb(projectId);
@@ -9019,7 +9020,7 @@ const bulkRegenerationStatus: Map<string, {
 router.post('/:projectId/regenerate-all-videos', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
     
     const projectData = await getProjectFromDb(projectId);
     if (!projectData) {
@@ -9210,7 +9211,7 @@ router.post('/:projectId/regenerate-all-videos', isAuthenticated, async (req: Re
 router.get('/:projectId/regenerate-all-videos/status', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
     
     const projectData = await getProjectFromDb(projectId);
     if (!projectData) {
@@ -9252,7 +9253,7 @@ import { runCinematicFlow, getCinematicFlowStatus, cancelCinematicFlow } from '.
 router.post('/:projectId/cinematic-flow-regenerate', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
     const { provider } = req.body;
 
     const projectData = await getProjectFromDb(projectId);
@@ -9282,7 +9283,7 @@ router.post('/:projectId/cinematic-flow-regenerate', isAuthenticated, async (req
 router.post('/:projectId/cinematic-flow-regenerate/cancel', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
 
     const projectData = await getProjectFromDb(projectId);
     if (!projectData) {
@@ -9310,7 +9311,7 @@ router.post('/:projectId/cinematic-flow-regenerate/cancel', isAuthenticated, asy
 router.get('/:projectId/cinematic-flow-regenerate/status', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
     const projectData = await getProjectFromDb(projectId);
     if (!projectData || projectData.ownerId !== userId) {
       return res.status(404).json({ success: false, error: 'Not found' });
@@ -9342,7 +9343,7 @@ router.get('/:projectId/cinematic-flow-regenerate/status', isAuthenticated, asyn
 router.patch('/:projectId/music-volume', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
     const { volume } = req.body;
     
     if (typeof volume !== 'number') {
@@ -9380,7 +9381,7 @@ router.patch('/:projectId/music-volume', isAuthenticated, async (req: Request, r
 router.delete('/:projectId/music', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
     
     const projectData = await getProjectFromDb(projectId);
     if (!projectData) {
@@ -9413,7 +9414,7 @@ router.delete('/:projectId/music', isAuthenticated, async (req: Request, res: Re
 router.post('/:projectId/undo', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
     
     const projectData = await getProjectFromDb(projectId);
     if (!projectData) {
@@ -9448,7 +9449,7 @@ router.post('/:projectId/undo', isAuthenticated, async (req: Request, res: Respo
 router.post('/:projectId/redo', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
     
     const projectData = await getProjectFromDb(projectId);
     if (!projectData) {
@@ -9483,7 +9484,7 @@ router.post('/:projectId/redo', isAuthenticated, async (req: Request, res: Respo
 router.get('/:projectId/history', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
     
     const projectData = await getProjectFromDb(projectId);
     if (!projectData) {
@@ -9506,7 +9507,7 @@ router.get('/:projectId/history', isAuthenticated, async (req: Request, res: Res
 router.post('/:projectId/analyze-quality', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
     
     console.log('═══════════════════════════════════════════════════════════════════════════════');
     console.log('[Phase10A] ANALYZE-QUALITY ENDPOINT CALLED');
@@ -9696,7 +9697,7 @@ router.post('/:projectId/analyze-quality', isAuthenticated, async (req: Request,
 router.patch('/:projectId/reorder-scenes', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
     const { sceneOrder } = req.body;
     
     if (!Array.isArray(sceneOrder)) {
@@ -9739,7 +9740,7 @@ router.patch('/:projectId/reorder-scenes', isAuthenticated, async (req: Request,
 router.post('/projects/:projectId/preview', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
     
     const projectData = await getProjectFromDb(projectId);
     if (!projectData) {
@@ -9781,7 +9782,7 @@ router.post('/projects/:projectId/preview', isAuthenticated, async (req: Request
 router.post('/projects/:projectId/generate-product-image', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
     const { 
       productName, 
       productDescription, 
@@ -9852,7 +9853,7 @@ router.get('/product-image-styles', (req: Request, res: Response) => {
 router.get('/projects/:projectId/quality-report', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
     
     const projectData = await getProjectFromDb(projectId);
     
@@ -9934,7 +9935,7 @@ router.get('/projects/:projectId/quality-report', isAuthenticated, async (req: R
 router.post('/projects/:projectId/evaluate-quality', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
     
     const projectData = await getProjectFromDb(projectId);
     
@@ -9988,7 +9989,7 @@ router.post('/projects/:projectId/evaluate-quality', isAuthenticated, async (req
 router.post('/projects/:projectId/regenerate-scenes', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
     const { sceneIndices } = req.body;
     
     const projectData = await getProjectFromDb(projectId);
@@ -10074,7 +10075,7 @@ router.post('/projects/:projectId/regenerate-scenes', isAuthenticated, async (re
 // PATCH /projects/:projectId/scenes/:sceneId - Update individual scene (Phase 5C)
 router.patch('/projects/:projectId/scenes/:sceneId', isAuthenticated, async (req: Request, res: Response) => {
   try {
-    const { projectId, sceneId } = req.params;
+    const { projectId, sceneId } = req.params as Record<string, string>;
     const updates = req.body;
     
     console.log(`[UniversalVideo] Updating scene ${sceneId} in project ${projectId}`);
@@ -10246,7 +10247,7 @@ async function runQualityEvaluation(project: VideoProject, outputUrl: string, ow
 // GET /projects/:projectId/generation-estimate - Estimate generation cost/time (Phase 5D)
 router.get('/projects/:projectId/generation-estimate', isAuthenticated, async (req: Request, res: Response) => {
   try {
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
     
     const project = await getProjectFromDb(projectId);
     if (!project) {
@@ -10281,7 +10282,7 @@ router.get('/projects/:projectId/generation-estimate', isAuthenticated, async (r
     const providerSelections = videoProviderSelector.selectProvidersForProject(
       scenesForSelection,
       visualStyle,
-      qualityTier
+      qualityTier as any
     );
     
     // Get provider summary counts and cost breakdown
@@ -10368,7 +10369,7 @@ router.get('/projects/:projectId/generation-estimate', isAuthenticated, async (r
                   scene.type === 'testimonial' || !(scene as any).videoUrl,
     }));
     
-    const imageProviderSelections = imageProviderSelector.selectProvidersForScenes(scenesForImageSelection, qualityTier);
+    const imageProviderSelections = imageProviderSelector.selectProvidersForScenes(scenesForImageSelection, qualityTier as any);
     const rawImageProviderCounts = imageProviderSelector.getProviderSummary(imageProviderSelections);
     const imageProviderCounts = {
       midjourney: rawImageProviderCounts.midjourney || 0,
@@ -10640,7 +10641,7 @@ router.get('/projects/:projectId/generation-estimate', isAuthenticated, async (r
 router.post('/projects/:projectId/scenes/:sceneIndex/analyze', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId, sceneIndex } = req.params;
+    const { projectId, sceneIndex } = req.params as Record<string, string>;
     const sceneIdx = parseInt(sceneIndex, 10);
     
     const projectData = await getProjectFromDb(projectId);
@@ -10723,6 +10724,7 @@ router.post('/projects/:projectId/scenes/:sceneIndex/analyze', isAuthenticated, 
     // Phase 11E: Auto-save to asset library if quality score >= 70
     if (analysisResult.overallScore >= 70) {
       try {
+        // @ts-ignore — asset-library-service has no type declarations
         const { saveToLibrary } = await import('../services/asset-library-service');
         const sceneForLibrary = {
           id: scene.id,
@@ -10784,7 +10786,7 @@ router.post('/check-blank-gradient', isAuthenticated, async (req: Request, res: 
 router.post('/projects/:projectId/analyze-all-scenes', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
     
     console.log('═══════════════════════════════════════════════════════════════════════════════');
     console.log('[Phase10A] ANALYZE-ALL-SCENES ENDPOINT CALLED');
@@ -10864,6 +10866,7 @@ router.post('/projects/:projectId/analyze-all-scenes', isAuthenticated, async (r
         // Phase 11E: Auto-save to asset library if quality score >= 70
         if (analysisResult.overallScore >= 70) {
           try {
+            // @ts-ignore — asset-library-service has no type declarations
             const { saveToLibrary } = await import('../services/asset-library-service');
             const sceneForLibrary = {
               id: scene.id,
@@ -10936,7 +10939,7 @@ router.post('/projects/:projectId/analyze-all-scenes', isAuthenticated, async (r
 router.post('/projects/:projectId/run-qa', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
     
     const projectData = await getProjectFromDb(projectId);
     if (!projectData) {
@@ -11161,9 +11164,9 @@ router.post('/projects/:projectId/run-qa', isAuthenticated, async (req: Request,
     );
     
     const avgScores = qualityReport.sceneScores?.length > 0 ? {
-      technical: Math.round(qualityReport.sceneScores.reduce((sum, s) => sum + (s.scores?.technicalQuality || 75), 0) / qualityReport.sceneScores.length),
-      composition: Math.round(qualityReport.sceneScores.reduce((sum, s) => sum + (s.scores?.composition || 75), 0) / qualityReport.sceneScores.length),
-      brand: Math.round(qualityReport.sceneScores.reduce((sum, s) => sum + (s.scores?.contentMatch || 75), 0) / qualityReport.sceneScores.length),
+      technical: Math.round(qualityReport.sceneScores.reduce((sum: any, s: any) => sum + (s.scores?.technicalQuality || 75), 0) / qualityReport.sceneScores.length),
+      composition: Math.round(qualityReport.sceneScores.reduce((sum: any, s: any) => sum + (s.scores?.composition || 75), 0) / qualityReport.sceneScores.length),
+      brand: Math.round(qualityReport.sceneScores.reduce((sum: any, s: any) => sum + (s.scores?.contentMatch || 75), 0) / qualityReport.sceneScores.length),
     } : { technical: 75, composition: 75, brand: 75 };
     
     let recommendation: 'approved' | 'needs-review' | 'needs-fixes' = 'approved';
@@ -11207,7 +11210,7 @@ router.post('/projects/:projectId/run-qa', isAuthenticated, async (req: Request,
 router.get('/projects/:projectId/qa-result', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
     
     const projectData = await getProjectFromDb(projectId);
     if (!projectData) {
@@ -11230,9 +11233,9 @@ router.get('/projects/:projectId/qa-result', isAuthenticated, async (req: Reques
     // Transform existing qualityReport to QA Gate format
     const criticalIssues = qualityReport.criticalIssues || [];
     const allIssues = [
-      ...criticalIssues.map(i => ({ ...i, sceneIndex: i.sceneIndex || 0 })),
-      ...qualityReport.sceneScores?.flatMap(s => 
-        (s.issues || []).map(i => ({ ...i, sceneIndex: s.sceneIndex }))
+      ...criticalIssues.map((i: any) => ({ ...i, sceneIndex: i.sceneIndex || 0 })),
+      ...qualityReport.sceneScores?.flatMap((s: any) => 
+        (s.issues || []).map((i: any) => ({ ...i, sceneIndex: s.sceneIndex }))
       ) || [],
     ];
     
@@ -11241,9 +11244,9 @@ router.get('/projects/:projectId/qa-result', isAuthenticated, async (req: Reques
     );
     
     const avgScores = qualityReport.sceneScores?.length > 0 ? {
-      technical: Math.round(qualityReport.sceneScores.reduce((sum, s) => sum + (s.scores?.technicalQuality || 75), 0) / qualityReport.sceneScores.length),
-      composition: Math.round(qualityReport.sceneScores.reduce((sum, s) => sum + (s.scores?.composition || 75), 0) / qualityReport.sceneScores.length),
-      brand: Math.round(qualityReport.sceneScores.reduce((sum, s) => sum + (s.scores?.contentMatch || 75), 0) / qualityReport.sceneScores.length),
+      technical: Math.round(qualityReport.sceneScores.reduce((sum: any, s: any) => sum + (s.scores?.technicalQuality || 75), 0) / qualityReport.sceneScores.length),
+      composition: Math.round(qualityReport.sceneScores.reduce((sum: any, s: any) => sum + (s.scores?.composition || 75), 0) / qualityReport.sceneScores.length),
+      brand: Math.round(qualityReport.sceneScores.reduce((sum: any, s: any) => sum + (s.scores?.contentMatch || 75), 0) / qualityReport.sceneScores.length),
     } : { technical: 75, composition: 75, brand: 75 };
     
     let recommendation: 'approved' | 'needs-review' | 'needs-fixes' = 'approved';
@@ -11287,7 +11290,7 @@ router.get('/projects/:projectId/qa-result', isAuthenticated, async (req: Reques
 router.post('/projects/:projectId/scenes/:sceneIndex/auto-regenerate', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId, sceneIndex } = req.params;
+    const { projectId, sceneIndex } = req.params as Record<string, string>;
     const sceneIdx = parseInt(sceneIndex, 10);
     
     const projectData = await getProjectFromDb(projectId);
@@ -11457,7 +11460,7 @@ router.post('/projects/:projectId/scenes/:sceneIndex/auto-regenerate', isAuthent
 router.post('/projects/:projectId/auto-regenerate-failed', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
     
     const projectData = await getProjectFromDb(projectId);
     if (!projectData) {
@@ -11539,7 +11542,7 @@ router.post('/projects/:projectId/auto-regenerate-failed', isAuthenticated, asyn
 router.get('/projects/:projectId/review-queue', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
     
     const projectData = await getProjectFromDb(projectId);
     if (!projectData) {
@@ -11567,7 +11570,7 @@ router.get('/projects/:projectId/review-queue', isAuthenticated, async (req: Req
 router.post('/projects/:projectId/review-queue/:sceneId/resolve', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId, sceneId } = req.params;
+    const { projectId, sceneId } = req.params as Record<string, string>;
     const { action, customPrompt } = req.body;
     
     const projectData = await getProjectFromDb(projectId);
@@ -11667,7 +11670,7 @@ router.get('/auto-regeneration/config', isAuthenticated, async (req: Request, re
 router.post('/projects/:projectId/scenes/:sceneIndex/improve-prompt', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId, sceneIndex } = req.params;
+    const { projectId, sceneIndex } = req.params as Record<string, string>;
     const { issues, scores } = req.body;
     
     const projectRows = await db.select().from(universalVideoProjects)
@@ -11756,7 +11759,7 @@ router.post('/projects/:projectId/scenes/:sceneIndex/improve-prompt', isAuthenti
 router.post('/projects/:projectId/scenes/:sceneIndex/intelligent-regenerate', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId, sceneIndex } = req.params;
+    const { projectId, sceneIndex } = req.params as Record<string, string>;
     
     const projectRows = await db.select().from(universalVideoProjects)
       .where(eq(universalVideoProjects.projectId, projectId))
@@ -11861,7 +11864,7 @@ router.post('/projects/:projectId/scenes/:sceneIndex/intelligent-regenerate', is
 router.get('/projects/:projectId/scenes/:sceneId/regeneration-history', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId, sceneId } = req.params;
+    const { projectId, sceneId } = req.params as Record<string, string>;
     
     const projectRows = await db.select().from(universalVideoProjects)
       .where(eq(universalVideoProjects.projectId, projectId))
@@ -11987,7 +11990,7 @@ const textOverlaySchema = z.object({
 
 router.post('/projects/:projectId/scenes/:sceneIndex/calculate-text-placements', isAuthenticated, async (req: Request, res: Response) => {
   try {
-    const { projectId, sceneIndex } = req.params;
+    const { projectId, sceneIndex } = req.params as Record<string, string>;
     const { overlays, sceneDuration, fps = 30 } = req.body;
 
     if (!overlays || !Array.isArray(overlays)) {
@@ -12092,7 +12095,7 @@ router.get('/text-placement/styles', isAuthenticated, async (req: Request, res: 
 
 router.post('/projects/:projectId/plan-transitions', isAuthenticated, async (req: Request, res: Response) => {
   try {
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
     const { visualStyle } = req.body;
 
     const projectRows = await db.select().from(universalVideoProjects)
@@ -12130,7 +12133,7 @@ router.post('/projects/:projectId/plan-transitions', isAuthenticated, async (req
 
 router.get('/projects/:projectId/transitions/:transitionIndex/remotion-props', isAuthenticated, async (req: Request, res: Response) => {
   try {
-    const { projectId, transitionIndex } = req.params;
+    const { projectId, transitionIndex } = req.params as Record<string, string>;
     const { fps = 30 } = req.query;
 
     const projectRows = await db.select().from(universalVideoProjects)
@@ -12223,7 +12226,7 @@ router.get('/brand-injection/defaults', isAuthenticated, async (_req: Request, r
 
 router.get('/projects/:projectId/quality-report', isAuthenticated, async (req: Request, res: Response) => {
   try {
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
 
     const projectRows = await db.select().from(universalVideoProjects)
       .where(eq(universalVideoProjects.projectId, projectId))
@@ -12291,7 +12294,7 @@ router.get('/projects/:projectId/quality-report', isAuthenticated, async (req: R
 
 router.post('/projects/:projectId/analyze-all', isAuthenticated, async (req: Request, res: Response) => {
   try {
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
 
     const projectRows = await db.select().from(universalVideoProjects)
       .where(eq(universalVideoProjects.projectId, projectId))
@@ -12437,7 +12440,7 @@ router.post('/projects/:projectId/analyze-all', isAuthenticated, async (req: Req
 
 router.post('/projects/:projectId/scenes/:sceneIndex/approve', isAuthenticated, async (req: Request, res: Response) => {
   try {
-    const { projectId, sceneIndex } = req.params;
+    const { projectId, sceneIndex } = req.params as Record<string, string>;
     const idx = parseInt(sceneIndex, 10);
 
     const projectRows = await db.select().from(universalVideoProjects)
@@ -12476,7 +12479,7 @@ router.post('/projects/:projectId/scenes/:sceneIndex/approve', isAuthenticated, 
 
 router.post('/projects/:projectId/scenes/:sceneIndex/reject', isAuthenticated, async (req: Request, res: Response) => {
   try {
-    const { projectId, sceneIndex } = req.params;
+    const { projectId, sceneIndex } = req.params as Record<string, string>;
     const { reason } = req.body;
     const idx = parseInt(sceneIndex, 10);
 
@@ -12517,7 +12520,7 @@ router.post('/projects/:projectId/scenes/:sceneIndex/reject', isAuthenticated, a
 
 router.post('/projects/:projectId/approve-all', isAuthenticated, async (req: Request, res: Response) => {
   try {
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
 
     const projectRows = await db.select().from(universalVideoProjects)
       .where(eq(universalVideoProjects.projectId, projectId))
@@ -12604,7 +12607,7 @@ router.get('/api/debug/score-integrity', isAuthenticated, async (req, res) => {
         
         const analysisResult = scene.analysisResult;
         const qualityScore = scene.qualityScore || projectData.qualityReport?.sceneScores?.find(
-          s => s.sceneId === scene.id || s.sceneIndex === sceneIndex
+          (s: any) => s.sceneId === scene.id || s.sceneIndex === sceneIndex
         )?.overallScore;
         
         if (analysisResult?.overallScore !== undefined && analysisResult.overallScore > 0) {
@@ -12937,7 +12940,7 @@ router.post('/brand-assets/search', isAuthenticated, async (req, res) => {
 // Phase 14: Analyze all scenes in a project for brand requirements
 router.get('/projects/:projectId/brand-analysis', isAuthenticated, async (req, res) => {
   try {
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
     const projectData = await getProjectFromDb(projectId);
     
     if (!projectData) {
@@ -13142,7 +13145,7 @@ router.post('/compose-image/from-analysis', isAuthenticated, async (req: Request
 
 router.post('/projects/:projectId/scenes/:sceneId/compose', isAuthenticated, async (req: Request, res: Response) => {
   try {
-    const { projectId, sceneId } = req.params;
+    const { projectId, sceneId } = req.params as Record<string, string>;
     const { options } = req.body;
     
     console.log(`[Phase14C] Composing scene ${sceneId} in project ${projectId}`);
@@ -13331,7 +13334,7 @@ router.post('/image-to-video/select-provider', isAuthenticated, async (req: Requ
 
 router.post('/projects/:projectId/scenes/:sceneId/generate-video-from-composed', isAuthenticated, async (req: Request, res: Response) => {
   try {
-    const { projectId, sceneId } = req.params;
+    const { projectId, sceneId } = req.params as Record<string, string>;
     const { composedImageUrl, motion, duration = 5 } = req.body;
 
     if (!composedImageUrl) {
@@ -13483,7 +13486,7 @@ router.post('/logo-composition/generate-props', isAuthenticated, async (req: Req
 
 router.get('/logo-composition/select-logo/:type', isAuthenticated, async (req: Request, res: Response) => {
   try {
-    const { type } = req.params;
+    const { type } = req.params as Record<string, string>;
     const { preferredName } = req.query;
 
     const validTypes: LogoType[] = ['primary', 'watermark', 'certification', 'partner'];
@@ -13595,7 +13598,7 @@ router.post('/logo-composition/resolve-assets', isAuthenticated, async (req: Req
 
 router.post('/projects/:projectId/scenes/:sceneId/compose-logos', isAuthenticated, async (req: Request, res: Response) => {
   try {
-    const { projectId, sceneId } = req.params;
+    const { projectId, sceneId } = req.params as Record<string, string>;
     const { 
       logoTypes = ['primary', 'watermark'],
       productRegions,
@@ -13766,7 +13769,7 @@ router.get('/workflow/paths', isAuthenticated, async (req: Request, res: Respons
 
 router.post('/projects/:projectId/scenes/:sceneId/workflow', isAuthenticated, async (req: Request, res: Response) => {
   try {
-    const { projectId, sceneId } = req.params;
+    const { projectId, sceneId } = req.params as Record<string, string>;
     const { outputType = 'video' } = req.body;
 
     const projectData = await getProjectFromDb(projectId);
@@ -13803,7 +13806,7 @@ router.post('/projects/:projectId/scenes/:sceneId/workflow', isAuthenticated, as
 
 router.post('/projects/:projectId/workflow-preview', isAuthenticated, async (req: Request, res: Response) => {
   try {
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
     
     const projectData = await getProjectFromDb(projectId);
     if (!projectData) {
@@ -13861,7 +13864,7 @@ router.post('/projects/:projectId/workflow-preview', isAuthenticated, async (req
 router.post('/projects/:projectId/scenes/:sceneId/pipeline-step', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId, sceneId } = req.params;
+    const { projectId, sceneId } = req.params as Record<string, string>;
     const { stepName, intermediates = {}, provider, qualityTier } = req.body;
 
     if (!stepName) {
@@ -13935,7 +13938,7 @@ router.post('/projects/:projectId/scenes/:sceneId/pipeline-step', isAuthenticate
 router.post('/projects/:projectId/scenes/:sceneId/run-full-pipeline', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any)?.id;
-    const { projectId, sceneId } = req.params;
+    const { projectId, sceneId } = req.params as Record<string, string>;
     const { provider, qualityTier } = req.body;
 
     const projectData = await getProjectFromDb(projectId);
@@ -14048,7 +14051,7 @@ recoverStaleRenders();
 
 router.put('/projects/:projectId/characters', isAuthenticated, async (req: Request, res: Response) => {
   try {
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
     const userId = (req.user as any)?.id;
     if (!userId) return res.status(401).json({ success: false, error: 'Unauthorized' });
 
@@ -14206,7 +14209,7 @@ router.post('/generate-character-reference', isAuthenticated, async (req: Reques
 
 router.post('/projects/:projectId/characters/:characterId/generate-reference', isAuthenticated, async (req: Request, res: Response) => {
   try {
-    const { projectId, characterId } = req.params;
+    const { projectId, characterId } = req.params as Record<string, string>;
     const userId = (req.user as any)?.id;
     if (!userId) return res.status(401).json({ success: false, error: 'Unauthorized' });
 
@@ -14383,7 +14386,7 @@ router.post('/projects/:projectId/characters/:characterId/generate-reference', i
 
 router.put('/projects/:projectId/characters/:characterId/lock', isAuthenticated, async (req: Request, res: Response) => {
   try {
-    const { projectId, characterId } = req.params;
+    const { projectId, characterId } = req.params as Record<string, string>;
     const userId = (req.user as any)?.id;
     if (!userId) return res.status(401).json({ success: false, error: 'Unauthorized' });
 
@@ -14461,7 +14464,7 @@ router.delete('/character-library/:id', isAuthenticated, async (req: Request, re
     const userId = (req.user as any)?.id;
     if (!userId) return res.status(401).json({ success: false, error: 'Unauthorized' });
 
-    const id = parseInt(req.params.id);
+    const id = parseInt(req.params.id as string);
     if (isNaN(id)) return res.status(400).json({ success: false, error: 'Invalid ID' });
 
     const [entry] = await db.select().from(characterLibrary)
@@ -14473,7 +14476,7 @@ router.delete('/character-library/:id', isAuthenticated, async (req: Request, re
     try {
       const matchingAssets = await db.select().from(assetLibrary)
         .where(and(
-          eq(assetLibrary.assetUrl, entry.referenceImageUrl),
+          eq(assetLibrary.assetUrl, entry.referenceImageUrl ?? ''),
           eq(assetLibrary.createdBy, userId),
         ));
       for (const asset of matchingAssets) {
@@ -14497,7 +14500,7 @@ router.patch('/character-library/:id', isAuthenticated, async (req: Request, res
     const userId = (req.user as any)?.id;
     if (!userId) return res.status(401).json({ success: false, error: 'Unauthorized' });
 
-    const id = parseInt(req.params.id);
+    const id = parseInt(req.params.id as string);
     if (isNaN(id)) return res.status(400).json({ success: false, error: 'Invalid ID' });
 
     const [existing] = await db.select().from(characterLibrary)
@@ -14539,7 +14542,7 @@ router.patch('/character-library/:id', isAuthenticated, async (req: Request, res
 
 router.post('/projects/:projectId/characters/import', isAuthenticated, async (req: Request, res: Response) => {
   try {
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
     const userId = (req.user as any)?.id;
     if (!userId) return res.status(401).json({ success: false, error: 'Unauthorized' });
 
@@ -14591,11 +14594,12 @@ router.post('/projects/:projectId/characters/import', isAuthenticated, async (re
 // ============================================================
 router.post('/projects/:projectId/scenes/:sceneId/suggest-text-overlays', isAuthenticated, async (req: Request, res: Response) => {
   try {
-    const { projectId, sceneId } = req.params;
+    const { projectId, sceneId } = req.params as Record<string, string>;
     const userId = (req as any).user?.id;
     const { narration, sceneType, brandColors } = req.body;
 
     const projectData = await getProjectFromDb(projectId);
+    if (!projectData) return res.status(404).json({ success: false, error: 'Project not found' });
     if (projectData.ownerId !== userId) return res.status(403).json({ success: false, error: 'Access denied' });
 
     if (!narration) {

@@ -51,7 +51,7 @@ export interface VideoProvider {
   weaknesses: string[];
   bestFor: string[];
   family?: string;
-  tier?: 'premium' | 'standard' | 'budget';
+  tier?: 'premium' | 'standard' | 'budget' | 'ultra';
   specialization?: string;
   specialties?: string[];
   limitations?: string[];

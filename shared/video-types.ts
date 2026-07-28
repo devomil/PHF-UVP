@@ -141,6 +141,8 @@ export interface StyleReferenceSettings {
 export interface ReferenceConfig {
   mode: ReferenceMode;
   sourceUrl?: string;
+  /** Legacy field used by some route handlers for the reference image URL. */
+  imageUrl?: string;
   sourceType: ReferenceSourceType;
   i2iSettings?: ImageToImageSettings;
   i2vSettings?: ImageToVideoSettings;
@@ -471,6 +473,10 @@ export interface Scene {
   shotType?: string;
   chapterIndex?: number;
   chapterTitle?: string;
+  /** Optional human-readable label for this scene, used in logging and bulk regen. */
+  title?: string;
+  /** ISO timestamp set when this scene's primary asset was generated. */
+  generatedAt?: string;
   voiceoverUrl?: string;
   voiceoverDuration?: number;
   voiceoverWords?: import('./config/caption-styles').CaptionWord[];
@@ -741,6 +747,11 @@ export interface BackgroundConfig {
   type: 'image' | 'video' | 'gradient' | 'solid';
   source: string;
   videoUrl?: string;
+  mediaUrl?: string;
+  /** Legacy alias for mediaUrl used in some route handlers. */
+  url?: string;
+  /** Provider that produced the background video (e.g. 'runway'). */
+  videoSource?: string;
   effect?: {
     type: 'ken-burns' | 'parallax' | 'zoom' | 'pan' | 'none';
     intensity: 'subtle' | 'medium' | 'dramatic';
@@ -796,6 +807,8 @@ export interface RegenerationRecord {
   prompt?: string;
   timestamp: string;
   success: boolean;
+  /** Identifies the regeneration strategy used (e.g. 'object-replacement'). */
+  method?: string;
 }
 
 export interface ProjectHistoryEntry {
@@ -867,7 +880,7 @@ export interface GeneratedAssets {
 }
 
 export interface ProductionProgress {
-  currentStep: ProductionStep;
+  currentStep: ProductionStep | string | null;
   steps: {
     script: StepStatus;
     voiceover: StepStatus;
@@ -880,6 +893,10 @@ export interface ProductionProgress {
   overallPercent: number;
   errors: string[];
   serviceFailures: ServiceFailure[];
+  /** Legacy/extended fields used by some route handlers. */
+  completedSteps?: string[];
+  percentage?: number;
+  phase?: string;
 }
 
 export type ProductionStep = 'idle' | 'script' | 'voiceover' | 'images' | 'videos' | 'music' | 'assembly' | 'rendering';

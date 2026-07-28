@@ -5,12 +5,16 @@ import { universalVideoProjects } from '../../shared/schema';
 import { eq, sql, type SQL } from 'drizzle-orm';
 
 export type VideoProjectWithMeta = VideoProject & {
+  /** Always populated from the DB row — guaranteed non-null after load. */
+  ownerId: string;
+  projectId: string;
   renderId?: string;
   bucketName?: string;
   outputUrl?: string;
+  qualityReport?: any;
 };
 
-export function dbRowToVideoProject(row: any): VideoProject {
+export function dbRowToVideoProject(row: any): VideoProjectWithMeta {
   const progress = row.progress || {};
   const result: any = {
     ...(row.projectData || {}),
@@ -63,7 +67,7 @@ export function dbRowToVideoProject(row: any): VideoProject {
   if (progress.endCardSettings !== undefined) result.endCardSettings = progress.endCardSettings;
   if (progress.introCardSettings !== undefined) result.introCardSettings = progress.introCardSettings;
   if (progress.introBackgroundUrl !== undefined) result.introBackgroundUrl = progress.introBackgroundUrl;
-  return result as VideoProject;
+  return result as VideoProjectWithMeta;
 }
 
 export async function saveProjectToDb(
@@ -141,10 +145,11 @@ export async function saveProjectToDb(
   }
 }
 
-export async function getProjectFromDb(projectId: string): Promise<VideoProject | null> {
+export async function getProjectFromDb(projectId: string | string[]): Promise<VideoProjectWithMeta | null> {
+  const id = Array.isArray(projectId) ? projectId[0] : projectId;
   const rows = await db.select()
     .from(universalVideoProjects)
-    .where(eq(universalVideoProjects.projectId, projectId));
+    .where(eq(universalVideoProjects.projectId, id));
 
   if (rows.length === 0) return null;
   return dbRowToVideoProject(rows[0]);
