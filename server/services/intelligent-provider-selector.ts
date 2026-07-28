@@ -31,7 +31,7 @@ export interface BatchProviderRecommendations {
 }
 
 class IntelligentProviderSelectorService {
-  async analyzeAndRecommendProviders(scenes: SceneContent[], artPresetId?: string): Promise<BatchProviderRecommendations> {
+  async analyzeAndRecommendProviders(scenes: SceneContent[], artPresetId?: string, availableProviders?: string[]): Promise<BatchProviderRecommendations> {
     if (!llmClient.isAvailable() || scenes.length === 0) {
       return this.fallbackProviderSelection(scenes, artPresetId);
     }
@@ -39,7 +39,7 @@ class IntelligentProviderSelectorService {
     console.log(`[IntelligentProvider] Analyzing ${scenes.length} scenes with Claude...`);
 
     try {
-      const prompt = this.buildAnalysisPrompt(scenes);
+      const prompt = this.buildAnalysisPrompt(scenes, availableProviders);
       
       const result = await llmClient.createChatCompletion({
         systemPrompt: 'You are an expert video production AI assistant.',
@@ -69,7 +69,7 @@ class IntelligentProviderSelectorService {
     }
   }
 
-  private buildAnalysisPrompt(scenes: SceneContent[]): string {
+  private buildAnalysisPrompt(scenes: SceneContent[], availableProviders?: string[]): string {
     const scenesDescription = scenes.map((scene, idx) => `
 Scene ${idx + 1} (ID: ${scene.sceneId}):
 - Type: ${scene.sceneType}
@@ -126,7 +126,11 @@ IMPORTANT PROVIDER PREFERENCE ORDER:
 9. Hailuo (ONLY as absolute last resort — avoid recommending this provider)
 
 When in doubt, default to Seedance. For fallbacks, prefer Runway 4.5, Kling, or Veo over Hailuo.
-
+${availableProviders && availableProviders.length > 0 ? `
+CONSTRAINT — only recommend providers from this list: ${availableProviders.join(', ')}
+Do NOT recommend any provider not in the list above, even if it seems like a better fit.
+If your top choice is not available, pick the next best available provider.
+` : ''}
 Respond with ONLY a JSON array (no markdown, no code blocks):
 [
   {
@@ -398,8 +402,8 @@ Respond with ONLY a JSON array (no markdown, no code blocks):
     return { provider: 'seedance', classification: 'mixed', confidence: 60, reasoning: 'Default to Seedance 2 GA as primary provider' };
   }
 
-  async recommendProviderForScene(scene: SceneContent): Promise<ProviderRecommendation> {
-    const batch = await this.analyzeAndRecommendProviders([scene]);
+  async recommendProviderForScene(scene: SceneContent, availableProviders?: string[]): Promise<ProviderRecommendation> {
+    const batch = await this.analyzeAndRecommendProviders([scene], undefined, availableProviders);
     return batch.recommendations[0];
   }
 }

@@ -905,7 +905,17 @@ class AIVideoService {
         duration: options.duration,
       };
 
-      const result = await intelligentProviderSelector.recommendProviderForScene(sceneContent);
+      // Reduce configured providers to provider families and exclude Runway:
+      // the runwaySafeOrder backstop will strip runway from auto-routing anyway,
+      // so telling Claude "runway is available" just wastes the LLM call.
+      const selectableProviders = [...new Set(
+        configuredProviders
+          .map(p => p.split('-')[0])
+          .filter(family => family !== 'runway')
+      )];
+      console.log(`[AIVideo] Intelligent selector constraint: [${selectableProviders.join(', ')}]`);
+
+      const result = await intelligentProviderSelector.recommendProviderForScene(sceneContent, selectableProviders);
       
       let recommendedProvider = result.recommendedProvider;
       let fallbackProvider = result.fallbackProvider;
