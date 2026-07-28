@@ -1763,38 +1763,61 @@ class PiAPIVideoService {
       // PiAPI Kling I2V parameters:
       // - cfg_scale: 0.0-1.0, controls prompt vs source image balance (lower = more source fidelity)
       // - static_mask: controls what parts of image to animate (we want full frame)
-      const imageControlStrength = options.i2vSettings?.imageControlStrength ?? 1.0;
+
+      // cfg_scale defaults per animation style.
+      //
+      // The 0.25 ceiling on product styles is empirical: above it, Kling
+      // reimagines the product and returns the wrong bottle or label. That
+      // finding applies to shots with a product to protect. Non-product
+      // styles deliberately sit above it, because suppressing the prompt to
+      // protect a product that isn't in frame is what made general scenes inert.
+      const CFG_BY_ANIMATION_STYLE: Record<string, number> = {
+        'product-static': 0.15,
+        'product-hero':   0.20,
+        'subtle-motion':  0.40,
+        'dynamic':        0.55,
+      };
+      const CFG_FALLBACK = 0.40;
+
+      // explicitFidelity has NO default — undefined must stay distinguishable
+      // from a real slider value or the CFG_BY_ANIMATION_STYLE table is
+      // unreachable and cfg stays at 0.10 for every pipeline scene.
+      const explicitFidelity = options.i2vSettings?.imageControlStrength;
       const motionStrength = options.i2vSettings?.motionStrength ?? 0.3;
-      let animationStyle = options.i2vSettings?.animationStyle ?? 'product-hero';
-      if (animationStyle === 'product-hero' && !options.i2vSettings?.animationStyle) {
-          if (hasActionPrompt(sanitizedPrompt)) {
-          animationStyle = 'dynamic';
-          console.log(`[PiAPI I2V] Action prompt detected — switching from product-hero to dynamic animation style`);
-        }
+
+      // Pipeline scenes arrive with no i2vSettings. 'product-hero' was the wrong
+      // neutral default — it framed every scene as a product push-in.
+      let animationStyle = options.i2vSettings?.animationStyle ?? 'subtle-motion';
+      if (!options.i2vSettings?.animationStyle && hasActionPrompt(sanitizedPrompt)) {
+        animationStyle = 'dynamic';
+        console.log(`[PiAPI I2V] Action prompt detected — animation style → dynamic`);
       }
-      
-      // Map user's Image Fidelity slider (0-1 where 1 = max fidelity) to cfg_scale
-      // cfg_scale: 0.0 = preserve source exactly, 1.0 = follow prompt completely
-      // For I2V product shots: keep LOW to preserve the actual product image
-      // cfg_scale 0.25+ causes Kling to reimagine the product entirely (wrong bottle/labels)
-      // Motion comes from the prompt directives, NOT from cfg_scale freedom
-      // Default fidelity=1.0 → cfg=0.1 (preserve product), fidelity=0.0 → cfg=0.5 (creative)
-      let cfgScale = Math.max(0.1, 0.5 - imageControlStrength * 0.4); // Range: 0.5 (creative) to 0.1 (high fidelity)
-      
+
+      // Precedence: explicit user slider > animation-style default > stylized floor.
+      let cfgScale: number;
+      let cfgSource: string;
+      if (explicitFidelity !== undefined) {
+        cfgScale = Math.max(0.1, 0.5 - explicitFidelity * 0.4);
+        cfgSource = `user fidelity slider (${explicitFidelity})`;
+      } else {
+        cfgScale = CFG_BY_ANIMATION_STYLE[animationStyle] ?? CFG_FALLBACK;
+        cfgSource = `animationStyle default (${animationStyle})`;
+      }
+
+      // Stylized floor — unchanged behavior, raises cfg only, never lowers it.
       if (options.artPresetId && isStylizedPreset(options.artPresetId)) {
         const targetCfg = options.isCharacterReference ? STYLIZED_CHARACTER_CFG : STYLIZED_ENVIRONMENT_CFG;
         const stylizedCfg = Math.max(cfgScale, targetCfg);
         if (stylizedCfg !== cfgScale) {
           const tier = options.isCharacterReference ? 'character' : 'environment';
-          console.log(`[PiAPI I2V] Stylized preset cfg override (${tier}): ${cfgScale.toFixed(2)} → ${stylizedCfg.toFixed(2)} for art style adherence`);
+          console.log(`[PiAPI I2V] Stylized preset cfg override (${tier}): ${cfgScale.toFixed(2)} → ${stylizedCfg.toFixed(2)}`);
           cfgScale = stylizedCfg;
+          cfgSource = `stylized floor (${tier})`;
         }
       }
-      
-      // Map motion strength to animation intensity
-      // Kling uses a subtle approach - lower values mean less dramatic motion
-      // The prompt-based approach is our primary control since Kling I2V has limited motion params
-      
+
+      console.log(`[PiAPI I2V] cfg=${cfgScale.toFixed(2)} via ${cfgSource}, motion=${motionStrength}, style=${animationStyle}`);
+
       // Different camera/animation directive for each style
       const motionDirectiveMap: Record<string, string> = {
         'product-hero': 'slow smooth push towards product, steady focus',
@@ -1803,8 +1826,6 @@ class PiAPIVideoService {
         'dynamic': 'energetic camera movement, engaging motion',
       };
       const motionDirective = motionDirectiveMap[animationStyle] || 'gentle camera motion';
-      
-      console.log(`[PiAPI I2V] Kling settings: fidelity=${imageControlStrength} → cfg=${cfgScale.toFixed(2)}, motion=${motionStrength}, style=${animationStyle}`);
       
       // Check if prompt requires NEW content generation (people, activities)
       const requiresNewContent = promptRequiresNewContent(sanitizedPrompt);
