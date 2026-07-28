@@ -32,7 +32,7 @@ export const DEFAULT_END_CARD_SETTINGS: EndCardSettings = {
   logoAnimation: 'scale-bounce',
   taglineText: 'Rooted in Nature, Grown with Care',
   taglineAnimation: 'typewriter',
-  contactWebsite: 'PineHillFarm.com',
+  contactWebsite: '',
   contactPhone: '',
   contactEmail: '',
   ambientEffect: 'bokeh',

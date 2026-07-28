@@ -504,7 +504,7 @@ const endCardSettingsSchema = z.object({
   logoAnimation: z.enum(['scale-bounce', 'fade', 'slide-up', 'none']).default('scale-bounce'),
   taglineText: z.string().default('Rooted in Nature, Grown with Care'),
   taglineAnimation: z.enum(['typewriter', 'fade', 'slide-up']).default('typewriter'),
-  contactWebsite: z.string().default('PineHillFarm.com'),
+  contactWebsite: z.string().default(''),
   contactPhone: z.string().default(''),
   contactEmail: z.string().default(''),
   // Phase 18E: Social icons
@@ -1251,7 +1251,7 @@ router.post('/projects/script', isAuthenticated, async (req: Request, res: Respo
       logoAnimation: 'scale-bounce',
       taglineText: 'Rooted in Nature, Grown with Care',
       taglineAnimation: 'typewriter',
-      contactWebsite: 'PineHillFarm.com',
+      contactWebsite: '',
       contactPhone: '',
       contactEmail: '',
       ambientEffect: 'bokeh',

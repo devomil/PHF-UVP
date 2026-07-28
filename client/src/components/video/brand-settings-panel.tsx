@@ -129,7 +129,7 @@ export const BrandSettingsPanel: React.FC<BrandSettingsPanelProps> = ({
   const getDisplayCta = () => {
     return {
       text: settings.ctaText || brandPreview?.callToAction.text || 'Start Your Wellness Journey Today',
-      subtext: settings.ctaSubtext || brandPreview?.callToAction.url || 'PineHillFarm.com',
+      subtext: settings.ctaSubtext || brandPreview?.callToAction.url || '',
     };
   };
 

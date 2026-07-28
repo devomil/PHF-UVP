@@ -7,6 +7,7 @@ import { getTableName } from "drizzle-orm";
 // server/db.ts throws at module load if DATABASE_URL is unset.
 process.env.DATABASE_URL = "postgres://test:test@localhost:5432/test";
 process.env.SESSION_SECRET = "test-session-secret";
+process.env.ADMIN_EMAILS = "ryan@admin-test.example.com";
 
 // ---------------------------------------------------------------------------
 // In-memory store for users + oauth_accounts (the two tables the local-login
@@ -356,7 +357,7 @@ describe("LocalStrategy / POST /api/login", () => {
     const hashed = await bcrypt.hash("admin-pw", 10);
     usersStore.push({
       id: "u-admin",
-      email: "ryan@pinehillfarm.co",
+      email: "ryan@admin-test.example.com",
       password: hashed,
       firstName: null,
       lastName: null,
@@ -367,7 +368,7 @@ describe("LocalStrategy / POST /api/login", () => {
     const app = buildApp();
     const res = await request(app)
       .post("/api/login")
-      .send({ email: "ryan@pinehillfarm.co", password: "admin-pw" });
+      .send({ email: "ryan@admin-test.example.com", password: "admin-pw" });
     expect(res.status).toBe(200);
     expect(res.body.role).toBe("admin");
     // Persisted on the underlying row, not just the response payload.
@@ -471,7 +472,7 @@ describe("POST /api/register", () => {
     const app = buildApp();
     const res = await request(app)
       .post("/api/register")
-      .send({ email: "ryan@pinehillfarm.co", password: "pw12345" });
+      .send({ email: "ryan@admin-test.example.com", password: "pw12345" });
     expect(res.status).toBe(201);
     expect(res.body.role).toBe("admin");
     expect(usersStore[0].role).toBe("admin");

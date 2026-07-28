@@ -2377,11 +2377,7 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
     let processedText = text;
     
     // Only fix brand name spacing (no phonetic syllable breaks)
-    const brandFixes: Record<string, string> = {
-      'PineHillFarm': 'Pine Hill Farm',
-      'pinehillfarm': 'Pine Hill Farm',
-      'Pinehillfarm': 'Pine Hill Farm',
-    };
+    const brandFixes: Record<string, string> = {};
     
     for (const [original, fixed] of Object.entries(brandFixes)) {
       const regex = new RegExp(`\\b${original}\\b`, 'g');
@@ -6067,7 +6063,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
       try {
         const productImages = await productImageService.generateProjectImages(
           productsNeedingImages,
-          'natural'  // Pine Hill Farm brand style
+          'natural'
         );
 
         (updatedProject as any).generatedProductImages = {};

@@ -96,7 +96,7 @@ export function computeSafeAnimationRange({
 /**
  * Wrap policy applied to the body of every CustomTextOverlay. Centralized so
  * it can be snapshot-tested — these four properties together guarantee that
- * tokens like brand URLs ("PineHillFarm.co") never split mid-word at typical
+ * tokens like brand URLs never split mid-word at typical
  * lower-third widths. Loosening any of them is a regression.
  */
 export const TEXT_OVERLAY_WRAP_STYLE = {

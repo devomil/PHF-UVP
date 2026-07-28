@@ -6,6 +6,7 @@ import { getTableName } from "drizzle-orm";
 // server/db.ts throws at module load if DATABASE_URL is unset; satisfy the
 // guard before anything in server/auth.ts pulls it transitively.
 process.env.DATABASE_URL = "postgres://test:test@localhost:5432/test";
+process.env.ADMIN_EMAILS = "ryan@admin-test.example.com";
 
 // ---------------------------------------------------------------------------
 // In-memory store for the two tables linkOrCreateOAuthUser touches.
@@ -442,7 +443,7 @@ describe("linkOrCreateOAuthUser", () => {
     const result = await linkOrCreateOAuthUser({
       provider: "google",
       providerAccountId: "google-admin",
-      email: "Ryan@PineHillFarm.co",
+      email: "Ryan@admin-test.example.com",
       emailVerified: true,
       firstName: "Ryan",
       lastName: "Admin",
@@ -456,7 +457,7 @@ describe("linkOrCreateOAuthUser", () => {
   it("auto-promotes an existing non-admin allowlist user when they sign in via OAuth", async () => {
     usersStore.push({
       id: "user-existing-admin",
-      email: "ryan@pinehillfarm.co",
+      email: "ryan@admin-test.example.com",
       password: null,
       firstName: null,
       lastName: null,
@@ -468,7 +469,7 @@ describe("linkOrCreateOAuthUser", () => {
       userId: "user-existing-admin",
       provider: "google",
       providerAccountId: "google-admin-existing",
-      email: "ryan@pinehillfarm.co",
+      email: "ryan@admin-test.example.com",
       accessToken: null,
       refreshToken: null,
       expiresAt: null,
@@ -477,7 +478,7 @@ describe("linkOrCreateOAuthUser", () => {
     const result = await linkOrCreateOAuthUser({
       provider: "google",
       providerAccountId: "google-admin-existing",
-      email: "ryan@pinehillfarm.co",
+      email: "ryan@admin-test.example.com",
       emailVerified: true,
       firstName: null,
       lastName: null,

@@ -16,9 +16,10 @@ import crypto from "crypto";
 import { sendNewUserSignupNotification, sendWelcomeEmail } from "./services/notification-service";
 import { revokeAppleToken } from "./lib/apple-revoke";
 
-const ADMIN_EMAILS = [
-  "ryan@pinehillfarm.co",
-];
+const ADMIN_EMAILS: string[] = (process.env.ADMIN_EMAILS || "")
+  .split(",")
+  .map((e) => e.trim().toLowerCase())
+  .filter(Boolean);
 
 type OAuthProviderName = "google" | "facebook" | "apple";
 

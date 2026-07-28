@@ -4954,7 +4954,7 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
                     <DebouncedTextInput
                       label="Website"
                       value={settings.introCard?.contactWebsite || ''}
-                      placeholder="e.g. PineHillFarm.com"
+                      placeholder="e.g. yourbusiness.com"
                       onSave={(val) => saveMutation.mutate({ introCard: { ...settings.introCard, contactWebsite: val } })}
                     />
                     <div className="grid grid-cols-2 gap-1.5">
@@ -5387,7 +5387,7 @@ function RenderConfigPanel({ projectId, projectOutputUrl, projectStatus, project
                     <DebouncedTextInput
                       label="Website"
                       value={settings.endCard?.contactWebsite || ''}
-                      placeholder="e.g. PineHillFarm.com"
+                      placeholder="e.g. yourbusiness.com"
                       onSave={(val) => saveMutation.mutate({ endCard: { ...settings.endCard, contactWebsite: val } })}
                     />
                     <div className="grid grid-cols-2 gap-1.5">
