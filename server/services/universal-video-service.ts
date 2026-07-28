@@ -13,7 +13,6 @@ import {
   CharacterProfile,
   createEmptyVideoProject,
   calculateTotalDuration,
-  PINE_HILL_FARM_BRAND,
   OUTPUT_FORMATS,
   SCENE_OVERLAY_DEFAULTS,
 } from "../../shared/video-types";

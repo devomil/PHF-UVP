@@ -9,7 +9,7 @@ import {
   DEFAULT_TITLE_CARD_PROPS,
   type TitleCardInputProps,
 } from "./compositions/TitleCardComposition";
-import { PINE_HILL_FARM_BRAND, OUTPUT_FORMATS } from "../shared/video-types";
+import { OUTPUT_FORMATS } from "../shared/video-types";
 import { calculateEffectiveDurationInFrames } from "../shared/config/duration-math";
 
 const calculateTitleCardMetadata: CalculateMetadataFunction<
@@ -27,7 +27,27 @@ const defaultUniversalProps: UniversalVideoProps = {
   voiceoverUrl: null,
   musicUrl: null,
   musicVolume: 0.18,
-  brand: PINE_HILL_FARM_BRAND,
+  brand: {
+    name: '',
+    logoUrl: '',
+    watermarkPosition: 'bottom-right',
+    watermarkOpacity: 0.3,
+    colors: {
+      primary: '#000000',
+      secondary: '#666666',
+      accent: '#0066cc',
+      text: '#333333',
+      textLight: '#ffffff',
+    },
+    fonts: {
+      heading: 'Georgia, serif',
+      body: 'Helvetica, sans-serif',
+      weight: {
+        heading: 700,
+        body: 400,
+      },
+    },
+  },
   outputFormat: OUTPUT_FORMATS.youtube,
 };
 

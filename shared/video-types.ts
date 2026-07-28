@@ -975,34 +975,6 @@ export interface ScriptVideoInput {
   contentStructure?: string | null;
 }
 
-// Pine Hill Farm Official Brand Colors
-// Primary: Forest Green #2d5a27 (main brand color)
-// Secondary: Sage Green #607e66 (softer green)
-// Accent: Gold #c9a227 (CTAs, highlights)
-// Blues: Slate #5e637a, Steel #5b7c99, Periwinkle #8c93ad, Teal #6c97ab
-// Neutrals: Gray #a9a9a9, White #ffffff, Dark text #5e637a
-// Backgrounds: Cream #f5f0e8, Off-white #f8f8f3
-export const PINE_HILL_FARM_BRAND: BrandSettings = {
-  name: 'Pine Hill Farm',
-  logoUrl: '/uploads/16045ec5-d8e6-4b90-a65f-eb7e39e280ab.png',
-  watermarkPosition: 'bottom-right',
-  watermarkOpacity: 0.3,
-  colors: {
-    primary: '#2d5a27',      // Forest green (main brand color)
-    secondary: '#607e66',    // Sage green (softer green)
-    accent: '#c9a227',       // Gold (CTAs, highlights)
-    text: '#5e637a',         // Slate blue (dark text on light backgrounds)
-    textLight: '#ffffff',    // White text on dark backgrounds
-  },
-  fonts: {
-    heading: 'Playfair Display, Georgia, serif',
-    body: 'Open Sans, Helvetica, sans-serif',
-    weight: {
-      heading: 700,
-      body: 400,
-    },
-  },
-};
 
 export const OUTPUT_FORMATS: Record<string, OutputFormat> = {
   youtube: {
@@ -1051,7 +1023,27 @@ export function createEmptyVideoProject(
     fps: 30,
     totalDuration: 0,
     outputFormat: OUTPUT_FORMATS[platform] || OUTPUT_FORMATS.youtube,
-    brand: PINE_HILL_FARM_BRAND,
+    brand: {
+      name: '',
+      logoUrl: '',
+      watermarkPosition: 'bottom-right',
+      watermarkOpacity: 0.3,
+      colors: {
+        primary: '#000000',
+        secondary: '#666666',
+        accent: '#0066cc',
+        text: '#333333',
+        textLight: '#ffffff',
+      },
+      fonts: {
+        heading: 'Georgia, serif',
+        body: 'Helvetica, sans-serif',
+        weight: {
+          heading: 700,
+          body: 400,
+        },
+      },
+    },
     scenes: [],
     assets: {
       voiceover: { fullTrackUrl: '', duration: 0, perScene: [] },
