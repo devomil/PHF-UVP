@@ -78,6 +78,12 @@ Scene ${idx + 1} (ID: ${scene.sceneId}):
 - Visual Direction: "${scene.visualDirection}"
 `).join('\n');
 
+    // When a constraint list is active, restrict the JSON schema enum to only those
+    // providers so the example and the constraint block agree — no contradiction for Claude.
+    const providerEnum = availableProviders && availableProviders.length > 0
+      ? availableProviders.join('|')
+      : 'seedance|runway|kling|luma|veo|sora|wan|remotion';
+
     return `You are an expert video production AI assistant. Analyze each scene and recommend the optimal AI video generation provider based on the content.
 
 PROVIDER SPECIALIZATIONS:
@@ -137,8 +143,8 @@ Respond with ONLY a JSON array (no markdown, no code blocks):
     "sceneIndex": 0,
     "sceneId": "scene_id",
     "contentClassification": "cinematic|human_subjects|product_reveal|broll|conceptual_explanatory|infographic_diagram|motion_graphics|mixed",
-    "recommendedProvider": "seedance|runway|kling|luma|veo|sora|wan|remotion",
-    "fallbackProvider": "seedance|runway|kling|luma|veo|sora|wan|remotion",
+    "recommendedProvider": "${providerEnum}",
+    "fallbackProvider": "${providerEnum}",
     "confidence": 85,
     "reasoning": "Brief explanation of why this provider is best"
   }
