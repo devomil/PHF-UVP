@@ -1,0 +1,53 @@
+Phase A2 — Five-item report
+Item 1 — Three-way prompt comparison (A/B/C)
+Setup: 4-scene project (Chicago premium whiskey bar + private dining), cinematic-realism preset, Stage 4 fully run — all three fields populated per scene.
+
+Critical behavioral finding discovered during Run A:
+videoGenerationMode: null + cinematic-realism art preset → the preset overrides the mode to image-first-i2v before any video work starts. Runs A and B are therefore identical code paths. Run C used direct-t2v to bypass that override.
+
+Run A — "default"	Run B — image-first-i2v	Run C — direct-t2v, cap bypassed
+Actual mode	image-first-i2v (art preset override)	image-first-i2v	direct-t2v
+Images step	✓ ran	✓ ran	skipped
+Video providers	veo-3.1 ×3, kling-mc-pro ×1	kling-mc-pro ×1, veo-3.1 ×3	kling-mc-pro ×4
+Costs	$0.241 / $0.208 / $0.214 / $0.320 = $0.983	$0.221 / $0.208 / $0.234 / $0.320 = $0.983	$0.256 / $0.320 / $0.288 / $0.272 = $1.136
+Wall-clock	~180 s	~180 s	199 s
+Prompt word counts per run:
+
+Run A/B (I2V): scene.visualDirection sent to provider (91–124 words). Veo 3.1 skips sanitization for I2V; the full Stage 4 visual direction travels unchanged to the model.
+Run C (T2V, bypass): Optimizer ran but no truncation — 144–166 words sent per scene (visual direction + style prefix added by enhancer). Normal T2V would cap at 30 words.
+Conclusion: The art preset override means most cinematic-realism projects effectively always use image-first-i2v when videoGenerationMode is unset. A/B showing identical behavior is expected. The interesting comparison is C vs. future A with direct-t2v explicitly set.
+
+Item 2 — progress.errors crash
+Root cause: generateProjectAssets initialized serviceFailures but not errors in the progress block. Line 3911 (updatedProject.progress.errors.push(...)) threw TypeError: Cannot read properties of undefined (reading 'push') after total voiceover failure.
+
+Fix: if (!updatedProject.progress.errors) updatedProject.progress.errors = [] guard added before the push. Two other call sites at lines 5856-5857 already had the guard; line 6003 was checked and also already guarded. Committed in b196e50.
+
+Item 3 — Sound design timeout (report only)
+generateProjectSoundDesign (sound-design-service.ts:113) is a sequential for loop — one scene at a time, no parallelism, no per-call timeout. Per scene: up to 4 serial ElevenLabs SFX API calls (transition-in, transition-out, ambient, optional emphasis).
+
+From the smoke test: 2-scene project timed out after ~120 s in the SFX phase. That puts the per-scene ceiling at ~60 s, or ~15 s per ElevenLabs call. Scaling:
+
+Scenes	Estimated API calls	Estimated wall-clock
+2	~6	~90 s
+5	~15	~225 s (⚠ near timeout)
+10	~30	~450 s (☠ always fails)
+Nothing to fix per scope — reporting the structural issue: sequential design means sound design scales linearly with scene count and will time out on any project over ~4 scenes. The fix would be parallelizing generateProjectSoundDesign to run scenes concurrently (analogous to how parallel video tasks work).
+
+Item 4 — Veo 3.1 cost logging
+Correction of prior report: The cost line was already there — [PiAPI:veo-3.1] I2V complete! Time: 99.8s, Cost: $0.241 appeared three times in Run A. AI_VIDEO_PROVIDERS['veo-3.1'].costPerSecond = 0.065 (confirmed in ai-video-providers-static.ts). The earlier smoke test report of "not logged" was wrong — the cost line was buried in interleaved parallel output and fell outside the captured window before the shell timed out.
+
+No code change needed. Cost is estimated and logged identically to all other providers at line 1162–1164 in piapi-video-service.ts.
+
+Item 5 — Stage 4 word-count sample (two projects)
+Combined across project 149 (DB query, prior session) and the new Chicago project (Stage 4 run this session):
+
+Field	Target	Project 149 (micro-scenes)	Chicago project (micro-scenes)	Pattern
+imagePrompt	50–80 w	38–48 w (under)	84–106 w (over)	High LLM variance; LLM-determined
+visualDirection	40–80 w	20–33 w (under)	91–124 w (over)	Opposite poles across projects
+motionPrompt	15–30 w	11–21 w (slightly under)	19–26 w (on target)	Most consistent field
+Conclusion: Under-production is not systematic. Project 149's micro-scenes consistently under-shot visual direction; the Chicago project consistently over-shot it. The field most reliably on-target across both projects is motionPrompt (15–30 w range, which matches the 15-30 w spec almost exactly). No code change indicated — these are LLM output distributions, not a truncation or formatting bug.
+
+Additional finding from comparison runs
+motionPrompt wiring was incomplete. My earlier fix (cdfa451) wired motionPrompt into two fallback paths but missed the primary path: the deferred single-scene loop at lines 5514 and 5482 (used by every non-micro-scene that isn't the sequential-first-scene edge case). Both were using sceneVideoPrompt = scene.visualDirection unconditionally — even for I2V.
+
+Fixed in b196e50: both the sequential-first-scene path and the deferred-task path now use (scene.motionPrompt || sceneVideoPrompt) when sceneImageUrl is set (I2V), and sceneVideoPrompt unchanged for T2V. New log line: [Assets] Scene X [sequential|deferred] prompt source: motionPrompt (19 words): "Glacial 24mm push-in..." confirms the correct field is flowing to each provider.
