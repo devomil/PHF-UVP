@@ -240,14 +240,19 @@ class AIVideoService {
     
     const isStylizedArt = artPreset && isStylizedPresetCheck(artPreset.id);
 
-    // A1-4: Resolve the provider order BEFORE building the prompt so the optimizer
-    // formats the prompt for the actual target provider family, not a premature 'seedance' default.
-    const { circuitFilteredOrder, runwaySafeOrder, qualityTier } = await this.resolveProviderOrder(
-      options, configuredProviders, artPreset, contentType, contentTag, isStylizedArt, styleConfig,
-    );
-    const normalizedProvider = circuitFilteredOrder[0]?.split('-')[0] || 'seedance';
+    // A1-4 + Task-480: hoist provider-order vars so both branches can assign them, then
+    // dispatch resolveProviderOrder concurrently with enhanceVideoPrompt in the T2V branch
+    // to cut per-scene latency from ~2–4 s sequential to the latency of the slower call.
+    let circuitFilteredOrder: string[];
+    let runwaySafeOrder: string[];
+    let qualityTier: string;
 
     if (generationMode === 'i2v') {
+      // I2V path: only provider resolution is needed — there is no enhanceVideoPrompt call here.
+      ({ circuitFilteredOrder, runwaySafeOrder, qualityTier } = await this.resolveProviderOrder(
+        options, configuredProviders, artPreset, contentType, contentTag, isStylizedArt, styleConfig,
+      ));
+
       let i2vPrompt: string;
       if (options.isCharacterReference) {
         console.log(`[AIVideo] CHARACTER REFERENCE I2V — preserving full scene prompt (no motion simplification)`);
@@ -310,22 +315,34 @@ class AIVideoService {
       const styleEnhancedPrompt = this.applyStyleToPrompt(basePrompt, styleConfig);
       
       console.log(`[AIVideo] Using style: ${styleConfig.name}`);
+      console.log(`[PromptEnhance] Enhancing prompt for ${options.sceneType} scene — running concurrently with provider selection`);
 
-      console.log(`[PromptEnhance] Enhancing prompt for ${options.sceneType} scene`);
-      const enhanced = await promptEnhancementService.enhanceVideoPrompt(
-        styleEnhancedPrompt,
-        {
-          sceneType: options.sceneType,
-          narration: options.narration,
-          mood: options.mood || styleConfig.promptModifiers.mood,
-          contentType,
-          excludeElements: styleConfig.negativePromptAdditions,
-        }
-      );
-      
-      console.log(`[AIVideo] Enhanced prompt for ${options.sceneType} scene`);
-      
-      // normalizedProvider is resolved from the real provider order above (A1-4).
+      // Task-480: dispatch provider selection and prompt enhancement concurrently.
+      // styleEnhancedPrompt is already computed synchronously above so both calls
+      // can start immediately.  normalizedProvider is derived AFTER Promise.all
+      // resolves, preserving the A1-4 guarantee that optimizePrompt sees the real
+      // winning provider family rather than a premature default.
+      let enhanced: Awaited<ReturnType<typeof promptEnhancementService.enhanceVideoPrompt>>;
+      ([{ circuitFilteredOrder, runwaySafeOrder, qualityTier }, enhanced] = await Promise.all([
+        this.resolveProviderOrder(
+          options, configuredProviders, artPreset, contentType, contentTag, isStylizedArt, styleConfig,
+        ),
+        promptEnhancementService.enhanceVideoPrompt(
+          styleEnhancedPrompt,
+          {
+            sceneType: options.sceneType,
+            narration: options.narration,
+            mood: options.mood || styleConfig.promptModifiers.mood,
+            contentType,
+            excludeElements: styleConfig.negativePromptAdditions,
+          }
+        ),
+      ]));
+
+      console.log(`[AIVideo] Provider selection and prompt enhancement both complete`);
+
+      // normalizedProvider is derived from the resolved provider order (A1-4 fix preserved).
+      const normalizedProvider = circuitFilteredOrder[0]?.split('-')[0] || 'seedance';
       const includeProduct = ['product', 'solution', 'cta', 'feature'].includes(options.sceneType?.toLowerCase() || '');
       
       const optimized = optimizePrompt({
