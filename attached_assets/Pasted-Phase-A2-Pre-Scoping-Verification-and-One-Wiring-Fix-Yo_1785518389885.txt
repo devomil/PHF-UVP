@@ -1,0 +1,32 @@
+Phase A2 — Pre-Scoping: Verification and One Wiring Fix
+
+Your Task 1 report established that videoGenerationMode defaults to direct T2V (auto and unset both resolve to preferDirectT2V = true), so the 30-word cap fires on most scenes, and that Stage 4's motionPrompt is written at script-pipeline-service.ts:1186–1206 but never read by any generation path. Three follow-ups before Phase A2 is written. Items 1 and 3 are report-only. Do not change the default videoGenerationMode — that's A2 and needs a cost/latency decision first.
+
+1. Verify the visualDirection question — report only, no code changes.
+
+What is scene.visualDirection? Which pipeline stage writes it, at what line? Is it Stage 4 output or an earlier stage's field?
+Paste the T2V call site showing which field is read as the prompt.
+Confirm plainly: in a default project (videoGenerationMode unset), is scene.imagePrompt read by any code path in the video generation flow? Yes or no.
+Paste one real example of both imagePrompt and visualDirection for the same scene, verbatim, so the quality difference is visible.
+
+2. Wire up motionPrompt — commit separately.
+In universal-video-service.ts, the I2V call sites at approximately lines 5214, 5282, and 5610 currently send visualDirection. Change the priority to prefer the purpose-built field:
+
+ts
+prompt: ms.motionPrompt || ms.visualDirection || visualPrompt,
+
+Same pattern at the non-micro-scene sites using scene.motionPrompt. Keep the existing fallbacks — do not remove visualDirection.
+
+Leave adaptPromptForI2V() in place; it's harmless on an already-motion-only prompt and removing it is Phase A2. Add a log line showing which field was used and its word count.
+
+Verify: run one image-first-i2v scene and paste the log line confirming motionPrompt was used, plus the prompt text sent to the provider.
+
+3. Smoke-test the image-first path — report only, fix nothing.
+Run one full multi-scene project with videoGenerationMode: 'image-first-i2v' end to end. Report:
+
+Any failures, with the real error message
+The T2I provider used per scene
+Total wall-clock time
+Total cost, versus an equivalent default T2V project
+
+Report everything you find. Do not fix any of it.
