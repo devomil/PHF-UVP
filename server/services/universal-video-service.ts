@@ -5279,7 +5279,9 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
               return Promise.resolve({ msIdx, skipped: true, success: true });
             }
             
-            let msPrompt = ms.visualDirection || visualPrompt;
+            const msMotionField = ms.motionPrompt ? 'motionPrompt' : (ms.visualDirection ? 'visualDirection' : 'visualPrompt(fallback)');
+            let msPrompt = ms.motionPrompt || ms.visualDirection || visualPrompt;
+            console.log(`[Assets] Micro-scene ${ms.id} I2V prompt source: ${msMotionField} (${(msPrompt || '').split(/\s+/).filter(Boolean).length} words)`);
             const resolvedProductRef = productImageForScene ? this.resolveProductImageUrl(productImageForScene) : null;
             const explicitRef = ms.imageUrl || parentRefImageUrl || resolvedProductRef;
             
@@ -5577,8 +5579,11 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
               const sourceImageUrl = scene.brandAssetUrl || scene.referenceConfig?.imageUrl || matchedBrandImage?.url;
               console.log(`[Assets] Scene ${scene.id} has USER-PROVIDED reference image → I2V with ${sourceImageUrl}`);
               
+              const i2vPromptField = (scene as any).motionPrompt ? 'motionPrompt' : (scene.visualDirection ? 'visualDirection' : 'narration(fallback)');
+              const i2vPromptText = (scene as any).motionPrompt || scene.visualDirection || scene.narration || 'Dynamic professional video content';
+              console.log(`[Assets] Scene ${scene.id} I2V prompt source: ${i2vPromptField} (${i2vPromptText.split(/\s+/).filter(Boolean).length} words): "${i2vPromptText.substring(0, 80)}..."`);
               const i2vResult = await aiVideoService.generateVideo({
-                prompt: scene.visualDirection || scene.narration || 'Dynamic professional video content',
+                prompt: i2vPromptText,
                 sceneType: scene.type,
                 duration: scene.duration || 5,
                 aspectRatio: updatedProject.outputFormat?.aspectRatio || '16:9',
@@ -5606,9 +5611,12 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
               // image-first-i2v mode: use the AI-generated image as I2V source
               const aiGeneratedImage = updatedProject.scenes.find(s => s.id === scene.id)?.assets?.imageUrl;
               if (aiGeneratedImage) {
+                const ifPromptField = (scene as any).motionPrompt ? 'motionPrompt' : (scene.visualDirection ? 'visualDirection' : 'narration(fallback)');
+                const ifPromptText = (scene as any).motionPrompt || scene.visualDirection || scene.narration || 'Dynamic professional video content';
                 console.log(`[Assets] Image-first I2V mode: Using AI-generated image for I2V on scene ${scene.id}`);
+                console.log(`[Assets] Scene ${scene.id} image-first I2V prompt source: ${ifPromptField} (${ifPromptText.split(/\s+/).filter(Boolean).length} words): "${ifPromptText.substring(0, 80)}..."`);
                 const i2vResult = await aiVideoService.generateVideo({
-                  prompt: scene.visualDirection || scene.narration || 'Dynamic professional video content',
+                  prompt: ifPromptText,
                   sceneType: scene.type,
                   duration: scene.duration || 5,
                   aspectRatio: updatedProject.outputFormat?.aspectRatio || '16:9',
