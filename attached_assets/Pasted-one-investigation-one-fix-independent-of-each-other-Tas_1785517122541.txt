@@ -1,0 +1,40 @@
+one investigation, one fix, independent of each other:
+
+Task 1 — A2 scoping report (no code changes, no new credits beyond one project run).
+
+Run one real multi-scene project. For every scene, report: scene type, whether it generated via T2V or image-first I2V, and which provider.
+Report the deciding logic — what in ai-video-service.ts sets generationMode, and under what conditions a scene takes T2V. replit.md says all nine art presets are image-first, but the A1-4 log shows a b-roll scene going T2V through the optimizer. Explain the discrepancy.
+For the image-first path: does the T2I image prompt pass through optimizePrompt / enforcePromptLength, or a different path? Paste the call site.
+For the I2V step: which prompt is sent as the motion prompt — Stage 4's motionPrompt, or the full scene imagePrompt? Paste the call site.
+
+Task 2 — Fix enforcePromptLength (commit separately). Two defects, independent of what the word budget should be:
+
+return truncated + '.' fabricates a terminal period on a mid-phrase fragment, so "...wrapped around a." reads to the model as a completed instruction rather than a cut-off one.
+lastPeriod > truncated.length * 0.5 compares a character index against half the string length, so a valid sentence boundary at 40% is rejected and the function falls through to fabricating a period.
+
+Replace with sentence-boundary accumulation:
+
+ts
+const words = prompt.split(/\s+/).filter(Boolean);
+if (words.length <= effectiveMax) return prompt;
+
+const sentences = prompt.match(/[^.!?]+[.!?]+\s*/g) || [];
+let kept = '', keptWords = 0;
+for (const s of sentences) {
+  const w = s.trim().split(/\s+/).filter(Boolean).length;
+  if (keptWords + w > effectiveMax && kept) break;
+  kept += s; keptWords += w;
+  if (keptWords >= effectiveMax) break;
+}
+if (kept.trim()) {
+  console.warn(`[PromptOptimizer] TRUNCATED ${words.length} → ${keptWords} words (cap ${effectiveMax}). DROPPED: "${prompt.slice(kept.length).trim()}"`);
+  return kept.trim();
+}
+console.warn(`[PromptOptimizer] TRUNCATED (no sentence boundary) ${words.length} → ${effectiveMax} words.`);
+return words.slice(0, effectiveMax).join(' ');
+
+Intentional behavior change: the first sentence is allowed to overshoot the cap rather than be fragmented. The cap becomes soft. A whole 40-word sentence is better than a 30-word fragment with a fake period. Do not "fix" this back to a hard cap.
+
+Do not change maxWords from 30 in this commit. The budget question is Phase A2 and depends on Task 1's answer.
+
+Verify: run the same 59-word kitchen prompt through the optimizer and paste the output. It must end on a real sentence boundary, and the TRUNCATED ... DROPPED: line must show what was lost.
