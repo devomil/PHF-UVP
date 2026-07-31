@@ -1,0 +1,20 @@
+Good report — the ⚡ root-cause diagnosis and the honest enum finding are exactly right. Three things before A1-4.
+
+1. Optimizer A/B — measurement only, nothing committed. Pre-enforcement counts show optimizePrompt compressing 106 words → 25. That, not the 200-word ceiling, is where prompt quality is going. Test whether the compression helps or hurts:
+
+Pick one non-stylized scene that routes to Seedance 2 or Veo (not Kling).
+Generate normally. Record the final prompt string, its word count, and the video URL.
+Temporarily set finalPrompt = enhanced.prompt (the pre-optimizer string) instead of optimized.prompt. Leave negativePrompt handling unchanged.
+Generate the same scene again — same provider, same source image if I2V.
+Restore. Do not commit the bypass.
+Report both prompt strings verbatim with word counts, both video URLs, and a log line confirming both ran on the same provider.
+Also paste any compression or word-cap constant in video-prompt-optimizer.ts with its line number, and a one-line summary of what cleanDescription() strips.
+
+2. A1-3b, one line. Make the schema enum match the constraint. In the JSON schema block, replace the hardcoded "seedance|runway|kling|luma|veo|sora|wan|remotion" for recommendedProvider and fallbackProvider with the availableProviders list when that parameter is set. Claude respected the prose constraint in a sample of one; removing the contradiction removes the risk entirely.
+
+3. Drop the ⚡ criterion. Your diagnosis is correct — the warnings come from the fallback loop at 949–952, not from Claude's recommendation. The guard is working. Leave that loop alone; filtering it is Phase A3.
+
+Then A1-4. When you run its mandatory full multi-scene project, add two reports:
+
+Paste one cfg=... via ... line from a genuine pipeline I2V scene (not the harness). If it reads via user fidelity slider, then something upstream populates i2vSettings and A1-1 did not take effect in production.
+Report which provider a stylized character-reference scene actually routes to — Kling or Seedance 2.
