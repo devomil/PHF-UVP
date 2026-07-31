@@ -150,16 +150,32 @@ function enforcePromptLength(prompt: string, maxWords: number = 30): string {
     prompt.toLowerCase().includes(token.toLowerCase())
   );
   const effectiveMax = hasArtPresetTokens ? maxWords + 15 : maxWords;
-  
-  const words = prompt.split(/\s+/);
+
+  const words = prompt.split(/\s+/).filter(Boolean);
   if (words.length <= effectiveMax) return prompt;
 
-  const truncated = words.slice(0, effectiveMax).join(' ');
-  const lastPeriod = truncated.lastIndexOf('.');
-  if (lastPeriod > truncated.length * 0.5) {
-    return truncated.substring(0, lastPeriod + 1);
+  // Accumulate whole sentences up to the cap (soft — a sentence may overshoot
+  // the cap rather than be fragmented). A 40-word whole sentence is better than
+  // a 30-word fragment with a fabricated terminal period.
+  const sentences = prompt.match(/[^.!?]+[.!?]+\s*/g) || [];
+  let kept = '', keptWords = 0;
+  for (const s of sentences) {
+    const w = s.trim().split(/\s+/).filter(Boolean).length;
+    if (keptWords + w > effectiveMax && kept) break;
+    kept += s; keptWords += w;
+    if (keptWords >= effectiveMax) break;
   }
-  return truncated + '.';
+  if (kept.trim()) {
+    console.warn(
+      `[PromptOptimizer] TRUNCATED ${words.length} → ${keptWords} words (cap ${effectiveMax}). DROPPED: "${prompt.slice(kept.length).trim()}"`,
+    );
+    return kept.trim();
+  }
+  // No sentence boundary found — fall back to word-slice without fabricated period.
+  console.warn(
+    `[PromptOptimizer] TRUNCATED (no sentence boundary) ${words.length} → ${effectiveMax} words.`,
+  );
+  return words.slice(0, effectiveMax).join(' ');
 }
 
 function extractCharacterBlocks(prompt: string): { cleaned: string; blocks: string[]; totalWords: number } {
