@@ -448,7 +448,9 @@ class AIVideoService {
           };
         }
         
-        const errorMsg = result.error || 'unknown error';
+        const errorMsg = typeof result.error === 'string'
+          ? result.error
+          : result.error != null ? JSON.stringify(result.error) : 'unknown error';
         failedProviders.push({ provider: providerKey, error: errorMsg });
         this.recordProviderFailure(providerKey);
         console.warn(`[AIVideo] ✗ ${providerKey} failed for preset "${artPresetIdentifier}": ${errorMsg}`);

@@ -82,6 +82,7 @@
 - **Husky Pre-commit Hook**: `npm install` is required after cloning to install the pre-commit hook which runs `lint:dialogs` and `lint:providers`. Set `HUSKY=0` to skip installation (and both checks).
 - **Session Security**: `SESSION_SECRET` environment variable is mandatory in production.
 - **Cinematic Flow Mode**: Breaks continuity chain if art styles change between scenes.
+- **STYLIZED_CHARACTER_CFG / STYLIZED_ENVIRONMENT_CFG are dead for stylized character-reference scenes**: These constants exist in `piapi-video-service.ts` and are referenced in the Kling I2V cfg-override branch (raises `cfg_scale` to the stylized floor). However, stylized character-reference I2V scenes do NOT route to Kling — they route to Seedance 2 via `omni_reference` mode. The Kling branch is therefore never reached for those scenes, and the override never executes. Do not document this override as active behavior for stylized char-ref scenes. It remains live only for non-character-reference stylized I2V scenes that actually land on Kling.
 - **Concurrent Video Generation**: Race conditions are handled by atomic DB operations and specific retry/polling logic, but unexpected delays can occur.
 - **Cost Telemetry**: Storyboard batch generation includes cost tracking with budget caps and alerts for nearing the cap.
 - **Canva Integration**: Requires `canva_tokens` to be valid and active. Sync status should be monitored in the UI.
