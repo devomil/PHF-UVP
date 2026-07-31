@@ -1312,16 +1312,24 @@ class PiAPIVideoService {
       console.log(`[PiAPI I2V] Original Prompt: ${motionPrompt}`);
       
       // For Veo 3.1 I2V, always use image_url (per PiAPI documentation)
-      // When generating new content with people, enhance the prompt to describe 
-      // how the product from the reference image should appear in the scene
+      // COMPOSITE MODE is only appropriate for product scenes where we want the
+      // reference image's product naturally integrated into a new scene.
+      // Lifestyle, cinematic, and character I2V scenes must use the original prompt
+      // unchanged — wrapping them in product-integration framing corrupts the output.
+      const isProductScene =
+        options.i2vSettings?.animationStyle === 'product-hero' ||
+        options.i2vSettings?.animationStyle === 'product-static';
+
       let finalPrompt = motionPrompt;
       
-      if (requiresNewContent) {
+      if (requiresNewContent && isProductScene) {
         // Enhance prompt to instruct Veo to incorporate the product from the reference
         // The image_url shows the product, and the prompt describes the scene with that product
         finalPrompt = `Using the product shown in the reference image as inspiration, create a scene where: ${motionPrompt}. The product from the reference image should be visible and naturally integrated into the scene. Maintain the product's appearance, branding, and colors from the reference.`;
         console.log(`[PiAPI I2V] COMPOSITE MODE - Enhanced prompt for product integration`);
         console.log(`[PiAPI I2V] Final Prompt: ${finalPrompt}`);
+      } else if (requiresNewContent) {
+        console.log(`[PiAPI I2V] ANIMATE MODE - Non-product scene, using original prompt unchanged`);
       }
       
       // Veo 3.1 I2V always uses image_url parameter (not reference_images)
