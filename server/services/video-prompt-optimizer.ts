@@ -146,6 +146,8 @@ function cleanPromptText(prompt: string, isStylized: boolean = false): string {
 }
 
 function enforcePromptLength(prompt: string, maxWords: number = 30): string {
+  // Test-only bypass: set BYPASS_PROMPT_CAP=1 to skip truncation (used by three-way-C comparison)
+  if (process.env.BYPASS_PROMPT_CAP === '1') return prompt;
   const hasArtPresetTokens = ART_PRESET_STYLE_TOKENS.some(token => 
     prompt.toLowerCase().includes(token.toLowerCase())
   );

@@ -3760,6 +3760,9 @@ Make sure durations add up exactly to ${input.duration} seconds.`;
     if (!updatedProject.progress.serviceFailures) {
       updatedProject.progress.serviceFailures = [];
     }
+    if (!updatedProject.progress.errors) {
+      updatedProject.progress.errors = [];
+    }
     if (!updatedProject.assets.images) {
       updatedProject.assets.images = [];
     }
@@ -5475,8 +5478,12 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
           if (needsSequentialFirstScene && !firstAIVideoSceneProcessed) {
             firstAIVideoSceneProcessed = true;
             console.log(`[ParallelVideo] Processing first scene ${scene.id} sequentially for character reference extraction`);
+            // Use motionPrompt for I2V (sceneImageUrl set), visualDirection for T2V
+            const seqI2VPrompt = sceneImageUrl ? ((scene as any).motionPrompt || sceneVideoPrompt) : sceneVideoPrompt;
+            const seqPromptField = sceneImageUrl ? ((scene as any).motionPrompt ? 'motionPrompt' : 'visualDirection(fallback)') : 'visualDirection(T2V)';
+            console.log(`[Assets] Scene ${scene.id} sequential prompt source: ${seqPromptField} (${seqI2VPrompt.split(/\s+/).filter(Boolean).length} words): "${seqI2VPrompt.substring(0, 80)}..."`);
             const aiResult = await aiVideoService.generateVideo({
-              prompt: sceneVideoPrompt,
+              prompt: seqI2VPrompt,
               duration: Math.min(scene.duration || 5, 10),
               aspectRatio: (project.outputFormat?.aspectRatio as '16:9' | '9:16' | '1:1') || '16:9',
               sceneType: scene.type,
@@ -5508,8 +5515,13 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
               console.warn(`[Assets] AI video failed for ${scene.type} scene ${scene.id}: ${aiResult.error}`);
             }
           } else {
+            // Use motionPrompt for I2V (sceneImageUrl set), visualDirection for T2V
+            const deferI2VPrompt = sceneImageUrl ? ((scene as any).motionPrompt || sceneVideoPrompt) : sceneVideoPrompt;
+            const deferPromptField = sceneImageUrl ? ((scene as any).motionPrompt ? 'motionPrompt' : 'visualDirection(fallback)') : 'visualDirection(T2V)';
+            const deferMode = sceneRefImageUrl ? 'I2V' : (sceneImageUrl ? 'I2V-CharRef' : 'T2V');
+            console.log(`[Assets] Scene ${scene.id} deferred prompt source: ${deferPromptField} (${deferI2VPrompt.split(/\s+/).filter(Boolean).length} words): "${deferI2VPrompt.substring(0, 80)}..."`);
             const genParams = {
-              prompt: sceneVideoPrompt,
+              prompt: deferI2VPrompt,
               duration: Math.min(scene.duration || 5, 10),
               aspectRatio: (project.outputFormat?.aspectRatio as '16:9' | '9:16' | '1:1') || '16:9',
               sceneType: scene.type,
@@ -5532,7 +5544,7 @@ Split this narration into micro-scenes (2-4 segments) at natural topic shifts. E
               type: 'single',
               promise: aiVideoService.generateVideo(genParams),
             });
-            console.log(`[ParallelVideo] Deferred single-scene video task for scene ${scene.id} (mode=${sceneRefImageUrl ? 'I2V' : (sceneImageUrl ? 'I2V-CharRef' : 'T2V')})`);
+            console.log(`[ParallelVideo] Deferred single-scene video task for scene ${scene.id} (mode=${deferMode})`);
             continue; // Results applied after parallel await
           }
         }
